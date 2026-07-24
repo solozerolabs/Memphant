@@ -10,8 +10,8 @@ use std::sync::Arc;
 #[cfg(any(feature = "fastembed", test))]
 use memphant_core::CrossRerankerConfig;
 use memphant_core::service::{
-    DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY, MAX_STRUCTURED_STATE_PREFETCH_CONCURRENCY,
-    MemoryService,
+    DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY, DEFAULT_WORKER_COMPILE_CONCURRENCY,
+    MAX_STRUCTURED_STATE_PREFETCH_CONCURRENCY, MAX_WORKER_COMPILE_CONCURRENCY, MemoryService,
 };
 use memphant_core::{
     ApiKeyRow, CompiledWrite, CorrectOutcome, CorrectionWrite, CrossRerankCandidateSelection,
@@ -22,7 +22,9 @@ use memphant_core::{
     ResolvedMemoryContext, ReviewEventRow, ScopePage, StoreError, SubjectErasureReceipt,
     SystemClock,
 };
-use memphant_store_postgres::{PgStore, PgTxn};
+use memphant_store_postgres::{
+    DEFAULT_DATABASE_MAX_CONNECTIONS, MAX_WORKER_DATABASE_MAX_CONNECTIONS, PgStore, PgTxn,
+};
 use memphant_types::{
     ActorId, AgentNodeId, ContextBindingRequest, ContextBindingResponse, DeepSnapshotEntry,
     EpisodeId, JobId, MemoryKind, NewEpisode, NewMemoryEdge, NewMemoryUnit, NewResource,
@@ -100,7 +102,17 @@ pub async fn build_worker_store() -> Result<AnyStore, StoreError> {
         env_url("DATABASE_URL"),
     ) {
         (Some(url), None) => {
-            let store = PgStore::connect_worker(&url).await?;
+            let max_connections = worker_database_max_connections_from_value(
+                std::env::var("MEMPHANT_WORKER_DATABASE_MAX_CONNECTIONS")
+                    .ok()
+                    .as_deref(),
+            )
+            .map_err(StoreError::Backend)?;
+            let store = PgStore::connect_worker_with_max_connections(
+                &url,
+                max_connections,
+            )
+            .await?;
             Ok(AnyStore::Pg(store))
         }
         (None, None) => {
@@ -120,6 +132,22 @@ fn env_url(name: &str) -> Option<String> {
     std::env::var(name)
         .ok()
         .filter(|value| !value.trim().is_empty())
+}
+
+fn worker_database_max_connections_from_value(value: Option<&str>) -> Result<u32, String> {
+    let Some(value) = value else {
+        return Ok(DEFAULT_DATABASE_MAX_CONNECTIONS);
+    };
+    value
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|value| (1..=MAX_WORKER_DATABASE_MAX_CONNECTIONS).contains(value))
+        .ok_or_else(|| {
+            format!(
+                "must be an integer from 1 through {MAX_WORKER_DATABASE_MAX_CONNECTIONS}, got {value:?}"
+            )
+        })
 }
 
 #[cfg(feature = "fastembed")]
@@ -418,6 +446,14 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
                     .as_deref(),
             )
             .unwrap_or_else(|error| panic!("MEMPHANT_STRUCTURED_STATE_CONCURRENCY: {error}")),
+        )
+        .with_worker_compile_concurrency(
+            worker_compile_concurrency_from_value(
+                std::env::var("MEMPHANT_WORKER_COMPILE_CONCURRENCY")
+                    .ok()
+                    .as_deref(),
+            )
+            .unwrap_or_else(|error| panic!("MEMPHANT_WORKER_COMPILE_CONCURRENCY: {error}")),
         );
     match structured_state_openrouter::provider_from_env()
         .unwrap_or_else(|error| panic!("MEMPHANT_STRUCTURED_STATE=on: {error}"))
@@ -439,6 +475,22 @@ fn structured_state_prefetch_concurrency_from_value(value: Option<&str>) -> Resu
         .ok_or_else(|| {
             format!(
                 "must be an integer from 1 through {MAX_STRUCTURED_STATE_PREFETCH_CONCURRENCY}, got {value:?}"
+            )
+        })
+}
+
+fn worker_compile_concurrency_from_value(value: Option<&str>) -> Result<usize, String> {
+    let Some(value) = value else {
+        return Ok(DEFAULT_WORKER_COMPILE_CONCURRENCY);
+    };
+    value
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .filter(|value| (1..=MAX_WORKER_COMPILE_CONCURRENCY).contains(value))
+        .ok_or_else(|| {
+            format!(
+                "must be an integer from 1 through {MAX_WORKER_COMPILE_CONCURRENCY}, got {value:?}"
             )
         })
 }
@@ -837,12 +889,28 @@ impl MemoryStore for AnyStore {
         delegate!(self, store => store.fetch_episode(context, id).await)
     }
 
+    async fn fetch_episodes_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[EpisodeId],
+    ) -> Result<Vec<StoredEpisode>, StoreError> {
+        delegate!(self, store => store.fetch_episodes_by_ids(context, ids).await)
+    }
+
     async fn fetch_resource(
         &self,
         context: &ResolvedMemoryContext,
         id: ResourceId,
     ) -> Result<Option<StoredResource>, StoreError> {
         delegate!(self, store => store.fetch_resource(context, id).await)
+    }
+
+    async fn fetch_resources_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[ResourceId],
+    ) -> Result<Vec<StoredResource>, StoreError> {
+        delegate!(self, store => store.fetch_resources_by_ids(context, ids).await)
     }
 
     async fn stage_correction(
@@ -1117,7 +1185,10 @@ impl MutationLedgerStore for AnyStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{embedder_from_id, structured_state_prefetch_concurrency_from_value};
+    use super::{
+        embedder_from_id, structured_state_prefetch_concurrency_from_value,
+        worker_compile_concurrency_from_value, worker_database_max_connections_from_value,
+    };
     use memphant_core::{EmbedError, EmbeddingProvider, embedding_profile_for};
 
     #[test]
@@ -1137,6 +1208,29 @@ mod tests {
         assert!(structured_state_prefetch_concurrency_from_value(Some("0")).is_err());
         assert!(structured_state_prefetch_concurrency_from_value(Some("17")).is_err());
         assert!(structured_state_prefetch_concurrency_from_value(Some("fast")).is_err());
+    }
+
+    #[test]
+    fn worker_compile_concurrency_is_separate_and_bounded() {
+        assert_eq!(worker_compile_concurrency_from_value(None), Ok(16));
+        assert_eq!(worker_compile_concurrency_from_value(Some("1")), Ok(1));
+        assert_eq!(worker_compile_concurrency_from_value(Some("128")), Ok(128));
+        assert!(worker_compile_concurrency_from_value(Some("0")).is_err());
+        assert!(worker_compile_concurrency_from_value(Some("129")).is_err());
+        assert!(worker_compile_concurrency_from_value(Some("fast")).is_err());
+    }
+
+    #[test]
+    fn worker_database_capacity_is_explicit_and_bounded() {
+        assert_eq!(worker_database_max_connections_from_value(None), Ok(8));
+        assert_eq!(worker_database_max_connections_from_value(Some("1")), Ok(1));
+        assert_eq!(
+            worker_database_max_connections_from_value(Some("64")),
+            Ok(64)
+        );
+        assert!(worker_database_max_connections_from_value(Some("0")).is_err());
+        assert!(worker_database_max_connections_from_value(Some("65")).is_err());
+        assert!(worker_database_max_connections_from_value(Some("wide")).is_err());
     }
 
     #[test]

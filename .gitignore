@@ -61,6 +61,15 @@ benchmarks/data/coding_events_golden.jsonl
 docs/build-log/artifacts/*/reader-evidence-*.jsonl
 docs/build-log/artifacts/*/reader-cache/
 docs/build-log/artifacts/*/query-rewrite-cache/
+# Public trajectory corpora and pinned upstream checkouts are reproducible
+# inputs, not repository artifacts. Commit their content hashes, transformed
+# goldens, and scored reports; never duplicate the 60+ MiB source rows or
+# nested Git repositories.
+docs/build-log/artifacts/c3-public-code-lane*/corpus.jsonl
+docs/build-log/artifacts/c3-public-code-lane*/evidence*.jsonl
+docs/build-log/artifacts/tri-sota-completion/swe-explore/bench.final.public.jsonl
+docs/build-log/artifacts/**/official/
+docs/build-log/artifacts/**/dataset-official.git/
 docs/build-log/artifacts/**/extraction-bank/*.dump
 docs/build-log/artifacts/**/extraction-bank/*.extractor.jsonl
 # Syndai-gate lane: evidence packs embed raw retrieved doc bodies and the miner

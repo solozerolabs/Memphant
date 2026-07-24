@@ -1469,11 +1469,21 @@ pub trait MemoryStore: Send + Sync {
         context: &ResolvedMemoryContext,
         id: EpisodeId,
     ) -> impl Future<Output = Result<Option<StoredEpisode>, StoreError>> + Send;
+    fn fetch_episodes_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[EpisodeId],
+    ) -> impl Future<Output = Result<Vec<StoredEpisode>, StoreError>> + Send;
     fn fetch_resource(
         &self,
         context: &ResolvedMemoryContext,
         id: ResourceId,
     ) -> impl Future<Output = Result<Option<StoredResource>, StoreError>> + Send;
+    fn fetch_resources_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[ResourceId],
+    ) -> impl Future<Output = Result<Vec<StoredResource>, StoreError>> + Send;
 
     // Mutation seam.
     fn stage_correction(
@@ -1699,6 +1709,8 @@ pub struct InMemoryStore {
     fail_next_mutation_response: Arc<std::sync::atomic::AtomicBool>,
     #[cfg(test)]
     deep_snapshot_reads: Arc<std::sync::atomic::AtomicUsize>,
+    #[cfg(test)]
+    citation_source_batch_reads: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 type MutationLockKey = (TenantId, MutationVerb, [u8; 32]);
@@ -4188,6 +4200,34 @@ impl MemoryStore for InMemoryStore {
         }))
     }
 
+    async fn fetch_episodes_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[EpisodeId],
+    ) -> Result<Vec<StoredEpisode>, StoreError> {
+        #[cfg(test)]
+        self.citation_source_batch_reads
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        state.validate_context(context)?;
+        let ids: HashSet<_> = ids.iter().copied().collect();
+        Ok(state
+            .episodes
+            .get(&context.tenant_id)
+            .into_iter()
+            .flatten()
+            .filter(|episode| {
+                ids.contains(&episode.id)
+                    && episode.data_subject_id == context.data_subject_id
+                    && episode.subject_generation == context.subject_generation
+                    && episode.scope_id == context.scope_id
+                    && episode.agent_node_id == context.agent_node_id
+                    && episode.actor_id == context.actor_id
+            })
+            .cloned()
+            .collect())
+    }
+
     async fn fetch_resource(
         &self,
         context: &ResolvedMemoryContext,
@@ -4211,6 +4251,34 @@ impl MemoryStore for InMemoryStore {
                     })
                     .cloned()
             }))
+    }
+
+    async fn fetch_resources_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[ResourceId],
+    ) -> Result<Vec<StoredResource>, StoreError> {
+        #[cfg(test)]
+        self.citation_source_batch_reads
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        state.validate_context(context)?;
+        let ids: HashSet<_> = ids.iter().copied().collect();
+        Ok(state
+            .resources
+            .get(&context.tenant_id)
+            .into_iter()
+            .flatten()
+            .filter(|resource| {
+                ids.contains(&resource.id)
+                    && resource.data_subject_id == context.data_subject_id
+                    && resource.subject_generation == context.subject_generation
+                    && resource.scope_id == context.scope_id
+                    && resource.agent_node_id == context.agent_node_id
+                    && resource.actor_id == context.actor_id
+            })
+            .cloned()
+            .collect())
     }
 
     async fn stage_correction(
@@ -7190,6 +7258,42 @@ async fn build_recall_citations<S: MemoryStore>(
         .into_iter()
         .map(|material| (material.unit.id, material))
         .collect::<HashMap<_, _>>();
+    let episode_ids = materials
+        .values()
+        .flat_map(|material| {
+            material
+                .citations
+                .iter()
+                .filter_map(|citation| citation.episode_id)
+        })
+        .collect::<HashSet<_>>();
+    let resource_ids = materials
+        .values()
+        .flat_map(|material| {
+            material
+                .citations
+                .iter()
+                .filter_map(|citation| citation.resource_id)
+        })
+        .collect::<HashSet<_>>();
+    let episodes = store
+        .fetch_episodes_by_ids(
+            &request.context,
+            &episode_ids.into_iter().collect::<Vec<_>>(),
+        )
+        .await?
+        .into_iter()
+        .map(|episode| (episode.id, episode))
+        .collect::<HashMap<_, _>>();
+    let resources = store
+        .fetch_resources_by_ids(
+            &request.context,
+            &resource_ids.into_iter().collect::<Vec<_>>(),
+        )
+        .await?
+        .into_iter()
+        .map(|resource| (resource.id, resource))
+        .collect::<HashMap<_, _>>();
     let mut output = Vec::new();
 
     for item in items {
@@ -7278,14 +7382,9 @@ async fn build_recall_citations<S: MemoryStore>(
             let (source_kind, source_id, source_ref, source_revision, source_body, source_trust) =
                 match (citation.episode_id, citation.resource_id) {
                     (Some(id), None) => {
-                        let episode = store
-                            .fetch_episode(&request.context, id)
-                            .await?
-                            .ok_or_else(|| {
-                                CoreError::Invalid(
-                                    "canonical citation episode is missing".to_string(),
-                                )
-                            })?;
+                        let episode = episodes.get(&id).ok_or_else(|| {
+                            CoreError::Invalid("canonical citation episode is missing".to_string())
+                        })?;
                         if episode.tenant_id != request.context.tenant_id
                             || episode.data_subject_id != request.context.data_subject_id
                             || episode.scope_id != request.context.scope_id
@@ -7301,21 +7400,16 @@ async fn build_recall_citations<S: MemoryStore>(
                         (
                             EvidenceSourceKind::Episode,
                             id.as_uuid(),
-                            episode.source_ref,
+                            episode.source_ref.clone(),
                             None,
-                            episode.body,
+                            episode.body.clone(),
                             episode.source_trust,
                         )
                     }
                     (None, Some(id)) => {
-                        let resource = store
-                            .fetch_resource(&request.context, id)
-                            .await?
-                            .ok_or_else(|| {
-                                CoreError::Invalid(
-                                    "canonical citation resource is missing".to_string(),
-                                )
-                            })?;
+                        let resource = resources.get(&id).ok_or_else(|| {
+                            CoreError::Invalid("canonical citation resource is missing".to_string())
+                        })?;
                         if resource.tenant_id != request.context.tenant_id
                             || resource.data_subject_id != request.context.data_subject_id
                             || resource.scope_id != request.context.scope_id
@@ -7329,7 +7423,7 @@ async fn build_recall_citations<S: MemoryStore>(
                                 "citation resource is unauthorized for this recall".to_string(),
                             ));
                         }
-                        let body = resource.body.ok_or_else(|| {
+                        let body = resource.body.clone().ok_or_else(|| {
                             CoreError::Invalid(
                                 "canonical citation resource has no source text".to_string(),
                             )
@@ -7344,8 +7438,8 @@ async fn build_recall_citations<S: MemoryStore>(
                         (
                             EvidenceSourceKind::Resource,
                             id.as_uuid(),
-                            resource.source_ref,
-                            resource.revision,
+                            resource.source_ref.clone(),
+                            resource.revision.clone(),
                             body,
                             resource.source_trust,
                         )
@@ -7592,6 +7686,32 @@ mod evidence_receipt_tests {
             serde_json::to_vec(&serde_json::from_slice::<EvidenceReceipt>(&encoded).unwrap())
                 .unwrap(),
             encoded
+        );
+    }
+
+    #[tokio::test]
+    async fn receipt_source_loading_is_constant_batch_count_not_per_citation() {
+        let (store, request, recall_time, item, _) = fixture();
+        let items = vec![item; 128];
+
+        let citations = build_recall_citations(
+            &store,
+            &request,
+            &recall_time,
+            TraceId::from_u128(70_008),
+            &hash_query(&request.query),
+            &items,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(citations.len(), 128);
+        assert_eq!(
+            store
+                .citation_source_batch_reads
+                .load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "one episode batch and one resource batch, independent of citation count"
         );
     }
 

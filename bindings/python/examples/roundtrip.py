@@ -28,8 +28,9 @@ retained = client.retain_episode(
     observed_at="2025-06-01T00:00:00Z",
     source_kind="user",
     body="Release region is Taipei.",
+    idempotency_key="roundtrip-retain-region-v1",
 )
-client.reflect(ctx=ctx)
+client.reflect(ctx=ctx, idempotency_key="roundtrip-reflect-region-v1")
 recalled = client.recall(ctx=ctx, query="Where is the release region?")
 
 print({"retained": retained["episode_id"], "trace_id": recalled["trace_id"]})

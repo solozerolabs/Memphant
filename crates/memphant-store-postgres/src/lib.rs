@@ -3,7 +3,9 @@ use std::str::FromStr;
 
 mod store;
 
-pub use store::{PgStore, PgTxn};
+pub use store::{
+    DEFAULT_DATABASE_MAX_CONNECTIONS, MAX_WORKER_DATABASE_MAX_CONNECTIONS, PgStore, PgTxn,
+};
 
 pub const STORE_NAME: &str = "postgres";
 
@@ -11,15 +13,21 @@ const WSA_BOOTSTRAP_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260703_001_wsa_bootstrap.sql");
 const FILE_SYNC_MUTATION_VERB_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql");
+const WORKER_CLAIM_THROUGHPUT_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260724_003_worker_claim_throughput.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260723_002_file_sync_mutation_verb";
+pub const MIGRATION_HEAD: &str = "20260724_003_worker_claim_throughput";
 
 /// Bundled migrations in apply order.
 pub const MIGRATIONS: &[(&str, &str)] = &[
     ("20260703_001_wsa_bootstrap", WSA_BOOTSTRAP_SQL),
-    (MIGRATION_HEAD, FILE_SYNC_MUTATION_VERB_SQL),
+    (
+        "20260723_002_file_sync_mutation_verb",
+        FILE_SYNC_MUTATION_VERB_SQL,
+    ),
+    (MIGRATION_HEAD, WORKER_CLAIM_THROUGHPUT_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[

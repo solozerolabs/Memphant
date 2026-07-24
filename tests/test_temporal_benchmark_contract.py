@@ -77,11 +77,86 @@ def test_shared_attempt_ledger_rejects_interruption_duplicate_ids_and_hash_drift
     with pytest.raises(RuntimeError, match="interrupted or unpriced"):
         attempts.validate_provider_attempt_ledger(malformed.snapshot())
 
-    value = json.loads((tmp_path / "attempts.json").read_text(encoding="utf-8"))
-    value["attempts"][0]["result"]["response"]["provider"] = "tampered"
-    (tmp_path / "attempts.json").write_text(json.dumps(value), encoding="utf-8")
-    with pytest.raises(ValueError, match="hash mismatch"):
+    path = tmp_path / "attempts.json"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    terminal = json.loads(lines[2])
+    terminal["payload"]["response"]["provider"] = "tampered"
+    lines[2] = json.dumps(terminal, sort_keys=True, separators=(",", ":"))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="event hash mismatch"):
         attempts.ProviderAttemptLedger(tmp_path / "attempts.json", "fingerprint")
+
+
+def test_attempt_journal_appends_without_rewriting_and_rejects_truncation_or_forks(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+    path = tmp_path / "attempts.jsonl"
+    ledger = attempts.ProviderAttemptLedger(path, "fingerprint")
+    start = {
+        "retry_index": 0,
+        "requested_model": "openai/gpt-5.6-luna-pro",
+        "request_sha256": "1" * 64,
+    }
+    ledger.record("start", "request-a", start)
+    prefix = path.read_bytes()
+    ledger.record("result", "request-a", {"response": paid_response("response-a")})
+    complete = path.read_bytes()
+    assert complete.startswith(prefix)
+    assert len(complete) > len(prefix)
+
+    truncated = tmp_path / "truncated.jsonl"
+    truncated.write_bytes(complete[:-1])
+    with pytest.raises(ValueError, match="truncated"):
+        attempts.ProviderAttemptLedger(truncated, "fingerprint")
+
+    malformed = tmp_path / "malformed.jsonl"
+    malformed.write_bytes(complete + b"not-json\n")
+    with pytest.raises(ValueError, match="malformed"):
+        attempts.ProviderAttemptLedger(malformed, "fingerprint")
+
+    forked = tmp_path / "forked.jsonl"
+    forked.write_bytes(complete)
+    prior = json.loads(complete.splitlines()[-1])
+    terminal = {
+        "event": "error",
+        "attempt_id": 1,
+        "request_key": "request-a",
+        "payload": {"type": "late-error"},
+        "sequence": 3,
+        "previous_event_sha256": attempts.hashlib.sha256(
+            attempts._event_bytes(prior)
+        ).hexdigest(),
+    }
+    terminal["event_sha256"] = attempts._sha256_json(terminal)
+    with forked.open("ab") as handle:
+        handle.write(attempts._event_bytes(terminal) + b"\n")
+    with pytest.raises(ValueError, match="forked terminal transition"):
+        attempts.ProviderAttemptLedger(forked, "fingerprint")
+
+
+def test_attempt_journal_coordinates_multiple_live_writers(tmp_path: Path) -> None:
+    attempts = load_attempts()
+    path = tmp_path / "attempts.jsonl"
+    first = attempts.ProviderAttemptLedger(path, "fingerprint")
+    second = attempts.ProviderAttemptLedger(path, "fingerprint")
+    start = {
+        "retry_index": 0,
+        "requested_model": "openai/gpt-5.6-luna-pro",
+        "request_sha256": "1" * 64,
+    }
+
+    first.record("start", "request-a", start)
+    second.record("start", "request-b", start)
+    first.record("result", "request-a", {"response": paid_response("response-a")})
+    second.record("result", "request-b", {"response": paid_response("response-b")})
+
+    snapshot = first.snapshot()
+    attempts.validate_provider_attempt_ledger(snapshot)
+    assert [row["request_key"] for row in snapshot["attempts"]] == [
+        "request-a",
+        "request-b",
+    ]
 
 
 def load_script():

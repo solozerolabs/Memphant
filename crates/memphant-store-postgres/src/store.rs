@@ -37,6 +37,8 @@ use crate::MIGRATION_HEAD;
 /// 3339 strings and cast `::timestamptz`.
 const TS_FMT: &str = r#"'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'"#;
 const TRANSACTION_POOLER_ERROR: &str = "persistent Postgres connections cannot use transaction pooler port 6543; use direct or session port 5432";
+pub const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 8;
+pub const MAX_WORKER_DATABASE_MAX_CONNECTIONS: u32 = 64;
 
 fn ts(column: &str) -> String {
     format!("to_char({column} at time zone 'utc', {TS_FMT})")
@@ -186,6 +188,18 @@ impl PgStore {
         Self::connect_pools(database_url, None, None).await
     }
 
+    pub async fn connect_worker_with_max_connections(
+        database_url: &str,
+        max_connections: u32,
+    ) -> Result<Self, StoreError> {
+        if !(1..=MAX_WORKER_DATABASE_MAX_CONNECTIONS).contains(&max_connections) {
+            return Err(StoreError::Backend(format!(
+                "worker database max connections must be from 1 through {MAX_WORKER_DATABASE_MAX_CONNECTIONS}"
+            )));
+        }
+        Self::connect_pools_with_database_capacity(database_url, None, None, max_connections).await
+    }
+
     pub async fn connect_provisioner(database_url: &str) -> Result<Self, StoreError> {
         Self::connect_pools(database_url, None, Some(database_url)).await
     }
@@ -208,6 +222,21 @@ impl PgStore {
         auth_database_url: Option<&str>,
         provision_database_url: Option<&str>,
     ) -> Result<Self, StoreError> {
+        Self::connect_pools_with_database_capacity(
+            database_url,
+            auth_database_url,
+            provision_database_url,
+            DEFAULT_DATABASE_MAX_CONNECTIONS,
+        )
+        .await
+    }
+
+    async fn connect_pools_with_database_capacity(
+        database_url: &str,
+        auth_database_url: Option<&str>,
+        provision_database_url: Option<&str>,
+        database_max_connections: u32,
+    ) -> Result<Self, StoreError> {
         let database_options = Self::persistent_connect_options(database_url)?;
         let auth_options = auth_database_url
             .map(Self::persistent_connect_options)
@@ -215,16 +244,20 @@ impl PgStore {
         let provision_options = provision_database_url
             .map(Self::persistent_connect_options)
             .transpose()?;
-        let pool = Self::connect_pool(database_options).await?;
+        let pool = Self::connect_pool(database_options, database_max_connections).await?;
         let auth_pool = match (auth_database_url, auth_options) {
             (Some(url), _) if url == database_url => Some(pool.clone()),
-            (Some(_), Some(options)) => Some(Self::connect_pool(options).await?),
+            (Some(_), Some(options)) => {
+                Some(Self::connect_pool(options, DEFAULT_DATABASE_MAX_CONNECTIONS).await?)
+            }
             (None, None) => None,
             _ => unreachable!("auth URL and parsed options must match"),
         };
         let provision_pool = match (provision_database_url, provision_options) {
             (Some(url), _) if url == database_url => Some(pool.clone()),
-            (Some(_), Some(options)) => Some(Self::connect_pool(options).await?),
+            (Some(_), Some(options)) => {
+                Some(Self::connect_pool(options, DEFAULT_DATABASE_MAX_CONNECTIONS).await?)
+            }
             (None, None) => None,
             _ => unreachable!("provision URL and parsed options must match"),
         };
@@ -243,9 +276,12 @@ impl PgStore {
         Ok(options)
     }
 
-    async fn connect_pool(options: PgConnectOptions) -> Result<PgPool, StoreError> {
+    async fn connect_pool(
+        options: PgConnectOptions,
+        max_connections: u32,
+    ) -> Result<PgPool, StoreError> {
         let pool = PgPoolOptions::new()
-            .max_connections(8)
+            .max_connections(max_connections)
             .after_connect(|connection, _| {
                 Box::pin(async move {
                     sqlx::query(
@@ -637,6 +673,70 @@ impl PgStore {
                 row.try_get("last_observed_at").map_err(backend)?,
             )
             .ok_or_else(|| StoreError::Backend("episode last_observed_at is null".to_string()))?,
+        })
+    }
+
+    fn resource_from_row(row: &PgRow) -> Result<StoredResource, StoreError> {
+        let acl = serde_json::from_value::<ResourceAcl>(
+            row.try_get::<serde_json::Value, _>("acl")
+                .map_err(backend)?,
+        )
+        .map_err(|error| StoreError::Backend(format!("invalid resource ACL: {error}")))?;
+        Ok(StoredResource {
+            id: ResourceId::from_u128(row.try_get::<Uuid, _>("id").map_err(backend)?.as_u128()),
+            tenant_id: TenantId::from_u128(
+                row.try_get::<Uuid, _>("tenant_id")
+                    .map_err(backend)?
+                    .as_u128(),
+            ),
+            data_subject_id: SubjectId::from_u128(
+                row.try_get::<Uuid, _>("data_subject_id")
+                    .map_err(backend)?
+                    .as_u128(),
+            ),
+            scope_id: ScopeId::from_u128(
+                row.try_get::<Uuid, _>("scope_id")
+                    .map_err(backend)?
+                    .as_u128(),
+            ),
+            actor_id: ActorId::from_u128(
+                row.try_get::<Uuid, _>("actor_id")
+                    .map_err(backend)?
+                    .as_u128(),
+            ),
+            agent_node_id: AgentNodeId::from_u128(
+                row.try_get::<Uuid, _>("agent_node_id")
+                    .map_err(backend)?
+                    .as_u128(),
+            ),
+            subject_generation: row
+                .try_get::<i64, _>("subject_generation")
+                .map_err(backend)? as u64,
+            uri: row.try_get("uri").map_err(backend)?,
+            source_ref: row.try_get("source_ref").map_err(backend)?,
+            observed_at: canonical_timestamp(row.try_get("observed_at").map_err(backend)?)
+                .ok_or_else(|| StoreError::Backend("resource observed_at is null".to_string()))?,
+            kind: enum_from_str(row.try_get::<String, _>("kind").map_err(backend)?.as_str())
+                .unwrap_or_default(),
+            content_hash: row.try_get("content_hash").map_err(backend)?,
+            mime_type: row
+                .try_get::<Option<String>, _>("mime_type")
+                .map_err(backend)?
+                .unwrap_or_default(),
+            revision: row.try_get("revision").map_err(backend)?,
+            body: row.try_get("body").map_err(backend)?,
+            source_trust: enum_from_str(
+                row.try_get::<String, _>("source_trust")
+                    .map_err(backend)?
+                    .as_str(),
+            )
+            .unwrap_or(TrustLevel::Quarantined),
+            acl,
+            extractor_state: enum_from_str(
+                row.try_get::<String, _>("extractor_state")
+                    .map_err(backend)?
+                    .as_str(),
+            )?,
         })
     }
 
@@ -2813,6 +2913,40 @@ impl MemoryStore for PgStore {
         row.as_ref().map(Self::episode_from_row).transpose()
     }
 
+    async fn fetch_episodes_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[EpisodeId],
+    ) -> Result<Vec<StoredEpisode>, StoreError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut tx = self.tenant_tx(context.tenant_id).await?;
+        let ids = ids.iter().map(|id| id.as_uuid()).collect::<Vec<_>>();
+        let rows = sqlx::query(
+            "select id, tenant_id, data_subject_id, scope_id, actor_id, agent_node_id,
+                    subject_generation, source_kind, source_ref, source_trust, dedup_key, body,
+                    observation_count,
+                    to_char(first_observed_at at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') as first_observed_at,
+                    to_char(last_observed_at at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') as last_observed_at
+             from memphant.episode
+             where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+               and scope_id = $4 and agent_node_id = $5 and actor_id = $6
+               and id = any($7) and deletion_generation is null",
+        )
+        .bind(context.tenant_id.as_uuid())
+        .bind(context.data_subject_id.as_uuid())
+        .bind(context.subject_generation as i64)
+        .bind(context.scope_id.as_uuid())
+        .bind(context.agent_node_id.as_uuid())
+        .bind(context.actor_id.as_uuid())
+        .bind(ids)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(backend)?;
+        rows.iter().map(Self::episode_from_row).collect()
+    }
+
     async fn fetch_resource(
         &self,
         context: &ResolvedMemoryContext,
@@ -2839,68 +2973,40 @@ impl MemoryStore for PgStore {
         .fetch_optional(&mut *tx)
         .await
         .map_err(backend)?;
-        let Some(row) = row else { return Ok(None) };
-        let acl = serde_json::from_value::<ResourceAcl>(
-            row.try_get::<serde_json::Value, _>("acl")
-                .map_err(backend)?,
+        row.as_ref().map(Self::resource_from_row).transpose()
+    }
+
+    async fn fetch_resources_by_ids(
+        &self,
+        context: &ResolvedMemoryContext,
+        ids: &[ResourceId],
+    ) -> Result<Vec<StoredResource>, StoreError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut tx = self.tenant_tx(context.tenant_id).await?;
+        let ids = ids.iter().map(|id| id.as_uuid()).collect::<Vec<_>>();
+        let rows = sqlx::query(
+            "select id, tenant_id, data_subject_id, scope_id, actor_id, agent_node_id,
+                    subject_generation, kind, uri, source_ref,
+                    to_char(observed_at at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') as observed_at,
+                    content_hash, mime_type, revision, body, source_trust, acl, extractor_state
+             from memphant.resource
+             where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+               and scope_id = $4 and agent_node_id = $5 and actor_id = $6
+               and id = any($7)",
         )
-        .map_err(|error| StoreError::Backend(format!("invalid resource ACL: {error}")))?;
-        Ok(Some(StoredResource {
-            id: ResourceId::from_u128(row.try_get::<Uuid, _>("id").map_err(backend)?.as_u128()),
-            tenant_id: TenantId::from_u128(
-                row.try_get::<Uuid, _>("tenant_id")
-                    .map_err(backend)?
-                    .as_u128(),
-            ),
-            data_subject_id: SubjectId::from_u128(
-                row.try_get::<Uuid, _>("data_subject_id")
-                    .map_err(backend)?
-                    .as_u128(),
-            ),
-            scope_id: ScopeId::from_u128(
-                row.try_get::<Uuid, _>("scope_id")
-                    .map_err(backend)?
-                    .as_u128(),
-            ),
-            actor_id: ActorId::from_u128(
-                row.try_get::<Uuid, _>("actor_id")
-                    .map_err(backend)?
-                    .as_u128(),
-            ),
-            agent_node_id: AgentNodeId::from_u128(
-                row.try_get::<Uuid, _>("agent_node_id")
-                    .map_err(backend)?
-                    .as_u128(),
-            ),
-            subject_generation: row
-                .try_get::<i64, _>("subject_generation")
-                .map_err(backend)? as u64,
-            uri: row.try_get("uri").map_err(backend)?,
-            source_ref: row.try_get("source_ref").map_err(backend)?,
-            observed_at: canonical_timestamp(row.try_get("observed_at").map_err(backend)?)
-                .ok_or_else(|| StoreError::Backend("resource observed_at is null".to_string()))?,
-            kind: enum_from_str(row.try_get::<String, _>("kind").map_err(backend)?.as_str())
-                .unwrap_or_default(),
-            content_hash: row.try_get("content_hash").map_err(backend)?,
-            mime_type: row
-                .try_get::<Option<String>, _>("mime_type")
-                .map_err(backend)?
-                .unwrap_or_default(),
-            revision: row.try_get("revision").map_err(backend)?,
-            body: row.try_get("body").map_err(backend)?,
-            source_trust: enum_from_str(
-                row.try_get::<String, _>("source_trust")
-                    .map_err(backend)?
-                    .as_str(),
-            )
-            .unwrap_or(TrustLevel::Quarantined),
-            acl,
-            extractor_state: enum_from_str(
-                row.try_get::<String, _>("extractor_state")
-                    .map_err(backend)?
-                    .as_str(),
-            )?,
-        }))
+        .bind(context.tenant_id.as_uuid())
+        .bind(context.data_subject_id.as_uuid())
+        .bind(context.subject_generation as i64)
+        .bind(context.scope_id.as_uuid())
+        .bind(context.agent_node_id.as_uuid())
+        .bind(context.actor_id.as_uuid())
+        .bind(ids)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(backend)?;
+        rows.iter().map(Self::resource_from_row).collect()
     }
 
     async fn stage_correction(

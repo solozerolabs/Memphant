@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "memphant_migrations" / "versions"
 BOOTSTRAP = MIGRATIONS / "20260703_001_wsa_bootstrap.sql"
 FILE_SYNC_FORWARD = MIGRATIONS / "20260723_002_file_sync_mutation_verb.sql"
+WORKER_CLAIM_FORWARD = MIGRATIONS / "20260724_003_worker_claim_throughput.sql"
 
 
 def _load_script(name: str):
@@ -271,9 +272,12 @@ def test_apply_runner_dry_run_reports_ordered_migrations() -> None:
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "migration_plan=2" in result.stdout
+    assert "migration_plan=3" in result.stdout
     assert result.stdout.index("20260703_001_wsa_bootstrap.sql") < result.stdout.index(
         "20260723_002_file_sync_mutation_verb.sql"
+    )
+    assert result.stdout.index("20260723_002_file_sync_mutation_verb.sql") < result.stdout.index(
+        "20260724_003_worker_claim_throughput.sql"
     )
 
 
@@ -312,14 +316,14 @@ def test_apply_runner_executes_migration_and_ledger_in_one_transaction(
     assert result.returncode == 0, result.stdout + result.stderr
     calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     mutation_calls = [call for call in calls if "--file" in call]
-    assert len(mutation_calls) == 2
+    assert len(mutation_calls) == 3
     for call in mutation_calls:
         assert "ON_ERROR_STOP=1" in call
         assert "--single-transaction" in call
         assert "--file" in call
         assert "--command" in call
         assert "insert into memphant.schema_migrations" in call[call.index("--command") + 1]
-    assert len(calls) == 3, "ledger must not execute in a second psql process"
+    assert len(calls) == 4, "ledger must not execute in a second psql process"
 
 
 def test_apply_runner_failure_keeps_migration_and_ledger_in_same_failed_transaction(
@@ -527,7 +531,7 @@ def test_live_forward_migration_upgrades_applied_bootstrap_atomically() -> None:
         check=False,
     )
     assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
-    assert "migration_apply=complete applied=1 skipped=1" in upgrade.stdout
+    assert "migration_apply=complete applied=2 skipped=1" in upgrade.stdout
 
     accepted = runner.psql(database_url, "--command", insert_file_sync)
     assert accepted.returncode == 0, accepted.stderr
@@ -539,10 +543,11 @@ def test_live_forward_migration_upgrades_applied_bootstrap_atomically() -> None:
         "--command",
         "select count(*) from memphant.schema_migrations "
         "where version in ('20260703_001_wsa_bootstrap', "
-        "'20260723_002_file_sync_mutation_verb')",
+        "'20260723_002_file_sync_mutation_verb', "
+        "'20260724_003_worker_claim_throughput')",
     )
     assert readback.returncode == 0, readback.stderr
-    assert readback.stdout.strip() == "2"
+    assert readback.stdout.strip() == "3"
 
 
 def test_wsa_bootstrap_has_schema_migration_compat_floor() -> None:
@@ -754,9 +759,25 @@ def test_bootstrap_has_final_job_state_shape() -> None:
     assert "(tenant_id, data_subject_id, scope_id, agent_node_id, state, run_after)" in sql
     claim = sql.split("create or replace function memphant.claim_reflect_jobs", 1)[1]
     assert "subject.generation = job.subject_generation" in claim
-    assert "earlier.queue_order < job.queue_order" in claim
+    assert "blocking_predecessors as materialized" in claim
+    assert "min(blocker.queue_order) as first_queue_order" in claim
+    assert "job.queue_order < blocker.first_queue_order" in claim
+    assert "not exists (\n        select 1 from memphant.job_state earlier" not in claim
     assert "order by job.queue_order" in claim
     assert "(earlier.created_at, earlier.id)" not in claim
+    assert claim.index("limit greatest(0, least(p_limit, 1000))") < claim.index(
+        "for update of job skip locked"
+    )
+
+
+def test_worker_claim_optimization_has_an_exact_forward_migration() -> None:
+    marker = "create or replace function memphant.claim_reflect_jobs("
+
+    def definition(path: Path) -> str:
+        suffix = path.read_text(encoding="utf-8").split(marker, 1)[1]
+        return marker + suffix.split("\n$$;", 1)[0] + "\n$$;"
+
+    assert definition(BOOTSTRAP) == definition(WORKER_CLAIM_FORWARD)
 
 
 def test_resource_and_source_lineage_are_subject_agent_generation_owned() -> None:
@@ -800,9 +821,9 @@ def test_episode_dedup_and_worker_claim_lanes_are_exact_context_bound() -> None:
         "lane.subject_generation = job.subject_generation",
         "lane.scope_id = job.scope_id",
         "lane.agent_node_id = job.agent_node_id",
-        "earlier.data_subject_id = job.data_subject_id",
-        "earlier.subject_generation = job.subject_generation",
-        "earlier.agent_node_id = job.agent_node_id",
+        "blocker.data_subject_id = job.data_subject_id",
+        "blocker.subject_generation = job.subject_generation",
+        "blocker.agent_node_id = job.agent_node_id",
     ):
         assert predicate in claim
 

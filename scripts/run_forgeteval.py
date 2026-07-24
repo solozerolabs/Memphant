@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 from collections import Counter
@@ -36,6 +37,52 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def repository_identity(root: Path) -> dict:
+    head = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--stage", "-z"],
+        check=True, capture_output=True,
+    ).stdout.split(b"\0")
+    digest = hashlib.sha256()
+    count = 0
+    for entry in tracked:
+        if not entry:
+            continue
+        metadata, raw_path = entry.split(b"\t", 1)
+        mode = metadata.split(b" ", 1)[0]
+        path = raw_path.decode("utf-8", errors="surrogateescape")
+        digest.update(mode + b"\0" + raw_path + b"\0")
+        digest.update(hashlib.sha256((root / path).read_bytes()).digest())
+        count += 1
+    diff = subprocess.run(
+        ["git", "-C", str(root), "diff", "--binary", "HEAD", "--"],
+        check=True, capture_output=True,
+    ).stdout
+    return {
+        "git_head": head,
+        "tracked_file_count": count,
+        "tracked_worktree_sha256": digest.hexdigest(),
+        "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
+        "tracked_dirty": bool(diff),
+    }
+
+
+def migration_identity(root: Path) -> dict:
+    rows = [
+        {"path": str(path.relative_to(root)), "sha256": sha256_file(path)}
+        for path in sorted((root / "memphant_migrations" / "versions").glob("*.sql"))
+    ]
+    return {
+        "files": rows,
+        "aggregate_sha256": hashlib.sha256(
+            json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
 
 
 def verify_upstream(official_dir: Path) -> dict:
@@ -325,9 +372,18 @@ def main() -> int:
             },
             "runtime": {
                 "server": str(Path(args.server_bin).resolve()),
+                "server_sha256": sha256_file(Path(args.server_bin).resolve()),
+                "cli": str(Path(args.cli_bin).resolve()),
+                "cli_sha256": sha256_file(Path(args.cli_bin).resolve()),
                 "database": "run-owned ephemeral scratch Postgres",
                 "mode": "fast",
                 "embed_model": args.embed_model,
+                "adapter_path": str(Path(__file__).resolve()),
+                "adapter_sha256": sha256_file(Path(__file__).resolve()),
+                "repository": repository_identity(ROOT),
+                "migrations": migration_identity(ROOT),
+                "argv": sys.argv,
+                "command": shlex.join([sys.executable, *sys.argv]),
             },
             "capabilities": {
                 "inscribe": "synchronous direct-unit POST /v1/episodes",

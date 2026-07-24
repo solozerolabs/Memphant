@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """MemPhant engine runner for the R0 code-lane sub-bakeoff (R0-T6).
 
-Ingests the pinned coding-events corpus into MemPhant as raw EPISODES (real
+Ingests the pinned coding-events corpus into MemPhant as event-granular raw
+EPISODES (real
 runtime path: packaged ``memphant-server`` + ``memphant-worker`` +
 ``memphant-cli`` against Postgres), then calls ``/v1/recall`` (k=10,
 mode=deep, budget_tokens=8192) per golden question and emits an
@@ -13,19 +14,18 @@ Ingest mapping (episode, not resource — the brief's explicit choice for this
 lane; documented here since the REST API has no literal "turns" field):
 ``POST /v1/episodes`` takes a single ``body: Option<String>`` (see
 ``RetainEpisodeHttpRequest`` in ``memphant-types``) — there is no turn-array
-wire shape. One episode is retained per sampled attempt; its body is that
-attempt's content events concatenated as ``role: text`` lines in sequence
-order, ONE role-prefixed line per event (the exact convention
+wire shape. One episode is retained per content event; its body is one
+``role: text`` record. This preserves the source event granularity instead of
+turning a long trajectory into one oversized retrieval candidate. The format
+is the exact convention
 ``memphant-eval``'s ``bench_lme::session_body`` already uses for LongMemEval
 turns, and the format ``memphant-core::service::segment_episode_body``
 recognizes as "turn-structured" for its citation-window segmentation —
 `parse_turn` there matches a `role: content` PREFIX per physical line, so a
 multi-line event's continuation lines don't themselves parse as turns; this
 is an accepted characteristic of the existing convention, not new here).
-``source_kind="agent"`` (episode content is the coding agent's own
-transcript, not tool/user/web input per the source_kind taxonomy in spec
-`04`), ``source_trust="trusted_system"`` (an advisory hint, capped at the
-provisioned key's ceiling exactly like the docs runner).
+Event roles map explicitly to the public source taxonomy: user→user,
+assistant→agent, and toolResult→tool. Trust is API-key-bound.
 
 Isolation: each run re-execs itself through ``scripts/with_scratch_db.sh``
 (``gate_runtime.reexec_through_scratch_db``) onto a fresh, migrated, per-run
@@ -43,8 +43,11 @@ never drop the gold" contract as the docs runner's ``--limit-haystack``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shlex
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -61,6 +64,60 @@ GOLDEN_PATH = gc.MEMPHANT_ROOT / "benchmarks" / "data" / "coding_events_golden.j
 
 def golden_lock_path(golden_path: Path) -> Path:
     return golden_path.with_name(golden_path.stem + ".lock.json")
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def repository_identity(root: Path) -> dict:
+    head = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--stage", "-z"],
+        check=True,
+        capture_output=True,
+    ).stdout.split(b"\0")
+    digest = hashlib.sha256()
+    count = 0
+    for entry in tracked:
+        if not entry:
+            continue
+        metadata, raw_path = entry.split(b"\t", 1)
+        mode = metadata.split(b" ", 1)[0]
+        path = raw_path.decode("utf-8", errors="surrogateescape")
+        digest.update(mode + b"\0" + raw_path + b"\0")
+        digest.update(hashlib.sha256((root / path).read_bytes()).digest())
+        count += 1
+    diff = subprocess.run(
+        ["git", "-C", str(root), "diff", "--binary", "HEAD", "--"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return {
+        "git_head": head,
+        "tracked_file_count": count,
+        "tracked_worktree_sha256": digest.hexdigest(),
+        "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
+        "tracked_dirty": bool(diff),
+    }
+
+
+def migration_identity(root: Path) -> dict:
+    rows = [
+        {"path": str(path.relative_to(root)), "sha256": sha256_file(path)}
+        for path in sorted((root / "memphant_migrations" / "versions").glob("*.sql"))
+    ]
+    return {
+        "files": rows,
+        "aggregate_sha256": hashlib.sha256(
+            json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
 
 
 # --- pure functions (unit-tested in tests/test_code_lane_run_memphant.py) ---
@@ -237,21 +294,72 @@ def require_outcome_mark_ready(readiness: dict) -> None:
 # --- ingest ------------------------------------------------------------------
 
 
-def ingest_attempt(client: gr.ApiClient, ctx: dict, row: dict) -> str:
-    """Retain one coding attempt as an episode, strict-contract shape.
+EVENT_SOURCE_KINDS = {"user": "user", "assistant": "agent", "toolResult": "tool"}
 
-    Identity comes from the bound context (``ctx``); the episode body is the
-    attempt's role-prefixed transcript. ``source_kind="agent"`` (the agent's own
-    transcript); trust is bound by the API key, never sent."""
-    body = build_episode_body(row["events"])
-    payload = {
-        **ctx,
-        "source_ref": f"coding-attempt:{row['attempt_id']}",
-        "observed_at": "2026-07-13T00:00:00Z",
-        "payload": {"episode": {"source_kind": "agent", "body": body}},
-    }
-    response = client.post("/v1/episodes", payload)
-    return response.get("episode_id") or ""
+
+def event_source_ref(row: dict, event: dict) -> str:
+    return f"coding-event:{row['attempt_id']}:{event['sequence']}:{event['event_id']}"
+
+
+def ingest_attempt(client: gr.ApiClient, ctx: dict, row: dict) -> list[str]:
+    """Retain every coding event as an event-granular episode.
+
+    Identity comes from the bound context; tenant remains API-key-bound."""
+    episode_ids = []
+    for event in row["events"]:
+        try:
+            source_kind = EVENT_SOURCE_KINDS[event["role"]]
+        except KeyError as error:
+            raise RuntimeError(f"unmapped code event role: {event['role']!r}") from error
+        response = client.post(
+            "/v1/episodes",
+            {
+                **ctx,
+                "source_ref": event_source_ref(row, event),
+                "observed_at": row["started_at"],
+                "payload": {
+                    "episode": {
+                        "source_kind": source_kind,
+                        "body": f"{event['role']}: {event['text']}",
+                    }
+                },
+            },
+        )
+        episode_id = response.get("episode_id")
+        if not episode_id:
+            raise RuntimeError("event retain response omitted episode_id")
+        episode_ids.append(episode_id)
+    return episode_ids
+
+
+ISOLATION_SENTINEL_TEXT = "tenant-b-only isolation sentinel cobalt-orchid-7319"
+
+
+def ingest_isolation_sentinel(client: gr.ApiClient, ctx: dict, row: dict) -> tuple[str, str]:
+    """Insert one tenant-B-only row using a source ref that also exists in A.
+
+    This proves tenant identity, rather than external source identity, controls
+    isolation. The body is intentionally distinct from the evaluation corpus.
+    """
+    event = row["events"][0]
+    source_ref = event_source_ref(row, event)
+    response = client.post(
+        "/v1/episodes",
+        {
+            **ctx,
+            "source_ref": source_ref,
+            "observed_at": row["started_at"],
+            "payload": {
+                "episode": {
+                    "source_kind": EVENT_SOURCE_KINDS[event["role"]],
+                    "body": f"{event['role']}: {ISOLATION_SENTINEL_TEXT}",
+                }
+            },
+        },
+    )
+    if not response.get("episode_id"):
+        raise RuntimeError("isolation sentinel retain response omitted episode_id")
+    return source_ref, f"{event['role']}: {ISOLATION_SENTINEL_TEXT}"
 
 
 def main() -> int:
@@ -292,7 +400,8 @@ def main() -> int:
     args = parser.parse_args()
 
     golden_path = Path(args.golden)
-    lock = json.loads(golden_lock_path(golden_path).read_text())
+    lock_path = golden_lock_path(golden_path)
+    lock = json.loads(lock_path.read_text())
     corpus_path = Path(args.corpus)
     corpus_rows, goldens = verify_input_contract(corpus_path, golden_path, lock)
     readiness = control_readiness(corpus_rows, goldens)
@@ -322,8 +431,16 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    tenant_id, api_key = gr.provision_tenant(args.cli_bin, args.database_url, name_prefix="code-lane-gate")
-    print(f"{label_prefix}tenant={tenant_id}", file=sys.stderr)
+    principals = [
+        gr.provision_tenant(
+            args.cli_bin, args.database_url, name_prefix=f"code-lane-gate-{name}"
+        )
+        for name in ("a", "b")
+    ]
+    print(
+        f"{label_prefix}tenants={','.join(tenant for tenant, _key in principals)}",
+        file=sys.stderr,
+    )
 
     log_name = f"server-{args.label}.log" if args.label else "server.log"
     server_log_path = Path(args.out_provenance).resolve().parent / log_name
@@ -337,34 +454,51 @@ def main() -> int:
     # self-terminates before raising; stop() here is then a safe no-op).
     try:
         server.start()
-        client = gr.ApiClient(args.port, api_key, tenant_id)
-        # One bound context for the whole code-lane run (strict contract:
-        # server assigns the ids; we never send tenant_id).
-        ctx = client.bind_context(
-            "code-lane:coding-attempts",
-            subject_ref="code-lane:subject",
-            actor_ref="code-lane:actor",
-            actor_kind="agent",
-            scope_ref="code-lane:scope",
-            agent_node_ref="code-lane:agent",
-        )
+        clients = [gr.ApiClient(args.port, key, tenant) for tenant, key in principals]
+        contexts = [
+            client.bind_context(
+                "code-lane:coding-events",
+                subject_ref="code-lane:subject",
+                actor_ref="code-lane:actor",
+                actor_kind="agent",
+                scope_ref="code-lane:scope",
+                agent_node_ref="code-lane:agent",
+            )
+            for client in clients
+        ]
         t0 = time.time()
+        evaluation_events = 0
         for i, row in enumerate(ingest_rows):
-            ingest_attempt(client, ctx, row)
+            evaluation_events += len(ingest_attempt(clients[0], contexts[0], row))
             if (i + 1) % 25 == 0:
                 print(f"{label_prefix}  ingested {i + 1}/{len(ingest_rows)}", file=sys.stderr)
+        sentinel_source_ref, sentinel_body = ingest_isolation_sentinel(
+            clients[1], contexts[1], ingest_rows[0]
+        )
+        isolation_sentinel_events = 1
+        ingest_seconds = time.time() - t0
         print(
-            f"{label_prefix}ingest done in {time.time() - t0:.1f}s; draining worker...",
+            f"{label_prefix}ingest done in {ingest_seconds:.1f}s "
+            f"evaluation_events={evaluation_events} sentinel_events=1; draining worker...",
             file=sys.stderr,
         )
+        compile_started = time.time()
         compiled = gr.drain_worker(args.worker_bin, args.database_url, args.embed_model)
+        compile_seconds = time.time() - compile_started
+        expected_jobs = evaluation_events + isolation_sentinel_events
+        if compiled != expected_jobs:
+            raise RuntimeError(
+                f"compiled job count mismatch: {compiled} != {expected_jobs} events"
+            )
         print(f"{label_prefix}worker drained: compiled={compiled} jobs", file=sys.stderr)
 
         evidence_rows = []
         provenance_rows = []
+        recall_started = time.time()
         for i, golden in enumerate(goldens):
             bodies, degraded = gr.recall_query(
-                client, ctx, golden["question"], args.k, args.budget_tokens, args.mode
+                clients[0], contexts[0], golden["question"], args.k,
+                args.budget_tokens, args.mode
             )
             evidence_rows.append(gc.evidence_row(golden, bodies, args.k))
             provenance_rows.append(
@@ -379,6 +513,21 @@ def main() -> int:
             )
             if (i + 1) % 10 == 0:
                 print(f"{label_prefix}  recalled {i + 1}/{len(goldens)}", file=sys.stderr)
+        recall_seconds = time.time() - recall_started
+
+        isolation_golden = goldens[0]
+        other_bodies, other_degraded = gr.recall_query(
+            clients[1], contexts[1], isolation_golden["question"],
+            args.k, args.budget_tokens, args.mode,
+        )
+        if other_degraded or gc.provenance_hit(isolation_golden, other_bodies, args.k):
+            raise RuntimeError("two-tenant negative recall leaked owner evidence")
+        owner_sentinel_bodies, owner_sentinel_degraded = gr.recall_query(
+            clients[0], contexts[0], ISOLATION_SENTINEL_TEXT,
+            args.k, args.budget_tokens, args.mode,
+        )
+        if owner_sentinel_degraded or sentinel_body in owner_sentinel_bodies:
+            raise RuntimeError("two-tenant negative recall leaked sentinel evidence")
 
         gc.write_jsonl(Path(args.out_evidence), evidence_rows)
         n = len(provenance_rows)
@@ -391,15 +540,51 @@ def main() -> int:
             "embed_model": args.embed_model,
             "label": args.label,
             "golden_path": str(golden_path),
+            "corpus_path": str(corpus_path),
             "database_url_db": args.database_url.rsplit("/", 1)[-1],
             "k": args.k,
             "recall_mode": args.mode,
             "budget_tokens": args.budget_tokens,
             "ingested_attempts": len(ingest_rows),
+            "ingested_events": evaluation_events + isolation_sentinel_events,
+            "evaluation_events": evaluation_events,
+            "isolation_sentinel_events": isolation_sentinel_events,
+            "compiled_jobs": compiled,
             "corpus_attempts": len(corpus_rows),
             "limit_attempts": args.limit_attempts,
             "golden_sha256": golden_sha,
+            "corpus_sha256": lock["extraction"]["corpus_sha256"],
+            "golden_lock_sha256": sha256_file(lock_path),
             "golden_count": n,
+            "runtime_identity": {
+                "repository": repository_identity(gc.MEMPHANT_ROOT),
+                "migrations": migration_identity(gc.MEMPHANT_ROOT),
+                "runner_sha256": sha256_file(Path(__file__).resolve()),
+                "gate_common_sha256": sha256_file(Path(gc.__file__).resolve()),
+                "gate_runtime_sha256": sha256_file(Path(gr.__file__).resolve()),
+                "server_sha256": sha256_file(Path(args.server_bin).resolve()),
+                "worker_sha256": sha256_file(Path(args.worker_bin).resolve()),
+                "cli_sha256": sha256_file(Path(args.cli_bin).resolve()),
+                "argv": sys.argv,
+                "command": shlex.join([sys.executable, *sys.argv]),
+            },
+            "timings": {
+                "ingest_seconds": ingest_seconds,
+                "compile_seconds": compile_seconds,
+                "recall_seconds": recall_seconds,
+                "events_per_ingest_second": evaluation_events / ingest_seconds,
+            },
+            "tenancy": {
+                "api_tenants": 2,
+                "tenant_a_evaluation_events": evaluation_events,
+                "tenant_b_isolation_sentinel_events": isolation_sentinel_events,
+                "identical_binding_refs": True,
+                "identical_source_ref_sentinel": True,
+                "sentinel_source_ref": sentinel_source_ref,
+                "cross_tenant_negative_question_id": isolation_golden["question_id"],
+                "owner_to_sentinel_negative_passed": True,
+                "sentinel_to_owner_negative_passed": True,
+            },
             "control_readiness": readiness,
             "recall_at_5": r5,
             "recall_at_10": r10,

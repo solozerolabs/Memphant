@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "status": "AWAITING_EXPLICIT_MODEL_AND_COMPUTE_AUTHORIZATION",
+  "model_calls_executed": 0,
+  "settled_model_cost_usd": "0",
+  "official_code_revision": "31bb04155f52b184bf31b220e3cff0607ac9c953",
+  "official_dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
+  "protocol": {
+    "stage_1": "12 SWE-ContextBench Lite related tasks, repo-index recall versus no-context; continue only if resolved count is not lower",
+    "stage_2": "only after stage 1 freezes, the same 12 tasks with procedures derived from 12 disjoint prior tasks; promote only at plus 2 resolved and zero unsafe procedure reuse",
+    "agent_model": "Claude Sonnet 4.5 as specified by the preregistered plan",
+    "official_grader": "SWEContextBench evaluation.sh Lite path and prebuilt jiayuanz3/swecontextbench images"
+  },
+  "required_before_execution": [
+    "freeze the exact 12 evaluation task IDs and 12 disjoint experience task IDs",
+    "implement and test the MemPhant-to-agent prediction adapter without altering the official grader",
+    "freeze exact model ID, per-task turns and token ceilings, provider prices, total provider-attempt ceiling, Docker resource ceiling, and maximum USD spend",
+    "record explicit user authorization over those exact hashes and ceilings",
+    "validate authorization before reading provider credentials or starting a model-backed task"
+  ],
+  "kill_predicates": [
+    "official code, dataset, case, image, model, prompt, adapter, or grader identity drifts",
+    "a stage ceiling is exceeded or the next task would exceed it",
+    "any task lacks a complete provider-attempt and Docker-evaluation receipt",
+    "stage 1 resolves fewer tasks than no-context",
+    "stage 2 improves by fewer than two resolved tasks or has any unsafe procedure reuse"
+  ],
+  "non_claim": "The no-model smoke is not a benchmark run or a MemPhant result. This packet is intentionally non-executable until the remaining hashes and hard budgets are frozen and separately authorized."
+}

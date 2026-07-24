@@ -44,6 +44,8 @@ use crate::{
 
 pub const DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY: usize = 4;
 pub const MAX_STRUCTURED_STATE_PREFETCH_CONCURRENCY: usize = 16;
+pub const DEFAULT_WORKER_COMPILE_CONCURRENCY: usize = 16;
+pub const MAX_WORKER_COMPILE_CONCURRENCY: usize = 128;
 /// The maximum encoded JSON payload returned by the canonical projection read.
 pub const MAX_CANONICAL_PROJECTION_ENCODED_BYTES: usize = 1_048_576;
 /// Maximum-length future timestamp emitted by the canonical Jiff formatter.
@@ -2709,6 +2711,34 @@ mod structured_provider_retry_tests {
         );
     }
 
+    #[tokio::test]
+    async fn worker_batch_is_not_capped_by_provider_prefetch_concurrency() {
+        let store = InMemoryStore::default();
+        let tenant = TenantId::new();
+        let context = bind_test_context(&store, tenant, "batch-not-prefetch").await;
+        let service = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(FixedClock("2026-07-13T00:00:00Z")),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_prefetch_concurrency(2);
+        for index in 0..6 {
+            let key = format!("batch-not-prefetch:{index}");
+            service
+                .retain(
+                    &context,
+                    &key,
+                    TrustLevel::TrustedUser,
+                    episode_request(&context, key.clone(), format!("user: event {index}")),
+                )
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(service.run_worker_tick(16).await.unwrap(), 6);
+        assert_eq!(service.pending_worker_job_count().await.unwrap(), 0);
+    }
+
     #[tokio::test(start_paused = true)]
     async fn worker_prepares_distinct_lanes_concurrently() {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -2733,8 +2763,16 @@ mod structured_provider_retry_tests {
             Arc::new(NoopEmbedding),
         )
         .with_structured_state_provider(Arc::new(provider))
-        .with_structured_state_prefetch_concurrency(2);
-        for (suffix, city) in [("oslo-lane", "Oslo"), ("lima-lane", "Lima")] {
+        .with_structured_state_prefetch_concurrency(2)
+        .with_worker_compile_concurrency(128);
+        for (suffix, city) in [
+            ("oslo-lane", "Oslo"),
+            ("lima-lane", "Lima"),
+            ("rome-lane", "Rome"),
+            ("paris-lane", "Paris"),
+            ("tokyo-lane", "Tokyo"),
+            ("cairo-lane", "Cairo"),
+        ] {
             let context = bind_test_context(&store, tenant, suffix).await;
             let key = format!("structured:parallel-lane:{suffix}");
             service
@@ -2752,9 +2790,9 @@ mod structured_provider_retry_tests {
                 .unwrap();
         }
 
-        assert_eq!(service.run_worker_tick(16).await.unwrap(), 2);
-        assert_eq!(calls.load(Ordering::SeqCst), 2);
-        assert!(max_in_flight.load(Ordering::SeqCst) >= 2);
+        assert_eq!(service.run_worker_tick(16).await.unwrap(), 6);
+        assert_eq!(calls.load(Ordering::SeqCst), 6);
+        assert_eq!(max_in_flight.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]
@@ -3110,6 +3148,7 @@ pub struct MemoryService<S: MemoryStore> {
     cross_rerank_granularity: CrossRerankGranularity,
     structured_state_provider: Option<Arc<dyn StructuredStateProvider>>,
     structured_state_prefetch_concurrency: usize,
+    worker_compile_concurrency: usize,
     deep_recall_provider: Option<Arc<dyn DeepRecallProvider>>,
 }
 
@@ -3130,6 +3169,7 @@ impl<S: MemoryStore> Clone for MemoryService<S> {
             cross_rerank_granularity: self.cross_rerank_granularity,
             structured_state_provider: self.structured_state_provider.clone(),
             structured_state_prefetch_concurrency: self.structured_state_prefetch_concurrency,
+            worker_compile_concurrency: self.worker_compile_concurrency,
             deep_recall_provider: self.deep_recall_provider.clone(),
         }
     }
@@ -3152,6 +3192,7 @@ impl<S: MemoryStore> MemoryService<S> {
             cross_rerank_granularity: CrossRerankGranularity::UnitBody,
             structured_state_provider: None,
             structured_state_prefetch_concurrency: DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY,
+            worker_compile_concurrency: DEFAULT_WORKER_COMPILE_CONCURRENCY,
             deep_recall_provider: None,
         }
     }
@@ -3288,6 +3329,15 @@ impl<S: MemoryStore> MemoryService<S> {
     pub fn with_structured_state_prefetch_concurrency(mut self, concurrency: usize) -> Self {
         self.structured_state_prefetch_concurrency =
             concurrency.clamp(1, MAX_STRUCTURED_STATE_PREFETCH_CONCURRENCY);
+        self
+    }
+
+    /// Sets the maximum number of independent scope lanes compiled in parallel
+    /// when no structured-state provider is installed. Provider-bearing work
+    /// always uses the separately bounded prefetch concurrency so increasing
+    /// local throughput cannot increase remote calls or spend.
+    pub fn with_worker_compile_concurrency(mut self, concurrency: usize) -> Self {
+        self.worker_compile_concurrency = concurrency.clamp(1, MAX_WORKER_COMPILE_CONCURRENCY);
         self
     }
 
@@ -4695,13 +4745,7 @@ impl<S: MemoryStore> MemoryService<S> {
         filter: JobFilter,
         batch: usize,
     ) -> Result<usize, ServiceError> {
-        let jobs = self
-            .store
-            .claim_reflect_jobs(
-                filter,
-                batch.min(self.structured_state_prefetch_concurrency),
-            )
-            .await?;
+        let jobs = self.store.claim_reflect_jobs(filter, batch).await?;
         let mut lanes: Vec<Vec<ReflectJobRow>> = Vec::new();
         for job in jobs {
             let lane = (
@@ -4726,6 +4770,11 @@ impl<S: MemoryStore> MemoryService<S> {
                 None => lanes.push(vec![job]),
             }
         }
+        let lane_concurrency = if self.structured_state_provider.is_some() {
+            self.structured_state_prefetch_concurrency
+        } else {
+            self.worker_compile_concurrency
+        };
         let outcomes = stream::iter(lanes.into_iter().map(|jobs| {
             let service = self.clone();
             async move {
@@ -4851,7 +4900,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 Ok::<usize, ServiceError>(completed)
             }
         }))
-        .buffer_unordered(self.structured_state_prefetch_concurrency)
+        .buffer_unordered(lane_concurrency)
         .collect::<Vec<_>>()
         .await;
         outcomes

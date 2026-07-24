@@ -1641,6 +1641,16 @@ def load_bootstrap():
     return module
 
 
+def load_provider_attempts():
+    spec = importlib.util.spec_from_file_location(
+        "memsyco_provider_attempts", ROOT / "scripts" / "provider_attempts.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -2084,7 +2094,7 @@ def test_bootstrap_usage_meter_records_complete_usage_without_secrets(
     client = module.OpenAI(api_key="secret-key", base_url="https://models.invalid/v1")
     client.chat.completions.create(model="requested-model", messages=[{"role": "user", "content": "hi"}])
 
-    stored = json.loads(ledger.read_text(encoding="utf-8"))
+    stored = load_provider_attempts().load_provider_attempt_ledger_snapshot(ledger)
     assert stored["attempts_sha256"]
     assert len(stored["attempts"]) == 1
     assert stored["attempts"][0]["status"] == "result"
@@ -2182,7 +2192,7 @@ def test_bootstrap_meter_wraps_async_client_and_disables_hidden_retries(
 
     assert constructors[0]["max_retries"] == 0
     assert constructors[0]["default_headers"]["X-OpenRouter-Cache"] == "false"
-    stored = json.loads(ledger.read_text(encoding="utf-8"))
+    stored = load_provider_attempts().load_provider_attempt_ledger_snapshot(ledger)
     response = stored["attempts"][0]["result"]["response"]
     assert response["response_id"] == "async-1"
     assert response["retry_index"] == 0
@@ -2231,7 +2241,7 @@ def test_async_meter_reconciles_generation_stats_off_event_loop_and_times_errors
     module_under_test.install_openai_meter(sdk, ledger, generation_lookup=lookup)
     asyncio.run(sdk.AsyncOpenAI().chat.completions.create(model="requested", messages=[]))
     assert lookup_threads and lookup_threads[0] != event_loop_thread
-    assert json.loads(ledger.read_text(encoding="utf-8"))["attempts"][0]["result"][
+    assert module_under_test.load_provider_attempt_ledger_snapshot(ledger)["attempts"][0]["result"][
         "response"
     ]["served_model"] == "served-pinned"
 
@@ -2248,7 +2258,7 @@ def test_async_meter_reconciles_generation_stats_off_event_loop_and_times_errors
     module_under_test.install_openai_meter(failed_sdk, failed_ledger)
     with pytest.raises(OSError, match="offline"):
         failed_sdk.OpenAI().chat.completions.create(model="requested", messages=[])
-    error = json.loads(failed_ledger.read_text(encoding="utf-8"))["attempts"][0]["error"]
+    error = module_under_test.load_provider_attempt_ledger_snapshot(failed_ledger)["attempts"][0]["error"]
     assert error["type"] == "OSError"
     assert error["elapsed_seconds"] >= 0
 
@@ -2294,7 +2304,7 @@ def test_sync_meter_preserves_paid_response_when_generation_lookup_fails(
     with pytest.raises(RuntimeError, match="generation statistics"):
         sdk.OpenAI().chat.completions.create(model="requested", messages=[])
 
-    attempt = json.loads(ledger.read_text(encoding="utf-8"))["attempts"][0]
+    attempt = module_under_test.load_provider_attempt_ledger_snapshot(ledger)["attempts"][0]
     assert calls == ["completion"]
     assert attempt["status"] == "error"
     assert attempt["result"] is None
@@ -2353,7 +2363,7 @@ def test_async_meter_preserves_paid_response_when_generation_lookup_fails(
             sdk.AsyncOpenAI().chat.completions.create(model="requested", messages=[])
         )
 
-    attempt = json.loads(ledger.read_text(encoding="utf-8"))["attempts"][0]
+    attempt = module_under_test.load_provider_attempt_ledger_snapshot(ledger)["attempts"][0]
     assert calls == ["completion"]
     assert attempt["status"] == "error"
     assert attempt["result"] is None
@@ -2682,7 +2692,9 @@ def test_memsyco_cli_exposes_complete_lifecycle_and_preserves_five_metrics(
             encoding="utf-8",
         )
         proof_path.write_text(json.dumps(proof_payload), encoding="utf-8")
-        responses = []
+        attempt_ledger = load_provider_attempts().ProviderAttemptLedger(
+            task_dir / "attempts.json", f"fixture:{task}"
+        )
         for role, model in (("answer", "answer-model"), ("judge", "judge-model")):
             response = {
                 "response_id": f"{task}-{role}",
@@ -2698,30 +2710,18 @@ def test_memsyco_cli_exposes_complete_lifecycle_and_preserves_five_metrics(
                 "arm": "memphant",
                 "task": task,
             }
-            responses.append(
+            attempt_ledger.record(
+                "start",
+                role,
                 {
-                    "attempt_id": len(responses) + 1,
-                    "request_key": role,
                     "retry_index": 0,
-                    "start": {
-                        "retry_index": 0,
-                        "requested_model": model,
-                        "request_sha256": "1" * 64,
-                        "arm": "memphant",
-                        "task": task,
-                    },
-                    "status": "result",
-                    "result": {"response": response},
-                    "error": None,
-                }
+                    "requested_model": model,
+                    "request_sha256": "1" * 64,
+                    "arm": "memphant",
+                    "task": task,
+                },
             )
-        digest = hashlib.sha256(
-            json.dumps(responses, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        (task_dir / "attempts.json").write_text(
-            json.dumps({"attempts_sha256": digest, "attempts": responses}),
-            encoding="utf-8",
-        )
+            attempt_ledger.record("result", role, {"response": response})
 
     verified = runner.verify_results(run_dir)
     assert set(verified["metrics_by_task"]) == set(runner.TASKS)

@@ -70,6 +70,98 @@ from provider_attempts import (
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 ENGINES = ("claude", "codex", "openrouter")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_paid_authorization(
+    manifest_path: Path,
+    *,
+    arm: str,
+    evidence_path: Path,
+    retrieval_report_path: Path | None,
+    reader_model: str,
+    judge_model: str,
+    judge_profile: str,
+    prompt_version: int,
+    reasoning_effort: str | None,
+    max_calls: int,
+    max_provider_attempts: int | None,
+    max_output_tokens: int,
+    max_spend_usd: Decimal | None,
+    max_price_prompt_per_million: Decimal | None,
+    max_price_completion_per_million: Decimal | None,
+) -> dict:
+    """Validate a frozen paid packet before any provider credential is read."""
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("paid authorization manifest is unreadable") from error
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        raise ValueError("paid authorization manifest schema mismatch")
+    frozen = manifest.get("frozen_inputs")
+    models = manifest.get("models")
+    limits = manifest.get("hard_limits", {}).get(arm)
+    if not all(isinstance(value, dict) for value in (frozen, models, limits)):
+        raise ValueError("paid authorization manifest arm is missing")
+    arm_prefix = "baseline" if arm == "baseline" else "treatment"
+    expected = {
+        f"{arm_prefix}_evidence_sha256": _file_sha256(evidence_path),
+        f"{arm_prefix}_retrieval_sha256": (
+            _file_sha256(retrieval_report_path) if retrieval_report_path else None
+        ),
+        "reader_runner_sha256": _file_sha256(Path(__file__)),
+        "provider_attempts_sha256": _file_sha256(
+            SCRIPTS_DIR / "provider_attempts.py"
+        ),
+    }
+    for field, actual in expected.items():
+        if frozen.get(field) != actual:
+            raise ValueError(f"paid authorization {field} drift")
+    model_expectations = {
+        "provider": "OpenRouter",
+        "reader": reader_model,
+        "reader_reasoning_effort": reasoning_effort,
+        "judge": judge_model,
+        "judge_profile": judge_profile,
+        "prompt_version": prompt_version,
+        "max_output_tokens_per_request": max_output_tokens,
+        "provider_max_price_usd_per_million": {
+            "prompt": str(max_price_prompt_per_million),
+            "completion": str(max_price_completion_per_million),
+        },
+    }
+    for field, actual in model_expectations.items():
+        if models.get(field) != actual:
+            raise ValueError(f"paid authorization model field {field} drift")
+    limit_expectations = {
+        "max_logical_calls": max_calls,
+        "max_provider_attempts": max_provider_attempts,
+        "max_spend_usd": str(max_spend_usd),
+    }
+    for field, actual in limit_expectations.items():
+        if limits.get(field) != actual:
+            raise ValueError(f"paid authorization limit {field} drift")
+    scope = {
+        "frozen_inputs": frozen,
+        "models": models,
+        "hard_limits": manifest["hard_limits"],
+    }
+    authorization = manifest.get("authorization")
+    if (
+        manifest.get("status") != "AUTHORIZED_FOR_PAID_EXECUTION"
+        or not isinstance(authorization, dict)
+        or not isinstance(authorization.get("authorized_by"), str)
+        or not authorization["authorized_by"].strip()
+        or not isinstance(authorization.get("authorized_at"), str)
+        or not authorization["authorized_at"].strip()
+        or authorization.get("authorization_scope_sha256")
+        != sha256_text(json.dumps(scope, sort_keys=True, separators=(",", ":")))
+    ):
+        raise ValueError("paid execution has not been explicitly authorized")
+    return manifest
 OPENROUTER_TIMEOUT = 180
 OPENROUTER_RETRY_DELAYS = (2, 8, 30)  # 4 tries total: 3 backoff sleeps between them
 FLASH_MODEL = "google/gemini-3.5-flash"
@@ -1483,6 +1575,15 @@ def main() -> int:
         "--attempt-ledger",
         help="durable OpenRouter attempt ledger (required with spend control)",
     )
+    parser.add_argument(
+        "--authorization-manifest",
+        help="frozen paid authorization packet (required for OpenRouter)",
+    )
+    parser.add_argument(
+        "--authorization-arm",
+        choices=("baseline", "treatment_and_paired_adjudication"),
+        help="hard-limit arm in the paid authorization packet",
+    )
     parser.add_argument("--limit", type=int, help="only process the first N evidence rows (smoke)")
     parser.add_argument("--seed", type=int, default=20260710, help="bootstrap seed")
     args = parser.parse_args()
@@ -1510,6 +1611,12 @@ def main() -> int:
         parser.error("--max-provider-attempts must be at least 1")
     if args.max_output_tokens < 1:
         parser.error("--max-output-tokens must be at least 1")
+    if args.engine == "openrouter" and (
+        not args.authorization_manifest or not args.authorization_arm
+    ):
+        parser.error(
+            "--authorization-manifest and --authorization-arm are required with --engine openrouter"
+        )
 
     # Split on '\n' only: chat bodies can embed U+2028/U+2029, which
     # str.splitlines() would treat as line breaks mid-JSON-record.
@@ -1540,6 +1647,29 @@ def main() -> int:
         if args.max_spend_usd is not None
         else None
     )
+    if args.engine == "openrouter":
+        if not args.retrieval_report:
+            parser.error("--retrieval-report is required with --engine openrouter")
+        try:
+            validate_paid_authorization(
+                Path(args.authorization_manifest),
+                arm=args.authorization_arm,
+                evidence_path=evidence_path,
+                retrieval_report_path=Path(args.retrieval_report),
+                reader_model=args.model,
+                judge_model=judge_model,
+                judge_profile=args.judge_profile,
+                prompt_version=args.prompt_version,
+                reasoning_effort=args.reasoning_effort,
+                max_calls=args.max_calls,
+                max_provider_attempts=args.max_provider_attempts,
+                max_output_tokens=args.max_output_tokens,
+                max_spend_usd=args.max_spend_usd,
+                max_price_prompt_per_million=args.max_price_prompt_per_million,
+                max_price_completion_per_million=args.max_price_completion_per_million,
+            )
+        except ValueError as error:
+            parser.error(str(error))
     cli = ReaderCli(
         args.engine,
         args.model,

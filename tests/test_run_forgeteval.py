@@ -131,3 +131,16 @@ def test_summary_separates_failures_from_not_applicable() -> None:
         "total": 3,
         "wall_seconds": 1.25,
     }
+
+
+def test_runtime_provenance_binds_tracked_tree_and_migrations() -> None:
+    repository = module.repository_identity(ROOT)
+    migrations = module.migration_identity(ROOT)
+
+    assert len(repository["git_head"]) == 40
+    assert repository["tracked_file_count"] > 0
+    assert len(repository["tracked_worktree_sha256"]) == 64
+    assert len(repository["tracked_diff_sha256"]) == 64
+    assert migrations["files"]
+    assert all(row["path"].endswith(".sql") for row in migrations["files"])
+    assert len(migrations["aggregate_sha256"]) == 64

@@ -15,7 +15,6 @@ silently fall back to — a contract violation raises `MemPhantValidationError`.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -166,6 +165,7 @@ class MemPhant:
         observed_at: str,
         source_kind: str,
         body: str,
+        idempotency_key: str,
     ) -> dict[str, Any]:
         """Retain a raw episode (RetainEpisodePayload: source_kind + body)."""
         return self._post(
@@ -176,6 +176,7 @@ class MemPhant:
                 "observed_at": observed_at,
                 "payload": {"episode": {"source_kind": source_kind, "body": body}},
             },
+            idempotency_key=idempotency_key,
         )
 
     def retain_resource(
@@ -190,6 +191,7 @@ class MemPhant:
         kind: str | None = None,
         revision: str | None = None,
         body: str | None = None,
+        idempotency_key: str,
     ) -> dict[str, Any]:
         """Retain a resource (RetainResourcePayload: uri + mime_type +
         content_hash; `revision` is the commit identity for code)."""
@@ -210,6 +212,7 @@ class MemPhant:
                     }
                 },
             },
+            idempotency_key=idempotency_key,
         )
 
     def retain_unit(
@@ -223,6 +226,7 @@ class MemPhant:
         predicate: str,
         body: str,
         confidence: float,
+        idempotency_key: str,
         valid_from: str | None = None,
         valid_to: str | None = None,
     ) -> dict[str, Any]:
@@ -246,6 +250,7 @@ class MemPhant:
                     }
                 },
             },
+            idempotency_key=idempotency_key,
         )
 
     def recall(
@@ -276,8 +281,12 @@ class MemPhant:
             },
         )
 
-    def reflect(self, *, ctx: BoundContext) -> dict[str, Any]:
-        return self._post("/v1/reflect", {**ctx._identity()})
+    def reflect(self, *, ctx: BoundContext, idempotency_key: str) -> dict[str, Any]:
+        return self._post(
+            "/v1/reflect",
+            {**ctx._identity()},
+            idempotency_key=idempotency_key,
+        )
 
     def correct(
         self,
@@ -290,6 +299,7 @@ class MemPhant:
         observed_at: str,
         valid_from: str | None = None,
         valid_to: str | None = None,
+        idempotency_key: str,
     ) -> dict[str, Any]:
         return self._post(
             "/v1/correct",
@@ -305,6 +315,7 @@ class MemPhant:
                     "valid_to": valid_to,
                 },
             },
+            idempotency_key=idempotency_key,
         )
 
     def forget(
@@ -315,6 +326,7 @@ class MemPhant:
         memory_unit_id: str | None = None,
         episode_id: str | None = None,
         resource_id: str | None = None,
+        idempotency_key: str,
     ) -> dict[str, Any]:
         """Forget exactly one of memory_unit_id / episode_id / resource_id. The
         selector carries the scope from the bound context."""
@@ -336,6 +348,7 @@ class MemPhant:
                 "selector": {"scope_id": ctx.scope_id, selector_name: selector_value},
                 "reason": reason,
             },
+            idempotency_key=idempotency_key,
         )
 
     def mark(
@@ -346,6 +359,7 @@ class MemPhant:
         caller_id: str,
         used_ids: list[str],
         outcome: str,
+        idempotency_key: str,
     ) -> dict[str, Any]:
         return self._post(
             "/v1/mark",
@@ -356,6 +370,7 @@ class MemPhant:
                 "used_ids": used_ids,
                 "outcome": outcome,
             },
+            idempotency_key=idempotency_key,
         )
 
     def trace(self, *, ctx: BoundContext, trace_id: str) -> dict[str, Any]:
@@ -365,12 +380,26 @@ class MemPhant:
     def _get(self, path: str) -> dict[str, Any]:
         return self._request("GET", path, None)
 
-    def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self._request("POST", path, body)
+    def _post(
+        self,
+        path: str,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST", path, body, idempotency_key=idempotency_key
+        )
 
     def _request(
-        self, method: str, path: str, body: dict[str, Any] | None
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None,
+        *,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        self._headers(method, path, body, idempotency_key)
         if self._transport is not None:
             return self._transport(method, path, body)
         wire_body = None if body is None else _strip_none(body)
@@ -379,7 +408,7 @@ class MemPhant:
             _join_url(self.base_url, path),
             data=payload,
             method=method,
-            headers=self._headers(method, path, wire_body),
+            headers=self._headers(method, path, wire_body, idempotency_key),
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
@@ -391,23 +420,38 @@ class MemPhant:
         return json.loads(raw.decode()) if raw else {}
 
     def _headers(
-        self, method: str, path: str, body: dict[str, Any] | None
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None,
+        idempotency_key: str | None,
     ) -> dict[str, str]:
         headers = {"accept": "application/json"}
         if body is not None:
             headers["content-type"] = "application/json"
         if self.api_key:
             headers["authorization"] = f"Bearer {self.api_key}"
-        if method == "POST" and path in {
+        mutation = method == "POST" and path in {
             "/v1/episodes",
             "/v1/reflect",
             "/v1/correct",
             "/v1/forget",
             "/v1/mark",
-        }:
-            canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
-            digest = hashlib.sha256(f"{method}\n{path}\n{canonical}".encode()).hexdigest()
-            headers["idempotency-key"] = f"memphant-sdk-{digest}"
+        }
+        if mutation:
+            if not isinstance(idempotency_key, str) or not 1 <= len(
+                idempotency_key.encode()
+            ) <= 255:
+                raise MemPhantValidationError(
+                    "invalid_request",
+                    "mutation idempotency_key must contain 1 through 255 UTF-8 bytes"
+                )
+            headers["idempotency-key"] = idempotency_key
+        elif idempotency_key is not None:
+            raise MemPhantValidationError(
+                "invalid_request",
+                "idempotency_key is accepted only by mutation requests"
+            )
         return headers
 
 

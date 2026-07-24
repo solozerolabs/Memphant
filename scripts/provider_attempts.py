@@ -7,7 +7,6 @@ import asyncio
 import hashlib
 import json
 import os
-import tempfile
 import threading
 import time
 import urllib.error
@@ -42,21 +41,86 @@ def _response_sha256(response: Any) -> str:
     return _sha256_json(value)
 
 
-def _atomic_write_json(path: Path, value: Any) -> None:
+def _event_bytes(event: dict[str, Any]) -> bytes:
+    return json.dumps(event, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _append_event(path: Path, event: dict[str, Any]) -> None:
+    """Append and fsync exactly one journal event; prior bytes are untouched."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=path.parent, delete=False
-    ) as handle:
-        temp_path = Path(handle.name)
-        json.dump(value, handle, indent=2, sort_keys=True)
-        handle.write("\n")
+    with path.open("ab") as handle:
+        handle.write(_event_bytes(event) + b"\n")
         handle.flush()
         os.fsync(handle.fileno())
-    try:
-        os.replace(temp_path, path)
-    except BaseException:
-        temp_path.unlink(missing_ok=True)
-        raise
+
+
+def _replay_journal(
+    path: Path, expected_fingerprint: str | None = None
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+    raw = path.read_bytes()
+    if not raw or not raw.endswith(b"\n"):
+        raise ValueError("provider-attempt journal is truncated")
+    events: list[dict[str, Any]] = []
+    previous_hash: str | None = None
+    for sequence, line in enumerate(raw.splitlines()):
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise ValueError("provider-attempt journal is malformed") from error
+        if not isinstance(event, dict) or event.get("sequence") != sequence:
+            raise ValueError("provider-attempt journal sequence mismatch")
+        claimed_event_hash = event.get("event_sha256")
+        unhashed_event = {key: value for key, value in event.items() if key != "event_sha256"}
+        if claimed_event_hash != _sha256_json(unhashed_event):
+            raise ValueError("provider-attempt journal event hash mismatch")
+        if event.get("previous_event_sha256") != previous_hash:
+            raise ValueError("provider-attempt journal hash-chain mismatch")
+        events.append(event)
+        previous_hash = hashlib.sha256(_event_bytes(event)).hexdigest()
+
+    header = events[0]
+    if (
+        header.get("event") != "header"
+        or header.get("schema") != 1
+        or not isinstance(header.get("generation_fingerprint"), str)
+    ):
+        raise ValueError("provider-attempt journal header is malformed")
+    fingerprint = header["generation_fingerprint"]
+    if expected_fingerprint is not None and fingerprint != expected_fingerprint:
+        raise ValueError("provider-attempt ledger fingerprint mismatch")
+
+    attempts: list[dict[str, Any]] = []
+    by_id: dict[int, dict[str, Any]] = {}
+    for event in events[1:]:
+        kind = event.get("event")
+        attempt_id = event.get("attempt_id")
+        request_key = event.get("request_key")
+        payload = event.get("payload")
+        if type(attempt_id) is not int or not isinstance(request_key, str) or not isinstance(payload, dict):
+            raise ValueError("provider-attempt journal event is malformed")
+        if kind == "start":
+            if attempt_id != len(attempts) + 1 or attempt_id in by_id:
+                raise ValueError("provider-attempt journal forked start transition")
+            row = {
+                "attempt_id": attempt_id,
+                "request_key": request_key,
+                "retry_index": payload.get("retry_index", 0),
+                "start": payload,
+                "status": "started",
+                "result": None,
+                "error": None,
+            }
+            attempts.append(row)
+            by_id[attempt_id] = row
+        elif kind in {"result", "error"}:
+            row = by_id.get(attempt_id)
+            if row is None or row["request_key"] != request_key or row["status"] != "started":
+                raise ValueError("provider-attempt journal forked terminal transition")
+            row["status"] = kind
+            row[kind] = payload
+        else:
+            raise ValueError("provider-attempt journal event kind is malformed")
+    return fingerprint, events, attempts
 
 
 def fresh_paid_usage(response: Any) -> bool:
@@ -83,7 +147,7 @@ def fresh_paid_usage(response: Any) -> bool:
 
 
 class ProviderAttemptLedger:
-    """Append-before-call state machine persisted atomically after every transition.
+    """Append-before-call, fsynced JSONL state machine.
 
     started -> result
             -> error
@@ -92,74 +156,101 @@ class ProviderAttemptLedger:
     def __init__(self, path: Path, generation_fingerprint: str) -> None:
         self.path = path
         self.generation_fingerprint = generation_fingerprint
-        if path.exists():
-            value = json.loads(path.read_text(encoding="utf-8"))
-            if value.get("generation_fingerprint") != generation_fingerprint:
-                raise ValueError("provider-attempt ledger fingerprint mismatch")
-            attempts = value.get("attempts")
-            if not isinstance(attempts, list):
-                raise ValueError("provider-attempt ledger is malformed")
-            expected_hash = value.get("attempts_sha256")
-            if expected_hash != _sha256_json(attempts):
-                raise ValueError("provider-attempt ledger hash mismatch")
-            self.attempts = attempts
-        else:
-            self.attempts: list[dict[str, Any]] = []
-            self._write()
+        with _LEDGER_LOCK:
+            if path.exists():
+                _, self._events, self.attempts = _replay_journal(
+                    path, generation_fingerprint
+                )
+            else:
+                self._events: list[dict[str, Any]] = []
+                self.attempts: list[dict[str, Any]] = []
+                self._append(
+                    {
+                        "schema": 1,
+                        "event": "header",
+                        "generation_fingerprint": generation_fingerprint,
+                    }
+                )
 
-    def _write(self) -> None:
-        _atomic_write_json(
-            self.path,
-            {
-                "generation_fingerprint": self.generation_fingerprint,
-                "attempts_sha256": _sha256_json(self.attempts),
-                "attempts": self.attempts,
-            },
-        )
+    def _append(self, body: dict[str, Any]) -> None:
+        event = {
+            **body,
+            "sequence": len(self._events),
+            "previous_event_sha256": (
+                hashlib.sha256(_event_bytes(self._events[-1])).hexdigest()
+                if self._events
+                else None
+            ),
+        }
+        event["event_sha256"] = _sha256_json(event)
+        _append_event(self.path, event)
+        self._events.append(event)
 
     def record(self, event: str, request_key: str, payload: dict | None) -> None:
-        payload = payload or {}
-        if event == "start":
-            self.attempts.append(
-                {
-                    "attempt_id": len(self.attempts) + 1,
-                    "request_key": request_key,
-                    "retry_index": payload.get("retry_index", 0),
-                    "start": payload,
-                    "status": "started",
-                    "result": None,
-                    "error": None,
-                }
+        with _LEDGER_LOCK:
+            _, self._events, self.attempts = _replay_journal(
+                self.path, self.generation_fingerprint
             )
-        elif event in {"result", "error"}:
-            for attempt in reversed(self.attempts):
-                if attempt["request_key"] == request_key and attempt["status"] == "started":
-                    attempt["status"] = event
-                    attempt[event] = payload
-                    break
+            payload = payload or {}
+            if event == "start":
+                attempt_id = len(self.attempts) + 1
+                self._append(
+                    {
+                        "event": "start",
+                        "attempt_id": attempt_id,
+                        "request_key": request_key,
+                        "payload": payload,
+                    }
+                )
+            elif event in {"result", "error"}:
+                for attempt in reversed(self.attempts):
+                    if (
+                        attempt["request_key"] == request_key
+                        and attempt["status"] == "started"
+                    ):
+                        attempt_id = attempt["attempt_id"]
+                        break
+                else:
+                    raise RuntimeError(
+                        f"provider-attempt {event} has no durable start"
+                    )
+                self._append(
+                    {
+                        "event": event,
+                        "attempt_id": attempt_id,
+                        "request_key": request_key,
+                        "payload": payload,
+                    }
+                )
             else:
-                raise RuntimeError(f"provider-attempt {event} has no durable start")
-        else:
-            raise ValueError(f"unknown provider-attempt event: {event}")
-        self._write()
+                raise ValueError(f"unknown provider-attempt event: {event}")
+            _, self._events, self.attempts = _replay_journal(
+                self.path, self.generation_fingerprint
+            )
 
     def snapshot(self) -> dict[str, Any]:
-        responses = [
-            row["result"]["response"]
-            for row in self.attempts
-            if row.get("status") == "result"
-            and isinstance(row.get("result"), dict)
-            and isinstance(row["result"].get("response"), dict)
-        ]
-        priced = [response for response in responses if fresh_paid_usage(response)]
-        return {
-            "provider_attempts": len(self.attempts),
-            "priced_provider_attempts": len(priced),
-            "unpriced_provider_attempts": len(self.attempts) - len(priced),
-            "reported_cost_usd": sum(float(row["usage"]["cost"]) for row in priced),
-            "attempts_sha256": _sha256_json(self.attempts),
-            "attempts": self.attempts,
-        }
+        with _LEDGER_LOCK:
+            _, self._events, self.attempts = _replay_journal(
+                self.path, self.generation_fingerprint
+            )
+            responses = [
+                row["result"]["response"]
+                for row in self.attempts
+                if row.get("status") == "result"
+                and isinstance(row.get("result"), dict)
+                and isinstance(row["result"].get("response"), dict)
+            ]
+            priced = [response for response in responses if fresh_paid_usage(response)]
+            return {
+                "provider_attempts": len(self.attempts),
+                "priced_provider_attempts": len(priced),
+                "unpriced_provider_attempts": len(self.attempts) - len(priced),
+                "reported_cost_usd": sum(
+                    float(row["usage"]["cost"]) for row in priced
+                ),
+                "attempts_sha256": _sha256_json(self.attempts),
+                "attempts": self.attempts,
+            }
 
 
 def provider_attempt_ledger_is_complete(snapshot: dict[str, Any]) -> bool:
@@ -224,14 +315,11 @@ def validate_provider_attempt_ledger(snapshot: dict[str, Any]) -> None:
 
 def load_provider_attempt_ledger_snapshot(path: Path) -> dict[str, Any]:
     """Load a persisted ledger into the same validated summary used at runtime."""
-    stored = json.loads(Path(path).read_text(encoding="utf-8"))
-    attempts = stored.get("attempts")
-    if not isinstance(attempts, list):
-        raise RuntimeError(f"malformed provider-attempt ledger: {path}")
-    expected_hash = stored.get("attempts_sha256")
+    try:
+        _, _events, attempts = _replay_journal(Path(path))
+    except ValueError as error:
+        raise RuntimeError(f"malformed provider-attempt ledger: {path}") from error
     actual_hash = _sha256_json(attempts)
-    if expected_hash != actual_hash:
-        raise RuntimeError(f"provider-attempt ledger hash mismatch: {path}")
     responses = [
         row["result"]["response"]
         for row in attempts

@@ -84,7 +84,7 @@ the missing input is outside these repositories or requires authorization.
 | D2 ForgetEval | Unimplemented adapter; current upstream runnable | Pin official upstream `b6053b7...`; map reset/inscribe/recall/supersede/release exactly. Selective purge is unsupported and must report N/A; subject erasure is not a substitute. Mutation correctness is the prerequisite. |
 | D3 LME-S full-500 | Deferred by A1 | Do not run or use SOTA language. |
 | D4 SWE-Explore | External-block reconfirmed | Current public package still omits required issue text/base commits; retain fail-closed evidence. |
-| D4 SWE Context Bench | External-block on official harness and sequenced after C3 | The paper describes the task set but no runnable official harness is public. Do not invent an official result. |
+| D4 SWE Context Bench | Official harness now public; no-model smoke complete; model run unauthorized | Pinned code `31bb04155f52b184bf31b220e3cff0607ac9c953` and dataset `5bec275a2095768a53ac804ae4fdf90b1723b8af`; official input combiner and evaluator import smoke passed on one Lite case. No Docker task, model, MemPhant adapter, or benchmark score was run. The frozen gate remains awaiting exact model/compute budgets and explicit authorization. |
 | Supporting Memora/STALE/MemSyco/MemBench | Supporting-only | Repair public contracts when required, but never promote them to headline evidence. |
 
 ## Reopened STATUS predicates
@@ -135,5 +135,5 @@ the missing input is outside these repositories or requires authorization.
 4. C3 pinned public adapter plus packaged realistic-volume proof.
 5. Clean Syndai worktree: loud active L1+ read, parent identity, two-tenant
    packaged proof, and mirror reconciliation.
-6. D2 adapter/mutation proof and honest D4 external-block refresh; final ledger
+6. D2 adapter/mutation proof and honest D4 official-harness smoke; final ledger
    reconciliation and independent review.

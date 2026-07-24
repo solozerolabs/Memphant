@@ -390,8 +390,9 @@ def drain_worker(
     """
     env = dict(os.environ)
     env.pop("DATABASE_URL", None)
+    env.pop("MEMPHANT_WORKER_ONCE", None)
+    env.pop("MEMPHANT_WORKER_DRAIN", None)
     env["MEMPHANT_WORKER_DATABASE_URL"] = database_url
-    env["MEMPHANT_WORKER_ONCE"] = "1"
     env.setdefault("RUST_LOG", "warn")
     if embed_model:
         env["MEMPHANT_EMBEDDINGS"] = embed_model
@@ -404,6 +405,33 @@ def drain_worker(
         raise ValueError(
             "structured attempt ledger and requested model must be provided together"
         )
+    if structured_attempt_ledger is None:
+        # The worker owns the queue-empty and dead-letter invariants in drain
+        # mode. Keep one process (and one pool) alive for large local corpora;
+        # spawning a new binary per four-job tick turns 64k events into more
+        # than 16k process launches. Structured-provider campaigns retain the
+        # tick loop below so their append-only attempt ledger is inspected
+        # after every provider-bearing tick.
+        env["MEMPHANT_WORKER_DRAIN"] = "1"
+        # Free/no-provider compilation has no remote-rate or spend constraint.
+        # Use the runtime's bounded maximum so realistic-volume gates do not
+        # inherit the conservative provider-prefetch default of four.
+        env["MEMPHANT_WORKER_COMPILE_CONCURRENCY"] = "64"
+        env["MEMPHANT_WORKER_BATCH_SIZE"] = "256"
+        env["MEMPHANT_WORKER_DATABASE_MAX_CONNECTIONS"] = "32"
+        out = sh([worker_bin], env=env)
+        if out.returncode != 0:
+            raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
+        match = re.fullmatch(
+            r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
+        )
+        if match is None:
+            raise RuntimeError(
+                f"worker drain completion output is malformed: {out.stdout[:300]!r}"
+            )
+        return int(match.group(1))
+
+    env["MEMPHANT_WORKER_ONCE"] = "1"
     total = 0
     worker_stderr: list[str] = []
     for _tick in range(max_ticks):

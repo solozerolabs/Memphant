@@ -237,7 +237,13 @@ def test_ingest_attempt_payload_conforms_to_strict_contract(clr):
     clr.ingest_attempt(
         client,
         ctx,
-        {"attempt_id": "attempt-1", "events": [{"sequence": 0, "role": "assistant", "text": "hi"}]},
+        {
+            "attempt_id": "attempt-1",
+            "started_at": "2026-01-01T00:00:00Z",
+            "events": [
+                {"sequence": 0, "event_id": "event-0", "role": "assistant", "text": "hi"}
+            ],
+        },
     )
     path, payload = client.posts[-1]
     assert path == "/v1/episodes"
@@ -247,6 +253,62 @@ def test_ingest_attempt_payload_conforms_to_strict_contract(clr):
     assert "source_kind" not in payload  # now lives inside payload.episode
     spec, schema = _retain_episode_schema()
     _assert_object_conforms(spec, "RetainEpisodeHttpRequest", schema, payload)
+
+
+def test_runtime_provenance_binds_repository_and_migrations(clr):
+    repository = clr.repository_identity(ROOT)
+    migrations = clr.migration_identity(ROOT)
+
+    assert len(repository["git_head"]) == 40
+    assert repository["tracked_file_count"] > 0
+    assert len(repository["tracked_worktree_sha256"]) == 64
+    assert len(repository["tracked_diff_sha256"]) == 64
+    assert migrations["files"]
+    assert len(migrations["aggregate_sha256"]) == 64
+
+
+def test_isolation_sentinel_reuses_source_ref_but_not_evaluation_body(clr):
+    row = {
+        "attempt_id": "attempt-1",
+        "started_at": "2026-01-01T00:00:00Z",
+        "events": [
+            {"sequence": 0, "event_id": "event-0", "role": "assistant", "text": "gold"}
+        ],
+    }
+    client = _CaptureClient()
+    ctx = {
+        "subject_id": "s", "scope_id": "scope", "actor_id": "a",
+        "agent_node_id": "n", "subject_generation": 0,
+    }
+
+    source_ref, body = clr.ingest_isolation_sentinel(client, ctx, row)
+
+    assert source_ref == clr.event_source_ref(row, row["events"][0])
+    assert client.posts[0][1]["source_ref"] == source_ref
+    assert "gold" not in body
+    assert clr.ISOLATION_SENTINEL_TEXT in body
+
+
+def test_ingest_attempt_rejects_unmapped_event_role(clr):
+    client = _CaptureClient()
+    with pytest.raises(RuntimeError, match="unmapped code event role"):
+        clr.ingest_attempt(
+            client,
+            {
+                "subject_id": "s",
+                "scope_id": "scope",
+                "actor_id": "a",
+                "agent_node_id": "n",
+                "subject_generation": 0,
+            },
+            {
+                "attempt_id": "a",
+                "started_at": "2026-01-01T00:00:00Z",
+                "events": [
+                    {"sequence": 0, "event_id": "e", "role": "system", "text": "x"}
+                ],
+            },
+        )
 
 
 def test_deterministic_file_search_ranks_raw_matching_event_first():

@@ -40,6 +40,7 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             observed_at="2025-06-01T00:00:00Z",
             source_kind="system",
             body="Release region is Taipei.",
+            idempotency_key="wsd-retain-episode",
         )
         assert retained["episode_id"] == "ep_test"
 
@@ -53,6 +54,7 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             kind="code",
             revision="abc123",
             body="fn main() {}",
+            idempotency_key="wsd-retain-resource",
         )
         client.retain_unit(
             ctx=ctx,
@@ -63,9 +65,10 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             predicate="release_region",
             body="Release region is Taipei.",
             confidence=1.0,
+            idempotency_key="wsd-retain-unit",
         )
 
-        reflected = client.reflect(ctx=ctx)
+        reflected = client.reflect(ctx=ctx, idempotency_key="wsd-reflect")
         assert reflected["episodes_consumed"] == 1
 
         recalled = client.recall(
@@ -90,6 +93,7 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             reason="stale_fact",
             source_ref="agent:helper",
             observed_at="2025-06-02T00:00:00Z",
+            idempotency_key="wsd-correct",
         )
         assert corrected["correction_kind"] == "current"
 
@@ -97,6 +101,7 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             ctx=ctx,
             memory_unit_id="00000000-0000-0000-0000-000000088001",
             reason="user_request",
+            idempotency_key="wsd-forget",
         )
         assert forgotten["verification"] == "no_recall_path_returns_forgotten"
 
@@ -106,6 +111,7 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             caller_id="pytest",
             used_ids=["00000000-0000-0000-0000-000000088001"],
             outcome="success",
+            idempotency_key="wsd-mark",
         )
         assert marked["accepted"] is True
 
@@ -137,9 +143,7 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
                 "/v1/forget",
                 "/v1/mark",
             }:
-                assert request["headers"].get("idempotency-key", "").startswith(
-                    "memphant-sdk-"
-                )
+                assert request["headers"].get("idempotency-key", "").startswith("wsd-")
 
         # No verb body smuggles tenant_id / allowed_scope_ids (the banned shape).
         for request in server.requests:

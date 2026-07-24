@@ -4,7 +4,10 @@ import importlib.util
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -307,6 +310,83 @@ def test_openrouter_requires_api_key(tmp_path, monkeypatch) -> None:
         raise AssertionError("expected RuntimeError")
     except RuntimeError as error:
         assert "OPENROUTER_API_KEY" in str(error)
+
+
+def test_paid_authorization_drift_fails_before_reader_or_provider_access(
+    tmp_path, monkeypatch
+) -> None:
+    reader = _load_run_reader()
+    evidence = tmp_path / "evidence.jsonl"
+    retrieval = tmp_path / "retrieval.json"
+    evidence.write_text("{}\n")
+    retrieval.write_text("{}\n")
+    frozen = {
+        "baseline_evidence_sha256": reader._file_sha256(evidence),
+        "baseline_retrieval_sha256": reader._file_sha256(retrieval),
+        "reader_runner_sha256": reader._file_sha256(Path(reader.__file__)),
+        "provider_attempts_sha256": reader._file_sha256(
+            ROOT / "scripts" / "provider_attempts.py"
+        ),
+    }
+    models = {
+        "provider": "OpenRouter",
+        "reader": "reader-model",
+        "reader_reasoning_effort": "medium",
+        "judge": "judge-model",
+        "judge_profile": "rag-supported-v1",
+        "prompt_version": 3,
+        "max_output_tokens_per_request": 1024,
+        "provider_max_price_usd_per_million": {
+            "prompt": "2.75", "completion": "16.5"
+        },
+    }
+    hard_limits = {
+        "baseline": {
+            "max_logical_calls": 10,
+            "max_provider_attempts": 10,
+            "max_spend_usd": "3",
+        }
+    }
+    scope = {"frozen_inputs": frozen, "models": models, "hard_limits": hard_limits}
+    manifest = {
+        "schema_version": 1,
+        "status": "AUTHORIZED_FOR_PAID_EXECUTION",
+        **scope,
+        "authorization": {
+            "authorized_by": "test-user",
+            "authorized_at": "2026-07-23T00:00:00Z",
+            "authorization_scope_sha256": reader.sha256_text(
+                json.dumps(scope, sort_keys=True, separators=(",", ":"))
+            ),
+        },
+    }
+    manifest_path = tmp_path / "authorization.json"
+    manifest_path.write_text(json.dumps(manifest))
+    evidence.write_text('{"drift":true}\n')
+    constructors = []
+    monkeypatch.setattr(reader, "ReaderCli", lambda *_args, **_kwargs: constructors.append(1))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_reader.py", "--evidence", str(evidence), "--retrieval-report", str(retrieval),
+            "--out", str(tmp_path / "out.json"), "--engine", "openrouter",
+            "--model", "reader-model", "--judge-model", "judge-model",
+            "--judge-profile", "rag-supported-v1", "--prompt-version", "3",
+            "--reasoning-effort", "medium", "--max-calls", "10",
+            "--max-output-tokens", "1024", "--max-provider-attempts", "10",
+            "--max-spend-usd", "3", "--max-price-prompt-per-million", "2.75",
+            "--max-price-completion-per-million", "16.5", "--attempt-ledger",
+            str(tmp_path / "attempts.jsonl"), "--authorization-manifest", str(manifest_path),
+            "--authorization-arm", "baseline",
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        reader.main()
+    assert constructors == []
+    assert not (tmp_path / "attempts.jsonl").exists()
 
 
 def test_openrouter_cache_key_includes_engine_model_and_effort(tmp_path, monkeypatch) -> None:
@@ -1232,7 +1312,7 @@ def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
     except RuntimeError as error:
         assert "generation statistics" in str(error)
 
-    stored = json.loads(ledger_path.read_text(encoding="utf-8"))
+    stored = attempts.load_provider_attempt_ledger_snapshot(ledger_path)
     assert len(stored["attempts"]) == 1
     attempt = stored["attempts"][0]
     assert attempt["status"] == "error"

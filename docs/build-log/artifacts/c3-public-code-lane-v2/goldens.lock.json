@@ -1,0 +1,38 @@
+{
+  "bytes": 33997,
+  "count": 40,
+  "extraction": {
+    "classification": "public_synthetic_agent_rollout_not_production_traffic",
+    "corpus_bytes": 65677339,
+    "corpus_path": "docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl",
+    "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+    "emitted_events": 64055,
+    "materializer_sha256": "6fadc606499e99a25400bc2847ac5d162f7dad13c8e20f5725a6d16e08a5e1a7",
+    "modification_notice": "Roles normalized, system messages omitted with accounting, and event texts clipped at the recorded character cap.",
+    "sampled_attempts": 495,
+    "skipped_empty": 0,
+    "skipped_system": 495,
+    "source_citation": "SWE-rebench OpenHands trajectories dataset card",
+    "source_creator": "Nebius AI",
+    "source_dataset": "nebius/SWE-rebench-openhands-trajectories",
+    "source_last_modified": "2025-12-27T14:08:07.000Z",
+    "source_license": "CC-BY-4.0",
+    "source_license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "source_messages": 64550,
+    "source_revision": "35455389ab51bf5e2306bfd436ef72d0f98bf882",
+    "source_url": "https://huggingface.co/datasets/nebius/SWE-rebench-openhands-trajectories/tree/35455389ab51bf5e2306bfd436ef72d0f98bf882",
+    "target_events": 64000,
+    "transform": "openhands_trajectory_to_syndai_content_events_v2",
+    "truncate_chars": 4000,
+    "truncated_bytes": 36480400,
+    "truncated_chars": 36405709,
+    "truncated_events": 4811
+  },
+  "generator": "deterministic_late_diagnostic_span_v2",
+  "golden_path": "docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl",
+  "schema_version": 1,
+  "sha256": "2bb0b5ee790a77b7d1fa62ec82b4a0ee4cc226d96b6bbd63bd90abbb2f13dfe9",
+  "strata": {
+    "coding-continuity": 40
+  }
+}

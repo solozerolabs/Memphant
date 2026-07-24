@@ -9,7 +9,8 @@
     "baseline_retrieval_sha256": "9bc12884f32e07c56c213f3314b142560a1f6f976bef41750e9d2f45aecb7569",
     "treatment_evidence_sha256": "143a245584f4a179ba6b7adf1f1cf7db6a33fd8edcc0bfe4837df10881565a26",
     "treatment_retrieval_sha256": "105ea035ebb677ae86355c9108574088fa2131167f09a2ed502e99d4a77673ee",
-    "reader_runner_sha256": "94801782d1588d459a87ab477e248e66d5bfadb16940f10b82fc01afda1b7733",
+    "reader_runner_sha256": "77f93462d1474fec474adb3ea3fbc73f29eecda0bbc6b7369fa7ba94a88b5062",
+    "provider_attempts_sha256": "9b52a7db8c76916cbcf85b72312dc927b9b3bedefdcbe8f737d126c6ba669310",
     "rows_per_arm": 178,
     "non_abstention_rows_per_arm": 166,
     "abstention_rows_per_arm": 12
@@ -67,7 +68,7 @@
   "kill_predicates": [
     "any input, evaluator, schema, model, provider, or question-set hash drift",
     "any reader, parse, judge, pairing, position, pricing, settlement, or attempt-ledger error",
-    "any hard call, provider-attempt, price, output-token, or spend ceiling reached",
+    "any hard call, provider-attempt, price, output-token, or spend ceiling is exceeded or the next call would exceed it",
     "paired accuracy CI lower bound is less than or equal to zero",
     "exact-abstention accuracy regresses"
   ],

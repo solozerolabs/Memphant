@@ -9,6 +9,9 @@ The exact paid commands, immutable hashes, current OpenRouter model/routing
 contracts, hard provider prices, conservative in-run liabilities, call caps,
 pass/kill rules, scratch-database provenance, and abort settlement behavior are
 frozen in `artifacts/rung7-packing-reader-gate/authorization-request.json`.
+That manifest independently hash-binds both the reader runner and its
+append-only provider-attempt journal implementation, so either kind of code
+drift fails before the OpenRouter credential is read.
 
 Execution status: **not authorized and not executed**. Paid calls: **0**.
 Settled model cost: **$0**. The packing default remains off.
@@ -27,6 +30,8 @@ doppler run --project syndai --config dev -- python3 scripts/run_reader.py \
   --max-price-prompt-per-million 2.75 \
   --max-price-completion-per-million 16.5 \
   --attempt-ledger docs/build-log/artifacts/rung7-packing-reader-gate/baseline-attempts.jsonl \
+  --authorization-manifest docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.json \
+  --authorization-arm baseline \
   --cache-dir docs/build-log/artifacts/rung7-packing-reader-gate/cache-baseline \
   --seed 20260710
 ```
@@ -46,6 +51,8 @@ doppler run --project syndai --config dev -- python3 scripts/run_reader.py \
   --max-price-prompt-per-million 2.75 \
   --max-price-completion-per-million 16.5 \
   --attempt-ledger docs/build-log/artifacts/rung7-packing-reader-gate/rendercap1200-attempts.jsonl \
+  --authorization-manifest docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.json \
+  --authorization-arm treatment_and_paired_adjudication \
   --cache-dir docs/build-log/artifacts/rung7-packing-reader-gate/cache-treatment \
   --seed 20260710
 ```
@@ -53,3 +60,7 @@ doppler run --project syndai --config dev -- python3 scripts/run_reader.py \
 The commands read the OpenRouter key only from the already-configured Doppler
 environment. They do not print or persist it. Any failure named in the packet
 keeps the rung open and the default off.
+
+The free rehearsal's exact-abstention retrieval count moved from 7/12 in the
+baseline to 5/12 in treatment. That is a regression signal, not an answer-level
+result; the paid gate therefore retains the strict no-regression predicate.

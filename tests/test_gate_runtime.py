@@ -600,20 +600,27 @@ def test_structured_extractor_summary_classifies_missing_response_id_as_provenan
     assert summary["cost_status"] == "reported_cost_is_lower_bound"
 
 
-def test_drain_worker_verifies_zero_tick_against_database(grt, monkeypatch):
+def test_drain_worker_uses_one_binary_drain_without_structured_provider(grt, monkeypatch):
     calls = []
+    environments = []
 
-    def fake_sh(command, **_kwargs):
+    def fake_sh(command, **kwargs):
         calls.append(command)
-        if command == ["worker"]:
-            return grt.subprocess.CompletedProcess(command, 0, "completed=0\n", "")
-        return grt.subprocess.CompletedProcess(command, 0, "0\n", "")
+        environments.append(kwargs["env"])
+        return grt.subprocess.CompletedProcess(
+            command, 0, "memphant-worker: drain completed=0\n", ""
+        )
 
     monkeypatch.setattr(grt, "sh", fake_sh)
 
     assert grt.drain_worker("worker", "postgres://fixture") == 0
-    assert calls[1][0] == "psql"
-    assert "job_state" in calls[1][-1]
+    assert calls == [["worker"]]
+    assert environments[0]["MEMPHANT_WORKER_DRAIN"] == "1"
+    assert environments[0]["MEMPHANT_WORKER_COMPILE_CONCURRENCY"] == "64"
+    assert environments[0]["MEMPHANT_WORKER_BATCH_SIZE"] == "256"
+    assert environments[0]["MEMPHANT_WORKER_DATABASE_MAX_CONNECTIONS"] == "32"
+    assert "MEMPHANT_STRUCTURED_STATE_CONCURRENCY" not in environments[0]
+    assert "MEMPHANT_WORKER_ONCE" not in environments[0]
 
 
 def test_drain_worker_stops_on_zero_execution_before_next_tick(grt, monkeypatch, tmp_path):
@@ -690,7 +697,9 @@ def test_drain_worker_stops_on_semantic_rejection_before_next_tick(grt, monkeypa
     assert calls == 1
 
 
-def test_drain_worker_rejects_zero_tick_with_pending_retry(grt, monkeypatch):
+def test_drain_worker_rejects_zero_tick_with_pending_retry(
+    grt, monkeypatch, tmp_path
+):
     worker_calls = 0
 
     def fake_sh(command, **_kwargs):
@@ -715,6 +724,16 @@ def test_drain_worker_rejects_zero_tick_with_pending_retry(grt, monkeypatch):
         return grt.subprocess.CompletedProcess(command, 0, "1\n", "")
 
     monkeypatch.setattr(grt, "sh", fake_sh)
+    monkeypatch.setattr(
+        grt,
+        "structured_extractor_attempt_summary",
+        lambda *_args, **_kwargs: {
+            "terminal_decode_errors": 0,
+            "terminal_rejected_operations": 0,
+        },
+    )
+    ledger = tmp_path / "attempts.jsonl"
+    ledger.write_text("")
 
     with pytest.raises(
         RuntimeError,
@@ -724,4 +743,27 @@ def test_drain_worker_rejects_zero_tick_with_pending_retry(grt, monkeypatch):
             ".*pending_job_errors=.*duplicate structured identity"
         ),
     ):
+        grt.drain_worker(
+            "worker",
+            "postgres://fixture",
+            structured_attempt_ledger=ledger,
+            structured_requested_model="fixture/model",
+        )
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    ["", "completed=4\n", "memphant-worker: drain completed=-1\n"],
+)
+def test_drain_worker_rejects_malformed_drain_completion(
+    grt, monkeypatch, stdout
+):
+    monkeypatch.setattr(
+        grt,
+        "sh",
+        lambda command, **_kwargs: grt.subprocess.CompletedProcess(
+            command, 0, stdout, ""
+        ),
+    )
+    with pytest.raises(RuntimeError, match="drain completion"):
         grt.drain_worker("worker", "postgres://fixture")

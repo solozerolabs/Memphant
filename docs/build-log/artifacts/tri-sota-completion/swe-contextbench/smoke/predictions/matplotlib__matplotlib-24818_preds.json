@@ -1,0 +1,7 @@
+{
+  "matplotlib__matplotlib-24818": {
+    "model_name_or_path": "memphant-no-model-smoke",
+    "instance_id": "matplotlib__matplotlib-24818",
+    "model_patch": ""
+  }
+}

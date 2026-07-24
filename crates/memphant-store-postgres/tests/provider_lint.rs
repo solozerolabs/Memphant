@@ -11,17 +11,22 @@ fn bundled_wsa_migration_passes_all_provider_lints() {
 }
 
 #[test]
-fn bundled_migrations_are_ordered_bootstrap_then_file_sync_forward_migration() {
+fn bundled_migrations_are_ordered_through_worker_claim_forward_migration() {
     let versions: Vec<_> = MIGRATIONS.iter().map(|(version, _)| *version).collect();
     assert_eq!(
         versions,
         [
             "20260703_001_wsa_bootstrap",
-            "20260723_002_file_sync_mutation_verb"
+            "20260723_002_file_sync_mutation_verb",
+            "20260724_003_worker_claim_throughput",
         ]
     );
     assert_eq!(MIGRATIONS.last().unwrap().0, MIGRATION_HEAD);
-    assert_eq!(MIGRATION_HEAD, SCHEMA_COMPAT_REVISION);
+    assert_eq!(
+        SCHEMA_COMPAT_REVISION,
+        "20260723_002_file_sync_mutation_verb"
+    );
+    assert!(MIGRATION_HEAD > SCHEMA_COMPAT_REVISION);
 }
 
 #[test]

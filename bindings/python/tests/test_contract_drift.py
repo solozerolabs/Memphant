@@ -19,7 +19,7 @@ from uuid import uuid4
 
 import pytest
 
-from memphant import BoundContext, MemPhant
+from memphant import BoundContext, MemPhant, MemPhantValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SPEC_PATH = REPO_ROOT / "openapi" / "memphant.v1.json"
@@ -199,6 +199,7 @@ def test_retain_episode_payload_conforms(spec, client, capture, ctx):
         observed_at="2026-07-21T00:00:00Z",
         source_kind="agent",
         body="assistant: hello",
+        idempotency_key="retain-episode-contract",
     )
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/episodes")
@@ -215,6 +216,7 @@ def test_retain_resource_payload_conforms(spec, client, capture, ctx):
         content_hash="sha256:abc",
         revision="deadbeef",
         body="fn main() {}",
+        idempotency_key="retain-resource-contract",
     )
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/episodes")
@@ -231,6 +233,7 @@ def test_retain_unit_payload_conforms(spec, client, capture, ctx):
         predicate="release_region",
         body="Release region is Taipei.",
         confidence=1.0,
+        idempotency_key="retain-unit-contract",
     )
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/episodes")
@@ -245,6 +248,7 @@ def test_correct_payload_conforms(spec, client, capture, ctx):
         reason="file_memory_update",
         source_ref="agent:helper",
         observed_at="2026-07-21T00:00:00Z",
+        idempotency_key="correct-contract",
     )
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/correct")
@@ -256,6 +260,7 @@ def test_forget_payload_conforms(spec, client, capture, ctx):
         ctx=ctx,
         reason="user_erasure",
         memory_unit_id=str(uuid4()),
+        idempotency_key="forget-contract",
     )
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/forget")
@@ -263,7 +268,7 @@ def test_forget_payload_conforms(spec, client, capture, ctx):
 
 
 def test_reflect_payload_conforms(spec, client, capture, ctx):
-    client.reflect(ctx=ctx)
+    client.reflect(ctx=ctx, idempotency_key="reflect-contract")
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/reflect")
     _assert_conforms(spec, method, path, body)
@@ -276,6 +281,7 @@ def test_mark_payload_conforms(spec, client, capture, ctx):
         caller_id="agent:helper",
         used_ids=[str(uuid4())],
         outcome="used",
+        idempotency_key="mark-contract",
     )
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/mark")
@@ -284,12 +290,21 @@ def test_mark_payload_conforms(spec, client, capture, ctx):
 
 def test_wire_headers_satisfy_mutation_idempotency_contract(client, ctx):
     body = {**ctx._identity(), "query": "q"}
-    first = client._headers("POST", "/v1/reflect", body)
-    second = client._headers("POST", "/v1/reflect", dict(reversed(body.items())))
-    assert first["idempotency-key"] == second["idempotency-key"]
-    assert first["idempotency-key"].startswith("memphant-sdk-")
-    assert "idempotency-key" not in client._headers("POST", "/v1/recall", body)
-    assert "idempotency-key" not in client._headers("GET", "/v1/health", None)
+    first = client._headers("POST", "/v1/reflect", body, "reflect-attempt-1")
+    replay = client._headers("POST", "/v1/reflect", body, "reflect-attempt-1")
+    distinct = client._headers("POST", "/v1/reflect", body, "reflect-attempt-2")
+    assert first["idempotency-key"] == replay["idempotency-key"]
+    assert first["idempotency-key"] != distinct["idempotency-key"]
+    assert "idempotency-key" not in client._headers("POST", "/v1/recall", body, None)
+    assert "idempotency-key" not in client._headers("GET", "/v1/health", None, None)
+
+
+def test_mutations_require_valid_caller_owned_idempotency_keys(client, ctx):
+    for key in (None, "", "x" * 256):
+        with pytest.raises(MemPhantValidationError, match="idempotency_key"):
+            client._request("POST", "/v1/reflect", ctx._identity(), idempotency_key=key)
+    with pytest.raises(MemPhantValidationError, match="only by mutation"):
+        client._request("POST", "/v1/recall", ctx._identity(), idempotency_key="wrong")
 
 
 def test_trace_carries_complete_bound_context_query(client, capture, ctx):
@@ -307,8 +322,8 @@ def test_no_verb_smuggles_tenant_id(spec, client, capture, ctx):
     """The banned failure mode: tenant is bound by the API key, never sent in a
     body. Every verb must be clean."""
     client.recall(ctx=ctx, query="q")
-    client.reflect(ctx=ctx)
-    client.mark(ctx=ctx, trace_id=str(uuid4()), caller_id="a", used_ids=[], outcome="used")
+    client.reflect(ctx=ctx, idempotency_key="no-smuggle-reflect")
+    client.mark(ctx=ctx, trace_id=str(uuid4()), caller_id="a", used_ids=[], outcome="used", idempotency_key="no-smuggle-mark")
     for method, path, body in capture.calls:
         assert "tenant_id" not in body, f"{path} smuggles tenant_id"
         assert "allowed_scope_ids" not in body, f"{path} smuggles allowed_scope_ids"
