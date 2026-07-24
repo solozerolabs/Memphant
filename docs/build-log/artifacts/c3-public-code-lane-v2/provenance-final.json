@@ -3,10 +3,10 @@
   "lane": "code",
   "runtime": "memphant-server episode ingest (role-prefixed turn body) + /v1/recall",
   "embed_model": "off",
-  "label": "c3-public-full-final",
+  "label": "c3-public-full-terminal",
   "golden_path": "docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl",
   "corpus_path": "docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl",
-  "database_url_db": "memphant_scratch_35634_1784883214",
+  "database_url_db": "memphant_scratch_37200_1784886688",
   "k": 10,
   "recall_mode": "fast",
   "budget_tokens": 8192,
@@ -35,9 +35,9 @@
   "golden_count": 40,
   "runtime_identity": {
     "repository": {
-      "git_head": "9c37fff3840e4ede504d0f67b09acb9c3613cb32",
-      "tracked_file_count": 1527,
-      "tracked_worktree_sha256": "12dc663813a641eb1b015469a97256b425c7e4341226e71a8fcefbf742d7be82",
+      "git_head": "aae4b97aea1a5e8dd0377a8a3566da2bc6be225a",
+      "tracked_file_count": 1531,
+      "tracked_worktree_sha256": "9f15731c35e62f3cfbfc2939c745049230339071dbc712f56af64f152e0d0ee9",
       "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tracked_dirty": false
     },
@@ -45,7 +45,7 @@
       "files": [
         {
           "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
-          "sha256": "7ae6ecbe9daeae138ee8feeb9e391637913024616e7177dec55170e8c3c4cfbc"
+          "sha256": "1efe280d9bfdac73f22aeec53b92ca5e7b4827c4af96a0dc10cd42c406be70a5"
         },
         {
           "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
@@ -56,14 +56,14 @@
           "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
         }
       ],
-      "aggregate_sha256": "7191b5cf53bcc3104a7280c18060a1e9c2297e894ecf93c684a9c78cf481c721"
+      "aggregate_sha256": "4761986ff058077cef62bfb3c1bfeba8de0b987844f91b1fc3fff0c22ed80770"
     },
-    "runner_sha256": "6256c785293dfc7c11d39f22e840708f2a503a0f47eb6b455187eb73137ba043",
+    "runner_sha256": "a471b7963b877e7411a7223cdae060c3166e6f506dd867ca77e2823de85b7d24",
     "gate_common_sha256": "caaacb70d5a74df971c092d89798f8027a010744dfff89fdd00460a3f70280b0",
-    "gate_runtime_sha256": "38ca860ef91076f4189353f2e451b92413dd25247b05dd7fa594e902ad98c7a1",
-    "server_sha256": "1baf85b82554f4d2633bcf198d142999c2f770957d7ce5b80073fd426ebe13e8",
-    "worker_sha256": "219b5498b94a4b34f8a88f65b98b3a6e0ddf511aff656bc3004168904697c4f6",
-    "cli_sha256": "3b5a83f3b53e26c5aa91f101b177e4ef7f1fce5d7778ae12494122f81a03e9eb",
+    "gate_runtime_sha256": "afe6caabcaf6ddce1fbe9786a8d597ce78979cd51d4b255adebe483c7a1f1be7",
+    "server_sha256": "7e94f7314ac638105ff9c1a6051edddb76c3e1127a3c3a4e5be260e9f9b6a29e",
+    "worker_sha256": "396c3fbcf8e897bc0cb0455a07cf281b7d9a514b34cc33e84c066b55ba8c670f",
+    "cli_sha256": "8987ebe1d3a3a6f75cd7536dd206c2754cf2b31511a1382060ec4ff082b506bd",
     "argv": [
       "scripts/code_lane_run_memphant.py",
       "--database-url",
@@ -73,13 +73,13 @@
       "--golden",
       "docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl",
       "--out-evidence",
-      "docs/build-log/artifacts/c3-public-code-lane-v2/evidence-final.jsonl",
+      "<external>/c3-evidence.jsonl",
       "--out-provenance",
-      "docs/build-log/artifacts/c3-public-code-lane-v2/provenance-final.json",
+      "<external>/c3-provenance.json",
       "--embed-model",
       "off",
       "--label",
-      "c3-public-full-final",
+      "c3-public-full-terminal",
       "--port",
       "39419",
       "--k",
@@ -89,13 +89,13 @@
       "--mode",
       "fast"
     ],
-    "command": "/opt/homebrew/opt/python@3.14/bin/python3.14 scripts/code_lane_run_memphant.py --database-url postgres://memphant:memphant@localhost:5432/memphant --corpus docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl --golden docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl --out-evidence docs/build-log/artifacts/c3-public-code-lane-v2/evidence-final.jsonl --out-provenance docs/build-log/artifacts/c3-public-code-lane-v2/provenance-final.json --embed-model off --label c3-public-full-final --port 39419 --k 10 --budget-tokens 8192 --mode fast"
+    "command": "python3 scripts/code_lane_run_memphant.py --database-url postgres://memphant:memphant@localhost:5432/memphant --corpus docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl --golden docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl --out-evidence '<external>/c3-evidence.jsonl' --out-provenance '<external>/c3-provenance.json' --embed-model off --label c3-public-full-terminal --port 39419 --k 10 --budget-tokens 8192 --mode fast"
   },
   "timings": {
-    "ingest_seconds": 317.5146048069,
-    "compile_seconds": 641.59734582901,
-    "recall_seconds": 2.808293104171753,
-    "events_per_ingest_second": 201.738751636183
+    "ingest_seconds": 428.77320194244385,
+    "compile_seconds": 615.2428829669952,
+    "recall_seconds": 2.7679107189178467,
+    "events_per_ingest_second": 149.3913325502054
   },
   "tenancy": {
     "api_tenants": 2,

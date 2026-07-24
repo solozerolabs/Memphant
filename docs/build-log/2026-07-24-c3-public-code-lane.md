@@ -10,9 +10,9 @@ organic production traffic. No model or paid provider was called.
 - Corpus: 495 whole attempts, 64,550 source messages, 64,055 emitted events.
 - Corpus SHA-256: `c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669`.
 - Golden SHA-256: `6a5f6978c922abe41be0a1ebc232248f7baa0dd4c897212ffe2879655681ed97`.
-- Runtime commit: `9c37fff3840e4ede504d0f67b09acb9c3613cb32`, tracked tree clean.
+- Runtime commit: `aae4b97aea1a5e8dd0377a8a3566da2bc6be225a`, tracked tree clean.
 - Machine proof: `docs/build-log/artifacts/c3-public-code-lane-v2/provenance-final.json`
-  (SHA-256 `f8ba2c445772000701b800f7fe3e1380990446d2c09b71d0a6df26f0e6b1c8fc`).
+  (SHA-256 `0c38812f39ceb3911ca7712ea4fb0a55c59bf2f9cb37a49d0846d51ccd4d2ca0`).
 
 The transform omitted 495 system messages with accounting, omitted zero empty
 messages, and clipped 4,811 events at 4,000 characters (36,405,709 characters /
@@ -27,7 +27,7 @@ action and rejects missing queries or answer leakage.
 - 64,056 raw writes and 64,056 completed worker jobs.
 - 64,014 episodic projections; 42 repeated bodies were exact in-context dedup,
   accounting for every raw episode. Zero dead or pending jobs.
-- Ingest: 317.515 s (201.739 events/s). Compile: 641.597 s. Recall: 2.808 s.
+- Ingest: 428.773 s (149.391 events/s). Compile: 615.243 s. Recall: 2.768 s.
 - Two-tenant owner-to-sentinel and sentinel-to-owner negative checks passed.
 - Exact action-to-result lexical retrieval: Recall@5 = 12/40 (0.300), Recall@10 = 18/40
   (0.450). All 40 queries returned ten items.

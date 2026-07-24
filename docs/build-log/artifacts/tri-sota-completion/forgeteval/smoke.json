@@ -56,11 +56,11 @@
     "not_applicable": 3,
     "passed": 12,
     "total": 15,
-    "wall_seconds": 1.8705242919968441
+    "wall_seconds": 1.7969900000025518
   },
   "runtime": {
-    "adapter_path": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/scripts/run_forgeteval.py",
-    "adapter_sha256": "bbf4118b884c41f35846a28120987adfab49a2d47d9b1306ec0a70146e58e63b",
+    "adapter_path": "scripts/run_forgeteval.py",
+    "adapter_sha256": "44dc0aa303f4fc829683928f855ea9ef489eeaea631580c652bb7c8931024789",
     "argv": [
       "scripts/run_forgeteval.py",
       "--official-dir",
@@ -68,23 +68,23 @@
       "--suite",
       "smoke",
       "--out",
-      "docs/build-log/artifacts/tri-sota-completion/forgeteval/smoke.json",
+      "<external>/smoke.json",
       "--embed-model",
       "small",
       "--port",
       "39431"
     ],
-    "cli": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/target/release/memphant-cli",
-    "cli_sha256": "3b5a83f3b53e26c5aa91f101b177e4ef7f1fce5d7778ae12494122f81a03e9eb",
-    "command": "/opt/homebrew/opt/python@3.14/bin/python3.14 scripts/run_forgeteval.py --official-dir docs/build-log/artifacts/tri-sota-completion/forgeteval/official --suite smoke --out docs/build-log/artifacts/tri-sota-completion/forgeteval/smoke.json --embed-model small --port 39431",
+    "cli": "target/release/memphant-cli",
+    "cli_sha256": "8987ebe1d3a3a6f75cd7536dd206c2754cf2b31511a1382060ec4ff082b506bd",
+    "command": "python3 scripts/run_forgeteval.py --official-dir docs/build-log/artifacts/tri-sota-completion/forgeteval/official --suite smoke --out '<external>/smoke.json' --embed-model small --port 39431",
     "database": "run-owned ephemeral scratch Postgres",
     "embed_model": "small",
     "migrations": {
-      "aggregate_sha256": "7191b5cf53bcc3104a7280c18060a1e9c2297e894ecf93c684a9c78cf481c721",
+      "aggregate_sha256": "4761986ff058077cef62bfb3c1bfeba8de0b987844f91b1fc3fff0c22ed80770",
       "files": [
         {
           "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
-          "sha256": "7ae6ecbe9daeae138ee8feeb9e391637913024616e7177dec55170e8c3c4cfbc"
+          "sha256": "1efe280d9bfdac73f22aeec53b92ca5e7b4827c4af96a0dc10cd42c406be70a5"
         },
         {
           "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
@@ -98,13 +98,13 @@
     },
     "mode": "fast",
     "repository": {
-      "git_head": "ee4de593f1cd7bd2cef6fcca6d464d501c0c1da5",
+      "git_head": "aae4b97aea1a5e8dd0377a8a3566da2bc6be225a",
       "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tracked_dirty": false,
-      "tracked_file_count": 1527,
-      "tracked_worktree_sha256": "415afa88d9ff3f3c3a90d8c9169e0a63e9662b1740d26efcd7396a815bcac6c3"
+      "tracked_file_count": 1531,
+      "tracked_worktree_sha256": "9f15731c35e62f3cfbfc2939c745049230339071dbc712f56af64f152e0d0ee9"
     },
-    "server": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/target/release/memphant-server",
+    "server": "target/release/memphant-server",
     "server_sha256": "7e94f7314ac638105ff9c1a6051edddb76c3e1127a3c3a4e5be260e9f9b6a29e"
   },
   "suite": "smoke",
