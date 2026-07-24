@@ -76,8 +76,8 @@
         "preparation_commands": [
           "git clone --filter=blob:none --no-checkout https://github.com/xiaowu0162/LongMemEval-V2.git docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official",
           "git -C docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official checkout --detach be15ea6e995462f3391c1a610892df3f67dfa7bd",
-          "python3 scripts/acquire_longmemeval_v2_packing.py --output-dir docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/data",
-          "python3 scripts/prepare_longmemeval_v2_packing_slice.py --data-dir docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/data --output-dir docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/slice",
+          "python3 scripts/acquire_longmemeval_v2_packing.py --data-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/data",
+          "python3 scripts/prepare_longmemeval_v2_packing_slice.py --data-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/data --output-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/slice",
           "cargo build -p memphant-server -p memphant-worker -p memphant-cli",
           "python3 scripts/run_longmemeval_v2_packing_campaign.py plan --official-dir docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official --slice-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/slice --artifact-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid --authorization-manifest docs/build-log/artifacts/next-evidence/authorization-request.json --attempt-ledger docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/attempts.jsonl"
         ],

@@ -57,6 +57,12 @@ def test_packing_packet_binds_every_local_input() -> None:
     assert campaign["hard_limits"]["logical_calls"] == 90
     assert campaign["hard_limits"]["max_provider_attempts"] == 90
     assert campaign["hard_limits"]["sdk_retries"] == 0
+    preparation = "\n".join(campaign["execution"]["preparation_commands"])
+    assert "acquire_longmemeval_v2_packing.py --data-root" in preparation
+    assert "prepare_longmemeval_v2_packing_slice.py --data-root" in preparation
+    assert "--output-root" in preparation
+    assert "--output-dir" not in preparation
+    assert "--data-dir" not in preparation
 
 
 def test_bootstrap_rejects_packet_before_provider_access(tmp_path: Path) -> None:
