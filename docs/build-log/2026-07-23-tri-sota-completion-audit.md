@@ -1,8 +1,9 @@
 # Tri-SOTA completion audit — 2026-07-23
 
-Status: initial read-only reconciliation. This document classifies work; it is
-not proof that an unchecked gate passed. Ledger changes require the named proof
-artifact in the same logical checkpoint.
+Status: final reconciliation is recorded in
+`docs/build-log/2026-07-24-tri-sota-terminal-reconciliation.md`. The tables
+below preserve the initial audit and are superseded where the final evidence
+explicitly says so.
 
 ## Audited state
 
@@ -48,8 +49,8 @@ the missing input is outside these repositories or requires authorization.
 | B1 observation block | Rejected and deleted | Named proof: `docs/build-log/2026-07-22-b1-observation-block.md`; 0/12 in both arms. Do not revive. |
 | B2 file plane | Complete | Canonical projection plus compile/sync fixed-point proof at B2 head `9c52b8e4...`. |
 | B3 distribution wedge | Complete locally | Named proof: `docs/build-log/2026-07-23-b3-distribution-wedge.md`; machine gate under `docs/build-log/artifacts/b3-distribution-wedge/`. Not pushed, landed, deployed, or CI-proven. |
-| B4 verified receipts | Unimplemented; substrate exists | `StoredCitation` already owns source IDs, UTF-8 byte spans, and quote hash; recall drops these to ID-only citations. Add one tenant-bound verifier over canonical source bytes and persist receipts in the existing trace. No second evidence store or migration is justified. |
-| B4 evidence status/policy | Unimplemented | Add a versioned MemPhant contract with `supported`, `contradicts-premise`, `near-match`, and `insufficient`, plus a deterministic server-owned answer policy. These requested names are not an official LongMemEval-V2 wire contract. |
+| B4 verified receipts | Complete locally | Named proof: `docs/build-log/2026-07-23-b4-verified-receipts.md`; canonical UTF-8 spans, source hashes, context/trace/contract binding, replay/tamper/tenant/trust/ACL/fanout failures, and constant-batch source loading are proven. |
+| B4 evidence status/policy | Complete locally | The versioned status quartet and deterministic answer policy are public contracts. No upstream LongMemEval wire-compatibility claim is made. |
 | B5 WS-0 stubs/spikes/compare/schema comments | Complete | Landed in inherited history. `retention_tier` is live, not a dormant table. |
 | B5 heuristic reranker | Complete at `2cd157a4` | Harmful stage, learned wrapper, request/trace/eval surface, and synthetic promotion fixtures deleted. Distinct cross-encoder seam preserved default-off. |
 | B5 `Balanced` / decomposition | Rejected and deleted at `2cd157a4` | Real Postgres comparison was zero-delta at @5/@10. `Balanced` was removed coherently after its only distinct retrieval behavior was rejected; no alias remains. |
@@ -69,11 +70,11 @@ the missing input is outside these repositories or requires authorization.
 | C1 quality parity | External/evidence block | No accepted live parity corpus/oracle is authorized. Keep separate from mapping correctness and UI equivalence. |
 | C2 docs | Rejected by free kill-gate | Named proof: `docs/build-log/2026-07-22-c2-docs-slice-killgate.md`; do not revive. |
 | C3 strict ingest mechanism | Complete | Focused extract/mine/runner contracts: 79 tests passed. Current runner uses binding plus nested `payload.episode`. |
-| C3 public trajectory adapter | Unimplemented | Pin `nebius/SWE-rebench-openhands-trajectories` revision `35455389ab51bf5e2306bfd436ef72d0f98bf882` (CC-BY-4.0), sample whole trajectories deterministically, record every transformation/drop, and fail on unknown roles. |
-| C3 realistic-volume proof | Unimplemented | Run approximately 1,000 trajectories / approximately 64k turns through packaged MemPhant and scratch Postgres in Fast mode; prove provenance, throughput, two-tenant isolation, no silent drops, bounded failures, and adversarial continuity. Label it public synthetic model-generated traffic, never organic production traffic. |
+| C3 public trajectory adapter | Complete locally | Pinned revision, license, corpus/transform/golden hashes, role/drop/truncation accounting, and fail-closed retrieval-query contract are in `docs/build-log/2026-07-24-c3-public-code-lane.md`. |
+| C3 realistic-volume proof | Complete at no-model retrieval level | 495 attempts / 64,055 events through packaged MemPhant and scratch Postgres; 64,056 jobs, 42 exact dedups, zero dead/pending, tenant negatives pass, R@5 12/40 and R@10 18/40. Not production or reader QA. |
 | C3 adversarial reader | External-block on paid authorization | Mining may be free/deterministic, but the existing generator/reader is paid. Prepare one consolidated authorization packet; continue all free work. |
-| WS-F active dogfood read | Implemented seam, proof missing | Use the existing L1+ loader seam. It is default-off and current mission consumers swallow hard contract errors, so the dogfood predicate remains open. |
-| Loud dogfood failures | Unimplemented root fix | Propagate non-transient contract/auth failures through both mission consumers; degrade only transport faults. Add a real-loader scratch-PG proof with two API keys and a malformed contract. |
+| WS-F active dogfood read | Local active-loader proof complete; dogfood gate open | The real Syndai loader executes public retain/compile/recall/verified receipt/trace paths under one key, returns empty under a second tenant, and fails loudly on an invalid key. It is still default-off/local synthetic evidence. |
+| Loud dogfood failures | Complete locally | Non-transient contract/auth failures propagate; only transport faults degrade. Cross-repo scratch integration passes against latest packaged binaries. |
 | Private mirror drift | Unimplemented repair | `check_spec_drift.py` currently reports `STATUS.md` and `08-api-sdk-mcp-spec.md` drift. Update mirrors only with the owning evidence and preserve unrelated Syndai work. |
 
 ## Phase D
@@ -81,7 +82,7 @@ the missing input is outside these repositories or requires authorization.
 | Item | Classification | Evidence and terminal action |
 |---|---|---|
 | D1 LongMemEval-V2 dual point | Deferred by A1 | No new Deep campaign or leaderboard claim without a new frozen depth-bound bank and explicit authorization. |
-| D2 ForgetEval | Unimplemented adapter; current upstream runnable | Pin official upstream `b6053b7...`; map reset/inscribe/recall/supersede/release exactly. Selective purge is unsupported and must report N/A; subject erasure is not a substitute. Mutation correctness is the prerequisite. |
+| D2 ForgetEval | Instrument complete; measured product gaps remain | Official `b6053b7...` reports: smoke 12/0/3 N/A; template 771/29/200 N/A; adversarial 133/126/126 N/A. Selective purge remains unsupported/N/A. Proof: `docs/build-log/2026-07-24-forgeteval-public-api.md`. |
 | D3 LME-S full-500 | Deferred by A1 | Do not run or use SOTA language. |
 | D4 SWE-Explore | External-block reconfirmed | Current public package still omits required issue text/base commits; retain fail-closed evidence. |
 | D4 SWE Context Bench | Official harness now public; no-model smoke complete; model run unauthorized | Pinned code `31bb04155f52b184bf31b220e3cff0607ac9c953` and dataset `5bec275a2095768a53ac804ae4fdf90b1723b8af`; official input combiner and evaluator import smoke passed on one Lite case. No Docker task, model, MemPhant adapter, or benchmark score was run. The frozen gate remains awaiting exact model/compute budgets and explicit authorization. |
