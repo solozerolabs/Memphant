@@ -92,6 +92,23 @@ def test_deep_recall_rejects_embeddings_off(clr):
         clr.validate_recall_configuration("off", "deep")
 
 
+def test_compilation_summary_fails_closed_on_silent_drops(clr):
+    complete = {
+        "episodes": 2,
+        "episodic_units": 2,
+        "distinct_source_episodes": 2,
+        "missing_source_episodes": 0,
+        "done_jobs": 2,
+        "dead_jobs": 0,
+        "pending_jobs": 0,
+    }
+    clr.validate_compilation_summary(complete, 2)
+
+    incomplete = {**complete, "distinct_source_episodes": 1, "missing_source_episodes": 1}
+    with pytest.raises(RuntimeError, match="silent drops"):
+        clr.validate_compilation_summary(incomplete, 2)
+
+
 def test_select_ingest_attempts_full_corpus_when_no_limit(clr):
     corpus = [_row("a1"), _row("a2"), _row("a3")]
     out = clr.select_ingest_attempts(corpus, [_golden("a1")], limit_attempts=0)

@@ -10875,7 +10875,11 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
         } else {
             let new_id = UnitId::new();
             // Untrusted callers never mint semantic units — a kind hint is
-            // honored only when it does not escalate past candidate tier.
+            // honored only when it does not escalate a claim past candidate
+            // tier. Raw episodic/resource projections are evidence, not
+            // promoted claims: keep them recallable while preserving their
+            // low trust label so high-risk recall policy can still suppress
+            // them.
             let low_trust_kind = candidate
                 .kind
                 .filter(|kind| *kind != MemoryKind::Semantic)
@@ -10884,7 +10888,7 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
                 new_id,
                 &input,
                 low_trust_kind,
-                UnitState::Candidate,
+                low_trust_projection_state(low_trust_kind),
                 fact_key,
                 &candidate,
                 &now,
@@ -11005,6 +11009,38 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
             embeddings,
         },
     })
+}
+
+fn low_trust_projection_state(kind: MemoryKind) -> UnitState {
+    if matches!(kind, MemoryKind::Episodic | MemoryKind::Resource) {
+        UnitState::Active
+    } else {
+        UnitState::Candidate
+    }
+}
+
+#[cfg(test)]
+mod low_trust_projection_tests {
+    use super::*;
+
+    #[test]
+    fn raw_evidence_is_recallable_without_promoting_low_trust_claims() {
+        assert_eq!(
+            low_trust_projection_state(MemoryKind::Episodic),
+            UnitState::Active
+        );
+        assert_eq!(
+            low_trust_projection_state(MemoryKind::Resource),
+            UnitState::Active
+        );
+        for kind in [
+            MemoryKind::Semantic,
+            MemoryKind::Belief,
+            MemoryKind::Procedural,
+        ] {
+            assert_eq!(low_trust_projection_state(kind), UnitState::Candidate);
+        }
+    }
 }
 
 fn mint_compiled_citations(

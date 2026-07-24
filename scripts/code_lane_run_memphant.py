@@ -51,6 +51,7 @@ import shlex
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -299,6 +300,62 @@ def validate_recall_configuration(embed_model: str, mode: str) -> None:
         raise RuntimeError("deep recall requires an embeddings model; use fast with off")
 
 
+def compilation_summary(database_url: str, tenant_ids: list[str]) -> dict:
+    ids = [str(uuid.UUID(value)) for value in tenant_ids]
+    tenant_array = "array[" + ",".join(f"'{value}'::uuid" for value in ids) + "]"
+    query = f"""
+select json_build_object(
+  'episodes', (select count(*) from memphant.episode where tenant_id = any({tenant_array})),
+  'episodic_units', (select count(*) from memphant.memory_unit
+    where tenant_id = any({tenant_array}) and kind = 'episodic'),
+  'distinct_source_episodes', (select count(distinct source_episode_id)
+    from memphant.memory_unit where tenant_id = any({tenant_array})
+      and kind = 'episodic' and source_episode_id is not null),
+  'missing_source_episodes', (select count(*) from memphant.episode episode
+    where episode.tenant_id = any({tenant_array}) and not exists (
+      select 1 from memphant.memory_unit unit
+      where unit.tenant_id = episode.tenant_id
+        and unit.source_episode_id = episode.id and unit.kind = 'episodic')),
+  'done_jobs', (select count(*) from memphant.job_state
+    where tenant_id = any({tenant_array}) and state = 'done'),
+  'dead_jobs', (select count(*) from memphant.job_state
+    where tenant_id = any({tenant_array}) and state = 'dead'),
+  'pending_jobs', (select count(*) from memphant.job_state
+    where tenant_id = any({tenant_array}) and state in ('queued', 'running'))
+)::text
+"""
+    result = gr.sh([
+        "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+        "--set", "ON_ERROR_STOP=1", database_url, "--command", query,
+    ])
+    if result.returncode != 0:
+        raise RuntimeError(f"compilation summary failed: {result.stderr.strip()[:300]}")
+    return json.loads(result.stdout)
+
+
+def validate_compilation_summary(summary: dict, expected_episodes: int) -> None:
+    expected = {
+        "episodes": expected_episodes,
+        "distinct_source_episodes": expected_episodes,
+        "done_jobs": expected_episodes,
+        "dead_jobs": 0,
+        "pending_jobs": 0,
+        "missing_source_episodes": 0,
+    }
+    mismatches = {
+        key: {"expected": value, "actual": summary.get(key)}
+        for key, value in expected.items()
+        if summary.get(key) != value
+    }
+    if summary.get("episodic_units", 0) < expected_episodes:
+        mismatches["episodic_units"] = {
+            "expected_minimum": expected_episodes,
+            "actual": summary.get("episodic_units"),
+        }
+    if mismatches:
+        raise RuntimeError(f"compiled corpus has silent drops: {mismatches}")
+
+
 def require_outcome_mark_ready(readiness: dict) -> None:
     if not readiness.get("outcome_marked_memphant"):
         raise RuntimeError(
@@ -541,6 +598,10 @@ def main() -> int:
                 f"compiled job count mismatch: {compiled} != {expected_jobs} events"
             )
         print(f"{label_prefix}worker drained: compiled={compiled} jobs", file=sys.stderr)
+        compiled_corpus = compilation_summary(
+            args.database_url, [tenant_id for tenant_id, _key in principals]
+        )
+        validate_compilation_summary(compiled_corpus, expected_jobs)
 
         evidence_rows = []
         provenance_rows = []
@@ -611,6 +672,7 @@ def main() -> int:
             "context_window": "nearest_preceding_assistant_for_tool_results",
             "isolation_sentinel_events": isolation_sentinel_events,
             "compiled_jobs": compiled,
+            "compiled_corpus": compiled_corpus,
             "corpus_attempts": len(corpus_rows),
             "limit_attempts": args.limit_attempts,
             "golden_sha256": golden_sha,
