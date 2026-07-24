@@ -17,7 +17,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import uuid
 from pathlib import Path
 
 
@@ -38,6 +37,17 @@ BUDGET_TOKENS = 4096
 EMBED_MODEL = "small"
 PROTOCOL_ID = "state_bench_v0.8.0_gpt54"
 DEFAULT_DATABASE_URL = "postgres://memphant:memphant@localhost:5432/memphant"
+
+
+def map_attempt_source_kind(attempt_type: str) -> str:
+    mapping = {
+        "tool_attempt.success": "tool",
+        "tool_attempt.failure": "tool",
+    }
+    try:
+        return mapping[attempt_type]
+    except KeyError as error:
+        raise ValueError(f"unmapped STATE-Bench attempt_type: {attempt_type!r}") from error
 
 EVIDENCE_SCHEMA = {
     "additionalProperties": False,
@@ -287,14 +297,6 @@ def runner_contract(agent_model: str, output_root: str) -> dict:
     }
 
 
-def deterministic_ids(domain: str) -> tuple[str, str]:
-    namespace = uuid.UUID("ac279d0c-2c05-4e64-b243-4fc560ad935f")
-    return (
-        str(uuid.uuid5(namespace, f"scope:{domain}")),
-        str(uuid.uuid5(namespace, f"actor:{domain}")),
-    )
-
-
 def validate_checkpoint(
     checkpoint: dict, fingerprint: str, expected_ids: dict[str, set[str]]
 ) -> None:
@@ -384,14 +386,21 @@ def provision_domain(
     tenant_id, api_key = gate.provision_tenant(
         str(cli_bin), database_url, name_prefix=f"state-bench-{domain}"
     )
-    scope_id, actor_id = deterministic_ids(domain)
+    client = gate.ApiClient(client_port, api_key, tenant_id)
+    context = client.bind_context(
+        f"state-bench:{domain}",
+        subject_ref=f"state-bench:{domain}:subject",
+        actor_ref=f"state-bench:{domain}:actor",
+        scope_ref=f"state-bench:{domain}:scope",
+        agent_node_ref=f"state-bench:{domain}:agent",
+        scope_kind="benchmark",
+    )
     bound = {
         "tenant_id": tenant_id,
         "api_key": api_key,
-        "scope_id": scope_id,
-        "actor_id": actor_id,
+        **context,
     }
-    return bound, gate.ApiClient(client_port, api_key, tenant_id)
+    return bound, client
 
 
 def execute_build(
@@ -447,6 +456,13 @@ def execute_build(
                 atomic_write_json(checkpoint_path, checkpoint, private=True)
             else:
                 client = gate.ApiClient(args.port, bound["api_key"], bound["tenant_id"])
+            context = {
+                key: bound[key]
+                for key in (
+                    "subject_id", "scope_id", "actor_id", "agent_node_id",
+                    "subject_generation",
+                )
+            }
             clients[domain] = client
             for attempt in domain_plans:
                 record = domain_state["attempts"][attempt["attempt_id"]]
@@ -454,17 +470,13 @@ def execute_build(
                     continue
                 response = client.post(
                     "/v1/episodes",
-                    {
-                        "tenant_id": bound["tenant_id"],
-                        "scope_id": bound["scope_id"],
-                        "actor_id": bound["actor_id"],
-                        "source_kind": attempt["attempt_type"],
-                        "source_trust": "trusted_system",
-                        "subject_hint": (
-                            f"{domain} {attempt['tool_name']} {attempt['mark_outcome']}"
-                        ),
-                        "body": attempt["body"],
-                    },
+                    gate.episode_retain_payload(
+                        context,
+                        source_ref=f"state-bench:{domain}:{attempt['attempt_id']}",
+                        observed_at="2026-07-13T00:00:00Z",
+                        source_kind=map_attempt_source_kind(attempt["attempt_type"]),
+                        body=attempt["body"],
+                    ),
                 )
                 episode_id = response.get("episode_id")
                 if not isinstance(episode_id, str) or not episode_id:
@@ -474,11 +486,7 @@ def execute_build(
             if domain_state.get("reflected") is None:
                 reflected = client.post(
                     "/v1/reflect",
-                    {
-                        "tenant_id": bound["tenant_id"],
-                        "scope_id": bound["scope_id"],
-                        "actor_id": bound["actor_id"],
-                    },
+                    context,
                 )
                 domain_state["reflected"] = reflected
                 atomic_write_json(checkpoint_path, checkpoint, private=True)
@@ -489,9 +497,7 @@ def execute_build(
                 recalled = client.post(
                     "/v1/recall",
                     {
-                        "tenant_id": bound["tenant_id"],
-                        "scope_id": bound["scope_id"],
-                        "actor_id": bound["actor_id"],
+                        **context,
                         "query": attempt["recall_query"],
                         "limit": TOP_K,
                         "budget_tokens": BUDGET_TOKENS,
@@ -509,7 +515,7 @@ def execute_build(
                 marked = client.post(
                     "/v1/mark",
                     {
-                        "tenant_id": bound["tenant_id"],
+                        **context,
                         "trace_id": recalled["trace_id"],
                         "caller_id": f"state-bench-train:{attempt['attempt_id']}",
                         "used_ids": used_ids,

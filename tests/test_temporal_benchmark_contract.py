@@ -290,14 +290,22 @@ def test_stale_runtime_requests_use_api_key_tenant_and_canonical_context() -> No
             }
 
         def get(self, path):
-            assert path == "/v1/traces/trace-1"
+            assert path == (
+                "/v1/traces/trace-1?subject_id=subject-1&scope_id=scope-1"
+                "&actor_id=actor-1&agent_node_id=agent-1&subject_generation=7"
+            )
             return {"id": "trace-1"}
 
     client = Client()
     subject_id, scope_id, actor_id, agent_node_id, generation = (
         generator.bind_record_context(client, "fixture-uid")
     )
-    plan = {"uid": "fixture-uid", "sessions": [{"body": "hello"}]}
+    plan = {
+        "uid": "fixture-uid",
+        "sessions": [
+            {"timestamp": "2026-01-01T00:00:00Z", "body": "hello"}
+        ],
+    }
     assert (
         generator.ingest_plan(
             client, plan, subject_id, scope_id, actor_id, agent_node_id, generation
@@ -329,9 +337,17 @@ def test_stale_runtime_requests_use_api_key_tenant_and_canonical_context() -> No
     binding = client.requests[0][1]
     assert binding["subject"] == {"external_ref": "stale:fixture-uid", "kind": "user"}
     assert binding["actor"] == binding["subject"]
-    for _, payload in client.requests[1:]:
-        assert "tenant_id" not in payload
-        assert {key: payload[key] for key in required_context} == required_context
+    episode_payload = client.requests[1][1]
+    assert "tenant_id" not in episode_payload
+    assert {key: episode_payload[key] for key in required_context} == required_context
+    assert episode_payload["source_ref"] == "stale:fixture-uid:session:0001"
+    assert episode_payload["payload"]["episode"] == {
+        "source_kind": "user",
+        "body": "hello",
+    }
+    recall_payload = client.requests[2][1]
+    assert "tenant_id" not in recall_payload
+    assert {key: recall_payload[key] for key in required_context} == required_context
 
 
 def test_stale_generation_rejects_malformed_sessions_and_partial_resume() -> None:

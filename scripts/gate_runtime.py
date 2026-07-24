@@ -57,9 +57,39 @@ API_KEY_ENV_BY_ARM = {
     "voyage-context-4": "VOYAGE_API_KEY",
     "gemini-embedding-001": "GEMINI_API_KEY",
     "gemini-embedding-2": "GEMINI_API_KEY",
-    "jina-v5-small": "JINA_API_KEY",
     "openai-text-embedding-3-small": "OPENAI_API_KEY",
+    "jina-v5-small": "JINA_API_KEY",
 }
+
+
+def episode_retain_payload(
+    context: dict,
+    *,
+    source_ref: str,
+    observed_at: str,
+    source_kind: str,
+    body: str,
+) -> dict:
+    """Build the one strict public episode-retain shape used by benchmark
+    runners. Context is server-bound; tenant and internal compiler hints are
+    deliberately impossible to add through this helper."""
+    required = {
+        "subject_id", "scope_id", "actor_id", "agent_node_id",
+        "subject_generation",
+    }
+    if set(context) != required:
+        raise ValueError("episode retain context must contain exactly the five bound fields")
+    if source_kind not in {"user", "agent", "tool", "web", "resource", "system"}:
+        raise ValueError(f"unmapped episode source kind: {source_kind!r}")
+    if not source_ref or not observed_at or not body:
+        raise ValueError("episode retain source_ref, observed_at, and body must be nonempty")
+    payload = {
+        **context,
+        "source_ref": source_ref,
+        "observed_at": observed_at,
+        "payload": {"episode": {"source_kind": source_kind, "body": body}},
+    }
+    return payload
 
 
 def check_embed_model_key(embed_model: str | None) -> None:

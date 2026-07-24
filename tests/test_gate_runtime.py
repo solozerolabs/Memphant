@@ -39,8 +39,8 @@ EXPECTED_API_ARMS = {
     "voyage-context-4",
     "gemini-embedding-001",
     "gemini-embedding-2",
-    "jina-v5-small",
     "openai-text-embedding-3-small",
+    "jina-v5-small",
 }
 
 # `"<id>" => api(` — the exact shape of an API-arm match arm in
@@ -63,6 +63,36 @@ def grt():
 
 def test_api_key_map_covers_exactly_the_expected_api_arms(grt):
     assert set(grt.API_KEY_ENV_BY_ARM) == EXPECTED_API_ARMS
+
+
+def test_episode_retain_builder_is_context_bound_and_fail_closed(grt):
+    context = {
+        "subject_id": "subject",
+        "scope_id": "scope",
+        "actor_id": "actor",
+        "agent_node_id": "agent",
+        "subject_generation": 3,
+    }
+    assert grt.episode_retain_payload(
+        context,
+        source_ref="bench:episode:1",
+        observed_at="2026-07-23T00:00:00Z",
+        source_kind="tool",
+        body="tool outcome",
+    ) == {
+        **context,
+        "source_ref": "bench:episode:1",
+        "observed_at": "2026-07-23T00:00:00Z",
+        "payload": {"episode": {"source_kind": "tool", "body": "tool outcome"}},
+    }
+    with pytest.raises(ValueError, match="unmapped episode source kind"):
+        grt.episode_retain_payload(
+            context,
+            source_ref="bench:episode:2",
+            observed_at="2026-07-23T00:00:00Z",
+            source_kind="tool_attempt.success",
+            body="must map first",
+        )
 
 
 def test_replay_key_provisioning_reuses_existing_tenant_without_storing_key(

@@ -21,6 +21,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+CTX = {
+    "subject_id": "00000000-0000-0000-0000-000000000011",
+    "scope_id": "00000000-0000-0000-0000-000000000012",
+    "actor_id": "00000000-0000-0000-0000-000000000013",
+    "agent_node_id": "00000000-0000-0000-0000-000000000014",
+    "subject_generation": 0,
+}
 
 
 def _load(name: str, rel: str):

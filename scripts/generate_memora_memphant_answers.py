@@ -1346,13 +1346,16 @@ class PackagedRuntime:
         }
 
     def retain(self, session: dict) -> None:
-        response = self.client.post("/v1/episodes", {
-            **self.context_payload(),
-            "source_kind": "user",
-            "source_trust": "trusted_user",
-            "subject_hint": f"session {session['session_id']:04d} date {session['date']}",
-            "body": session["body"],
-        })
+        response = self.client.post(
+            "/v1/episodes",
+            gate_runtime.episode_retain_payload(
+                self.context_payload(),
+                source_ref=f"memora:session:{session['session_id']:04d}",
+                observed_at=f"{session['date']}T00:00:00Z",
+                source_kind="user",
+                body=session["body"],
+            ),
+        )
         if not response.get("episode_id"):
             raise RuntimeError(f"Memora retain returned no episode_id for session {session['session_id']}")
 

@@ -408,9 +408,19 @@ def test_answer_spans_are_verbatim_in_the_pinned_corpus(golden_path: Path, lock_
     root = next((path for path in candidates if path.exists()), None)
     if root is None:
         pytest.skip(f"Syndai corpus not present at any of {candidates}")
+    pinned_commit = manifest["git_commit"]
     for g in _rows(golden_path):
         for entry in g["provenance"]:
-            text = (root / entry["file"]).read_text(encoding="utf-8", errors="replace")
+            # Offsets are meaningful only against the exact corpus commit
+            # named by the manifest. Reading the live sister worktree made
+            # ordinary later doc edits look like corruption of the frozen
+            # golden and encouraged offset re-pins against the wrong bytes.
+            result = subprocess.run(
+                ["git", "-C", str(root), "show", f"{pinned_commit}:{entry['file']}"],
+                check=True,
+                capture_output=True,
+            )
+            text = result.stdout.decode("utf-8", errors="replace")
             excerpt = text[entry["char_start"] : entry["char_end"]]
             assert excerpt == entry["span"], (
                 f"{g['question_id']} {entry['role']} span not verbatim at offsets in {entry['file']}"

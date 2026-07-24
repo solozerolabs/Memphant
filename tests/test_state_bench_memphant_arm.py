@@ -77,6 +77,14 @@ def test_train_mapping_preserves_success_and_failure_without_gold() -> None:
         assert forbidden not in serialized
 
 
+def test_external_attempt_kinds_map_explicitly_and_unknown_values_fail() -> None:
+    arm = load_script()
+    assert arm.map_attempt_source_kind("tool_attempt.success") == "tool"
+    assert arm.map_attempt_source_kind("tool_attempt.failure") == "tool"
+    with pytest.raises(ValueError, match="unmapped STATE-Bench attempt_type"):
+        arm.map_attempt_source_kind("tool_attempt.mystery")
+
+
 def test_official_loader_reads_only_train_conversation_and_split_ids(
     tmp_path: Path,
 ) -> None:

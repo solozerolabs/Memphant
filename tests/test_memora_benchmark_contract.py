@@ -875,10 +875,9 @@ def test_packaged_runtime_resolves_context_and_sends_subject_bound_episode(monke
         "actor_id": "actor",
         "agent_node_id": "agent-node",
         "subject_generation": 0,
-        "source_kind": "user",
-        "source_trust": "trusted_user",
-        "subject_hint": "session 0001 date 2026-07-13",
-        "body": "User: hello",
+        "source_ref": "memora:session:0001",
+        "observed_at": "2026-07-13T00:00:00Z",
+        "payload": {"episode": {"source_kind": "user", "body": "User: hello"}},
     }
 
 

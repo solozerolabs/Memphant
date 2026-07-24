@@ -31,7 +31,7 @@ from provider_attempts import (  # noqa: E402
     fresh_paid_usage,
     validate_provider_attempt_ledger,
 )
-from gate_runtime import reexec_through_scratch_db  # noqa: E402
+from gate_runtime import episode_retain_payload, reexec_through_scratch_db  # noqa: E402
 from run_stale import load_records, sha256_file, verify_dataset  # noqa: E402
 
 
@@ -595,20 +595,23 @@ def ingest_plan(
     agent_node_id: str,
     subject_generation: int,
 ) -> int:
+    context = {
+        "subject_id": subject_id,
+        "scope_id": scope_id,
+        "actor_id": actor_id,
+        "agent_node_id": agent_node_id,
+        "subject_generation": subject_generation,
+    }
     for index, session in enumerate(plan["sessions"]):
         response = client.post(
             "/v1/episodes",
-            {
-                "subject_id": subject_id,
-                "scope_id": scope_id,
-                "actor_id": actor_id,
-                "agent_node_id": agent_node_id,
-                "subject_generation": subject_generation,
-                "source_kind": "user",
-                "source_trust": "trusted_user",
-                "subject_hint": f"session {index + 1:04d}",
-                "body": session["body"],
-            },
+            episode_retain_payload(
+                context,
+                source_ref=f"stale:{plan['uid']}:session:{index + 1:04d}",
+                observed_at=session["timestamp"],
+                source_kind="user",
+                body=session["body"],
+            ),
         )
         if not response.get("episode_id"):
             raise RuntimeError(
@@ -651,7 +654,16 @@ def recall_plan(
         for item in items
     ):
         raise RuntimeError("STALE recall returned malformed items")
-    trace = client.get(f"/v1/traces/{trace_id}")
+    trace_query = urllib.parse.urlencode(
+        {
+            "subject_id": subject_id,
+            "scope_id": scope_id,
+            "actor_id": actor_id,
+            "agent_node_id": agent_node_id,
+            "subject_generation": subject_generation,
+        }
+    )
+    trace = client.get(f"/v1/traces/{trace_id}?{trace_query}")
     if not isinstance(trace, dict) or trace.get("id") != trace_id:
         raise RuntimeError(f"STALE trace coverage missing for {trace_id}")
     return [item["body"] for item in items], trace_id
