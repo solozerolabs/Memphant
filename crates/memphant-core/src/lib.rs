@@ -11134,7 +11134,7 @@ fn mint_compiled_citations(
             .iter()
             .filter_map(|chunk| chunk.source_span.as_deref().map(|span| (chunk, span)))
             .collect();
-        if spans.len() != unit.contextual_chunks.len() {
+        if spans.is_empty() || spans.len() != unit.contextual_chunks.len() {
             citations.push(citation(unit, 0, source_body.len(), source_body));
             continue;
         }
@@ -11182,6 +11182,87 @@ fn mint_compiled_citations(
         }
     }
     Ok(citations)
+}
+
+#[cfg(test)]
+mod compiled_citation_tests {
+    use super::*;
+
+    #[test]
+    fn unchunked_resource_mints_one_full_body_citation() {
+        let tenant_id = TenantId::from_u128(81_001);
+        let data_subject_id = SubjectId::from_u128(81_002);
+        let scope_id = ScopeId::from_u128(81_003);
+        let agent_node_id = memphant_types::AgentNodeId::from_u128(81_004);
+        let actor_id = ActorId::from_u128(81_005);
+        let resource_id = ResourceId::from_u128(81_006);
+        let body = "canonical unchunked resource body";
+        let input = ReflectInput {
+            tenant_id,
+            data_subject_id,
+            scope_id,
+            agent_node_id,
+            subject_generation: 0,
+            actor_id,
+            source_ref: "test:resource".to_string(),
+            observed_at: "2026-07-24T00:00:00Z".to_string(),
+            source_body: Some(body.to_string()),
+            episode_id: None,
+            resource_id: Some(resource_id),
+            job_id: JobId::from_u128(81_007),
+            compiler_version: "test".to_string(),
+            candidates: Vec::new(),
+        };
+        let unit = StoredMemoryUnit {
+            id: UnitId::from_u128(81_008),
+            tenant_id,
+            data_subject_id,
+            scope_id,
+            agent_node_id,
+            subject_generation: 0,
+            kind: MemoryKind::Resource,
+            state: UnitState::Active,
+            fact_key: None,
+            predicate: None,
+            body: body.to_string(),
+            confidence: None,
+            trust_level: TrustLevel::TrustedSystem,
+            churn_class: None,
+            freshness_due_at: None,
+            actor_id: Some(actor_id),
+            source_kind: Some("resource".to_string()),
+            source_ref: "test:resource".to_string(),
+            observed_at: "2026-07-24T00:00:00Z".to_string(),
+            source_episode_id: None,
+            source_resource_id: Some(resource_id),
+            deletion_generation: None,
+            contextual_chunks: Vec::new(),
+            valid_from: None,
+            valid_to: None,
+            transaction_from: None,
+            transaction_to: None,
+            difficulty: None,
+            stability_days: None,
+            last_reinforced_at: None,
+            reinforcement_count: 0,
+        };
+
+        let citations = mint_compiled_citations(&input, &[unit]).unwrap();
+
+        assert_eq!(citations.len(), 1);
+        assert_eq!(citations[0].resource_id, Some(resource_id));
+        assert_eq!(
+            citations[0].span,
+            Some(memphant_types::CitationSpan {
+                start: 0,
+                end: body.len() as u64,
+            })
+        );
+        assert_eq!(
+            citations[0].quote_hash.as_deref(),
+            Some(format!("sha256:{:x}", Sha256::digest(body.as_bytes())).as_str())
+        );
+    }
 }
 
 fn candidate_targets_unit(
