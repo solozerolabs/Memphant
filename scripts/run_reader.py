@@ -374,7 +374,6 @@ FORGET_SUPERSEDE_JSON_SCHEMA = {
             "items": {"type": "integer", "minimum": 0},
             "minItems": 1,
             "maxItems": 1,
-            "uniqueItems": True,
         },
         "replacement_text": {"type": "string", "minLength": 1},
     },
@@ -387,7 +386,6 @@ FORGET_RELEASE_JSON_SCHEMA = {
         "selected_indices": {
             "type": "array",
             "items": {"type": "integer", "minimum": 0},
-            "uniqueItems": True,
         }
     },
     "required": ["selected_indices"],

@@ -622,12 +622,12 @@ def test_terra_proposal_uses_supported_decoding_and_exact_schema(
     }
 
 
-def test_forgeteval_release_schema_allows_empty_unique_selection() -> None:
+def test_forgeteval_release_schema_allows_empty_selection() -> None:
     reader = _load_run_reader()
     schema = reader.response_contract(
         "openrouter", "forget_release", "openai/gpt-5.6-terra"
     )["response_format"]["json_schema"]["schema"]
-    assert schema["properties"]["selected_indices"]["uniqueItems"] is True
+    assert "uniqueItems" not in schema["properties"]["selected_indices"]
     assert "minItems" not in schema["properties"]["selected_indices"]
 
 
