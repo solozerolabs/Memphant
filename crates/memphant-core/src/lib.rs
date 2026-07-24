@@ -7161,7 +7161,12 @@ where
     })
 }
 
-const MAX_VERIFIED_RECEIPTS: usize = 64;
+// A recall response contains at most `k` context items, but one consolidated
+// item can legitimately retain many source citations (for example, a long
+// session). This is a serialized-receipt bound, not the internal candidate-pool
+// depth and not an answer-evidence item bound. 1024 keeps realistic 10-item
+// session packs valid while still failing closed on pathological citation fanout.
+const MAX_VERIFIED_RECEIPTS: usize = 1024;
 const MAX_VERIFIED_QUOTE_BYTES: usize = 64 * 1024;
 
 #[allow(clippy::too_many_arguments)]
@@ -7726,6 +7731,34 @@ mod evidence_receipt_tests {
         .await
         .unwrap_err();
         assert!(matches!(error, CoreError::Invalid(_)));
+    }
+
+    #[tokio::test]
+    async fn oversized_citation_fanout_fails_closed_without_rejecting_realistic_packs() {
+        let (store, request, recall_time, item, citation) = fixture();
+        {
+            let mut state = store.inner.lock().unwrap();
+            let citations = state.citations.get_mut(&request.context.tenant_id).unwrap();
+            citations.clear();
+            for index in 0..=MAX_VERIFIED_RECEIPTS {
+                let mut next = citation.clone();
+                next.id = Uuid::from_u128(80_000 + index as u128);
+                citations.push(next);
+            }
+        }
+        let error = build_recall_citations(
+            &store,
+            &request,
+            &recall_time,
+            TraceId::new(),
+            &hash_query(&request.query),
+            &[item],
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(error, CoreError::Invalid(message) if message.contains("count exceeds limit"))
+        );
     }
 }
 

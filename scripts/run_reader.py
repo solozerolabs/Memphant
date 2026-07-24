@@ -54,13 +54,18 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from provider_attempts import openrouter_generation_lookup, provider_response_evidence
+from provider_attempts import (
+    ProviderAttemptLedger,
+    openrouter_generation_lookup,
+    provider_response_evidence,
+)
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 ENGINES = ("claude", "codex", "openrouter")
@@ -317,6 +322,44 @@ class CallBudgetExceeded(Exception):
     pass
 
 
+def positive_decimal(value: str) -> Decimal:
+    try:
+        parsed = Decimal(value)
+    except InvalidOperation as error:
+        raise argparse.ArgumentTypeError("must be a decimal number") from error
+    if not parsed.is_finite() or parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
+
+
+def restore_spend_from_attempts(attempts: list[dict]) -> tuple[Decimal, Decimal]:
+    """Reconstruct settled cost and fail-closed liability from a durable ledger."""
+    reported = Decimal("0")
+    unsettled = Decimal("0")
+    for attempt in attempts:
+        start = attempt.get("start") if isinstance(attempt, dict) else None
+        if not isinstance(start, dict):
+            raise ValueError("provider-attempt ledger is missing start metadata")
+        try:
+            liability = Decimal(str(start["max_liability_usd"]))
+        except (KeyError, InvalidOperation) as error:
+            raise ValueError("provider-attempt ledger is missing spend liability") from error
+        result = attempt.get("result")
+        response = result.get("response") if isinstance(result, dict) else None
+        usage = response.get("usage") if isinstance(response, dict) else None
+        cost = usage.get("cost") if isinstance(usage, dict) else None
+        if (
+            attempt.get("status") == "result"
+            and not isinstance(cost, bool)
+            and isinstance(cost, (int, float))
+            and cost >= 0
+        ):
+            reported += Decimal(str(cost))
+        else:
+            unsettled += liability
+    return reported, unsettled
+
+
 class JudgeFailure(RuntimeError):
     pass
 
@@ -442,8 +485,15 @@ def response_contract(engine: str, kind: str, model: str | None = None) -> dict:
     }
 
 
-def openrouter_provider_preferences(model: str) -> dict:
+def openrouter_provider_preferences(
+    model: str,
+    max_price_per_million: dict[str, Decimal] | None = None,
+) -> dict:
     preferences = {"require_parameters": True}
+    if max_price_per_million is not None:
+        preferences["max_price"] = {
+            key: float(value) for key, value in max_price_per_million.items()
+        }
     if model == FLASH_MODEL:
         preferences |= {
             "only": [FLASH_PROVIDER],
@@ -464,6 +514,9 @@ class ReaderCli:
         cache_dir: Path,
         max_calls: int,
         reasoning_effort: str | None = None,
+        max_spend_usd: Decimal | None = None,
+        max_price_per_million: dict[str, Decimal] | None = None,
+        max_output_tokens: int | None = None,
     ) -> None:
         if engine not in ENGINES:
             raise ValueError(f"unknown engine: {engine} (known: {ENGINES})")
@@ -481,6 +534,20 @@ class ReaderCli:
         self.provider_attempt_log: list[dict] = []
         self.provider_attempt_limit: int | None = None
         self.provider_attempt_hook = None
+        if (max_spend_usd is None) != (max_price_per_million is None):
+            raise ValueError(
+                "OpenRouter spend control requires both a total ceiling and "
+                "prompt/completion max prices"
+            )
+        if max_spend_usd is not None and engine != "openrouter":
+            raise ValueError("spend control is openrouter-only")
+        self.max_spend_usd = max_spend_usd
+        self.max_price_per_million = max_price_per_million
+        self.max_output_tokens = max_output_tokens or OPENROUTER_DECODING["max_tokens"]
+        if self.max_output_tokens < 1:
+            raise ValueError("max output tokens must be at least 1")
+        self.reported_spend_usd = Decimal("0")
+        self.unsettled_liability_usd = Decimal("0")
         self._active_cache_key: str | None = None
         self.last_call_metadata: dict | None = None
         self._openrouter_api_key = None
@@ -509,14 +576,20 @@ class ReaderCli:
             return f"{model}@{self.reasoning_effort}"
         return model
 
+    def response_contract_for(self, kind: str) -> dict:
+        contract = response_contract(self.engine, kind, self.model_for(kind))
+        if self.engine == "openrouter":
+            contract["decoding"]["max_tokens"] = self.max_output_tokens
+        return contract
+
     def _cache_path(self, kind: str, system_prompt: str, prompt: str) -> Path:
         contract_identity = {
-            "response": response_contract(self.engine, kind, self.model_for(kind)),
+            "response": self.response_contract_for(kind),
             "provenance_schema": 2,
         }
         if self.engine == "openrouter":
             contract_identity["provider"] = openrouter_provider_preferences(
-                self.model_for(kind)
+                self.model_for(kind), self.max_price_per_million
             )
         contract = json.dumps(contract_identity, sort_keys=True, separators=(",", ":"))
         key = hashlib.sha256(
@@ -573,6 +646,60 @@ class ReaderCli:
 
     def set_provider_attempt_hook(self, hook) -> None:
         self.provider_attempt_hook = hook
+
+    def restore_spend_state(
+        self, *, reported_spend_usd: Decimal, unsettled_liability_usd: Decimal
+    ) -> None:
+        """Restore durable reservations before a resumed paid invocation."""
+        if reported_spend_usd < 0 or unsettled_liability_usd < 0:
+            raise ValueError("restored spend state cannot be negative")
+        self.reported_spend_usd = reported_spend_usd
+        self.unsettled_liability_usd = unsettled_liability_usd
+        if (
+            self.max_spend_usd is not None
+            and reported_spend_usd + unsettled_liability_usd > self.max_spend_usd
+        ):
+            raise ValueError("restored spend state exceeds the configured ceiling")
+
+    def _attempt_liability_usd(self, request_body: bytes) -> Decimal:
+        if self.max_price_per_million is None:
+            return Decimal("0")
+        # A byte is a conservative upper bound for an input token for the
+        # byte-backed tokenizers served here; counting the complete JSON body
+        # also covers chat framing. Completion tokens are hard-capped in the
+        # provider request. Provider max_price enforces the matching rates.
+        prompt_bound = Decimal(len(request_body))
+        completion_bound = Decimal(self.max_output_tokens)
+        return (
+            prompt_bound * self.max_price_per_million["prompt"]
+            + completion_bound * self.max_price_per_million["completion"]
+        ) / Decimal(1_000_000)
+
+    def _reserve_attempt(self, request_body: bytes) -> Decimal:
+        liability = self._attempt_liability_usd(request_body)
+        if self.max_spend_usd is None:
+            return liability
+        projected = (
+            self.reported_spend_usd + self.unsettled_liability_usd + liability
+        )
+        if projected > self.max_spend_usd:
+            raise CallBudgetExceeded(
+                "openrouter spend ceiling would be exceeded "
+                f"({projected} > {self.max_spend_usd} USD)"
+            )
+        self.unsettled_liability_usd += liability
+        return liability
+
+    def _settle_attempt(self, liability: Decimal, cost: object) -> None:
+        if self.max_spend_usd is None:
+            return
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0:
+            raise RuntimeError("OpenRouter response is missing a valid usage.cost")
+        settled = Decimal(str(cost))
+        if settled > liability:
+            raise RuntimeError("OpenRouter response cost exceeds reserved liability")
+        self.unsettled_liability_usd -= liability
+        self.reported_spend_usd += settled
 
     def _provider_attempt_event(self, event: str, payload: dict | None = None) -> None:
         if self.provider_attempt_hook is not None:
@@ -655,15 +782,19 @@ class ReaderCli:
     def _call_openrouter(self, kind: str, system_prompt: str, prompt: str) -> str:
         self.last_call_metadata = None
         model = self.model_for(kind)
+        decoding = openrouter_decoding(model)
+        decoding["max_tokens"] = self.max_output_tokens
         payload = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            **openrouter_decoding(model),
-            "response_format": response_contract("openrouter", kind)["response_format"],
-            "provider": openrouter_provider_preferences(self.model_for(kind)),
+            **decoding,
+            "response_format": self.response_contract_for(kind)["response_format"],
+            "provider": openrouter_provider_preferences(
+                self.model_for(kind), self.max_price_per_million
+            ),
         }
         if self.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.reasoning_effort}
@@ -692,12 +823,14 @@ class ReaderCli:
                 )
             if delay:
                 time.sleep(delay)
+            liability = self._reserve_attempt(body)
             self._provider_attempt_event(
                 "start",
                 {
                     "retry_index": attempt,
                     "requested_model": model,
                     "request_sha256": hashlib.sha256(body).hexdigest(),
+                    "max_liability_usd": str(liability),
                 },
             )
             self.provider_attempts += 1
@@ -757,6 +890,9 @@ class ReaderCli:
                 metadata["served_model"] = stats.get("model") or metadata["served_model"]
                 metadata["provider"] = stats.get("provider_name") or metadata["provider"]
                 metadata["usage"] = usage
+                self._settle_attempt(
+                    liability, usage.get("cost") if isinstance(usage, dict) else None
+                )
                 content = (
                     (data.get("choices") or [{}])[0].get("message", {}).get("content")
                 )
@@ -1317,11 +1453,63 @@ def main() -> int:
     )
     parser.add_argument("--cache-dir", default="docs/build-log/artifacts/real-retrieval-20260710/reader-cache")
     parser.add_argument("--max-calls", type=int, default=150, help="hard fresh-call budget for this invocation")
+    parser.add_argument(
+        "--max-output-tokens",
+        type=int,
+        default=OPENROUTER_DECODING["max_tokens"],
+        help="hard OpenRouter completion-token cap per request",
+    )
+    parser.add_argument(
+        "--max-provider-attempts",
+        type=int,
+        help="hard OpenRouter attempt budget, including internal retries",
+    )
+    parser.add_argument(
+        "--max-spend-usd",
+        type=positive_decimal,
+        help="hard OpenRouter campaign ceiling in USD",
+    )
+    parser.add_argument(
+        "--max-price-prompt-per-million",
+        type=positive_decimal,
+        help="OpenRouter provider.max_price prompt-token ceiling in USD/million",
+    )
+    parser.add_argument(
+        "--max-price-completion-per-million",
+        type=positive_decimal,
+        help="OpenRouter provider.max_price completion-token ceiling in USD/million",
+    )
+    parser.add_argument(
+        "--attempt-ledger",
+        help="durable OpenRouter attempt ledger (required with spend control)",
+    )
     parser.add_argument("--limit", type=int, help="only process the first N evidence rows (smoke)")
     parser.add_argument("--seed", type=int, default=20260710, help="bootstrap seed")
     args = parser.parse_args()
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
+    spend_values = (
+        args.max_spend_usd,
+        args.max_price_prompt_per_million,
+        args.max_price_completion_per_million,
+    )
+    if any(value is not None for value in spend_values) and not all(
+        value is not None for value in spend_values
+    ):
+        parser.error(
+            "--max-spend-usd and both --max-price-*-per-million values are required together"
+        )
+    if args.max_spend_usd is not None:
+        if args.engine != "openrouter":
+            parser.error("spend control is supported only with --engine openrouter")
+        if not args.attempt_ledger:
+            parser.error("--attempt-ledger is required with spend control")
+        if args.max_provider_attempts is None:
+            parser.error("--max-provider-attempts is required with spend control")
+    if args.max_provider_attempts is not None and args.max_provider_attempts < 1:
+        parser.error("--max-provider-attempts must be at least 1")
+    if args.max_output_tokens < 1:
+        parser.error("--max-output-tokens must be at least 1")
 
     # Split on '\n' only: chat bodies can embed U+2028/U+2029, which
     # str.splitlines() would treat as line breaks mid-JSON-record.
@@ -1344,6 +1532,14 @@ def main() -> int:
     evaluated_evidence_bytes = b"".join(source_lines[: args.limit]) if smoke_only else evidence_bytes
 
     judge_model = args.judge_model or args.model
+    max_price_per_million = (
+        {
+            "prompt": args.max_price_prompt_per_million,
+            "completion": args.max_price_completion_per_million,
+        }
+        if args.max_spend_usd is not None
+        else None
+    )
     cli = ReaderCli(
         args.engine,
         args.model,
@@ -1351,7 +1547,47 @@ def main() -> int:
         Path(args.cache_dir),
         args.max_calls,
         reasoning_effort=args.reasoning_effort,
+        max_spend_usd=args.max_spend_usd,
+        max_price_per_million=max_price_per_million,
+        max_output_tokens=args.max_output_tokens,
     )
+    attempt_ledger = None
+    if args.attempt_ledger:
+        attempt_fingerprint = sha256_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "source_evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),
+                    "engine": args.engine,
+                    "reader_model_id": args.model,
+                    "judge_model_id": judge_model,
+                    "judge_profile": args.judge_profile,
+                    "prompt_version": args.prompt_version,
+                    "reasoning_effort": args.reasoning_effort,
+                    "max_calls": args.max_calls,
+                    "max_provider_attempts": args.max_provider_attempts,
+                    "max_output_tokens": args.max_output_tokens,
+                    "max_spend_usd": str(args.max_spend_usd),
+                    "max_price_per_million": {
+                        key: str(value)
+                        for key, value in (max_price_per_million or {}).items()
+                    },
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        attempt_ledger = ProviderAttemptLedger(
+            Path(args.attempt_ledger), attempt_fingerprint
+        )
+        reported, unsettled = restore_spend_from_attempts(attempt_ledger.attempts)
+        cli.restore_spend_state(
+            reported_spend_usd=reported, unsettled_liability_usd=unsettled
+        )
+        cli.provider_attempts = len(attempt_ledger.attempts)
+        cli.set_provider_attempt_hook(attempt_ledger.record)
+    if args.max_provider_attempts is not None:
+        cli.set_provider_attempt_limit(args.max_provider_attempts)
     reader_system_prompt = READER_SYSTEM_PROMPTS.get(args.prompt_version)
     routing_counts = {"cot": 0, "terse": 0} if args.prompt_version == 3 else None
     per_question: list[dict] = []
@@ -1445,9 +1681,7 @@ def main() -> int:
         }
         judge_system_prompt = RAG_SUPPORTED_JUDGE_SYSTEM_PROMPT
         response_contracts = {
-            kind: response_contract(
-                args.engine, kind, args.model if kind == "reader" else judge_model
-            )
+            kind: cli.response_contract_for(kind)
             for kind in ("reader", "rag_judge", "pair_judge")
         }
     else:
@@ -1466,10 +1700,7 @@ def main() -> int:
         }
         judge_system_prompt = JUDGE_SYSTEM_PROMPT
         response_contracts = {
-            kind: response_contract(
-                args.engine, kind, args.model if kind == "reader" else judge_model
-            )
-            for kind in ("reader", "judge")
+            kind: cli.response_contract_for(kind) for kind in ("reader", "judge")
         }
     evaluator = {
         "engine": args.engine,
@@ -1555,6 +1786,18 @@ def main() -> int:
         "aborted": aborted_reason,
         "fresh_calls": cli.fresh_calls,
         "cached_calls": cli.cached_calls,
+        "provider_attempts": cli.provider_attempts,
+        "spend_control": {
+            "max_spend_usd": str(args.max_spend_usd),
+            "max_price_per_million": {
+                key: str(value) for key, value in (max_price_per_million or {}).items()
+            },
+            "reported_spend_usd": str(cli.reported_spend_usd),
+            "unsettled_liability_usd": str(cli.unsettled_liability_usd),
+            "max_provider_attempts": args.max_provider_attempts,
+            "max_output_tokens": args.max_output_tokens,
+            "attempt_ledger": args.attempt_ledger,
+        },
         "overall": accuracy(per_question),
         "strata": {
             stratum: accuracy(

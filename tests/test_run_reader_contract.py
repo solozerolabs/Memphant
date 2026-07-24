@@ -331,8 +331,10 @@ def test_cache_key_includes_response_schema_and_decoding_identity(tmp_path, monk
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
     cli = reader.ReaderCli("openrouter", "reader", "judge", tmp_path, 0)
     original = cli._cache_path("reader", "sys", "prompt")
-    monkeypatch.setitem(reader.OPENROUTER_DECODING, "max_tokens", 2048)
-    assert cli._cache_path("reader", "sys", "prompt") != original
+    capped = reader.ReaderCli(
+        "openrouter", "reader", "judge", tmp_path, 0, max_output_tokens=2048
+    )
+    assert capped._cache_path("reader", "sys", "prompt") != original
     monkeypatch.setitem(
         reader.READER_JSON_SCHEMA["properties"]["notes"], "maxLength", 10
     )
@@ -1349,6 +1351,126 @@ def test_openrouter_provider_attempt_limit_stops_internal_retries(
     except reader.CallBudgetExceeded as error:
         assert "provider attempt budget" in str(error)
     assert calls["n"] == cli.provider_attempts == 2
+
+
+def test_openrouter_spend_control_sets_provider_price_caps_and_settles_cost(
+    tmp_path, monkeypatch
+) -> None:
+    reader = _load_run_reader()
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
+    payload = {
+        "id": "gen-priced",
+        "model": "reader",
+        "provider": "fixture",
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "cost": 0.0012,
+        },
+        "choices": [
+            {"message": {"content": '{"notes":"","answer":"ok","abstain":false}'}}
+        ],
+    }
+    requests = []
+
+    def open_response(request, timeout=None):
+        requests.append(request)
+        if request.full_url == reader.OPENROUTER_URL:
+            return _FakeHttpResponse(payload)
+        return _FakeHttpResponse(
+            {"data": {"model": "reader", "provider_name": "fixture", "total_cost": 0.0012}}
+        )
+
+    monkeypatch.setattr(reader.urllib.request, "urlopen", open_response)
+    cli = reader.ReaderCli(
+        "openrouter",
+        "reader",
+        "judge",
+        tmp_path,
+        1,
+        max_spend_usd=reader.Decimal("1"),
+        max_price_per_million={
+            "prompt": reader.Decimal("2.5"),
+            "completion": reader.Decimal("10"),
+        },
+        max_output_tokens=1024,
+    )
+    assert cli.call("reader", "sys", "prompt").startswith("{")
+    sent = json.loads(requests[0].data)
+    assert sent["provider"]["max_price"] == {"prompt": 2.5, "completion": 10.0}
+    assert sent["max_tokens"] == 1024
+    assert cli.response_contract_for("reader")["decoding"]["max_tokens"] == 1024
+    assert cli.reported_spend_usd == reader.Decimal("0.0012")
+    assert cli.unsettled_liability_usd == 0
+
+
+def test_openrouter_spend_control_reserves_ambiguous_retry_liability(
+    tmp_path, monkeypatch
+) -> None:
+    reader = _load_run_reader()
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
+    monkeypatch.setattr(reader.time, "sleep", lambda _seconds: None)
+    calls = {"n": 0}
+
+    def fail(_request, timeout=None):
+        calls["n"] += 1
+        raise reader.urllib.error.URLError("ambiguous transport failure")
+
+    monkeypatch.setattr(reader.urllib.request, "urlopen", fail)
+    prices = {
+        "prompt": reader.Decimal("1"),
+        "completion": reader.Decimal("1"),
+    }
+    probe = reader.ReaderCli(
+        "openrouter", "reader", "judge", tmp_path / "probe", 1,
+        max_spend_usd=reader.Decimal("1"), max_price_per_million=prices,
+    )
+    body = json.dumps(
+        {
+            "model": "reader",
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "prompt"},
+            ],
+            **reader.openrouter_decoding("reader"),
+            "response_format": reader.response_contract("openrouter", "reader")["response_format"],
+            "provider": reader.openrouter_provider_preferences("reader", prices),
+        }
+    ).encode()
+    one_attempt = probe._attempt_liability_usd(body)
+    cli = reader.ReaderCli(
+        "openrouter", "reader", "judge", tmp_path / "actual", 1,
+        max_spend_usd=one_attempt, max_price_per_million=prices,
+    )
+    try:
+        cli._call_openrouter("reader", "sys", "prompt")
+        raise AssertionError("expected fail-closed spend exhaustion")
+    except reader.CallBudgetExceeded as error:
+        assert "spend ceiling" in str(error)
+    assert calls["n"] == 1
+    assert cli.reported_spend_usd == 0
+    assert cli.unsettled_liability_usd == one_attempt
+
+
+def test_restore_spend_from_attempts_keeps_errors_as_liability() -> None:
+    reader = _load_run_reader()
+    reported, unsettled = reader.restore_spend_from_attempts(
+        [
+            {
+                "status": "result",
+                "start": {"max_liability_usd": "0.05"},
+                "result": {"response": {"usage": {"cost": 0.012}}},
+            },
+            {
+                "status": "error",
+                "start": {"max_liability_usd": "0.07"},
+                "error": {"error": "timeout"},
+            },
+        ]
+    )
+    assert reported == reader.Decimal("0.012")
+    assert unsettled == reader.Decimal("0.07")
 
 
 def test_reader_cache_write_is_atomic_on_replace_failure(tmp_path, monkeypatch) -> None:
