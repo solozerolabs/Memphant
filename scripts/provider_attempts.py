@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import hashlib
 import json
 import os
@@ -156,21 +157,44 @@ class ProviderAttemptLedger:
     def __init__(self, path: Path, generation_fingerprint: str) -> None:
         self.path = path
         self.generation_fingerprint = generation_fingerprint
+        self._lock_path = path.with_name(path.name + ".lock")
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_handle = self._lock_path.open("a+b")
+        try:
+            fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            self._lock_handle.close()
+            raise RuntimeError(
+                f"provider-attempt authorization is already active: {self._lock_path}"
+            ) from error
         with _LEDGER_LOCK:
-            if path.exists():
-                _, self._events, self.attempts = _replay_journal(
-                    path, generation_fingerprint
-                )
-            else:
-                self._events: list[dict[str, Any]] = []
-                self.attempts: list[dict[str, Any]] = []
-                self._append(
-                    {
-                        "schema": 1,
-                        "event": "header",
-                        "generation_fingerprint": generation_fingerprint,
-                    }
-                )
+            try:
+                if path.exists():
+                    _, self._events, self.attempts = _replay_journal(
+                        path, generation_fingerprint
+                    )
+                else:
+                    self._events: list[dict[str, Any]] = []
+                    self.attempts: list[dict[str, Any]] = []
+                    self._append(
+                        {
+                            "schema": 1,
+                            "event": "header",
+                            "generation_fingerprint": generation_fingerprint,
+                        }
+                    )
+            except BaseException:
+                self.close()
+                raise
+
+    def close(self) -> None:
+        handle = getattr(self, "_lock_handle", None)
+        if handle is not None and not handle.closed:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
+    def __del__(self) -> None:
+        self.close()
 
     def _append(self, body: dict[str, Any]) -> None:
         event = {

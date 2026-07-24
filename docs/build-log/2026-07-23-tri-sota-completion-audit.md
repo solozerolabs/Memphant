@@ -72,10 +72,10 @@ the missing input is outside these repositories or requires authorization.
 | C3 strict ingest mechanism | Complete | Focused extract/mine/runner contracts: 79 tests passed. Current runner uses binding plus nested `payload.episode`. |
 | C3 public trajectory adapter | Complete locally | Pinned revision, license, corpus/transform/golden hashes, role/drop/truncation accounting, and fail-closed retrieval-query contract are in `docs/build-log/2026-07-24-c3-public-code-lane.md`. |
 | C3 realistic-volume proof | Complete at no-model retrieval level | 495 attempts / 64,055 events through packaged MemPhant and scratch Postgres; 64,056 jobs, 42 exact dedups, zero dead/pending, tenant negatives pass, R@5 12/40 and R@10 18/40. Not production or reader QA. |
-| C3 adversarial reader | External-block on paid authorization | Mining may be free/deterministic, but the existing generator/reader is paid. Prepare one consolidated authorization packet; continue all free work. |
+| C3 adversarial continuity/reader | Open; reader externally blocked on paid authorization | The free result is exact action-to-result lexical retrieval because the target body repeats the query action. A frozen paraphrased/distractor-controlled set remains open; the existing reader is paid and requires separate authorization. |
 | WS-F active dogfood read | Local active-loader proof complete; dogfood gate open | The real Syndai loader executes public retain/compile/recall/verified receipt/trace paths under one key, returns empty under a second tenant, and fails loudly on an invalid key. It is still default-off/local synthetic evidence. |
 | Loud dogfood failures | Complete locally | Non-transient contract/auth failures propagate; only transport faults degrade. Cross-repo scratch integration passes against latest packaged binaries. |
-| Private mirror drift | Unimplemented repair | `check_spec_drift.py` currently reports `STATUS.md` and `08-api-sdk-mcp-spec.md` drift. Update mirrors only with the owning evidence and preserve unrelated Syndai work. |
+| Private mirror drift | Complete in the authorized worktrees | The earlier audit found `STATUS.md` and `08-api-sdk-mcp-spec.md` drift. They are now synchronized, and `check_spec_drift.py` passes when `MEMPHANT_PRIVATE_SPEC_DIR` explicitly names the linked Syndai worktree. The default sibling lookup still skips in this topology, so it is not counted as a pass unless the boundary is supplied. |
 
 ## Phase D
 
@@ -84,7 +84,7 @@ the missing input is outside these repositories or requires authorization.
 | D1 LongMemEval-V2 dual point | Deferred by A1 | No new Deep campaign or leaderboard claim without a new frozen depth-bound bank and explicit authorization. |
 | D2 ForgetEval | Instrument complete; measured product gaps remain | Official `b6053b7...` reports: smoke 12/0/3 N/A; template 771/29/200 N/A; adversarial 133/126/126 N/A. Selective purge remains unsupported/N/A. Proof: `docs/build-log/2026-07-24-forgeteval-public-api.md`. |
 | D3 LME-S full-500 | Deferred by A1 | Do not run or use SOTA language. |
-| D4 SWE-Explore | External-block reconfirmed | Current public package still omits required issue text/base commits; retain fail-closed evidence. |
+| D4 SWE-Explore | Immutable-input external block | The pinned JSONL omits issue text/base commits. Official code supplies a reconstruction helper, but its auxiliary datasets are unpinned, issue-map/trajectory inputs are absent, and mappings remain incomplete for pro/multilingual cells. |
 | D4 SWE Context Bench | Official harness now public; no-model smoke complete; model run unauthorized | Pinned code `31bb04155f52b184bf31b220e3cff0607ac9c953` and dataset `5bec275a2095768a53ac804ae4fdf90b1723b8af`; official input combiner and evaluator import smoke passed on one Lite case. No Docker task, model, MemPhant adapter, or benchmark score was run. The frozen gate remains awaiting exact model/compute budgets and explicit authorization. |
 | Supporting Memora/STALE/MemSyco/MemBench | Supporting-only | Repair public contracts when required, but never promote them to headline evidence. |
 

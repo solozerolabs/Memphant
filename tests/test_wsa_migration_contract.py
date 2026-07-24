@@ -759,25 +759,23 @@ def test_bootstrap_has_final_job_state_shape() -> None:
     assert "(tenant_id, data_subject_id, scope_id, agent_node_id, state, run_after)" in sql
     claim = sql.split("create or replace function memphant.claim_reflect_jobs", 1)[1]
     assert "subject.generation = job.subject_generation" in claim
-    assert "blocking_predecessors as materialized" in claim
-    assert "min(blocker.queue_order) as first_queue_order" in claim
-    assert "job.queue_order < blocker.first_queue_order" in claim
-    assert "not exists (\n        select 1 from memphant.job_state earlier" not in claim
+    assert "not exists (" in claim
+    assert "select 1 from memphant.job_state earlier" in claim
     assert "order by job.queue_order" in claim
     assert "(earlier.created_at, earlier.id)" not in claim
-    assert claim.index("limit greatest(0, least(p_limit, 1000))") < claim.index(
-        "for update of job skip locked"
-    )
+    assert "for update of job skip locked" in claim
 
 
-def test_worker_claim_optimization_has_an_exact_forward_migration() -> None:
-    marker = "create or replace function memphant.claim_reflect_jobs("
+def test_worker_claim_optimization_is_owned_by_forward_migration() -> None:
+    bootstrap = BOOTSTRAP.read_text(encoding="utf-8").lower()
+    forward = WORKER_CLAIM_FORWARD.read_text(encoding="utf-8").lower()
 
-    def definition(path: Path) -> str:
-        suffix = path.read_text(encoding="utf-8").split(marker, 1)[1]
-        return marker + suffix.split("\n$$;", 1)[0] + "\n$$;"
-
-    assert definition(BOOTSTRAP) == definition(WORKER_CLAIM_FORWARD)
+    assert "blocking_predecessors as materialized" not in bootstrap
+    assert "select 1 from memphant.job_state earlier" in bootstrap
+    assert "blocking_predecessors as materialized" in forward
+    assert "min(blocker.queue_order) as first_queue_order" in forward
+    assert "job.queue_order < blocker.first_queue_order" in forward
+    assert "not exists (\n        select 1 from memphant.job_state earlier" not in forward
 
 
 def test_resource_and_source_lineage_are_subject_agent_generation_owned() -> None:
@@ -807,7 +805,7 @@ def test_episode_dedup_and_worker_claim_lanes_are_exact_context_bound() -> None:
         "unique (tenant_id, data_subject_id, subject_generation, scope_id, "
         "agent_node_id, actor_id, dedup_key)"
     ) in episode
-    claim = sql.split("create or replace function memphant.claim_reflect_jobs", 1)[1]
+    claim = " ".join(WORKER_CLAIM_FORWARD.read_text().lower().split())
     for predicate in (
         # Lane ownership is serialized by a BLOCKING per-lane advisory lock taken
         # in a plpgsql loop BEFORE the claim query, carried in via the

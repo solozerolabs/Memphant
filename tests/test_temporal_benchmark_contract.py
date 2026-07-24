@@ -83,6 +83,7 @@ def test_shared_attempt_ledger_rejects_interruption_duplicate_ids_and_hash_drift
     terminal["payload"]["response"]["provider"] = "tampered"
     lines[2] = json.dumps(terminal, sort_keys=True, separators=(",", ":"))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    ledger.close()
     with pytest.raises(ValueError, match="event hash mismatch"):
         attempts.ProviderAttemptLedger(tmp_path / "attempts.json", "fingerprint")
 
@@ -135,28 +136,34 @@ def test_attempt_journal_appends_without_rewriting_and_rejects_truncation_or_for
         attempts.ProviderAttemptLedger(forked, "fingerprint")
 
 
-def test_attempt_journal_coordinates_multiple_live_writers(tmp_path: Path) -> None:
+def test_attempt_journal_rejects_a_second_process_before_provider_work(
+    tmp_path: Path,
+) -> None:
     attempts = load_attempts()
     path = tmp_path / "attempts.jsonl"
-    first = attempts.ProviderAttemptLedger(path, "fingerprint")
-    second = attempts.ProviderAttemptLedger(path, "fingerprint")
-    start = {
-        "retry_index": 0,
-        "requested_model": "openai/gpt-5.6-luna-pro",
-        "request_sha256": "1" * 64,
-    }
-
-    first.record("start", "request-a", start)
-    second.record("start", "request-b", start)
-    first.record("result", "request-a", {"response": paid_response("response-a")})
-    second.record("result", "request-b", {"response": paid_response("response-b")})
-
-    snapshot = first.snapshot()
-    attempts.validate_provider_attempt_ledger(snapshot)
-    assert [row["request_key"] for row in snapshot["attempts"]] == [
-        "request-a",
-        "request-b",
-    ]
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys,time; sys.path.insert(0, sys.argv[1]); "
+                "from provider_attempts import ProviderAttemptLedger; "
+                "ledger=ProviderAttemptLedger(__import__('pathlib').Path(sys.argv[2]), 'fingerprint'); "
+                "print('locked', flush=True); time.sleep(30)"
+            ),
+            str(ROOT / "scripts"),
+            str(path),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None and child.stdout.readline().strip() == "locked"
+        with pytest.raises(RuntimeError, match="already active"):
+            attempts.ProviderAttemptLedger(path, "fingerprint")
+    finally:
+        child.terminate()
+        child.wait(timeout=5)
 
 
 def load_script():

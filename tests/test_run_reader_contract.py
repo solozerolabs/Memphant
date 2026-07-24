@@ -5,6 +5,7 @@ import hashlib
 import json
 import subprocess
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -347,9 +348,20 @@ def test_paid_authorization_drift_fails_before_reader_or_provider_access(
             "max_spend_usd": "3",
         }
     }
-    scope = {"frozen_inputs": frozen, "models": models, "hard_limits": hard_limits}
+    execution = {"baseline": {
+        "run_id": "baseline",
+        "attempt_ledger": "attempts.jsonl",
+        "cache_dir": "cache",
+        "output": "out.json",
+    }}
+    scope = {
+        "frozen_inputs": frozen,
+        "models": models,
+        "hard_limits": hard_limits,
+        "execution": execution,
+    }
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "AUTHORIZED_FOR_PAID_EXECUTION",
         **scope,
         "authorization": {
@@ -387,6 +399,65 @@ def test_paid_authorization_drift_fails_before_reader_or_provider_access(
         reader.main()
     assert constructors == []
     assert not (tmp_path / "attempts.jsonl").exists()
+
+
+def test_paid_authorization_rejects_fresh_ledger_replay(tmp_path, monkeypatch) -> None:
+    reader = _load_run_reader()
+    monkeypatch.setattr(reader, "REPO_ROOT", tmp_path)
+    evidence = tmp_path / "evidence.jsonl"
+    retrieval = tmp_path / "retrieval.json"
+    evidence.write_text("{}\n")
+    retrieval.write_text("{}\n")
+    canonical_ledger = tmp_path / "attempts.jsonl"
+    cache = tmp_path / "cache"
+    output = tmp_path / "out.json"
+    frozen = {
+        "baseline_evidence_sha256": reader._file_sha256(evidence),
+        "baseline_retrieval_sha256": reader._file_sha256(retrieval),
+        "reader_runner_sha256": reader._file_sha256(Path(reader.__file__)),
+        "provider_attempts_sha256": reader._file_sha256(ROOT / "scripts/provider_attempts.py"),
+    }
+    models = {
+        "provider": "OpenRouter", "reader": "reader", "reader_reasoning_effort": "medium",
+        "judge": "judge", "judge_profile": "rag-supported-v1", "prompt_version": 3,
+        "max_output_tokens_per_request": 1024,
+        "provider_max_price_usd_per_million": {"prompt": "2.75", "completion": "16.5"},
+    }
+    hard_limits = {"baseline": {
+        "max_logical_calls": 10, "max_provider_attempts": 10, "max_spend_usd": "3",
+    }}
+    execution = {"baseline": {
+        "run_id": "baseline", "attempt_ledger": "attempts.jsonl",
+        "cache_dir": "cache", "output": "out.json",
+    }}
+    scope = {"frozen_inputs": frozen, "models": models, "hard_limits": hard_limits, "execution": execution}
+    manifest = {
+        "schema_version": 2, "status": "AUTHORIZED_FOR_PAID_EXECUTION", **scope,
+        "authorization": {
+            "authorized_by": "test", "authorized_at": "2026-07-23T00:00:00Z",
+            "authorization_scope_sha256": reader.sha256_text(
+                json.dumps(scope, sort_keys=True, separators=(",", ":"))
+            ),
+        },
+    }
+    manifest_path = tmp_path / "authorization.json"
+    manifest_path.write_text(json.dumps(manifest))
+    kwargs = dict(
+        arm="baseline", evidence_path=evidence, retrieval_report_path=retrieval,
+        reader_model="reader", judge_model="judge", judge_profile="rag-supported-v1",
+        prompt_version=3, reasoning_effort="medium", max_calls=10,
+        max_provider_attempts=10, max_output_tokens=1024, max_spend_usd=Decimal("3"),
+        max_price_prompt_per_million=Decimal("2.75"),
+        max_price_completion_per_million=Decimal("16.5"), cache_dir=cache,
+        output_path=output,
+    )
+    reader.validate_paid_authorization(
+        manifest_path, attempt_ledger_path=canonical_ledger, **kwargs
+    )
+    with pytest.raises(ValueError, match="attempt_ledger drift"):
+        reader.validate_paid_authorization(
+            manifest_path, attempt_ledger_path=tmp_path / "fresh.jsonl", **kwargs
+        )
 
 
 def test_openrouter_cache_key_includes_engine_model_and_effort(tmp_path, monkeypatch) -> None:

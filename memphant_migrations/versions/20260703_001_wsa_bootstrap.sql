@@ -1238,30 +1238,6 @@ begin
     select (key).tenant_id, (key).data_subject_id, (key).subject_generation,
            (key).scope_id, (key).agent_node_id
     from unnest(locked_lane_keys) as key
-  ), blocking_predecessors as materialized (
-    -- Compute the first live/delayed blocker once per locked lane. A
-    -- correlated `not exists (earlier.queue_order < job.queue_order)` probes
-    -- every earlier queued row for every candidate when no blocker exists,
-    -- making a 64k-event lane quadratic.
-    select blocker.tenant_id, blocker.data_subject_id,
-           blocker.subject_generation, blocker.scope_id,
-           blocker.agent_node_id, min(blocker.queue_order) as first_queue_order
-    from memphant.job_state blocker
-    join locked_lanes lane
-      on lane.tenant_id = blocker.tenant_id
-     and lane.data_subject_id = blocker.data_subject_id
-     and lane.subject_generation = blocker.subject_generation
-     and lane.scope_id = blocker.scope_id
-     and lane.agent_node_id = blocker.agent_node_id
-    where blocker.state not in ('done', 'dead')
-      and (
-        blocker.run_after > now()
-        or (blocker.state = 'running'
-            and blocker.claimed_at >= now() - interval '15 minutes')
-      )
-    group by blocker.tenant_id, blocker.data_subject_id,
-             blocker.subject_generation, blocker.scope_id,
-             blocker.agent_node_id
   ), eligible as (
     select job.tenant_id, job.id, job.queue_order
     from memphant.job_state job
@@ -1272,39 +1248,47 @@ begin
       on lane.tenant_id = job.tenant_id and lane.data_subject_id = job.data_subject_id
      and lane.subject_generation = job.subject_generation and lane.scope_id = job.scope_id
      and lane.agent_node_id = job.agent_node_id
-    left join blocking_predecessors blocker
-      on blocker.tenant_id = job.tenant_id
-     and blocker.data_subject_id = job.data_subject_id
-     and blocker.subject_generation = job.subject_generation
-     and blocker.scope_id = job.scope_id
-     and blocker.agent_node_id = job.agent_node_id
     where job.state in ('queued', 'running') and job.attempts < p_max_attempts
       and job.run_after <= now()
       and (job.claimed_at is null or job.claimed_at < now() - interval '15 minutes')
-      and (blocker.first_queue_order is null
-           or job.queue_order < blocker.first_queue_order)
+      and not exists (
+        -- Do not claim a job while an earlier job in the same lane is not yet
+        -- claimable-past: either it is scheduled for the future (run_after >
+        -- now, the original delayed-predecessor guard) OR it is already
+        -- `running` under a live claim held by another worker. The second case
+        -- is what keeps two concurrent claims from splitting one lane: the
+        -- lane-admission snapshot can be stale (a claimer may admit the lane
+        -- just before a peer commits the head jobs as running), but this guard
+        -- is evaluated in the claim query's own, later snapshot, where the
+        -- peer's running head IS visible — so the tail jobs are excluded and
+        -- the loser claims nothing. The serial-per-lane invariant (a later job
+        -- never runs before an earlier one completes) is thus enforced at claim
+        -- time, not left to the lane lock alone.
+        select 1 from memphant.job_state earlier
+        where earlier.tenant_id = job.tenant_id
+          and earlier.data_subject_id = job.data_subject_id
+          and earlier.subject_generation = job.subject_generation
+          and earlier.scope_id = job.scope_id and earlier.agent_node_id = job.agent_node_id
+          and earlier.state not in ('done', 'dead')
+          and earlier.queue_order < job.queue_order
+          and (
+            earlier.run_after > now()
+            or (earlier.state = 'running'
+                and earlier.claimed_at >= now() - interval '15 minutes')
+          )
+      )
     order by job.queue_order
+    for update of job skip locked
   ), ranked as (
     select eligible.tenant_id, eligible.id, eligible.queue_order,
            row_number() over (
              partition by eligible.tenant_id order by eligible.queue_order
            ) as rn
     from eligible
-  ), claim_candidates as (
+  ), claimed as (
     select ranked.tenant_id, ranked.id from ranked
     order by ranked.rn, ranked.queue_order
     limit greatest(0, least(p_limit, 1000))
-  ), claimed as (
-    -- Lock only the bounded candidate set. Locking inside `eligible` puts the
-    -- LockRows node above its Sort and locks every eligible job before the
-    -- downstream LIMIT (64k event lanes took minutes per four-job tick).
-    -- The transaction-scoped lane advisory lock above already serializes
-    -- claimers for a lane; this row lock only protects the chosen jobs.
-    select job.tenant_id, job.id
-    from memphant.job_state job
-    join claim_candidates candidate
-      on candidate.tenant_id = job.tenant_id and candidate.id = job.id
-    for update of job skip locked
   )
   update memphant.job_state job
   set state = 'running', claimed_at = now(), attempts = job.attempts + 1

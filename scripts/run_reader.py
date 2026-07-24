@@ -58,6 +58,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPTS_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -93,18 +94,22 @@ def validate_paid_authorization(
     max_spend_usd: Decimal | None,
     max_price_prompt_per_million: Decimal | None,
     max_price_completion_per_million: Decimal | None,
+    attempt_ledger_path: Path,
+    cache_dir: Path,
+    output_path: Path,
 ) -> dict:
     """Validate a frozen paid packet before any provider credential is read."""
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError("paid authorization manifest is unreadable") from error
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 2:
         raise ValueError("paid authorization manifest schema mismatch")
     frozen = manifest.get("frozen_inputs")
     models = manifest.get("models")
     limits = manifest.get("hard_limits", {}).get(arm)
-    if not all(isinstance(value, dict) for value in (frozen, models, limits)):
+    execution = manifest.get("execution", {}).get(arm)
+    if not all(isinstance(value, dict) for value in (frozen, models, limits, execution)):
         raise ValueError("paid authorization manifest arm is missing")
     arm_prefix = "baseline" if arm == "baseline" else "treatment"
     expected = {
@@ -144,10 +149,20 @@ def validate_paid_authorization(
     for field, actual in limit_expectations.items():
         if limits.get(field) != actual:
             raise ValueError(f"paid authorization limit {field} drift")
+    execution_expectations = {
+        "run_id": arm,
+        "attempt_ledger": str(attempt_ledger_path.resolve().relative_to(REPO_ROOT)),
+        "cache_dir": str(cache_dir.resolve().relative_to(REPO_ROOT)),
+        "output": str(output_path.resolve().relative_to(REPO_ROOT)),
+    }
+    for field, actual in execution_expectations.items():
+        if execution.get(field) != actual:
+            raise ValueError(f"paid authorization execution field {field} drift")
     scope = {
         "frozen_inputs": frozen,
         "models": models,
         "hard_limits": manifest["hard_limits"],
+        "execution": manifest["execution"],
     }
     authorization = manifest.get("authorization")
     if (
@@ -1667,20 +1682,12 @@ def main() -> int:
                 max_spend_usd=args.max_spend_usd,
                 max_price_prompt_per_million=args.max_price_prompt_per_million,
                 max_price_completion_per_million=args.max_price_completion_per_million,
+                attempt_ledger_path=Path(args.attempt_ledger),
+                cache_dir=Path(args.cache_dir),
+                output_path=Path(args.out),
             )
         except ValueError as error:
             parser.error(str(error))
-    cli = ReaderCli(
-        args.engine,
-        args.model,
-        judge_model,
-        Path(args.cache_dir),
-        args.max_calls,
-        reasoning_effort=args.reasoning_effort,
-        max_spend_usd=args.max_spend_usd,
-        max_price_per_million=max_price_per_million,
-        max_output_tokens=args.max_output_tokens,
-    )
     attempt_ledger = None
     if args.attempt_ledger:
         attempt_fingerprint = sha256_text(
@@ -1710,6 +1717,18 @@ def main() -> int:
         attempt_ledger = ProviderAttemptLedger(
             Path(args.attempt_ledger), attempt_fingerprint
         )
+    cli = ReaderCli(
+        args.engine,
+        args.model,
+        judge_model,
+        Path(args.cache_dir),
+        args.max_calls,
+        reasoning_effort=args.reasoning_effort,
+        max_spend_usd=args.max_spend_usd,
+        max_price_per_million=max_price_per_million,
+        max_output_tokens=args.max_output_tokens,
+    )
+    if attempt_ledger is not None:
         reported, unsettled = restore_spend_from_attempts(attempt_ledger.attempts)
         cli.restore_spend_state(
             reported_spend_usd=reported, unsettled_liability_usd=unsettled

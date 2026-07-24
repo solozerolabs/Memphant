@@ -47,7 +47,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shlex
 import subprocess
 import sys
 import time
@@ -63,6 +62,8 @@ import gate_runtime as gr  # noqa: E402
 DEFAULT_BASE_DATABASE_URL = "postgres://memphant:memphant@localhost:5432/memphant"
 CORPUS_PATH = gc.MEMPHANT_ROOT / "benchmarks" / "data" / "coding_events_corpus.jsonl"
 GOLDEN_PATH = gc.MEMPHANT_ROOT / "benchmarks" / "data" / "coding_events_golden.jsonl"
+repository_identity = gr.repository_identity
+migration_identity = gr.migration_identity
 
 def golden_lock_path(golden_path: Path) -> Path:
     return golden_path.with_name(golden_path.stem + ".lock.json")
@@ -70,56 +71,6 @@ def golden_lock_path(golden_path: Path) -> Path:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def repository_identity(root: Path) -> dict:
-    head = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    tracked = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--stage", "-z"],
-        check=True,
-        capture_output=True,
-    ).stdout.split(b"\0")
-    digest = hashlib.sha256()
-    count = 0
-    for entry in tracked:
-        if not entry:
-            continue
-        metadata, raw_path = entry.split(b"\t", 1)
-        mode = metadata.split(b" ", 1)[0]
-        path = raw_path.decode("utf-8", errors="surrogateescape")
-        digest.update(mode + b"\0" + raw_path + b"\0")
-        digest.update(hashlib.sha256((root / path).read_bytes()).digest())
-        count += 1
-    diff = subprocess.run(
-        ["git", "-C", str(root), "diff", "--binary", "HEAD", "--"],
-        check=True,
-        capture_output=True,
-    ).stdout
-    return {
-        "git_head": head,
-        "tracked_file_count": count,
-        "tracked_worktree_sha256": digest.hexdigest(),
-        "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
-        "tracked_dirty": bool(diff),
-    }
-
-
-def migration_identity(root: Path) -> dict:
-    rows = [
-        {"path": str(path.relative_to(root)), "sha256": sha256_file(path)}
-        for path in sorted((root / "memphant_migrations" / "versions").glob("*.sql"))
-    ]
-    return {
-        "files": rows,
-        "aggregate_sha256": hashlib.sha256(
-            json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest(),
-    }
 
 
 # --- pure functions (unit-tested in tests/test_code_lane_run_memphant.py) ---
@@ -658,6 +609,7 @@ def main() -> int:
         n = len(provenance_rows)
         r5 = sum(r["hit_at_5"] for r in provenance_rows) / n if n else 0.0
         r10 = sum(r["hit_at_10"] for r in provenance_rows) / n if n else 0.0
+        portable_argv, portable_command = gr.portable_command(sys.argv, gc.MEMPHANT_ROOT)
         report = {
             "engine": "memphant",
             "lane": "code",
@@ -693,16 +645,16 @@ def main() -> int:
             "golden_lock_sha256": sha256_file(lock_path),
             "golden_count": n,
             "runtime_identity": {
-                "repository": repository_identity(gc.MEMPHANT_ROOT),
-                "migrations": migration_identity(gc.MEMPHANT_ROOT),
+                "repository": gr.repository_identity(gc.MEMPHANT_ROOT),
+                "migrations": gr.migration_identity(gc.MEMPHANT_ROOT),
                 "runner_sha256": sha256_file(Path(__file__).resolve()),
                 "gate_common_sha256": sha256_file(Path(gc.__file__).resolve()),
                 "gate_runtime_sha256": sha256_file(Path(gr.__file__).resolve()),
                 "server_sha256": sha256_file(Path(args.server_bin).resolve()),
                 "worker_sha256": sha256_file(Path(args.worker_bin).resolve()),
                 "cli_sha256": sha256_file(Path(args.cli_bin).resolve()),
-                "argv": sys.argv,
-                "command": shlex.join([sys.executable, *sys.argv]),
+                "argv": portable_argv,
+                "command": portable_command,
             },
             "timings": {
                 "ingest_seconds": ingest_seconds,

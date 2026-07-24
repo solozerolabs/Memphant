@@ -16,6 +16,13 @@ drift fails before the OpenRouter credential is read.
 Execution status: **not authorized and not executed**. Paid calls: **0**.
 Settled model cost: **$0**. The packing default remains off.
 
+The schema-v2 packet binds one canonical run ID, output, cache, and append-only
+attempt ledger per arm. A nonblocking OS lock is held for the invocation before
+the provider credential is read, so a second process fails before any call. A
+resume must use the same bound paths and cumulative ledger; a fresh-ledger
+replay of the same authorization is rejected, keeping the $116 ceiling global
+to this authorization rather than per process.
+
 If separately authorized, run the baseline first:
 
 ```sh

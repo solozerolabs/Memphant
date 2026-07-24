@@ -29,15 +29,17 @@ action and rejects missing queries or answer leakage.
   accounting for every raw episode. Zero dead or pending jobs.
 - Ingest: 317.515 s (201.739 events/s). Compile: 641.597 s. Recall: 2.808 s.
 - Two-tenant owner-to-sentinel and sentinel-to-owner negative checks passed.
-- Adversarial continuity: Recall@5 = 12/40 (0.300), Recall@10 = 18/40
+- Exact action-to-result lexical retrieval: Recall@5 = 12/40 (0.300), Recall@10 = 18/40
   (0.450). All 40 queries returned ten items.
 
 This closes the realistic-volume, provenance, isolation, source-accounting,
-bounded no-model runner, and deterministic adversarial-retrieval predicates.
-It does not prove reader answer quality, outcome-marked memory, validator-backed
-held-out task success, production traffic, live Syndai coding ingestion, or
-SOTA. The paid reader remains awaiting the separately frozen authorization
-packet.
+and bounded no-model runner predicates. Because each retrieval query is the
+nearest prior assistant action and the target tool-result body repeats that
+action as its causal context, this is lexical action-to-result retrieval, not a
+paraphrased or distractor-controlled adversarial-continuity result. That
+predicate stays open, as do reader answer quality, outcome-marked memory,
+validator-backed held-out task success, production traffic, live Syndai coding
+ingestion, and SOTA. The paid reader remains awaiting separate authorization.
 
 ## Root fixes exposed by the run
 

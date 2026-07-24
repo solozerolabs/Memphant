@@ -767,3 +767,27 @@ def test_drain_worker_rejects_malformed_drain_completion(
     )
     with pytest.raises(RuntimeError, match="drain completion"):
         grt.drain_worker("worker", "postgres://fixture")
+
+
+def test_portable_runtime_identity_never_records_machine_absolute_paths(grt) -> None:
+    argv, command = grt.portable_command(
+        [
+            "scripts/run_forgeteval.py",
+            "--server-bin",
+            str(ROOT / "target/release/memphant-server"),
+            "--official-dir",
+            "/private/tmp/lethe",
+        ],
+        ROOT,
+    )
+
+    assert argv == [
+        "scripts/run_forgeteval.py",
+        "--server-bin",
+        "target/release/memphant-server",
+        "--official-dir",
+        "<external>/lethe",
+    ]
+    assert command.startswith("python3 scripts/run_forgeteval.py")
+    assert str(ROOT) not in command
+    assert "/private/tmp" not in command

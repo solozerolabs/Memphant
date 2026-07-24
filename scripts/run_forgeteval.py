@@ -15,7 +15,6 @@ import argparse
 import hashlib
 import json
 import os
-import shlex
 import subprocess
 import sys
 from collections import Counter
@@ -26,6 +25,8 @@ import gate_common as gc  # noqa: E402
 import gate_runtime as gr  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+repository_identity = gr.repository_identity
+migration_identity = gr.migration_identity
 DEFAULT_BASE_DATABASE_URL = "postgres://memphant:memphant@localhost:5432/memphant"
 UPSTREAM_COMMIT = "b6053b7bdacc78a91b9ea4bb25f32edad278c495"
 UPSTREAM_REPO = "https://github.com/deeplethe/lethe.git"
@@ -37,52 +38,6 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def repository_identity(root: Path) -> dict:
-    head = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
-    ).stdout.strip()
-    tracked = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--stage", "-z"],
-        check=True, capture_output=True,
-    ).stdout.split(b"\0")
-    digest = hashlib.sha256()
-    count = 0
-    for entry in tracked:
-        if not entry:
-            continue
-        metadata, raw_path = entry.split(b"\t", 1)
-        mode = metadata.split(b" ", 1)[0]
-        path = raw_path.decode("utf-8", errors="surrogateescape")
-        digest.update(mode + b"\0" + raw_path + b"\0")
-        digest.update(hashlib.sha256((root / path).read_bytes()).digest())
-        count += 1
-    diff = subprocess.run(
-        ["git", "-C", str(root), "diff", "--binary", "HEAD", "--"],
-        check=True, capture_output=True,
-    ).stdout
-    return {
-        "git_head": head,
-        "tracked_file_count": count,
-        "tracked_worktree_sha256": digest.hexdigest(),
-        "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
-        "tracked_dirty": bool(diff),
-    }
-
-
-def migration_identity(root: Path) -> dict:
-    rows = [
-        {"path": str(path.relative_to(root)), "sha256": sha256_file(path)}
-        for path in sorted((root / "memphant_migrations" / "versions").glob("*.sql"))
-    ]
-    return {
-        "files": rows,
-        "aggregate_sha256": hashlib.sha256(
-            json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest(),
-    }
 
 
 def verify_upstream(official_dir: Path) -> dict:
@@ -361,6 +316,7 @@ def main() -> int:
         client = gr.ApiClient(args.port, api_key, tenant_id)
         adapter = MemphantForgetEvalAdapter(client, lambda: None)
         summary = run_adapter(adapter, cases, verbose=False)
+        portable_argv, portable_command = gr.portable_command(sys.argv, ROOT)
         report = {
             "benchmark": "ForgetEval",
             "suite": args.suite,
@@ -371,19 +327,19 @@ def main() -> int:
                 "distractors": args.distractors if args.suite == "template" else None,
             },
             "runtime": {
-                "server": str(Path(args.server_bin).resolve()),
+                "server": gr.portable_path(Path(args.server_bin), ROOT),
                 "server_sha256": sha256_file(Path(args.server_bin).resolve()),
-                "cli": str(Path(args.cli_bin).resolve()),
+                "cli": gr.portable_path(Path(args.cli_bin), ROOT),
                 "cli_sha256": sha256_file(Path(args.cli_bin).resolve()),
                 "database": "run-owned ephemeral scratch Postgres",
                 "mode": "fast",
                 "embed_model": args.embed_model,
-                "adapter_path": str(Path(__file__).resolve()),
+                "adapter_path": gr.portable_path(Path(__file__), ROOT),
                 "adapter_sha256": sha256_file(Path(__file__).resolve()),
-                "repository": repository_identity(ROOT),
-                "migrations": migration_identity(ROOT),
-                "argv": sys.argv,
-                "command": shlex.join([sys.executable, *sys.argv]),
+                "repository": gr.repository_identity(ROOT),
+                "migrations": gr.migration_identity(ROOT),
+                "argv": portable_argv,
+                "command": portable_command,
             },
             "capabilities": {
                 "inscribe": "synchronous direct-unit POST /v1/episodes",

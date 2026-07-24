@@ -15,17 +15,18 @@ launch.
 | B1 | rejected/deleted | `2026-07-22-b1-observation-block.md`. |
 | B2/B3/B6 | locally complete | Existing B2/B3 proofs and local CI-honesty legs; remote CI unproven. |
 | B4 receipts/status/policy | complete locally | `2026-07-23-b4-verified-receipts.md`; verified receipts fail closed and calibrated policy is deterministic. |
-| Rung 7 packing | retrieval proven; reader external-blocked | Retrieval 0.6145 to 0.8434; paid packet frozen, zero calls, maximum 1,020 calls / $116. Default remains off. |
+| Rung 7 packing | mixed retrieval result; reader external-blocked | Across 178 rows Recall@10 moved 0.6145 to 0.8434, while the binding 12-row exact-abstention slice regressed 7/12 to 5/12. Paid packet frozen, zero calls, maximum 1,020 calls / $116. Default remains off. |
 | B5 cleanup | complete/rejected as adjudicated | `2026-07-23-b5-recall-stage-retirement.md`; heuristic, learned wrapper, decomposition and Balanced deleted; cross-encoder seam remains default-off. |
 | C0/C1 | correctness complete; parity/live L0 open | Existing C0/C1 proofs; no new production corpus authorization. |
 | C2 | rejected/deleted | Free kill-gate remains binding. |
-| C3 public volume | complete at the stated evidence level | `2026-07-24-c3-public-code-lane.md`; 64,055 events, no-model R@10 18/40. Reader and live production ingestion remain open. |
+| C3 public volume | volume/isolation complete; adversarial continuity open | `2026-07-24-c3-public-code-lane.md`; 64,055 events, exact action-to-result lexical retrieval R@10 18/40. Reader, paraphrased adversarial continuity, and live production ingestion remain open. |
 | WS-F active-read mechanism | local integration complete; dogfood gate open | Syndai commit `69f60239d`; scratch test passes retain/compile/verified receipt/loader/trace/isolation/auth paths. Feature is not an enabled production cutover. |
 | D2 ForgetEval | instrument complete; measured gaps remain | `2026-07-24-forgeteval-public-api.md`; 133/126/126 on adversarial. |
-| D4 SWE-Explore | external-blocked | Public package omits issue text/base commits. |
+| D4 SWE-Explore | immutable-input external block | The pinned JSONL omits issue text/base commits. Official code includes a reconstruction helper, but its auxiliary datasets are unpinned, required issue-map/trajectory inputs are absent, and mappings are incomplete for pro/multilingual cells. |
 | D4 SWE Context Bench | no-model smoke complete; benchmark unauthorized | Pinned artifacts under `tri-sota-completion/swe-contextbench`; exact task/adapter/model/compute budgets and authorization absent. |
 | WS-G/public launch/restraint/GateMem | open | Local mechanisms and synthetic fixtures do not close reopened launch predicates. |
 | Rungs 5/6/8/10/11/13/15 | open/rejected exactly as STATUS records | No new real promotion evidence in this program. Rung 9 remains rejected/deleted. |
+| Public/private spec mirror | complete in the authorized worktrees | `check_spec_drift.py` passes when `MEMPHANT_PRIVATE_SPEC_DIR` names the Syndai mirror. Its default sibling lookup skips in this linked-worktree topology, so the final gate must set that boundary explicitly. |
 
 ## Landing dependency graph
 
@@ -38,13 +39,15 @@ narrow tests before continuing:
 2. Current Python/public contracts: `2c2358d6`.
 3. Recall retirement plus proof: `2cd157a4`, `68192ee9`.
 4. Durable paid-run authorization/ledger: `197f0ddf`, `84f7445a`.
-5. ForgetEval adapter/provenance: `e9755cd4` plus final evidence `8ccdc407`.
+5. ForgetEval adapter: `e9755cd4`.
 6. Free-gate and throughput/migration fixes: `cc5c6c7c` (includes migration
    `20260724_003_worker_claim_throughput.sql`).
 7. C3 identity/adapter chain: `1471ac82`, `8617fa93`, `a9d7e73a`, `c4a6c97b`,
    `d8933695`, `c3f610bc`, `e1d019c0`, `9c37fff3`.
 8. Unchunked canonical citation repair: `ee4de593`.
-9. Final public evidence and ledger/docs commits after review.
+9. Final C3/ForgetEval evidence: `8ccdc407` only after every implementation
+   dependency above, followed by the post-review evidence refresh commit.
+10. Final ledger/docs reconciliation commits after review.
 
 The private Syndai branch is separate and depends on the B4 public receipt
 contract plus `ee4de593`: `aef1af62d`, `a80c054aa`, `1e4b38cb6`, `6f3285972`,

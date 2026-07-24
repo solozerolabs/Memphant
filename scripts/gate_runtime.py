@@ -30,6 +30,7 @@ import http.client
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -60,6 +61,74 @@ API_KEY_ENV_BY_ARM = {
     "openai-text-embedding-3-small": "OPENAI_API_KEY",
     "jina-v5-small": "JINA_API_KEY",
 }
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def repository_identity(root: Path) -> dict:
+    """Content-bound Git identity shared by sealed benchmark runners."""
+    head = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--stage", "-z"],
+        check=True, capture_output=True,
+    ).stdout.split(b"\0")
+    digest = hashlib.sha256()
+    count = 0
+    for entry in tracked:
+        if not entry:
+            continue
+        metadata, raw_path = entry.split(b"\t", 1)
+        mode = metadata.split(b" ", 1)[0]
+        path = raw_path.decode("utf-8", errors="surrogateescape")
+        digest.update(mode + b"\0" + raw_path + b"\0")
+        digest.update(hashlib.sha256((root / path).read_bytes()).digest())
+        count += 1
+    diff = subprocess.run(
+        ["git", "-C", str(root), "diff", "--binary", "HEAD", "--"],
+        check=True, capture_output=True,
+    ).stdout
+    return {
+        "git_head": head,
+        "tracked_file_count": count,
+        "tracked_worktree_sha256": digest.hexdigest(),
+        "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
+        "tracked_dirty": bool(diff),
+    }
+
+
+def migration_identity(root: Path) -> dict:
+    rows = [
+        {"path": str(path.relative_to(root)), "sha256": sha256_file(path)}
+        for path in sorted((root / "memphant_migrations" / "versions").glob("*.sql"))
+    ]
+    return {
+        "files": rows,
+        "aggregate_sha256": hashlib.sha256(
+            json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+
+
+def portable_path(path: Path, root: Path) -> str:
+    """Return a stable evidence label, never a machine-local absolute path."""
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(root.resolve()))
+    except ValueError:
+        return f"<external>/{resolved.name}"
+
+
+def portable_command(argv: list[str], root: Path) -> tuple[list[str], str]:
+    portable = [
+        portable_path(Path(value), root) if Path(value).is_absolute() else value
+        for value in argv
+    ]
+    return portable, shlex.join(["python3", *portable])
 
 
 def episode_retain_payload(
