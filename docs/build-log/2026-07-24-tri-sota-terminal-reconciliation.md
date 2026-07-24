@@ -20,7 +20,7 @@ launch.
 | C0/C1 | correctness complete; parity/live L0 open | Existing C0/C1 proofs; no new production corpus authorization. |
 | C2 | rejected/deleted | Free kill-gate remains binding. |
 | C3 public volume | volume/isolation complete; adversarial continuity open | `2026-07-24-c3-public-code-lane.md`; 64,055 events, exact action-to-result lexical retrieval R@10 18/40. Reader, paraphrased adversarial continuity, and live production ingestion remain open. |
-| WS-F active-read mechanism | local integration complete; dogfood gate open | Syndai commit `69f60239d`; scratch test passes retain/compile/verified receipt/loader/trace/isolation/auth paths. Feature is not an enabled production cutover. |
+| WS-F active-read mechanism | local integration complete; dogfood gate open | Private companion evidence passes retain/compile/verified receipt/loader/trace/isolation/auth paths. Feature is not an enabled production cutover. Exact private landing identity stays in the private repository. |
 | D2 ForgetEval | instrument complete; measured gaps remain | `2026-07-24-forgeteval-public-api.md`; 133/126/126 on adversarial. |
 | D4 SWE-Explore | immutable-input external block | The pinned JSONL omits issue text/base commits. Official code includes a reconstruction helper, but its auxiliary datasets are unpinned, required issue-map/trajectory inputs are absent, and mappings are incomplete for pro/multilingual cells. |
 | D4 SWE Context Bench | no-model smoke complete; benchmark unauthorized | Pinned artifacts under `tri-sota-completion/swe-contextbench`; exact task/adapter/model/compute budgets and authorization absent. |
@@ -46,13 +46,15 @@ narrow tests before continuing:
    `d8933695`, `c3f610bc`, `e1d019c0`, `9c37fff3`.
 8. Unchunked canonical citation repair: `ee4de593`.
 9. Final C3/ForgetEval evidence: `8ccdc407` only after every implementation
-   dependency above, followed by the post-review evidence refresh commit.
-10. Final ledger/docs reconciliation commits after review.
+   dependency above.
+10. Post-review proof-integrity implementation and evidence: `aae4b97a`,
+    `847a5059`.
+11. Final regression-only repairs: `1915dfa8`, `6b1efe86`.
 
 The private Syndai branch is separate and depends on the B4 public receipt
-contract plus `ee4de593`: `aef1af62d`, `a80c054aa`, `1e4b38cb6`, `6f3285972`,
-`69f60239d`. Land it only after compatible public MemPhant commits exist. No
-private path or secret is recorded in this repository.
+contract plus `ee4de593`. Land its exact private manifest only after compatible
+public MemPhant commits exist. No private commit identity, path, or secret is
+recorded in this repository.
 
 Generated OpenAPI/MCP artifacts travel with their owning commits. The worker
 throughput migration travels before any binary that declares it as migration
