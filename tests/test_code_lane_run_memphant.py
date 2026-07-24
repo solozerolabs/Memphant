@@ -102,11 +102,19 @@ def test_compilation_summary_fails_closed_on_silent_drops(clr):
         "dead_jobs": 0,
         "pending_jobs": 0,
     }
-    clr.validate_compilation_summary(complete, 2)
+    clr.validate_compilation_summary(complete, 2, 2)
 
     incomplete = {**complete, "distinct_source_episodes": 1, "missing_source_episodes": 1}
     with pytest.raises(RuntimeError, match="silent drops"):
-        clr.validate_compilation_summary(incomplete, 2)
+        clr.validate_compilation_summary(incomplete, 2, 2)
+
+    deduplicated = {
+        **complete,
+        "episodic_units": 1,
+        "distinct_source_episodes": 1,
+        "missing_source_episodes": 1,
+    }
+    clr.validate_compilation_summary(deduplicated, 2, 1)
 
 
 def test_select_ingest_attempts_full_corpus_when_no_limit(clr):

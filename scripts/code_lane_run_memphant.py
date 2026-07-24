@@ -333,25 +333,23 @@ select json_build_object(
     return json.loads(result.stdout)
 
 
-def validate_compilation_summary(summary: dict, expected_episodes: int) -> None:
+def validate_compilation_summary(
+    summary: dict, expected_episodes: int, expected_projections: int
+) -> None:
     expected = {
         "episodes": expected_episodes,
-        "distinct_source_episodes": expected_episodes,
+        "episodic_units": expected_projections,
+        "distinct_source_episodes": expected_projections,
+        "missing_source_episodes": expected_episodes - expected_projections,
         "done_jobs": expected_episodes,
         "dead_jobs": 0,
         "pending_jobs": 0,
-        "missing_source_episodes": 0,
     }
     mismatches = {
         key: {"expected": value, "actual": summary.get(key)}
         for key, value in expected.items()
         if summary.get(key) != value
     }
-    if summary.get("episodic_units", 0) < expected_episodes:
-        mismatches["episodic_units"] = {
-            "expected_minimum": expected_episodes,
-            "actual": summary.get("episodic_units"),
-        }
     if mismatches:
         raise RuntimeError(f"compiled corpus has silent drops: {mismatches}")
 
@@ -601,7 +599,22 @@ def main() -> int:
         compiled_corpus = compilation_summary(
             args.database_url, [tenant_id for tenant_id, _key in principals]
         )
-        validate_compilation_summary(compiled_corpus, expected_jobs)
+        expected_projections = (
+            sum(
+                len(
+                    {
+                        contextual_event_body(row["events"], index)
+                        for index in range(len(row["events"]))
+                    }
+                )
+                for row in ingest_rows
+            )
+            + isolation_sentinel_events
+        )
+        validate_compilation_summary(
+            compiled_corpus, expected_jobs, expected_projections
+        )
+        compiled_corpus["deduplicated_episodes"] = expected_jobs - expected_projections
 
         evidence_rows = []
         provenance_rows = []
