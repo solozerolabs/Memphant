@@ -10550,9 +10550,7 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
         // Explicit direct/structured facts already carry caller-validated
         // identity and may legitimately be terse (for example "Busy."). Keep
         // the historical noise floor only for unkeyed extraction candidates.
-        if candidate.body.trim().is_empty()
-            || (candidate.fact_key.is_none() && candidate.body.split_whitespace().count() < 3)
-        {
+        if reject_compiler_candidate_as_noise(&candidate) {
             actions.push(AdmissionAction::Reject);
             continue;
         }
@@ -11019,6 +11017,17 @@ fn low_trust_projection_state(kind: MemoryKind) -> UnitState {
     }
 }
 
+fn reject_compiler_candidate_as_noise(candidate: &memphant_types::ReflectCandidate) -> bool {
+    if candidate.body.trim().is_empty() {
+        return true;
+    }
+    let raw_evidence = matches!(
+        candidate.kind,
+        Some(MemoryKind::Episodic | MemoryKind::Resource)
+    );
+    !raw_evidence && candidate.fact_key.is_none() && candidate.body.split_whitespace().count() < 3
+}
+
 #[cfg(test)]
 mod low_trust_projection_tests {
     use super::*;
@@ -11040,6 +11049,44 @@ mod low_trust_projection_tests {
         ] {
             assert_eq!(low_trust_projection_state(kind), UnitState::Candidate);
         }
+    }
+
+    #[test]
+    fn short_raw_evidence_bypasses_the_unkeyed_claim_noise_floor() {
+        let candidate = |kind, body: &str| memphant_types::ReflectCandidate {
+            source_kind: "agent".to_string(),
+            trust_level: TrustLevel::AgentOutput,
+            actor_id: ActorId::from_u128(1),
+            subject: None,
+            predicate: None,
+            fact_key: None,
+            kind: Some(kind),
+            body: body.to_string(),
+            confidence: None,
+            churn_class: None,
+            admission_hint: None,
+            target_unit_ids: None,
+            contextual_chunks: Vec::new(),
+            valid_from: None,
+            valid_to: None,
+        };
+
+        assert!(!reject_compiler_candidate_as_noise(&candidate(
+            MemoryKind::Episodic,
+            "test passed"
+        )));
+        assert!(!reject_compiler_candidate_as_noise(&candidate(
+            MemoryKind::Resource,
+            "ok"
+        )));
+        assert!(reject_compiler_candidate_as_noise(&candidate(
+            MemoryKind::Semantic,
+            "too short"
+        )));
+        assert!(reject_compiler_candidate_as_noise(&candidate(
+            MemoryKind::Episodic,
+            "   "
+        )));
     }
 }
 
