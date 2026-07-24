@@ -20,7 +20,12 @@ from run_reader import ReaderCli, restore_spend_from_attempts
 ROOT = Path(__file__).resolve().parents[1]
 SYSTEM_PROMPT = (
     "You propose memory mutations but cannot execute them. Select only from the "
-    "numbered evidence candidates. Return strict JSON without prose or reasoning."
+    "numbered evidence candidates. For supersession, start replacement_text with "
+    "NEW_FACT exactly as written. Append only clauses whose subject-attribute is "
+    "independent of SUPERSEDE_QUERY. Omit every old negation, value, role, reason, "
+    "or time qualifier that bears on the targeted attribute. If no independent "
+    "clause remains, replacement_text must equal NEW_FACT byte-for-byte. Return "
+    "strict JSON without prose or reasoning."
 )
 
 
@@ -45,9 +50,10 @@ def build_prompt(value: dict) -> str:
     if value["operation"] == "supersede":
         instruction = (
             "Select exactly one existing memory whose subject and attribute are "
-            "targeted by SUPERSEDE_QUERY. replacement_text must apply NEW_FACT while "
-            "preserving any distinct, unaffected clause from that selected memory. "
-            "Do not copy facts from other candidates and do not invent facts. Return "
+            "targeted by SUPERSEDE_QUERY. replacement_text must apply NEW_FACT and "
+            "may preserve only a distinct, unaffected subject-attribute clause from "
+            "that selected memory. Do not preserve stale target history, copy facts "
+            "from other candidates, or invent facts. Return "
             '{"selected_indices":[<one integer>],"replacement_text":"<text>"}.'
         )
         details = (
