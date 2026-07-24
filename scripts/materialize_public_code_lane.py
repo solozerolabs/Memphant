@@ -35,7 +35,11 @@ PAGE_SIZE = 100
 TRUNCATE_CHARS = 4_000
 GOLDEN_COUNT = 40
 TRANSFORM_VERSION = "openhands_trajectory_to_syndai_content_events_v2"
-GOLDEN_GENERATOR = "deterministic_late_diagnostic_span_v2"
+GOLDEN_GENERATOR = "deterministic_issue_to_late_diagnostic_v3"
+QUERY_MAX_CHARS = 1_000
+MAX_QUERY_TARGET_OVERLAP = 0.06
+MIN_DISTRACTOR_EVENTS = 20
+WORD_RE = re.compile(r"[a-z0-9]+")
 DIAGNOSTIC_PATTERNS = (
     re.compile(r"^E\s+\S"),
     re.compile(r"^(?:ERROR|FAILED)(?:\s|:|$)", re.IGNORECASE),
@@ -165,10 +169,34 @@ def diagnostic_span(text: str) -> tuple[int, int, str] | None:
     return None
 
 
+def issue_query(events: list[dict]) -> str:
+    source = next((event["text"] for event in events if event["role"] == "user"), "")
+    marker = "<issue_description>"
+    start = source.find(marker)
+    if start >= 0:
+        source = source[start + len(marker) :]
+        end = source.find("</issue_description>")
+        if end >= 0:
+            source = source[:end]
+    return " ".join(source.split())[:QUERY_MAX_CHARS].strip()
+
+
+def lexical_overlap(left: str, right: str) -> float:
+    left_words = {word for word in WORD_RE.findall(left.lower()) if len(word) > 2}
+    right_words = {word for word in WORD_RE.findall(right.lower()) if len(word) > 2}
+    if not left_words or not right_words:
+        return 0.0
+    return len(left_words & right_words) / len(left_words | right_words)
+
+
 def build_goldens(corpus: list[dict], count: int) -> list[dict]:
     candidates = []
     for row in corpus:
         events = row["events"]
+        query = issue_query(events)
+        query_source = next((event for event in events if event["role"] == "user"), None)
+        if not query or query_source is None:
+            continue
         for event_index, event in enumerate(row["events"]):
             minimum_index = max(20, int(len(events) * 0.60))
             if event_index < minimum_index or event["role"] != "toolResult":
@@ -186,8 +214,17 @@ def build_goldens(corpus: list[dict], count: int) -> list[dict]:
             )
             if previous_event is None:
                 continue
-            previous = previous_event["text"].replace("\n", " ")[:120]
             start, end, answer = span
+            contextual_target = previous_event["text"] + "\n" + event["text"]
+            query_target_overlap = lexical_overlap(query, contextual_target)
+            query_answer_overlap = lexical_overlap(query, answer)
+            if (
+                answer in query
+                or query_target_overlap > MAX_QUERY_TARGET_OVERLAP
+                or query_answer_overlap > MAX_QUERY_TARGET_OVERLAP
+                or len(events) - 1 < MIN_DISTRACTOR_EVENTS
+            ):
+                continue
             candidates.append(
                 (
                     event_index / len(events),
@@ -197,10 +234,10 @@ def build_goldens(corpus: list[dict], count: int) -> list[dict]:
                     "question_type": "coding-continuity",
                     "is_abstention": False,
                     "question": (
-                        f"In the {row['repository']} trajectory, what exact diagnostic followed "
-                        f"the action beginning {previous!r}?"
+                        f"While addressing the source issue in {row['repository']}, what exact "
+                        "late diagnostic was observed?"
                     ),
-                    "retrieval_query": previous,
+                    "retrieval_query": query,
                     "question_date": row["started_at"],
                     "gold_answer": answer,
                     "provenance": [
@@ -214,6 +251,10 @@ def build_goldens(corpus: list[dict], count: int) -> list[dict]:
                             "span": answer,
                             "event_index": event_index,
                             "attempt_event_count": len(events),
+                            "distractor_events": len(events) - 1,
+                            "query_source_event_id": query_source["event_id"],
+                            "query_target_lexical_overlap": round(query_target_overlap, 6),
+                            "query_answer_lexical_overlap": round(query_answer_overlap, 6),
                         }
                     ],
                 },

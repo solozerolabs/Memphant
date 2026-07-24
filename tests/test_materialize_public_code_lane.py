@@ -83,9 +83,12 @@ def test_diagnostic_golden_is_exactly_bound_to_source_span() -> None:
     proof = golden["provenance"][0]
     assert event["text"][proof["char_start"] : proof["char_end"]] == proof["span"]
     assert golden["gold_answer"] == proof["span"]
-    assert golden["retrieval_query"] == "run the late test"
+    assert golden["retrieval_query"] == "fix it"
     assert golden["gold_answer"] not in golden["retrieval_query"]
     assert proof["event_index"] / proof["attempt_event_count"] >= 0.60
+    assert proof["distractor_events"] >= lane.MIN_DISTRACTOR_EVENTS
+    assert proof["query_target_lexical_overlap"] <= lane.MAX_QUERY_TARGET_OVERLAP
+    assert proof["query_answer_lexical_overlap"] <= lane.MAX_QUERY_TARGET_OVERLAP
 
 
 def test_build_goldens_fails_closed_without_diagnostics() -> None:
@@ -107,4 +110,4 @@ def test_diagnostic_parser_rejects_keyword_only_source_and_docs_lines() -> None:
 def test_transform_and_golden_generator_versions_are_not_conflated() -> None:
     lane = load_module()
     assert lane.TRANSFORM_VERSION == "openhands_trajectory_to_syndai_content_events_v2"
-    assert lane.GOLDEN_GENERATOR == "deterministic_late_diagnostic_span_v2"
+    assert lane.GOLDEN_GENERATOR == "deterministic_issue_to_late_diagnostic_v3"
