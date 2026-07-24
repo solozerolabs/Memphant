@@ -142,7 +142,7 @@ TRACE_ID=$(echo "$RECALL1" | jget "['trace_id']")
 UNIT_ID=$(echo "$RECALL1" | jget "['items'][0]['unit_id']")
 
 log "retain code resource (A) with commit revision"
-RES=$(api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:resource:1\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"resource\":{\"uri\":\"repo://demo/src/main.rs\",\"mime_type\":\"text/x-rust\",\"content_hash\":\"sha256:probe\",\"kind\":\"code\",\"revision\":\"abc123def\",\"body\":\"fn deploy() { /* canary first, then roll forward */ }\"}}}")
+RES=$(api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:resource:1\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"resource\":{\"uri\":\"repo://demo/src/main.rs\",\"mime_type\":\"text/x-rust\",\"content_hash\":\"sha256:fb731a330c0e0531431869357136178788ef57c7ec89eb9f0db8e398ddefbf8f\",\"kind\":\"code\",\"revision\":\"abc123def\",\"body\":\"fn deploy() { /* canary first, then roll forward */ }\"}}}")
 echo "$RES" | jget "['enqueued'][0]" | grep -q reflect_resource || fail "resource retain not enqueued: $RES"
 worker_once
 RECALL_RES=$(api "$KEY_A" POST /v1/recall "{$CTX_A,\"query\":\"canary deploy roll forward\"}")
