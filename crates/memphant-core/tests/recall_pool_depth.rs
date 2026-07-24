@@ -1,6 +1,6 @@
 //! R1.5-T0: `recall_pool_depth` decouples the recall engine's internal
 //! fan-out from the caller's requested `k`. D1 proved the OLD coupling was a
-//! correctness bug in ranking terms: Fast/Balanced-mode packing clamped its
+//! correctness bug in ranking terms: Fast-mode packing clamped its
 //! candidate-consideration scan window to exactly `output_limit == k`, so a
 //! caller requesting a bigger `k` handed the greedy fill a wider window to
 //! skip past subject-dedup drops — which changed even the top-5 composition
@@ -72,9 +72,6 @@ fn request(context: &ResolvedMemoryContext, query: &str, k: usize) -> RecallRequ
         include_beliefs: false,
         edge_expansion_enabled: false,
         context_packing_abstention_enabled: true,
-        rerank_enabled: false,
-        learned_rerank_profile: None,
-        query_decomposition_enabled: false,
         procedure_recall_enabled: true,
         decay_enabled: true,
         engine_version: "engine-r15t0-test".to_string(),
@@ -246,130 +243,4 @@ async fn k5_and_k50_agree_trivially_without_dedup_pressure() {
     let k5_top5: Vec<UnitId> = k5.items.iter().map(|item| item.unit_id).collect();
     let k50_top5: Vec<UnitId> = k50.items[..5].iter().map(|item| item.unit_id).collect();
     assert_eq!(k5_top5, k50_top5);
-}
-
-/// Review follow-up tombstone (Balanced mode + query decomposition): the
-/// decomposition subquery loop capped each per-subquery per-channel fusion
-/// contribution at `.take(request.k.max(1))` — a residual k-derived internal
-/// limit the first R1.5-T0 pass missed. Because active decomposition ALSO
-/// retains only subquery-tagged candidates
-/// (`fused.retain(|c| !c.subquery_ids.is_empty())`), the cap gates candidate
-/// MEMBERSHIP, not just fused-score nudges: a unit outside every subquery
-/// channel's top-k is dropped from the response entirely.
-///
-/// Fixture shape: query "alpha crucible and beta lantern" decomposes into
-/// sq1 "alpha crucible" + sq2 "beta lantern" (2 conjuncts ⇒ 2 reasons ⇒
-/// active in Balanced). Six A-units ("alpha crucible a{i}") monopolise sq1's
-/// per-channel top slots and six B-units ("beta lantern b{i}") sq2's; the
-/// "hybrid" unit H ("alpha and beta h1") out-scores everything on the MAIN
-/// query channels (3/4 token overlap incl. the connector token "and", which
-/// belongs to NO subquery) but ranks 7th on every subquery channel. Old
-/// code, k=5: H is never subquery-tagged ⇒ dropped ⇒ absent from the top-5.
-/// Old code, k=50: H is tagged (rank 7 ≤ 50), and its main-channel
-/// dominance puts it INSIDE the top-5 ⇒ different top-5 for k=5 vs k=50 over
-/// the identical corpus/query. Fixed code: the cap derives from
-/// `recall_pool_depth` (64 ≫ 13 units), so both k tag identically and the
-/// top-5 is byte-identical.
-#[tokio::test]
-async fn decomposed_balanced_k5_and_k50_produce_identical_top5() {
-    let store = InMemoryStore::default();
-    let tenant_id = tenant(90_200);
-    let context = memphant_store_testkit::bind_context(&store, tenant_id).await;
-
-    let mut tx = store.begin(&context).await.expect("begin transaction");
-    // Six sq1 monopolists: identical sq1/lexical shape (2 signal tokens of 3
-    // ⇒ ratio 2/3), distinct bodies for the deterministic tie-break.
-    for index in 1..=6u32 {
-        store
-            .stage_memory_unit(
-                &mut tx,
-                new_unit(
-                    &context,
-                    &format!("zk-a{index}"),
-                    format!("alpha crucible a{index}"),
-                ),
-            )
-            .await
-            .expect("A unit seeded");
-    }
-    // Six sq2 monopolists, same shape on the other conjunct.
-    for index in 1..=6u32 {
-        store
-            .stage_memory_unit(
-                &mut tx,
-                new_unit(
-                    &context,
-                    &format!("zk-b{index}"),
-                    format!("beta lantern b{index}"),
-                ),
-            )
-            .await
-            .expect("B unit seeded");
-    }
-    // The hybrid: best MAIN-query match (alpha + and + beta = 3/4), worst
-    // per-subquery match (1/4 against either conjunct ⇒ rank 7 on every
-    // subquery channel, behind the six monopolists).
-    let hybrid_id = store
-        .stage_memory_unit(
-            &mut tx,
-            new_unit(&context, "zk-h", "alpha and beta h1".to_string()),
-        )
-        .await
-        .expect("hybrid unit seeded");
-    store.commit(tx).await.expect("seed committed");
-
-    let query = "alpha crucible and beta lantern";
-    let mut k5_request = request(&context, query, 5);
-    k5_request.mode = RecallMode::Balanced;
-    k5_request.query_decomposition_enabled = true;
-    let mut k50_request = request(&context, query, 50);
-    k50_request.mode = RecallMode::Balanced;
-    k50_request.query_decomposition_enabled = true;
-
-    let k5 = recall(&store, k5_request, None, &CLOCK)
-        .await
-        .expect("k=5 recall succeeds");
-    let k50 = recall(&store, k50_request, None, &CLOCK)
-        .await
-        .expect("k=50 recall succeeds");
-
-    // Sanity: decomposition actually fired for both requests — otherwise
-    // this fixture isn't exercising the subquery fusion cap it claims to.
-    let k5_trace = store
-        .trace_by_id_any_tenant(k5.trace_id)
-        .expect("k=5 trace stored");
-    let k50_trace = store
-        .trace_by_id_any_tenant(k50.trace_id)
-        .expect("k=50 trace stored");
-    assert!(
-        k5_trace.subquery_ids.len() >= 2 && k50_trace.subquery_ids.len() >= 2,
-        "both requests must decompose into >=2 subqueries (got {} / {})",
-        k5_trace.subquery_ids.len(),
-        k50_trace.subquery_ids.len()
-    );
-    // Sanity: the hybrid is the fixture's discriminator — it must be present
-    // in the k=50 top-5 (its main-channel dominance earns the slot) for the
-    // top-5 comparison to be exercising membership, not merely order.
-    let k50_top5: Vec<UnitId> = k50.items[..5].iter().map(|item| item.unit_id).collect();
-    assert!(
-        k50_top5.contains(&hybrid_id),
-        "the hybrid unit must sit in the k=50 top-5: {k50_top5:?}"
-    );
-
-    assert_eq!(k5.items.len(), 5, "k=5 pack fills to exactly k");
-    // THE tombstone assertion: identical unit ids, in identical order, for
-    // the first 5 items regardless of whether the caller asked for k=5 or
-    // k=50 — the decomposition subquery fusion cap no longer scales with k.
-    let k5_top5: Vec<UnitId> = k5.items.iter().map(|item| item.unit_id).collect();
-    assert_eq!(
-        k5_top5, k50_top5,
-        "decomposed Balanced-mode k=5 and k=50 must produce an identical \
-         top-5 over the same corpus/query (subquery-cap tombstone)"
-    );
-    let k5_bodies: Vec<&str> = k5.items.iter().map(|item| item.body.as_str()).collect();
-    let k50_bodies: Vec<&str> = k50.items[..5]
-        .iter()
-        .map(|item| item.body.as_str())
-        .collect();
-    assert_eq!(k5_bodies, k50_bodies);
 }

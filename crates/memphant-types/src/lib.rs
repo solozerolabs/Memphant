@@ -354,7 +354,6 @@ pub struct RetainResourceRequest {
 #[serde(rename_all = "snake_case")]
 pub enum RecallMode {
     Fast,
-    Balanced,
     Deep,
 }
 
@@ -365,6 +364,7 @@ mod recall_mode_contract_tests {
     #[test]
     fn deep_is_the_only_explicit_deliberate_recall_mode() {
         assert!(serde_json::from_str::<RecallMode>(r#""deep""#).is_ok());
+        assert!(serde_json::from_str::<RecallMode>(r#""balanced""#).is_err());
         assert!(serde_json::from_str::<RecallMode>(r#""exhaustive""#).is_err());
     }
 }
@@ -455,12 +455,6 @@ pub struct RecallRequest {
     #[serde(default = "default_true")]
     pub context_packing_abstention_enabled: bool,
     #[serde(default = "default_true")]
-    pub rerank_enabled: bool,
-    #[serde(default)]
-    pub learned_rerank_profile: Option<LearnedRerankProfile>,
-    #[serde(default = "default_true")]
-    pub query_decomposition_enabled: bool,
-    #[serde(default = "default_true")]
     pub procedure_recall_enabled: bool,
     #[serde(default = "default_true")]
     pub decay_enabled: bool,
@@ -513,18 +507,6 @@ pub struct AggregationWindow {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct LearnedRerankProfile {
-    pub profile_id: String,
-    pub training_set_id: String,
-    pub lexical_weight: f32,
-    pub vector_weight: f32,
-    pub exact_weight: f32,
-    pub intent_weight: f32,
-    pub decay_weight: f32,
-    pub fused_weight: f32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RecallCandidateTrace {
     pub unit_id: UnitId,
     pub channel: RecallChannel,
@@ -533,10 +515,6 @@ pub struct RecallCandidateTrace {
     pub derived_by: String,
     pub fused_rank: Option<usize>,
     pub fused_score: Option<f32>,
-    pub rerank_rank: Option<usize>,
-    pub rerank_score: f32,
-    #[serde(default)]
-    pub subquery_ids: Vec<String>,
     #[serde(default)]
     pub decay_retrievability: f32,
     #[serde(default)]
@@ -901,9 +879,7 @@ pub struct RetrievalTrace {
     #[serde(default)]
     pub recall_pool_depth: u32,
     /// R1.5-T1: per-recall wall-clock (ms) spent inside the W8 cross-encoder
-    /// rerank stage ([`crate::CrossReranker`], distinct from the retired
-    /// heuristic `reranker_id`/`rerank_input_count`/`rerank_overfetch_ratio`
-    /// fields below). `0` when no cross-reranker is installed on the service
+    /// rerank stage ([`crate::CrossReranker`]). `0` when no cross-reranker is installed on the service
     /// (the default) or the candidate pool was empty — a legitimate "not
     /// run" value, not a sentinel. `#[serde(default)]` so traces recorded
     /// before this field existed still deserialize.
@@ -914,18 +890,9 @@ pub struct RetrievalTrace {
     pub consolidation_lag_ms: u64,
     #[serde(default)]
     pub degradation: Option<RecallDegradationDiagnostic>,
-    pub weight_vector_id: String,
     pub mode_requested: RecallMode,
     pub mode_executed: RecallMode,
     pub escalation_reason: String,
-    pub reranker_id: String,
-    pub rerank_input_count: usize,
-    pub rerank_overfetch_ratio: f32,
-    #[serde(default)]
-    pub learned_rerank_training_set_id: Option<String>,
-    #[serde(default)]
-    pub subquery_ids: Vec<String>,
-    pub decomposition_reason: String,
     #[serde(default)]
     pub procedure_ids: Vec<UnitId>,
     #[serde(default)]

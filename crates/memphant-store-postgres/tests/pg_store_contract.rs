@@ -1817,9 +1817,6 @@ fn recall_request(context: &ResolvedMemoryContext, query: &str) -> RecallRequest
         include_beliefs: true,
         edge_expansion_enabled: true,
         context_packing_abstention_enabled: true,
-        rerank_enabled: true,
-        learned_rerank_profile: None,
-        query_decomposition_enabled: true,
         procedure_recall_enabled: true,
         decay_enabled: true,
         engine_version: "pg-contract-test".to_string(),
@@ -3344,9 +3341,6 @@ async fn bitemporal_correction_round_trips_through_postgres_and_forget_erases_hi
                 include_beliefs: true,
                 edge_expansion_enabled: true,
                 context_packing_abstention_enabled: false,
-                rerank_enabled: false,
-                learned_rerank_profile: None,
-                query_decomposition_enabled: false,
                 procedure_recall_enabled: true,
                 decay_enabled: false,
                 engine_version: "pg-bitemporal-test".to_string(),
@@ -3650,7 +3644,6 @@ async fn structured_exact_recurrence_replaces_every_overlapping_postgres_rectang
     historical_request.transaction_as_of =
         Some(second_generation_time.expect("second generation has database transaction time"));
     historical_request.valid_at = Some("2025-05-01T00:00:00Z".to_string());
-    historical_request.rerank_enabled = false;
     historical_request.context_packing_abstention_enabled = false;
     let historical = recall(&store, historical_request, None, &CLOCK)
         .await

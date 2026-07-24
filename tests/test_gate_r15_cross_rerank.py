@@ -686,7 +686,7 @@ def test_negative_recall_wires_public_bitemporal_query_fields_without_labels(gr)
         "question only",
         10,
         100,
-        "balanced",
+        "fast",
         transaction_as_of="2026-01-01T00:00:00Z",
         valid_at="2025-01-01T00:00:00Z",
     )

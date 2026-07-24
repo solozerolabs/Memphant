@@ -850,7 +850,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=39412)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--budget-tokens", type=int, default=8192)
-    parser.add_argument("--mode", default="deep", choices=("fast", "balanced", "deep"))
+    parser.add_argument("--mode", default="deep", choices=("fast", "deep"))
     parser.add_argument("--limit-haystack", type=int, default=0, help="0 = full corpus")
     parser.add_argument("--server-bin", default=str(gc.MEMPHANT_ROOT / "target/debug/memphant-server"))
     parser.add_argument("--worker-bin", default=str(gc.MEMPHANT_ROOT / "target/debug/memphant-worker"))

@@ -1,3 +1,0 @@
-id: rung8-baseline-sampled
-cases:
-  - ../examples/evals/golden/bounded_rerank_incident_owner.yaml

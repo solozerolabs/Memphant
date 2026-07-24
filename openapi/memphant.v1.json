@@ -1609,27 +1609,8 @@
               "null"
             ]
           },
-          "rerank_rank": {
-            "format": "uint",
-            "minimum": 0,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "rerank_score": {
-            "format": "float",
-            "type": "number"
-          },
           "state": {
             "$ref": "#/components/schemas/UnitState"
-          },
-          "subquery_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
           },
           "transaction_from": {
             "type": [
@@ -1668,7 +1649,6 @@
           "channel_rank",
           "channel_score",
           "derived_by",
-          "rerank_score",
           "trust_level",
           "state"
         ],
@@ -1946,7 +1926,6 @@
       "RecallMode": {
         "enum": [
           "fast",
-          "balanced",
           "deep"
         ],
         "type": "string"
@@ -2445,7 +2424,7 @@
           },
           "cross_rerank_ms": {
             "default": 0,
-            "description": "R1.5-T1: per-recall wall-clock (ms) spent inside the W8 cross-encoder\nrerank stage ([`crate::CrossReranker`], distinct from the retired\nheuristic `reranker_id`/`rerank_input_count`/`rerank_overfetch_ratio`\nfields below). `0` when no cross-reranker is installed on the service\n(the default) or the candidate pool was empty — a legitimate \"not\nrun\" value, not a sentinel. `#[serde(default)]` so traces recorded\nbefore this field existed still deserialize.",
+            "description": "R1.5-T1: per-recall wall-clock (ms) spent inside the W8 cross-encoder\nrerank stage ([`crate::CrossReranker`]). `0` when no cross-reranker is installed on the service\n(the default) or the candidate pool was empty — a legitimate \"not\nrun\" value, not a sentinel. `#[serde(default)]` so traces recorded\nbefore this field existed still deserialize.",
             "format": "uint64",
             "minimum": 0,
             "type": "integer"
@@ -2455,9 +2434,6 @@
           },
           "decay_model_id": {
             "default": "",
-            "type": "string"
-          },
-          "decomposition_reason": {
             "type": "string"
           },
           "deep": {
@@ -2583,13 +2559,6 @@
             "minimum": 0,
             "type": "integer"
           },
-          "learned_rerank_training_set_id": {
-            "default": null,
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "mode_executed": {
             "$ref": "#/components/schemas/RecallMode"
           },
@@ -2632,18 +2601,6 @@
           "recall_time": {
             "$ref": "#/components/schemas/RecallTime"
           },
-          "rerank_input_count": {
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "rerank_overfetch_ratio": {
-            "format": "float",
-            "type": "number"
-          },
-          "reranker_id": {
-            "type": "string"
-          },
           "scope_id": {
             "$ref": "#/components/schemas/ScopeId"
           },
@@ -2652,13 +2609,6 @@
             "minimum": 0,
             "type": "integer"
           },
-          "subquery_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "tenant_id": {
             "$ref": "#/components/schemas/TenantId"
           },
@@ -2666,9 +2616,6 @@
             "format": "uint",
             "minimum": 0,
             "type": "integer"
-          },
-          "weight_vector_id": {
-            "type": "string"
           }
         },
         "required": [
@@ -2690,14 +2637,9 @@
           "dropped_items",
           "citations",
           "consolidation_lag_ms",
-          "weight_vector_id",
           "mode_requested",
           "mode_executed",
           "escalation_reason",
-          "reranker_id",
-          "rerank_input_count",
-          "rerank_overfetch_ratio",
-          "decomposition_reason",
           "abstention_signal",
           "latency_ms",
           "token_estimate",

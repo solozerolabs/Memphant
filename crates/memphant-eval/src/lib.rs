@@ -98,11 +98,10 @@ impl DeepRecallProvider for EvalDeepProvider {
             .take(8)
             .map(|(_, _, _, source_id)| source_id)
             .collect::<Vec<_>>();
-        let evidence_status = if source_ids.is_empty() {
-            EvidenceStatus::Insufficient
-        } else {
-            EvidenceStatus::Supported
-        };
+        // The local evaluator ranks authorized raw sources but does not mint
+        // canonical byte-span citations. It must never label that diagnostic
+        // selection as supported evidence.
+        let evidence_status = EvidenceStatus::Insufficient;
         Box::pin(async move {
             Ok(DeepRecallProviderResult {
                 status: DeepRecallStatus::Completed,
@@ -119,7 +118,8 @@ impl DeepRecallProvider for EvalDeepProvider {
                     contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
                     status: evidence_status,
                     answer_policy: evidence_status.answer_policy(),
-                    reason: "deterministic query-overlap evidence classification".to_string(),
+                    reason: "local evaluator sources have no canonical byte-span citations"
+                        .to_string(),
                 },
             })
         })
@@ -129,10 +129,10 @@ use memphant_types::{
     ActorId, AgentNodeId, ContextualChunk, DeepProviderIdentity, DeepRecallLimits,
     DeepRecallStatus, DeepRecallStopReason, DeepRecallSummary, DeepRecallUsage, ENGINE_VERSION,
     EVIDENCE_DISPOSITION_CONTRACT_REVISION, EvidenceDisposition, EvidenceStatus, ForgetRequest,
-    ForgetSelector, LearnedRerankProfile, MarkOutcome, MarkRequest, MemoryEdgeKind, MemoryKind,
-    NewEpisode, NewMemoryEdge, NewMemoryUnit, RecallContextItem, RecallDropReason, RecallMode,
-    RecallRequest, RecallTime, ResolvedMemoryContext, RetrievalTrace, ScopeId, SubjectId,
-    TRACE_SCHEMA_VERSION, TenantId, TraceId, TrustLevel, UnitId, UnitState,
+    ForgetSelector, MarkOutcome, MarkRequest, MemoryEdgeKind, MemoryKind, NewEpisode,
+    NewMemoryEdge, NewMemoryUnit, RecallContextItem, RecallDropReason, RecallMode, RecallRequest,
+    RecallTime, ResolvedMemoryContext, RetrievalTrace, ScopeId, SubjectId, TRACE_SCHEMA_VERSION,
+    TenantId, TraceId, TrustLevel, UnitId, UnitState,
 };
 use schemars::schema_for;
 use serde::{Deserialize, Serialize};
@@ -178,9 +178,6 @@ pub struct EvalRunOptions {
     pub temporal_validity_enabled: bool,
     pub edge_expansion_enabled: bool,
     pub context_packing_abstention_enabled: bool,
-    pub rerank_enabled: bool,
-    pub learned_rerank_enabled: bool,
-    pub query_decomposition_enabled: bool,
     pub procedure_recall_enabled: bool,
     pub decay_enabled: bool,
     pub l4_exhaustive_enabled: bool,
@@ -199,9 +196,6 @@ impl Default for EvalRunOptions {
             temporal_validity_enabled: true,
             edge_expansion_enabled: true,
             context_packing_abstention_enabled: true,
-            rerank_enabled: true,
-            learned_rerank_enabled: true,
-            query_decomposition_enabled: true,
             procedure_recall_enabled: true,
             decay_enabled: true,
             l4_exhaustive_enabled: true,
@@ -233,7 +227,7 @@ pub struct EvalCaseResult {
     pub dropped_mismatches: Vec<String>,
     pub error: Option<String>,
     /// Deep-recall settlement receipt when this case ran a Deep provider
-    /// (P0.3 §6 settlement accounting). `None` for Fast/Balanced cases.
+    /// (P0.3 §6 settlement accounting). `None` for Fast cases.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deep: Option<DeepSettlement>,
 }
@@ -267,7 +261,7 @@ fn deep_settlement(trace: &RetrievalTrace) -> Option<DeepSettlement> {
 }
 
 /// Testable core: map a Deep summary (present only for Deep cases) to its
-/// settlement receipt. `None` in ⇒ `None` out (Fast/Balanced never settle).
+/// settlement receipt. `None` in ⇒ `None` out (Fast never settles).
 fn deep_settlement_from_summary(
     summary: Option<&DeepRecallSummary>,
     gathered_evidence_ids: &[String],
@@ -504,8 +498,6 @@ struct GoldenCase {
     #[serde(default)]
     mode: Option<RecallMode>,
     #[serde(default)]
-    learned_rerank_profile: Option<LearnedRerankProfile>,
-    #[serde(default)]
     include_beliefs: bool,
     seed: GoldenSeed,
     expect: GoldenExpect,
@@ -579,18 +571,6 @@ struct GoldenExpect {
     trace_stages_include: Vec<String>,
     #[serde(default)]
     trace_feature_flags_include: Vec<String>,
-    #[serde(default)]
-    reranker_id: Option<String>,
-    #[serde(default)]
-    rerank_training_set_id: Option<String>,
-    #[serde(default)]
-    weight_vector_id: Option<String>,
-    #[serde(default)]
-    rerank_input_count_min: Option<usize>,
-    #[serde(default)]
-    subquery_count_min: Option<usize>,
-    #[serde(default)]
-    decomposition_reason_contains: Option<String>,
     #[serde(default)]
     dropped: Vec<GoldenDropped>,
     #[serde(default)]
@@ -749,9 +729,6 @@ struct GoldenRunControls {
     temporal_validity_enabled: bool,
     edge_expansion_enabled: bool,
     context_packing_abstention_enabled: bool,
-    rerank_enabled: bool,
-    learned_rerank_enabled: bool,
-    query_decomposition_enabled: bool,
     procedure_recall_enabled: bool,
     decay_enabled: bool,
     l4_exhaustive_enabled: bool,
@@ -766,9 +743,6 @@ impl Default for GoldenRunControls {
             temporal_validity_enabled: true,
             edge_expansion_enabled: true,
             context_packing_abstention_enabled: true,
-            rerank_enabled: true,
-            learned_rerank_enabled: true,
-            query_decomposition_enabled: true,
             procedure_recall_enabled: true,
             decay_enabled: true,
             l4_exhaustive_enabled: true,
@@ -785,9 +759,6 @@ impl From<&EvalRunOptions> for GoldenRunControls {
             temporal_validity_enabled: options.temporal_validity_enabled,
             edge_expansion_enabled: options.edge_expansion_enabled,
             context_packing_abstention_enabled: options.context_packing_abstention_enabled,
-            rerank_enabled: options.rerank_enabled,
-            learned_rerank_enabled: options.learned_rerank_enabled,
-            query_decomposition_enabled: options.query_decomposition_enabled,
             procedure_recall_enabled: options.procedure_recall_enabled,
             decay_enabled: options.decay_enabled,
             l4_exhaustive_enabled: options.l4_exhaustive_enabled,
@@ -859,9 +830,6 @@ pub fn run_eval_file(path: &Path, options: EvalRunOptions) -> EvalResult<EvalRep
                 "temporal_validity_enabled": options.temporal_validity_enabled,
                 "edge_expansion_enabled": options.edge_expansion_enabled,
                 "context_packing_abstention_enabled": options.context_packing_abstention_enabled,
-                "rerank_enabled": options.rerank_enabled,
-                "learned_rerank_enabled": options.learned_rerank_enabled,
-                "query_decomposition_enabled": options.query_decomposition_enabled,
                 "procedure_recall_enabled": options.procedure_recall_enabled,
                 "decay_enabled": options.decay_enabled,
                 "l4_exhaustive_enabled": options.l4_exhaustive_enabled,
@@ -1352,12 +1320,6 @@ fn validate_rung_decision(
     if decision.rung == 7 && decision.status == "promoted" {
         validate_rung7_packing_abstention_promotion(decision, axes, &prefix, findings);
     }
-    if decision.rung == 8 && decision.status == "promoted" {
-        validate_rung8_bounded_rerank_promotion(decision, axes, &prefix, findings);
-    }
-    if decision.rung == 9 && decision.status == "promoted" {
-        validate_rung9_query_decomposition_promotion(decision, axes, &prefix, findings);
-    }
     if decision.rung == 10 && decision.status == "promoted" {
         validate_rung10_procedural_memory_promotion(decision, axes, &prefix, findings);
     }
@@ -1372,9 +1334,6 @@ fn validate_rung_decision(
             &prefix,
             findings,
         );
-    }
-    if decision.rung == 13 && decision.status == "promoted" {
-        validate_rung13_learned_rerank_promotion(decision, axes, &prefix, findings);
     }
     if decision.rung == 14 && decision.status == "retired" {
         validate_rung14_external_engine_retirement(decision, axes, &prefix, findings);
@@ -1551,94 +1510,6 @@ fn validate_rung7_packing_abstention_promotion(
     }
 }
 
-fn validate_rung8_bounded_rerank_promotion(
-    decision: &RungDecision,
-    axes: &BTreeMap<String, SotaAxisResult>,
-    prefix: &str,
-    findings: &mut Vec<String>,
-) {
-    if decision.item != "bounded rerank" {
-        findings.push(format!("{prefix}:invalid_item:{}", decision.item));
-    }
-    for required_axis in ["outcome", "interactive"] {
-        if !decision.axes.iter().any(|axis| axis == required_axis) {
-            findings.push(format!("{prefix}:missing_{required_axis}_axis"));
-        }
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("bounded_rerank_incident_owner"))
-    {
-        findings.push(format!("{prefix}:missing_bounded_rerank_sample"));
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("no-rerank"))
-    {
-        findings.push(format!("{prefix}:missing_no_rerank_control"));
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("rung8-state-style"))
-    {
-        findings.push(format!("{prefix}:missing_state_style_sample_ref"));
-    }
-    for axis in ["outcome", "interactive"] {
-        match axes.get(axis) {
-            Some(result) if result.delta_vs_baseline.unwrap_or_default() > 0.0 => {}
-            Some(_) => findings.push(format!("{prefix}:{axis}:non_positive_axis_delta")),
-            None => {}
-        }
-    }
-}
-
-fn validate_rung9_query_decomposition_promotion(
-    decision: &RungDecision,
-    axes: &BTreeMap<String, SotaAxisResult>,
-    prefix: &str,
-    findings: &mut Vec<String>,
-) {
-    if decision.item != "query decomposition" {
-        findings.push(format!("{prefix}:invalid_item:{}", decision.item));
-    }
-    for required_axis in ["outcome", "long_horizon", "interactive"] {
-        if !decision.axes.iter().any(|axis| axis == required_axis) {
-            findings.push(format!("{prefix}:missing_{required_axis}_axis"));
-        }
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("query_decomposition_deploy_release"))
-    {
-        findings.push(format!("{prefix}:missing_query_decomposition_sample"));
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("no-decomposition"))
-    {
-        findings.push(format!("{prefix}:missing_no_decomposition_control"));
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("rung9-state-lme"))
-    {
-        findings.push(format!("{prefix}:missing_state_lme_sample_ref"));
-    }
-    for axis in ["outcome", "long_horizon", "interactive"] {
-        match axes.get(axis) {
-            Some(result) if result.delta_vs_baseline.unwrap_or_default() > 0.0 => {}
-            Some(_) => findings.push(format!("{prefix}:{axis}:non_positive_axis_delta")),
-            None => {}
-        }
-    }
-}
-
 fn validate_rung10_procedural_memory_promotion(
     decision: &RungDecision,
     axes: &BTreeMap<String, SotaAxisResult>,
@@ -1771,59 +1642,6 @@ fn validate_rung12_deep_promotion(
         findings.push(format!("{prefix}:missing_rung12_l4_trace"));
     }
     for axis in ["long_horizon", "scale", "interactive"] {
-        match axes.get(axis) {
-            Some(result) if result.delta_vs_baseline.unwrap_or_default() > 0.0 => {}
-            Some(_) => findings.push(format!("{prefix}:{axis}:non_positive_axis_delta")),
-            None => {}
-        }
-    }
-}
-
-fn validate_rung13_learned_rerank_promotion(
-    decision: &RungDecision,
-    axes: &BTreeMap<String, SotaAxisResult>,
-    prefix: &str,
-    findings: &mut Vec<String>,
-) {
-    if decision.item != "learned reranker" {
-        findings.push(format!("{prefix}:invalid_item:{}", decision.item));
-    }
-    for required_axis in ["outcome", "interactive"] {
-        if !decision.axes.iter().any(|axis| axis == required_axis) {
-            findings.push(format!("{prefix}:missing_{required_axis}_axis"));
-        }
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("learned_rerank_memory_tuned_runbook"))
-    {
-        findings.push(format!("{prefix}:missing_learned_rerank_sample"));
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("no-learned-rerank"))
-    {
-        findings.push(format!("{prefix}:missing_no_learned_rerank_control"));
-    }
-    if !decision
-        .benchmark_sample_refs
-        .iter()
-        .any(|sample| sample.contains("training-set:rung13_learned_rerank_training_001"))
-    {
-        findings.push(format!("{prefix}:missing_training_set_ref"));
-    }
-    if !decision.before_trace_ref.contains("rung13-baseline") {
-        findings.push(format!("{prefix}:missing_rung13_baseline_trace"));
-    }
-    if !decision.after_trace_ref.contains("rung13-learned-rerank") {
-        findings.push(format!("{prefix}:missing_rung13_learned_trace"));
-    }
-    if decision.delta_vs_baseline < 0.03 || decision.ci[0] < 0.03 {
-        findings.push(format!("{prefix}:delta_below_three_point_gate"));
-    }
-    for axis in ["outcome", "interactive"] {
         match axes.get(axis) {
             Some(result) if result.delta_vs_baseline.unwrap_or_default() > 0.0 => {}
             Some(_) => findings.push(format!("{prefix}:{axis}:non_positive_axis_delta")),
@@ -2081,9 +1899,6 @@ async fn run_syndai_file_memory(
             include_beliefs: false,
             edge_expansion_enabled: true,
             context_packing_abstention_enabled: true,
-            rerank_enabled: true,
-            learned_rerank_profile: None,
-            query_decomposition_enabled: true,
             procedure_recall_enabled: true,
             decay_enabled: true,
             engine_version: ENGINE_VERSION.to_string(),
@@ -2203,12 +2018,6 @@ async fn run_golden_case_inner(
             include_beliefs: case.include_beliefs,
             edge_expansion_enabled: recall_edge_expansion_enabled,
             context_packing_abstention_enabled: controls.context_packing_abstention_enabled,
-            rerank_enabled: controls.rerank_enabled,
-            learned_rerank_profile: case
-                .learned_rerank_profile
-                .clone()
-                .filter(|_| controls.learned_rerank_enabled),
-            query_decomposition_enabled: controls.query_decomposition_enabled,
             procedure_recall_enabled: controls.procedure_recall_enabled,
             decay_enabled: controls.decay_enabled,
             engine_version: ENGINE_VERSION.to_string(),
@@ -2321,57 +2130,6 @@ async fn run_golden_case_inner(
         if !trace_feature_flags.contains(flag.as_str()) {
             dropped_mismatches.push(format!("trace_feature_flag_missing:{flag}"));
         }
-    }
-    if let Some(expected) = &case.expect.reranker_id
-        && trace.reranker_id != *expected
-    {
-        dropped_mismatches.push(format!(
-            "reranker_id:expected={expected}:actual={}",
-            trace.reranker_id
-        ));
-    }
-    if let Some(expected) = &case.expect.rerank_training_set_id
-        && trace.learned_rerank_training_set_id.as_deref() != Some(expected.as_str())
-    {
-        dropped_mismatches.push(format!(
-            "rerank_training_set_id:expected={expected}:actual={}",
-            trace
-                .learned_rerank_training_set_id
-                .as_deref()
-                .unwrap_or("none")
-        ));
-    }
-    if let Some(expected) = &case.expect.weight_vector_id
-        && trace.weight_vector_id != *expected
-    {
-        dropped_mismatches.push(format!(
-            "weight_vector_id:expected={expected}:actual={}",
-            trace.weight_vector_id
-        ));
-    }
-    if let Some(minimum) = case.expect.rerank_input_count_min
-        && trace.rerank_input_count < minimum
-    {
-        dropped_mismatches.push(format!(
-            "rerank_input_count_min:expected>={minimum}:actual={}",
-            trace.rerank_input_count
-        ));
-    }
-    if let Some(minimum) = case.expect.subquery_count_min
-        && trace.subquery_ids.len() < minimum
-    {
-        dropped_mismatches.push(format!(
-            "subquery_count_min:expected>={minimum}:actual={}",
-            trace.subquery_ids.len()
-        ));
-    }
-    if let Some(expected) = &case.expect.decomposition_reason_contains
-        && !trace.decomposition_reason.contains(expected)
-    {
-        dropped_mismatches.push(format!(
-            "decomposition_reason:expected_contains={expected}:actual={}",
-            trace.decomposition_reason
-        ));
     }
     for (name, max_position) in &case.expect.packed_position_max {
         let actual_position = context.named_units.get(name).and_then(|unit_id| {
@@ -2514,7 +2272,6 @@ async fn run_fixture_security_lane(lane: &SecurityLane) -> EvalResult<String> {
         k: None,
         budget_tokens: None,
         mode: None,
-        learned_rerank_profile: None,
         include_beliefs: false,
         seed: lane.seed.clone(),
         expect: lane.expect.clone(),
@@ -2555,9 +2312,6 @@ async fn run_high_risk_lane(lane: &SecurityLane) -> EvalResult<String> {
             include_beliefs: true,
             edge_expansion_enabled: true,
             context_packing_abstention_enabled: true,
-            rerank_enabled: true,
-            learned_rerank_profile: None,
-            query_decomposition_enabled: true,
             procedure_recall_enabled: true,
             decay_enabled: true,
             engine_version: ENGINE_VERSION.to_string(),
@@ -2658,7 +2412,6 @@ async fn run_deletion_lane(lane: &SecurityLane) -> EvalResult<String> {
         k: None,
         budget_tokens: None,
         mode: None,
-        learned_rerank_profile: None,
         include_beliefs: false,
         seed: GoldenSeed::default(),
         expect: lane.expect.clone(),
@@ -2674,9 +2427,6 @@ async fn run_deletion_lane(lane: &SecurityLane) -> EvalResult<String> {
             include_beliefs: false,
             edge_expansion_enabled: true,
             context_packing_abstention_enabled: true,
-            rerank_enabled: true,
-            learned_rerank_profile: None,
-            query_decomposition_enabled: true,
             procedure_recall_enabled: true,
             decay_enabled: true,
             engine_version: ENGINE_VERSION.to_string(),
@@ -2841,16 +2591,9 @@ fn seeded_review_trace(
         cross_rerank: None,
         consolidation_lag_ms: 0,
         degradation: None,
-        weight_vector_id: "none".to_string(),
         mode_requested: RecallMode::Fast,
         mode_executed: RecallMode::Fast,
         escalation_reason: "none".to_string(),
-        reranker_id: "none".to_string(),
-        rerank_input_count: 0,
-        rerank_overfetch_ratio: 0.0,
-        learned_rerank_training_set_id: None,
-        subquery_ids: Vec::new(),
-        decomposition_reason: "none".to_string(),
         procedure_ids: Vec::new(),
         procedure_validation_states: Vec::new(),
         abstention_signal: false,
@@ -3182,7 +2925,7 @@ mod tests {
     #[test]
     fn deep_settlement_captures_receipt_and_is_none_for_fast() {
         // P0.3 §6: a Deep case records its settle-on-abort receipt (settled +
-        // unsettled micros, status, stop reason, tool iterations). Fast/Balanced
+        // unsettled micros, status, stop reason, tool iterations). Fast
         // cases (no Deep summary) settle nothing.
         assert_eq!(deep_settlement_from_summary(None, &[]), None);
 

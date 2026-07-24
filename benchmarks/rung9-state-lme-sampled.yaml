@@ -1,3 +1,0 @@
-id: rung9-state-lme-sampled
-cases:
-  - ../examples/evals/golden/query_decomposition_deploy_release.yaml

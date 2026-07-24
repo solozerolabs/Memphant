@@ -153,7 +153,12 @@ fn scripted_openrouter() -> (String, Arc<AtomicUsize>, std::thread::JoinHandle<(
                 let listed: Value = serde_json::from_str(tool_content).unwrap();
                 let path = listed["files"][0]["path"].as_str().unwrap();
                 let source_id = path.trim_start_matches("episodes/").trim_end_matches(".md");
-                ("finish", format!("{{\"source_ids\":[\"{source_id}\"]}}"))
+                (
+                    "finish",
+                    format!(
+                        "{{\"source_ids\":[\"{source_id}\"],\"evidence_status\":\"insufficient\",\"reason\":\"The episode has no canonical byte-span citation.\"}}"
+                    ),
+                )
             };
             let event = serde_json::json!({
                 "model":"anthropic/claude-sonnet-5","provider":"Azure",
@@ -344,30 +349,28 @@ async fn packaged_cli_and_rest_deep_use_runtime_streaming_provider_only_when_exp
     });
     let url = format!("http://{address}");
 
-    for mode in ["fast", "balanced"] {
-        let response = cli(
-            &url,
-            &[
-                "recall",
-                "--subject-id",
-                &subject,
-                "--scope",
-                &scope,
-                "--actor",
-                &actor,
-                "--agent-node",
-                &agent,
-                "--subject-generation",
-                &generation,
-                "--query",
-                "launch code",
-                "--mode",
-                mode,
-            ],
-        );
-        assert!(response.1, "{mode} failed: {}", response.0);
-        assert_eq!(provider_calls.load(Ordering::SeqCst), 0);
-    }
+    let response = cli(
+        &url,
+        &[
+            "recall",
+            "--subject-id",
+            &subject,
+            "--scope",
+            &scope,
+            "--actor",
+            &actor,
+            "--agent-node",
+            &agent,
+            "--subject-generation",
+            &generation,
+            "--query",
+            "launch code",
+            "--mode",
+            "fast",
+        ],
+    );
+    assert!(response.1, "fast failed: {}", response.0);
+    assert_eq!(provider_calls.load(Ordering::SeqCst), 0);
 
     let (deep, ok) = cli(
         &url,
@@ -391,6 +394,8 @@ async fn packaged_cli_and_rest_deep_use_runtime_streaming_provider_only_when_exp
     );
     assert!(ok, "Deep failed: {deep}");
     assert_eq!(deep["deep"]["status"], "completed");
+    assert_eq!(deep["deep"]["evidence"]["status"], "insufficient");
+    assert_eq!(deep["abstention"], true);
     assert_eq!(
         deep["deep"]["generation_ids"],
         serde_json::json!(["gen-cli-1", "gen-cli-2"])

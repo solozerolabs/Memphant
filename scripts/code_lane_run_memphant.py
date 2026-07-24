@@ -276,7 +276,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=39413)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--budget-tokens", type=int, default=8192)
-    parser.add_argument("--mode", default="deep", choices=("fast", "balanced", "deep"))
+    parser.add_argument("--mode", default="deep", choices=("fast", "deep"))
     parser.add_argument(
         "--limit-attempts", type=int, default=0,
         help="0 = full corpus; otherwise a smoke cap that always keeps every gold-referenced attempt",

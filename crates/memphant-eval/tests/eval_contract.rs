@@ -12,12 +12,16 @@ fn oracle_suite_runs_and_verifies_load_bearing_labels() {
     let suite = root.join("examples/evals/golden.yaml");
 
     let report = run_eval_file(&suite, EvalRunOptions::default()).expect("golden run");
-    assert_eq!(report.total_cases, 13);
-    assert_eq!(report.passed_cases, report.total_cases);
+    assert_eq!(report.total_cases, 10);
+    assert_eq!(
+        report.passed_cases, report.total_cases,
+        "{:#?}",
+        report.case_results
+    );
     assert!(report.case_results.iter().all(|case| case.passed));
 
     let verify = verify_golden_file(&suite).expect("verify golden");
-    assert_eq!(verify.verified_cases, 13);
+    assert_eq!(verify.verified_cases, 10);
     assert!(verify.case_results.iter().all(|case| case.load_bearing));
 }
 
@@ -26,7 +30,7 @@ fn verify_golden_accepts_whole_corpus_directory() {
     let verify =
         verify_golden_file(&repo_root().join("examples/evals")).expect("verify golden directory");
 
-    assert_eq!(verify.verified_cases, 13);
+    assert_eq!(verify.verified_cases, 10);
     assert!(verify.case_results.iter().all(|case| case.load_bearing));
 }
 
@@ -207,63 +211,6 @@ fn rung7_state_style_suite_proves_packing_abstention_delta() {
             .all(|case| { !case.missing_units.is_empty() || !case.dropped_mismatches.is_empty() })
     );
 }
-
-#[test]
-fn rung8_state_style_suite_proves_bounded_rerank_delta() {
-    let suite = repo_root().join("benchmarks/rung8-state-style-sampled.yaml");
-    let with_rerank = run_eval_file(&suite, EvalRunOptions::default()).expect("with rerank");
-    assert_eq!(with_rerank.passed_cases, with_rerank.total_cases);
-
-    let without_rerank = run_eval_file(
-        &suite,
-        EvalRunOptions {
-            rerank_enabled: false,
-            ..EvalRunOptions::default()
-        },
-    )
-    .expect("without rerank");
-    assert_eq!(without_rerank.total_cases, with_rerank.total_cases);
-    assert_eq!(without_rerank.passed_cases, 0);
-    assert!(
-        without_rerank
-            .case_results
-            .iter()
-            .all(|case| !case.missing_units.is_empty() || !case.forbidden_present.is_empty())
-    );
-}
-
-#[test]
-fn rung9_state_lme_suite_proves_query_decomposition_delta() {
-    let suite = repo_root().join("benchmarks/rung9-state-lme-sampled.yaml");
-    let with_decomposition =
-        run_eval_file(&suite, EvalRunOptions::default()).expect("with decomposition");
-    assert_eq!(
-        with_decomposition.passed_cases,
-        with_decomposition.total_cases
-    );
-
-    let without_decomposition = run_eval_file(
-        &suite,
-        EvalRunOptions {
-            query_decomposition_enabled: false,
-            procedure_recall_enabled: true,
-            ..EvalRunOptions::default()
-        },
-    )
-    .expect("without decomposition");
-    assert_eq!(
-        without_decomposition.total_cases,
-        with_decomposition.total_cases
-    );
-    assert_eq!(without_decomposition.passed_cases, 0);
-    assert!(
-        without_decomposition
-            .case_results
-            .iter()
-            .all(|case| !case.missing_units.is_empty())
-    );
-}
-
 #[test]
 fn rung10_state_style_suite_proves_procedural_memory_delta() {
     let suite = repo_root().join("benchmarks/rung10-state-style-sampled.yaml");
@@ -292,7 +239,11 @@ fn rung10_state_style_suite_proves_procedural_memory_delta() {
 fn rung11_memorystress_style_suite_proves_dsr_decay_delta() {
     let suite = repo_root().join("benchmarks/rung11-memorystress-sampled.yaml");
     let with_decay = run_eval_file(&suite, EvalRunOptions::default()).expect("with decay");
-    assert_eq!(with_decay.passed_cases, with_decay.total_cases);
+    assert_eq!(
+        with_decay.passed_cases, with_decay.total_cases,
+        "{:#?}",
+        with_decay.case_results
+    );
 
     let without_decay = run_eval_file(
         &suite,
@@ -347,7 +298,7 @@ fn rung12_l4_exhaustive_suite_proves_raw_episode_delta() {
 }
 
 #[test]
-fn rung12_disabled_arm_is_explicitly_unavailable_not_balanced() {
+fn rung12_disabled_arm_is_explicitly_unavailable_not_fast_fallback() {
     let suite = repo_root().join("benchmarks/rung12-l4-exhaustive-sampled.yaml");
     let control = run_eval_file(
         &suite,
@@ -390,31 +341,6 @@ fn rung12_fake_provider_arm_executes_while_control_is_unavailable() {
             .is_some_and(|error| error.contains("deep recall is unavailable"))
     );
     assert!(control.case_results[0].trace_id.is_none());
-}
-
-#[test]
-fn rung13_state_style_suite_proves_learned_rerank_delta() {
-    let suite = repo_root().join("benchmarks/rung13-learned-rerank-sampled.yaml");
-    let with_learned =
-        run_eval_file(&suite, EvalRunOptions::default()).expect("with learned rerank");
-    assert_eq!(with_learned.passed_cases, with_learned.total_cases);
-
-    let without_learned = run_eval_file(
-        &suite,
-        EvalRunOptions {
-            learned_rerank_enabled: false,
-            ..EvalRunOptions::default()
-        },
-    )
-    .expect("without learned rerank");
-    assert_eq!(without_learned.total_cases, with_learned.total_cases);
-    assert_eq!(without_learned.passed_cases, 0);
-    assert!(
-        without_learned
-            .case_results
-            .iter()
-            .all(|case| !case.missing_units.is_empty() || !case.forbidden_present.is_empty())
-    );
 }
 
 #[test]

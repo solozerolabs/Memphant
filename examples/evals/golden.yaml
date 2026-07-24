@@ -1,13 +1,10 @@
 id: pr-golden
 manifest: manifest.yaml
 cases:
-  - golden/bounded_rerank_incident_owner.yaml
-  - golden/query_decomposition_deploy_release.yaml
   - golden/procedural_memory_replay_validation.yaml
   - golden/dsr_decay_fold_review_event.yaml
   # dormant until P1-T6 agentic deep mode (engine l4_exhaustive stage unimplemented):
   # - golden/l4_exhaustive_raw_episode_buried.yaml
-  - golden/learned_rerank_memory_tuned_runbook.yaml
   - golden/inferred_belief_composition.yaml
   - golden/checkout_region.yaml
   - golden/contextual_chunk_breaker.yaml

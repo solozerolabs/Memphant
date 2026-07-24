@@ -6,7 +6,6 @@ harness_pin:
   answer_model: retrieval-only-oracle
   embedding_profile: deterministic-local
   reranker: memory-tuned-linear-rung13-v1
-  learned_rerank_training_set: rung13_learned_rerank_training_001
   query_decomposer: deterministic-structural-v1
   decay_model: fixed-prior-dsr-v1
   l4_mode: deterministic-local-l4-v1

@@ -3,7 +3,7 @@ second_author_confirmed: true
 query: "Which deploy runbook is current?"
 k: 1
 budget_tokens: 80
-mode: balanced
+mode: fast
 seed:
   units:
     - name: mem_deploy_stale_ignored_runbook
@@ -36,7 +36,6 @@ expect:
   forbidden_units:
     - mem_deploy_stale_ignored_runbook
   trace_stages_include:
-    - rerank
     - trace
   trace_feature_flags_include:
     - decay_enabled

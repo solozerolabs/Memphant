@@ -30,17 +30,16 @@ use memphant_types::{
     DeepRecallStopReason, DeepRecallSummary, DeepSnapshotEntry, DeepSnapshotSourceKind,
     DeepWorkspace, DeepWorkspaceFile, EVIDENCE_DISPOSITION_CONTRACT_REVISION,
     EVIDENCE_RECEIPT_CONTRACT_REVISION, EdgeId, EpisodeId, EvidenceReceipt, EvidenceSourceKind,
-    EvidenceStatus, ForgetRequest, ForgetResult, ForgetTarget, JobId, LearnedRerankProfile,
-    LineageRelation, MarkOutcome, MarkRequest, MarkResult, MemoryCitation, MemoryEdgeKind,
-    MemoryKind, MemoryLineage, MemoryRecord, NewEpisode, NewMemoryEdge, NewMemoryUnit,
-    ProcedureTraceFact, QueuedReflectJob, RecallCandidateTrace, RecallChannel, RecallCitation,
-    RecallContextItem, RecallDropReason, RecallDroppedItem, RecallMode, RecallPolicyFilter,
-    RecallRequest, RecallResponse, RecallTime, RecordMaterial, ReflectInput, ReflectJob,
-    ReflectJobKind, ReflectStageFact, ReflectTrace, ResolvedMemorySource, RetainOutcome,
-    RetainRequest, RetainResourceOutcome, RetainResourceRequest, RetrievalTrace, ReviewEvent,
-    SCHEMA_COMPAT_REVISION, ScopeId, StoredCitation, StoredEpisode, StoredMemoryEdge,
-    StoredMemoryUnit, StoredResource, SubjectId, TenantId, TraceId, TrustLevel, UnitId, UnitState,
-    agent_level_allows_memory_kind,
+    EvidenceStatus, ForgetRequest, ForgetResult, ForgetTarget, JobId, LineageRelation, MarkOutcome,
+    MarkRequest, MarkResult, MemoryCitation, MemoryEdgeKind, MemoryKind, MemoryLineage,
+    MemoryRecord, NewEpisode, NewMemoryEdge, NewMemoryUnit, ProcedureTraceFact, QueuedReflectJob,
+    RecallCandidateTrace, RecallChannel, RecallCitation, RecallContextItem, RecallDropReason,
+    RecallDroppedItem, RecallMode, RecallPolicyFilter, RecallRequest, RecallResponse, RecallTime,
+    RecordMaterial, ReflectInput, ReflectJob, ReflectJobKind, ReflectStageFact, ReflectTrace,
+    ResolvedMemorySource, RetainOutcome, RetainRequest, RetainResourceOutcome,
+    RetainResourceRequest, RetrievalTrace, ReviewEvent, SCHEMA_COMPAT_REVISION, ScopeId,
+    StoredCitation, StoredEpisode, StoredMemoryEdge, StoredMemoryUnit, StoredResource, SubjectId,
+    TenantId, TraceId, TrustLevel, UnitId, UnitState, agent_level_allows_memory_kind,
 };
 use memphant_types::{
     CitationUnverifiedReason, CitationVerification, NewResource, ResourceAcl,
@@ -414,7 +413,7 @@ pub const VECTOR_CANDIDATE_LIMIT: usize = 32;
 /// knob every internal channel/fusion limit in the recall path now derives
 /// from INSTEAD of `k`: the vector-channel KNN fetch
 /// ([`crate::service::MemoryService::with_recall_pool_depth`]), the
-/// Fast/Balanced packing scan window and the Deep scan multiplier
+/// Fast packing scan window and the Deep scan multiplier
 /// (`recall_pack_scan_limit`), and the rerank rescoring cap
 /// (`rerank_input_cap`). Returned items still stop at exactly `k`
 /// (`PackCtx::output_limit`) — only the CONSIDERATION window widens/narrows
@@ -6298,7 +6297,7 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
 /// `recall` with the recall-pool-depth knob exposed. `recall_pool_depth` is the
 /// ONE knob every internal channel/fusion limit in the recall path derives
 /// from (R1.5-T0 — see the pool-mapping note on [`DEFAULT_RECALL_POOL_DEPTH`]):
-/// the vector-channel KNN fan-out, the Fast/Balanced packing scan window and
+/// the vector-channel KNN fan-out, the Fast packing scan window and
 /// Deep scan multiplier, and the rerank rescoring cap. `k` never gates
 /// any of these — only the final `PackCtx::output_limit` truncation to `k`
 /// items. The construction-time [`crate::service::MemoryService`] recall-pool
@@ -6322,9 +6321,7 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
 /// and BEFORE packing, the top `recall_pool_depth` candidates are scored as
 /// `(query, unit body)` pairs and reordered by cross-encoder score (ties broken
 /// by prior fused rank via a stable sort). `None` leaves the fused order
-/// untouched — byte-identical to today. This is independent of, and never
-/// entangled with, the retired deterministic heuristic [`rerank_candidates`]
-/// stage (gated by `request.rerank_enabled`, off by default). R1.5-T1: the
+/// untouched — byte-identical to today. R1.5-T1: the
 /// wall-clock spent in `cross_rerank_candidates` (0 when `None` or the pool is
 /// empty) is recorded on the trace as `RetrievalTrace::cross_rerank_ms` and
 /// `eprintln!`-logged, and `"cross_rerank_enabled"` is added to
@@ -6595,8 +6592,6 @@ async fn recall_with_pool_and_selection_impl<S>(
 where
     S: MemoryStore,
 {
-    validate_learned_rerank_profile(request.learned_rerank_profile.as_ref())?;
-
     let recall_time = resolve_recall_time(
         request.transaction_as_of.as_deref(),
         request.valid_at.as_deref(),
@@ -6646,16 +6641,9 @@ where
             cross_rerank: None,
             consolidation_lag_ms: 0,
             degradation: None,
-            weight_vector_id: "none".to_string(),
             mode_requested: request.mode,
             mode_executed: request.mode,
             escalation_reason: "none".to_string(),
-            reranker_id: "none".to_string(),
-            rerank_input_count: 0,
-            rerank_overfetch_ratio: 0.0,
-            learned_rerank_training_set_id: None,
-            subquery_ids: Vec::new(),
-            decomposition_reason: "none".to_string(),
             procedure_ids: Vec::new(),
             procedure_validation_states: Vec::new(),
             abstention_signal: true,
@@ -6830,7 +6818,6 @@ where
     let dropped_items = trace_filter_drops(&tenant_units, &request, &recall_time);
     let surviving = tenant_units.len().saturating_sub(dropped_items.len());
     let filter_selectivity = Some(surviving as f32 / tenant_units.len().max(1) as f32);
-    let decomposition = decompose_query(&request);
     let mut candidates_by_unit: HashMap<UnitId, CandidateAccumulator> = HashMap::new();
     let mut candidate_traces = Vec::new();
 
@@ -6885,12 +6872,8 @@ where
                     unit: unit.clone(),
                     fused_score: contribution,
                     deep_rank: None,
-                    rerank_rank: None,
-                    rerank_score: 0.0,
                     cross_rerank_rank: None,
                     decay,
-                    subquery_ids: Vec::new(),
-                    decomposition_rank: None,
                     channels: vec![(channel, channel_rank, score)],
                 });
             candidate_traces.push(RecallCandidateTrace {
@@ -6901,9 +6884,6 @@ where
                 derived_by: derived_by_for_unit(&unit).to_string(),
                 fused_rank: None,
                 fused_score: None,
-                rerank_rank: None,
-                rerank_score: 0.0,
-                subquery_ids: Vec::new(),
                 decay_retrievability: decay.retrievability,
                 dsr_stability_days: decay.stability_days,
                 dsr_difficulty: decay.difficulty,
@@ -6935,12 +6915,8 @@ where
                     unit: unit.clone(),
                     fused_score: 0.0,
                     deep_rank: Some(channel_rank),
-                    rerank_rank: None,
-                    rerank_score: 0.0,
                     cross_rerank_rank: None,
                     decay,
-                    subquery_ids: Vec::new(),
-                    decomposition_rank: None,
                     channels: vec![(RecallChannel::Deep, channel_rank, 1.0)],
                 });
             candidate_traces.push(RecallCandidateTrace {
@@ -6951,9 +6927,6 @@ where
                 derived_by: derived_by_for_unit(unit).to_string(),
                 fused_rank: None,
                 fused_score: None,
-                rerank_rank: None,
-                rerank_score: 0.0,
-                subquery_ids: Vec::new(),
                 decay_retrievability: decay.retrievability,
                 dsr_stability_days: decay.stability_days,
                 dsr_difficulty: decay.difficulty,
@@ -6969,114 +6942,18 @@ where
         }
     }
 
-    if decomposition.active() {
-        // R1.5-T0 (review follow-up): the per-subquery per-channel fusion cap
-        // derives from the pool depth, never from the caller's `k` (it was
-        // `.take(request.k.max(1))`). This cap is doubly load-bearing: besides
-        // gating which units receive subquery fusion contributions, active
-        // decomposition RETAINS only subquery-tagged candidates after fusion
-        // (`fused.retain(|c| !c.subquery_ids.is_empty())` below), so the old
-        // k-derived cap silently controlled candidate MEMBERSHIP — a k=5
-        // caller lost every unit outside each subquery channel's top-5 while
-        // a k=50 caller kept it, changing even the top-5. Floored at
-        // `output_limit` like `recall_pack_scan_limit`'s `pool_floor`, so a
-        // `k` larger than the pool still tags at least `k` per channel.
-        let subquery_channel_cap = recall_pool_depth.max(request.k.max(1));
-        for (subquery_index, subquery) in decomposition.subqueries.iter().enumerate() {
-            let subquery_tokens = tokenize(&subquery.query);
-            for pass in channels
-                .into_iter()
-                .filter(|pass| request.edge_expansion_enabled || *pass != ChannelPass::Edge)
-            {
-                let channel = pass.label();
-                let mut ranked = channel_candidates(
-                    pass,
-                    &tenant_units,
-                    &tenant_edges,
-                    &request,
-                    &subquery_tokens,
-                    None,
-                    &recall_time,
-                    None,
-                );
-                ranked.sort_by(|left, right| {
-                    right
-                        .1
-                        .partial_cmp(&left.1)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| left.0.body.cmp(&right.0.body))
-                });
-                for (rank, (unit, score)) in
-                    ranked.into_iter().take(subquery_channel_cap).enumerate()
-                {
-                    let channel_rank = rank + 1;
-                    let decay =
-                        decay_score_for(&unit, &tenant_review_events, request.decay_enabled);
-                    let contribution =
-                        channel_weight(pass, &subquery.query, None) / (55.0 + channel_rank as f32);
-                    candidates_by_unit
-                        .entry(unit.id)
-                        .and_modify(|candidate| {
-                            candidate.fused_score += contribution;
-                            candidate.channels.push((channel, channel_rank, score));
-                            push_unique(&mut candidate.subquery_ids, subquery.id.clone());
-                        })
-                        .or_insert_with(|| CandidateAccumulator {
-                            unit: unit.clone(),
-                            fused_score: contribution,
-                            deep_rank: None,
-                            rerank_rank: None,
-                            rerank_score: 0.0,
-                            cross_rerank_rank: None,
-                            decay,
-                            subquery_ids: vec![subquery.id.clone()],
-                            decomposition_rank: None,
-                            channels: vec![(channel, channel_rank, score)],
-                        });
-                    candidate_traces.push(RecallCandidateTrace {
-                        unit_id: unit.id,
-                        channel,
-                        channel_rank,
-                        channel_score: score,
-                        derived_by: derived_by_for_unit(&unit).to_string(),
-                        fused_rank: None,
-                        fused_score: None,
-                        rerank_rank: None,
-                        rerank_score: 0.0,
-                        subquery_ids: vec![subquery.id.clone()],
-                        decay_retrievability: decay.retrievability,
-                        dsr_stability_days: decay.stability_days,
-                        dsr_difficulty: decay.difficulty,
-                        dsr_reinforcement_count: decay.reinforcement_count,
-                        trust_level: unit.trust_level,
-                        state: unit.state,
-                        discard_reason: None,
-                        valid_from: unit.valid_from.clone(),
-                        valid_to: unit.valid_to.clone(),
-                        transaction_from: unit.transaction_from.clone(),
-                        transaction_to: unit.transaction_to.clone(),
-                    });
-                }
-            }
-            mark_best_subquery_candidate(
-                &mut candidates_by_unit,
-                &subquery.id,
-                &subquery.query,
-                subquery_index + 1,
-            );
-        }
-    }
-
     let l4_gathered_evidence_ids = deep_run
         .as_ref()
         .map(|deep| deep.source_ids.iter().map(Uuid::to_string).collect())
         .unwrap_or_default();
 
     let mut fused: Vec<_> = candidates_by_unit.into_values().collect();
-    if decomposition.active() {
-        fused.retain(|candidate| {
-            candidate.deep_rank.is_some() || !candidate.subquery_ids.is_empty()
-        });
+    // Decay is an independent retrieval signal, not a feature of the retired
+    // heuristic reranker. Fold it into the fused score before the canonical
+    // sort so review outcomes remain effective even when subject dedup admits
+    // only the first candidate for a fact key.
+    for candidate in &mut fused {
+        candidate.fused_score *= candidate.decay.retrievability;
     }
     fused.sort_by(|left, right| {
         right
@@ -7092,23 +6969,6 @@ where
         {
             trace_candidate.fused_rank = Some(rank + 1);
             trace_candidate.fused_score = Some(candidate.fused_score);
-        }
-    }
-
-    let rerank = rerank_candidates(
-        fused.as_mut_slice(),
-        &request,
-        &query_tokens,
-        recall_pool_depth,
-    );
-    for candidate in &fused {
-        for trace_candidate in candidate_traces
-            .iter_mut()
-            .filter(|trace_candidate| trace_candidate.unit_id == candidate.unit.id)
-        {
-            trace_candidate.rerank_rank = candidate.rerank_rank;
-            trace_candidate.rerank_score = candidate.rerank_score;
-            trace_candidate.subquery_ids = candidate.subquery_ids.clone();
         }
     }
 
@@ -7221,9 +7081,7 @@ where
         // R1.5-T1: construction-time flag (the `MemoryService`/runtime
         // `MEMPHANT_CROSS_RERANK` seam), not a `RecallRequest` field — mirrors
         // how `contextual_chunks_enabled` is unconditional-per-service rather
-        // than request-derived. Distinct from the retired heuristic
-        // `rerank_enabled` flag above (already pushed by
-        // `recall_feature_flags` when `request.rerank_enabled`).
+        // than request-derived.
         feature_flags.push("cross_rerank_enabled".to_string());
     }
     let trace = RetrievalTrace {
@@ -7251,20 +7109,9 @@ where
         cross_rerank,
         consolidation_lag_ms: 0,
         degradation: None,
-        weight_vector_id: rerank.weight_vector_id,
         mode_requested: request.mode,
         mode_executed: request.mode,
         escalation_reason: "none".to_string(),
-        reranker_id: rerank.reranker_id,
-        rerank_input_count: rerank.input_count,
-        rerank_overfetch_ratio: rerank.overfetch_ratio,
-        learned_rerank_training_set_id: rerank.training_set_id,
-        subquery_ids: decomposition
-            .subqueries
-            .iter()
-            .map(|subquery| subquery.id.clone())
-            .collect(),
-        decomposition_reason: decomposition.reason,
         procedure_ids,
         procedure_validation_states,
         abstention_signal: abstention,
@@ -7683,9 +7530,6 @@ mod evidence_receipt_tests {
             include_beliefs: false,
             edge_expansion_enabled: false,
             context_packing_abstention_enabled: true,
-            rerank_enabled: false,
-            learned_rerank_profile: None,
-            query_decomposition_enabled: false,
             procedure_recall_enabled: false,
             decay_enabled: false,
             engine_version: "test-engine".to_string(),
@@ -8107,160 +7951,11 @@ fn unsafe_procedure_step(unit: &StoredMemoryUnit) -> bool {
     .any(|phrase| body.contains(phrase))
 }
 
-fn decompose_query(request: &RecallRequest) -> QueryDecompositionFacts {
-    if !request.query_decomposition_enabled || request.mode == RecallMode::Fast {
-        return QueryDecompositionFacts::none();
-    }
-
-    let conjuncts = structural_query_conjuncts(&request.query);
-    let mut reasons = Vec::new();
-    if conjuncts.len() >= 2 {
-        reasons.push("multi_constraint_conjunction");
-        reasons.push("multiple_entity_hits");
-    }
-    if has_comparative_or_causal_connector(&request.query) {
-        reasons.push("comparative_causal_connector");
-    }
-    if has_temporal_relation(&request.query) {
-        reasons.push("temporal_relation");
-    }
-
-    if reasons.len() < 2 || conjuncts.len() < 2 {
-        return QueryDecompositionFacts::none();
-    }
-
-    let subqueries = conjuncts
-        .into_iter()
-        .enumerate()
-        .map(|(index, query)| QuerySubquery {
-            id: format!("sq{}_{}", index + 1, stable_subquery_slug(&query)),
-            query,
-        })
-        .collect::<Vec<_>>();
-
-    QueryDecompositionFacts {
-        subqueries,
-        reason: reasons.join("+"),
-    }
-}
-
-fn structural_query_conjuncts(query: &str) -> Vec<String> {
-    let normalized = normalize_component(query);
-    let mut parts = vec![normalized.as_str()];
-    for connector in [
-        " and which ",
-        " and what ",
-        " and where ",
-        " and who ",
-        " and when ",
-        " and ",
-    ] {
-        if normalized.contains(connector) {
-            parts = normalized.split(connector).collect();
-            break;
-        }
-    }
-
-    parts
-        .into_iter()
-        .map(|part| {
-            part.trim()
-                .trim_start_matches("which ")
-                .trim_start_matches("what ")
-                .trim_start_matches("where ")
-                .trim_start_matches("who ")
-                .trim_start_matches("when ")
-                .trim()
-                .to_string()
-        })
-        .filter(|part| tokenize(part).len() >= 2)
-        .collect()
-}
-
-fn has_comparative_or_causal_connector(query: &str) -> bool {
-    let query = normalize_component(query);
-    query
-        .split_whitespace()
-        .any(|token| matches!(token, "because" | "why" | "versus" | "vs" | "compare"))
-}
-
-fn has_temporal_relation(query: &str) -> bool {
-    let query_tokens = tokenize(query);
-    query_tokens.iter().any(|token| {
-        matches!(
-            token.as_str(),
-            "before" | "after" | "during" | "since" | "current" | "latest" | "now"
-        )
-    })
-}
-
-fn stable_subquery_slug(query: &str) -> String {
-    let tokens = tokenize(query);
-    let slug = tokens.iter().take(4).cloned().collect::<Vec<_>>().join("_");
-    if slug.is_empty() {
-        "empty".to_string()
-    } else {
-        slug
-    }
-}
-
-fn mark_best_subquery_candidate(
-    candidates: &mut HashMap<UnitId, CandidateAccumulator>,
-    subquery_id: &str,
-    subquery: &str,
-    rank: usize,
-) {
-    let subquery_tokens = tokenize(subquery);
-    let Some(unit_id) = candidates
-        .iter()
-        .filter(|(_, candidate)| {
-            candidate
-                .subquery_ids
-                .iter()
-                .any(|candidate_subquery| candidate_subquery == subquery_id)
-        })
-        .max_by(|(_, left), (_, right)| {
-            exact_score(&left.unit, &subquery_tokens)
-                .partial_cmp(&exact_score(&right.unit, &subquery_tokens))
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    lexical_score(&left.unit, &subquery_tokens)
-                        .partial_cmp(&lexical_score(&right.unit, &subquery_tokens))
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .then_with(|| {
-                    left.fused_score
-                        .partial_cmp(&right.fused_score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .then_with(|| right.unit.body.cmp(&left.unit.body))
-        })
-        .map(|(unit_id, _)| *unit_id)
-    else {
-        return;
-    };
-    if let Some(candidate) = candidates.get_mut(&unit_id) {
-        candidate.decomposition_rank = Some(
-            candidate
-                .decomposition_rank
-                .map_or(rank, |existing| existing.min(rank)),
-        );
-    }
-}
-
-fn push_unique(values: &mut Vec<String>, value: String) {
-    if !values.iter().any(|existing| existing == &value) {
-        values.push(value);
-    }
-}
-
 /// W8 cross-encoder rerank stage: reorder the top `pool` fused candidates by a
 /// real `(query, doc)` cross-encoder, in place. Docs are unit bodies under
 /// [`CrossRerankGranularity::UnitBody`] (the default) or flattened
 /// `contextual_chunks` bodies max-pooled back per candidate under
-/// [`CrossRerankGranularity::ContextualChunks`]. Distinct from the retired
-/// heuristic [`rerank_candidates`] — this never touches the heuristic
-/// `rerank_score`/`rerank_rank` fields.
+/// [`CrossRerankGranularity::ContextualChunks`].
 ///
 /// Determinism + ties: the top-`pool` slice is already in fused-rank order, and
 /// a STABLE sort by descending cross-encoder score preserves that order for
@@ -8485,139 +8180,6 @@ fn sub_split_for_rerank(text: &str, budget: usize) -> Vec<String> {
     windows
 }
 
-fn rerank_candidates(
-    fused: &mut [CandidateAccumulator],
-    request: &RecallRequest,
-    query_tokens: &[String],
-    recall_pool_depth: usize,
-) -> RerankTraceFacts {
-    if !request.rerank_enabled {
-        return RerankTraceFacts {
-            reranker_id: "none".to_string(),
-            weight_vector_id: "default".to_string(),
-            training_set_id: None,
-            input_count: 0,
-            overfetch_ratio: 0.0,
-        };
-    }
-
-    let profile = request.learned_rerank_profile.as_ref();
-    let input_count = fused
-        .len()
-        .min(rerank_input_cap(request, recall_pool_depth));
-    for candidate in fused.iter_mut().take(input_count) {
-        candidate.rerank_score = rerank_score(candidate, query_tokens, profile);
-    }
-    fused[..input_count].sort_by(|left, right| {
-        right
-            .rerank_score
-            .partial_cmp(&left.rerank_score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| {
-                right
-                    .fused_score
-                    .partial_cmp(&left.fused_score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .then_with(|| left.unit.body.cmp(&right.unit.body))
-    });
-    for (rank, candidate) in fused.iter_mut().take(input_count).enumerate() {
-        candidate.rerank_rank = Some(rank + 1);
-    }
-
-    RerankTraceFacts {
-        reranker_id: profile
-            .map(|profile| profile.profile_id.clone())
-            .unwrap_or_else(|| "deterministic-local-v1".to_string()),
-        weight_vector_id: profile
-            .map(|profile| profile.profile_id.clone())
-            .unwrap_or_else(|| "default".to_string()),
-        training_set_id: profile.map(|profile| profile.training_set_id.clone()),
-        input_count,
-        overfetch_ratio: input_count as f32 / request.k.max(1) as f32,
-    }
-}
-
-/// R1.5-T0: the deterministic-rerank rescoring cap derives from
-/// `recall_pool_depth`, NOT from `k * 10` (the old formula) — a caller
-/// requesting a larger `k` no longer widens how many fused candidates get
-/// rescored. `mode_cap` (100 Fast / 200 Balanced+Deep) is an
-/// independent, non-`k`-derived per-mode ceiling, unchanged by this task.
-/// Floored at `k` so the rerank always covers at least the final output size.
-fn rerank_input_cap(request: &RecallRequest, recall_pool_depth: usize) -> usize {
-    let mode_cap = match request.mode {
-        RecallMode::Fast => 100,
-        RecallMode::Balanced | RecallMode::Deep => 200,
-    };
-    recall_pool_depth.min(mode_cap).max(request.k.max(1))
-}
-
-fn rerank_score(
-    candidate: &CandidateAccumulator,
-    query_tokens: &[String],
-    profile: Option<&LearnedRerankProfile>,
-) -> f32 {
-    let lexical = lexical_score(&candidate.unit, query_tokens);
-    let vector = candidate
-        .channels
-        .iter()
-        .filter(|(channel, _, _)| *channel == RecallChannel::Vector)
-        .map(|(_, _, score)| *score)
-        .fold(0.0, f32::max);
-    let exact = exact_score(&candidate.unit, query_tokens);
-    let intent = rerank_intent_anchor_score(&candidate.unit, query_tokens);
-    let decay = candidate.decay.retrievability;
-    let fused = candidate.fused_score;
-
-    match profile {
-        Some(profile) => {
-            (profile.lexical_weight * lexical)
-                + (profile.vector_weight * vector)
-                + (profile.exact_weight * exact)
-                + (profile.intent_weight * intent)
-                + (profile.decay_weight * decay)
-                + (profile.fused_weight * fused)
-        }
-        None => (3.0 * lexical) + (2.0 * vector) + exact + (2.0 * intent) + (3.0 * decay) + fused,
-    }
-}
-
-fn rerank_intent_anchor_score(unit: &StoredMemoryUnit, query_tokens: &[String]) -> f32 {
-    let Some(fact_key) = unit.fact_key.as_deref() else {
-        return 0.0;
-    };
-    let subject_tokens = tokenize(fact_key);
-    let body_tokens = tokenize(&unit.body);
-    query_tokens
-        .iter()
-        .filter(|token| is_rerank_intent_token(token))
-        .map(|token| {
-            let subject_anchor = subject_tokens
-                .iter()
-                .any(|subject| tokens_related(subject, token))
-                as u8 as f32;
-            let body_anchor =
-                body_tokens.iter().any(|body| tokens_related(body, token)) as u8 as f32;
-            subject_anchor + (0.5 * body_anchor)
-        })
-        .sum()
-}
-
-fn is_rerank_intent_token(token: &str) -> bool {
-    matches!(
-        token,
-        "owner"
-            | "owns"
-            | "owned"
-            | "resolve"
-            | "resolves"
-            | "resolved"
-            | "responsible"
-            | "assignee"
-            | "assigned"
-    )
-}
-
 #[derive(Clone)]
 struct CandidateAccumulator {
     unit: StoredMemoryUnit,
@@ -8626,8 +8188,6 @@ struct CandidateAccumulator {
     /// fusion score, this rank is deliberate external evidence selection and
     /// therefore governs packing directly.
     deep_rank: Option<usize>,
-    rerank_rank: Option<usize>,
-    rerank_score: f32,
     /// W8 cross-encoder rank (0-based): `Some` only for candidates the
     /// cross-reranker scored (the top `recall_pool_depth` fused head). Packing
     /// honors it FIRST when any candidate carries one, so the cross-encoder
@@ -8635,8 +8195,6 @@ struct CandidateAccumulator {
     /// for every run without a cross-reranker (then packing is unchanged).
     cross_rerank_rank: Option<usize>,
     decay: DecayScore,
-    subquery_ids: Vec<String>,
-    decomposition_rank: Option<usize>,
     channels: Vec<(RecallChannel, usize, f32)>,
 }
 
@@ -8657,69 +8215,6 @@ impl DecayScore {
             reinforcement_count: unit.reinforcement_count,
         }
     }
-}
-
-struct RerankTraceFacts {
-    reranker_id: String,
-    weight_vector_id: String,
-    training_set_id: Option<String>,
-    input_count: usize,
-    overfetch_ratio: f32,
-}
-
-fn validate_learned_rerank_profile(
-    profile: Option<&LearnedRerankProfile>,
-) -> Result<(), CoreError> {
-    let Some(profile) = profile else {
-        return Ok(());
-    };
-    if profile.profile_id.trim().is_empty() {
-        return Err(CoreError::Invalid(
-            "learned_rerank_profile.profile_id cannot be empty".to_string(),
-        ));
-    }
-    if profile.training_set_id.trim().is_empty() {
-        return Err(CoreError::Invalid(
-            "learned_rerank_profile.training_set_id cannot be empty".to_string(),
-        ));
-    }
-    let weights = [
-        profile.lexical_weight,
-        profile.vector_weight,
-        profile.exact_weight,
-        profile.intent_weight,
-        profile.decay_weight,
-        profile.fused_weight,
-    ];
-    if weights.iter().any(|weight| !weight.is_finite()) {
-        return Err(CoreError::Invalid(
-            "learned_rerank_profile weights must be finite".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-struct QueryDecompositionFacts {
-    subqueries: Vec<QuerySubquery>,
-    reason: String,
-}
-
-impl QueryDecompositionFacts {
-    fn none() -> Self {
-        Self {
-            subqueries: Vec::new(),
-            reason: "none".to_string(),
-        }
-    }
-
-    fn active(&self) -> bool {
-        !self.subqueries.is_empty()
-    }
-}
-
-struct QuerySubquery {
-    id: String,
-    query: String,
 }
 
 struct PackedRecallContext {
@@ -8875,19 +8370,15 @@ fn pack_recall_context(
     let live_candidate_ids = fused.iter().map(|candidate| candidate.unit.id).collect();
     let goal_companion_id = goal_companion_id(&fused, query_tokens);
 
-    // R1.5-T0: does an EXTERNAL rank signal (cross-encoder rerank,
-    // decomposition, or the deterministic/learned reranker) actually govern
+    // R1.5-T0: does an EXTERNAL rank signal (Deep or cross-encoder rerank) govern
     // this candidate list's order? Mirrors the exact per-pair conditions the
     // `fused.sort_by` below uses. Threaded into `PackCtx` so `admit_or_drop`
     // can tell whether the established sort order is rank-authoritative (see
     // the comment on the "output already full" branch there for why that
     // matters).
-    let rank_based_ordering_active = fused.iter().any(|candidate| {
-        candidate.deep_rank.is_some()
-            || candidate.cross_rerank_rank.is_some()
-            || (request.query_decomposition_enabled && candidate.decomposition_rank.is_some())
-            || (request.rerank_enabled && candidate.rerank_rank.is_some())
-    });
+    let rank_based_ordering_active = fused
+        .iter()
+        .any(|candidate| candidate.deep_rank.is_some() || candidate.cross_rerank_rank.is_some());
 
     if request.context_packing_abstention_enabled {
         fused.sort_by(|left, right| {
@@ -8900,8 +8391,7 @@ fn pack_recall_context(
                 // W8: the cross-encoder ordering governs when it ran. The scored
                 // head (0-based `cross_rerank_rank`) leads in cross-encoder order;
                 // the unscored tail (`None` → `usize::MAX`) follows in fusion
-                // order (fused_score desc), body-tie-broken. Independent of the
-                // heuristic-rerank and decomposition branches below.
+                // order (fused_score desc), body-tie-broken.
                 left.cross_rerank_rank
                     .unwrap_or(usize::MAX)
                     .cmp(&right.cross_rerank_rank.unwrap_or(usize::MAX))
@@ -8909,35 +8399,6 @@ fn pack_recall_context(
                         right
                             .fused_score
                             .partial_cmp(&left.fused_score)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .then_with(|| left.unit.body.cmp(&right.unit.body))
-            } else if request.query_decomposition_enabled
-                && (left.decomposition_rank.is_some() || right.decomposition_rank.is_some())
-            {
-                left.decomposition_rank
-                    .unwrap_or(usize::MAX)
-                    .cmp(&right.decomposition_rank.unwrap_or(usize::MAX))
-                    .then_with(|| {
-                        left.rerank_rank
-                            .unwrap_or(usize::MAX)
-                            .cmp(&right.rerank_rank.unwrap_or(usize::MAX))
-                    })
-                    .then_with(|| {
-                        right
-                            .rerank_score
-                            .partial_cmp(&left.rerank_score)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .then_with(|| left.unit.body.cmp(&right.unit.body))
-            } else if request.rerank_enabled {
-                left.rerank_rank
-                    .unwrap_or(usize::MAX)
-                    .cmp(&right.rerank_rank.unwrap_or(usize::MAX))
-                    .then_with(|| {
-                        right
-                            .rerank_score
-                            .partial_cmp(&left.rerank_score)
                             .unwrap_or(std::cmp::Ordering::Equal)
                     })
                     .then_with(|| left.unit.body.cmp(&right.unit.body))
@@ -9110,7 +8571,7 @@ fn admit_or_drop(
 
     if acc.items.len() >= ctx.output_limit {
         // R1.5-T0: decoupling the packing scan window from `k` (widening it
-        // to `recall_pool_depth`) makes this branch reachable in Fast/Balanced
+        // to `recall_pool_depth`) makes this branch reachable in Fast
         // mode for candidates beyond the top-`k` for the first time — before
         // this fix `scan_limit == k == output_limit` made it unreachable
         // there. `fused` is ALREADY sorted by the request's established
@@ -9290,7 +8751,7 @@ fn sibling_gather_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
 
 /// R1.5-T0 / D1 fix: the packing CONSIDERATION window (how many of the
 /// fused, score-sorted candidates get a chance at admission) now derives from
-/// `recall_pool_depth`, never from `k`. Before this fix, Fast/Balanced set
+/// `recall_pool_depth`, never from `k`. Before this fix, Fast set
 /// `scan_limit == output_limit == k` — a caller requesting a larger `k` gave
 /// the greedy fill a wider window to skip past subject-dedup/budget/quota
 /// drops, which changed WHICH candidates filled even the top-5 slots (D1:
@@ -9311,9 +8772,9 @@ fn recall_pack_scan_limit(
         RecallMode::Deep => candidate_count
             .min(pool_floor.saturating_mul(25).max(25))
             .max(output_limit),
-        RecallMode::Fast | RecallMode::Balanced => pool_floor.min(candidate_count).max(1),
+        RecallMode::Fast => pool_floor.min(candidate_count).max(1),
     };
-    // wave-final-review finding (pre-R1.5-T0): in Fast/Balanced, scan_limit ==
+    // wave-final-review finding (pre-R1.5-T0): in Fast, scan_limit ==
     // output_limit == k, so the session-diversity quota (W4,
     // `pack_levers.session_quota`) could only reshuffle the already-admitted
     // top-k and could never surface a below-k distinct episode — its entire
@@ -10680,7 +10141,6 @@ fn review_grade_adjustment(review_events: &[ReviewEvent], unit_id: UnitId) -> f3
 fn recall_stage_facts(vector_enabled: bool, deep: Option<&DeepRunFacts>) -> Vec<ReflectStageFact> {
     [
         "stage0_policy",
-        "query_decomposition",
         "procedure_recall",
         "l4_exhaustive",
         "exact",
@@ -10689,7 +10149,6 @@ fn recall_stage_facts(vector_enabled: bool, deep: Option<&DeepRunFacts>) -> Vec<
         "temporal",
         "edge",
         "fusion",
-        "rerank",
         "assemble",
         "trace",
     ]
@@ -10757,15 +10216,6 @@ fn recall_feature_flags(
     }
     if request.context_packing_abstention_enabled {
         flags.push("context_packing_abstention_enabled".to_string());
-    }
-    if request.rerank_enabled {
-        flags.push("rerank_enabled".to_string());
-    }
-    if request.rerank_enabled && request.learned_rerank_profile.is_some() {
-        flags.push("learned_rerank_enabled".to_string());
-    }
-    if request.query_decomposition_enabled {
-        flags.push("query_decomposition_enabled".to_string());
     }
     if request.procedure_recall_enabled {
         flags.push("procedure_recall_enabled".to_string());
@@ -12784,9 +12234,6 @@ mod temporal_grounding_tests {
                 include_beliefs: false,
                 edge_expansion_enabled: false,
                 context_packing_abstention_enabled: false,
-                rerank_enabled: false,
-                learned_rerank_profile: None,
-                query_decomposition_enabled: false,
                 procedure_recall_enabled: false,
                 decay_enabled: false,
                 engine_version: "review-test".to_string(),
@@ -13318,12 +12765,8 @@ mod pack_cost_tests {
             unit,
             fused_score,
             deep_rank: None,
-            rerank_rank: None,
-            rerank_score: 0.0,
             cross_rerank_rank: None,
             decay,
-            subquery_ids: Vec::new(),
-            decomposition_rank: None,
             channels: Vec::new(),
         }
     }
@@ -13477,13 +12920,10 @@ mod pack_cost_tests {
             query: "quantum".to_string(),
             k: 10,
             budget_tokens,
-            mode: RecallMode::Balanced,
+            mode: RecallMode::Fast,
             include_beliefs: true,
             edge_expansion_enabled: false,
             context_packing_abstention_enabled: false,
-            rerank_enabled: false,
-            learned_rerank_profile: None,
-            query_decomposition_enabled: false,
             procedure_recall_enabled: true,
             decay_enabled: false,
             engine_version: "pack-cost-test".to_string(),
@@ -14051,7 +13491,7 @@ mod pack_cost_tests {
     }
 
     /// R1.5-T0 / D1 fix: `recall_pack_scan_limit` no longer clamps
-    /// `scan_limit == output_limit == k` in Fast/Balanced — that conflated the
+    /// `scan_limit == output_limit == k` in Fast — that conflated the
     /// caller-presentation `k` with the engine's internal fan-out (D1: a
     /// larger `k` widened the scan window, which changed even the top-5
     /// ordering). Quota off must now match the pool floor
@@ -14071,69 +13511,64 @@ mod pack_cost_tests {
         req.k = 8;
         let candidate_count = 100;
 
-        for mode in [RecallMode::Fast, RecallMode::Balanced] {
-            req.mode = mode;
-            let off = recall_pack_scan_limit(
-                &req,
-                candidate_count,
-                PackLevers::default(),
-                DEFAULT_RECALL_POOL_DEPTH,
-            );
-            assert_eq!(
-                off, DEFAULT_RECALL_POOL_DEPTH,
-                "{mode:?}: quota off must match recall_pool_depth (floored at k), not k"
-            );
+        req.mode = RecallMode::Fast;
+        let off = recall_pack_scan_limit(
+            &req,
+            candidate_count,
+            PackLevers::default(),
+            DEFAULT_RECALL_POOL_DEPTH,
+        );
+        assert_eq!(
+            off, DEFAULT_RECALL_POOL_DEPTH,
+            "Fast: quota off must match recall_pool_depth (floored at k), not k"
+        );
 
-            let on = recall_pack_scan_limit(
-                &req,
-                candidate_count,
-                PackLevers {
-                    sibling_gather_enabled: false,
-                    session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
-                    pack_render_cap: None,
-                },
-                DEFAULT_RECALL_POOL_DEPTH,
-            );
-            assert_eq!(
-                on,
-                DEFAULT_RECALL_POOL_DEPTH * 2,
-                "{mode:?}: quota on widens to 2*recall_pool_depth (not 2*k) so the quota has headroom"
-            );
-        }
+        let on = recall_pack_scan_limit(
+            &req,
+            candidate_count,
+            PackLevers {
+                sibling_gather_enabled: false,
+                session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
+                pack_render_cap: None,
+            },
+            DEFAULT_RECALL_POOL_DEPTH,
+        );
+        assert_eq!(
+            on,
+            DEFAULT_RECALL_POOL_DEPTH * 2,
+            "Fast: quota on widens to 2*recall_pool_depth (not 2*k) so the quota has headroom"
+        );
 
         // k LARGER than the pool depth: the quota widen must double the pool
         // FLOOR (max(pool, k) = 200 here), not the bare pool depth — bare
         // `64*2 = 128 < k` would leave the quota with no headroom past k.
         req.k = 200;
         let candidate_count = 1_000;
-        for mode in [RecallMode::Fast, RecallMode::Balanced] {
-            req.mode = mode;
-            let off = recall_pack_scan_limit(
-                &req,
-                candidate_count,
-                PackLevers::default(),
-                DEFAULT_RECALL_POOL_DEPTH,
-            );
-            assert_eq!(
-                off, 200,
-                "{mode:?}: quota off, k>pool: the pool floor is k itself"
-            );
-            let on = recall_pack_scan_limit(
-                &req,
-                candidate_count,
-                PackLevers {
-                    sibling_gather_enabled: false,
-                    session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
-                    pack_render_cap: None,
-                },
-                DEFAULT_RECALL_POOL_DEPTH,
-            );
-            assert_eq!(
-                on, 400,
-                "{mode:?}: quota on, k>pool: widen doubles the pool floor (2*max(pool, k)), \
-                 keeping headroom past k"
-            );
-        }
+        let off = recall_pack_scan_limit(
+            &req,
+            candidate_count,
+            PackLevers::default(),
+            DEFAULT_RECALL_POOL_DEPTH,
+        );
+        assert_eq!(
+            off, 200,
+            "Fast: quota off, k>pool: the pool floor is k itself"
+        );
+        let on = recall_pack_scan_limit(
+            &req,
+            candidate_count,
+            PackLevers {
+                sibling_gather_enabled: false,
+                session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
+                pack_render_cap: None,
+            },
+            DEFAULT_RECALL_POOL_DEPTH,
+        );
+        assert_eq!(
+            on, 400,
+            "Fast: quota on, k>pool: widen doubles the pool floor (2*max(pool, k)), \
+             keeping headroom past k"
+        );
     }
 
     /// wave-final-review: the same monopoly corpus as
@@ -14445,12 +13880,12 @@ mod deep_call_routing_tests {
                     + 'a,
             >,
         > {
-            panic!("Fast/Balanced must not invoke Deep provider")
+            panic!("Fast must not invoke Deep provider")
         }
     }
 
     #[tokio::test]
-    async fn fast_and_balanced_do_not_fetch_deep_snapshot_with_provider_installed() {
+    async fn fast_does_not_fetch_deep_snapshot_with_provider_installed() {
         let store = InMemoryStore::default();
         let context = memphant_store_testkit::resolved_context(
             TenantId::from_u128(91_000),
@@ -14466,7 +13901,7 @@ mod deep_call_routing_tests {
                 config_hash: "config".to_string(),
             },
         };
-        for mode in [RecallMode::Fast, RecallMode::Balanced] {
+        for mode in [RecallMode::Fast] {
             recall_with_pool_and_selection_and_deep(
                 &store,
                 RecallRequest {
@@ -14478,9 +13913,6 @@ mod deep_call_routing_tests {
                     include_beliefs: false,
                     edge_expansion_enabled: false,
                     context_packing_abstention_enabled: true,
-                    rerank_enabled: false,
-                    learned_rerank_profile: None,
-                    query_decomposition_enabled: false,
                     procedure_recall_enabled: true,
                     decay_enabled: false,
                     engine_version: "test".to_string(),
@@ -14533,7 +13965,7 @@ mod deep_call_routing_tests {
         )
         .with_deep_recall_provider(provider);
 
-        for mode in [RecallMode::Fast, RecallMode::Balanced, RecallMode::Deep] {
+        for mode in [RecallMode::Fast, RecallMode::Deep] {
             let error = service
                 .recall_internal(RecallRequest {
                     context: context.clone(),
@@ -14544,9 +13976,6 @@ mod deep_call_routing_tests {
                     include_beliefs: false,
                     edge_expansion_enabled: false,
                     context_packing_abstention_enabled: true,
-                    rerank_enabled: false,
-                    learned_rerank_profile: None,
-                    query_decomposition_enabled: false,
                     procedure_recall_enabled: true,
                     decay_enabled: false,
                     engine_version: "test".to_string(),
@@ -14565,7 +13994,7 @@ mod deep_call_routing_tests {
         assert_eq!(embedder.calls.load(Ordering::SeqCst), 0);
         assert_eq!(store.deep_snapshot_read_count(), 0);
         let traces = store.retrieval_traces(TenantId::from_u128(92_000));
-        assert_eq!(traces.len(), 3);
+        assert_eq!(traces.len(), 2);
         assert!(
             traces
                 .iter()

@@ -150,9 +150,6 @@ fn request(context: memphant_types::ResolvedMemoryContext, mode: RecallMode) -> 
         include_beliefs: false,
         edge_expansion_enabled: true,
         context_packing_abstention_enabled: true,
-        rerank_enabled: false,
-        learned_rerank_profile: None,
-        query_decomposition_enabled: true,
         procedure_recall_enabled: true,
         decay_enabled: true,
         engine_version: "deep-test".to_string(),
@@ -320,7 +317,7 @@ async fn policy_denial_precedes_missing_provider_disclosure() {
 }
 
 #[tokio::test]
-async fn fast_and_balanced_never_call_an_installed_deep_provider() {
+async fn fast_never_calls_an_installed_deep_provider() {
     let (store, context, answer_id, source_id) = seeded_service().await;
     let provider = Arc::new(RecordingProvider::completed(vec![source_id]));
     let service = MemoryService::new(
@@ -332,7 +329,7 @@ async fn fast_and_balanced_never_call_an_installed_deep_provider() {
     let baseline_service =
         MemoryService::new(Arc::new(store), Arc::new(CLOCK), Arc::new(NoopEmbedding));
 
-    for mode in [RecallMode::Fast, RecallMode::Balanced] {
+    for mode in [RecallMode::Fast] {
         let response = service
             .recall_internal(request(context.clone(), mode))
             .await

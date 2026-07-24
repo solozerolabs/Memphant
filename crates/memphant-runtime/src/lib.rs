@@ -465,7 +465,6 @@ fn resource_chunks_write_from_env() -> bool {
 /// today, no reranker constructed, no model-load cost). Mirrors
 /// `resource_chunks_write_from_env`/`recall_pool_depth_from_env`. Named
 /// distinctly from the retired heuristic rerank's request-level
-/// `rerank_enabled` — a different, unrelated mechanism.
 fn cross_rerank_enabled_from_env() -> bool {
     matches!(
         std::env::var("MEMPHANT_CROSS_RERANK")

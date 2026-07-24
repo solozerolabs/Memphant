@@ -1,10 +1,7 @@
 golden:
-  - bounded_rerank_incident_owner
-  - query_decomposition_deploy_release
   - procedural_memory_replay_validation
   - dsr_decay_fold_review_event
   - l4_exhaustive_raw_episode_buried
-  - learned_rerank_memory_tuned_runbook
   - inferred_belief_composition
   - inferred_belief_composition_control
   - checkout_region

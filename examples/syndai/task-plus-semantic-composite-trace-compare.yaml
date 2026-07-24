@@ -1,13 +1,13 @@
 # Spec-28 §4 coding-continuity family: one composite query packs the
-# task-state episodic memory plus the semantic constraint, and asserts the
-# trace records subquery_ids (query decomposition actually fired).
+# task-state episodic memory plus the semantic constraint through the ordinary
+# fused retrieval path.
 id: syndai_task_plus_semantic_composite_001
 surface: coding_continuity
 case:
   id: syndai_task_plus_semantic_composite_001
   query: "Which task is the checkout retry rollout paused on and which constraint gates resuming it?"
   k: 2
-  mode: balanced
+  mode: fast
   budget_tokens: 96
   seed:
     units:
@@ -50,9 +50,4 @@ case:
       - mem_rollout_task_state
       - mem_error_budget_constraint
     trace_stages_include:
-      - query_decomposition
       - trace
-    trace_feature_flags_include:
-      - query_decomposition_enabled
-    subquery_count_min: 2
-    decomposition_reason_contains: multi_constraint_conjunction

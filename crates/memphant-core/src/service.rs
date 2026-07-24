@@ -3648,9 +3648,6 @@ impl<S: MemoryStore> MemoryService<S> {
             // Real-evidence default (rung 8 disable-when, real-retrieval-20260710):
             // the deterministic reranker cost -0.143 Recall@5 on LongMemEval-S
             // (CI excludes zero), so it is opt-in until a variant earns its keep.
-            rerank_enabled: false,
-            learned_rerank_profile: None,
-            query_decomposition_enabled: true,
             procedure_recall_enabled: true,
             decay_enabled: true,
             engine_version: ENGINE_VERSION.to_string(),

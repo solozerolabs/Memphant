@@ -92,8 +92,7 @@ pub struct BenchLmeOptions {
     pub sample: usize,
     pub seed: u64,
     pub k: usize,
-    /// One of: vector, edge_expansion, rerank, query_decomposition,
-    /// procedure_recall, decay, packing.
+    /// One of: vector, edge_expansion, procedure_recall, decay, packing.
     pub disable: Option<String>,
     pub mode: RecallMode,
     /// Baseline report path for paired per-question deltas.
@@ -928,8 +927,6 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         let known = [
             "vector",
             "edge_expansion",
-            "rerank",
-            "query_decomposition",
             "procedure_recall",
             "decay",
             "packing",
@@ -1089,9 +1086,6 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
                 include_beliefs: false,
                 edge_expansion_enabled: disable != Some("edge_expansion"),
                 context_packing_abstention_enabled: disable != Some("packing"),
-                rerank_enabled: disable != Some("rerank"),
-                learned_rerank_profile: None,
-                query_decomposition_enabled: disable != Some("query_decomposition"),
                 procedure_recall_enabled: disable != Some("procedure_recall"),
                 decay_enabled: disable != Some("decay"),
                 engine_version: "bench-lme".to_string(),
@@ -1393,7 +1387,6 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         cross_rerank: options.cross_rerank,
         mode: match options.mode {
             RecallMode::Fast => "fast",
-            RecallMode::Balanced => "balanced",
             RecallMode::Deep => "deep",
         }
         .to_string(),
