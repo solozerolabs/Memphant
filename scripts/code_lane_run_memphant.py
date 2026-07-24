@@ -14,10 +14,11 @@ Ingest mapping (episode, not resource — the brief's explicit choice for this
 lane; documented here since the REST API has no literal "turns" field):
 ``POST /v1/episodes`` takes a single ``body: Option<String>`` (see
 ``RetainEpisodeHttpRequest`` in ``memphant-types``) — there is no turn-array
-wire shape. One episode is retained per content event; its body is one
-``role: text`` record. This preserves the source event granularity instead of
-turning a long trajectory into one oversized retrieval candidate. The format
-is the exact convention
+wire shape. One episode is retained per content event. Tool-result episodes
+also include their nearest preceding assistant action, the smallest causal
+window that lets an action-named continuity query retrieve its result without
+turning a long trajectory into one oversized candidate. Other bodies contain
+one ``role: text`` record. The format is the exact convention
 ``memphant-eval``'s ``bench_lme::session_body`` already uses for LongMemEval
 turns, and the format ``memphant-core::service::segment_episode_body``
 recognizes as "turn-structured" for its citation-window segmentation —
@@ -318,12 +319,30 @@ def event_source_ref(row: dict, event: dict) -> str:
     return f"coding-event:{row['attempt_id']}:{event['sequence']}:{event['event_id']}"
 
 
+def contextual_event_body(events: list[dict], event_index: int) -> str:
+    event = events[event_index]
+    current = f"{event['role']}: {event['text']}"
+    if event["role"] != "toolResult":
+        return current
+    previous_action = next(
+        (
+            prior
+            for prior in reversed(events[:event_index])
+            if prior["role"] == "assistant"
+        ),
+        None,
+    )
+    if previous_action is None:
+        return current
+    return f"assistant: {previous_action['text']}\n{current}"
+
+
 def ingest_attempt(client: gr.ApiClient, ctx: dict, row: dict) -> list[str]:
-    """Retain every coding event as an event-granular episode.
+    """Retain every coding event as a minimally contextualized episode.
 
     Identity comes from the bound context; tenant remains API-key-bound."""
     episode_ids = []
-    for event in row["events"]:
+    for event_index, event in enumerate(row["events"]):
         try:
             source_kind = EVENT_SOURCE_KINDS[event["role"]]
         except KeyError as error:
@@ -337,7 +356,7 @@ def ingest_attempt(client: gr.ApiClient, ctx: dict, row: dict) -> list[str]:
                 "payload": {
                     "episode": {
                         "source_kind": source_kind,
-                        "body": f"{event['role']}: {event['text']}",
+                        "body": contextual_event_body(row["events"], event_index),
                     }
                 },
             },
@@ -563,6 +582,16 @@ def main() -> int:
             "ingested_attempts": len(ingest_rows),
             "ingested_events": evaluation_events + isolation_sentinel_events,
             "evaluation_events": evaluation_events,
+            "contextualized_tool_result_events": sum(
+                1
+                for row in ingest_rows
+                for index, event in enumerate(row["events"])
+                if event["role"] == "toolResult"
+                and any(
+                    prior["role"] == "assistant" for prior in row["events"][:index]
+                )
+            ),
+            "context_window": "nearest_preceding_assistant_for_tool_results",
             "isolation_sentinel_events": isolation_sentinel_events,
             "compiled_jobs": compiled,
             "corpus_attempts": len(corpus_rows),

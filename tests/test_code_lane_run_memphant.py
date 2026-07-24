@@ -313,6 +313,20 @@ def test_isolation_sentinel_reuses_source_ref_but_not_evaluation_body(clr):
     assert clr.ISOLATION_SENTINEL_TEXT in body
 
 
+def test_tool_result_episode_includes_nearest_preceding_action(clr):
+    events = [
+        {"role": "assistant", "text": "first action"},
+        {"role": "user", "text": "interruption"},
+        {"role": "assistant", "text": "diagnostic command"},
+        {"role": "toolResult", "text": "ERROR exact failure"},
+    ]
+
+    assert clr.contextual_event_body(events, 3) == (
+        "assistant: diagnostic command\ntoolResult: ERROR exact failure"
+    )
+    assert clr.contextual_event_body(events, 1) == "user: interruption"
+
+
 def test_ingest_attempt_rejects_unmapped_event_role(clr):
     client = _CaptureClient()
     with pytest.raises(RuntimeError, match="unmapped code event role"):
