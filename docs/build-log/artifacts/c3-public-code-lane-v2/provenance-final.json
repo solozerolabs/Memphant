@@ -1,0 +1,450 @@
+{
+  "engine": "memphant",
+  "lane": "code",
+  "runtime": "memphant-server episode ingest (role-prefixed turn body) + /v1/recall",
+  "embed_model": "off",
+  "label": "c3-public-full-final",
+  "golden_path": "docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl",
+  "corpus_path": "docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl",
+  "database_url_db": "memphant_scratch_35634_1784883214",
+  "k": 10,
+  "recall_mode": "fast",
+  "budget_tokens": 8192,
+  "ingested_attempts": 495,
+  "ingested_events": 64056,
+  "evaluation_events": 64055,
+  "contextualized_tool_result_events": 31532,
+  "context_window": "nearest_preceding_assistant_for_tool_results",
+  "isolation_sentinel_events": 1,
+  "compiled_jobs": 64056,
+  "compiled_corpus": {
+    "episodes": 64056,
+    "episodic_units": 64014,
+    "distinct_source_episodes": 64014,
+    "missing_source_episodes": 42,
+    "done_jobs": 64056,
+    "dead_jobs": 0,
+    "pending_jobs": 0,
+    "deduplicated_episodes": 42
+  },
+  "corpus_attempts": 495,
+  "limit_attempts": 0,
+  "golden_sha256": "6a5f6978c922abe41be0a1ebc232248f7baa0dd4c897212ffe2879655681ed97",
+  "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+  "golden_lock_sha256": "315b23cf0419e043ffafbcad7048664de01f377caa40e875d8221e5fcec46b1d",
+  "golden_count": 40,
+  "runtime_identity": {
+    "repository": {
+      "git_head": "9c37fff3840e4ede504d0f67b09acb9c3613cb32",
+      "tracked_file_count": 1527,
+      "tracked_worktree_sha256": "12dc663813a641eb1b015469a97256b425c7e4341226e71a8fcefbf742d7be82",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tracked_dirty": false
+    },
+    "migrations": {
+      "files": [
+        {
+          "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
+          "sha256": "7ae6ecbe9daeae138ee8feeb9e391637913024616e7177dec55170e8c3c4cfbc"
+        },
+        {
+          "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
+          "sha256": "5fa198008ce6775ca31ec8661b4ae70fd7d319de34bfaa47659a0702d4d79341"
+        },
+        {
+          "path": "memphant_migrations/versions/20260724_003_worker_claim_throughput.sql",
+          "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
+        }
+      ],
+      "aggregate_sha256": "7191b5cf53bcc3104a7280c18060a1e9c2297e894ecf93c684a9c78cf481c721"
+    },
+    "runner_sha256": "6256c785293dfc7c11d39f22e840708f2a503a0f47eb6b455187eb73137ba043",
+    "gate_common_sha256": "caaacb70d5a74df971c092d89798f8027a010744dfff89fdd00460a3f70280b0",
+    "gate_runtime_sha256": "38ca860ef91076f4189353f2e451b92413dd25247b05dd7fa594e902ad98c7a1",
+    "server_sha256": "1baf85b82554f4d2633bcf198d142999c2f770957d7ce5b80073fd426ebe13e8",
+    "worker_sha256": "219b5498b94a4b34f8a88f65b98b3a6e0ddf511aff656bc3004168904697c4f6",
+    "cli_sha256": "3b5a83f3b53e26c5aa91f101b177e4ef7f1fce5d7778ae12494122f81a03e9eb",
+    "argv": [
+      "scripts/code_lane_run_memphant.py",
+      "--database-url",
+      "postgres://memphant:memphant@localhost:5432/memphant",
+      "--corpus",
+      "docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl",
+      "--golden",
+      "docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl",
+      "--out-evidence",
+      "docs/build-log/artifacts/c3-public-code-lane-v2/evidence-final.jsonl",
+      "--out-provenance",
+      "docs/build-log/artifacts/c3-public-code-lane-v2/provenance-final.json",
+      "--embed-model",
+      "off",
+      "--label",
+      "c3-public-full-final",
+      "--port",
+      "39419",
+      "--k",
+      "10",
+      "--budget-tokens",
+      "8192",
+      "--mode",
+      "fast"
+    ],
+    "command": "/opt/homebrew/opt/python@3.14/bin/python3.14 scripts/code_lane_run_memphant.py --database-url postgres://memphant:memphant@localhost:5432/memphant --corpus docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl --golden docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl --out-evidence docs/build-log/artifacts/c3-public-code-lane-v2/evidence-final.jsonl --out-provenance docs/build-log/artifacts/c3-public-code-lane-v2/provenance-final.json --embed-model off --label c3-public-full-final --port 39419 --k 10 --budget-tokens 8192 --mode fast"
+  },
+  "timings": {
+    "ingest_seconds": 317.5146048069,
+    "compile_seconds": 641.59734582901,
+    "recall_seconds": 2.808293104171753,
+    "events_per_ingest_second": 201.738751636183
+  },
+  "tenancy": {
+    "api_tenants": 2,
+    "tenant_a_attempt_contexts": 495,
+    "tenant_a_evaluation_events": 64055,
+    "tenant_b_isolation_sentinel_events": 1,
+    "identical_binding_refs": true,
+    "identical_source_ref_sentinel": true,
+    "sentinel_source_ref": "coding-event:chatcmpl-89d640444f1a8d48446a9852fd3ebb65:1:hf:chatcmpl-89d640444f1a8d48446a9852fd3ebb65:1:ec3559a005c87986",
+    "cross_tenant_negative_question_id": "public_code_001",
+    "owner_to_sentinel_negative_passed": true,
+    "sentinel_to_owner_negative_passed": true
+  },
+  "control_readiness": {
+    "deterministic_file_search": true,
+    "verbatim_memphant": true,
+    "outcome_marked_memphant": false,
+    "validator_backed_held_out": false,
+    "missing_fields": [
+      "base_commit",
+      "explicit_outcome",
+      "held_out_task_id",
+      "outcome_evidence",
+      "validator_command",
+      "validator_expected"
+    ]
+  },
+  "recall_at_5": 0.3,
+  "recall_at_10": 0.45,
+  "per_question": [
+    {
+      "question_id": "public_code_001",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_002",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_003",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_004",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_005",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_006",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_007",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_008",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_009",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_010",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_011",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_012",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_013",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_014",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_015",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_016",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_017",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_018",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_019",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_020",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_021",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_022",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_023",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_024",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_025",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_026",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_027",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_028",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_029",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_030",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_031",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_032",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_033",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_034",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_035",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_036",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_037",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_038",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question_id": "public_code_039",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question_id": "public_code_040",
+      "question_type": "coding-continuity",
+      "returned_items": 10,
+      "degraded": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    }
+  ]
+}

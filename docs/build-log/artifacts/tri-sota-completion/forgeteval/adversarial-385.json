@@ -56,13 +56,56 @@
     "not_applicable": 126,
     "passed": 133,
     "total": 385,
-    "wall_seconds": 44.67972975000157
+    "wall_seconds": 46.68815133400494
   },
   "runtime": {
+    "adapter_path": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/scripts/run_forgeteval.py",
+    "adapter_sha256": "bbf4118b884c41f35846a28120987adfab49a2d47d9b1306ec0a70146e58e63b",
+    "argv": [
+      "scripts/run_forgeteval.py",
+      "--official-dir",
+      "docs/build-log/artifacts/tri-sota-completion/forgeteval/official",
+      "--suite",
+      "adversarial",
+      "--out",
+      "docs/build-log/artifacts/tri-sota-completion/forgeteval/adversarial-385.json",
+      "--embed-model",
+      "small",
+      "--port",
+      "39433"
+    ],
+    "cli": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/target/release/memphant-cli",
+    "cli_sha256": "3b5a83f3b53e26c5aa91f101b177e4ef7f1fce5d7778ae12494122f81a03e9eb",
+    "command": "/opt/homebrew/opt/python@3.14/bin/python3.14 scripts/run_forgeteval.py --official-dir docs/build-log/artifacts/tri-sota-completion/forgeteval/official --suite adversarial --out docs/build-log/artifacts/tri-sota-completion/forgeteval/adversarial-385.json --embed-model small --port 39433",
     "database": "run-owned ephemeral scratch Postgres",
     "embed_model": "small",
+    "migrations": {
+      "aggregate_sha256": "7191b5cf53bcc3104a7280c18060a1e9c2297e894ecf93c684a9c78cf481c721",
+      "files": [
+        {
+          "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
+          "sha256": "7ae6ecbe9daeae138ee8feeb9e391637913024616e7177dec55170e8c3c4cfbc"
+        },
+        {
+          "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
+          "sha256": "5fa198008ce6775ca31ec8661b4ae70fd7d319de34bfaa47659a0702d4d79341"
+        },
+        {
+          "path": "memphant_migrations/versions/20260724_003_worker_claim_throughput.sql",
+          "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
+        }
+      ]
+    },
     "mode": "fast",
-    "server": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/target/release/memphant-server"
+    "repository": {
+      "git_head": "ee4de593f1cd7bd2cef6fcca6d464d501c0c1da5",
+      "tracked_diff_sha256": "8c8c138b8635fb291294bcfdb324d0127c309fa13264b4f7a706bcac37127205",
+      "tracked_dirty": true,
+      "tracked_file_count": 1527,
+      "tracked_worktree_sha256": "6ffaea0b8167b9a6c7a9d89c93347c1895e7cead06c77494b2428a97d982b3de"
+    },
+    "server": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/target/release/memphant-server",
+    "server_sha256": "7e94f7314ac638105ff9c1a6051edddb76c3e1127a3c3a4e5be260e9f9b6a29e"
   },
   "suite": "adversarial",
   "upstream": {
