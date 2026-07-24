@@ -55,8 +55,10 @@ narrow tests before continuing:
     `c5d58ec5`, `6185c5b5`, `54e50a84`.
 14. Terminal-manifest repair chain: `8bf9ab44`, `40e5e6cf`, `8c023803`.
 15. Source-derived C3 rejected stress bank: `025f350c`.
-16. Apply the commit containing the v3 machine proof and this corrected
-    manifest last.
+16. Rejected-bank adjudication, runner honesty repair, sealed v3 provenance,
+    and corrected manifest: `965ad632`.
+17. Hash-bound rejection receipt plus regression: `ad9b217a`.
+18. Apply the documentation-only commit containing this final manifest last.
 
 The private Syndai branch is separate and depends on the B4 public receipt
 contract plus `ee4de593`. Land its exact private manifest only after compatible
