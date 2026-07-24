@@ -294,6 +294,11 @@ def retrieval_query(golden: dict) -> str:
     return query
 
 
+def validate_recall_configuration(embed_model: str, mode: str) -> None:
+    if mode == "deep" and embed_model == "off":
+        raise RuntimeError("deep recall requires an embeddings model; use fast with off")
+
+
 def require_outcome_mark_ready(readiness: dict) -> None:
     if not readiness.get("outcome_marked_memphant"):
         raise RuntimeError(
@@ -424,14 +429,14 @@ def main() -> int:
     parser.add_argument("--out-provenance", required=True)
     parser.add_argument(
         "--embed-model",
-        default=None,
+        default="off",
         help="MEMPHANT_EMBEDDINGS id passed into BOTH the server and worker subprocess env",
     )
     parser.add_argument("--label", default=None)
     parser.add_argument("--port", type=int, default=39413)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--budget-tokens", type=int, default=8192)
-    parser.add_argument("--mode", default="deep", choices=("fast", "deep"))
+    parser.add_argument("--mode", default="fast", choices=("fast", "deep"))
     parser.add_argument(
         "--limit-attempts", type=int, default=0,
         help="0 = full corpus; otherwise a smoke cap that always keeps every gold-referenced attempt",
@@ -445,6 +450,7 @@ def main() -> int:
     parser.add_argument("--worker-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-worker"))
     parser.add_argument("--cli-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-cli"))
     args = parser.parse_args()
+    validate_recall_configuration(args.embed_model, args.mode)
 
     golden_path = Path(args.golden)
     lock_path = golden_lock_path(golden_path)

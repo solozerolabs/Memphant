@@ -85,6 +85,13 @@ def test_retrieval_query_is_required_and_cannot_leak_answer(clr):
         clr.retrieval_query(golden)
 
 
+def test_deep_recall_rejects_embeddings_off(clr):
+    clr.validate_recall_configuration("off", "fast")
+    clr.validate_recall_configuration("small", "deep")
+    with pytest.raises(RuntimeError, match="deep recall requires"):
+        clr.validate_recall_configuration("off", "deep")
+
+
 def test_select_ingest_attempts_full_corpus_when_no_limit(clr):
     corpus = [_row("a1"), _row("a2"), _row("a3")]
     out = clr.select_ingest_attempts(corpus, [_golden("a1")], limit_attempts=0)
