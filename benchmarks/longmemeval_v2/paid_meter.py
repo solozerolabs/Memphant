@@ -59,6 +59,18 @@ class PaidRunCaps:
         key = _sha256_json({"context": self.context, "request": kwargs})
         return key, liability
 
+    def attempt_metadata(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        _key, liability = self._liability(kwargs)
+        output_limit = kwargs.get("max_completion_tokens", kwargs.get("max_tokens"))
+        input_token_bound = len(
+            json.dumps(kwargs, sort_keys=True, separators=(",", ":")).encode()
+        )
+        return {
+            "reserved_liability_usd": str(liability),
+            "input_token_upper_bound": input_token_bound,
+            "authorized_output_limit": output_limit,
+        }
+
     def reserve(self, kwargs: dict[str, Any]) -> str:
         key, liability = self._liability(kwargs)
         with self._lock:
@@ -116,6 +128,7 @@ def install_bounded_openai_meter(
         ledger_path,
         context=context,
         ledger_context=ledger_context,
+        request_metadata=lambda kwargs: caps.attempt_metadata(kwargs),
         generation_lookup=generation_lookup,
     )
     caps = PaidRunCaps(

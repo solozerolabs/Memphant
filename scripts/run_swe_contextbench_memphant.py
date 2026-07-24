@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -40,7 +41,6 @@ EXPERIENCE_BODY_FIELDS = {
     "base_commit",
     "problem_statement",
     "hints_text",
-    "patch",
     "FAIL_TO_PASS",
     "created_at",
     "version",
@@ -116,7 +116,7 @@ def experience_body(row: dict[str, object]) -> str:
     )
     require(
         all(isinstance(selected[key], str) and selected[key] for key in (
-            "instance_id", "repo", "base_commit", "problem_statement", "patch",
+            "instance_id", "repo", "base_commit", "problem_statement",
             "FAIL_TO_PASS", "created_at", "version",
         )),
         "experience source field is invalid",
@@ -130,8 +130,9 @@ def experience_body(row: dict[str, object]) -> str:
         f"Observed at: {selected['created_at']}\n\n"
         f"Prior problem:\n{selected['problem_statement']}\n\n"
         f"Prior hints:\n{hints or '(none)'}\n\n"
-        f"Observed successful patch from the prior task:\n{selected['patch']}\n\n"
-        f"Prior fail-to-pass tests:\n{selected['FAIL_TO_PASS']}"
+        f"Settled verifier outcome: success.\n"
+        f"Prior fail-to-pass test identifiers:\n{selected['FAIL_TO_PASS']}\n\n"
+        "The reference patch and hidden tests are deliberately excluded."
     )
 
 
@@ -272,7 +273,34 @@ def runtime_identity(
         "experience_body_fields": sorted(EXPERIENCE_BODY_FIELDS),
         "recall": {"limit": 5, "budget_tokens": 8192, "mode": "fast"},
     }
+    def command_output(argv: list[str]) -> str:
+        return subprocess.run(
+            argv,
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git_head = command_output(["git", "rev-parse", "HEAD"])
+    git_tree = command_output(["git", "rev-parse", "HEAD^{tree}"])
+    git_status = command_output(["git", "status", "--porcelain"])
+    require(not git_status.strip(), "coding rehearsal requires a clean source worktree")
+    migrations = sorted((ROOT / "memphant_migrations/versions").glob("*.sql"))
     return {
+        "source": {
+            "git_head": git_head,
+            "git_tree": git_tree,
+            "git_status": "clean",
+            "cargo_lock_sha256": sha256_file(ROOT / "Cargo.lock"),
+            "migration_head": migrations[-1].name,
+            "migration_hashes": {
+                path.name: sha256_file(path) for path in migrations
+            },
+            "build_command": "cargo build -p memphant-server -p memphant-worker -p memphant-cli",
+            "rustc_version": command_output(["rustc", "--version"]),
+            "cargo_version": command_output(["cargo", "--version"]),
+        },
         "runner_sha256": sha256_file(Path(__file__).resolve()),
         "gate_runtime_sha256": sha256_file(Path(gr.__file__).resolve()),
         "prompt_contract_sha256": sha256_json(prompt_contract),
@@ -328,6 +356,9 @@ def rehearse(
     embed_model: str,
     output: Path,
 ) -> dict[str, object]:
+    identity = runtime_identity(
+        server_bin=server_bin, worker_bin=worker_bin, cli_bin=cli_bin
+    )
     tenant_id, api_key = gr.provision_tenant(cli_bin, database_url, "swe-context-n12")
     server = gr.Server(
         server_bin,
@@ -422,9 +453,7 @@ def rehearse(
         "database_persisted": False,
         "model_calls": 0,
         "cost_usd": 0,
-        "runtime_identity": runtime_identity(
-            server_bin=server_bin, worker_bin=worker_bin, cli_bin=cli_bin
-        ),
+        "runtime_identity": identity,
         "worker_completed": 24,
         "records": records,
     }

@@ -17,6 +17,7 @@ from provider_attempts import ProviderAttemptLedger
 from run_reader import ReaderCli, restore_spend_from_attempts
 
 
+ROOT = Path(__file__).resolve().parents[1]
 SYSTEM_PROMPT = (
     "You propose memory mutations but cannot execute them. Select only from the "
     "numbered evidence candidates. Return strict JSON without prose or reasoning."
@@ -126,8 +127,35 @@ def validate_authorization(
     prompt_price: Decimal,
     completion_price: Decimal,
 ) -> None:
-    if manifest.get("status") != "AUTHORIZED_FOR_PAID_EXECUTION":
+    authorization = manifest.get("authorization")
+    scope = {
+        key: value
+        for key, value in manifest.items()
+        if key not in {"status", "authorization"}
+    }
+    if (
+        manifest.get("status") != "AUTHORIZED_FOR_PAID_EXECUTION"
+        or not isinstance(authorization, dict)
+        or not str(authorization.get("authorized_by", "")).strip()
+        or not str(authorization.get("authorized_at", "")).strip()
+        or authorization.get("authorization_scope_sha256") != sha256_json(scope)
+    ):
         raise ValueError("proposal campaign is not explicitly authorized")
+    code = manifest.get("code", {})
+    code_files = {
+        "proposal_generator_sha256": Path(__file__).resolve(),
+        "reader_client_sha256": ROOT / "scripts/run_reader.py",
+        "provider_attempt_journal_sha256": ROOT / "scripts/provider_attempts.py",
+    }
+    for field, path in code_files.items():
+        if code.get(field) != sha256_file(path):
+            raise ValueError(f"authorization code hash mismatch for {field}")
+    if code.get("proposal_generator") != "scripts/generate_forgeteval_proposals.py":
+        raise ValueError("authorization proposal generator path mismatch")
+    if code.get("proposal_system_prompt_sha256") != sha256_bytes(
+        SYSTEM_PROMPT.encode()
+    ):
+        raise ValueError("authorization proposal prompt hash mismatch")
     expected = {
         "input_sha256": sha256_file(input_path),
         "output": str(output_path),

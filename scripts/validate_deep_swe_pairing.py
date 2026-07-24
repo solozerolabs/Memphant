@@ -81,6 +81,8 @@ def validate(manifest: dict[str, object], checkout: Path) -> dict[str, object]:
     digests = task_digest_index(tasks_root / "dataset.toml")
 
     targets: set[str] = set()
+    ancestry = manifest.get("ancestry_evidence")
+    require(isinstance(ancestry, dict), "ancestry evidence is missing")
     for pair in manifest["accepted_pairs"]:
         prior_id, target_id = pair["prior"], pair["target"]
         require(prior_id != target_id, "pair is not disjoint")
@@ -93,6 +95,20 @@ def validate(manifest: dict[str, object], checkout: Path) -> dict[str, object]:
         require(prior_meta["base_commit_hash"] == pair["prior_base"], "prior base drift")
         require(target_meta["base_commit_hash"] == pair["target_base"], "target base drift")
         require(pair["prior_base"] != pair["target_base"], "pair has no earlier base")
+        ancestry_key = f"{prior_meta['repository_url']}:{pair['prior_base']}...{pair['target_base']}"
+        lineage = ancestry.get(ancestry_key)
+        require(isinstance(lineage, dict), "pinned upstream compare evidence is missing")
+        require(lineage.get("status") == "ahead", "target is not ahead of prior")
+        require(lineage.get("behind_by") == 0, "prior is not an upstream ancestor")
+        require(
+            lineage.get("merge_base_commit") == pair["prior_base"],
+            "upstream merge base does not equal prior base",
+        )
+        require(
+            isinstance(lineage.get("response_sha256"), str)
+            and len(lineage["response_sha256"]) == 64,
+            "upstream compare response hash is missing",
+        )
         require(
             pair["lineage"] == "prior_base_is_upstream_ancestor_of_target_base",
             "upstream lineage proof is missing",

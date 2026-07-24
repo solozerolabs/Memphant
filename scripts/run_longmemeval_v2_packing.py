@@ -67,6 +67,8 @@ def packing_harness_command(**kwargs: object) -> list[str]:
     budget_index = command.index("--memory-context-max-tokens") + 1
     command[budget_index] = str(budget)
     command.extend([
+        "--api-key-env", "OPENROUTER_API_KEY",
+        "--evaluator-api-key-env", "OPENROUTER_API_KEY",
         "--max-completion-tokens", "1024",
         "--evaluator-max-completion-tokens", "1024",
         "--reader-max-concurrent-requests", "4",

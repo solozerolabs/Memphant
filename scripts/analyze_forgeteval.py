@@ -35,6 +35,38 @@ def classify(case: dict) -> str:
         return "intentionally_unsupported_operation"
     if outcome != "fail":
         raise ValueError(f"{case['case_id']}: unknown outcome {outcome!r}")
+    if case.get("error_kind") == "benchmark_limitation":
+        return "benchmark_limitation"
+    decisions = case.get("adapter_decisions")
+    if not isinstance(decisions, list):
+        raise ValueError(f"{case['case_id']}: adapter evidence is missing")
+    mutations = [
+        row
+        for row in decisions
+        if row.get("operation") in {"release", "supersede"}
+    ]
+    if not mutations:
+        if operations & {"release", "supersede"}:
+            return "actual_memphant_defect"
+        raise ValueError(f"{case['case_id']}: failed without a classified mutation")
+    for mutation in mutations:
+        if mutation["operation"] == "release":
+            receipts = mutation.get("receipts")
+            if not isinstance(receipts, list) or not receipts:
+                return "actual_memphant_defect"
+            for receipt in receipts:
+                selected = receipt.get("selected_unit_id")
+                if (
+                    selected not in receipt.get("invalidated_units", [])
+                    or receipt.get("verification")
+                    != "authorized_transaction_committed"
+                ):
+                    return "actual_memphant_defect"
+        elif (
+            mutation.get("selected_unit_id") not in mutation.get("superseded", [])
+            or not mutation.get("created")
+        ):
+            return "actual_memphant_defect"
     if "release" in operations:
         return "ambiguous_destructive_request_should_fail_closed"
     if "supersede" in operations:
@@ -88,6 +120,11 @@ def build_report(baseline: dict, candidate: dict) -> dict:
         "category_counts": {name: categories[name] for name in CATEGORIES},
         "transition_counts": dict(sorted(transitions.items())),
         "classification_basis": {
+            "method": (
+                "Per-case operation-boundary root-cause adjudication consumes the "
+                "recorded error kind, failed assertion indexes, adapter decisions, "
+                "exact selected IDs, mutation receipts, and created/superseded IDs."
+            ),
             "exact_mutation_boundary": (
                 "The adapter fails closed unless POST /v1/correct acknowledges the "
                 "selected unit or POST /v1/forget acknowledges every selected unit."

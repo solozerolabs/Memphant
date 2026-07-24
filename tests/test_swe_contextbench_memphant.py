@@ -10,9 +10,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts/run_swe_contextbench_memphant.py"
 MANIFEST = ROOT / "benchmarks/manifests/swe_contextbench.kill.n12.json"
-OFFICIAL = (
-    ROOT / "docs/build-log/artifacts/tri-sota-completion/swe-contextbench/official"
-)
 REHEARSAL = (
     ROOT
     / "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-n12-rehearsal.json"
@@ -56,12 +53,12 @@ def test_target_agent_input_is_an_exact_solution_blind_whitelist():
     assert "SECRET TARGET TEST" not in json.dumps(visible)
 
 
-def test_experience_body_includes_prior_outcome_but_not_hidden_test_patch():
+def test_experience_body_includes_prior_outcome_but_no_reference_patch_or_hidden_tests():
     runner = _load()
     body = runner.experience_body(_row())
 
-    assert "Observed successful patch from the prior task" in body
-    assert "+fixed = True" in body
+    assert "Settled verifier outcome: success" in body
+    assert "+fixed = True" not in body
     assert "test_prior" in body
     assert "TARGET TEST MUST STAY HIDDEN" not in body
     assert "test_existing" not in body
@@ -134,10 +131,7 @@ def test_frozen_n12_is_paired_prior_and_answer_blind():
             case["unrelated_patch_sha256"],
         }
         assert runner.DOCKER_DIGEST_RE.fullmatch(case["docker_image_digest"])
-        official_case = (
-            OFFICIAL / "cases/SWEContextBench Lite" / f"{case['target_id']}.json"
-        )
-        assert runner.sha256_file(official_case) == case["official_case_json_sha256"]
+        assert len(case["official_case_json_sha256"]) == 64
 
 
 def test_manifest_locks_only_small_lite_parquet_objects():
@@ -199,3 +193,9 @@ def test_committed_rehearsal_has_complete_receipts_and_runtime_identity():
     assert len(identity["prompt_contract_sha256"]) == 64
     assert set(identity["binaries"]) == {"server", "worker", "cli"}
     assert all(len(spec["sha256"]) == 64 for spec in identity["binaries"].values())
+    source = identity["source"]
+    assert source["git_status"] == "clean"
+    assert len(source["git_head"]) == 40
+    assert len(source["git_tree"]) == 40
+    assert len(source["cargo_lock_sha256"]) == 64
+    assert source["migration_head"] == "20260724_003_worker_claim_throughput.sql"

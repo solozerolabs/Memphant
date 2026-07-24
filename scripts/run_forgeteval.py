@@ -138,6 +138,7 @@ class MemphantForgetEvalAdapter:
         self.release_selection = release_selection
         self.cross_rerank = cross_rerank
         self.case_ids = case_ids
+        self.confirmation_required = confirmations is not None
         self.confirmations = confirmations or {}
         self.capture_proposals = capture_proposals
         self.case_number = 0
@@ -317,7 +318,7 @@ class MemphantForgetEvalAdapter:
     def _confirmed_selection(
         self, proposal_input: dict, hits: list[dict]
     ) -> tuple[list[dict], dict | None]:
-        if not self.confirmations:
+        if not self.confirmation_required:
             return [], None
         input_sha256 = proposal_input["input_sha256"]
         confirmation = self.confirmations.get(input_sha256)
@@ -344,11 +345,14 @@ class MemphantForgetEvalAdapter:
     def supersede(self, old_query: str, new_text: str) -> None:
         self.mutation_number += 1
         hits = self._recall(
-            old_query, 20 if self.confirmations or self.capture_proposals else 1
+            old_query, 20 if self.confirmation_required or self.capture_proposals else 1
         )
         proposal_input = self._proposal_input(
             "supersede", old_query, hits, new_text=new_text
         )
+        confirmed, confirmation = self._confirmed_selection(proposal_input, hits)
+        if confirmation is not None and len(confirmed) != 1:
+            raise RuntimeError("confirmed supersession must select exactly one candidate")
         if not hits:
             created = self.inscribe(new_text)
             self._record(
@@ -361,10 +365,7 @@ class MemphantForgetEvalAdapter:
                 }
             )
             return
-        confirmed, confirmation = self._confirmed_selection(proposal_input, hits)
         if confirmation is not None:
-            if len(confirmed) != 1:
-                raise RuntimeError("confirmed supersession must select exactly one candidate")
             hits = confirmed
             replacement_text = confirmation.get("replacement_text")
             if not isinstance(replacement_text, str) or not replacement_text.strip():

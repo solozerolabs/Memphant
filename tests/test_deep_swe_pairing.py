@@ -40,6 +40,7 @@ def test_accepted_pairs_are_disjoint_unique_exact_base_candidates():
 
     assert len(pairs) == 3
     assert len({pair["target"] for pair in pairs}) == 3
+    ancestry = manifest["ancestry_evidence"]
     for pair in pairs:
         assert pair["prior"] != pair["target"]
         assert pair["prior_base"] != pair["target_base"]
@@ -48,6 +49,16 @@ def test_accepted_pairs_are_disjoint_unique_exact_base_candidates():
         assert pair["shared_solution_files"]
         assert pair["reusable_lesson"]
         assert pair["non_leakage"]
+        repository = (
+            "https://github.com/pmndrs/koota"
+            if pair["prior"].startswith("koota-")
+            else "https://github.com/testem/testem"
+        )
+        lineage = ancestry[f"{repository}:{pair['prior_base']}...{pair['target_base']}"]
+        assert lineage["status"] == "ahead"
+        assert lineage["behind_by"] == 0
+        assert lineage["merge_base_commit"] == pair["prior_base"]
+        assert len(lineage["response_sha256"]) == 64
         for lock in (pair["prior_lock"], pair["target_lock"]):
             assert len(lock) == 4
             assert lock[0].startswith("sha256:") and len(lock[0]) == 71

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 from decimal import Decimal
 from pathlib import Path
@@ -96,18 +97,51 @@ def test_authorization_must_be_explicit_and_exact(tmp_path) -> None:
         "prompt_price": Decimal("2.75"),
         "completion_price": Decimal("16.5"),
     }
+    code = {
+        "proposal_generator": "scripts/generate_forgeteval_proposals.py",
+        "proposal_generator_sha256": module.sha256_file(module.Path(module.__file__)),
+        "reader_client_sha256": module.sha256_file(ROOT / "scripts/run_reader.py"),
+        "provider_attempt_journal_sha256": module.sha256_file(
+            ROOT / "scripts/provider_attempts.py"
+        ),
+        "proposal_system_prompt_sha256": module.sha256_bytes(
+            module.SYSTEM_PROMPT.encode()
+        ),
+    }
+    scope = {"execution": execution, "code": code}
+    authorized = {
+        "status": "AUTHORIZED_FOR_PAID_EXECUTION",
+        **scope,
+        "authorization": {
+            "authorized_by": "test",
+            "authorized_at": "2026-07-24T00:00:00Z",
+            "authorization_scope_sha256": module.sha256_json(scope),
+        },
+    }
     with pytest.raises(ValueError, match="not explicitly authorized"):
         module.validate_authorization(
-            {"status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION", "execution": execution},
+            {"status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION", **scope},
             **kwargs,
         )
-    module.validate_authorization(
-        {"status": "AUTHORIZED_FOR_PAID_EXECUTION", "execution": execution},
-        **kwargs,
+    module.validate_authorization(authorized, **kwargs)
+    drifted = copy.deepcopy(authorized)
+    drifted["execution"]["max_calls"] = 17
+    drifted_scope = {
+        key: value for key, value in drifted.items() if key not in {"status", "authorization"}
+    }
+    drifted["authorization"]["authorization_scope_sha256"] = module.sha256_json(
+        drifted_scope
     )
-    execution["max_calls"] = 17
     with pytest.raises(ValueError, match="max_calls"):
-        module.validate_authorization(
-            {"status": "AUTHORIZED_FOR_PAID_EXECUTION", "execution": execution},
-            **kwargs,
-        )
+        module.validate_authorization(drifted, **kwargs)
+
+    code_drift = copy.deepcopy(authorized)
+    code_drift["code"]["provider_attempt_journal_sha256"] = "0" * 64
+    code_scope = {
+        key: value for key, value in code_drift.items() if key not in {"status", "authorization"}
+    }
+    code_drift["authorization"]["authorization_scope_sha256"] = module.sha256_json(
+        code_scope
+    )
+    with pytest.raises(ValueError, match="code hash mismatch"):
+        module.validate_authorization(code_drift, **kwargs)

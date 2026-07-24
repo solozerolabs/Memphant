@@ -223,6 +223,34 @@ def test_missing_or_ambiguous_confirmation_fails_closed() -> None:
         value.release("target")
 
 
+def test_explicit_empty_confirmation_ledger_fails_closed() -> None:
+    client = FakeClient()
+    value = module.MemphantForgetEvalAdapter(
+        client,
+        lambda: None,
+        case_ids=["case-a"],
+        confirmations={},
+    )
+    value.reset()
+    with pytest.raises(RuntimeError, match="missing explicit confirmation"):
+        value.release("target")
+
+
+def test_zero_hit_supersession_requires_confirmation_before_create() -> None:
+    client = FakeClient()
+    client.recall_items = []
+    value = module.MemphantForgetEvalAdapter(
+        client,
+        lambda: None,
+        case_ids=["case-a"],
+        confirmations={},
+    )
+    value.reset()
+    with pytest.raises(RuntimeError, match="missing explicit confirmation"):
+        value.supersede("missing subject", "new fact")
+    assert all(path != "/v1/episodes" for path, _body in client.posts)
+
+
 def test_confirmation_ledger_rejects_unconfirmed_or_duplicate_rows(tmp_path) -> None:
     path = tmp_path / "confirmations.json"
     digest = "a" * 64

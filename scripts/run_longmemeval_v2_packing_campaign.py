@@ -15,6 +15,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gate_runtime as gr  # noqa: E402
 from analyze_longmemeval_v2_packing_campaign import analyze  # noqa: E402
+from provider_attempts import load_provider_attempt_ledger_snapshot  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -139,46 +140,81 @@ def execute(args: argparse.Namespace) -> None:
         }
     )
     construction: dict[str, Path] = {}
-    for cell in campaign_cells():
-        arm, domain = cell["arm"], cell["domain"]
-        output_dir = args.artifact_root / "runs" / arm / domain
-        if output_dir.exists():
-            raise RuntimeError(f"refusing to overwrite paid output: {output_dir}")
-        proof_dir = args.artifact_root / "proof" / arm / domain
-        env = dict(base_env)
-        env["MEMPHANT_LME_PROOF_DIR"] = str(proof_dir)
-        env["MEMPHANT_LME_RUN_ID"] = f"packing-{arm}-{domain}"
-        if arm != "no_retrieval" and arm != "memphant_current":
-            env["MEMPHANT_LME_PREBUILT_PROOF"] = str(construction[domain])
-        else:
-            env.pop("MEMPHANT_LME_PREBUILT_PROOF", None)
-        command = command_for(args, arm=arm, domain=domain)
-        if arm == "no_retrieval":
-            subprocess.run(command, cwd=ROOT, env=env, check=True)
-            continue
-        server = gr.Server(
-            str(args.server_bin),
-            database_url,
-            args.port,
-            embed_model="small",
-            log_path=args.artifact_root / "logs" / f"{arm}-{domain}.server.log",
-            **ARM_SERVER[arm],
+    completed_cells: list[dict[str, str]] = []
+    try:
+        for cell in campaign_cells():
+            arm, domain = cell["arm"], cell["domain"]
+            output_dir = args.artifact_root / "runs" / arm / domain
+            if output_dir.exists():
+                raise RuntimeError(f"refusing to overwrite paid output: {output_dir}")
+            proof_dir = args.artifact_root / "proof" / arm / domain
+            env = dict(base_env)
+            env["MEMPHANT_LME_PROOF_DIR"] = str(proof_dir)
+            env["MEMPHANT_LME_RUN_ID"] = f"packing-{arm}-{domain}"
+            if arm != "no_retrieval" and arm != "memphant_current":
+                env["MEMPHANT_LME_PREBUILT_PROOF"] = str(construction[domain])
+            else:
+                env.pop("MEMPHANT_LME_PREBUILT_PROOF", None)
+            command = command_for(args, arm=arm, domain=domain)
+            if arm == "no_retrieval":
+                subprocess.run(command, cwd=ROOT, env=env, check=True)
+                completed_cells.append(cell)
+                continue
+            server = gr.Server(
+                str(args.server_bin),
+                database_url,
+                args.port,
+                embed_model="small",
+                log_path=args.artifact_root / "logs" / f"{arm}-{domain}.server.log",
+                **ARM_SERVER[arm],
+            )
+            try:
+                server.start()
+                subprocess.run(command, cwd=ROOT, env=env, check=True)
+            finally:
+                server.stop()
+            if arm == "memphant_current":
+                proofs = list(proof_dir.glob("construction.*.json"))
+                if len(proofs) != 1:
+                    raise RuntimeError(f"construction proof count drift: {domain}")
+                construction[domain] = proofs[0]
+            completed_cells.append(cell)
+        summary = analyze(args.artifact_root, args.manifest, args.attempt_ledger)
+        summary_path = args.artifact_root / "campaign-summary.json"
+        if summary_path.exists():
+            raise RuntimeError(f"refusing to overwrite paid summary: {summary_path}")
+        summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    except BaseException as error:
+        attempts: list[dict] = []
+        reported_cost = 0
+        if args.attempt_ledger.exists():
+            try:
+                snapshot = load_provider_attempt_ledger_snapshot(args.attempt_ledger)
+                attempts = snapshot["attempts"]
+                reported_cost = snapshot["reported_cost_usd"]
+            except BaseException:
+                pass
+        unsettled = sum(
+            float(row.get("start", {}).get("reserved_liability_usd", 0))
+            for row in attempts
+            if row.get("status") != "result"
         )
-        try:
-            server.start()
-            subprocess.run(command, cwd=ROOT, env=env, check=True)
-        finally:
-            server.stop()
-        if arm == "memphant_current":
-            proofs = list(proof_dir.glob("construction.*.json"))
-            if len(proofs) != 1:
-                raise RuntimeError(f"construction proof count drift: {domain}")
-            construction[domain] = proofs[0]
-    summary = analyze(args.artifact_root, args.manifest, args.attempt_ledger)
-    summary_path = args.artifact_root / "campaign-summary.json"
-    if summary_path.exists():
-        raise RuntimeError(f"refusing to overwrite paid summary: {summary_path}")
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+        abort = {
+            "schema_version": 1,
+            "status": "INCOMPLETE_NOT_RESUMABLE",
+            "completed_cells": completed_cells,
+            "provider_attempts": len(attempts),
+            "reported_cost_usd": reported_cost,
+            "unsettled_reserved_liability_usd": unsettled,
+            "failure_type": type(error).__name__,
+            "claim_boundary": "Partial artifacts are preserved but are not an adjudicated campaign.",
+        }
+        args.artifact_root.mkdir(parents=True, exist_ok=True)
+        abort_path = args.artifact_root / "campaign-abort.json"
+        with abort_path.open("x", encoding="utf-8") as handle:
+            json.dump(abort, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        raise
 
 
 def main() -> int:
