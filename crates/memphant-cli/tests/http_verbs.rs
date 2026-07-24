@@ -620,7 +620,7 @@ async fn resource_retain_and_trace_round_trip_over_http() {
             "--revision",
             "abc123",
             "--content-hash",
-            "sha256:cli-resource",
+            "sha256:e05ca253b856f3ce50676893df80d1417d6ef34baf6d06d0ff27b40d2790b0c9",
             "--body-file",
             body_file.to_str().expect("utf-8 temp path"),
         ],
@@ -671,7 +671,7 @@ async fn resource_retain_and_trace_round_trip_over_http() {
             "release taipei",
         ],
     );
-    assert!(ok);
+    assert!(ok, "resource recall exits zero: {recalled}");
     let trace_id = recalled["trace_id"].as_str().expect("trace id").to_string();
 
     let (trace, ok) = cli(
