@@ -113,12 +113,17 @@ def extend_lineage_confirmations(
 
     output = dict(base_document)
     output["reviewed_at"] = reviewed_at
-    output["lineage_completion"] = {
-        "source_inputs": inputs_path,
-        "source_inputs_sha256": inputs_sha256,
-        "selection_source": "deterministic_previous_transition",
-        "added_confirmations": added,
-    }
+    sources = list(base_document.get("lineage_completion_sources", []))
+    sources.append(
+        {
+            "source_inputs": inputs_path,
+            "source_inputs_sha256": inputs_sha256,
+            "selection_source": "deterministic_previous_transition",
+            "added_confirmations": added,
+        }
+    )
+    output.pop("lineage_completion", None)
+    output["lineage_completion_sources"] = sources
     output["confirmations"] = confirmations
     return output
 

@@ -158,6 +158,14 @@ def test_lineage_completion_targets_the_previous_transition_exactly() -> None:
     second["input_sha256"] = module.sha256_json(second)
     base = {
         "schema_version": 1,
+        "lineage_completion_sources": [
+            {
+                "source_inputs": "pass0.json",
+                "source_inputs_sha256": "e" * 64,
+                "selection_source": "deterministic_previous_transition",
+                "added_confirmations": 1,
+            }
+        ],
         "confirmations": [
             {
                 "input_sha256": "a" * 64,
@@ -196,3 +204,6 @@ def test_lineage_completion_targets_the_previous_transition_exactly() -> None:
     ]
     assert completed["replacement_text"] == "User now works at OpenAI."
     assert completed["selection_source"] == "deterministic_previous_transition"
+    assert [
+        source["source_inputs"] for source in result["lineage_completion_sources"]
+    ] == ["pass0.json", "pass1.json"]
