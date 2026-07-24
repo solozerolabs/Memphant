@@ -836,7 +836,8 @@ async fn resource_retain_reflect_recall_returns_resource_kind_item() {
     request.payload = RetainPayload::Resource(RetainResourcePayload {
         uri: "https://example.test/runbooks/deploy.md".to_string(),
         mime_type: "text/markdown".to_string(),
-        content_hash: "sha256:deploy-runbook".to_string(),
+        content_hash: "sha256:15cae6da6e921e32a0dd42efdb3fcec54e8de2b4b45824a46f2b7768dd78448b"
+            .to_string(),
         kind: Some(memphant_types::ResourceKind::Document),
         revision: Some("rev-42".to_string()),
         body: Some("Deploy runbook: canary first, then roll forward regions.".to_string()),
