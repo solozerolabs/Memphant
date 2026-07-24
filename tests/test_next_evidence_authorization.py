@@ -15,13 +15,16 @@ def sha256_file(path: Path) -> str:
 
 def test_combined_packet_authorizes_only_the_minimum_forgetting_proposal_stage() -> None:
     packet = json.loads(PACKET.read_text(encoding="utf-8"))
-    assert packet["status"] == "AWAITING_EXPLICIT_PAID_AUTHORIZATION"
+    assert packet["status"] == "AUTHORIZED_FOR_PAID_EXECUTION"
     assert packet["paid_calls_executed"] == 0
     assert packet["settled_cost_usd"] == "0"
     assert packet["maximum_currently_authorizable_usd"] == "0.50"
     assert packet["authorizable_campaigns"] == ["forgetting_proposals"]
     assert packet["campaigns"]["packing"]["authorization"] is None
-    assert packet["campaigns"]["forgetting_proposals"]["authorization"] is None
+    assert packet["campaigns"]["forgetting_proposals"]["status"] == "AUTHORIZED_FOR_PAID_EXECUTION"
+    assert packet["campaigns"]["forgetting_proposals"]["authorization"] == {
+        "authoritative_child_packet": packet["campaigns"]["forgetting_proposals"]["authoritative_child_packet"]
+    }
     assert packet["campaigns"]["swe_contextbench"]["status"] == "BLOCKED_NOT_AUTHORIZABLE"
     assert packet["campaigns"]["deep_swe_pairing"]["status"].startswith("REJECTED_")
 

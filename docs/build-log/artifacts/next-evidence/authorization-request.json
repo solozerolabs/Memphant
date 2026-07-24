@@ -1,7 +1,11 @@
 {
   "schema_version": 1,
-  "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
-  "authorization": null,
+  "status": "AUTHORIZED_FOR_PAID_EXECUTION",
+  "authorization": {
+    "authorized_by": "user in Codex task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+    "authorized_at": "2026-07-24T18:54:35Z",
+    "campaigns": ["forgetting_proposals"]
+  },
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
   "maximum_currently_authorizable_usd": "0.50",
@@ -38,11 +42,13 @@
       "future_boundary": "A materially different technique must pass both free utility and exact-abstention gates before a new paid campaign can be proposed."
     },
     "forgetting_proposals": {
-      "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
-      "authorization": null,
+      "status": "AUTHORIZED_FOR_PAID_EXECUTION",
+      "authorization": {
+        "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json"
+      },
       "purpose": "Generate 16 non-executing mutation proposals for the frozen ForgetEval n=12 control-plane gate.",
       "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json",
-      "authoritative_child_packet_sha256": "7424eeb2dccdb471e91259a5e1e6d152f8c3df953f6e7233732a7b986800d59f",
+      "authoritative_child_packet_sha256": "6462c58326fb9d69c1848ab7abfb8d96f95e211a31e3200cc311478c1a5099ca",
       "hard_limits": {
         "logical_calls": 16,
         "max_provider_attempts": 32,
