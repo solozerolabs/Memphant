@@ -1,0 +1,31 @@
+{
+  "capabilities": {
+    "resources": {}
+  },
+  "resourceTemplates": [
+    {
+      "description": "Tenant-bound read-only MemPhant resource",
+      "name": "memphant-memory",
+      "title": "MemPhant memory",
+      "uriTemplate": "memphant://memory/{id}"
+    },
+    {
+      "description": "Tenant-bound read-only MemPhant resource",
+      "name": "memphant-trace",
+      "title": "MemPhant trace",
+      "uriTemplate": "memphant://trace/{id}"
+    },
+    {
+      "description": "Tenant-bound read-only MemPhant resource",
+      "name": "memphant-episode",
+      "title": "MemPhant episode",
+      "uriTemplate": "memphant://episode/{id}"
+    },
+    {
+      "description": "Tenant-bound read-only MemPhant resource",
+      "name": "memphant-resource",
+      "title": "MemPhant resource",
+      "uriTemplate": "memphant://resource/{id}"
+    }
+  ]
+}

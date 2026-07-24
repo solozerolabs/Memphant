@@ -36,6 +36,7 @@ BASE="http://127.0.0.1:${PORT}"
 SERVER="$ROOT/target/debug/memphant-server"
 WORKER="$ROOT/target/debug/memphant-worker"
 CLI="$ROOT/target/debug/memphant-cli"
+MCP="$ROOT/target/debug/memphant-mcp"
 SERVER_PID=""
 
 log()  { printf '\n### %s\n' "$*"; }
@@ -86,7 +87,7 @@ api_status() { # like api, but prints only the HTTP status
 }
 
 log "build binaries (debug)"
-(cd "$ROOT" && cargo build -q -p memphant-server -p memphant-worker -p memphant-cli)
+(cd "$ROOT" && cargo build -q -p memphant-server -p memphant-worker -p memphant-cli -p memphant-mcp)
 
 log "apply migrations (idempotent)"
 python3 "$ROOT/scripts/apply_memphant_migrations.py" --database-url "$DATABASE_URL" | tail -1
@@ -112,6 +113,12 @@ AGENT_A=$(echo "$BIND_A" | jget "['agent_node_id']")
 GEN_A=$(echo "$BIND_A" | jget "['subject_generation']")
 CTX_A="\"subject_id\":\"$SUBJ_A\",\"scope_id\":\"$SCOPE_A\",\"actor_id\":\"$ACTOR_A\",\"agent_node_id\":\"$AGENT_A\",\"subject_generation\":$GEN_A"
 QS_A="subject_id=$SUBJ_A&subject_generation=$GEN_A&scope_id=$SCOPE_A&actor_id=$ACTOR_A&agent_node_id=$AGENT_A"
+MCP_KEY=$(
+  "$CLI" admin create-key --tenant "$TENANT_A" --max-trust trusted_system \
+    --subject-id "$SUBJ_A" --subject-generation "$GEN_A" --scope "$SCOPE_A" \
+    --actor "$ACTOR_A" --agent-node "$AGENT_A" --database-url "$DATABASE_URL" | tail -1
+)
+[ -n "$MCP_KEY" ] || fail "scoped MCP key provisioning failed"
 
 BIND_B=$(bind_context "$KEY_B" "probe-b")
 SUBJ_B=$(echo "$BIND_B" | jget "['subject_id']") || fail "context binding B failed: $BIND_B"
@@ -140,6 +147,101 @@ echo "$RES" | jget "['enqueued'][0]" | grep -q reflect_resource || fail "resourc
 worker_once
 RECALL_RES=$(api "$KEY_A" POST /v1/recall "{$CTX_A,\"query\":\"canary deploy roll forward\"}")
 echo "$RECALL_RES" | python3 -c "import json,sys;d=json.load(sys.stdin);assert any(i['kind']=='resource' for i in d['items']),d" || fail "resource-derived unit not recalled"
+
+log "real MCP stdio binary lists and reads the bound canonical projection"
+api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:mcp:unit\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"unit\":{\"kind\":\"semantic\",\"fact_key\":\"mcp-probe\",\"predicate\":\"memory_file\",\"body\":\"Real MCP resource body\",\"confidence\":1.0}}}" >/dev/null
+env -u DATABASE_URL \
+  MEMPHANT_APP_DATABASE_URL="$DATABASE_URL" \
+  MEMPHANT_AUTHN_DATABASE_URL="$DATABASE_URL" \
+  MEMPHANT_API_KEY="$MCP_KEY" \
+  MEMPHANT_MCP_PROBE_BINARY="$MCP" \
+  python3 - <<'PY'
+import atexit
+import json
+import os
+import select
+import subprocess
+
+process = subprocess.Popen(
+    [os.environ["MEMPHANT_MCP_PROBE_BINARY"], "stdio"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    bufsize=1,
+)
+
+def stop_process():
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+atexit.register(stop_process)
+
+def send(message):
+    process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
+    process.stdin.flush()
+
+def receive(request_id):
+    while True:
+        ready, _, _ = select.select([process.stdout], [], [], 20)
+        if not ready:
+            process.terminate()
+            raise AssertionError(f"MCP response {request_id} timed out")
+        line = process.stdout.readline()
+        if not line:
+            error = process.stderr.read()
+            raise AssertionError(f"MCP exited before response {request_id}: {error}")
+        response = json.loads(line)
+        if response.get("id") == request_id:
+            assert "error" not in response, response
+            return response["result"]
+
+send({
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {"name": "memphant-b3-probe", "version": "1"},
+    },
+})
+initialized = receive(1)
+assert "resources" in initialized["capabilities"], initialized
+assert "tools" in initialized["capabilities"], initialized
+send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+send({"jsonrpc": "2.0", "id": 2, "method": "resources/list", "params": {}})
+first = receive(2)
+assert first["resources"], first
+send({"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}})
+second = receive(3)
+assert [item["uri"] for item in first["resources"]] == [
+    item["uri"] for item in second["resources"]
+]
+target = next(
+    item for item in first["resources"]
+    if item.get("name") == "mcp-probe" or item.get("title") == "mcp-probe"
+)
+uri = target["uri"]
+send({
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "resources/read",
+    "params": {"uri": uri},
+})
+read = receive(4)
+assert read["contents"][0]["uri"] == uri, read
+assert read["contents"][0]["text"] == "Real MCP resource body", read
+process.stdin.close()
+process.wait(timeout=10)
+assert process.returncode == 0, process.stderr.read()
+print(f"MCP PROBE: resources={len(first['resources'])} read=ok deterministic=ok")
+PY
 
 log "cross-tenant: B fetching A's trace must 404"
 STATUS_B=$(api_status "$KEY_B" GET "/v1/traces/$TRACE_ID?$QS_B")

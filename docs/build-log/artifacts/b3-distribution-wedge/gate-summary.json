@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "gate": "b3_distribution_wedge",
+  "status": "pass",
+  "repository_gate_status": "unmet",
+  "base_commit": "9c52b8e4bd3f75420fb64df99e64245ff716336b",
+  "tested_commit": "containing_commit",
+  "architecture": "one bounded Anthropic and MCP projection adapter over B2 canonical MemoryService and file_sync",
+  "contracts": {
+    "anthropic_memory_tool_type": "memory_20250818",
+    "commands": ["view", "create", "str_replace", "insert", "delete", "rename"],
+    "root": "/memories",
+    "claude_code_index": "MEMORY.md",
+    "index_max_bytes": 25600,
+    "index_max_lines": 200,
+    "topic_max_bytes": 65536,
+    "default_view_max_characters": 16000,
+    "nested_text_directories": true,
+    "binary_image_projection": false,
+    "mcp_capabilities": ["tools", "resources"],
+    "mcp_list_page_max": 100,
+    "mcp_read_max_bytes": 65536,
+    "mcp_uri_kinds": ["memory", "episode", "resource", "trace"]
+  },
+  "research": {
+    "accessed": "2026-07-23",
+    "sources": [
+      "https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool",
+      "https://github.com/anthropics/anthropic-sdk-python/blob/main/examples/memory/basic.py",
+      "https://github.com/anthropics/anthropic-sdk-typescript/blob/main/examples/tools-helpers-memory.ts",
+      "https://code.claude.com/docs/en/memory",
+      "https://modelcontextprotocol.io/specification/2025-11-25/server/resources",
+      "https://modelcontextprotocol.io/specification/2025-11-25/server/tools",
+      "https://modelcontextprotocol.io/specification/2025-11-25/client/roots",
+      "https://modelcontextprotocol.io/specification/2025-11-25/client/sampling",
+      "https://docs.openviking.ai/en/concepts/01-architecture",
+      "https://github.com/volcengine/OpenViking/",
+      "https://github.com/modelcontextprotocol/servers"
+    ]
+  },
+  "coverage": {
+    "focused_tests_passed": 8,
+    "focused_tests_failed": 0,
+    "all_six_commands_success_and_typed_failure": true,
+    "fixed_point": true,
+    "hash_bound_admission": true,
+    "cross_tenant_and_unbound_denial": true,
+    "path_uri_and_resource_bounds": true,
+    "deterministic_pagination_and_identifiers": true,
+    "generated_artifact_drift": true,
+    "real_mcp_stdio_and_postgres": true,
+    "api_key_trust_ceiling": true
+  },
+  "verification": [
+    {"command": "cargo test -p memphant-mcp --test distribution_wedge", "status": "pass", "passed": 8, "failed": 0},
+    {"command": "MCP schema and generated resource drift tests", "status": "pass", "passed": 5, "failed": 0},
+    {"command": "cargo test -p memphant-cli --test file_plane_n12 -- --nocapture", "status": "pass", "passed": 1, "fixture_cases": 12},
+    {"command": "cargo fmt --check", "status": "pass"},
+    {"command": "cargo clippy --all-targets --all-features -- -D warnings", "status": "pass"},
+    {"command": "cargo test --all-targets --all-features", "status": "pass", "passed": 692, "failed": 0, "ignored": 92},
+    {"command": "cargo test --doc", "status": "pass", "passed": 0, "failed": 0},
+    {"command": "bash scripts/with_scratch_db.sh postgres://memphant:memphant@localhost:5432/memphant MEMPHANT_TEST_DATABASE_URL cargo test -p memphant-store-postgres -p memphant-worker -- --ignored --test-threads=1", "status": "pass", "passed": 77, "failed": 0, "ignored": 0, "filtered": 16},
+    {"command": "cargo run -p memphant-cli -- db lint --provider plain-postgres", "status": "pass"},
+    {"command": "cargo run -p memphant-cli -- db lint --provider supabase", "status": "pass"},
+    {"command": "cargo run -p memphant-cli -- db lint --provider neon", "status": "pass"},
+    {"command": "python3 scripts/apply_memphant_migrations.py --database-url postgres://memphant.invalid/memphant --dry-run", "status": "pass", "planned_migrations": 2},
+    {"command": "DATABASE_URL=postgres://memphant:memphant@localhost:5432/memphant bash scripts/e2e_probe.sh", "status": "pass", "mcp_resources": 1, "mcp_read": "ok", "mcp_deterministic": "ok"},
+    {"command": "python3 -m pytest tests/ -q", "status": "unmet", "passed": 697, "failed": 24, "skipped": 11, "classification": "15 stale r15 runner contracts; 6 stale breadcrumb runner contracts; 1 stale embedder-arm pin; 1 frozen P1 adapter OpenAPI hash; 1 live private Syndai span drift"},
+    {"command": "scratch-Postgres Python opt-ins with MEMPHANT_LME_PACKAGED_INTEGRATION=1", "status": "pass", "passed": 3, "failed": 0},
+    {"command": "cd web && npm test", "status": "pass", "passed": 23, "failed": 0, "skipped": 1},
+    {"command": "python3 scripts/check_spec_drift.py", "status": "skipped", "exit_code": 0, "reason": "private_specs_missing"}
+  ],
+  "unavailable_predicates": [
+    "8 private coding-events fixture tests",
+    "private specification mirror parity"
+  ],
+  "nonclaims": [
+    "no push, merge, PR, landing, or deployment",
+    "no paid or model call",
+    "no private Syndai or production mutation",
+    "no B4 work",
+    "no immutable Deep campaign or P1 worktree mutation",
+    "no accuracy, Deep, SOTA, or cutover promotion",
+    "full Python repository gate is not green"
+  ]
+}

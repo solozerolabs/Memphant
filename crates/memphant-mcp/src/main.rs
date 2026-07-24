@@ -45,10 +45,20 @@ async fn main() -> ExitCode {
             );
             ExitCode::SUCCESS
         }
+        Some("--list-resources-json") => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&memphant_mcp::resources_artifact())
+                    .expect("MCP resources serialize")
+            );
+            ExitCode::SUCCESS
+        }
         Some("stdio") | None => run_stdio().await,
         Some("streamable-http") => run_streamable_http().await,
         Some(_) => {
-            eprintln!("usage: memphant-mcp [--list-tools-json|stdio|streamable-http]");
+            eprintln!(
+                "usage: memphant-mcp [--list-tools-json|--list-resources-json|stdio|streamable-http]"
+            );
             ExitCode::from(2)
         }
     }

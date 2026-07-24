@@ -68,6 +68,44 @@ Automation may branch on these stable stderr classes:
 | `sync=post_commit_error remote_committed=true` | Canonical memory committed; preserve recovery files and recompile before editing again. |
 | `compile=error`, `sync=error` | Fix the reported configuration or request error, then rerun dry-run. |
 
+## Agent distribution surfaces
+
+`memphant-mcp` serves the seven governed tools and read-only MCP resources on
+the same stdio or Streamable HTTP session. Resource listing requires an API key
+bound to tenant, subject generation, actor, scope, and agent node; it returns
+opaque pages of at most 100 `memphant://memory/{unit_id}` entries. Known
+`memory`, `episode`, `resource`, and `trace` URIs are readable through the
+advertised templates, but never grant access outside that key binding.
+
+Rust hosts integrating Anthropic's GA client-side memory tool use
+`anthropic_memory_tool()` for the exact
+`{"type":"memory_20250818","name":"memory"}` declaration and dispatch the
+six decoded `MemoryCommand` variants to `MemphantMcp::handle_memory_command`.
+The virtual root matches Claude Code auto memory:
+`/memories/MEMORY.md` is a generated bounded index and Markdown topic files
+are governed projections. The GA handler also accepts bounded nested text-file
+paths and implements virtual directory listing, move, and recursive delete;
+binary/image files are not part of the canonical memory projection. Postgres
+remains authoritative; edits commit through the same atomic file-sync path as
+the CLI.
+
+After resolving a context binding, mint the MCP principal with the complete
+server-issued context (the plaintext key is printed once):
+
+```bash
+memphant-cli admin create-key --tenant "$TENANT_ID" \
+  --subject-id "$SUBJECT_ID" --subject-generation "$GENERATION" \
+  --scope "$SCOPE_ID" --actor "$ACTOR_ID" --agent-node "$AGENT_NODE_ID" \
+  --database-url "$PROVISIONER_DATABASE_URL"
+```
+
+Regenerate committed MCP artifacts only through their owner:
+
+```bash
+cargo run -q -p memphant-mcp -- --list-tools-json
+cargo run -q -p memphant-mcp -- --list-resources-json
+```
+
 ## Local Checks
 
 ```bash

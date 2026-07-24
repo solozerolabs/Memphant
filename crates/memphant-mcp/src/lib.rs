@@ -1,4 +1,5 @@
-//! MemPhant MCP server on rmcp 2.2 (MCP 2025-11-25): seven tools over the
+//! MemPhant MCP server on rmcp 2.2 (MCP 2025-11-25): seven tools and
+//! tenant-bound memory resources over the
 //! shared `MemoryService<AnyStore>`, a persistent stdio session, and an
 //! optional streamable-HTTP transport. The tenant is fixed at startup from
 //! `MEMPHANT_API_KEY` (sha256 → api_key lookup) or `MEMPHANT_DEV_TENANT`
@@ -9,20 +10,33 @@ use memphant_core::service::{MemoryService, ServiceError, clamp_trust};
 use memphant_core::{CoreError, MemoryStore, MutationResponse, StoreError};
 use memphant_runtime::AnyStore;
 use memphant_types::{
-    CorrectRequest, CorrectResult, ENGINE_VERSION, ForgetRequest, ForgetResult, MarkRequest,
-    MarkResult, RecallHttpRequest, RecallResponse, ReflectAccepted, ReflectRequest,
-    RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace, TenantId, TraceRequest,
-    TrustLevel,
+    AgentNodeId, CorrectRequest, CorrectResult, ENGINE_VERSION, ForgetRequest, ForgetResult,
+    MarkRequest, MarkResult, RecallHttpRequest, RecallResponse, ReflectAccepted, ReflectRequest,
+    RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace, ScopeId, SubjectId,
+    TenantId, TraceRequest, TrustLevel,
 };
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
-use rmcp::{Json, ServerHandler, tool, tool_handler, tool_router};
+use rmcp::model::{
+    Implementation, ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams,
+    ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
+    ServerCapabilities, ServerInfo,
+};
+use rmcp::service::RequestContext;
+use rmcp::{ErrorData, Json, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+
+mod file_memory;
+pub use file_memory::{
+    ANTHROPIC_MEMORY_TOOL_TYPE, MAX_DIRECTORY_BYTES, MAX_DIRECTORY_ENTRIES, MAX_MEMORY_INDEX_BYTES,
+    MAX_MEMORY_INDEX_LINES, MAX_RESOURCE_BYTES, MAX_TOPIC_BYTES, MAX_VIEW_CHARACTERS, MEMORY_ROOT,
+    MemoryCommand, MemoryProjection, MemoryResourceContent, MemoryToolError, anthropic_memory_tool,
+    memory_index, memory_resource_uri, parse_memory_resource_uri, resource_page, topic_path,
+};
 
 /// Hashes a presented API key into the stored `api_key.key_hash` form
 /// (identical to the REST edge).
@@ -126,8 +140,11 @@ pub fn mcp_http_authorized(
 pub struct BoundTenant {
     pub tenant: TenantId,
     pub max_trust: TrustLevel,
+    pub subject_id: Option<SubjectId>,
+    pub subject_generation: Option<u64>,
     pub actor_id: Option<memphant_types::ActorId>,
-    pub scope_id: Option<memphant_types::ScopeId>,
+    pub scope_id: Option<ScopeId>,
+    pub agent_node_id: Option<AgentNodeId>,
     pub dev_mode: bool,
 }
 
@@ -151,8 +168,11 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
         return Ok(BoundTenant {
             tenant,
             max_trust: TrustLevel::TrustedSystem,
+            subject_id: None,
+            subject_generation: None,
             actor_id: None,
             scope_id: None,
+            agent_node_id: None,
             dev_mode: true,
         });
     }
@@ -172,8 +192,11 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
     Ok(BoundTenant {
         tenant: row.tenant_id,
         max_trust: row.max_trust,
+        subject_id: row.data_subject_id,
+        subject_generation: row.subject_generation,
         actor_id: row.actor_id,
         scope_id: row.scope_id,
+        agent_node_id: row.agent_node_id,
         dev_mode: false,
     })
 }
@@ -192,6 +215,74 @@ impl MemphantMcp {
     /// bearer auth.
     pub fn dev_mode(&self) -> bool {
         self.bound.dev_mode
+    }
+
+    async fn memory_projection(&self) -> Result<MemoryProjection, MemoryToolError> {
+        let (
+            Some(subject_id),
+            Some(subject_generation),
+            Some(actor_id),
+            Some(scope_id),
+            Some(agent_node_id),
+        ) = (
+            self.bound.subject_id,
+            self.bound.subject_generation,
+            self.bound.actor_id,
+            self.bound.scope_id,
+            self.bound.agent_node_id,
+        )
+        else {
+            return Err(MemoryToolError {
+                code: "scope_denied",
+                message: "MCP resources and memory files require a fully context-bound API key"
+                    .to_string(),
+            });
+        };
+        let mut context = self
+            .service
+            .store()
+            .resolve_memory_context(
+                self.bound.tenant,
+                subject_id,
+                actor_id,
+                scope_id,
+                agent_node_id,
+            )
+            .await
+            .map_err(|error| {
+                let (code, message) = match error {
+                    StoreError::NotFound(_) => ("scope_denied", "unresolved memory context"),
+                    _ => ("backend_unavailable", "memory store unavailable"),
+                };
+                MemoryToolError {
+                    code,
+                    message: message.to_string(),
+                }
+            })?;
+        if context.subject_generation != subject_generation {
+            return Err(MemoryToolError {
+                code: "context_binding_conflict",
+                message: "subject generation is stale".to_string(),
+            });
+        }
+        context.actor_trust = clamp_trust(context.actor_trust, self.bound.max_trust);
+        Ok(MemoryProjection::new(self.service.clone(), context))
+    }
+
+    /// Executes one GA Anthropic `memory_20250818` command over the same
+    /// canonical projection and atomic file-sync path as `memphant compile`.
+    pub async fn handle_memory_command(
+        &self,
+        command: MemoryCommand,
+    ) -> Result<String, MemoryToolError> {
+        self.memory_projection().await?.handle(command).await
+    }
+
+    pub async fn read_bound_resource(
+        &self,
+        uri: &str,
+    ) -> Result<MemoryResourceContent, MemoryToolError> {
+        self.memory_projection().await?.read_resource(uri).await
     }
 }
 
@@ -516,11 +607,88 @@ impl MemphantMcp {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for MemphantMcp {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+        ServerInfo::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
             .with_server_info(Implementation::new("memphant", ENGINE_VERSION))
             .with_instructions(
-                "MemPhant memory service: retain, recall, reflect, correct, forget, trace, mark.",
+                "MemPhant memory service: seven governed tools plus read-only tenant-bound memory resources.",
             )
+    }
+
+    async fn list_resources(
+        &self,
+        request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        let projection = self.memory_projection().await.map_err(memory_mcp_error)?;
+        let snapshot = projection.snapshot().await.map_err(memory_mcp_error)?;
+        let (items, next_cursor) = resource_page(
+            &snapshot,
+            request
+                .as_ref()
+                .and_then(|request| request.cursor.as_deref()),
+            100,
+        )
+        .map_err(memory_mcp_error)?;
+        Ok(ListResourcesResult {
+            meta: None,
+            next_cursor,
+            resources: items
+                .into_iter()
+                .map(|item| {
+                    Resource::new(
+                        memory_resource_uri(item.unit_id),
+                        item.fact_key
+                            .clone()
+                            .unwrap_or_else(|| item.unit_id.as_uuid().to_string()),
+                    )
+                    .with_title(
+                        item.fact_key
+                            .clone()
+                            .unwrap_or_else(|| item.unit_id.as_uuid().to_string()),
+                    )
+                    .with_description(format!("Governed {:?} memory unit", item.kind))
+                    .with_mime_type("text/markdown")
+                    .with_size(item.body.len() as u64)
+                })
+                .collect(),
+        })
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResult, ErrorData> {
+        let content = self
+            .read_bound_resource(&request.uri)
+            .await
+            .map_err(memory_mcp_error)?;
+        Ok(ReadResourceResult::new(vec![
+            ResourceContents::text(content.text, content.uri).with_mime_type(content.mime_type),
+        ]))
+    }
+
+    async fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourceTemplatesResult, ErrorData> {
+        Ok(ListResourceTemplatesResult::with_all_items(
+            resource_templates(),
+        ))
+    }
+}
+
+fn memory_mcp_error(error: MemoryToolError) -> ErrorData {
+    match error.code {
+        "not_found" => ErrorData::resource_not_found(error.message, None),
+        "backend_unavailable" => ErrorData::internal_error("memory store unavailable", None),
+        _ => ErrorData::invalid_params(error.to_string(), None),
     }
 }
 
@@ -528,6 +696,29 @@ impl ServerHandler for MemphantMcp {
 /// (camelCase `inputSchema`/`outputSchema`), never hand-edited.
 pub fn tools_artifact() -> Value {
     serde_json::to_value(MemphantMcp::tool_router().list_all()).expect("MCP tools serialize")
+}
+
+pub fn resource_templates() -> Vec<ResourceTemplate> {
+    ["memory", "trace", "episode", "resource"]
+        .into_iter()
+        .map(|kind| {
+            ResourceTemplate::new(
+                format!("memphant://{kind}/{{id}}"),
+                format!("memphant-{kind}"),
+            )
+            .with_title(format!("MemPhant {kind}"))
+            .with_description("Tenant-bound read-only MemPhant resource")
+        })
+        .collect()
+}
+
+/// The generated MCP resources artifact. It records only declared protocol
+/// capability and stable templates; tenant data is never emitted at build time.
+pub fn resources_artifact() -> Value {
+    serde_json::json!({
+        "capabilities": {"resources": {}},
+        "resourceTemplates": resource_templates(),
+    })
 }
 
 #[cfg(test)]
@@ -771,8 +962,11 @@ mod deep_runtime_smoke {
             BoundTenant {
                 tenant,
                 max_trust: TrustLevel::TrustedSystem,
+                subject_id: None,
+                subject_generation: None,
                 actor_id: None,
                 scope_id: None,
+                agent_node_id: None,
                 dev_mode: true,
             },
         );

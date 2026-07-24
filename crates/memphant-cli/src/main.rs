@@ -5,8 +5,11 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::str::FromStr;
 
+use memphant_core::MemoryStore;
 use memphant_store_postgres::{Provider, lint_migrations};
-use memphant_types::{MemphantLock, VerifyReport};
+use memphant_types::{
+    ActorId, AgentNodeId, MemphantLock, ScopeId, SubjectId, TenantId, VerifyReport,
+};
 mod file_plane;
 
 const DEFAULT_PROVIDER_PROFILE_DIR: &str = "deploy/provider-profiles";
@@ -14,6 +17,11 @@ const PITR_RETENTION_MARGIN_DAYS: u64 = 1;
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
+    if args.first().is_some_and(|value| value == "admin")
+        && args.get(1).is_some_and(|value| value == "create-key")
+    {
+        return admin_create_key(&args[2..]);
+    }
     if args.first().is_some_and(|verb| verb == "compile") {
         return file_plane::run_compile(&args[1..]);
     }
@@ -73,31 +81,6 @@ fn main() -> ExitCode {
                 && url_flag == "--database-url" =>
         {
             admin_create_tenant(name, url)
-        }
-        [admin, command, tenant_flag, tenant, url_flag, url]
-            if admin == "admin"
-                && command == "create-key"
-                && tenant_flag == "--tenant"
-                && url_flag == "--database-url" =>
-        {
-            admin_create_key(tenant, "trusted_user", url)
-        }
-        [
-            admin,
-            command,
-            tenant_flag,
-            tenant,
-            trust_flag,
-            trust,
-            url_flag,
-            url,
-        ] if admin == "admin"
-            && command == "create-key"
-            && tenant_flag == "--tenant"
-            && trust_flag == "--max-trust"
-            && url_flag == "--database-url" =>
-        {
-            admin_create_key(tenant, trust, url)
         }
         [admin, command, id_flag, id, url_flag, url]
             if admin == "admin"
@@ -446,7 +429,39 @@ fn admin_create_tenant(name: &str, url: &str) -> ExitCode {
     }
 }
 
-fn admin_create_key(tenant: &str, max_trust: &str, url: &str) -> ExitCode {
+fn admin_create_key(args: &[String]) -> ExitCode {
+    let flags = match admin_flags(args) {
+        Ok(flags) => flags,
+        Err(error) => {
+            eprintln!("admin=error command=create-key");
+            eprintln!("{error}");
+            return ExitCode::from(2);
+        }
+    };
+    let required = |name: &str| {
+        flags
+            .get(name)
+            .map(String::as_str)
+            .ok_or_else(|| format!("missing --{name}"))
+    };
+    let tenant = match required("tenant") {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("admin=error command=create-key\n{error}");
+            return ExitCode::from(2);
+        }
+    };
+    let url = match required("database-url") {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("admin=error command=create-key\n{error}");
+            return ExitCode::from(2);
+        }
+    };
+    let max_trust = flags
+        .get("max-trust")
+        .map(String::as_str)
+        .unwrap_or("trusted_user");
     let tenant_id = match uuid::Uuid::parse_str(tenant) {
         Ok(tenant_id) => tenant_id,
         Err(error) => {
@@ -476,9 +491,60 @@ fn admin_create_key(tenant: &str, max_trust: &str, url: &str) -> ExitCode {
     );
     let key_hash = sha256_hex(&plaintext);
 
+    let context_names = [
+        "subject-id",
+        "subject-generation",
+        "scope",
+        "actor",
+        "agent-node",
+    ];
+    let context_count = context_names
+        .iter()
+        .filter(|name| flags.contains_key(**name))
+        .count();
+    if context_count != 0 && context_count != context_names.len() {
+        eprintln!("admin=error command=create-key");
+        eprintln!(
+            "context binding requires --subject-id, --subject-generation, --scope, --actor, and --agent-node together"
+        );
+        return ExitCode::from(2);
+    }
+
     match connect_pg(url).and_then(|store| {
-        block_on(store.create_api_key(tenant_id, &key_hash, "cli", trust, None))
-            .map_err(|error| error.to_string())
+        block_on(async {
+            let context = if context_count == context_names.len() {
+                let parse_uuid = |name: &str| {
+                    uuid::Uuid::parse_str(flags.get(name).expect("complete context flags"))
+                        .map_err(|error| format!("--{name} must be a UUID: {error}"))
+                };
+                let expected_generation = flags["subject-generation"]
+                    .parse::<u64>()
+                    .map_err(|error| format!("--subject-generation must be an integer: {error}"))?;
+                let context = store
+                    .resolve_memory_context(
+                        TenantId::from_u128(tenant_id.as_u128()),
+                        SubjectId::from_u128(parse_uuid("subject-id")?.as_u128()),
+                        ActorId::from_u128(parse_uuid("actor")?.as_u128()),
+                        ScopeId::from_u128(parse_uuid("scope")?.as_u128()),
+                        AgentNodeId::from_u128(parse_uuid("agent-node")?.as_u128()),
+                    )
+                    .await
+                    .map_err(|error| format!("context binding is invalid: {error}"))?;
+                if context.subject_generation != expected_generation {
+                    return Err(format!(
+                        "--subject-generation is stale: expected {}, got {expected_generation}",
+                        context.subject_generation
+                    ));
+                }
+                Some(context)
+            } else {
+                None
+            };
+            store
+                .create_api_key(tenant_id, &key_hash, "cli", trust, context.as_ref())
+                .await
+                .map_err(|error| error.to_string())
+        })
     }) {
         Ok(id) => {
             println!("key_created id={id} tenant={tenant_id} max_trust={max_trust}");
@@ -491,6 +557,35 @@ fn admin_create_key(tenant: &str, max_trust: &str, url: &str) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+fn admin_flags(args: &[String]) -> Result<BTreeMap<String, String>, String> {
+    if !args.len().is_multiple_of(2) {
+        return Err("every create-key flag requires a value".to_string());
+    }
+    let allowed = [
+        "tenant",
+        "database-url",
+        "max-trust",
+        "subject-id",
+        "subject-generation",
+        "scope",
+        "actor",
+        "agent-node",
+    ];
+    let mut flags = BTreeMap::new();
+    for pair in args.chunks_exact(2) {
+        let name = pair[0]
+            .strip_prefix("--")
+            .ok_or_else(|| format!("expected a flag, got {}", pair[0]))?;
+        if !allowed.contains(&name) {
+            return Err(format!("unknown create-key flag --{name}"));
+        }
+        if flags.insert(name.to_string(), pair[1].clone()).is_some() {
+            return Err(format!("duplicate create-key flag --{name}"));
+        }
+    }
+    Ok(flags)
 }
 
 fn admin_revoke_key(id: &str, url: &str) -> ExitCode {
@@ -853,5 +948,50 @@ fn expect_false(profile: &BTreeMap<String, String>, key: &str, findings: &mut Ve
         && value != "false"
     {
         findings.push(format!("profile:expected_false:{key}:actual={value}"));
+    }
+}
+
+#[cfg(test)]
+mod admin_key_tests {
+    use super::admin_flags;
+
+    #[test]
+    fn create_key_flags_accept_a_complete_context_in_any_order() {
+        let values = [
+            "--scope",
+            "scope-id",
+            "--tenant",
+            "tenant-id",
+            "--database-url",
+            "postgres://example",
+            "--subject-id",
+            "subject-id",
+            "--subject-generation",
+            "3",
+            "--actor",
+            "actor-id",
+            "--agent-node",
+            "agent-id",
+        ]
+        .map(str::to_string);
+        let flags = admin_flags(&values).expect("valid flags");
+        assert_eq!(flags["subject-generation"], "3");
+        assert_eq!(flags["agent-node"], "agent-id");
+    }
+
+    #[test]
+    fn create_key_flags_reject_unknown_duplicate_and_unpaired_values() {
+        for values in [
+            vec!["--unknown".to_string(), "x".to_string()],
+            vec![
+                "--tenant".to_string(),
+                "a".to_string(),
+                "--tenant".to_string(),
+                "b".to_string(),
+            ],
+            vec!["--tenant".to_string()],
+        ] {
+            assert!(admin_flags(&values).is_err());
+        }
     }
 }

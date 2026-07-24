@@ -33,8 +33,11 @@ fn dev_handler(store: InMemoryStore, tenant: TenantId) -> MemphantMcp {
         BoundTenant {
             tenant,
             max_trust: TrustLevel::TrustedSystem,
+            subject_id: None,
+            subject_generation: None,
             actor_id: None,
             scope_id: None,
+            agent_node_id: None,
             dev_mode: true,
         },
     )
@@ -81,6 +84,33 @@ fn artifact_has_camel_case_input_schema_for_all_seven_tools() {
     assert_eq!(
         generated, committed,
         "mcp/memphant.tools.v1.json is stale — regenerate via `memphant-mcp --list-tools-json`"
+    );
+}
+
+#[test]
+fn resources_artifact_matches_capability_and_stable_templates() {
+    let generated = memphant_mcp::resources_artifact();
+    let committed: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mcp/memphant.resources.v1.json"),
+        )
+        .expect("committed resources artifact readable"),
+    )
+    .expect("committed resources artifact is JSON");
+    assert_eq!(
+        generated, committed,
+        "regenerate with `memphant-mcp --list-resources-json`"
+    );
+    assert_eq!(
+        generated["capabilities"]["resources"],
+        serde_json::json!({})
+    );
+    assert_eq!(
+        generated["resourceTemplates"]
+            .as_array()
+            .expect("templates")
+            .len(),
+        4
     );
 }
 

@@ -334,8 +334,10 @@ team verdict). Each item carries an n=12-style falsification gate.
 3. **B3 — Distribution wedge**: Anthropic **memory-tool handler** (six
    commands over `/memories`, exact GA contract per OSS team) + Claude Code
    auto-memory shape (MEMORY.md index + topic files) + MCP resources mount.
-   Tools+resources only — the 2026 MCP spec deprecates sampling/roots (docs
-   team). This is the zero-integration adoption path for any agent, and the
+   Tools+resources only — current MCP keeps roots and sampling active client
+   capabilities; only sampling's `includeContext` values are soft-deprecated,
+   and B3 has no need to request either capability. This is the
+   zero-integration adoption path for any agent, and the
    direct answer to OpenViking.
 4. **B4 — Receipts + calibrated answers**: citation quote_hash verification
    end-to-end (experimental P11) and the LME-V2-blessed evidence-status →
