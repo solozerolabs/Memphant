@@ -59,7 +59,10 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             source_ref="fact:release-region",
             observed_at="2025-06-01T00:00:00Z",
             kind="semantic",
+            fact_key="profile:release-region",
+            predicate="release_region",
             body="Release region is Taipei.",
+            confidence=1.0,
         )
 
         reflected = client.reflect(ctx=ctx)
@@ -75,7 +78,9 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
         )
         assert recalled["items"][0]["body"] == "Release region is Taipei."
 
-        trace = client.trace("00000000-0000-0000-0000-000000099001")
+        trace = client.trace(
+            ctx=ctx, trace_id="00000000-0000-0000-0000-000000099001"
+        )
         assert trace["id"] == "00000000-0000-0000-0000-000000099001"
 
         corrected = client.correct(
@@ -105,14 +110,17 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
         assert marked["accepted"] is True
 
         paths = [request["path"] for request in server.requests]
-        assert paths == [
+        trace_path = paths[6]
+        assert trace_path.startswith(
+            "/v1/traces/00000000-0000-0000-0000-000000099001?"
+        )
+        assert paths[:6] + paths[7:] == [
             "/v1/context-bindings/syndai:user:demo",
             "/v1/episodes",
             "/v1/episodes",
             "/v1/episodes",
             "/v1/reflect",
             "/v1/recall",
-            "/v1/traces/00000000-0000-0000-0000-000000099001",
             "/v1/correct",
             "/v1/forget",
             "/v1/mark",
@@ -121,6 +129,17 @@ def test_python_sdk_round_trips_all_public_verbs() -> None:
             request["headers"].get("authorization") == "Bearer test-key"
             for request in server.requests
         )
+        for request in server.requests:
+            if request["method"] == "POST" and request["path"] in {
+                "/v1/episodes",
+                "/v1/reflect",
+                "/v1/correct",
+                "/v1/forget",
+                "/v1/mark",
+            }:
+                assert request["headers"].get("idempotency-key", "").startswith(
+                    "memphant-sdk-"
+                )
 
         # No verb body smuggles tenant_id / allowed_scope_ids (the banned shape).
         for request in server.requests:
@@ -201,7 +220,11 @@ class FakeMemphantServer:
             def do_GET(self) -> None:  # noqa: N802
                 parent._record(self)
                 if self.path.startswith("/v1/traces/"):
-                    parent._write(self, 200, {"id": self.path.rsplit("/", 1)[-1]})
+                    parent._write(
+                        self,
+                        200,
+                        {"id": self.path.rsplit("/", 1)[-1].split("?", 1)[0]},
+                    )
                 else:
                     parent._write(self, 404, {"error": {"code": "not_found", "message": "missing", "request_id": "req_test", "details": {}}})
 

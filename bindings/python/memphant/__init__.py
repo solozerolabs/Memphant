@@ -15,9 +15,11 @@ silently fall back to — a contract violation raises `MemPhantValidationError`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any, Callable
+from urllib.parse import urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -217,8 +219,10 @@ class MemPhant:
         source_ref: str,
         observed_at: str,
         kind: str,
+        fact_key: str,
+        predicate: str,
         body: str,
-        churn_class: str | None = None,
+        confidence: float,
         valid_from: str | None = None,
         valid_to: str | None = None,
     ) -> dict[str, Any]:
@@ -233,8 +237,10 @@ class MemPhant:
                 "payload": {
                     "unit": {
                         "kind": kind,
+                        "fact_key": fact_key,
+                        "predicate": predicate,
                         "body": body,
-                        "churn_class": churn_class,
+                        "confidence": confidence,
                         "valid_from": valid_from,
                         "valid_to": valid_to,
                     }
@@ -352,8 +358,9 @@ class MemPhant:
             },
         )
 
-    def trace(self, trace_id: str) -> dict[str, Any]:
-        return self._get(f"/v1/traces/{trace_id}")
+    def trace(self, *, ctx: BoundContext, trace_id: str) -> dict[str, Any]:
+        query = urlencode(ctx._identity())
+        return self._get(f"/v1/traces/{trace_id}?{query}")
 
     def _get(self, path: str) -> dict[str, Any]:
         return self._request("GET", path, None)
@@ -366,12 +373,13 @@ class MemPhant:
     ) -> dict[str, Any]:
         if self._transport is not None:
             return self._transport(method, path, body)
-        payload = None if body is None else json.dumps(_strip_none(body)).encode()
+        wire_body = None if body is None else _strip_none(body)
+        payload = None if wire_body is None else json.dumps(wire_body).encode()
         request = Request(
             _join_url(self.base_url, path),
             data=payload,
             method=method,
-            headers=self._headers(payload is not None),
+            headers=self._headers(method, path, wire_body),
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
@@ -382,12 +390,24 @@ class MemPhant:
             _raise_error(raw, retry_after=retry_after)
         return json.loads(raw.decode()) if raw else {}
 
-    def _headers(self, has_body: bool) -> dict[str, str]:
+    def _headers(
+        self, method: str, path: str, body: dict[str, Any] | None
+    ) -> dict[str, str]:
         headers = {"accept": "application/json"}
-        if has_body:
+        if body is not None:
             headers["content-type"] = "application/json"
         if self.api_key:
             headers["authorization"] = f"Bearer {self.api_key}"
+        if method == "POST" and path in {
+            "/v1/episodes",
+            "/v1/reflect",
+            "/v1/correct",
+            "/v1/forget",
+            "/v1/mark",
+        }:
+            canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
+            digest = hashlib.sha256(f"{method}\n{path}\n{canonical}".encode()).hexdigest()
+            headers["idempotency-key"] = f"memphant-sdk-{digest}"
         return headers
 
 

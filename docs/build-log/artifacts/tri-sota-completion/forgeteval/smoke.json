@@ -1,0 +1,78 @@
+{
+  "benchmark": "ForgetEval",
+  "capabilities": {
+    "inscribe": "synchronous direct-unit POST /v1/episodes",
+    "purge": "N/A: no selective hard purge-by-query public primitive",
+    "recall": "POST /v1/recall",
+    "release": "trace fused-score adaptive gap then exact-unit POST /v1/forget",
+    "supersede": "rank-1 recall then exact-unit POST /v1/correct"
+  },
+  "case_generation": {
+    "distractors": null,
+    "scale_per_family": null,
+    "seed": null
+  },
+  "operation_counts": {
+    "inscribe": 23,
+    "recall": 27,
+    "release": 8,
+    "resets": 15,
+    "supersede": 9
+  },
+  "results": {
+    "failed": 0,
+    "families": {
+      "amnesia": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 3
+      },
+      "decay": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 3
+      },
+      "drift": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 3
+      },
+      "purge": {
+        "failed": 0,
+        "not_applicable": 3,
+        "passed": 0,
+        "total": 3
+      },
+      "supersession": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 3
+      }
+    },
+    "not_applicable": 3,
+    "passed": 12,
+    "total": 15,
+    "wall_seconds": 1.8970873750222381
+  },
+  "runtime": {
+    "database": "run-owned ephemeral scratch Postgres",
+    "embed_model": "small",
+    "mode": "fast",
+    "server": "/Users/sidsharma/.codex/worktrees/Memphant/tri-sota-completion/target/release/memphant-server"
+  },
+  "suite": "smoke",
+  "upstream": {
+    "adapter_sha256": "f1eff0efa89437e8c44ce6f60b5a88280592094c2c6b9b955524cc0262c3c307",
+    "adversarial_sha256": "cfdf125aba5b90975634ce48bdf0f078397a72a1cc9dd1aa5bb59ab067c322d3",
+    "commit": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
+    "license": "MIT",
+    "license_sha256": "cdf599e8c8ce18ca59dae4d6617f06cb59433752203e703c9defb274b40c6657",
+    "repository": "https://github.com/deeplethe/lethe.git",
+    "runner_sha256": "4fdc672e2c19eec7f3da30fda5a541699a0fe07e1a00a4bae67fa6343800162e",
+    "templates_sha256": "39072bea33402e5cbf66a6c1101504a337ab9f5f3bd90d5402afc7727c4516a8"
+  }
+}

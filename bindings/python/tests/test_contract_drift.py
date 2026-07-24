@@ -221,6 +221,22 @@ def test_retain_resource_payload_conforms(spec, client, capture, ctx):
     _assert_conforms(spec, method, path, body)
 
 
+def test_retain_unit_payload_conforms(spec, client, capture, ctx):
+    client.retain_unit(
+        ctx=ctx,
+        source_ref="fact:release-region",
+        observed_at="2026-07-21T00:00:00Z",
+        kind="semantic",
+        fact_key="profile:release-region",
+        predicate="release_region",
+        body="Release region is Taipei.",
+        confidence=1.0,
+    )
+    method, path, body = capture.last
+    assert (method, path) == ("POST", "/v1/episodes")
+    _assert_conforms(spec, method, path, body)
+
+
 def test_correct_payload_conforms(spec, client, capture, ctx):
     client.correct(
         ctx=ctx,
@@ -264,6 +280,27 @@ def test_mark_payload_conforms(spec, client, capture, ctx):
     method, path, body = capture.last
     assert (method, path) == ("POST", "/v1/mark")
     _assert_conforms(spec, method, path, body)
+
+
+def test_wire_headers_satisfy_mutation_idempotency_contract(client, ctx):
+    body = {**ctx._identity(), "query": "q"}
+    first = client._headers("POST", "/v1/reflect", body)
+    second = client._headers("POST", "/v1/reflect", dict(reversed(body.items())))
+    assert first["idempotency-key"] == second["idempotency-key"]
+    assert first["idempotency-key"].startswith("memphant-sdk-")
+    assert "idempotency-key" not in client._headers("POST", "/v1/recall", body)
+    assert "idempotency-key" not in client._headers("GET", "/v1/health", None)
+
+
+def test_trace_carries_complete_bound_context_query(client, capture, ctx):
+    trace_id = str(uuid4())
+    client.trace(ctx=ctx, trace_id=trace_id)
+    method, path, body = capture.last
+    assert method == "GET"
+    assert body == {}
+    assert path.startswith(f"/v1/traces/{trace_id}?")
+    for name, value in ctx._identity().items():
+        assert f"{name}={value}" in path
 
 
 def test_no_verb_smuggles_tenant_id(spec, client, capture, ctx):
