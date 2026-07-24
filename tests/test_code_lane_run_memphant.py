@@ -255,6 +255,30 @@ def test_ingest_attempt_payload_conforms_to_strict_contract(clr):
     _assert_object_conforms(spec, "RetainEpisodeHttpRequest", schema, payload)
 
 
+def test_attempt_context_preserves_run_scope_and_agent_identity(clr):
+    class Client:
+        def bind_context(self, client_ref, **kwargs):
+            return {"client_ref": client_ref, **kwargs}
+
+    context = clr.bind_attempt_context(
+        Client(),
+        {
+            "attempt_id": "attempt-1",
+            "run_id": "issue-1",
+            "repository": "org/repo",
+        },
+    )
+
+    assert context == {
+        "client_ref": "code-lane:attempt:attempt-1",
+        "subject_ref": "code-lane:run:issue-1",
+        "actor_ref": "code-lane:actor:org/repo",
+        "actor_kind": "agent",
+        "scope_ref": "code-lane:scope:attempt-1",
+        "agent_node_ref": "code-lane:agent:org/repo",
+    }
+
+
 def test_runtime_provenance_binds_repository_and_migrations(clr):
     repository = clr.repository_identity(ROOT)
     migrations = clr.migration_identity(ROOT)

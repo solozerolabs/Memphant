@@ -297,6 +297,23 @@ def require_outcome_mark_ready(readiness: dict) -> None:
 EVENT_SOURCE_KINDS = {"user": "user", "assistant": "agent", "toolResult": "tool"}
 
 
+def bind_attempt_context(client: gr.ApiClient, row: dict) -> dict:
+    """Bind one independent coding attempt to one scope lane.
+
+    All attempts remain under the same API-key tenant, while run/scope/agent
+    identity stays faithful to the source trajectory instead of collapsing the
+    entire public corpus into one serial scope.
+    """
+    return client.bind_context(
+        f"code-lane:attempt:{row['attempt_id']}",
+        subject_ref=f"code-lane:run:{row['run_id']}",
+        actor_ref=f"code-lane:actor:{row['repository']}",
+        actor_kind="agent",
+        scope_ref=f"code-lane:scope:{row['attempt_id']}",
+        agent_node_ref=f"code-lane:agent:{row['repository']}",
+    )
+
+
 def event_source_ref(row: dict, event: dict) -> str:
     return f"coding-event:{row['attempt_id']}:{event['sequence']}:{event['event_id']}"
 
@@ -455,25 +472,22 @@ def main() -> int:
     try:
         server.start()
         clients = [gr.ApiClient(args.port, key, tenant) for tenant, key in principals]
-        contexts = [
-            client.bind_context(
-                "code-lane:coding-events",
-                subject_ref="code-lane:subject",
-                actor_ref="code-lane:actor",
-                actor_kind="agent",
-                scope_ref="code-lane:scope",
-                agent_node_ref="code-lane:agent",
-            )
-            for client in clients
-        ]
         t0 = time.time()
         evaluation_events = 0
+        evaluation_contexts = {}
         for i, row in enumerate(ingest_rows):
-            evaluation_events += len(ingest_attempt(clients[0], contexts[0], row))
+            context = bind_attempt_context(clients[0], row)
+            evaluation_contexts[row["attempt_id"]] = context
+            evaluation_events += len(ingest_attempt(clients[0], context, row))
             if (i + 1) % 25 == 0:
                 print(f"{label_prefix}  ingested {i + 1}/{len(ingest_rows)}", file=sys.stderr)
+        sentinel_attempt_id = goldens[0]["provenance"][0]["attempt_id"]
+        sentinel_row = next(
+            row for row in ingest_rows if row["attempt_id"] == sentinel_attempt_id
+        )
+        sentinel_context = bind_attempt_context(clients[1], sentinel_row)
         sentinel_source_ref, sentinel_body = ingest_isolation_sentinel(
-            clients[1], contexts[1], ingest_rows[0]
+            clients[1], sentinel_context, sentinel_row
         )
         isolation_sentinel_events = 1
         ingest_seconds = time.time() - t0
@@ -496,8 +510,9 @@ def main() -> int:
         provenance_rows = []
         recall_started = time.time()
         for i, golden in enumerate(goldens):
+            attempt_id = golden["provenance"][0]["attempt_id"]
             bodies, degraded = gr.recall_query(
-                clients[0], contexts[0], golden["question"], args.k,
+                clients[0], evaluation_contexts[attempt_id], golden["question"], args.k,
                 args.budget_tokens, args.mode
             )
             evidence_rows.append(gc.evidence_row(golden, bodies, args.k))
@@ -517,13 +532,13 @@ def main() -> int:
 
         isolation_golden = goldens[0]
         other_bodies, other_degraded = gr.recall_query(
-            clients[1], contexts[1], isolation_golden["question"],
+            clients[1], sentinel_context, isolation_golden["question"],
             args.k, args.budget_tokens, args.mode,
         )
         if other_degraded or gc.provenance_hit(isolation_golden, other_bodies, args.k):
             raise RuntimeError("two-tenant negative recall leaked owner evidence")
         owner_sentinel_bodies, owner_sentinel_degraded = gr.recall_query(
-            clients[0], contexts[0], ISOLATION_SENTINEL_TEXT,
+            clients[0], evaluation_contexts[sentinel_attempt_id], ISOLATION_SENTINEL_TEXT,
             args.k, args.budget_tokens, args.mode,
         )
         if owner_sentinel_degraded or sentinel_body in owner_sentinel_bodies:
@@ -576,6 +591,7 @@ def main() -> int:
             },
             "tenancy": {
                 "api_tenants": 2,
+                "tenant_a_attempt_contexts": len(evaluation_contexts),
                 "tenant_a_evaluation_events": evaluation_events,
                 "tenant_b_isolation_sentinel_events": isolation_sentinel_events,
                 "identical_binding_refs": True,

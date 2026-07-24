@@ -22,7 +22,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 class MemPhantError(Exception):

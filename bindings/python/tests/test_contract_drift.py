@@ -14,6 +14,7 @@ capture transport records the (method, path, body) the SDK would send.
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,6 +24,15 @@ from memphant import BoundContext, MemPhant, MemPhantValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SPEC_PATH = REPO_ROOT / "openapi" / "memphant.v1.json"
+
+
+def test_package_and_runtime_versions_match() -> None:
+    metadata = tomllib.loads(
+        (REPO_ROOT / "bindings/python/pyproject.toml").read_text(encoding="utf-8")
+    )
+    import memphant
+
+    assert metadata["project"]["version"] == memphant.__version__ == "0.4.0"
 
 
 def _spec() -> dict:
