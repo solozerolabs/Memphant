@@ -51,7 +51,8 @@ narrow tests before continuing:
 11. Initial terminal reconciliation documents: `8e6a2d1c`.
 12. Post-review proof-integrity implementation and evidence: `aae4b97a`,
     `847a5059`.
-13. Final regression-only repairs: `1915dfa8`, `6b1efe86`, `d590b7dc`.
+13. Final regression-only repairs: `1915dfa8`, `6b1efe86`, `d590b7dc`,
+    `c5d58ec5`, `6185c5b5`, `54e50a84`.
 14. Apply the commit containing this corrected manifest last.
 
 The private Syndai branch is separate and depends on the B4 public receipt
