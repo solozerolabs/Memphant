@@ -486,11 +486,17 @@ def install_openai_meter(
     ledger_path: Path,
     *,
     context: dict[str, Any] | None = None,
+    ledger_context: dict[str, Any] | None = None,
     generation_lookup=None,
 ) -> ProviderAttemptLedger:
     """Wrap available sync/async OpenAI clients with the same durable meter."""
     context = dict(context or {})
-    fingerprint = _sha256_json({"schema_version": 2, "context": context})
+    # An evaluation campaign may invoke the official harness in separate
+    # processes for several arm/domain cells while sharing one cumulative
+    # attempt ceiling. Attempt ``context`` remains recorded on every row;
+    # ``ledger_context`` gives those cells one explicitly scoped journal.
+    ledger_context = dict(context if ledger_context is None else ledger_context)
+    fingerprint = _sha256_json({"schema_version": 2, "context": ledger_context})
     ledger = ProviderAttemptLedger(Path(ledger_path), fingerprint)
 
     def install(name: str, *, is_async: bool) -> None:

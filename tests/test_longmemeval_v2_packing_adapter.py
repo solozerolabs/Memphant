@@ -106,6 +106,7 @@ def test_packing_query_binds_trace_flags_and_emits_receipt_provenance(monkeypatc
     memory.arm_contract = dict(adapter.ARM_CONTRACTS["cap1200"])
     memory.proof_dir = tmp_path
     memory.instance_id = "fixture"
+    memory.tenant_id = "tenant-1"
     memory.construction_proof = {
         "pairing": {
             "retains": [
@@ -163,6 +164,7 @@ def test_packing_query_binds_trace_flags_and_emits_receipt_provenance(monkeypatc
 
     monkeypatch.setattr(adapter._BASE.MemphantMemory, "query", fake_base_query)
     context = memory.query("What is supported?")
+    memory._queried_question_id = "question-1"
     metadata = memory.post_query_hook(
         query="What is supported?", query_image=None, memory_context=context
     )
@@ -173,9 +175,20 @@ def test_packing_query_binds_trace_flags_and_emits_receipt_provenance(monkeypatc
     assert metadata["packing_disposition"] == "supported"
     companion = json.loads(Path(metadata["packing_proof_path"]).read_text())
     assert companion["packing"]["items"][0]["verification_sha256"]
+    assert Path(companion["base"]["construction_proof_path"]).is_file()
     assert companion["contract"]["expected_pack_feature_flags"] == [
         "pack_render_cap:1200"
     ]
+    assert memory._queried_question_id is None
+    second_context = memory.query("What is supported again?")
+    memory._queried_question_id = "question-2"
+    second_metadata = memory.post_query_hook(
+        query="What is supported again?",
+        query_image=None,
+        memory_context=second_context,
+    )
+    assert second_metadata["packing_disposition"] == "supported"
+    assert memory._queried_question_id is None
 
 
 def test_packing_query_fails_closed_on_wrong_server_arm(monkeypatch, tmp_path):
@@ -186,6 +199,7 @@ def test_packing_query_fails_closed_on_wrong_server_arm(monkeypatch, tmp_path):
     memory.arm_contract = dict(adapter.ARM_CONTRACTS["cap1200"])
     memory.proof_dir = tmp_path
     memory.instance_id = "fixture"
+    memory.tenant_id = "tenant-1"
     memory.construction_proof = {"pairing": {"retains": []}}
     memory._last_query_proof = None
     memory._last_packing_query_proof = None
@@ -229,6 +243,14 @@ def test_packing_runner_uses_config_budget_and_dedicated_bootstrap(tmp_path):
         reader_base_url="http://reader/v1",
         evaluator_model="judge",
         evaluator_base_url="http://judge/v1",
+        attempt_ledger=tmp_path / "attempts.jsonl",
+        attempt_context_json='{"arm":"current","domain":"web"}',
+        max_provider_attempts=90,
+        max_spend_usd="8.00",
+        model_prices_json='{"reader":{"prompt":"0.17","completion":"0.25"},"judge":{"prompt":"1.75","completion":"14"}}',
+        model_output_caps_json='{"reader":1024,"judge":1024}',
+        authorization_manifest=tmp_path / "authorization.json",
+        authorization_campaign="packing",
         python="python3",
     )
     assert command[:4] == [
@@ -238,6 +260,11 @@ def test_packing_runner_uses_config_budget_and_dedicated_bootstrap(tmp_path):
         str(tmp_path / "official"),
     ]
     assert command[command.index("--memory-context-max-tokens") + 1] == "8192"
+    assert command[command.index("--max-provider-attempts") + 1] == "90"
+    assert command[command.index("--max-spend-usd") + 1] == "8.00"
+    assert command[command.index("--max-completion-tokens") + 1] == "1024"
+    assert command[command.index("--evaluator-max-completion-tokens") + 1] == "1024"
+    assert command[command.index("--authorization-campaign") + 1] == "packing"
 
 
 @pytest.mark.skipif(

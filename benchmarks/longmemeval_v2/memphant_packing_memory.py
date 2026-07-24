@@ -193,6 +193,21 @@ class MemphantPackingMemory(_BASE.MemphantMemory):
     ) -> list[MemoryContextItem]:
         base_context = super().query(query, query_image)
         _BASE._require(self._last_query_proof is not None, "base query proof is missing")
+        _BASE._require(
+            isinstance(self.construction_proof, dict),
+            "construction proof is missing after query",
+        )
+        construction_path = self.proof_dir / f"construction.{self.tenant_id}.json"
+        if construction_path.exists():
+            frozen_construction = json.loads(
+                construction_path.read_text(encoding="utf-8")
+            )
+            _BASE._require(
+                frozen_construction == self.construction_proof,
+                "construction proof changed across shared-haystack queries",
+            )
+        else:
+            _BASE._atomic_write_json(construction_path, self.construction_proof)
         base_proof_path = Path(self._last_query_proof["proof_path"])
         base_proof = json.loads(base_proof_path.read_text(encoding="utf-8"))
         public = base_proof.get("public")
@@ -252,6 +267,10 @@ class MemphantPackingMemory(_BASE.MemphantMemory):
                 "proof_path": str(base_proof_path),
                 "proof_sha256": _BASE._sha256_file(base_proof_path),
                 "context_sha256": _BASE._sha256_json(base_context),
+                "construction_proof_path": str(construction_path),
+                "construction_proof_sha256": _BASE._sha256_file(
+                    construction_path
+                ),
             },
             "packing": {
                 "context_sha256": _BASE._sha256_json(memory_context),
@@ -298,4 +317,8 @@ class MemphantPackingMemory(_BASE.MemphantMemory):
             == _BASE._sha256_json(memory_context),
             "post-query packing context mismatch",
         )
-        return dict(self._last_packing_query_proof)
+        result = dict(self._last_packing_query_proof)
+        self._last_packing_query_proof = None
+        self._last_query_proof = None
+        self._queried_question_id = None
+        return result
