@@ -3,24 +3,32 @@
 Date: 2026-07-24. Machine packet:
 `docs/build-log/artifacts/next-evidence/authorization-request.json`.
 
-The packet is deliberately non-authorizing: every executable campaign remains
-`AWAITING_EXPLICIT_PAID_AUTHORIZATION`, with `authorization: null`. Zero model
+The packet is deliberately non-authorizing. Only the ForgetEval proposal
+campaign remains `AWAITING_EXPLICIT_PAID_AUTHORIZATION`, with
+`authorization: null`. Packing is rejected before paid execution. Zero model
 calls were made and $0 settled.
 
 ## Minimum current request
 
 | campaign | purpose | logical calls | provider attempts | ceiling | current state |
 |---|---|---:|---:|---:|---|
-| LongMemEval-V2 packing | 12 cases, five paired arms; reader plus judge | 90 | 90 | $8.00 | awaiting explicit authorization |
+| LongMemEval-V2 packing | 12 cases, five paired arms; reader plus judge | 0 | 0 | $0 | rejected: free exact abstention regressed 3/4 to 1/4 |
 | ForgetEval proposals | 16 non-executing proposals over 12 cases | 16 | 32 | $0.50 | awaiting explicit authorization |
 | SWE-ContextBench | four-target operational tranche, then conditional n=12 | 12 then at most 36 task runs | not frozen | not frozen | blocked, not authorizable |
 | DeepSWE paired memory | required 12 causal targets | 0 | 0 | $0 | rejected at 3/12 pairs |
 
-The current maximum authorizable dollar liability is therefore **$8.50**,
-split across two independently scoped campaigns. Authorization for either does
-not authorize the other.
+The current maximum authorizable dollar liability is therefore **$0.50**, for
+non-executing ForgetEval proposals only.
 
-## Packing controls
+## Packing stop decision
+
+Render cap 1200 recovered all eight scored retrieval cases but failed the
+separately deterministic exact-`UNKNOWN` sentinel: 1/4 versus current 3/4.
+That free non-regression gate is binding, so the $8 reader/judge campaign is
+not authorizable. A new packing technique must first pass both free retrieval
+and exact-abstention predicates on the frozen small set.
+
+## Dormant packing controls
 
 The packing packet binds all source, case, adapter, runner, bootstrap, meter,
 acquisition, and slice-builder hashes. It fixes Qwen 3.5 9B as reader, GPT-5.2
@@ -39,8 +47,7 @@ uses the same constructed state. The database is dropped at settlement.
 
 The data acquisition command downloads only the five required source objects
 (about 1.20 GB), not the approximately 6 GB trajectory screenshot archives.
-Acquisition remains deferred until authorization because it has no value if the
-paid gate is not approved.
+Acquisition remains deferred because the paid gate was rejected.
 
 ## Forgetting controls
 

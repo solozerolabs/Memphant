@@ -49,3 +49,26 @@ def test_campaign_commands_bind_both_openrouter_key_consumers(tmp_path):
         command[command.index("--evaluator-api-key-env") + 1]
         == "OPENROUTER_API_KEY"
     )
+
+
+def test_partial_abort_preserves_reserved_liability(tmp_path):
+    module = _load()
+    ledger = tmp_path / "attempts.jsonl"
+    ledger.write_text("fixture")
+    artifact = module.abort_artifact(
+        [{"arm": "no_retrieval", "domain": "web"}],
+        ledger,
+        RuntimeError("provider detail must not be persisted"),
+        snapshot_loader=lambda path: {
+            "reported_cost_usd": 0.1,
+            "attempts": [
+                {"status": "result", "start": {"reserved_liability_usd": "0.2"}},
+                {"status": "started", "start": {"reserved_liability_usd": "0.3"}},
+            ],
+        },
+    )
+    assert artifact["status"] == "INCOMPLETE_NOT_RESUMABLE"
+    assert artifact["reported_cost_usd"] == 0.1
+    assert artifact["unsettled_reserved_liability_usd"] == 0.3
+    assert artifact["failure_type"] == "RuntimeError"
+    assert "provider detail" not in str(artifact)

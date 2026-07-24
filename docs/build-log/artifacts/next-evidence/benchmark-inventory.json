@@ -31,7 +31,7 @@
       "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
       "dataset_license": "MIT",
       "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
-      "case_manifest_sha256": "8610c8b5097cbb57702d9f330897673cdb514baaca3d144ac4376d8ab76e37ae"
+      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a"
     },
     "deep_swe": {
       "purpose": "secondary unpaired robustness benchmark only",
@@ -41,7 +41,7 @@
       "license": "Apache-2.0 for Datacurve contributions; upstream task licenses remain separate",
       "task_count": 113,
       "pairing_manifest": "benchmarks/manifests/deep_swe.pairing.audit.json",
-      "pairing_manifest_sha256": "ea6f6d69c3db83d959c8034e62cd6db6ce41f0ea8f904dd4f79cce56c637edd8"
+      "pairing_manifest_sha256": "e93e7cd3b5482d1c726dce70bd058e4c61537b72fad11e818b6c8f491da80ca2"
     },
     "forgeteval": {
       "purpose": "explicit mutation and control-plane gate",

@@ -40,9 +40,11 @@ The machine-readable report classifies all 385 baseline cases:
 | benchmark limitation | 0 | No failure needed this category after inspecting the official cases and recorded operations. |
 | already-correct behavior | 133 | Baseline pass. |
 
-This is a benchmark-adapter classification, not a general proof that MemPhant
-has no forgetting defects. The full exact-state/lineage contract remains a
-separate product gate.
+This classification consumes each case's failed assertion indexes, operation
+decisions, exact selected IDs, mutation acknowledgements, and created or
+superseded IDs. It is still a benchmark-adapter classification, not a general
+proof that MemPhant has no forgetting defects. The full exact-state/lineage
+contract remains a separate product gate.
 
 ## Why threshold tuning stopped
 
@@ -91,7 +93,8 @@ The paid packet is staged at
 `docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json`.
 It authorizes at most 16 logical proposal calls, 32 provider attempts, 256
 output tokens per attempt, and $0.50. Its current status is
-`AWAITING_EXPLICIT_PAID_AUTHORIZATION`, so the command fails before reading the
+`AWAITING_EXPLICIT_PAID_AUTHORIZATION`, so the command verifies its signed
+scope plus generator, reader, journal, and prompt hashes before reading the
 provider credential. Even if proposal generation is later authorized, mutation
 execution still requires separate confirmation and authorization.
 

@@ -28,7 +28,8 @@ def test_combined_packet_is_frozen_and_non_authorizing() -> None:
     assert packet["status"] == "AWAITING_EXPLICIT_PAID_AUTHORIZATION"
     assert packet["paid_calls_executed"] == 0
     assert packet["settled_cost_usd"] == "0"
-    assert packet["maximum_currently_authorizable_usd"] == "8.50"
+    assert packet["maximum_currently_authorizable_usd"] == "0.50"
+    assert packet["campaigns"]["packing"]["status"].startswith("REJECTED_")
     assert packet["campaigns"]["packing"]["authorization"] is None
     assert packet["campaigns"]["forgetting_proposals"]["authorization"] is None
     assert packet["campaigns"]["swe_contextbench"]["status"] == "BLOCKED_NOT_AUTHORIZABLE"

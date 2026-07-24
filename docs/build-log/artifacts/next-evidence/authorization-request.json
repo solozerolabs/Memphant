@@ -3,18 +3,18 @@
   "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
-  "maximum_currently_authorizable_usd": "8.50",
-  "claim_boundary": "This packet authorizes nothing in its present state. Packing and proposal generation require separate explicit scope authorization; mutation execution, coding agents, Docker evaluation, production, deployment, and landing remain excluded.",
+  "maximum_currently_authorizable_usd": "0.50",
+  "claim_boundary": "This packet authorizes nothing in its present state. Only non-executing ForgetEval proposal generation remains eligible for separate explicit scope authorization; packing failed its free exact-abstention gate. Mutation execution, coding agents, Docker evaluation, production, deployment, and landing remain excluded.",
   "campaigns": {
     "packing": {
-      "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
+      "status": "REJECTED_AT_FREE_EXACT_ABSTENTION_GATE_NOT_AUTHORIZABLE",
       "authorization": null,
       "purpose": "Frozen LongMemEval-V2 n=12 paired answer-quality and premise-resistance kill gate.",
       "frozen_inputs": {
         "case_manifest": "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json",
         "case_manifest_sha256": "a1e806679e3095ab030964dc27cc17f2f466ab93e7da0a64d5b0d72e9e052d20",
         "adapter_lock": "benchmarks/manifests/longmemeval_v2_packing_adapter.lock.json",
-        "adapter_lock_sha256": "e8f3ab3963e7f6bab1e26b183551c2f2be4a8baddc21685bff6144420f65f9e6",
+        "adapter_lock_sha256": "4a3355a8e8136e8d5b2e631f0f5773756ab724b1fd834a9af929c7fbc611bcdf",
         "code_revision": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
         "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
         "case_count": 12,
@@ -22,14 +22,22 @@
         "judge_calls": 30
       },
       "code": {
-        "campaign_runner_sha256": "ebb5abddf1893d64312ee21e5c79749e9ac3d23bd1cc3c187cd1d14dd4491d38",
-        "campaign_analyzer_sha256": "fb39f01426e54af2e12dc20d981b7fd3efe0b3624f4ab12e474c89aab33a97f4",
-        "harness_runner_sha256": "19109a8ced558394ea7fe1176205ad4b8cd9f3b439046ba7e44a5312b9c14043",
-        "bootstrap_sha256": "fdad3d710a07c5569d5ab82d47549809f2ab05346ec0899646a2f4049a2a5f8e",
-        "paid_meter_sha256": "dbf81312f9d4f1049dd6bf8056fcc47e322f1c18490429b00b0d263553cd9b1b",
-        "provider_attempt_journal_sha256": "4c581a109a3a4887a5e3b7a34ebe32b784e9086af4815d394fff14dc74204fdd",
+        "campaign_runner_sha256": "09e3a004c634642b336d7a1c5626ae9519c8389c20da1953df6572e86b4cdf70",
+        "campaign_analyzer_sha256": "14cdc0a172a2c09dec856f3a690ca38c4d72a6fcb31435e7cfb12acae1dd6ac0",
+        "harness_runner_sha256": "d902b4c14ca3586156c15e0098ec5344560795e2f28e1f4ea84aa4ca87c53e87",
+        "bootstrap_sha256": "ba4b6d8a739acc712b69400f39619b2c98ede55fda388c39aa3016942df9415e",
+        "paid_meter_sha256": "a3d8f71589ebac9f266bb30d05f704d3c1f0807bfc9be734462e02e4e50d4e44",
+        "provider_attempt_journal_sha256": "ea8f264da051450a0bca80ae49858060739ea5c1bf9c2f2444e44a71e947ca5f",
         "acquisition_sha256": "9ee312e844d1fb926e004a9aedcd589487cc15ada9161595a2ca2b00a2d57d02",
         "slice_builder_sha256": "0ea8dc092a377749c81b45cc6579f647447016b0909e00c02c4067671873ca75"
+      },
+      "free_exact_abstention_gate": {
+        "metric": "deterministic exact UNKNOWN sentinel on the frozen LongMemEval-S n=12 pilot",
+        "current": "3/4",
+        "cap1200": "1/4",
+        "current_artifact_sha256": "a925bef25d82000ecb55e6f58ff5d73850e1491a7e3afbcae0b16768fa4b65be",
+        "cap1200_artifact_sha256": "da56ae3a5a3d5f0fa895728e0ebb1f2cf50082d688cbe2dece86a6f66f1f1442",
+        "decision": "reject before paid reader and judge calls"
       },
       "models": {
         "provider": "OpenRouter",
@@ -92,7 +100,7 @@
       },
       "kill_predicates": {
         "integrity": "90/90 unique attempt contexts, zero receipt failures, zero target-answer leakage, zero stale/contradictory unsupported answers",
-        "primary": "cap1200 answer correctness exceeds current on paired n=12 without regressing exact abstention/premise resistance",
+        "primary": "cap1200 answer correctness exceeds current on paired n=12 without regressing the official LLM-judged abstention/premise-resistance score",
         "ordering": "cap1200_submodular must improve answer correctness or premise resistance over cap1200; otherwise delete the ordering candidate",
         "negative_control": "order-swapped must not outperform the selected ordering treatment on the ordering-attributable cases",
         "expansion": "Only a treatment satisfying every integrity and kill predicate may receive a separately frozen larger confirmation request."
@@ -103,7 +111,7 @@
       "authorization": null,
       "purpose": "Generate 16 non-executing mutation proposals for the frozen ForgetEval n=12 control-plane gate.",
       "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json",
-      "authoritative_child_packet_sha256": "d91ceed4fb765224f12e2cdf03a630810fd7490dc3557fb4ea243684fd3ff41d",
+      "authoritative_child_packet_sha256": "80b68005e0bdc030d043eb6331f72f969d9196aeeda4752f9b29bef0f1a69780",
       "hard_limits": {"logical_calls": 16, "max_provider_attempts": 32, "max_output_tokens": 256, "max_spend_usd": "0.50"},
       "model": {"provider": "OpenRouter", "model": "openai/gpt-5.6-terra", "reasoning_effort": "medium"},
       "execution_boundary": "Proposal generation only. Every output remains confirmed=false; mutation execution requires a separate human-reviewed confirmation ledger and separate authorization.",
@@ -114,9 +122,9 @@
       "authorization": null,
       "reason": "The official code repository had no license file at the pinned audited revision. No official agent execution or Docker grading may be requested until that boundary is clarified and a model/agent/call/compute cap is frozen.",
       "free_rehearsal": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-n12-rehearsal.json",
-      "free_rehearsal_sha256": "821ee594b98035f14d97599556613ad4e8823b02d8d91baefc3def468bd000fe",
+      "free_rehearsal_sha256": "ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc",
       "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
-      "case_manifest_sha256": "8610c8b5097cbb57702d9f330897673cdb514baaca3d144ac4376d8ab76e37ae",
+      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
       "future_minimum": "Operational tranche 4 targets x 3 arms = 12 task runs; broaden remaining 8 targets only if related memory resolves at least 2 more targets than no-memory with zero unsafe unrelated reuse/leakage."
     },
     "deep_swe_pairing": {
@@ -124,7 +132,7 @@
       "authorization": null,
       "reason": "Only 3 of the required 12 unique causal earlier-to-target pairs survived manual subsystem, chronology, and non-leakage review.",
       "pairing_manifest": "benchmarks/manifests/deep_swe.pairing.audit.json",
-      "pairing_manifest_sha256": "ea6f6d69c3db83d959c8034e62cd6db6ce41f0ea8f904dd4f79cce56c637edd8",
+      "pairing_manifest_sha256": "e93e7cd3b5482d1c726dce70bd058e4c61537b72fad11e818b6c8f491da80ca2",
       "allowed_future_use": "Unpaired robustness/outcome benchmark under a separately frozen request only."
     }
   }

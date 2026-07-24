@@ -52,6 +52,19 @@ def test_paid_caps_reserve_once_and_block_attempt_overrun():
     caps.release(reservation)
 
 
+def test_paid_caps_persist_conservative_liability_metadata():
+    module = _load()
+    request = {
+        "model": "reader",
+        "messages": [{"role": "user", "content": "x"}],
+        "max_tokens": 256,
+    }
+    metadata = _caps(module, Ledger()).attempt_metadata(request)
+    assert Decimal(metadata["reserved_liability_usd"]) > 0
+    assert metadata["input_token_upper_bound"] > 0
+    assert metadata["authorized_output_limit"] == 256
+
+
 def test_paid_caps_block_output_model_spend_and_interrupted_resume():
     module = _load()
     request = {"model": "reader", "messages": [{"role": "user", "content": "x"}], "max_completion_tokens": 1025}
@@ -93,3 +106,24 @@ def test_shared_ledger_fingerprint_is_campaign_scoped(tmp_path):
                 {"schema_version": 2, "context": {"campaign": "other"}}
             ),
         )
+
+
+def test_provider_evidence_hashes_exact_reader_text():
+    provider_path = ROOT / "scripts/provider_attempts.py"
+    spec = importlib.util.spec_from_file_location("provider_attempts_text", provider_path)
+    assert spec and spec.loader
+    provider = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(provider)
+    response = {
+        "id": "response-1",
+        "model": "reader",
+        "provider": "fixture",
+        "choices": [{"message": {"content": "  exact answer  "}}],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2, "cost": 0.1},
+    }
+    evidence = provider.provider_response_evidence(
+        response, "reader", 0.1, "a" * 64
+    )
+    assert evidence["response_text_sha256"] == provider.hashlib.sha256(
+        b"exact answer"
+    ).hexdigest()

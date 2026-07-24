@@ -125,6 +125,39 @@ def validate_inputs(args: argparse.Namespace) -> None:
         raise RuntimeError("packing campaign matrix drift")
 
 
+def abort_artifact(
+    completed_cells: list[dict[str, str]],
+    attempt_ledger: Path,
+    failure: BaseException,
+    *,
+    snapshot_loader=load_provider_attempt_ledger_snapshot,
+) -> dict:
+    attempts: list[dict] = []
+    reported_cost = 0
+    if attempt_ledger.exists():
+        try:
+            snapshot = snapshot_loader(attempt_ledger)
+            attempts = snapshot["attempts"]
+            reported_cost = snapshot["reported_cost_usd"]
+        except BaseException:
+            pass
+    unsettled = sum(
+        float(row.get("start", {}).get("reserved_liability_usd", 0))
+        for row in attempts
+        if row.get("status") != "result"
+    )
+    return {
+        "schema_version": 1,
+        "status": "INCOMPLETE_NOT_RESUMABLE",
+        "completed_cells": completed_cells,
+        "provider_attempts": len(attempts),
+        "reported_cost_usd": reported_cost,
+        "unsettled_reserved_liability_usd": unsettled,
+        "failure_type": type(failure).__name__,
+        "claim_boundary": "Partial artifacts are preserved but are not an adjudicated campaign.",
+    }
+
+
 def execute(args: argparse.Namespace) -> None:
     gr.reexec_through_scratch_db(args.database_url)
     database_url = os.environ["DATABASE_URL"]
@@ -185,30 +218,7 @@ def execute(args: argparse.Namespace) -> None:
             raise RuntimeError(f"refusing to overwrite paid summary: {summary_path}")
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     except BaseException as error:
-        attempts: list[dict] = []
-        reported_cost = 0
-        if args.attempt_ledger.exists():
-            try:
-                snapshot = load_provider_attempt_ledger_snapshot(args.attempt_ledger)
-                attempts = snapshot["attempts"]
-                reported_cost = snapshot["reported_cost_usd"]
-            except BaseException:
-                pass
-        unsettled = sum(
-            float(row.get("start", {}).get("reserved_liability_usd", 0))
-            for row in attempts
-            if row.get("status") != "result"
-        )
-        abort = {
-            "schema_version": 1,
-            "status": "INCOMPLETE_NOT_RESUMABLE",
-            "completed_cells": completed_cells,
-            "provider_attempts": len(attempts),
-            "reported_cost_usd": reported_cost,
-            "unsettled_reserved_liability_usd": unsettled,
-            "failure_type": type(error).__name__,
-            "claim_boundary": "Partial artifacts are preserved but are not an adjudicated campaign.",
-        }
+        abort = abort_artifact(completed_cells, args.attempt_ledger, error)
         args.artifact_root.mkdir(parents=True, exist_ok=True)
         abort_path = args.artifact_root / "campaign-abort.json"
         with abort_path.open("x", encoding="utf-8") as handle:

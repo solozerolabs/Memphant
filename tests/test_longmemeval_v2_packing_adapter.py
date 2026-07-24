@@ -69,7 +69,7 @@ def _sha256(path: Path) -> str:
 def test_packing_adapter_lock_binds_every_implementation_file():
     lock = json.loads(PACKING_LOCK.read_text())
     assert lock["paid_models_run"] is False
-    assert lock["status"] == "FROZEN_AWAITING_EXPLICIT_PAID_AUTHORIZATION"
+    assert lock["status"] == "FROZEN_REJECTED_AT_FREE_EXACT_ABSTENTION_GATE"
     assert lock["base_adapter_sha256"] == _sha256(
         ROOT / "benchmarks/longmemeval_v2/memphant_memory.py"
     )

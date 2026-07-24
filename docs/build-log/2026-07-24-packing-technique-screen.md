@@ -13,11 +13,11 @@ sentinels, and two stable scored controls.
 | arm | scored hit@10 | exact abstention | decision |
 |---|---:|---:|---|
 | current | 2/8 | 3/4 | control |
-| render cap 1200 | **8/8** | 1/4 | retain as retrieval candidate; reader and abstention gates still open |
+| render cap 1200 | **8/8** | 1/4 | reject: exact-abstention non-regression failed |
 | utility / rendered token | 1/8 | 4/4 | reject |
 | cap 1200 + utility / rendered token | 3/8 | 4/4 | reject |
 | submodular order | 2/8 | 3/4 | no retrieval gain |
-| cap 1200 + submodular order | **8/8** | 1/4 | tied with cap on retrieval; retain only as the downstream ordering arm |
+| cap 1200 + submodular order | **8/8** | 1/4 | reject: no ordering gain and exact-abstention non-regression failed |
 
 The naive density method over-rewarded short distractors. Adding the render cap
 did not repair it, so the session-quota mixture was not run: earlier complete
@@ -64,11 +64,10 @@ bank. Relevance remains primary while marginal query coverage, saturated
 lexical representativeness, and source diversity regularize each admission. It
 preserved both stable controls and tied cap-only on aggregate retrieval and
 abstention, but it did not improve either: several gold spans moved later in the
-pack. It therefore has no retrieval claim and cannot replace cap-only. It is
-retained solely as the required, mechanistically distinct ordering arm for the
-paired reader test; a downstream null or regression removes it.
+pack. It therefore has no retrieval claim and is rejected with the other tested
+candidates.
 
-## LongMemEval-V2 frozen reader gate
+## LongMemEval-V2 hypothetical reader gate
 
 The exact n=12 follow-up is frozen in
 `benchmarks/manifests/longmemeval_v2.packing-kill.n12.json`: six enterprise and
@@ -106,6 +105,8 @@ MEMPHANT_LME_PACKAGED_INTEGRATION=1 ... pytest \
 1 passed in 5.08s
 ```
 
-This closes the free adapter/runtime rehearsal only. The default remains off,
-the rung remains open, and downstream answer quality still awaits explicit
-paid/model authorization.
+This closes the free adapter/runtime rehearsal and rejects paid execution for
+the tested techniques. The default remains off and the rung remains open. The
+hardened reader harness is retained for a future technique, but it cannot be
+authorized until a new candidate passes both the frozen retrieval and exact
+abstention gates.

@@ -22,20 +22,24 @@ at the audited revision. No upstream code was copied. Official execution is
 therefore externally blocked pending explicit license clarification as well as
 a separately frozen agent/model/compute request.
 
-The packaged-REST rehearsal created, retained, recalled, traced, and marked all
-24 related and unrelated source experiences in a migrated scratch database:
+The packaged-REST rehearsal created, retained, recalled, and traced all 24
+related and unrelated source experiences in a migrated scratch database. It
+constructed the future outcome-mark payload but did not post a mark:
 
 - 24/24 contexts created;
 - 24/24 experiences retained and settled;
 - 24/24 query recalls returned a trace and verified receipt;
-- 24/24 outcome marks were hash-bound;
+- 24/24 future outcome-mark payloads were hash-bound;
 - zero target solutions or hidden tests exposed;
 - zero model calls, zero container runs, and $0 cost.
 
 Artifact:
 `docs/build-log/artifacts/next-evidence/coding/swe-contextbench-n12-rehearsal.json`
 (SHA-256
-`821ee594b98035f14d97599556613ad4e8823b02d8d91baefc3def468bd000fe`).
+`ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc`).
+The artifact also binds clean Git head/tree status, Cargo.lock, every migration,
+the exact build command/toolchain, runner/runtime code, prompt contract, and
+the three packaged binary hashes.
 This proves adapter/runtime integrity only, not task resolution or coding-memory
 benefit.
 
@@ -66,6 +70,8 @@ gate is rejected; arbitrary pairs will not be manufactured. DeepSWE may be
 used only as a separately authorized unpaired robustness/outcome benchmark.
 The exact task, verifier, ancestry, shared-file, and non-leakage locks are in
 `benchmarks/manifests/deep_swe.pairing.audit.json` (SHA-256
-`ea6f6d69c3db83d959c8034e62cd6db6ce41f0ea8f904dd4f79cce56c637edd8`).
+`e93e7cd3b5482d1c726dce70bd058e4c61537b72fad11e818b6c8f491da80ca2`).
+Each accepted pair now includes a pinned upstream compare-response hash,
+zero-behind result, and merge base equal to the prior base commit.
 
 Focused verification: 6 SWE adapter tests and 2 DeepSWE audit tests passed.

@@ -1655,9 +1655,17 @@ def validate_reader_metadata(value: Any) -> dict[str, Any]:
         "parse_status",
         "request_sha256",
         "result_sha256",
+        "response_text_sha256",
     }
     if not isinstance(value, dict) or set(value) != required:
         raise RuntimeError("OpenRouter reader response omitted provenance metadata")
+    response_text_sha256 = value["response_text_sha256"]
+    if not (
+        isinstance(response_text_sha256, str)
+        and len(response_text_sha256) == 64
+        and all(character in "0123456789abcdef" for character in response_text_sha256)
+    ):
+        raise RuntimeError("OpenRouter reader response text hash is invalid")
     expected_served_model = LUNA_CANONICAL_MODEL if MODEL == REQUESTED_MODEL else MODEL
     if value["requested_model"] != MODEL or value["served_model"] != expected_served_model:
         raise RuntimeError(

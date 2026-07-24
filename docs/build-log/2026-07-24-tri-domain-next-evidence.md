@@ -9,9 +9,9 @@ dogfood, tenant-safety, or real-user-value claim.
 
 | domain | free result | decision | next boundary |
 |---|---|---|---|
-| packing | render cap 1200 recovered 8/8 scored retrieval cases but regressed exact abstention to 1/4; naive density rejected; submodular ordering tied cap-only | cap and cap+ordering retained only for paired answer-quality gate; defaults unchanged | frozen 90-call, $8.00 n=12 reader/judge request |
+| packing | render cap 1200 recovered 8/8 scored retrieval cases but regressed deterministic exact abstention from 3/4 to 1/4; naive density rejected; submodular ordering tied cap-only | reject all tested candidates before paid calls; defaults unchanged | research a new technique, then require both free predicates before any reader request |
 | forgetting | cross-rerank + rank-one improved n=12 from 6/12 to 9/12 and full aggregate 133 to 182 passes, but regressed 16 prior passes | deterministic semantic deletion selector rejected; exact-ID mutation stays authoritative | frozen 16-proposal, $0.50 non-executing control-plane request |
-| coding | SWE-ContextBench packaged adapter rehearsed 24 related/unrelated experiences with receipts/traces/marks; DeepSWE admitted only 3/12 causal pairs | SWE task efficacy blocked; DeepSWE paired memory rejected | license clarification plus separately frozen agent request; DeepSWE unpaired only |
+| coding | SWE-ContextBench packaged adapter rehearsed 24 related/unrelated experiences with receipts/traces and future mark-payload construction; DeepSWE admitted only 3/12 causal pairs | SWE task efficacy blocked; DeepSWE paired memory rejected | license clarification plus separately frozen agent request; DeepSWE unpaired only |
 
 ## Packing proof boundary
 
@@ -24,8 +24,8 @@ real adapter defect: six sequential queries reuse one constructed memory
 object. The root fix now preserves the hash-bound construction while resetting
 only query-local state; a regression test proves sequential query isolation.
 
-No packing default moves until downstream answer correctness and premise
-resistance pass together. Retrieval alone is insufficient.
+The free exact-abstention regression rejects the current packing treatment
+before downstream calls. Retrieval alone is insufficient.
 
 ## Forgetting proof boundary
 
