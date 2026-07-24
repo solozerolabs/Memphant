@@ -34,6 +34,95 @@ def load_cases(official_dir: Path) -> list[Any]:
     return list(ADVERSARIAL_TESTS)
 
 
+def extend_lineage_confirmations(
+    base_document: dict,
+    inputs_document: dict,
+    cases: list[Any],
+    *,
+    reviewed_by: str,
+    reviewed_at: str,
+    inputs_path: str,
+    inputs_sha256: str,
+) -> dict:
+    if base_document.get("schema_version") != 1:
+        raise ValueError("base confirmation ledger must use schema_version 1")
+    case_map = {case.id: case for case in cases}
+    confirmations = [dict(row) for row in base_document.get("confirmations", [])]
+    by_transition = {
+        (row["case_id"], row["mutation_index"]): row for row in confirmations
+    }
+    if len(by_transition) != len(confirmations):
+        raise ValueError("base confirmation ledger contains duplicate transitions")
+
+    added = 0
+    for source in sorted(
+        inputs_document.get("inputs", []),
+        key=lambda row: (row["case_id"], row["mutation_index"]),
+    ):
+        key = (source["case_id"], source["mutation_index"])
+        if key in by_transition:
+            continue
+        case = case_map.get(source["case_id"])
+        if case is None or not 1 <= source["mutation_index"] <= len(case.mutations):
+            raise ValueError(f"unknown lineage transition: {key}")
+        operation, query, *values = case.mutations[source["mutation_index"] - 1]
+        expected_new_text = values[0] if values else None
+        if (
+            source["operation"] != operation
+            or source["query"] != query
+            or source.get("new_text") != expected_new_text
+        ):
+            raise ValueError(f"lineage input does not match official transition: {key}")
+        if operation != "supersede":
+            raise ValueError(f"lineage completion supports supersession only: {key}")
+        previous = by_transition.get((source["case_id"], source["mutation_index"] - 1))
+        previous_text = previous.get("replacement_text") if previous else None
+        if not isinstance(previous_text, str) or not previous_text:
+            raise ValueError(f"lineage transition has no confirmed predecessor: {key}")
+        previous_hash = sha256_bytes(previous_text.encode())
+        matches = [
+            row
+            for row in source["candidates"]
+            if row["body_sha256"] == previous_hash
+            and sha256_bytes(row["body"].encode()) == previous_hash
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"confirmed predecessor matched {len(matches)} candidates: {key}"
+            )
+        provenance = {
+            "selection_source": "deterministic_previous_transition",
+            "input_sha256": source["input_sha256"],
+            "predecessor_body_sha256": previous_hash,
+        }
+        row = {
+            "input_sha256": source["input_sha256"],
+            "case_id": source["case_id"],
+            "mutation_index": source["mutation_index"],
+            "operation": operation,
+            "confirmed": True,
+            "confirmed_by": reviewed_by,
+            "selected_body_sha256": [previous_hash],
+            "replacement_text": expected_new_text,
+            "proposal_sha256": sha256_json(provenance),
+            "selection_source": provenance["selection_source"],
+        }
+        confirmations.append(row)
+        by_transition[key] = row
+        added += 1
+
+    output = dict(base_document)
+    output["reviewed_at"] = reviewed_at
+    output["lineage_completion"] = {
+        "source_inputs": inputs_path,
+        "source_inputs_sha256": inputs_sha256,
+        "selection_source": "deterministic_previous_transition",
+        "added_confirmations": added,
+    }
+    output["confirmations"] = confirmations
+    return output
+
+
 def build_confirmation(
     proposals_document: dict,
     inputs_document: dict,

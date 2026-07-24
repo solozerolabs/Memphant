@@ -131,3 +131,68 @@ def test_incomplete_supported_transition_chain_fails_closed() -> None:
 
     with pytest.raises(ValueError, match="incomplete transition chain"):
         build(proposals, inputs, cases, {"overrides": {}})
+
+
+def test_lineage_completion_targets_the_previous_transition_exactly() -> None:
+    prior = "User now works at Anthropic."
+    distractor = "Quarterly planning is Friday."
+    second = {
+        "case_id": "case-a",
+        "mutation_index": 2,
+        "operation": "supersede",
+        "query": "user employer Anthropic",
+        "new_text": "User now works at OpenAI.",
+        "candidates": [
+            {
+                "index": 0,
+                "body": distractor,
+                "body_sha256": "8622127570615d608b7957aa32fd6bdea25d5a71a85239ae97ccec0397d86431",
+            },
+            {
+                "index": 1,
+                "body": prior,
+                "body_sha256": "e135a7433c2b8b6236bbc6ed8afbec2b595046de2cc06bfd25877d6a7dc80eb7",
+            },
+        ],
+    }
+    second["input_sha256"] = module.sha256_json(second)
+    base = {
+        "schema_version": 1,
+        "confirmations": [
+            {
+                "input_sha256": "a" * 64,
+                "case_id": "case-a",
+                "mutation_index": 1,
+                "operation": "supersede",
+                "confirmed": True,
+                "confirmed_by": "reviewer",
+                "selected_body_sha256": ["b" * 64],
+                "replacement_text": prior,
+                "proposal_sha256": "c" * 64,
+            }
+        ],
+    }
+    case = SimpleNamespace(
+        id="case-a",
+        mutations=[
+            ("supersede", "user employer", prior),
+            ("supersede", "user employer Anthropic", "User now works at OpenAI."),
+        ],
+    )
+
+    result = module.extend_lineage_confirmations(
+        base,
+        {"inputs": [second]},
+        [case],
+        reviewed_by="reviewer",
+        reviewed_at="2026-07-24T00:00:00Z",
+        inputs_path="pass1.json",
+        inputs_sha256="d" * 64,
+    )
+
+    completed = result["confirmations"][1]
+    assert completed["selected_body_sha256"] == [
+        "e135a7433c2b8b6236bbc6ed8afbec2b595046de2cc06bfd25877d6a7dc80eb7"
+    ]
+    assert completed["replacement_text"] == "User now works at OpenAI."
+    assert completed["selection_source"] == "deterministic_previous_transition"
