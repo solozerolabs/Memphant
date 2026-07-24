@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-24",
+  "claim_boundary": "Immutable source and license inventory only; it is not benchmark efficacy evidence.",
+  "benchmarks": {
+    "longmemeval_v2": {
+      "purpose": "primary packing and answer-quality gate",
+      "code_repository": "https://github.com/xiaowu0162/LongMemEval-V2",
+      "code_revision": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
+      "code_license": "Apache-2.0",
+      "dataset_repository": "xiaowu0162/longmemeval-v2",
+      "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+      "dataset_license": "Apache-2.0",
+      "lock": "benchmarks/manifests/longmemeval_v2.lock.json",
+      "case_manifest": "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json",
+      "case_manifest_sha256": "a1e806679e3095ab030964dc27cc17f2f466ab93e7da0a64d5b0d72e9e052d20"
+    },
+    "longmemeval_s": {
+      "purpose": "packing regression and exact-abstention comparison",
+      "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+      "lock": "benchmarks/manifests/longmemeval_s.lock.json",
+      "case_manifest": "benchmarks/manifests/lme_s.packing-pilot.n12.json"
+    },
+    "swe_contextbench": {
+      "purpose": "primary validator-backed cross-task coding-memory gate",
+      "code_repository": "https://github.com/jiayuanz3/SWEContextBench",
+      "code_revision": "31bb04155f52b184bf31b220e3cff0607ac9c953",
+      "code_license": "NO_LICENSE_FILE_OBSERVED",
+      "code_boundary": "No upstream code copied; official execution blocked pending explicit license clarification.",
+      "dataset_repository": "https://huggingface.co/datasets/jiayuanz3/SWEContextBench",
+      "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
+      "dataset_license": "MIT",
+      "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
+      "case_manifest_sha256": "8610c8b5097cbb57702d9f330897673cdb514baaca3d144ac4376d8ab76e37ae"
+    },
+    "deep_swe": {
+      "purpose": "secondary unpaired robustness benchmark only",
+      "repository": "https://github.com/datacurve-ai/deep-swe",
+      "revision": "e016041a6ccf8da29906afc9a3f5a8df940a1f78",
+      "tree": "da6af978736343573c9f9560648c7a7f5e527a73",
+      "license": "Apache-2.0 for Datacurve contributions; upstream task licenses remain separate",
+      "task_count": 113,
+      "pairing_manifest": "benchmarks/manifests/deep_swe.pairing.audit.json",
+      "pairing_manifest_sha256": "ea6f6d69c3db83d959c8034e62cd6db6ce41f0ea8f904dd4f79cce56c637edd8"
+    },
+    "forgeteval": {
+      "purpose": "explicit mutation and control-plane gate",
+      "repository": "https://github.com/deeplethe/lethe",
+      "revision": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
+      "license": "MIT",
+      "case_manifest": "benchmarks/manifests/forgeteval.next-evidence.n12.json",
+      "case_manifest_sha256": "212cc375be1cafd0e57d66ce345ef38b27c3e7a9c4691a1c5738a650aabd6d5a"
+    },
+    "memora_fama": {
+      "purpose": "end-to-end stale or deleted-memory influence",
+      "repository": "https://github.com/geniesinc/Memora.git",
+      "revision": "a6493188efc836d6511ed5e4163fe3ba87da30ff",
+      "license": "Apache-2.0",
+      "dataset_tree_sha256": "12d63b7d86d8d1751ab4da1f282c5a0729a93ef87bd5ef720ccee85cffd47d58",
+      "lock": "benchmarks/manifests/memora.lock.json",
+      "state": "existing public-API adapter and negative pilot retained; no new model run"
+    },
+    "stale": {
+      "purpose": "implicit invalidation and stale-premise gate",
+      "code_repository": "https://github.com/icedreamc/STALE.git",
+      "code_revision": "ea7d391103a151927cd29d2f01d87597a782bdcb",
+      "code_license": "MIT",
+      "dataset_repository": "STALEproj/STALE",
+      "dataset_revision": "617c51dc200b5ab09970834144c7e51c77959af0",
+      "dataset_license": "CC-BY-4.0",
+      "dataset_sha256": "5f3ec375179e20e2e94469e018189188f34e2e7e5f21cbecbd99fcfa648c1876",
+      "lock": "benchmarks/manifests/stale.lock.json",
+      "state": "existing public-API adapter retained; no new model run"
+    }
+  }
+}
