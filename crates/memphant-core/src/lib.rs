@@ -490,6 +490,12 @@ pub struct PackLevers {
     /// (2026-07-21-rung7-packing-diagnosis.md). `None` keeps today's per-item
     /// budget of `whole_body.min(request_budget)` — byte-identical off-path.
     pub pack_render_cap: Option<usize>,
+    /// Order candidates by query-conditioned packing utility per actually
+    /// rendered token. The rendered cost honors `pack_render_cap`, so the
+    /// ordering optimizes the same bytes the admission loop later charges.
+    /// Ties are deterministic (relevance, cost, then unit id). Off preserves
+    /// the established fused ordering byte-for-byte.
+    pub utility_ordering_enabled: bool,
 }
 
 /// The active vector query for recall: the embedded query plus the embedding
@@ -6689,7 +6695,11 @@ where
             policy_revision: request.context.policy_revision.clone(),
             query_hash: hash_query(&request.query),
             engine_version: request.engine_version.clone(),
-            feature_flags: recall_feature_flags(&request, false, false),
+            feature_flags: {
+                let mut flags = recall_feature_flags(&request, false, false);
+                append_pack_feature_flags(&mut flags, pack_levers);
+                flags
+            },
             channel_runs: vec![ReflectStageFact {
                 stage: "stage0_policy".to_string(),
                 detail: "denied_scope".to_string(),
@@ -7152,6 +7162,7 @@ where
         // than request-derived.
         feature_flags.push("cross_rerank_enabled".to_string());
     }
+    append_pack_feature_flags(&mut feature_flags, pack_levers);
     let trace = RetrievalTrace {
         id: trace_id,
         tenant_id: request.context.tenant_id,
@@ -8529,9 +8540,10 @@ fn pack_recall_context(
     // can tell whether the established sort order is rank-authoritative (see
     // the comment on the "output already full" branch there for why that
     // matters).
-    let rank_based_ordering_active = fused
-        .iter()
-        .any(|candidate| candidate.deep_rank.is_some() || candidate.cross_rerank_rank.is_some());
+    let rank_based_ordering_active = pack_levers.utility_ordering_enabled
+        || fused.iter().any(|candidate| {
+            candidate.deep_rank.is_some() || candidate.cross_rerank_rank.is_some()
+        });
 
     if request.context_packing_abstention_enabled {
         fused.sort_by(|left, right| {
@@ -8567,6 +8579,43 @@ fn pack_recall_context(
                     })
                     .then_with(|| left.unit.body.cmp(&right.unit.body))
             }
+        });
+    }
+
+    if request.context_packing_abstention_enabled && pack_levers.utility_ordering_enabled {
+        let utility = fused
+            .iter()
+            .map(|candidate| {
+                let (_, rendered_tokens, _) = packed_render(
+                    &candidate.unit,
+                    query_tokens,
+                    request.budget_tokens,
+                    pack_levers.pack_render_cap,
+                );
+                let relevance = packing_relevance_score(candidate, query_tokens);
+                (
+                    candidate.unit.id,
+                    (
+                        relevance / rendered_tokens.max(1) as f32,
+                        relevance,
+                        rendered_tokens,
+                    ),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        fused.sort_by(|left, right| {
+            let (left_utility, left_relevance, left_tokens) = utility[&left.unit.id];
+            let (right_utility, right_relevance, right_tokens) = utility[&right.unit.id];
+            right_utility
+                .partial_cmp(&left_utility)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    right_relevance
+                        .partial_cmp(&left_relevance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| left_tokens.cmp(&right_tokens))
+                .then_with(|| left.unit.id.as_uuid().cmp(&right.unit.id.as_uuid()))
         });
     }
 
@@ -10386,6 +10435,18 @@ fn recall_feature_flags(
         flags.push("valid_time_override_requested".to_string());
     }
     flags
+}
+
+fn append_pack_feature_flags(flags: &mut Vec<String>, levers: PackLevers) {
+    if let Some(cap) = levers.pack_render_cap {
+        flags.push(format!("pack_render_cap:{cap}"));
+    }
+    if let Some(quota) = levers.session_quota {
+        flags.push(format!("pack_session_quota:{quota}"));
+    }
+    if levers.utility_ordering_enabled {
+        flags.push("pack_utility_ordering_enabled".to_string());
+    }
 }
 
 /// Returns the trace plus the ids of the units this call newly created (in
@@ -13256,6 +13317,48 @@ mod pack_cost_tests {
         vec!["x"; n].join(" ")
     }
 
+    #[test]
+    fn utility_ordering_prefers_more_relevance_per_rendered_token() {
+        let query_tokens = tokenize("quantum");
+        let mut one_item_request = request(256);
+        one_item_request.k = 1;
+        one_item_request.context_packing_abstention_enabled = true;
+        let long = || {
+            candidate(
+                unit(1, &format!("quantum {}", body_of(100)), Vec::new()),
+                5.0,
+            )
+        };
+        let compact = || candidate(unit(2, "quantum concise answer", Vec::new()), 4.0);
+
+        let baseline = pack_recall_context(
+            vec![long(), compact()],
+            &one_item_request,
+            &[],
+            &query_tokens,
+            Vec::new(),
+            2,
+            PackLevers::default(),
+            false,
+        );
+        assert_eq!(baseline.items[0].unit_id, UnitId::from_u128(1));
+
+        let treatment = pack_recall_context(
+            vec![long(), compact()],
+            &one_item_request,
+            &[],
+            &query_tokens,
+            Vec::new(),
+            2,
+            PackLevers {
+                utility_ordering_enabled: true,
+                ..PackLevers::default()
+            },
+            false,
+        );
+        assert_eq!(treatment.items[0].unit_id, UnitId::from_u128(2));
+    }
+
     /// Rung-7 per-item render cap: without a cap, a big chunk-matched item's
     /// per-item render budget is its whole body, so sibling expansion refills it
     /// back to nearly the whole session — the pathology that budget-drops
@@ -13651,6 +13754,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: true,
                 session_quota: None,
                 pack_render_cap: None,
+                utility_ordering_enabled: false,
             },
             false,
         );
@@ -13735,6 +13839,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
+                utility_ordering_enabled: false,
             },
             false,
         );
@@ -13789,6 +13894,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(2),
                 pack_render_cap: None,
+                utility_ordering_enabled: false,
             },
             false,
         );
@@ -13847,6 +13953,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
+                utility_ordering_enabled: false,
             },
             DEFAULT_RECALL_POOL_DEPTH,
         );
@@ -13878,6 +13985,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
+                utility_ordering_enabled: false,
             },
             DEFAULT_RECALL_POOL_DEPTH,
         );
@@ -13945,6 +14053,7 @@ mod pack_cost_tests {
             sibling_gather_enabled: false,
             session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
             pack_render_cap: None,
+            utility_ordering_enabled: false,
         };
         let on_scan_limit = recall_pack_scan_limit(
             &req,

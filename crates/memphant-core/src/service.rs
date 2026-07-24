@@ -3263,6 +3263,14 @@ impl<S: MemoryStore> MemoryService<S> {
         self
     }
 
+    /// Enables query-conditioned utility-per-rendered-token ordering (default
+    /// OFF). The ordering uses the same capped rendered cost the admission loop
+    /// charges and deterministic unit-id tie breaking.
+    pub fn with_pack_utility_ordering_enabled(mut self, enabled: bool) -> Self {
+        self.pack_levers.utility_ordering_enabled = enabled;
+        self
+    }
+
     /// Enables W5 temporal grounding (default OFF): reflect-stage content-date
     /// grounding of `valid_from` + dated chunk headers, query-date windowing at
     /// recall, and `[date ...]`-prefixed packed items. Construction-time only,

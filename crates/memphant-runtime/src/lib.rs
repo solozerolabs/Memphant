@@ -439,6 +439,18 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
     let service = MemoryService::new(Arc::new(store), Arc::new(SystemClock), build_embedder())
         .with_resource_chunks_write_enabled(resource_chunks_write_from_env())
         .with_recall_pool_depth(recall_pool_depth_from_env())
+        .with_pack_render_cap(
+            pack_render_cap_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_PACK_RENDER_CAP: {error}")),
+        )
+        .with_session_quota(
+            pack_session_quota_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_PACK_SESSION_QUOTA: {error}")),
+        )
+        .with_pack_utility_ordering_enabled(
+            pack_utility_ordering_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_PACK_UTILITY_ORDERING: {error}")),
+        )
         .with_structured_state_prefetch_concurrency(
             structured_state_prefetch_concurrency_from_value(
                 std::env::var("MEMPHANT_STRUCTURED_STATE_CONCURRENCY")
@@ -493,6 +505,44 @@ fn worker_compile_concurrency_from_value(value: Option<&str>) -> Result<usize, S
                 "must be an integer from 1 through {MAX_WORKER_COMPILE_CONCURRENCY}, got {value:?}"
             )
         })
+}
+
+fn optional_positive_usize_from_value(value: Option<&str>) -> Result<Option<usize>, String> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|value| *value > 0)
+        .map(Some)
+        .ok_or_else(|| format!("must be a positive integer when set, got {value:?}"))
+}
+
+fn pack_render_cap_from_env() -> Result<Option<usize>, String> {
+    optional_positive_usize_from_value(std::env::var("MEMPHANT_PACK_RENDER_CAP").ok().as_deref())
+}
+
+fn pack_session_quota_from_env() -> Result<Option<usize>, String> {
+    optional_positive_usize_from_value(std::env::var("MEMPHANT_PACK_SESSION_QUOTA").ok().as_deref())
+}
+
+fn strict_bool_from_value(value: Option<&str>) -> Result<bool, String> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        None | Some("0" | "false" | "off") => Ok(false),
+        Some("1" | "true" | "on") => Ok(true),
+        Some(value) => Err(format!(
+            "must be one of 1, true, on, 0, false, or off, got {value:?}"
+        )),
+    }
+}
+
+fn pack_utility_ordering_from_env() -> Result<bool, String> {
+    strict_bool_from_value(
+        std::env::var("MEMPHANT_PACK_UTILITY_ORDERING")
+            .ok()
+            .as_deref(),
+    )
 }
 
 /// `MEMPHANT_RESOURCE_CHUNKS` → bool. Truthy (`1`/`true`/`on`, case-insensitive)
@@ -1186,8 +1236,9 @@ impl MutationLedgerStore for AnyStore {
 #[cfg(test)]
 mod tests {
     use super::{
-        embedder_from_id, structured_state_prefetch_concurrency_from_value,
-        worker_compile_concurrency_from_value, worker_database_max_connections_from_value,
+        embedder_from_id, optional_positive_usize_from_value, strict_bool_from_value,
+        structured_state_prefetch_concurrency_from_value, worker_compile_concurrency_from_value,
+        worker_database_max_connections_from_value,
     };
     use memphant_core::{EmbedError, EmbeddingProvider, embedding_profile_for};
 
@@ -1231,6 +1282,31 @@ mod tests {
         assert!(worker_database_max_connections_from_value(Some("0")).is_err());
         assert!(worker_database_max_connections_from_value(Some("65")).is_err());
         assert!(worker_database_max_connections_from_value(Some("wide")).is_err());
+    }
+
+    #[test]
+    fn optional_pack_limits_are_off_by_default_and_fail_closed() {
+        assert_eq!(optional_positive_usize_from_value(None), Ok(None));
+        assert_eq!(optional_positive_usize_from_value(Some("")), Ok(None));
+        assert_eq!(
+            optional_positive_usize_from_value(Some(" 1200 ")),
+            Ok(Some(1200))
+        );
+        assert!(optional_positive_usize_from_value(Some("0")).is_err());
+        assert!(optional_positive_usize_from_value(Some("-1")).is_err());
+        assert!(optional_positive_usize_from_value(Some("wide")).is_err());
+    }
+
+    #[test]
+    fn pack_utility_boolean_is_explicit_and_fail_closed() {
+        for value in [None, Some(""), Some("0"), Some("false"), Some("off")] {
+            assert_eq!(strict_bool_from_value(value), Ok(false));
+        }
+        for value in [Some("1"), Some("true"), Some("on")] {
+            assert_eq!(strict_bool_from_value(value), Ok(true));
+        }
+        assert!(strict_bool_from_value(Some("yes")).is_err());
+        assert!(strict_bool_from_value(Some("enabled")).is_err());
     }
 
     #[test]

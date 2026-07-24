@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "benchmark": "LongMemEval-S",
+  "purpose": "economical no-model packing technique screen before any reader campaign",
+  "source_dataset_sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",
+  "selection_policy": {
+    "diagnostic_not_representative": true,
+    "cases": "six cap-sensitive scored cases spanning every question type, four exact-abstention sentinels including both known cap regressions, and two stable scored controls",
+    "promotion_use": "technique selection only; never an efficacy or SOTA claim"
+  },
+  "question_ids": [
+    "0ddfec37",
+    "118b2229",
+    "1c549ce4",
+    "1da05512",
+    "2c63a862",
+    "e9327a54",
+    "0862e8bf_abs",
+    "2133c1b5_abs",
+    "gpt4_93159ced_abs",
+    "09ba9854_abs",
+    "0100672e",
+    "1568498a"
+  ],
+  "arms": [
+    "current",
+    "pack_render_cap_1200",
+    "pack_utility_ordering",
+    "pack_render_cap_1200_plus_utility"
+  ],
+  "selection_rule": "maximize scored hit_at_10, then abstention_correct, then minimize packed tokens; reject any arm with a stable-control regression"
+}

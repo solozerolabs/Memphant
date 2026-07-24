@@ -124,6 +124,9 @@ pub struct BenchLmeOptions {
     /// threaded via `with_pack_render_cap`. Bounds each packed item's chunk-render
     /// budget so a large chunk-matched body cannot hog the pack budget.
     pub pack_render_cap: Option<usize>,
+    /// Query-conditioned utility-per-rendered-token ordering
+    /// (`--pack-utility-ordering`, default off).
+    pub pack_utility_ordering: bool,
     /// W5 temporal-grounding flag (`--temporal-grounding`, default off) threaded
     /// via `with_temporal_grounding_enabled` to BOTH the ingest service (so
     /// `valid_from` and chunk headers are date-grounded at reflect) and the
@@ -323,6 +326,9 @@ pub struct BenchLmeReport {
     /// `None` when off. Serde default `None` for pre-flag reports.
     #[serde(default)]
     pub pack_render_cap: Option<usize>,
+    /// Whether utility-per-rendered-token packing order was enabled.
+    #[serde(default)]
+    pub pack_utility_ordering: bool,
     /// Whether W5 temporal grounding (`--temporal-grounding`) was on for this
     /// run. Serde default `false`: every report written before the flag existed
     /// was a temporal-grounding-off run, so an absent field ⇒ off.
@@ -891,6 +897,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
     .with_sibling_gather_enabled(options.sibling_gather)
     .with_session_quota(options.session_quota)
     .with_pack_render_cap(options.pack_render_cap)
+    .with_pack_utility_ordering_enabled(options.pack_utility_ordering)
     // W5 temporal grounding: query-date windowing + dated packs at recall. Set
     // explicitly here too so the vector-disabled fresh recall service (which is
     // not a clone of `ingest_service`) also carries the flag.
@@ -1376,6 +1383,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         sibling_gather: options.sibling_gather,
         session_quota: options.session_quota,
         pack_render_cap: options.pack_render_cap,
+        pack_utility_ordering: options.pack_utility_ordering,
         temporal_grounding: options.temporal_grounding,
         fact_extraction: options.fact_extraction,
         runtime_chunks: runtime_chunks_enabled,
