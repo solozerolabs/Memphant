@@ -307,10 +307,10 @@ def bind_attempt_context(client: gr.ApiClient, row: dict) -> dict:
     return client.bind_context(
         f"code-lane:attempt:{row['attempt_id']}",
         subject_ref=f"code-lane:run:{row['run_id']}",
-        actor_ref=f"code-lane:actor:{row['repository']}",
+        actor_ref=f"code-lane:actor:{row['attempt_id']}",
         actor_kind="agent",
         scope_ref=f"code-lane:scope:{row['attempt_id']}",
-        agent_node_ref=f"code-lane:agent:{row['repository']}",
+        agent_node_ref=f"code-lane:agent:{row['attempt_id']}",
     )
 
 

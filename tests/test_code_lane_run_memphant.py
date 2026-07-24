@@ -272,10 +272,10 @@ def test_attempt_context_preserves_run_scope_and_agent_identity(clr):
     assert context == {
         "client_ref": "code-lane:attempt:attempt-1",
         "subject_ref": "code-lane:run:issue-1",
-        "actor_ref": "code-lane:actor:org/repo",
+        "actor_ref": "code-lane:actor:attempt-1",
         "actor_kind": "agent",
         "scope_ref": "code-lane:scope:attempt-1",
-        "agent_node_ref": "code-lane:agent:org/repo",
+        "agent_node_ref": "code-lane:agent:attempt-1",
     }
 
 
