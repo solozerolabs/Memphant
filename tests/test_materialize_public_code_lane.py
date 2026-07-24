@@ -83,6 +83,8 @@ def test_diagnostic_golden_is_exactly_bound_to_source_span() -> None:
     proof = golden["provenance"][0]
     assert event["text"][proof["char_start"] : proof["char_end"]] == proof["span"]
     assert golden["gold_answer"] == proof["span"]
+    assert golden["retrieval_query"] == "run the late test"
+    assert golden["gold_answer"] not in golden["retrieval_query"]
     assert proof["event_index"] / proof["attempt_event_count"] >= 0.60
 
 

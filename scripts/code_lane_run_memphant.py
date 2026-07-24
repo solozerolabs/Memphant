@@ -283,6 +283,17 @@ def control_readiness(corpus_rows: list[dict], goldens: list[dict]) -> dict:
     }
 
 
+def retrieval_query(golden: dict) -> str:
+    """Return the source-derived query while keeping the grader prompt immutable."""
+    query = golden.get("retrieval_query")
+    if not isinstance(query, str) or not query.strip():
+        raise RuntimeError(f"retrieval query missing: {golden.get('question_id')}")
+    answer = golden.get("gold_answer")
+    if isinstance(answer, str) and answer and answer in query:
+        raise RuntimeError(f"retrieval query leaks gold answer: {golden.get('question_id')}")
+    return query
+
+
 def require_outcome_mark_ready(readiness: dict) -> None:
     if not readiness.get("outcome_marked_memphant"):
         raise RuntimeError(
@@ -531,7 +542,7 @@ def main() -> int:
         for i, golden in enumerate(goldens):
             attempt_id = golden["provenance"][0]["attempt_id"]
             bodies, degraded = gr.recall_query(
-                clients[0], evaluation_contexts[attempt_id], golden["question"], args.k,
+                clients[0], evaluation_contexts[attempt_id], retrieval_query(golden), args.k,
                 args.budget_tokens, args.mode
             )
             evidence_rows.append(gc.evidence_row(golden, bodies, args.k))
@@ -551,7 +562,7 @@ def main() -> int:
 
         isolation_golden = goldens[0]
         other_bodies, other_degraded = gr.recall_query(
-            clients[1], sentinel_context, isolation_golden["question"],
+            clients[1], sentinel_context, retrieval_query(isolation_golden),
             args.k, args.budget_tokens, args.mode,
         )
         if other_degraded or gc.provenance_hit(isolation_golden, other_bodies, args.k):

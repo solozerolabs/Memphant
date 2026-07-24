@@ -1,5 +1,5 @@
 {
-  "bytes": 33997,
+  "bytes": 39025,
   "count": 40,
   "extraction": {
     "classification": "public_synthetic_agent_rollout_not_production_traffic",
@@ -7,7 +7,7 @@
     "corpus_path": "docs/build-log/artifacts/c3-public-code-lane-v2/corpus.jsonl",
     "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
     "emitted_events": 64055,
-    "materializer_sha256": "6fadc606499e99a25400bc2847ac5d162f7dad13c8e20f5725a6d16e08a5e1a7",
+    "materializer_sha256": "dcdfd49589e976bf72f0df5f339d4675350b72898f5527b8968cf7d9d39fd5c9",
     "modification_notice": "Roles normalized, system messages omitted with accounting, and event texts clipped at the recorded character cap.",
     "sampled_attempts": 495,
     "skipped_empty": 0,
@@ -31,7 +31,7 @@
   "generator": "deterministic_late_diagnostic_span_v2",
   "golden_path": "docs/build-log/artifacts/c3-public-code-lane-v2/goldens.jsonl",
   "schema_version": 1,
-  "sha256": "2bb0b5ee790a77b7d1fa62ec82b4a0ee4cc226d96b6bbd63bd90abbb2f13dfe9",
+  "sha256": "6a5f6978c922abe41be0a1ebc232248f7baa0dd4c897212ffe2879655681ed97",
   "strata": {
     "coding-continuity": 40
   }

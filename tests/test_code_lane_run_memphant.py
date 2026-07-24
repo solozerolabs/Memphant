@@ -71,6 +71,20 @@ def _golden(attempt_id: str, question_id: str = "q1") -> dict:
     }
 
 
+def test_retrieval_query_is_required_and_cannot_leak_answer(clr):
+    golden = _golden("a1")
+    golden.update({"retrieval_query": "run focused tests", "gold_answer": "ERROR exact"})
+    assert clr.retrieval_query(golden) == "run focused tests"
+
+    del golden["retrieval_query"]
+    with pytest.raises(RuntimeError, match="retrieval query missing"):
+        clr.retrieval_query(golden)
+
+    golden["retrieval_query"] = "ERROR exact"
+    with pytest.raises(RuntimeError, match="leaks gold answer"):
+        clr.retrieval_query(golden)
+
+
 def test_select_ingest_attempts_full_corpus_when_no_limit(clr):
     corpus = [_row("a1"), _row("a2"), _row("a3")]
     out = clr.select_ingest_attempts(corpus, [_golden("a1")], limit_attempts=0)

@@ -200,6 +200,7 @@ def build_goldens(corpus: list[dict], count: int) -> list[dict]:
                         f"In the {row['repository']} trajectory, what exact diagnostic followed "
                         f"the action beginning {previous!r}?"
                     ),
+                    "retrieval_query": previous,
                     "question_date": row["started_at"],
                     "gold_answer": answer,
                     "provenance": [
