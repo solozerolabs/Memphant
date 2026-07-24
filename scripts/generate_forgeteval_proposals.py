@@ -261,7 +261,9 @@ def main() -> int:
             proposal = completed.get(value["input_sha256"])
             if proposal is None:
                 prompt = build_prompt(value)
-                reply = cli.call("reader", SYSTEM_PROMPT, prompt)
+                reply = cli.call(
+                    f"forget_{value['operation']}", SYSTEM_PROMPT, prompt
+                )
                 proposal = parse_proposal(reply, value)
                 proposal["prompt_sha256"] = sha256_bytes(prompt.encode())
                 proposal["response_sha256"] = sha256_bytes(reply.encode())

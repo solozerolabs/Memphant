@@ -48,7 +48,7 @@
       },
       "purpose": "Generate 16 non-executing mutation proposals for the frozen ForgetEval n=12 control-plane gate.",
       "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json",
-      "authoritative_child_packet_sha256": "46e98bde75c392068b08b77e43875e177a80d3e6cf662d195932f940ce322daa",
+      "authoritative_child_packet_sha256": "86ebae33488dd5793ec193aacf568b7d6304a1d575607250b2ca5e14cf76b62b",
       "hard_limits": {
         "logical_calls": 16,
         "max_provider_attempts": 32,

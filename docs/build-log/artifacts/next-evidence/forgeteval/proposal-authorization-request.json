@@ -4,7 +4,7 @@
   "authorization": {
     "authorized_by": "user in Codex task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
     "authorized_at": "2026-07-24T18:54:35Z",
-    "authorization_scope_sha256": "a5ccda4047bd70fd76800e06bb48170e88427b29216b4943a7a2396f6e1c1eb3"
+    "authorization_scope_sha256": "12788f986e1fc5708358a98427f5360b5423cc06e6cf23c35bab55d40aa69d57"
   },
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
@@ -21,8 +21,8 @@
   },
   "code": {
     "proposal_generator": "scripts/generate_forgeteval_proposals.py",
-    "proposal_generator_sha256": "ceac4407b24a1bc28ae48777f76d9ed459db8de12220b003d0506692954ad914",
-    "reader_client_sha256": "bd5606ab30b49498e27cf62f76fe76bcc4520080cbac3ce0da0e5bdcf7e95ad3",
+    "proposal_generator_sha256": "73d81dcdb58174ebb48532e293a6b317861d32e1ac4b5919350c7f59407beb50",
+    "reader_client_sha256": "6e4a2e484bf41859c4c9cc0d9d59b41d38366393e9fbce8eab84f434432700cc",
     "provider_attempt_journal_sha256": "4c581a109a3a4887a5e3b7a34ebe32b784e9086af4815d394fff14dc74204fdd",
     "proposal_system_prompt_sha256": "c95b439a83f86a0dc7bd64d5a2782accc9b9157db8cd3144854f05533425aadb"
   },

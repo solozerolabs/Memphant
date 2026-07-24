@@ -181,7 +181,7 @@ OPENROUTER_TIMEOUT = 180
 OPENROUTER_RETRY_DELAYS = (2, 8, 30)  # 4 tries total: 3 backoff sleeps between them
 FLASH_MODEL = "google/gemini-3.5-flash"
 FLASH_PROVIDER = "google-ai-studio"
-LUNA_MODEL = "openai/gpt-5.6-luna-pro"
+OPENAI_GPT_56_PREFIX = "openai/gpt-5.6-"
 # The codex engine has no separate system-prompt channel; the system prompt is
 # prepended to the user prompt with this no-tool-use guard.
 CODEX_NO_TOOLS_GUARD = (
@@ -364,6 +364,33 @@ GENERATE_MULTI_JSON_SCHEMA = {
         "answer_span": {"type": "string"},
     },
     "required": ["question", "bridge_span", "answer_span"],
+    "additionalProperties": False,
+}
+FORGET_SUPERSEDE_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "selected_indices": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 1,
+            "maxItems": 1,
+            "uniqueItems": True,
+        },
+        "replacement_text": {"type": "string", "minLength": 1},
+    },
+    "required": ["selected_indices", "replacement_text"],
+    "additionalProperties": False,
+}
+FORGET_RELEASE_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "selected_indices": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "uniqueItems": True,
+        }
+    },
+    "required": ["selected_indices"],
     "additionalProperties": False,
 }
 RAG_SUPPORTED_SCHEMA_ID = "rag-supported-v1"
@@ -551,7 +578,10 @@ def parse_paired_rag_judge_output(reply: str) -> str:
 
 def openrouter_decoding(model: str | None = None) -> dict:
     decoding = dict(OPENROUTER_DECODING)
-    if model == LUNA_MODEL:
+    # OpenRouter's live GPT-5.6 contracts accept token limits and reasoning but
+    # not temperature. With require_parameters=true, sending temperature makes
+    # every otherwise-compatible endpoint ineligible.
+    if model and model.startswith(OPENAI_GPT_56_PREFIX):
         decoding.pop("temperature")
     return decoding
 
@@ -564,6 +594,8 @@ def response_contract(engine: str, kind: str, model: str | None = None) -> dict:
         "pair_judge": PAIRED_RAG_JUDGE_JSON_SCHEMA,
         "generate_single": GENERATE_SINGLE_JSON_SCHEMA,
         "generate_multi": GENERATE_MULTI_JSON_SCHEMA,
+        "forget_supersede": FORGET_SUPERSEDE_JSON_SCHEMA,
+        "forget_release": FORGET_RELEASE_JSON_SCHEMA,
     }
     try:
         schema = schemas[kind]
@@ -673,7 +705,11 @@ class ReaderCli:
         cache_dir.mkdir(parents=True, exist_ok=True)
 
     def model_for(self, kind: str) -> str:
-        return self.model if kind == "reader" else self.judge_model
+        return (
+            self.judge_model
+            if kind in {"judge", "rag_judge", "pair_judge"}
+            else self.model
+        )
 
     def cache_model_for(self, kind: str) -> str:
         """Cache identity of the model: reasoning effort changes replies, so

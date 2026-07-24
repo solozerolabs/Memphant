@@ -585,6 +585,52 @@ def test_luna_reader_omits_unsupported_temperature(tmp_path, monkeypatch) -> Non
     assert "temperature" not in payloads[0]
 
 
+def test_terra_proposal_uses_supported_decoding_and_exact_schema(
+    tmp_path, monkeypatch
+) -> None:
+    reader = _load_run_reader()
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
+    payloads = []
+
+    def fake_urlopen(request, timeout=None):
+        payloads.append(json.loads(request.data))
+        return _FakeHttpResponse({
+            "model": "openai/gpt-5.6-terra",
+            "provider": "OpenAI",
+            "choices": [{"message": {"content": (
+                '{"selected_indices":[1],"replacement_text":"updated"}'
+            )}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "cost": 0.001},
+        })
+
+    monkeypatch.setattr(reader.urllib.request, "urlopen", fake_urlopen)
+    cli = reader.ReaderCli(
+        "openrouter", "openai/gpt-5.6-terra", "judge-model", tmp_path, 1,
+        reasoning_effort="medium", max_output_tokens=256,
+    )
+    cli._call_openrouter("forget_supersede", "sys", "prompt")
+
+    payload = payloads[0]
+    assert payload["model"] == "openai/gpt-5.6-terra"
+    assert payload["max_tokens"] == 256
+    assert "temperature" not in payload
+    assert payload["reasoning"] == {"effort": "medium"}
+    assert payload["response_format"]["json_schema"] == {
+        "name": "forget_supersede_output",
+        "strict": True,
+        "schema": reader.FORGET_SUPERSEDE_JSON_SCHEMA,
+    }
+
+
+def test_forgeteval_release_schema_allows_empty_unique_selection() -> None:
+    reader = _load_run_reader()
+    schema = reader.response_contract(
+        "openrouter", "forget_release", "openai/gpt-5.6-terra"
+    )["response_format"]["json_schema"]["schema"]
+    assert schema["properties"]["selected_indices"]["uniqueItems"] is True
+    assert "minItems" not in schema["properties"]["selected_indices"]
+
+
 def test_judge_parser_requires_schema_valid_exact_enum() -> None:
     reader = _load_run_reader()
     assert reader.parse_judge_output('{"verdict":"yes"}', "openrouter") == "yes"
