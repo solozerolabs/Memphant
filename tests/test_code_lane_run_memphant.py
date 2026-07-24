@@ -216,18 +216,17 @@ def test_verify_input_contract_requires_exact_counts_and_pairing(clr, tmp_path):
     assert goldens == [golden_row]
 
 
-def test_outcome_marked_arm_fails_closed_without_explicit_typed_labels(clr):
-    readiness = clr.control_readiness(
+def test_control_input_readiness_does_not_claim_execution(clr):
+    readiness = clr.control_input_readiness(
         [{"attempt_id": "a1", "run_id": "r1", "started_at": "2026-01-01", "events": []}],
         [_golden("a1")],
     )
 
-    assert readiness["verbatim_memphant"] is True
-    assert readiness["outcome_marked_memphant"] is False
-    assert readiness["validator_backed_held_out"] is False
+    assert readiness["deterministic_file_search_inputs"] is True
+    assert readiness["verbatim_memphant_inputs"] is True
+    assert readiness["outcome_mark_inputs"] is False
+    assert readiness["validator_task_inputs"] is False
     assert "explicit_outcome" in readiness["missing_fields"]
-    with pytest.raises(RuntimeError, match="outcome-marked MemPhant is not paired"):
-        clr.require_outcome_mark_ready(readiness)
 
 
 # --- ingest payload conforms to the strict v1 contract ----------------------

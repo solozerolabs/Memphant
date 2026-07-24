@@ -41,6 +41,41 @@ predicate stays open, as do reader answer quality, outcome-marked memory,
 validator-backed held-out task success, production traffic, live Syndai coding
 ingestion, and SOTA. The paid reader remains awaiting separate authorization.
 
+## Free adversarial-bank audit
+
+A second deterministic candidate bank tested whether the original source issue
+alone could recover one automatically selected late diagnostic without
+repeating the preceding action. It contains 40 distinct repositories, 79-199
+in-scope non-target events per case, targets at 85.2%-98.7% trajectory depth,
+and at most 6% lexical overlap between the source issue and contextualized
+target. Those non-target events were not adjudicated distractors. Golden SHA-256:
+`2fc84252987e01bc84c7beea12d3b8d5bb414f7d9b175824be9a00569def91d5`.
+
+The clean full-volume packaged run compiled all 64,056 jobs with 64,014
+episodic projections, 42 exact deduplications, zero dead/pending jobs, no
+degraded recalls, and both tenant negatives passing. No-model Fast retrieval
+scored Recall@5 = 0/40 and Recall@10 = 0/40. Machine proof:
+`docs/build-log/artifacts/c3-public-code-lane-v3/provenance-final.json`
+(SHA-256 `ef80b2ddfacf5eb08313cd2a59f63b8d94f65a07ae627c8d79941a6aa9452581`).
+
+This v3 issue-to-late-diagnostic bank is rejected as an acceptance artifact.
+The source issue does not causally or semantically identify the automatically
+selected diagnostic, 19/40 answers are path-varied copies of the generic
+`.openhands/TASKS.md` file-not-found template, and the event-count field is not
+a frozen negative pool. Therefore 0/40 means only that Fast lexical recall did
+not return those arbitrary late targets from the issue text. It is not a
+MemPhant adversarial-continuity result. The historical run label
+`c3-public-adversarial-full` and its `deterministic_file_search: true` input-
+readiness field overstate that fact; the runner now names input readiness
+explicitly and has deleted its no-op `--outcome-marked` switch.
+
+Repeating the issue in every retained event would only game the ambiguity and
+was not implemented. The existing model-authored miner can form a causal
+paraphrase over a specific action/result pair, but running it requires the
+separately withheld model authorization. A validated distractor-controlled /
+causal-paraphrase bank therefore remains authorization-blocked, not passed or
+failed.
+
 ## Root fixes exposed by the run
 
 The first sealed attempts correctly failed and were retained as diagnostic

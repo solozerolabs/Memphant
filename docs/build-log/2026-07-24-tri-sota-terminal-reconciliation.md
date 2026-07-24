@@ -19,7 +19,7 @@ launch.
 | B5 cleanup | complete/rejected as adjudicated | `2026-07-23-b5-recall-stage-retirement.md`; heuristic, learned wrapper, decomposition and Balanced deleted; cross-encoder seam remains default-off. |
 | C0/C1 | correctness complete; parity/live L0 open | Existing C0/C1 proofs; no new production corpus authorization. |
 | C2 | rejected/deleted | Free kill-gate remains binding. |
-| C3 public volume | volume/isolation complete; adversarial continuity open | `2026-07-24-c3-public-code-lane.md`; 64,055 events, exact action-to-result lexical retrieval R@10 18/40. Reader, paraphrased adversarial continuity, and live production ingestion remain open. |
+| C3 public volume | volume/isolation complete; candidate stress bank rejected; valid adversarial continuity blocked | `2026-07-24-c3-public-code-lane.md`; 64,055 events, action-repetition lexical R@10 18/40. A clean issue-text to auto-selected late-diagnostic probe scored 0/40, but its targets were not causally identified and its non-target events were not adjudicated distractors. The probe rejects the bank, not MemPhant continuity. A valid causal-paraphrase bank, reader, validator-backed tasks, and live production ingestion remain authorization-blocked/open. |
 | WS-F active-read mechanism | local integration complete; dogfood gate open | Private companion evidence passes retain/compile/verified receipt/loader/trace/isolation/auth paths. Feature is not an enabled production cutover. Exact private landing identity stays in the private repository. |
 | D2 ForgetEval | instrument complete; measured gaps remain | `2026-07-24-forgeteval-public-api.md`; 133/126/126 on adversarial. |
 | D4 SWE-Explore | immutable-input external block | The pinned JSONL omits issue text/base commits. Official code includes a reconstruction helper, but its auxiliary datasets are unpinned, required issue-map/trajectory inputs are absent, and mappings are incomplete for pro/multilingual cells. |
@@ -53,7 +53,10 @@ narrow tests before continuing:
     `847a5059`.
 13. Final regression-only repairs: `1915dfa8`, `6b1efe86`, `d590b7dc`,
     `c5d58ec5`, `6185c5b5`, `54e50a84`.
-14. Apply the commit containing this corrected manifest last.
+14. Terminal-manifest repair chain: `8bf9ab44`, `40e5e6cf`, `8c023803`.
+15. Source-derived C3 rejected stress bank: `025f350c`.
+16. Apply the commit containing the v3 machine proof and this corrected
+    manifest last.
 
 The private Syndai branch is separate and depends on the B4 public receipt
 contract plus `ee4de593`. Land its exact private manifest only after compatible

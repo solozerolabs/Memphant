@@ -196,8 +196,8 @@ def verify_input_contract(
     return corpus_rows, goldens
 
 
-def control_readiness(corpus_rows: list[dict], goldens: list[dict]) -> dict:
-    """Report which Task-5 mechanisms the pinned rows can truthfully support.
+def control_input_readiness(corpus_rows: list[dict], goldens: list[dict]) -> dict:
+    """Report which Task-5 controls have the required immutable inputs.
 
     Outcome labels are intentionally never inferred from exit codes, run
     phases, or partial validator counts. A mark arm needs an explicit typed
@@ -226,11 +226,11 @@ def control_readiness(corpus_rows: list[dict], goldens: list[dict]) -> dict:
     typed = {"success", "failure", "corrected", "ignored"}
     labels_valid = all(row.get("explicit_outcome") in typed for row in corpus_rows)
     return {
-        "deterministic_file_search": bool(corpus_rows and goldens),
-        "verbatim_memphant": bool(corpus_rows and goldens),
-        "outcome_marked_memphant": not missing.intersection(required_attempt_fields)
+        "deterministic_file_search_inputs": bool(corpus_rows and goldens),
+        "verbatim_memphant_inputs": bool(corpus_rows and goldens),
+        "outcome_mark_inputs": not missing.intersection(required_attempt_fields)
         and labels_valid,
-        "validator_backed_held_out": not missing.intersection(required_task_fields),
+        "validator_task_inputs": not missing.intersection(required_task_fields),
         "missing_fields": sorted(missing),
     }
 
@@ -303,15 +303,6 @@ def validate_compilation_summary(
     }
     if mismatches:
         raise RuntimeError(f"compiled corpus has silent drops: {mismatches}")
-
-
-def require_outcome_mark_ready(readiness: dict) -> None:
-    if not readiness.get("outcome_marked_memphant"):
-        raise RuntimeError(
-            "outcome-marked MemPhant is not paired: explicit typed post-action "
-            "labels and validator evidence are required; missing "
-            + ", ".join(readiness.get("missing_fields", []))
-        )
 
 
 # --- ingest ------------------------------------------------------------------
@@ -447,11 +438,6 @@ def main() -> int:
         "--limit-attempts", type=int, default=0,
         help="0 = full corpus; otherwise a smoke cap that always keeps every gold-referenced attempt",
     )
-    parser.add_argument(
-        "--outcome-marked",
-        action="store_true",
-        help="require the explicit typed outcome+validator contract; current 40Q corpus fails closed",
-    )
     parser.add_argument("--server-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-server"))
     parser.add_argument("--worker-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-worker"))
     parser.add_argument("--cli-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-cli"))
@@ -463,9 +449,7 @@ def main() -> int:
     lock = json.loads(lock_path.read_text())
     corpus_path = Path(args.corpus)
     corpus_rows, goldens = verify_input_contract(corpus_path, golden_path, lock)
-    readiness = control_readiness(corpus_rows, goldens)
-    if args.outcome_marked:
-        require_outcome_mark_ready(readiness)
+    input_readiness = control_input_readiness(corpus_rows, goldens)
 
     # Re-exec only after immutable input + mechanism readiness checks. Invalid
     # inputs must not mint a scratch DB or start any packaged process.
@@ -674,7 +658,7 @@ def main() -> int:
                 "owner_to_sentinel_negative_passed": True,
                 "sentinel_to_owner_negative_passed": True,
             },
-            "control_readiness": readiness,
+            "control_input_readiness": input_readiness,
             "recall_at_5": r5,
             "recall_at_10": r10,
             "per_question": provenance_rows,
