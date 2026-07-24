@@ -786,28 +786,14 @@ mod deep_runtime_smoke {
                         break;
                     }
                 }
-                let header_end = request
-                    .windows(4)
-                    .position(|window| window == b"\r\n\r\n")
-                    .unwrap();
-                let body: Value = serde_json::from_slice(&request[header_end + 4..]).unwrap();
                 observed_calls.fetch_add(1, Ordering::SeqCst);
                 let (name, arguments) = if turn == 1 {
                     ("list_files", "{\"prefix\":\"episodes/\"}".to_string())
                 } else {
-                    let content = body["messages"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .rev()
-                        .find(|message| message["role"] == "tool")
-                        .unwrap()["content"]
-                        .as_str()
-                        .unwrap();
-                    let listed: Value = serde_json::from_str(content).unwrap();
-                    let path = listed["files"][0]["path"].as_str().unwrap();
-                    let source_id = path.trim_start_matches("episodes/").trim_end_matches(".md");
-                    ("finish", format!("{{\"source_ids\":[\"{source_id}\"]}}"))
+                    (
+                        "finish",
+                        "{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"fixture exercises calibrated abstention\"}".to_string(),
+                    )
                 };
                 let event = serde_json::json!({
                     "model":"anthropic/claude-sonnet-5","provider":"Azure",
@@ -993,11 +979,17 @@ mod deep_runtime_smoke {
         assert_eq!(provider_calls.load(Ordering::SeqCst), 2);
         assert_eq!(
             response.deep.as_ref().unwrap().status,
-            memphant_types::DeepRecallStatus::Completed
+            memphant_types::DeepRecallStatus::Completed,
+            "unexpected deep summary: {:?}",
+            response.deep
         );
         assert_eq!(
             response.deep.as_ref().unwrap().generation_ids,
             vec!["gen-mcp-1", "gen-mcp-2"]
+        );
+        assert_eq!(
+            response.deep.as_ref().unwrap().evidence.status,
+            memphant_types::EvidenceStatus::Insufficient
         );
         assert!(response.items[0].body.contains("heliotrope"));
         let trace = store.trace_by_id_any_tenant(response.trace_id).unwrap();
