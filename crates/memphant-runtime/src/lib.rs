@@ -447,9 +447,9 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
             pack_session_quota_from_env()
                 .unwrap_or_else(|error| panic!("MEMPHANT_PACK_SESSION_QUOTA: {error}")),
         )
-        .with_pack_utility_ordering_enabled(
-            pack_utility_ordering_from_env()
-                .unwrap_or_else(|error| panic!("MEMPHANT_PACK_UTILITY_ORDERING: {error}")),
+        .with_pack_submodular_ordering_enabled(
+            pack_submodular_ordering_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_PACK_SUBMODULAR_ORDERING: {error}")),
         )
         .with_structured_state_prefetch_concurrency(
             structured_state_prefetch_concurrency_from_value(
@@ -537,9 +537,9 @@ fn strict_bool_from_value(value: Option<&str>) -> Result<bool, String> {
     }
 }
 
-fn pack_utility_ordering_from_env() -> Result<bool, String> {
+fn pack_submodular_ordering_from_env() -> Result<bool, String> {
     strict_bool_from_value(
-        std::env::var("MEMPHANT_PACK_UTILITY_ORDERING")
+        std::env::var("MEMPHANT_PACK_SUBMODULAR_ORDERING")
             .ok()
             .as_deref(),
     )
@@ -1298,7 +1298,7 @@ mod tests {
     }
 
     #[test]
-    fn pack_utility_boolean_is_explicit_and_fail_closed() {
+    fn pack_submodular_boolean_is_explicit_and_fail_closed() {
         for value in [None, Some(""), Some("0"), Some("false"), Some("off")] {
             assert_eq!(strict_bool_from_value(value), Ok(false));
         }

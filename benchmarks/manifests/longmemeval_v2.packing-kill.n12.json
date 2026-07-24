@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "benchmark": "LongMemEval-V2",
+  "upstream_code_commit": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
+  "upstream_dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+  "source_files": {
+    "questions.jsonl": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7",
+    "haystacks/lme_v2_small.json": "9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d492046a9fff9b46593",
+    "haystacks/lme_v2_medium.json": "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59"
+  },
+  "selection": {
+    "tier": "small",
+    "question_count": 12,
+    "domains": {"enterprise": 6, "web": 6},
+    "non_abstention": 8,
+    "abstention": 4,
+    "policy": "balanced domains; dynamic, static, procedure, errors/gotchas, and abstention coverage; deterministic lowest suitable IDs; no answer values consumed",
+    "construction_reuse": "all six selected questions in each domain share the exact same 100-trajectory small-tier haystack, so construct once per domain and use query-only clones"
+  },
+  "cases": [
+    {"id":"01307e07","domain":"enterprise","question_type":"dynamic-environment","question_record_sha256":"2dbc48a1e51c34240b2571b5cd70c4371ee7d4e08c89ecb3446e0040c6a39593","haystack_ids_sha256":"350f5be05225777426a0ce46af78f41d05309b3cc44c6c6abb6655545ee0c7b6","image":null},
+    {"id":"057a2d4d","domain":"enterprise","question_type":"static-environment","question_record_sha256":"5164f16214ca565f87cce6c03a36a4a0a2d609bad6d9c64eef4407d89049f368","haystack_ids_sha256":"350f5be05225777426a0ce46af78f41d05309b3cc44c6c6abb6655545ee0c7b6","image":null},
+    {"id":"18b91103","domain":"enterprise","question_type":"errors-gotchas","question_record_sha256":"ac36bba72d55a73bc2557cb4400a35fdcdb2e90d74ec9ef8087dea3849f7754c","haystack_ids_sha256":"350f5be05225777426a0ce46af78f41d05309b3cc44c6c6abb6655545ee0c7b6","image":"question_screenshots/18b91103.png"},
+    {"id":"025db8ef","domain":"enterprise","question_type":"procedure","question_record_sha256":"cf63bed3513c6013cf0055453fc4fdc56afa81150d3cd9d4c56ef708fe6c11df","haystack_ids_sha256":"350f5be05225777426a0ce46af78f41d05309b3cc44c6c6abb6655545ee0c7b6","image":null},
+    {"id":"109b334c","domain":"enterprise","question_type":"dynamic-environment-abs","question_record_sha256":"0d06fd8a09d48f5caf0ea7bbe6f5da9552b0befa2d1560717e885c482ff73d89","haystack_ids_sha256":"350f5be05225777426a0ce46af78f41d05309b3cc44c6c6abb6655545ee0c7b6","image":null},
+    {"id":"123b74fb","domain":"enterprise","question_type":"static-environment-abs","question_record_sha256":"fe419430d5f1fe998f3bf7ed7e1954e1c50c506d8afd84bbb763456b5fbdd55e","haystack_ids_sha256":"350f5be05225777426a0ce46af78f41d05309b3cc44c6c6abb6655545ee0c7b6","image":null},
+    {"id":"00aa905a","domain":"web","question_type":"dynamic-environment","question_record_sha256":"a22cc87a5024260854fcf1d21e232204588e27f816af95a9165e74824764e8bf","haystack_ids_sha256":"731bba3f629000d537ddad7a1dd95af07e6810c40e39e4ba9bfa9a9ce490941a","image":null},
+    {"id":"05cce9b3","domain":"web","question_type":"static-environment","question_record_sha256":"03ca7686a34fdfb17073416ef0c706e97356c05a24f1fb1a8bbf086c22494367","haystack_ids_sha256":"731bba3f629000d537ddad7a1dd95af07e6810c40e39e4ba9bfa9a9ce490941a","image":null},
+    {"id":"0574c69a","domain":"web","question_type":"errors-gotchas","question_record_sha256":"de7583831936196f91a445883d9e8ec50d45b324a4074887f32a40d03251ce0e","haystack_ids_sha256":"731bba3f629000d537ddad7a1dd95af07e6810c40e39e4ba9bfa9a9ce490941a","image":"question_screenshots/0574c69a.png"},
+    {"id":"07ab3723","domain":"web","question_type":"procedure","question_record_sha256":"3fe489769e8688465f87b91f647ab9754e2a556a6c663b3ae616ebf3f8a3de64","haystack_ids_sha256":"731bba3f629000d537ddad7a1dd95af07e6810c40e39e4ba9bfa9a9ce490941a","image":null},
+    {"id":"0382ed92","domain":"web","question_type":"procedure-abs","question_record_sha256":"edbbd0566a1b1ddccc155cc3b257b8fe837190852b4e9aceda5b64deb2f56442","haystack_ids_sha256":"731bba3f629000d537ddad7a1dd95af07e6810c40e39e4ba9bfa9a9ce490941a","image":null},
+    {"id":"0401f0c8","domain":"web","question_type":"dynamic-environment-abs","question_record_sha256":"95f8262ad6ba29c669c2a045b6d3c047ec355b44de951c597fc9412e052eb0fd","haystack_ids_sha256":"731bba3f629000d537ddad7a1dd95af07e6810c40e39e4ba9bfa9a9ce490941a","image":null}
+  ],
+  "paired_arms": [
+    "no_retrieval",
+    "memphant_current",
+    "memphant_cap1200",
+    "memphant_cap1200_submodular",
+    "memphant_order_swapped"
+  ],
+  "budget_tokens": 8192,
+  "status": "FROZEN_AWAITING_EXPLICIT_PAID_AUTHORIZATION"
+}

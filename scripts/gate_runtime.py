@@ -253,7 +253,14 @@ class Server:
         log_path: Path | None = None,
         cross_rerank: bool = False,
         reranker: str = "fastembed",
+        pack_render_cap: int | None = None,
+        pack_session_quota: int | None = None,
+        pack_submodular_ordering: bool = False,
     ) -> None:
+        if pack_render_cap is not None and pack_render_cap <= 0:
+            raise ValueError("pack_render_cap must be a positive integer")
+        if pack_session_quota is not None and pack_session_quota <= 0:
+            raise ValueError("pack_session_quota must be a positive integer")
         self.server_bin = server_bin
         self.database_url = database_url
         self.port = port
@@ -261,6 +268,9 @@ class Server:
         self.log_path = log_path
         self.cross_rerank = cross_rerank
         self.reranker = reranker
+        self.pack_render_cap = pack_render_cap
+        self.pack_session_quota = pack_session_quota
+        self.pack_submodular_ordering = pack_submodular_ordering
         self.proc: subprocess.Popen | None = None
         self._log_file = None
 
@@ -270,6 +280,9 @@ class Server:
         env.pop("DATABASE_URL", None)
         env.pop("MEMPHANT_CROSS_RERANK", None)
         env.pop("MEMPHANT_RERANKER", None)
+        env.pop("MEMPHANT_PACK_RENDER_CAP", None)
+        env.pop("MEMPHANT_PACK_SESSION_QUOTA", None)
+        env.pop("MEMPHANT_PACK_SUBMODULAR_ORDERING", None)
         env["MEMPHANT_APP_DATABASE_URL"] = self.database_url
         env["MEMPHANT_AUTHN_DATABASE_URL"] = self.database_url
         env["MEMPHANT_BIND"] = f"127.0.0.1:{self.port}"
@@ -279,6 +292,12 @@ class Server:
         if self.cross_rerank:
             env["MEMPHANT_CROSS_RERANK"] = "1"
             env["MEMPHANT_RERANKER"] = self.reranker
+        if self.pack_render_cap is not None:
+            env["MEMPHANT_PACK_RENDER_CAP"] = str(self.pack_render_cap)
+        if self.pack_session_quota is not None:
+            env["MEMPHANT_PACK_SESSION_QUOTA"] = str(self.pack_session_quota)
+        if self.pack_submodular_ordering:
+            env["MEMPHANT_PACK_SUBMODULAR_ORDERING"] = "1"
         return env
 
     def _tail_log(self, n: int = LOG_TAIL_LINES) -> str:

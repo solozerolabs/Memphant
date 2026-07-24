@@ -490,12 +490,12 @@ pub struct PackLevers {
     /// (2026-07-21-rung7-packing-diagnosis.md). `None` keeps today's per-item
     /// budget of `whole_body.min(request_budget)` — byte-identical off-path.
     pub pack_render_cap: Option<usize>,
-    /// Order candidates by query-conditioned packing utility per actually
-    /// rendered token. The rendered cost honors `pack_render_cap`, so the
-    /// ordering optimizes the same bytes the admission loop later charges.
-    /// Ties are deterministic (relevance, cost, then unit id). Off preserves
-    /// the established fused ordering byte-for-byte.
-    pub utility_ordering_enabled: bool,
+    /// Budgeted submodular evidence ordering. When enabled, a deterministic
+    /// cost-scaled greedy pass jointly rewards relevance, distinct query-term
+    /// coverage, saturated lexical representativeness (so near-duplicates
+    /// quickly stop paying), and source diversity. Rendered costs honor
+    /// `pack_render_cap`. Off preserves the established order byte-for-byte.
+    pub submodular_ordering_enabled: bool,
 }
 
 /// The active vector query for recall: the embedded query plus the embedding
@@ -8540,7 +8540,7 @@ fn pack_recall_context(
     // can tell whether the established sort order is rank-authoritative (see
     // the comment on the "output already full" branch there for why that
     // matters).
-    let rank_based_ordering_active = pack_levers.utility_ordering_enabled
+    let rank_based_ordering_active = pack_levers.submodular_ordering_enabled
         || fused.iter().any(|candidate| {
             candidate.deep_rank.is_some() || candidate.cross_rerank_rank.is_some()
         });
@@ -8582,43 +8582,6 @@ fn pack_recall_context(
         });
     }
 
-    if request.context_packing_abstention_enabled && pack_levers.utility_ordering_enabled {
-        let utility = fused
-            .iter()
-            .map(|candidate| {
-                let (_, rendered_tokens, _) = packed_render(
-                    &candidate.unit,
-                    query_tokens,
-                    request.budget_tokens,
-                    pack_levers.pack_render_cap,
-                );
-                let relevance = packing_relevance_score(candidate, query_tokens);
-                (
-                    candidate.unit.id,
-                    (
-                        relevance / rendered_tokens.max(1) as f32,
-                        relevance,
-                        rendered_tokens,
-                    ),
-                )
-            })
-            .collect::<HashMap<_, _>>();
-        fused.sort_by(|left, right| {
-            let (left_utility, left_relevance, left_tokens) = utility[&left.unit.id];
-            let (right_utility, right_relevance, right_tokens) = utility[&right.unit.id];
-            right_utility
-                .partial_cmp(&left_utility)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    right_relevance
-                        .partial_cmp(&left_relevance)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .then_with(|| left_tokens.cmp(&right_tokens))
-                .then_with(|| left.unit.id.as_uuid().cmp(&right.unit.id.as_uuid()))
-        });
-    }
-
     // Query-specific deterministic projections over already-authorized source
     // units must not be buried by ordinary corpus fusion. Stable partitioning
     // preserves the selected lane ordering everywhere else.
@@ -8633,6 +8596,15 @@ fn pack_recall_context(
             3
         }
     });
+    if request.context_packing_abstention_enabled && pack_levers.submodular_ordering_enabled {
+        fused = submodular_pack_order(
+            fused,
+            request,
+            query_tokens,
+            pack_levers.pack_render_cap,
+            goal_companion_id,
+        );
+    }
 
     let ctx = PackCtx {
         request,
@@ -9004,6 +8976,300 @@ fn packing_relevance_score(candidate: &CandidateAccumulator, query_tokens: &[Str
         + lexical_score(&candidate.unit, query_tokens)
         + token_set_overlap_score(&candidate.unit, query_tokens)
         + candidate.decay.retrievability
+}
+
+#[derive(Debug)]
+struct SubmodularPackCandidate {
+    original_index: usize,
+    unit_id: UnitId,
+    source_id: Uuid,
+    relevance: f64,
+    cost: usize,
+    terms: HashSet<String>,
+}
+
+/// Cost-scaled greedy monotone-submodular ordering, following the four-term
+/// objective and singleton fallback in arXiv:2607.00725. The representation is
+/// deliberately product-native: query terms come from the recall tokenizer,
+/// representativeness is lexical Jaccard over the exact rendered item, and the
+/// diversity group is canonical `source_episode_id` (unit id only when a unit
+/// genuinely has no episode). No benchmark labels or gold fields participate.
+fn submodular_pack_order(
+    candidates: Vec<CandidateAccumulator>,
+    request: &RecallRequest,
+    query_tokens: &[String],
+    render_cap: Option<usize>,
+    goal_companion_id: Option<UnitId>,
+) -> Vec<CandidateAccumulator> {
+    const ALPHA: f64 = 0.3;
+    let query_terms = content_terms(query_tokens.iter().map(String::as_str));
+    let protected = candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(index, candidate)| {
+            (is_authoritative_projection(&candidate.unit)
+                || Some(candidate.unit.id) == goal_companion_id)
+                .then_some(index)
+        })
+        .collect::<Vec<_>>();
+    let protected_set = protected.iter().copied().collect::<HashSet<_>>();
+    let protected_cost = protected
+        .iter()
+        .map(|index| {
+            packed_render(
+                &candidates[*index].unit,
+                query_tokens,
+                request.budget_tokens,
+                render_cap,
+            )
+            .1
+        })
+        .sum::<usize>();
+    let available_budget = request.budget_tokens.saturating_sub(protected_cost);
+    let available_slots = request.k.max(1).saturating_sub(protected.len());
+
+    let metadata = candidates
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !protected_set.contains(index))
+        .map(|(original_index, candidate)| {
+            let (rendered, cost, _) = packed_render(
+                &candidate.unit,
+                query_tokens,
+                request.budget_tokens,
+                render_cap,
+            );
+            let text = rendered.as_deref().unwrap_or(&candidate.unit.body);
+            SubmodularPackCandidate {
+                original_index,
+                unit_id: candidate.unit.id,
+                source_id: candidate
+                    .unit
+                    .source_episode_id
+                    .map(|id| id.as_uuid())
+                    .unwrap_or_else(|| candidate.unit.id.as_uuid()),
+                relevance: f64::from(packing_relevance_score(candidate, query_tokens).max(0.0)),
+                cost: cost.max(1),
+                terms: content_terms(tokenize(text).iter().map(String::as_str)),
+            }
+        })
+        .collect::<Vec<_>>();
+    if metadata.is_empty() || available_budget == 0 || available_slots == 0 {
+        let mut order = protected;
+        let chosen = order.iter().copied().collect::<HashSet<_>>();
+        order.extend((0..candidates.len()).filter(|index| !chosen.contains(index)));
+        return reorder_candidates(candidates, order);
+    }
+
+    let similarities = (0..metadata.len())
+        .map(|left| {
+            (0..metadata.len())
+                .map(|right| jaccard(&metadata[left].terms, &metadata[right].terms))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let relevance_total = metadata
+        .iter()
+        .map(|candidate| candidate.relevance)
+        .sum::<f64>()
+        .max(f64::EPSILON);
+    let repr_caps = similarities
+        .iter()
+        .map(|row| ALPHA * row.iter().sum::<f64>())
+        .collect::<Vec<_>>();
+    let repr_total = repr_caps.iter().sum::<f64>().max(f64::EPSILON);
+    let mut source_totals = HashMap::<Uuid, f64>::new();
+    for candidate in &metadata {
+        *source_totals.entry(candidate.source_id).or_default() += candidate.relevance;
+    }
+    let diversity_total = source_totals
+        .values()
+        .map(|mass| mass.sqrt())
+        .sum::<f64>()
+        .max(f64::EPSILON);
+    let objective = |selected: &[bool]| {
+        submodular_objective(
+            &metadata,
+            &similarities,
+            &repr_caps,
+            relevance_total,
+            repr_total,
+            diversity_total,
+            &query_terms,
+            selected,
+        )
+    };
+
+    let mut selected = vec![false; metadata.len()];
+    let mut selected_order = Vec::new();
+    let mut used = 0usize;
+    let mut current = objective(&selected);
+    while selected_order.len() < available_slots {
+        let mut best: Option<(usize, f64, f64)> = None;
+        for (index, candidate) in metadata.iter().enumerate() {
+            if selected[index] || used.saturating_add(candidate.cost) > available_budget {
+                continue;
+            }
+            selected[index] = true;
+            let next = objective(&selected);
+            selected[index] = false;
+            let gain = (next - current).max(0.0);
+            let ratio = gain / candidate.cost as f64;
+            let replaces = best.is_none_or(|(best_index, best_ratio, best_gain)| {
+                ratio
+                    .total_cmp(&best_ratio)
+                    .then_with(|| gain.total_cmp(&best_gain))
+                    .then_with(|| {
+                        candidate
+                            .relevance
+                            .total_cmp(&metadata[best_index].relevance)
+                    })
+                    .then_with(|| metadata[best_index].cost.cmp(&candidate.cost))
+                    .then_with(|| {
+                        metadata[best_index]
+                            .unit_id
+                            .as_uuid()
+                            .cmp(&candidate.unit_id.as_uuid())
+                    })
+                    .is_gt()
+            });
+            if replaces {
+                best = Some((index, ratio, gain));
+            }
+        }
+        let Some((index, _, gain)) = best else { break };
+        if gain <= f64::EPSILON {
+            break;
+        }
+        selected[index] = true;
+        selected_order.push(index);
+        used += metadata[index].cost;
+        current = objective(&selected);
+    }
+
+    // Lin-Bilmes singleton fallback: cost-scaled greedy can miss one expensive,
+    // high-value item. Compare the full set objective to the best feasible
+    // singleton and use the singleton only when it is strictly better.
+    let best_singleton = metadata
+        .iter()
+        .enumerate()
+        .filter(|(_, candidate)| candidate.cost <= available_budget)
+        .map(|(index, candidate)| {
+            let mut singleton = vec![false; metadata.len()];
+            singleton[index] = true;
+            (index, objective(&singleton), candidate)
+        })
+        .max_by(
+            |(left_index, left_score, left), (right_index, right_score, right)| {
+                left_score
+                    .total_cmp(right_score)
+                    .then_with(|| left.relevance.total_cmp(&right.relevance))
+                    .then_with(|| right.cost.cmp(&left.cost))
+                    .then_with(|| {
+                        metadata[*right_index]
+                            .unit_id
+                            .as_uuid()
+                            .cmp(&metadata[*left_index].unit_id.as_uuid())
+                    })
+            },
+        );
+    if let Some((index, score, _)) = best_singleton
+        && score > current
+    {
+        selected_order = vec![index];
+    }
+
+    let mut order = protected;
+    order.extend(
+        selected_order
+            .iter()
+            .map(|index| metadata[*index].original_index),
+    );
+    let chosen = order.iter().copied().collect::<HashSet<_>>();
+    order.extend((0..candidates.len()).filter(|index| !chosen.contains(index)));
+    reorder_candidates(candidates, order)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn submodular_objective(
+    metadata: &[SubmodularPackCandidate],
+    similarities: &[Vec<f64>],
+    repr_caps: &[f64],
+    relevance_total: f64,
+    repr_total: f64,
+    diversity_total: f64,
+    query_terms: &HashSet<String>,
+    selected: &[bool],
+) -> f64 {
+    let relevance = metadata
+        .iter()
+        .zip(selected)
+        .filter(|(_, selected)| **selected)
+        .map(|(candidate, _)| candidate.relevance)
+        .sum::<f64>()
+        / relevance_total;
+    let mut covered_query_terms = HashSet::new();
+    let mut source_mass = HashMap::<Uuid, f64>::new();
+    for (candidate, selected) in metadata.iter().zip(selected) {
+        if !selected {
+            continue;
+        }
+        covered_query_terms.extend(candidate.terms.intersection(query_terms).cloned());
+        *source_mass.entry(candidate.source_id).or_default() += candidate.relevance;
+    }
+    let query_coverage = if query_terms.is_empty() {
+        0.0
+    } else {
+        covered_query_terms.len() as f64 / query_terms.len() as f64
+    };
+    let representativeness = similarities
+        .iter()
+        .enumerate()
+        .map(|(candidate_index, row)| {
+            row.iter()
+                .zip(selected)
+                .filter(|(_, selected)| **selected)
+                .map(|(similarity, _)| *similarity)
+                .sum::<f64>()
+                .min(repr_caps[candidate_index])
+        })
+        .sum::<f64>()
+        / repr_total;
+    let diversity = source_mass.values().map(|mass| mass.sqrt()).sum::<f64>() / diversity_total;
+    relevance + 0.5 * query_coverage + 0.4 * representativeness + 0.3 * diversity
+}
+
+fn content_terms<'a>(terms: impl Iterator<Item = &'a str>) -> HashSet<String> {
+    const STOP: &[&str] = &[
+        "and", "are", "but", "did", "does", "for", "from", "had", "has", "have", "how", "that",
+        "the", "their", "then", "this", "was", "were", "what", "when", "where", "which", "who",
+        "why", "with", "would", "you", "your",
+    ];
+    terms
+        .filter(|term| term.len() >= 3 && !STOP.contains(term))
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn jaccard(left: &HashSet<String>, right: &HashSet<String>) -> f64 {
+    if left.is_empty() && right.is_empty() {
+        return 1.0;
+    }
+    let intersection = left.intersection(right).count();
+    let union = left.len() + right.len() - intersection;
+    intersection as f64 / union.max(1) as f64
+}
+
+fn reorder_candidates(
+    candidates: Vec<CandidateAccumulator>,
+    order: Vec<usize>,
+) -> Vec<CandidateAccumulator> {
+    debug_assert_eq!(order.len(), candidates.len());
+    let mut slots = candidates.into_iter().map(Some).collect::<Vec<_>>();
+    order
+        .into_iter()
+        .map(|index| slots[index].take().expect("candidate order is unique"))
+        .collect()
 }
 
 fn replacement_index(
@@ -10444,8 +10710,8 @@ fn append_pack_feature_flags(flags: &mut Vec<String>, levers: PackLevers) {
     if let Some(quota) = levers.session_quota {
         flags.push(format!("pack_session_quota:{quota}"));
     }
-    if levers.utility_ordering_enabled {
-        flags.push("pack_utility_ordering_enabled".to_string());
+    if levers.submodular_ordering_enabled {
+        flags.push("pack_submodular_ordering_enabled".to_string());
     }
 }
 
@@ -13318,45 +13584,86 @@ mod pack_cost_tests {
     }
 
     #[test]
-    fn utility_ordering_prefers_more_relevance_per_rendered_token() {
-        let query_tokens = tokenize("quantum");
-        let mut one_item_request = request(256);
-        one_item_request.k = 1;
-        one_item_request.context_packing_abstention_enabled = true;
-        let long = || {
-            candidate(
-                unit(1, &format!("quantum {}", body_of(100)), Vec::new()),
-                5.0,
-            )
+    fn submodular_ordering_selects_complementary_cross_source_evidence() {
+        let query_tokens = tokenize("alpha beta gamma delta");
+        let mut two_item_request = request(256);
+        two_item_request.query = "alpha beta gamma delta".to_string();
+        two_item_request.k = 2;
+        two_item_request.context_packing_abstention_enabled = true;
+        let make = || {
+            let mut first = unit(1, "alpha beta shared detail", Vec::new());
+            first.source_episode_id = Some(EpisodeId::from_u128(1));
+            let mut redundant = unit(2, "alpha beta shared detail repeated", Vec::new());
+            redundant.source_episode_id = Some(EpisodeId::from_u128(1));
+            let mut complementary = unit(3, "gamma delta complementary answer", Vec::new());
+            complementary.source_episode_id = Some(EpisodeId::from_u128(2));
+            vec![
+                candidate(first, 5.0),
+                candidate(redundant, 4.9),
+                candidate(complementary, 4.0),
+            ]
         };
-        let compact = || candidate(unit(2, "quantum concise answer", Vec::new()), 4.0);
 
         let baseline = pack_recall_context(
-            vec![long(), compact()],
-            &one_item_request,
+            make(),
+            &two_item_request,
             &[],
             &query_tokens,
             Vec::new(),
-            2,
+            3,
             PackLevers::default(),
             false,
         );
-        assert_eq!(baseline.items[0].unit_id, UnitId::from_u128(1));
+        assert_eq!(
+            baseline
+                .items
+                .iter()
+                .map(|item| item.unit_id)
+                .collect::<Vec<_>>(),
+            vec![UnitId::from_u128(1), UnitId::from_u128(2)]
+        );
 
         let treatment = pack_recall_context(
-            vec![long(), compact()],
-            &one_item_request,
+            make(),
+            &two_item_request,
             &[],
             &query_tokens,
             Vec::new(),
-            2,
+            3,
             PackLevers {
-                utility_ordering_enabled: true,
+                submodular_ordering_enabled: true,
                 ..PackLevers::default()
             },
             false,
         );
-        assert_eq!(treatment.items[0].unit_id, UnitId::from_u128(2));
+        assert_eq!(
+            treatment
+                .items
+                .iter()
+                .map(|item| item.unit_id)
+                .collect::<Vec<_>>(),
+            vec![UnitId::from_u128(1), UnitId::from_u128(3)]
+        );
+    }
+
+    #[test]
+    fn submodular_ordering_keeps_complete_tail_when_protected_item_uses_budget() {
+        let query_tokens = tokenize("quantum");
+        let mut tiny_request = request(1);
+        tiny_request.context_packing_abstention_enabled = true;
+        let ordered = submodular_pack_order(
+            vec![
+                candidate(unit(2, "quantum ordinary evidence", Vec::new()), 4.0),
+                candidate(unit(1, "quantum protected goal", Vec::new()), 5.0),
+            ],
+            &tiny_request,
+            &query_tokens,
+            None,
+            Some(UnitId::from_u128(1)),
+        );
+        assert_eq!(ordered.len(), 2);
+        assert_eq!(ordered[0].unit.id, UnitId::from_u128(1));
+        assert_eq!(ordered[1].unit.id, UnitId::from_u128(2));
     }
 
     /// Rung-7 per-item render cap: without a cap, a big chunk-matched item's
@@ -13754,7 +14061,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: true,
                 session_quota: None,
                 pack_render_cap: None,
-                utility_ordering_enabled: false,
+                submodular_ordering_enabled: false,
             },
             false,
         );
@@ -13839,7 +14146,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
-                utility_ordering_enabled: false,
+                submodular_ordering_enabled: false,
             },
             false,
         );
@@ -13894,7 +14201,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(2),
                 pack_render_cap: None,
-                utility_ordering_enabled: false,
+                submodular_ordering_enabled: false,
             },
             false,
         );
@@ -13953,7 +14260,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
-                utility_ordering_enabled: false,
+                submodular_ordering_enabled: false,
             },
             DEFAULT_RECALL_POOL_DEPTH,
         );
@@ -13985,7 +14292,7 @@ mod pack_cost_tests {
                 sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
-                utility_ordering_enabled: false,
+                submodular_ordering_enabled: false,
             },
             DEFAULT_RECALL_POOL_DEPTH,
         );
@@ -14053,7 +14360,7 @@ mod pack_cost_tests {
             sibling_gather_enabled: false,
             session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
             pack_render_cap: None,
-            utility_ordering_enabled: false,
+            submodular_ordering_enabled: false,
         };
         let on_scan_limit = recall_pack_scan_limit(
             &req,

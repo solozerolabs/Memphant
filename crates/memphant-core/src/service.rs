@@ -3263,11 +3263,9 @@ impl<S: MemoryStore> MemoryService<S> {
         self
     }
 
-    /// Enables query-conditioned utility-per-rendered-token ordering (default
-    /// OFF). The ordering uses the same capped rendered cost the admission loop
-    /// charges and deterministic unit-id tie breaking.
-    pub fn with_pack_utility_ordering_enabled(mut self, enabled: bool) -> Self {
-        self.pack_levers.utility_ordering_enabled = enabled;
+    /// Enables budgeted submodular evidence ordering (default OFF).
+    pub fn with_pack_submodular_ordering_enabled(mut self, enabled: bool) -> Self {
+        self.pack_levers.submodular_ordering_enabled = enabled;
         self
     }
 

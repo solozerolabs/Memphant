@@ -224,6 +224,42 @@ def test_server_environment_closes_inherited_cross_rerank_state(grt, monkeypatch
     assert selected.environment()["MEMPHANT_RERANKER"] == "fastembed"
 
 
+def test_server_environment_closes_and_selects_exact_packing_arm(grt, monkeypatch):
+    monkeypatch.setenv("MEMPHANT_PACK_RENDER_CAP", "9999")
+    monkeypatch.setenv("MEMPHANT_PACK_SESSION_QUOTA", "9999")
+    monkeypatch.setenv("MEMPHANT_PACK_SUBMODULAR_ORDERING", "true")
+
+    default = grt.Server("server", "postgres://scratch", 39433)
+    selected = grt.Server(
+        "server",
+        "postgres://scratch",
+        39434,
+        pack_render_cap=1200,
+        pack_session_quota=2,
+        pack_submodular_ordering=True,
+    )
+
+    default_env = default.environment()
+    assert "MEMPHANT_PACK_RENDER_CAP" not in default_env
+    assert "MEMPHANT_PACK_SESSION_QUOTA" not in default_env
+    assert "MEMPHANT_PACK_SUBMODULAR_ORDERING" not in default_env
+
+    selected_env = selected.environment()
+    assert selected_env["MEMPHANT_PACK_RENDER_CAP"] == "1200"
+    assert selected_env["MEMPHANT_PACK_SESSION_QUOTA"] == "2"
+    assert selected_env["MEMPHANT_PACK_SUBMODULAR_ORDERING"] == "1"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("pack_render_cap", 0), ("pack_render_cap", -1),
+     ("pack_session_quota", 0), ("pack_session_quota", -1)],
+)
+def test_server_rejects_nonpositive_packing_limits(grt, field, value):
+    with pytest.raises(ValueError, match=f"{field} must be a positive integer"):
+        grt.Server("server", "postgres://scratch", 39435, **{field: value})
+
+
 def test_reexec_through_scratch_db_is_noop_when_already_active(grt, monkeypatch):
     """The recursion guard: inside a scratch DB (``MEMPHANT_SCRATCH_ACTIVE``
     set), the runner must NOT re-exec again — else `with_scratch_db.sh` nests

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "benchmark": "LongMemEval-V2",
+  "adapter": "MemPhant packaged REST packing treatment",
+  "upstream_release_lock_sha256": "846c73224c456a981c7812741c33ee948dbdcd8de84a220240e534558fa8cbab",
+  "base_adapter_lock_sha256": "f763984b09bd47798bb5d5206a64f4f8cd5c01054b6f3507945bffe136a0c33d",
+  "base_adapter_sha256": "56c2a7264112e012f9376178cc2ef3383d70705f21255d4182e92bf62f8e206c",
+  "files": {
+    "benchmarks/longmemeval_v2/memphant_packing_memory.py": "2619178a2c68bc2ff3836488a938bda00577847d708261de7402dfd0177f66bc",
+    "benchmarks/longmemeval_v2/packing_harness_bootstrap.py": "82cb16ff2bf32874256b64ffa655e1e0747990c435a3554d90d882d7b63a3e1b",
+    "benchmarks/longmemeval_v2/memphant.packing-current.memory.json": "a15fdef7adb804c4a0144909a703a9ee69260d02ed0688c8d9ea3db2cd32c569",
+    "benchmarks/longmemeval_v2/memphant.packing-cap1200.memory.json": "7f63a40991797006dcc2319a0f45579cb77e9868884b5e3f2d362bb16097ef00",
+    "benchmarks/longmemeval_v2/memphant.packing-submodular.memory.json": "2627ea6bc85695db159bfd31b49305dd7d7f4d63d9d75abd0c3e7d8590a53925",
+    "benchmarks/longmemeval_v2/memphant.packing-cap1200-submodular.memory.json": "86853fd0e78388f87d0791d2f204391905874b5a37acbccb44898c7f6afb6174",
+    "benchmarks/longmemeval_v2/memphant.packing-order-swapped.memory.json": "b073fdbae2c978056dd5bd9130bc541abdaeedb40a84d61ee24fe8939fb4b574",
+    "scripts/run_longmemeval_v2_packing.py": "8cb51ce8daba287c7a486dc8a225b5919c6b5de0de54d497627d50414f30a632",
+    "scripts/validate_lme_v2_packing_manifest.py": "6080e8a1c87f3cdc934856d2c095fd1af6c0eaa87d3f6052e786a7f0444d0687",
+    "scripts/gate_runtime.py": "2a382c972b119415b33a33227e64f68241ff8d14a2e35f331b7932381725c1ca",
+    "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json": "c216d21e79be625d99d9f03f793588c848f84e79287aa40d088cedf3fd4a67b6",
+    "crates/memphant-core/src/lib.rs": "0ce1fea48a96677cddebca3753eefa9cfc1f30e932877e85e7a30032465d0c0e",
+    "crates/memphant-core/src/service.rs": "30b93fbd0d28551b0aa1a298e0453a0d56a1090fcaf687c91422bb4a4c227ad3",
+    "crates/memphant-runtime/src/lib.rs": "1454f663536c3b8584de7651e6ccd3459a2c050ecd79ddd3c63ad6bf5dad0467",
+    "crates/memphant-eval/src/bench_lme.rs": "15879bdfd4bfc4639536404858ad0a0158199235498fd492ecebe71a991df5ea",
+    "crates/memphant-eval/src/main.rs": "0143317d5db7c0084770730c28a985df9220af62c7d2557ea50b233f9576a2e2"
+  },
+  "dataset": {
+    "code_commit": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
+    "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+    "pilot_tier": "small",
+    "question_count": 12,
+    "domains": ["enterprise", "web"],
+    "unique_haystack_constructions": 2,
+    "metadata_only_validation": true,
+    "full_dataset_downloaded": false
+  },
+  "arms": {
+    "memphant_current": {
+      "memory_config": "memphant.packing-current.memory.json",
+      "server_environment": {},
+      "order_swapped": false
+    },
+    "memphant_cap1200": {
+      "memory_config": "memphant.packing-cap1200.memory.json",
+      "server_environment": {"MEMPHANT_PACK_RENDER_CAP": "1200"},
+      "order_swapped": false
+    },
+    "memphant_cap1200_submodular": {
+      "memory_config": "memphant.packing-cap1200-submodular.memory.json",
+      "server_environment": {
+        "MEMPHANT_PACK_RENDER_CAP": "1200",
+        "MEMPHANT_PACK_SUBMODULAR_ORDERING": "1"
+      },
+      "order_swapped": false
+    },
+    "memphant_order_swapped": {
+      "memory_config": "memphant.packing-order-swapped.memory.json",
+      "server_environment": {
+        "MEMPHANT_PACK_RENDER_CAP": "1200",
+        "MEMPHANT_PACK_SUBMODULAR_ORDERING": "1"
+      },
+      "order_swapped": true
+    }
+  },
+  "protocol": {
+    "no_retrieval_control": true,
+    "top_k": 20,
+    "recall_and_reader_context_max_tokens": 8192,
+    "reader": "Qwen/Qwen3.5-9B",
+    "judge": "gpt-5.2",
+    "generation_and_scoring": "official evaluation/harness.py at code_commit",
+    "construction_reuse": "construct once per domain, then use query-only clones for every question and treatment arm",
+    "gold_fields_consumed_by_memory": [],
+    "same_prompt_reader_judge_and_budget_across_arms": true
+  },
+  "proof": {
+    "base": "immutable packaged-REST adapter proof remains authoritative for construction, retain, worker, recall, trace, and mutation pairing",
+    "packing": "companion proof binds base proof hash, exact trace feature flags, rendered context hash, per-item unit/resource/trajectory receipt provenance, disposition, and optional deterministic order reversal",
+    "server_arm_closure": "shared Server removes inherited packing variables and installs only explicit constructor-selected values",
+    "receipt_statuses": ["supported", "contradicts_premise", "near_match", "insufficient"]
+  },
+  "free_evidence": {
+    "lme_s_n12": {
+      "current_scored_hit_at_10": "2/8",
+      "cap1200_scored_hit_at_10": "8/8",
+      "submodular_scored_hit_at_10": "2/8",
+      "cap1200_submodular_scored_hit_at_10": "8/8",
+      "decision": "promote cap1200 as treatment; retain cap1200_submodular only as a downstream-reader ordering probe"
+    },
+    "packaged_fixture_dry_run": {
+      "command": "cargo build -p memphant-server -p memphant-cli -p memphant-worker && MEMPHANT_LME_PACKAGED_INTEGRATION=1 MEMPHANT_SCRATCH_ACTIVE=1 bash scripts/with_scratch_db.sh postgres://memphant:memphant@localhost:5432/memphant MEMPHANT_TEST_DATABASE_URL python3 -m pytest tests/test_longmemeval_v2_packing_adapter.py::test_cap1200_packing_adapter_tiny_packaged_rest_dry_run -q",
+      "result": "1 passed",
+      "database_persisted": false,
+      "model_calls": 0,
+      "cost_usd": 0
+    }
+  },
+  "paid_models_run": false,
+  "status": "FROZEN_AWAITING_EXPLICIT_PAID_AUTHORIZATION"
+}

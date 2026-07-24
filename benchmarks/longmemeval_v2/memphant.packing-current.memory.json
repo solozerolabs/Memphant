@@ -1,0 +1,22 @@
+{
+  "memory_type": "memphant_packing",
+  "memory_params": {
+    "schema_version": 2,
+    "server_url_env": "MEMPHANT_LME_SERVER_URL",
+    "database_url_env": "MEMPHANT_TEST_DATABASE_URL",
+    "cli_bin_env": "MEMPHANT_CLI_BIN",
+    "server_bin_env": "MEMPHANT_LME_SERVER_BIN",
+    "worker_bin_env": "MEMPHANT_LME_WORKER_BIN",
+    "proof_dir_env": "MEMPHANT_LME_PROOF_DIR",
+    "run_id_env": "MEMPHANT_LME_RUN_ID",
+    "top_k": 20,
+    "budget_tokens": 8192,
+    "mode": "deep",
+    "source_kind": "tool",
+    "source_trust": "trusted_system",
+    "compiler_version": "longmemeval-v2-memphant-v1",
+    "packing_contract_version": "memphant.lme_v2.packing.v1",
+    "reader_context_max_tokens": 8192,
+    "packing_arm": "current"
+  }
+}
