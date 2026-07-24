@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 CATEGORIES = (
-    "actual_memphant_defect",
-    "adapter_mismatch",
+    "observed_exact_mutation_acknowledgement_failure",
+    "adapter_semantic_selection_boundary",
     "intentionally_unsupported_operation",
     "ambiguous_destructive_request_should_fail_closed",
     "benchmark_limitation",
@@ -47,13 +47,13 @@ def classify(case: dict) -> str:
     ]
     if not mutations:
         if operations & {"release", "supersede"}:
-            return "actual_memphant_defect"
+            return "observed_exact_mutation_acknowledgement_failure"
         raise ValueError(f"{case['case_id']}: failed without a classified mutation")
     for mutation in mutations:
         if mutation["operation"] == "release":
             receipts = mutation.get("receipts")
             if not isinstance(receipts, list) or not receipts:
-                return "actual_memphant_defect"
+                return "observed_exact_mutation_acknowledgement_failure"
             for receipt in receipts:
                 selected = receipt.get("selected_unit_id")
                 if (
@@ -61,16 +61,16 @@ def classify(case: dict) -> str:
                     or receipt.get("verification")
                     != "authorized_transaction_committed"
                 ):
-                    return "actual_memphant_defect"
+                    return "observed_exact_mutation_acknowledgement_failure"
         elif (
             mutation.get("selected_unit_id") not in mutation.get("superseded", [])
             or not mutation.get("created")
         ):
-            return "actual_memphant_defect"
+            return "observed_exact_mutation_acknowledgement_failure"
     if "release" in operations:
         return "ambiguous_destructive_request_should_fail_closed"
     if "supersede" in operations:
-        return "adapter_mismatch"
+        return "adapter_semantic_selection_boundary"
     raise ValueError(f"{case['case_id']}: failed without a classified mutation")
 
 
@@ -91,6 +91,14 @@ def build_report(baseline: dict, candidate: dict) -> dict:
         if candidate_case["family"] != case["family"]:
             raise ValueError(f"{case['case_id']}: family changed between arms")
         category = classify(case)
+        assertion_indexes = {}
+        for field in ("missing_must_contain_indexes", "present_must_not_contain_indexes"):
+            value = case.get(field)
+            if not isinstance(value, list) or any(
+                not isinstance(index, int) or isinstance(index, bool) for index in value
+            ):
+                raise ValueError(f"{case['case_id']}: {field} is invalid")
+            assertion_indexes[field] = value
         transition = f"{case['outcome']}->{candidate_case['outcome']}"
         categories[category] += 1
         transitions[transition] += 1
@@ -100,8 +108,9 @@ def build_report(baseline: dict, candidate: dict) -> dict:
                 "family": case["family"],
                 "attack_category": case["attack_category"],
                 "mutation_operations": case["mutation_operations"],
+                **assertion_indexes,
                 "baseline_outcome": case["outcome"],
-                "root_cause_category": category,
+                "triage_category": category,
                 "candidate_outcome": candidate_case["outcome"],
                 "transition": transition,
             }
@@ -109,6 +118,7 @@ def build_report(baseline: dict, candidate: dict) -> dict:
 
     return {
         "schema_version": 1,
+        "status": "OPERATION_BOUNDARY_TRIAGE_ROOT_CAUSE_OPEN",
         "baseline_summary": {
             key: baseline["results"][key]
             for key in ("passed", "failed", "not_applicable", "total")
@@ -121,9 +131,11 @@ def build_report(baseline: dict, candidate: dict) -> dict:
         "transition_counts": dict(sorted(transitions.items())),
         "classification_basis": {
             "method": (
-                "Per-case operation-boundary root-cause adjudication consumes the "
-                "recorded error kind, failed assertion indexes, adapter decisions, "
-                "exact selected IDs, mutation receipts, and created/superseded IDs."
+                "Per-case operation-boundary triage records the error kind, failed "
+                "assertion indexes, adapter decisions, exact selected IDs, mutation "
+                "receipts, and created/superseded IDs. These records do not establish "
+                "target correctness, projection freshness, lineage correctness, or "
+                "final recall; product root cause remains open."
             ),
             "exact_mutation_boundary": (
                 "The adapter fails closed unless POST /v1/correct acknowledges the "

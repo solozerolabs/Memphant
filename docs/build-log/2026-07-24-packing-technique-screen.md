@@ -67,7 +67,7 @@ abstention, but it did not improve either: several gold spans moved later in the
 pack. It therefore has no retrieval claim and is rejected with the other tested
 candidates.
 
-## LongMemEval-V2 hypothetical reader gate
+## Rejected LongMemEval-V2 reader hypothesis
 
 The exact n=12 follow-up is frozen in
 `benchmarks/manifests/longmemeval_v2.packing-kill.n12.json`: six enterprise and
@@ -78,12 +78,9 @@ revision `f152293e235517d504809563c833d7190b8c713b`; all six questions in each
 domain share one 100-trajectory haystack, so the paid gate needs only two free
 constructions.
 
-The paired arms are no retrieval, current MemPhant, cap 1200, cap 1200 plus
-submodular ordering, and an exact order-swapped copy of the latter. Every arm
-uses the official `Qwen/Qwen3.5-9B` reader, official `gpt-5.2` judge, official
-generation/scoring code, and the same 8,192-token recall/reader budget. This is
-60 reader calls plus 30 judge calls before SDK retry liability. No call has
-been made.
+The discarded hypothesis paired no retrieval, current MemPhant, cap 1200,
+cap 1200 plus submodular ordering, and an order-swapped negative control. No
+reader or judge call was made.
 
 The treatment adapter is sealed by
 `benchmarks/manifests/longmemeval_v2_packing_adapter.lock.json`. It layers over
@@ -107,6 +104,6 @@ MEMPHANT_LME_PACKAGED_INTEGRATION=1 ... pytest \
 
 This closes the free adapter/runtime rehearsal and rejects paid execution for
 the tested techniques. The default remains off and the rung remains open. The
-hardened reader harness is retained for a future technique, but it cannot be
-authorized until a new candidate passes both the frozen retrieval and exact
-abstention gates.
+dormant paid runner, bootstrap, meter, and campaign analyzer were deleted. A
+materially different technique must pass both frozen free gates before it can
+justify a newly designed and separately reviewed paid campaign.

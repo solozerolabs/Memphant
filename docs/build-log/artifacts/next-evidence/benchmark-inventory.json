@@ -13,7 +13,7 @@
       "dataset_license": "Apache-2.0",
       "lock": "benchmarks/manifests/longmemeval_v2.lock.json",
       "case_manifest": "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json",
-      "case_manifest_sha256": "a1e806679e3095ab030964dc27cc17f2f466ab93e7da0a64d5b0d72e9e052d20"
+      "case_manifest_sha256": "4b614f38b9ceb0214696dddf020bf9c91b61dd5023dbc95438796fce88756503"
     },
     "longmemeval_s": {
       "purpose": "packing regression and exact-abstention comparison",
@@ -41,7 +41,7 @@
       "license": "Apache-2.0 for Datacurve contributions; upstream task licenses remain separate",
       "task_count": 113,
       "pairing_manifest": "benchmarks/manifests/deep_swe.pairing.audit.json",
-      "pairing_manifest_sha256": "e93e7cd3b5482d1c726dce70bd058e4c61537b72fad11e818b6c8f491da80ca2"
+      "pairing_manifest_sha256": "bb345a1981bb8f8fd450a9c29d16cb1f76ee9a62d4748aed06a81dc2805cb3f9"
     },
     "forgeteval": {
       "purpose": "explicit mutation and control-plane gate",

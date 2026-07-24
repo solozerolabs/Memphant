@@ -486,7 +486,6 @@ def test_executor_rejects_unpinned_or_unpriced_reader_response() -> None:
         "parse_status": "provider_response_validated",
         "request_sha256": "1" * 64,
         "result_sha256": "2" * 64,
-        "response_text_sha256": "3" * 64,
     }
     assert generator.validate_reader_metadata(valid) == valid
     with pytest.raises(RuntimeError, match="served model"):
@@ -624,7 +623,6 @@ def test_reader_abstention_is_preserved_as_a_scorable_answer(tmp_path: Path) -> 
         "parse_status": "provider_response_validated",
         "request_sha256": "1" * 64,
         "result_sha256": "2" * 64,
-        "response_text_sha256": "3" * 64,
     }
 
     class Cli:

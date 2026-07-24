@@ -366,26 +366,6 @@ def _value(value: Any, name: str) -> Any:
     return value.get(name) if isinstance(value, dict) else getattr(value, name, None)
 
 
-def _response_text_sha256(response: Any) -> str | None:
-    choices = _value(response, "choices")
-    if not isinstance(choices, (list, tuple)) or not choices:
-        return None
-    message = _value(choices[0], "message")
-    content = _value(message, "content")
-    if isinstance(content, str):
-        text = content
-    elif isinstance(content, (list, tuple)):
-        parts = []
-        for part in content:
-            part_text = _value(part, "text")
-            if isinstance(part_text, str):
-                parts.append(part_text)
-        text = "".join(parts)
-    else:
-        return None
-    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
-
-
 class GenerationStatsLookupError(RuntimeError):
     def __init__(self, response: dict[str, Any], cause: BaseException) -> None:
         super().__init__("OpenRouter generation statistics lookup failed")
@@ -410,7 +390,7 @@ def provider_response_evidence(
     parse_status: str = "provider_response_validated",
 ) -> dict[str, Any]:
     usage = _value(response, "usage")
-    evidence = {
+    return {
         "response_id": _value(response, "id"),
         "requested_model": requested_model,
         "served_model": _value(response, "model"),
@@ -427,10 +407,6 @@ def provider_response_evidence(
         "result_sha256": _response_sha256(response),
         "parse_status": parse_status,
     }
-    response_text_sha256 = _response_text_sha256(response)
-    if response_text_sha256 is not None:
-        evidence["response_text_sha256"] = response_text_sha256
-    return evidence
 
 
 def _normalize_response(
@@ -511,7 +487,6 @@ def install_openai_meter(
     *,
     context: dict[str, Any] | None = None,
     ledger_context: dict[str, Any] | None = None,
-    request_metadata=None,
     generation_lookup=None,
 ) -> ProviderAttemptLedger:
     """Wrap available sync/async OpenAI clients with the same durable meter."""
@@ -545,13 +520,13 @@ def install_openai_meter(
                 async def create(*create_args, **create_kwargs):
                     return await _meter_async(
                         original_create, create_args, create_kwargs, ledger,
-                        context, generation_lookup, request_metadata,
+                        context, generation_lookup,
                     )
             else:
                 def create(*create_args, **create_kwargs):
                     return _meter_sync(
                         original_create, create_args, create_kwargs, ledger,
-                        context, generation_lookup, request_metadata,
+                        context, generation_lookup,
                     )
             completions.create = create
             return client
@@ -604,31 +579,21 @@ def openrouter_generation_lookup(api_key: str):
     return lookup
 
 
-def _attempt_input(
-    kwargs: dict[str, Any],
-    context: dict[str, Any],
-    request_metadata=None,
-) -> tuple[str, dict[str, Any]]:
+def _attempt_input(kwargs: dict[str, Any], context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     requested_model = kwargs.get("model")
     if not isinstance(requested_model, str) or not requested_model:
         raise RuntimeError("completion request omitted model")
     request_sha256 = _sha256_json(kwargs)
-    metadata = request_metadata(kwargs) if request_metadata is not None else {}
-    if not isinstance(metadata, dict) or set(metadata) & set(context):
-        raise RuntimeError("provider attempt metadata is invalid")
     return request_sha256, {
         "retry_index": 0,
         "requested_model": requested_model,
         "request_sha256": request_sha256,
-        **metadata,
         **context,
     }
 
 
-def _meter_sync(
-    create, args, kwargs, ledger, context, generation_lookup, request_metadata=None
-):
-    request_key, start = _attempt_input(kwargs, context, request_metadata)
+def _meter_sync(create, args, kwargs, ledger, context, generation_lookup):
+    request_key, start = _attempt_input(kwargs, context)
     with _LEDGER_LOCK:
         ledger.record("start", request_key, start)
     started = time.monotonic()
@@ -652,10 +617,8 @@ def _meter_sync(
     return response
 
 
-async def _meter_async(
-    create, args, kwargs, ledger, context, generation_lookup, request_metadata=None
-):
-    request_key, start = _attempt_input(kwargs, context, request_metadata)
+async def _meter_async(create, args, kwargs, ledger, context, generation_lookup):
+    request_key, start = _attempt_input(kwargs, context)
     with _LEDGER_LOCK:
         ledger.record("start", request_key, start)
     started = time.monotonic()

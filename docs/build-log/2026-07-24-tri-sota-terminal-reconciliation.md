@@ -15,7 +15,7 @@ launch.
 | B1 | rejected/deleted | `2026-07-22-b1-observation-block.md`. |
 | B2/B3/B6 | locally complete | Existing B2/B3 proofs and local CI-honesty legs; remote CI unproven. |
 | B4 receipts/status/policy | complete locally | `2026-07-23-b4-verified-receipts.md`; verified receipts fail closed and calibrated policy is deterministic. |
-| Rung 7 packing | mixed retrieval result; reader external-blocked | Across 178 rows Recall@10 moved 0.6145 to 0.8434, while the binding 12-row exact-abstention slice regressed 7/12 to 5/12. Paid packet frozen, zero calls, maximum 1,020 calls / $116. Default remains off. |
+| Rung 7 packing | rejected at free exact-abstention gate | The current n=12 screen moved scored hit@10 from 2/8 to 8/8 but regressed exact abstention from 3/4 to 1/4. Paid execution surface was deleted; zero calls and $0. Default remains off. |
 | B5 cleanup | complete/rejected as adjudicated | `2026-07-23-b5-recall-stage-retirement.md`; heuristic, learned wrapper, decomposition and Balanced deleted; cross-encoder seam remains default-off. |
 | C0/C1 | correctness complete; parity/live L0 open | Existing C0/C1 proofs; no new production corpus authorization. |
 | C2 | rejected/deleted | Free kill-gate remains binding. |

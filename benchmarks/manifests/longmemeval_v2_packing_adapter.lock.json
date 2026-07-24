@@ -7,22 +7,16 @@
   "base_adapter_sha256": "56c2a7264112e012f9376178cc2ef3383d70705f21255d4182e92bf62f8e206c",
   "files": {
     "benchmarks/longmemeval_v2/memphant_packing_memory.py": "d67f86e1e047d9f6874227a656d447c9d112e03b9cd329eb14211a4a85414ece",
-    "benchmarks/longmemeval_v2/packing_harness_bootstrap.py": "ba4b6d8a739acc712b69400f39619b2c98ede55fda388c39aa3016942df9415e",
-    "benchmarks/longmemeval_v2/paid_meter.py": "a3d8f71589ebac9f266bb30d05f704d3c1f0807bfc9be734462e02e4e50d4e44",
     "benchmarks/longmemeval_v2/memphant.packing-current.memory.json": "a15fdef7adb804c4a0144909a703a9ee69260d02ed0688c8d9ea3db2cd32c569",
     "benchmarks/longmemeval_v2/memphant.packing-cap1200.memory.json": "7f63a40991797006dcc2319a0f45579cb77e9868884b5e3f2d362bb16097ef00",
     "benchmarks/longmemeval_v2/memphant.packing-submodular.memory.json": "2627ea6bc85695db159bfd31b49305dd7d7f4d63d9d75abd0c3e7d8590a53925",
     "benchmarks/longmemeval_v2/memphant.packing-cap1200-submodular.memory.json": "86853fd0e78388f87d0791d2f204391905874b5a37acbccb44898c7f6afb6174",
     "benchmarks/longmemeval_v2/memphant.packing-order-swapped.memory.json": "b073fdbae2c978056dd5bd9130bc541abdaeedb40a84d61ee24fe8939fb4b574",
-    "scripts/run_longmemeval_v2_packing.py": "d902b4c14ca3586156c15e0098ec5344560795e2f28e1f4ea84aa4ca87c53e87",
-    "scripts/run_longmemeval_v2_packing_campaign.py": "09e3a004c634642b336d7a1c5626ae9519c8389c20da1953df6572e86b4cdf70",
-    "scripts/analyze_longmemeval_v2_packing_campaign.py": "14cdc0a172a2c09dec856f3a690ca38c4d72a6fcb31435e7cfb12acae1dd6ac0",
     "scripts/acquire_longmemeval_v2_packing.py": "9ee312e844d1fb926e004a9aedcd589487cc15ada9161595a2ca2b00a2d57d02",
     "scripts/prepare_longmemeval_v2_packing_slice.py": "0ea8dc092a377749c81b45cc6579f647447016b0909e00c02c4067671873ca75",
-    "scripts/provider_attempts.py": "ea8f264da051450a0bca80ae49858060739ea5c1bf9c2f2444e44a71e947ca5f",
     "scripts/validate_lme_v2_packing_manifest.py": "6080e8a1c87f3cdc934856d2c095fd1af6c0eaa87d3f6052e786a7f0444d0687",
     "scripts/gate_runtime.py": "2a382c972b119415b33a33227e64f68241ff8d14a2e35f331b7932381725c1ca",
-    "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json": "a1e806679e3095ab030964dc27cc17f2f466ab93e7da0a64d5b0d72e9e052d20",
+    "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json": "4b614f38b9ceb0214696dddf020bf9c91b61dd5023dbc95438796fce88756503",
     "crates/memphant-core/src/lib.rs": "0ce1fea48a96677cddebca3753eefa9cfc1f30e932877e85e7a30032465d0c0e",
     "crates/memphant-core/src/service.rs": "30b93fbd0d28551b0aa1a298e0453a0d56a1090fcaf687c91422bb4a4c227ad3",
     "crates/memphant-runtime/src/lib.rs": "1454f663536c3b8584de7651e6ccd3459a2c050ecd79ddd3c63ad6bf5dad0467",
@@ -71,15 +65,7 @@
     "no_retrieval_control": true,
     "top_k": 20,
     "recall_and_reader_context_max_tokens": 8192,
-    "reader": "Qwen/Qwen3.5-9B",
-    "judge": "gpt-5.2",
-    "provider": "OpenRouter",
-    "reader_max_completion_tokens": 1024,
-    "judge_max_completion_tokens": 1024,
-    "sdk_max_retries": 0,
-    "maximum_provider_attempts": 90,
-    "maximum_spend_usd": "8.00",
-    "generation_and_scoring": "official evaluation/harness.py at code_commit",
+    "generation_and_scoring": "not run; candidate rejected by the free exact-abstention gate",
     "construction_reuse": "construct once per domain, then use query-only clones for every question and treatment arm",
     "gold_fields_consumed_by_memory": [],
     "same_prompt_reader_judge_and_budget_across_arms": true
@@ -107,5 +93,5 @@
     }
   },
   "paid_models_run": false,
-  "status": "FROZEN_REJECTED_AT_FREE_EXACT_ABSTENTION_GATE"
+  "status": "REJECTED_AT_FREE_EXACT_ABSTENTION_GATE_NOT_AUTHORIZABLE"
 }

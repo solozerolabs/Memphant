@@ -28,26 +28,14 @@ That free non-regression gate is binding, so the $8 reader/judge campaign is
 not authorizable. A new packing technique must first pass both free retrieval
 and exact-abstention predicates on the frozen small set.
 
-## Dormant packing controls
+## Deleted packing execution surface
 
-The packing packet binds all source, case, adapter, runner, bootstrap, meter,
-acquisition, and slice-builder hashes. It fixes Qwen 3.5 9B as reader, GPT-5.2
-as judge, the official prompts, 1,024 output tokens each, the same 8,192-token
-context budget, ten exact arm/domain contexts, 90 total attempts, SDK retries
-zero, parallelism four, and both provider-side and in-run limits at $8.00.
-The meter journals and fsyncs before a request and reserves a conservative
-UTF-8-byte-based maximum liability before provider access. Interrupted or
-unsettled attempts retain their reserved liability.
-
-Any provider, parser, receipt, trace, or evaluator error aborts the campaign.
-There is no automatic retry or resume. Partial results are retained and marked
-incomplete; a new run requires a new frozen packet. The two domain construction
-passes share one ephemeral migrated scratch database and every treatment query
-uses the same constructed state. The database is dropped at settlement.
-
-The data acquisition command downloads only the five required source objects
-(about 1.20 GB), not the approximately 6 GB trajectory screenshot archives.
-Acquisition remains deferred because the paid gate was rejected.
+The rejected packet now binds only the frozen case manifest, free diagnostic
+artifacts, and retained adapter/runtime proof. The dormant paid runner,
+bootstrap, meter, campaign controller, and analyzer were deleted. There is no
+packing command, model selection, or spend ceiling to authorize. A materially
+different technique must pass both free gates before a new paid campaign is
+designed and reviewed.
 
 ## Forgetting controls
 

@@ -70,8 +70,10 @@ gate is rejected; arbitrary pairs will not be manufactured. DeepSWE may be
 used only as a separately authorized unpaired robustness/outcome benchmark.
 The exact task, verifier, ancestry, shared-file, and non-leakage locks are in
 `benchmarks/manifests/deep_swe.pairing.audit.json` (SHA-256
-`e93e7cd3b5482d1c726dce70bd058e4c61537b72fad11e818b6c8f491da80ca2`).
-Each accepted pair now includes a pinned upstream compare-response hash,
-zero-behind result, and merge base equal to the prior base commit.
+`bb345a1981bb8f8fd450a9c29d16cb1f76ee9a62d4748aed06a81dc2805cb3f9`).
+Each accepted pair includes the exact compare URL plus a reproducible canonical
+hash of compare status, ahead/behind counts, total commits, and merge base. The
+validator recomputes that projection and requires zero behind plus a merge base
+equal to the prior base commit.
 
 Focused verification: 6 SWE adapter tests and 2 DeepSWE audit tests passed.

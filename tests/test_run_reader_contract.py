@@ -1324,7 +1324,6 @@ def test_openrouter_call_captures_and_caches_served_model_provider_usage_and_cos
             "parse_status": "provider_response_validated",
             "request_sha256": cli.last_call_metadata["request_sha256"],
             "result_sha256": cli.last_call_metadata["result_sha256"],
-            "response_text_sha256": cli.last_call_metadata["response_text_sha256"],
         }
     assert cli.last_call_metadata["elapsed_seconds"] >= 0
     assert cli.provider_attempt_log == [{"response": cli.last_call_metadata}]

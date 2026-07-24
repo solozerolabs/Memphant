@@ -19,7 +19,7 @@
     "proposal_generator": "scripts/generate_forgeteval_proposals.py",
     "proposal_generator_sha256": "ceac4407b24a1bc28ae48777f76d9ed459db8de12220b003d0506692954ad914",
     "reader_client_sha256": "bd5606ab30b49498e27cf62f76fe76bcc4520080cbac3ce0da0e5bdcf7e95ad3",
-    "provider_attempt_journal_sha256": "ea8f264da051450a0bca80ae49858060739ea5c1bf9c2f2444e44a71e947ca5f",
+    "provider_attempt_journal_sha256": "4c581a109a3a4887a5e3b7a34ebe32b784e9086af4815d394fff14dc74204fdd",
     "proposal_system_prompt_sha256": "c95b439a83f86a0dc7bd64d5a2782accc9b9157db8cd3144854f05533425aadb"
   },
   "execution": {

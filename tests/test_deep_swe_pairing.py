@@ -58,7 +58,14 @@ def test_accepted_pairs_are_disjoint_unique_exact_base_candidates():
         assert lineage["status"] == "ahead"
         assert lineage["behind_by"] == 0
         assert lineage["merge_base_commit"] == pair["prior_base"]
-        assert len(lineage["response_sha256"]) == 64
+        canonical = {
+            key: lineage[key]
+            for key in (
+                "compare_url", "status", "ahead_by", "behind_by",
+                "total_commits", "merge_base_commit",
+            )
+        }
+        assert lineage["canonical_evidence_sha256"] == runner.canonical_sha256(canonical)
         for lock in (pair["prior_lock"], pair["target_lock"]):
             assert len(lock) == 4
             assert lock[0].startswith("sha256:") and len(lock[0]) == 71

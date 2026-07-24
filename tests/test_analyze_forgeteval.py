@@ -84,13 +84,15 @@ def test_build_report_classifies_control_plane_boundaries_and_transitions() -> N
     result = module.build_report(baseline, candidate)
 
     assert result["category_counts"] == {
-        "actual_memphant_defect": 0,
-        "adapter_mismatch": 1,
+        "observed_exact_mutation_acknowledgement_failure": 0,
+        "adapter_semantic_selection_boundary": 1,
         "intentionally_unsupported_operation": 1,
         "ambiguous_destructive_request_should_fail_closed": 1,
         "benchmark_limitation": 0,
         "already_correct_behavior": 1,
     }
+    assert result["status"] == "OPERATION_BOUNDARY_TRIAGE_ROOT_CAUSE_OPEN"
+    assert result["cases"][1]["missing_must_contain_indexes"] == []
     assert result["transition_counts"] == {
         "fail->pass": 2,
         "not_applicable->not_applicable": 1,
@@ -105,10 +107,17 @@ def test_classification_fails_closed_on_unexplained_outcomes() -> None:
         module.classify(case("x", "unknown", "fail", ["recall"]))
 
 
-def test_failed_exact_mutation_receipt_is_a_product_defect() -> None:
+def test_failed_exact_mutation_receipt_is_an_observed_acknowledgement_failure() -> None:
     value = case("x", "amnesia", "fail", ["release"])
     value["adapter_decisions"][0]["receipts"][0]["verification"] = "unknown"
-    assert module.classify(value) == "actual_memphant_defect"
+    assert module.classify(value) == "observed_exact_mutation_acknowledgement_failure"
+
+
+def test_assertion_indexes_are_required_for_triage() -> None:
+    baseline_case = case("x", "drift", "fail", ["supersede"])
+    del baseline_case["missing_must_contain_indexes"]
+    with pytest.raises(ValueError, match="missing_must_contain_indexes"):
+        module.build_report(report([baseline_case]), report([case("x", "drift", "pass", ["supersede"])]))
 
 
 def test_explicit_benchmark_limitation_is_reachable() -> None:

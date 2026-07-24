@@ -14,7 +14,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "benchmarks/longmemeval_v2/memphant_packing_memory.py"
-RUNNER = ROOT / "scripts/run_longmemeval_v2_packing.py"
 CONFIG_DIR = ROOT / "benchmarks/longmemeval_v2"
 PACKING_LOCK = ROOT / "benchmarks/manifests/longmemeval_v2_packing_adapter.lock.json"
 
@@ -69,7 +68,7 @@ def _sha256(path: Path) -> str:
 def test_packing_adapter_lock_binds_every_implementation_file():
     lock = json.loads(PACKING_LOCK.read_text())
     assert lock["paid_models_run"] is False
-    assert lock["status"] == "FROZEN_REJECTED_AT_FREE_EXACT_ABSTENTION_GATE"
+    assert lock["status"] == "REJECTED_AT_FREE_EXACT_ABSTENTION_GATE_NOT_AUTHORIZABLE"
     assert lock["base_adapter_sha256"] == _sha256(
         ROOT / "benchmarks/longmemeval_v2/memphant_memory.py"
     )
@@ -227,44 +226,6 @@ def test_packing_query_fails_closed_on_wrong_server_arm(monkeypatch, tmp_path):
     monkeypatch.setattr(adapter._BASE.MemphantMemory, "query", fake_base_query)
     with pytest.raises(RuntimeError, match="packing server arm mismatch"):
         memory.query("query")
-
-
-def test_packing_runner_uses_config_budget_and_dedicated_bootstrap(tmp_path):
-    runner = _load(RUNNER, "packing_runner")
-    command = runner.packing_harness_command(
-        official_dir=tmp_path / "official",
-        domain="web",
-        questions_path=tmp_path / "questions.json",
-        haystack_path=tmp_path / "haystack.json",
-        trajectories_path=tmp_path / "trajectories.jsonl",
-        memory_config_path=CONFIG_DIR / "memphant.packing-current.memory.json",
-        output_dir=tmp_path / "out",
-        reader_model="reader",
-        reader_base_url="http://reader/v1",
-        evaluator_model="judge",
-        evaluator_base_url="http://judge/v1",
-        attempt_ledger=tmp_path / "attempts.jsonl",
-        attempt_context_json='{"arm":"current","domain":"web"}',
-        max_provider_attempts=90,
-        max_spend_usd="8.00",
-        model_prices_json='{"reader":{"prompt":"0.17","completion":"0.25"},"judge":{"prompt":"1.75","completion":"14"}}',
-        model_output_caps_json='{"reader":1024,"judge":1024}',
-        authorization_manifest=tmp_path / "authorization.json",
-        authorization_campaign="packing",
-        python="python3",
-    )
-    assert command[:4] == [
-        "python3",
-        str(runner.BOOTSTRAP),
-        "--official-dir",
-        str(tmp_path / "official"),
-    ]
-    assert command[command.index("--memory-context-max-tokens") + 1] == "8192"
-    assert command[command.index("--max-provider-attempts") + 1] == "90"
-    assert command[command.index("--max-spend-usd") + 1] == "8.00"
-    assert command[command.index("--max-completion-tokens") + 1] == "1024"
-    assert command[command.index("--evaluator-max-completion-tokens") + 1] == "1024"
-    assert command[command.index("--authorization-campaign") + 1] == "packing"
 
 
 @pytest.mark.skipif(

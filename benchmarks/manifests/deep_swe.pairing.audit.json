@@ -32,21 +32,23 @@
   "ancestry_evidence": {
     "https://github.com/pmndrs/koota:31cbe9a1a26b3822a6c82ad50132508087cd24bc...9c434858b2b522002f8c5eb4a554fa8836a7cf3c": {
       "source": "GitHub compare API response fetched 2026-07-24",
+      "compare_url": "https://api.github.com/repos/pmndrs/koota/compare/31cbe9a1a26b3822a6c82ad50132508087cd24bc...9c434858b2b522002f8c5eb4a554fa8836a7cf3c",
       "status": "ahead",
       "ahead_by": 26,
       "behind_by": 0,
       "total_commits": 26,
       "merge_base_commit": "31cbe9a1a26b3822a6c82ad50132508087cd24bc",
-      "response_sha256": "88fdca45f77b44ea57200c3281d4a4cd09218846a75536f21fb8c3219c77868b"
+      "canonical_evidence_sha256": "5a5957d0be07c524f7b213b23f821f49ee7ea5ace6962e14ac8fe8f3b133fa37"
     },
     "https://github.com/testem/testem:06a1adb7a70e85e7322d8cfae3181508785de95d...158f61ea91c9613d2011c41ee9be40ada1d7a307": {
       "source": "GitHub compare API response fetched 2026-07-24",
+      "compare_url": "https://api.github.com/repos/testem/testem/compare/06a1adb7a70e85e7322d8cfae3181508785de95d...158f61ea91c9613d2011c41ee9be40ada1d7a307",
       "status": "ahead",
       "ahead_by": 7,
       "behind_by": 0,
       "total_commits": 7,
       "merge_base_commit": "06a1adb7a70e85e7322d8cfae3181508785de95d",
-      "response_sha256": "9c8aa42bec7c2b5beed6c20b785093868d66771bdf98b8cac459e301b7e1058a"
+      "canonical_evidence_sha256": "daf60b365d5a30b1dd5eef3869d29abaf00791aea259677db147885a64f6d8c2"
     }
   },
   "accepted_pairs": [

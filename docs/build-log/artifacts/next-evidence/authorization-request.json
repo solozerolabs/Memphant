@@ -1,139 +1,77 @@
 {
   "schema_version": 1,
   "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
+  "authorization": null,
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
   "maximum_currently_authorizable_usd": "0.50",
-  "claim_boundary": "This packet authorizes nothing in its present state. Only non-executing ForgetEval proposal generation remains eligible for separate explicit scope authorization; packing failed its free exact-abstention gate. Mutation execution, coding agents, Docker evaluation, production, deployment, and landing remain excluded.",
+  "authorizable_campaigns": ["forgetting_proposals"],
   "campaigns": {
     "packing": {
       "status": "REJECTED_AT_FREE_EXACT_ABSTENTION_GATE_NOT_AUTHORIZABLE",
       "authorization": null,
-      "purpose": "Frozen LongMemEval-V2 n=12 paired answer-quality and premise-resistance kill gate.",
+      "purpose": "LongMemEval-V2 n=12 free packing kill gate.",
       "frozen_inputs": {
         "case_manifest": "benchmarks/manifests/longmemeval_v2.packing-kill.n12.json",
-        "case_manifest_sha256": "a1e806679e3095ab030964dc27cc17f2f466ab93e7da0a64d5b0d72e9e052d20",
+        "case_manifest_sha256": "4b614f38b9ceb0214696dddf020bf9c91b61dd5023dbc95438796fce88756503",
         "adapter_lock": "benchmarks/manifests/longmemeval_v2_packing_adapter.lock.json",
-        "adapter_lock_sha256": "4a3355a8e8136e8d5b2e631f0f5773756ab724b1fd834a9af929c7fbc611bcdf",
-        "code_revision": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
-        "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
-        "case_count": 12,
-        "reader_calls": 60,
-        "judge_calls": 30
-      },
-      "code": {
-        "campaign_runner_sha256": "09e3a004c634642b336d7a1c5626ae9519c8389c20da1953df6572e86b4cdf70",
-        "campaign_analyzer_sha256": "14cdc0a172a2c09dec856f3a690ca38c4d72a6fcb31435e7cfb12acae1dd6ac0",
-        "harness_runner_sha256": "d902b4c14ca3586156c15e0098ec5344560795e2f28e1f4ea84aa4ca87c53e87",
-        "bootstrap_sha256": "ba4b6d8a739acc712b69400f39619b2c98ede55fda388c39aa3016942df9415e",
-        "paid_meter_sha256": "a3d8f71589ebac9f266bb30d05f704d3c1f0807bfc9be734462e02e4e50d4e44",
-        "provider_attempt_journal_sha256": "ea8f264da051450a0bca80ae49858060739ea5c1bf9c2f2444e44a71e947ca5f",
-        "acquisition_sha256": "9ee312e844d1fb926e004a9aedcd589487cc15ada9161595a2ca2b00a2d57d02",
-        "slice_builder_sha256": "0ea8dc092a377749c81b45cc6579f647447016b0909e00c02c4067671873ca75"
+        "adapter_lock_sha256": "a775bfe3dd98f36e3bf65e2c58d2403213b2b68ab3f4928eddab2f1ca89c723b",
+        "case_count": 12
       },
       "free_exact_abstention_gate": {
         "metric": "deterministic exact UNKNOWN sentinel on the frozen LongMemEval-S n=12 pilot",
         "current": "3/4",
         "cap1200": "1/4",
+        "current_artifact": "docs/build-log/artifacts/next-evidence/packing/lme-s-pilot-current.json",
         "current_artifact_sha256": "a925bef25d82000ecb55e6f58ff5d73850e1491a7e3afbcae0b16768fa4b65be",
+        "cap1200_artifact": "docs/build-log/artifacts/next-evidence/packing/lme-s-pilot-cap1200.json",
         "cap1200_artifact_sha256": "da56ae3a5a3d5f0fa895728e0ebb1f2cf50082d688cbe2dece86a6f66f1f1442",
         "decision": "reject before paid reader and judge calls"
       },
-      "models": {
-        "provider": "OpenRouter",
-        "base_url": "https://openrouter.ai/api/v1",
-        "reader": "qwen/qwen3.5-9b",
-        "judge": "openai/gpt-5.2",
-        "reasoning": "official harness defaults; no repo-added reasoning override",
-        "prices_usd_per_million": {
-          "qwen/qwen3.5-9b": {"prompt": "0.17", "completion": "0.25"},
-          "openai/gpt-5.2": {"prompt": "1.75", "completion": "14.00"}
-        },
-        "max_completion_tokens": {
-          "qwen/qwen3.5-9b": 1024,
-          "openai/gpt-5.2": 1024
-        }
-      },
-      "hard_limits": {
-        "logical_calls": 90,
-        "max_provider_attempts": 90,
-        "max_spend_usd": "8.00",
-        "sdk_retries": 0,
-        "maximum_parallelism": 4,
-        "provider_side_key_limit_usd": "8.00",
-        "in_run_reserved_liability_cap_usd": "8.00"
-      },
-      "allowed_contexts": [
-        {"arm": "no_retrieval", "domain": "enterprise"},
-        {"arm": "no_retrieval", "domain": "web"},
-        {"arm": "memphant_current", "domain": "enterprise"},
-        {"arm": "memphant_current", "domain": "web"},
-        {"arm": "memphant_cap1200", "domain": "enterprise"},
-        {"arm": "memphant_cap1200", "domain": "web"},
-        {"arm": "memphant_cap1200_submodular", "domain": "enterprise"},
-        {"arm": "memphant_cap1200_submodular", "domain": "web"},
-        {"arm": "memphant_order_swapped", "domain": "enterprise"},
-        {"arm": "memphant_order_swapped", "domain": "web"}
+      "deleted_execution_surface": [
+        "benchmarks/longmemeval_v2/packing_harness_bootstrap.py",
+        "benchmarks/longmemeval_v2/paid_meter.py",
+        "scripts/run_longmemeval_v2_packing.py",
+        "scripts/run_longmemeval_v2_packing_campaign.py",
+        "scripts/analyze_longmemeval_v2_packing_campaign.py"
       ],
-      "execution": {
-        "artifact_root": "docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid",
-        "attempt_ledger": "docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/attempts.jsonl",
-        "scratch_database": "with_scratch_db.py generated migrated database from the local development base; dropped on settlement",
-        "official_container": "not applicable; pinned official Python harness plus packaged MemPhant binaries",
-        "token_budget": 8192,
-        "preparation_commands": [
-          "git clone --filter=blob:none --no-checkout https://github.com/xiaowu0162/LongMemEval-V2.git docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official",
-          "git -C docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official checkout --detach be15ea6e995462f3391c1a610892df3f67dfa7bd",
-          "python3 scripts/acquire_longmemeval_v2_packing.py --data-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/data",
-          "python3 scripts/prepare_longmemeval_v2_packing_slice.py --data-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/data --output-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/slice",
-          "cargo build -p memphant-server -p memphant-worker -p memphant-cli",
-          "python3 scripts/run_longmemeval_v2_packing_campaign.py plan --official-dir docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official --slice-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/slice --artifact-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid --authorization-manifest docs/build-log/artifacts/next-evidence/authorization-request.json --attempt-ledger docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/attempts.jsonl"
-        ],
-        "command": "doppler run --project syndai --config dev -- python3 scripts/run_longmemeval_v2_packing_campaign.py execute --official-dir docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/source/official --slice-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/slice --artifact-root docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid --authorization-manifest docs/build-log/artifacts/next-evidence/authorization-request.json --attempt-ledger docs/build-log/artifacts/next-evidence/packing/longmemeval-v2-paid/attempts.jsonl"
-      },
-      "retry_and_settlement": {
-        "journal": "append-before-call and fsynced; every attempt reserves conservative maximum liability before provider access",
-        "retry": "OpenAI SDK retries forced to zero; no repo retry or automatic replay",
-        "abort": "Any provider, parser, receipt, trace, or harness error aborts the entire campaign and preserves partial artifacts and ledger.",
-        "resume": "No resume into the same paid campaign; a partial run is adjudicated incomplete and needs a new explicit packet.",
-        "settlement": "Reconcile generation IDs and actual costs where available; retain conservative liability for interrupted or unsettled attempts; scratch database is dropped."
-      },
-      "kill_predicates": {
-        "integrity": "90/90 unique attempt contexts, zero receipt failures, zero target-answer leakage, zero stale/contradictory unsupported answers",
-        "primary": "cap1200 answer correctness exceeds current on paired n=12 without regressing the official LLM-judged abstention/premise-resistance score",
-        "ordering": "cap1200_submodular must improve answer correctness or premise resistance over cap1200; otherwise delete the ordering candidate",
-        "negative_control": "order-swapped must not outperform the selected ordering treatment on the ordering-attributable cases",
-        "expansion": "Only a treatment satisfying every integrity and kill predicate may receive a separately frozen larger confirmation request."
-      }
+      "future_boundary": "A materially different technique must pass both free utility and exact-abstention gates before a new paid campaign can be proposed."
     },
     "forgetting_proposals": {
       "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
       "authorization": null,
       "purpose": "Generate 16 non-executing mutation proposals for the frozen ForgetEval n=12 control-plane gate.",
       "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json",
-      "authoritative_child_packet_sha256": "80b68005e0bdc030d043eb6331f72f969d9196aeeda4752f9b29bef0f1a69780",
-      "hard_limits": {"logical_calls": 16, "max_provider_attempts": 32, "max_output_tokens": 256, "max_spend_usd": "0.50"},
-      "model": {"provider": "OpenRouter", "model": "openai/gpt-5.6-terra", "reasoning_effort": "medium"},
-      "execution_boundary": "Proposal generation only. Every output remains confirmed=false; mutation execution requires a separate human-reviewed confirmation ledger and separate authorization.",
-      "command": "doppler run --project syndai --config dev -- python3 scripts/generate_forgeteval_proposals.py --inputs docs/build-log/artifacts/next-evidence/forgeteval/proposal-inputs.n12.json --out docs/build-log/artifacts/next-evidence/forgeteval/proposals.n12.json --authorization-manifest docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json --attempt-ledger docs/build-log/artifacts/next-evidence/forgeteval/proposal-attempts.n12.jsonl --cache-dir docs/build-log/artifacts/next-evidence/forgeteval/proposal-cache-n12 --model openai/gpt-5.6-terra --reasoning-effort medium --max-calls 16 --max-provider-attempts 32 --max-output-tokens 256 --max-spend-usd 0.50 --max-price-prompt-per-million 2.75 --max-price-completion-per-million 16.5"
+      "authoritative_child_packet_sha256": "7424eeb2dccdb471e91259a5e1e6d152f8c3df953f6e7233732a7b986800d59f",
+      "hard_limits": {
+        "logical_calls": 16,
+        "max_provider_attempts": 32,
+        "max_output_tokens": 256,
+        "max_spend_usd": "0.50"
+      },
+      "model": {
+        "provider": "OpenRouter",
+        "model": "openai/gpt-5.6-terra",
+        "reasoning_effort": "medium"
+      },
+      "execution_boundary": "Proposal generation only; mutation execution requires a separate reviewed confirmation ledger and separate authorization."
     },
     "swe_contextbench": {
       "status": "BLOCKED_NOT_AUTHORIZABLE",
       "authorization": null,
-      "reason": "The official code repository had no license file at the pinned audited revision. No official agent execution or Docker grading may be requested until that boundary is clarified and a model/agent/call/compute cap is frozen.",
+      "reason": "The pinned official code repository had no license file. No official agent execution or Docker grading may be requested until that boundary is clarified and model, call, and compute caps are frozen.",
       "free_rehearsal": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-n12-rehearsal.json",
       "free_rehearsal_sha256": "ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc",
       "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
-      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
-      "future_minimum": "Operational tranche 4 targets x 3 arms = 12 task runs; broaden remaining 8 targets only if related memory resolves at least 2 more targets than no-memory with zero unsafe unrelated reuse/leakage."
+      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a"
     },
     "deep_swe_pairing": {
       "status": "REJECTED_NOT_AUTHORIZABLE_AS_PAIRED_MEMORY_GATE",
       "authorization": null,
-      "reason": "Only 3 of the required 12 unique causal earlier-to-target pairs survived manual subsystem, chronology, and non-leakage review.",
+      "reason": "Only 3 of the required 12 unique causal earlier-to-target pairs survived subsystem, chronology, and non-leakage review.",
       "pairing_manifest": "benchmarks/manifests/deep_swe.pairing.audit.json",
-      "pairing_manifest_sha256": "e93e7cd3b5482d1c726dce70bd058e4c61537b72fad11e818b6c8f491da80ca2",
-      "allowed_future_use": "Unpaired robustness/outcome benchmark under a separately frozen request only."
+      "pairing_manifest_sha256": "bb345a1981bb8f8fd450a9c29d16cb1f76ee9a62d4748aed06a81dc2805cb3f9",
+      "allowed_future_use": "Unpaired robustness benchmark under a separately frozen request only."
     }
   }
 }

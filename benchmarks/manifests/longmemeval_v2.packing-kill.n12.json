@@ -48,5 +48,5 @@
     "memphant_order_swapped"
   ],
   "budget_tokens": 8192,
-  "status": "FROZEN_AWAITING_EXPLICIT_PAID_AUTHORIZATION"
+  "status": "REJECTED_AT_FREE_EXACT_ABSTENTION_GATE_NOT_AUTHORIZABLE"
 }

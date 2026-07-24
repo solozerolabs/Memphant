@@ -28,6 +28,11 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def canonical_sha256(value: object) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def git_value(checkout: Path, expression: str) -> str:
     return subprocess.check_output(
         ["git", "-C", str(checkout), "rev-parse", expression], text=True
@@ -104,10 +109,16 @@ def validate(manifest: dict[str, object], checkout: Path) -> dict[str, object]:
             lineage.get("merge_base_commit") == pair["prior_base"],
             "upstream merge base does not equal prior base",
         )
+        canonical_lineage = {
+            key: lineage.get(key)
+            for key in (
+                "compare_url", "status", "ahead_by", "behind_by",
+                "total_commits", "merge_base_commit",
+            )
+        }
         require(
-            isinstance(lineage.get("response_sha256"), str)
-            and len(lineage["response_sha256"]) == 64,
-            "upstream compare response hash is missing",
+            lineage.get("canonical_evidence_sha256") == canonical_sha256(canonical_lineage),
+            "canonical upstream compare evidence hash drift",
         )
         require(
             pair["lineage"] == "prior_base_is_upstream_ancestor_of_target_base",

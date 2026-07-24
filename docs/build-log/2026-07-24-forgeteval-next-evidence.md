@@ -27,24 +27,24 @@ instrumented baseline replay reproduced the prior 133 / 126 / 126 aggregate
 exactly and was necessary because the historical report had no per-case rows.
 No other full arm was run.
 
-## Root-cause classification
+## Operation-boundary triage
 
 The machine-readable report classifies all 385 baseline cases:
 
 | Category | Count | Evidence boundary |
 |---|---:|---|
-| actual MemPhant defect | 0 | Exact-ID correct/forget receipts acknowledged every selected unit; no lineage or projection failure was observed. |
-| adapter mismatch | 77 | 73 supersession plus 4 drift failures require semantic target choice or compound-fact merge planning that is not part of the exact public primitive. |
+| observed exact-mutation acknowledgement failure | 0 | The recorded exact-ID correct/forget receipts acknowledged every selected unit. This does not adjudicate target correctness, projection freshness, lineage, or final recall. |
+| adapter semantic-selection boundary | 77 | 73 supersession plus 4 drift failures require semantic target choice or compound-fact merge planning that is not part of the exact public primitive. |
 | intentionally unsupported operation | 126 | 125 purge-family cases plus the purge-based `adv_substring_trap_15`; MemPhant has subject erasure and exact-unit forget, not selective natural-language hard purge. |
 | ambiguous/destructive request that should fail closed | 49 | 30 amnesia and 19 decay failures ask a natural-language selector to choose one or more destructive targets. |
 | benchmark limitation | 0 | No failure needed this category after inspecting the official cases and recorded operations. |
 | already-correct behavior | 133 | Baseline pass. |
 
-This classification consumes each case's failed assertion indexes, operation
-decisions, exact selected IDs, mutation acknowledgements, and created or
-superseded IDs. It is still a benchmark-adapter classification, not a general
-proof that MemPhant has no forgetting defects. The full exact-state/lineage
-contract remains a separate product gate.
+This triage records each case's failed assertion indexes, operation decisions,
+exact selected IDs, mutation acknowledgements, and created or superseded IDs.
+Those observations cannot establish that the chosen target was correct, the
+projection was fresh, lineage was correct, or final recall was clean. Product
+root cause therefore remains open; there is no zero-defect claim.
 
 ## Why threshold tuning stopped
 

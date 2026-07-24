@@ -1,6 +1,8 @@
 {
   "schema_version": 2,
-  "status": "AWAITING_EXPLICIT_PAID_AUTHORIZATION",
+  "status": "SUPERSEDED_REJECTED_BY_2026_07_24_FREE_EXACT_ABSTENTION_GATE",
+  "authorization": null,
+  "superseded_by": "docs/build-log/artifacts/next-evidence/authorization-request.json",
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
   "frozen_inputs": {

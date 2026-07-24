@@ -29,13 +29,14 @@ before downstream calls. Retrieval alone is insufficient.
 
 ## Forgetting proof boundary
 
-All 385 baseline outcomes were classified: 0 observed product defects, 77
-adapter mismatches, 126 intentionally unsupported operations, 49 destructive
-ambiguities that should fail closed, 0 benchmark limitations needed for the
-classification, and 133 already-correct cases. This does not prove that the
-product has no forgetting defects; it says none was observed in this official
-adapter replay. Existing deterministic ForgetContract, Memora, and STALE public
-API adapters remain the separate lineage/state and end-answer gates.
+All 385 baseline outcomes received operation-boundary triage: 0 observed
+exact-mutation acknowledgement failures, 77 adapter semantic-selection
+boundaries, 126 intentionally unsupported operations, 49 destructive
+ambiguities that should fail closed, 0 benchmark limitations, and 133
+already-correct cases. This does not adjudicate target correctness, projection
+freshness, lineage, or final recall. Product root cause remains open. Existing
+deterministic ForgetContract, Memora, and STALE public API adapters remain the
+separate lineage/state and end-answer gates.
 
 Similarity may propose candidates but cannot execute destructive mutation.
 Exact current unit IDs, confirmation, drift detection, and the existing public
@@ -61,5 +62,5 @@ so the paired hypothesis is rejected at the admission gate.
 - Forgetting report: `docs/build-log/2026-07-24-forgeteval-next-evidence.md`.
 - Coding report: `docs/build-log/2026-07-24-swe-contextbench-next-evidence.md`.
 
-The complete AGENTS verification gate and final specialist review are recorded
-in the clean-landing manifest after the last code change.
+The complete AGENTS verification gate and final specialist review must be
+recorded only after the last code change.
