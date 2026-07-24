@@ -51,11 +51,11 @@ the missing input is outside these repositories or requires authorization.
 | B4 verified receipts | Unimplemented; substrate exists | `StoredCitation` already owns source IDs, UTF-8 byte spans, and quote hash; recall drops these to ID-only citations. Add one tenant-bound verifier over canonical source bytes and persist receipts in the existing trace. No second evidence store or migration is justified. |
 | B4 evidence status/policy | Unimplemented | Add a versioned MemPhant contract with `supported`, `contradicts-premise`, `near-match`, and `insufficient`, plus a deterministic server-owned answer policy. These requested names are not an official LongMemEval-V2 wire contract. |
 | B5 WS-0 stubs/spikes/compare/schema comments | Complete | Landed in inherited history. `retention_tier` is live, not a dormant table. |
-| B5 heuristic reranker | Unimplemented deletion | Old heuristic rerank is production-dead and measured harmful. Delete its stage/trace/config surface while preserving the distinct cross-encoder seam default-off. |
-| B5 `Balanced` | Premise stale; decision required | It is not behaviorally Fast: it still enables query decomposition and uses different caps. First reject or decouple decomposition with evidence, then remove the public enum coherently; never alias silently. |
+| B5 heuristic reranker | Complete at `2cd157a4` | Harmful stage, learned wrapper, request/trace/eval surface, and synthetic promotion fixtures deleted. Distinct cross-encoder seam preserved default-off. |
+| B5 `Balanced` / decomposition | Rejected and deleted at `2cd157a4` | Real Postgres comparison was zero-delta at @5/@10. `Balanced` was removed coherently after its only distinct retrieval behavior was rejected; no alias remains. |
 | B5 l4 names / `subject_hint` | Proof-missing debt audit | Remove only live redundant authority. Avoid cosmetic churn in immutable artifacts. |
-| B5 stale strict-contract scripts | Unimplemented | `gate_run_memphant.py` is already current. Fix `build_state_bench_memphant_arm.py`, `generate_stale_memphant_answers.py`, and `generate_memora_memphant_answers.py` using one strict nested episode builder and fail-closed source-kind mapping. |
-| B5 Python repository gate | Unimplemented repair | Baseline is 696 passed / 25 failed / 11 skipped before local web dependencies. Fix 15 r15 and 6 breadcrumb caller tests, two embedder pins, frozen-lock verification, and the private corpus identity without shims or weakened locks. |
+| B5 stale strict-contract scripts | Complete at `2c2358d6` | One strict episode builder now serves StateBench, STALE, and Memora; external source kinds map explicitly and unknown values fail closed. `gate_run_memphant.py` was already current. |
+| B5 Python repository gate | Complete locally at `2c2358d6` | 723 passed / 11 skipped / 0 failed. Frozen campaign evidence remains immutable; private corpus spans resolve against their pinned Git commit. Skips remain skips. |
 | B6 CI honesty | Complete locally | Inherited CI legs and scratch-PG proof exist. Remote CI remains unproven until a separately authorized push. |
 
 ## Phase C and cutover

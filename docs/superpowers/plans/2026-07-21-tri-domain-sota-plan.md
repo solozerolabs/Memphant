@@ -409,6 +409,14 @@ team verdict). Each item carries an n=12-style falsification gate.
    default OFF, adopt a smaller/faster OSS reranker or rank-compression (§2.Q4).
    l4-naming shims (§f.5) and the `subject_hint` internal-type prune (§f.6) also
    deferred as their own focused passes.
+   **COMPLETED 2026-07-23 (`2cd157a4`):** the real Postgres evidence adjudicates
+   the two deferred stages: disabling the heuristic improved Recall@5 by 0.143
+   [0.036, 0.286], while disabling decomposition had zero paired effect at @5
+   and @10. The heuristic, learned wrapper, decomposition, `Balanced`, their
+   request/trace/eval surfaces, and synthetic promotion fixtures are deleted.
+   The cross-encoder seam remains construction-time and default-off. DSR decay
+   was decoupled into fusion after the deletion exposed its hidden dependency.
+   Proof: `docs/build-log/2026-07-23-b5-recall-stage-retirement.md`.
 6. **B6 — CI honesty legs** (tests team): a Postgres service leg (52 ignored
    live tests + e2e probe currently never run in CI — all CI eval evidence is
    InMemory today), a fastembed-less leg, the `ops` eval lane, and an LME-S

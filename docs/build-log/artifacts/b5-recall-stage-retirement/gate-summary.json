@@ -1,0 +1,28 @@
+{
+  "artifact_version": "memphant.b5_recall_stage_retirement.v1",
+  "date": "2026-07-23",
+  "implementation_commit": "2cd157a4",
+  "decision": {
+    "heuristic_reranker": "retired",
+    "query_decomposition": "rejected_and_deleted",
+    "recall_mode_balanced": "removed",
+    "cross_encoder_seam": "preserved_default_off",
+    "deep": "diagnostic_only"
+  },
+  "evidence": {
+    "heuristic_disable_delta_recall_at_5": 0.143,
+    "heuristic_disable_delta_recall_at_5_ci95": [0.036, 0.286],
+    "query_decomposition_delta_recall_at_5": 0.0,
+    "query_decomposition_delta_recall_at_10": 0.0,
+    "source": "docs/build-log/2026-07-10-real-retrieval-campaign.md"
+  },
+  "verification": {
+    "python": {"passed": 723, "failed": 0, "skipped": 11},
+    "eval_contract": {"passed": 16, "failed": 0, "ignored": 1},
+    "recall_golden": {"passed": 13, "failed": 0, "ignored": 0},
+    "clippy": "passed",
+    "spec_drift": "skipped_private_mirror_absent"
+  },
+  "paid_calls": 0,
+  "spend_usd": 0
+}
