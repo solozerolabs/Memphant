@@ -1,0 +1,348 @@
+{
+  "adapter_sha256": "193055ab2534727a08e029db8bfed163e1fcad593a25b0c3a8cac1cea651e163",
+  "benchmark": "ForgetEval",
+  "case_ids": [
+    "adv_paraphrase_supersession_01",
+    "adv_paraphrase_supersession_20",
+    "adv_negation_trap_01",
+    "adv_negation_trap_02",
+    "adv_temporal_qualifier_02",
+    "adv_temporal_qualifier_13",
+    "adv_shared_attribute_01",
+    "adv_shared_attribute_20",
+    "adv_compound_fact_01",
+    "adv_compound_fact_20",
+    "adv_recursive_supersession_01",
+    "adv_recursive_supersession_20"
+  ],
+  "inputs": [
+    {
+      "candidates": [
+        {
+          "body": "User commutes by bike to the SF office.",
+          "body_sha256": "f11e9b82e7447cfe32f6658fd6a7c6cc5da839584b3bb0c40c500f57d0d0cb30",
+          "index": 0
+        },
+        {
+          "body": "User works at Stripe as a senior backend engineer.",
+          "body_sha256": "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_paraphrase_supersession_01",
+      "input_sha256": "78958f3f78c504e52802b09302fe918322bf4b7615842b7c5455981a68f87126",
+      "mutation_index": 1,
+      "new_text": "User quit the payments industry and joined an AI safety lab in San Francisco.",
+      "operation": "supersede",
+      "query": "user employer"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User plays the cello in a community orchestra.",
+          "body_sha256": "1bd6a72eb90418b0cf1d5ffa2753bc9a65a5d7c4a7e2b5a78e126282c25a59f6",
+          "index": 0
+        },
+        {
+          "body": "User works as a lead architect at Foster + Partners.",
+          "body_sha256": "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_paraphrase_supersession_20",
+      "input_sha256": "ddc764fb2cacaaa6b1e275cdbd7c639b48111dcc153c08db2a21cca8189b6997",
+      "mutation_index": 1,
+      "new_text": "User left the architecture firm to start an urban farming collective.",
+      "operation": "supersede",
+      "query": "user job"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User does NOT work at Anthropic and has never interviewed there.",
+          "body_sha256": "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d",
+          "index": 0
+        },
+        {
+          "body": "User's coffee preference is espresso.",
+          "body_sha256": "de9cfce3951a00a595ed6240c5fe7539707ff13c67c25966bd8137352d40e867",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_negation_trap_01",
+      "input_sha256": "65029a890b93718dcb23375366ac87cd38553142db5d5e6635016e1e1060f898",
+      "mutation_index": 1,
+      "new_text": "User actually joined Anthropic last quarter.",
+      "operation": "supersede",
+      "query": "user Anthropic employment status"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User does not drink coffee under any circumstances.",
+          "body_sha256": "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb",
+          "index": 0
+        },
+        {
+          "body": "User drinks green tea every afternoon.",
+          "body_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_negation_trap_02",
+      "input_sha256": "7df4d97fad64b23921eb6914b5479d000aa63afc3d32fde12307d7a1c0a7cac6",
+      "mutation_index": 1,
+      "new_text": null,
+      "operation": "release",
+      "query": "user does not drink coffee"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User lived in Tokyo from 2015 to 2018.",
+          "body_sha256": "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532",
+          "index": 0
+        },
+        {
+          "body": "User's main language is English.",
+          "body_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_temporal_qualifier_02",
+      "input_sha256": "5f5763fc07a520d798099ba801fb7f6123ded7197f437916571cb6a8081f9535",
+      "mutation_index": 1,
+      "new_text": "User lived in Berlin from 2018 to 2022.",
+      "operation": "supersede",
+      "query": "user residence Tokyo 2015"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User lived in Berlin from 2018 to 2022.",
+          "body_sha256": "c8da1ed9634973865c97624fb6e29c769218ff50f6296de03bf572d6b882fdff",
+          "index": 0
+        },
+        {
+          "body": "User's main language is English.",
+          "body_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_temporal_qualifier_02",
+      "input_sha256": "a199c7d051cf00a7a135a19a0ad33c38283ff9afee25933b68dea93e04679020",
+      "mutation_index": 2,
+      "new_text": "User has lived in Lisbon since 2022.",
+      "operation": "supersede",
+      "query": "user residence Berlin 2018"
+    },
+    {
+      "candidates": [
+        {
+          "body": "Eve lived in Paris during 2017.",
+          "body_sha256": "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd",
+          "index": 0
+        },
+        {
+          "body": "Eve is allergic to peanuts.",
+          "body_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_temporal_qualifier_13",
+      "input_sha256": "58afab8d9ca5a947286efeed5641eb15e2870361df66fe738f8d08442f7a2e4d",
+      "mutation_index": 1,
+      "new_text": "Eve moved to Barcelona in 2019.",
+      "operation": "supersede",
+      "query": "Eve residence Paris"
+    },
+    {
+      "candidates": [
+        {
+          "body": "Eve moved to Barcelona in 2019.",
+          "body_sha256": "7763b0585bc0c3445e83c3d6ca78939f35e077e1f982eafcdb18c7c5dc50dab0",
+          "index": 0
+        },
+        {
+          "body": "Eve is allergic to peanuts.",
+          "body_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_temporal_qualifier_13",
+      "input_sha256": "ef080d81a6e328565b4e669455c67a55646ae2a0127ffb6fcb5bed464772ed98",
+      "mutation_index": 2,
+      "new_text": "Eve relocated to Singapore in 2023.",
+      "operation": "supersede",
+      "query": "Eve residence Barcelona"
+    },
+    {
+      "candidates": [
+        {
+          "body": "Dana lives in Berlin and works at Stripe.",
+          "body_sha256": "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b",
+          "index": 0
+        },
+        {
+          "body": "Eve lives in Berlin and works at Notion.",
+          "body_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+          "index": 1
+        },
+        {
+          "body": "Frank lives in Tokyo and works at Spotify.",
+          "body_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+          "index": 2
+        }
+      ],
+      "case_id": "adv_shared_attribute_01",
+      "input_sha256": "eeec5d832db267440181c6e4bd59a1e0c54af3cbdd8e34c22174162cbc752d27",
+      "mutation_index": 1,
+      "new_text": null,
+      "operation": "release",
+      "query": "everything about Dana"
+    },
+    {
+      "candidates": [
+        {
+          "body": "Restaurant Bella serves Italian and French cuisine.",
+          "body_sha256": "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7",
+          "index": 0
+        },
+        {
+          "body": "Restaurant Orion serves Japanese cuisine.",
+          "body_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+          "index": 1
+        },
+        {
+          "body": "Restaurant Luna serves Italian and Spanish cuisine.",
+          "body_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+          "index": 2
+        }
+      ],
+      "case_id": "adv_shared_attribute_20",
+      "input_sha256": "5dc02f0d01ebacd57378245b796fc53cfe0ee82881aa793b307a03e422f043b5",
+      "mutation_index": 1,
+      "new_text": null,
+      "operation": "release",
+      "query": "everything about Restaurant Bella"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User uses an ergonomic mechanical keyboard.",
+          "body_sha256": "e1633b727366a3e3e58315f72151bca93fcb19acd98a585d6364c1835d64e2c6",
+          "index": 0
+        },
+        {
+          "body": "User lives in Berlin and works at Stripe as a backend engineer.",
+          "body_sha256": "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_compound_fact_01",
+      "input_sha256": "bdb14363d0aa59772737b922b85559b34760f68f18f78a1d29a0db282ffc9cbc",
+      "mutation_index": 1,
+      "new_text": "User relocated to Madrid and continues working remotely.",
+      "operation": "supersede",
+      "query": "user city of residence"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User has visited every continent except Antarctica.",
+          "body_sha256": "e162be38ee0fab8907dc13339f44f408dafd7506dae15c0fbf9c268abde45a0f",
+          "index": 0
+        },
+        {
+          "body": "User writes poetry in their spare time and is fluent in Japanese.",
+          "body_sha256": "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e",
+          "index": 1
+        }
+      ],
+      "case_id": "adv_compound_fact_20",
+      "input_sha256": "457d3efcff6d954e7a4771b6df134e6a40caf31795c03520f73b31f4f781540b",
+      "mutation_index": 1,
+      "new_text": "User has transitioned to writing short stories instead of poetry.",
+      "operation": "supersede",
+      "query": "user poetic activity"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User has been using Chrome as primary browser since 2020.",
+          "body_sha256": "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a",
+          "index": 0
+        }
+      ],
+      "case_id": "adv_recursive_supersession_01",
+      "input_sha256": "dc3e4ac1ba7694764d6c6ad7d5bb05e61bb554a76931b67c1dead03060934d4e",
+      "mutation_index": 1,
+      "new_text": "User switched to Brave for privacy reasons in 2024.",
+      "operation": "supersede",
+      "query": "user primary browser Chrome"
+    },
+    {
+      "candidates": [
+        {
+          "body": "User switched to Brave for privacy reasons in 2024.",
+          "body_sha256": "22c7f14b856a5674f07fd7115d41de548b61dfbb1da64447a77e6c41e438d966",
+          "index": 0
+        }
+      ],
+      "case_id": "adv_recursive_supersession_01",
+      "input_sha256": "f0e6edd8b38a2db5132fa964d44f321021ae6a2a6f9d2c14b5abc6123fa69111",
+      "mutation_index": 2,
+      "new_text": "User switched back to Chrome in 2025 after Brave broke an extension.",
+      "operation": "supersede",
+      "query": "user primary browser Brave"
+    },
+    {
+      "candidates": [
+        {
+          "body": "Student studied French as second language in 2020.",
+          "body_sha256": "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0",
+          "index": 0
+        }
+      ],
+      "case_id": "adv_recursive_supersession_20",
+      "input_sha256": "3ee46c628e42593c3fa946f5bfd193e5e2abb77bdc0eeeb6b5e8f4b8d7892f9c",
+      "mutation_index": 1,
+      "new_text": "Student switched to learning Spanish in 2021 for travel.",
+      "operation": "supersede",
+      "query": "student language French"
+    },
+    {
+      "candidates": [
+        {
+          "body": "Student switched to learning Spanish in 2021 for travel.",
+          "body_sha256": "ce7ed7db9905469ecac72599220405bfc96e73e5a2556dfeb59b3fd80a9005ab",
+          "index": 0
+        }
+      ],
+      "case_id": "adv_recursive_supersession_20",
+      "input_sha256": "5c6b42d57134cfe414c63847cafd303c989f1e8089c5aee9dcc9d8d6181048bd",
+      "mutation_index": 2,
+      "new_text": "Student resumed French studies in 2023 for scholarship requirements.",
+      "operation": "supersede",
+      "query": "student language Spanish"
+    }
+  ],
+  "repository": {
+    "git_head": "11f957f0d8e1d90643f3b068a0297a1f6080f0e3",
+    "tracked_diff_sha256": "be64f7bef10dc12db60312c723f7ddf7185fba951f8335055e5b6b42e7ce8a2a",
+    "tracked_dirty": true,
+    "tracked_file_count": 1536,
+    "tracked_worktree_sha256": "2f2a9bb8368e4b8f0d9a6cd3f0ae4c221bae9669c4b2fe474270f268040f3d09"
+  },
+  "schema_version": 1,
+  "upstream": {
+    "adapter_sha256": "f1eff0efa89437e8c44ce6f60b5a88280592094c2c6b9b955524cc0262c3c307",
+    "adversarial_sha256": "cfdf125aba5b90975634ce48bdf0f078397a72a1cc9dd1aa5bb59ab067c322d3",
+    "commit": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
+    "license": "MIT",
+    "license_sha256": "cdf599e8c8ce18ca59dae4d6617f06cb59433752203e703c9defb274b40c6657",
+    "repository": "https://github.com/deeplethe/lethe.git",
+    "runner_sha256": "4fdc672e2c19eec7f3da30fda5a541699a0fe07e1a00a4bae67fa6343800162e",
+    "templates_sha256": "39072bea33402e5cbf66a6c1101504a337ab9f5f3bd90d5402afc7727c4516a8"
+  }
+}

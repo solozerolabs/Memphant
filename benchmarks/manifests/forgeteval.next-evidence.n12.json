@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "benchmark": "ForgetEval adversarial",
+  "upstream_commit": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
+  "frozen_before_model_calls": true,
+  "case_ids": [
+    "adv_paraphrase_supersession_01",
+    "adv_paraphrase_supersession_20",
+    "adv_negation_trap_01",
+    "adv_negation_trap_02",
+    "adv_temporal_qualifier_02",
+    "adv_temporal_qualifier_13",
+    "adv_shared_attribute_01",
+    "adv_shared_attribute_20",
+    "adv_compound_fact_01",
+    "adv_compound_fact_20",
+    "adv_recursive_supersession_01",
+    "adv_recursive_supersession_20"
+  ],
+  "mutation_call_count": 16,
+  "free_screen": {
+    "baseline": "small embeddings plus adaptive-gap release",
+    "arms": [
+      "base embeddings",
+      "ModernBERT embeddings",
+      "fastembed cross-rerank",
+      "rank-one release",
+      "fastembed cross-rerank plus rank-one release"
+    ],
+    "winner": "fastembed cross-rerank plus rank-one release",
+    "promotion_decision": "rejected",
+    "reason": "The full 385 comparison repaired 65 failures but regressed 16 baseline passes."
+  },
+  "next_treatment": {
+    "name": "evidence_proposal_plus_explicit_confirmation",
+    "model_role": "propose candidate body hashes and compound-fact merge text only",
+    "confirmation_role": "a separate confirmation ledger authorizes exact body hashes",
+    "execution_role": "map confirmed body hashes to current unit IDs and use existing exact public mutation APIs"
+  },
+  "kill_gate": {
+    "minimum_passed": 10,
+    "maximum_baseline_pass_to_fail": 0,
+    "maximum_unacknowledged_exact_mutations": 0,
+    "maximum_unconfirmed_mutations": 0,
+    "expand_only_if_all_predicates_pass": true
+  }
+}

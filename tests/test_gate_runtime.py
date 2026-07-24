@@ -205,6 +205,25 @@ def test_shared_api_client_supports_authenticated_trace_get(grt):
     ]
 
 
+def test_server_environment_closes_inherited_cross_rerank_state(grt, monkeypatch):
+    monkeypatch.setenv("MEMPHANT_CROSS_RERANK", "1")
+    monkeypatch.setenv("MEMPHANT_RERANKER", "inherited")
+
+    default = grt.Server("server", "postgres://scratch", 39431)
+    selected = grt.Server(
+        "server",
+        "postgres://scratch",
+        39432,
+        cross_rerank=True,
+        reranker="fastembed",
+    )
+
+    assert "MEMPHANT_CROSS_RERANK" not in default.environment()
+    assert "MEMPHANT_RERANKER" not in default.environment()
+    assert selected.environment()["MEMPHANT_CROSS_RERANK"] == "1"
+    assert selected.environment()["MEMPHANT_RERANKER"] == "fastembed"
+
+
 def test_reexec_through_scratch_db_is_noop_when_already_active(grt, monkeypatch):
     """The recursion guard: inside a scratch DB (``MEMPHANT_SCRATCH_ACTIVE``
     set), the runner must NOT re-exec again — else `with_scratch_db.sh` nests

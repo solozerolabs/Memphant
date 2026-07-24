@@ -1,0 +1,4726 @@
+{
+  "baseline_summary": {
+    "failed": 126,
+    "not_applicable": 126,
+    "passed": 133,
+    "total": 385
+  },
+  "candidate_summary": {
+    "failed": 77,
+    "not_applicable": 126,
+    "passed": 182,
+    "total": 385
+  },
+  "cases": [
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_01",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_02",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_03",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_04",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_05",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_06",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_07",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_08",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_11",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_14",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_12",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_13",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_15",
+      "family": "drift",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_16",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_18",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_17",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_19",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_20",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_21",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_22",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_26",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_27",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_24",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_25",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_30",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_28",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_31",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_32",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_33",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_35",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_substring_trap_36",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_34",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_37",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_substring_trap_38",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_39",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "substring_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_substring_trap_40",
+      "family": "drift",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_01",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_02",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_03",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_04",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_05",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_06",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_07",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_08",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_09",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_10",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_11",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_12",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_13",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_14",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_15",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_16",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_17",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_18",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_19",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_20",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_21",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_22",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_23",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_24",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_25",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_26",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_27",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_28",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_30",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_32",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_31",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_33",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_34",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_35",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_36",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_37",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_38",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_39",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "prefix_collision",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_prefix_collision_40",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_01",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_02",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_03",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_04",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_05",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_06",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_07",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_08",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_09",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_10",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_11",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_12",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_13",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_14",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_15",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_16",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_17",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_18",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_20",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_21",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_22",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_23",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_24",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_25",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_26",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_27",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_28",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_29",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_30",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_31",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_33",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_34",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_35",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_paraphrase_supersession_37",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_38",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_36",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_39",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "paraphrase_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_paraphrase_supersession_40",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_01",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_02",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_03",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_04",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_05",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_06",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_07",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_08",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_09",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_10",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_11",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_12",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_13",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_14",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_15",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_16",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_17",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_18",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_19",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_20",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_21",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_22",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_23",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_24",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_25",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_26",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_27",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_28",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_29",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_30",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_31",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_32",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_33",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_34",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_35",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_36",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_negation_trap_37",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_38",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_39",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "negation_trap",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_negation_trap_40",
+      "family": "decay",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_01",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_02",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_03",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_04",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_05",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_06",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_07",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_08",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_09",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_10",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_11",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_12",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_13",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_14",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_15",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_16",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_17",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_18",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_19",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_20",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_22",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_23",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_24",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_25",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_26",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_27",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_28",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_29",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_30",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_temporal_qualifier_31",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_33",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_34",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_36",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_37",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_38",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "fail",
+      "case_id": "adv_temporal_qualifier_39",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->fail"
+    },
+    {
+      "attack_category": "temporal_qualifier",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_temporal_qualifier_40",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_01",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_02",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_03",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_shared_attribute_04",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_05",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_06",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_07",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_08",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_09",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_10",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_11",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_12",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_13",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_14",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_15",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_16",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_17",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_18",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_19",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_20",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_21",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_22",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_23",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_24",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_25",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_26",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_27",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_28",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_29",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_30",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_31",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_32",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_33",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_34",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_35",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_36",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_37",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_38",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_39",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "shared_attribute",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "pass",
+      "case_id": "adv_shared_attribute_40",
+      "family": "amnesia",
+      "mutation_operations": [
+        "release"
+      ],
+      "root_cause_category": "ambiguous_destructive_request_should_fail_closed",
+      "transition": "fail->pass"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_01",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_02",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_03",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_04",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_05",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_06",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_07",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_08",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_09",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_10",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_11",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_12",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_13",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_14",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_15",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_16",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_17",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_18",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_19",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_20",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_21",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_22",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_23",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_24",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_25",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_26",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_27",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_28",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_29",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_30",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_31",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_32",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_33",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_34",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_35",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_36",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_37",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_38",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_39",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "compound_fact",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_compound_fact_40",
+      "family": "supersession",
+      "mutation_operations": [
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_01",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_02",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_03",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_04",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_05",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_06",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_07",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_08",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_09",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_10",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_11",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_12",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_13",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_14",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_15",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_16",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_19",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_20",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_21",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_22",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_23",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_24",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_25",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_26",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_27",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_28",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_29",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_30",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_31",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_32",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_33",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_34",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_35",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_36",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_37",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_38",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_17",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "identifier_obfuscation",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_identifier_obfuscation_18",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_01",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_02",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_03",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_04",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_05",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_06",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_07",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_08",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_09",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_10",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_11",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_12",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_13",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_14",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_15",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_16",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_17",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_19",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_20",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_21",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_22",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_24",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_23",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_25",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_26",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_27",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_30",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_28",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_29",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_31",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_32",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_33",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_34",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_35",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_37",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_38",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_39",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "cross_lingual_identifier",
+      "baseline_outcome": "not_applicable",
+      "candidate_outcome": "not_applicable",
+      "case_id": "adv_cross_lingual_identifier_40",
+      "family": "purge",
+      "mutation_operations": [
+        "purge"
+      ],
+      "root_cause_category": "intentionally_unsupported_operation",
+      "transition": "not_applicable->not_applicable"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_01",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_02",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_03",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_04",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_05",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_06",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_07",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_08",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_09",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_recursive_supersession_10",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_11",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_12",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_13",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_14",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_15",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_16",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_recursive_supersession_17",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "fail",
+      "candidate_outcome": "fail",
+      "case_id": "adv_recursive_supersession_18",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "adapter_mismatch",
+      "transition": "fail->fail"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_19",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_20",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_21",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_22",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_23",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_24",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_25",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_26",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_27",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_28",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_29",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_30",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_31",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_32",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_33",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_35",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_36",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_37",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_38",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_39",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    },
+    {
+      "attack_category": "recursive_supersession",
+      "baseline_outcome": "pass",
+      "candidate_outcome": "pass",
+      "case_id": "adv_recursive_supersession_40",
+      "family": "drift",
+      "mutation_operations": [
+        "supersede",
+        "supersede"
+      ],
+      "root_cause_category": "already_correct_behavior",
+      "transition": "pass->pass"
+    }
+  ],
+  "category_counts": {
+    "actual_memphant_defect": 0,
+    "adapter_mismatch": 77,
+    "already_correct_behavior": 133,
+    "ambiguous_destructive_request_should_fail_closed": 49,
+    "benchmark_limitation": 0,
+    "intentionally_unsupported_operation": 126
+  },
+  "classification_basis": {
+    "exact_mutation_boundary": "The adapter fails closed unless POST /v1/correct acknowledges the selected unit or POST /v1/forget acknowledges every selected unit.",
+    "purge_na": "MemPhant exposes subject erasure and exact-unit forget, not selective hard purge by natural-language query.",
+    "release_failures": "Natural-language multi-target deletion is destructive and ambiguous; it requires proposal plus explicit confirmation before exact-ID forget.",
+    "supersession_failures": "The public exact-ID correction primitive succeeded; natural-language target choice or compound-fact merge planning was the adapter gap."
+  },
+  "inputs": {
+    "baseline": "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-baseline-instrumented.json",
+    "baseline_sha256": "dec4ea012a2ca620c14179d8565979537707734d858d88abb9ad2935df94dd1a",
+    "candidate": "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-cross-rerank-rank-one.json",
+    "candidate_sha256": "b920d2111fc5fd378aafbb2056872b502ac22499994eea28a0dd4783bc280629"
+  },
+  "schema_version": 1,
+  "transition_counts": {
+    "fail->fail": 61,
+    "fail->pass": 65,
+    "not_applicable->not_applicable": 126,
+    "pass->fail": 16,
+    "pass->pass": 117
+  }
+}

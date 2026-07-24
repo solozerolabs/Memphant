@@ -251,14 +251,35 @@ class Server:
         port: int,
         embed_model: str | None = None,
         log_path: Path | None = None,
+        cross_rerank: bool = False,
+        reranker: str = "fastembed",
     ) -> None:
         self.server_bin = server_bin
         self.database_url = database_url
         self.port = port
         self.embed_model = embed_model
         self.log_path = log_path
+        self.cross_rerank = cross_rerank
+        self.reranker = reranker
         self.proc: subprocess.Popen | None = None
         self._log_file = None
+
+    def environment(self) -> dict[str, str]:
+        """Build a closed server environment for construction-time arms."""
+        env = dict(os.environ)
+        env.pop("DATABASE_URL", None)
+        env.pop("MEMPHANT_CROSS_RERANK", None)
+        env.pop("MEMPHANT_RERANKER", None)
+        env["MEMPHANT_APP_DATABASE_URL"] = self.database_url
+        env["MEMPHANT_AUTHN_DATABASE_URL"] = self.database_url
+        env["MEMPHANT_BIND"] = f"127.0.0.1:{self.port}"
+        env.setdefault("RUST_LOG", "warn")
+        if self.embed_model:
+            env["MEMPHANT_EMBEDDINGS"] = self.embed_model
+        if self.cross_rerank:
+            env["MEMPHANT_CROSS_RERANK"] = "1"
+            env["MEMPHANT_RERANKER"] = self.reranker
+        return env
 
     def _tail_log(self, n: int = LOG_TAIL_LINES) -> str:
         if self.log_path is None or not self.log_path.exists():
@@ -290,14 +311,7 @@ class Server:
 
     def start(self) -> None:
         check_port_free(self.port)
-        env = dict(os.environ)
-        env.pop("DATABASE_URL", None)
-        env["MEMPHANT_APP_DATABASE_URL"] = self.database_url
-        env["MEMPHANT_AUTHN_DATABASE_URL"] = self.database_url
-        env["MEMPHANT_BIND"] = f"127.0.0.1:{self.port}"
-        env.setdefault("RUST_LOG", "warn")
-        if self.embed_model:
-            env["MEMPHANT_EMBEDDINGS"] = self.embed_model
+        env = self.environment()
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self._log_file = open(self.log_path, "w")

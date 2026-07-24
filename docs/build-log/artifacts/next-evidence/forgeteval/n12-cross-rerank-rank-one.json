@@ -1,0 +1,1505 @@
+{
+  "benchmark": "ForgetEval",
+  "capabilities": {
+    "inscribe": "synchronous direct-unit POST /v1/episodes",
+    "purge": "N/A: no selective hard purge-by-query public primitive",
+    "recall": "POST /v1/recall",
+    "release": "rank_one over ranked recall then exact-unit POST /v1/forget",
+    "supersede": "rank-1 recall then exact-unit POST /v1/correct"
+  },
+  "case_generation": {
+    "distractors": null,
+    "scale_per_family": null,
+    "seed": null,
+    "selected_case_ids": [
+      "adv_paraphrase_supersession_01",
+      "adv_paraphrase_supersession_20",
+      "adv_negation_trap_01",
+      "adv_negation_trap_02",
+      "adv_temporal_qualifier_02",
+      "adv_temporal_qualifier_13",
+      "adv_shared_attribute_01",
+      "adv_shared_attribute_20",
+      "adv_compound_fact_01",
+      "adv_compound_fact_20",
+      "adv_recursive_supersession_01",
+      "adv_recursive_supersession_20"
+    ],
+    "source_case_count": 385
+  },
+  "operation_counts": {
+    "inscribe": 24,
+    "recall": 28,
+    "release": 3,
+    "resets": 12,
+    "supersede": 13
+  },
+  "results": {
+    "cases": [
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af",
+            "unit_id": "019f94ce-87e3-7013-8f7f-cd4602342f32"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "f11e9b82e7447cfe32f6658fd6a7c6cc5da839584b3bb0c40c500f57d0d0cb30",
+            "unit_id": "019f94ce-8801-7d80-b896-1ee34677e8b2"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 50,
+              "input_chars_p50": 39,
+              "input_chars_p95": 50,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "6ae475e842b6b2ef024e299a72c0a9ebb99015a0cf385eb0bcd2ed9d28933e2c",
+            "returned": [
+              {
+                "body_sha256": "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-87e3-7013-8f7f-cd4602342f32"
+              }
+            ],
+            "trace_id": "019f94ce-8847-72f0-9625-68b67a81b7ca"
+          },
+          {
+            "correction_id": "cor_019f94ce-8867-7703-947d-91477a1489ea",
+            "created": [
+              "019f94ce-8867-7703-947d-91477a1489ea",
+              "019f94ce-8867-7703-947d-915b3c674545"
+            ],
+            "operation": "supersede",
+            "query_sha256": "6ae475e842b6b2ef024e299a72c0a9ebb99015a0cf385eb0bcd2ed9d28933e2c",
+            "selected_unit_id": "019f94ce-87e3-7013-8f7f-cd4602342f32",
+            "superseded": [
+              "019f94ce-87e3-7013-8f7f-cd4602342f32"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 77,
+              "input_chars_p50": 39,
+              "input_chars_p95": 77,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "5a77d52359d9327d65b195aa2faee77c21662565a2fefa749832b4c6e11153da",
+            "returned": [
+              {
+                "body_sha256": "f11e9b82e7447cfe32f6658fd6a7c6cc5da839584b3bb0c40c500f57d0d0cb30",
+                "fused_score": 0.1040022,
+                "unit_id": "019f94ce-8801-7d80-b896-1ee34677e8b2"
+              },
+              {
+                "body_sha256": "4469756dc1693cab6baf0a474174b745750dd500fecbe8dca7329fee270b6de1",
+                "fused_score": 0.10232475,
+                "unit_id": "019f94ce-8867-7703-947d-91477a1489ea"
+              }
+            ],
+            "trace_id": "019f94ce-889f-7be1-9292-7f0f6f056af8"
+          }
+        ],
+        "attack_category": "paraphrase_supersession",
+        "case_id": "adv_paraphrase_supersession_01",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f",
+            "unit_id": "019f94ce-88c8-7ca2-bd2b-47c60b8c3975"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "1bd6a72eb90418b0cf1d5ffa2753bc9a65a5d7c4a7e2b5a78e126282c25a59f6",
+            "unit_id": "019f94ce-88e2-7a30-8ab7-2037a8a8b52e"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 52,
+              "input_chars_p50": 46,
+              "input_chars_p95": 52,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "5e8f5860c709b9cdc4d08d6e0a572551a18119fde3d3838ce601734855f01ca4",
+            "returned": [
+              {
+                "body_sha256": "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-88c8-7ca2-bd2b-47c60b8c3975"
+              }
+            ],
+            "trace_id": "019f94ce-8912-7d01-8c6c-d5efb92856f6"
+          },
+          {
+            "correction_id": "cor_019f94ce-8929-7403-8da0-2da889c4d631",
+            "created": [
+              "019f94ce-8929-7403-8da0-2da889c4d631",
+              "019f94ce-8929-7403-8da0-2db311235cdf"
+            ],
+            "operation": "supersede",
+            "query_sha256": "5e8f5860c709b9cdc4d08d6e0a572551a18119fde3d3838ce601734855f01ca4",
+            "selected_unit_id": "019f94ce-88c8-7ca2-bd2b-47c60b8c3975",
+            "superseded": [
+              "019f94ce-88c8-7ca2-bd2b-47c60b8c3975"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 69,
+              "input_chars_p50": 46,
+              "input_chars_p95": 69,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "54fdebcc58db57d86df33b754e028ae30c63bec94ac2ea54864b345440f40d9c",
+            "returned": [
+              {
+                "body_sha256": "8a17d96431d1459b400485e8eaa8a8b1319f68beef738d81f419dd78fdd286a0",
+                "fused_score": 0.103331216,
+                "unit_id": "019f94ce-8929-7403-8da0-2da889c4d631"
+              },
+              {
+                "body_sha256": "1bd6a72eb90418b0cf1d5ffa2753bc9a65a5d7c4a7e2b5a78e126282c25a59f6",
+                "fused_score": 0.10299573,
+                "unit_id": "019f94ce-88e2-7a30-8ab7-2037a8a8b52e"
+              }
+            ],
+            "trace_id": "019f94ce-895d-7661-b2ce-f25a54f18772"
+          }
+        ],
+        "attack_category": "paraphrase_supersession",
+        "case_id": "adv_paraphrase_supersession_20",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "fail",
+        "present_must_not_contain_indexes": [
+          0
+        ]
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d",
+            "unit_id": "019f94ce-897d-72a3-ac49-a9eb0f96d6fa"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "de9cfce3951a00a595ed6240c5fe7539707ff13c67c25966bd8137352d40e867",
+            "unit_id": "019f94ce-8992-7f53-a4ea-b5e7a06563ba"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 64,
+              "input_chars_p50": 37,
+              "input_chars_p95": 64,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "18a69b5f96d07c213802583a9559d4e6534940ab01cb2ba06ccbcf2ffccec09d",
+            "returned": [
+              {
+                "body_sha256": "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-897d-72a3-ac49-a9eb0f96d6fa"
+              }
+            ],
+            "trace_id": "019f94ce-89c1-73d3-95f9-4ab0f0f3a33c"
+          },
+          {
+            "correction_id": "cor_019f94ce-89d6-7881-9846-af4241b799c5",
+            "created": [
+              "019f94ce-89d6-7881-9846-af4241b799c5",
+              "019f94ce-89d6-7881-9846-af5f188362cf"
+            ],
+            "operation": "supersede",
+            "query_sha256": "18a69b5f96d07c213802583a9559d4e6534940ab01cb2ba06ccbcf2ffccec09d",
+            "selected_unit_id": "019f94ce-897d-72a3-ac49-a9eb0f96d6fa",
+            "superseded": [
+              "019f94ce-897d-72a3-ac49-a9eb0f96d6fa"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 44,
+              "input_chars_p50": 37,
+              "input_chars_p95": 44,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "d7c4cd1f03d95933eecf46a56ff4305811cf4ab923c781d169de08e0507ab3da",
+            "returned": [
+              {
+                "body_sha256": "eca7ec1694cb98759ddb958929c124c586f9f8f8fdff345dd3ae069c99efda8e",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-89d6-7881-9846-af4241b799c5"
+              },
+              {
+                "body_sha256": "de9cfce3951a00a595ed6240c5fe7539707ff13c67c25966bd8137352d40e867",
+                "fused_score": 0.0682165,
+                "unit_id": "019f94ce-8992-7f53-a4ea-b5e7a06563ba"
+              }
+            ],
+            "trace_id": "019f94ce-8a02-7592-bcc0-535d9bbd2b8f"
+          }
+        ],
+        "attack_category": "negation_trap",
+        "case_id": "adv_negation_trap_01",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb",
+            "unit_id": "019f94ce-8a18-7fe2-9614-1801749925c0"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+            "unit_id": "019f94ce-8a29-7a12-a8c4-a03e1e0f3629"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 51,
+              "input_chars_p50": 38,
+              "input_chars_p95": 51,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "7a5394ccec4cde314afe64081bcd68e79a636c3f4c9245f72357395e6d21ca23",
+            "returned": [
+              {
+                "body_sha256": "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8a18-7fe2-9614-1801749925c0"
+              },
+              {
+                "body_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+                "fused_score": 0.0682165,
+                "unit_id": "019f94ce-8a29-7a12-a8c4-a03e1e0f3629"
+              }
+            ],
+            "trace_id": "019f94ce-8a56-7e70-8df3-eb6258e4f676"
+          },
+          {
+            "operation": "release",
+            "query_sha256": "7a5394ccec4cde314afe64081bcd68e79a636c3f4c9245f72357395e6d21ca23",
+            "receipts": [
+              {
+                "deletion_generation": 1,
+                "invalidated_units": [
+                  "019f94ce-8a18-7fe2-9614-1801749925c0"
+                ],
+                "policy": "hard_delete",
+                "selected_unit_id": "019f94ce-8a18-7fe2-9614-1801749925c0",
+                "trace_ref": null,
+                "verification": "authorized_transaction_committed"
+              }
+            ],
+            "selected_unit_ids": [
+              "019f94ce-8a18-7fe2-9614-1801749925c0"
+            ],
+            "selection_strategy": "rank_one",
+            "threshold": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 38,
+              "input_chars_p50": 38,
+              "input_chars_p95": 38,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "8e557b02590f9e9f4423a95aca61ced2da906a800cb53df5edae01b47df071fb",
+            "returned": [
+              {
+                "body_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8a29-7a12-a8c4-a03e1e0f3629"
+              }
+            ],
+            "trace_id": "019f94ce-8a89-7652-bea5-a340cae0a2b1"
+          }
+        ],
+        "attack_category": "negation_trap",
+        "case_id": "adv_negation_trap_02",
+        "error_kind": null,
+        "family": "decay",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "release"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532",
+            "unit_id": "019f94ce-8aa2-7731-bbc9-ad0929f65115"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+            "unit_id": "019f94ce-8ab3-7581-b031-8d7793c53e0e"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 38,
+              "input_chars_p50": 32,
+              "input_chars_p95": 38,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "e1d3995a9970f921968325e7200ce892941c62f11b2d3bb7b645f27afa0202bf",
+            "returned": [
+              {
+                "body_sha256": "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8aa2-7731-bbc9-ad0929f65115"
+              }
+            ],
+            "trace_id": "019f94ce-8ae1-7dd0-ad6b-8b52706e650e"
+          },
+          {
+            "correction_id": "cor_019f94ce-8af7-7f93-b1d0-75dac014f62a",
+            "created": [
+              "019f94ce-8af7-7f93-b1d0-75dac014f62a",
+              "019f94ce-8af7-7f93-b1d0-75ea648ca25e"
+            ],
+            "operation": "supersede",
+            "query_sha256": "e1d3995a9970f921968325e7200ce892941c62f11b2d3bb7b645f27afa0202bf",
+            "selected_unit_id": "019f94ce-8aa2-7731-bbc9-ad0929f65115",
+            "superseded": [
+              "019f94ce-8aa2-7731-bbc9-ad0929f65115"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 39,
+              "input_chars_p50": 32,
+              "input_chars_p95": 39,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "e11db319ecfc5cfb72e298a69a51da4788e08ef6f448c84e61ee7eb7cd2d0f20",
+            "returned": [
+              {
+                "body_sha256": "c8da1ed9634973865c97624fb6e29c769218ff50f6296de03bf572d6b882fdff",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8af7-7f93-b1d0-75dac014f62a"
+              }
+            ],
+            "trace_id": "019f94ce-8b1e-7443-8923-1f5db5b69d60"
+          },
+          {
+            "correction_id": "cor_019f94ce-8b33-71b3-9301-82d40b5c3a4a",
+            "created": [
+              "019f94ce-8b33-71b3-9301-82d40b5c3a4a",
+              "019f94ce-8b33-71b3-9301-82e44f52d2e3"
+            ],
+            "operation": "supersede",
+            "query_sha256": "e11db319ecfc5cfb72e298a69a51da4788e08ef6f448c84e61ee7eb7cd2d0f20",
+            "selected_unit_id": "019f94ce-8af7-7f93-b1d0-75dac014f62a",
+            "superseded": [
+              "019f94ce-8af7-7f93-b1d0-75dac014f62a"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 36,
+              "input_chars_p50": 32,
+              "input_chars_p95": 36,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "5210d525a6c285df28c4a3061c8b5ba2d79e366136e24379b834c7cbc894006f",
+            "returned": [
+              {
+                "body_sha256": "97f7da1f1b9d4b57901d3b47c18f02bf72bb1865935fb2a627d85433d0b0784c",
+                "fused_score": 0.103331216,
+                "unit_id": "019f94ce-8b33-71b3-9301-82d40b5c3a4a"
+              },
+              {
+                "body_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+                "fused_score": 0.10299573,
+                "unit_id": "019f94ce-8ab3-7581-b031-8d7793c53e0e"
+              }
+            ],
+            "trace_id": "019f94ce-8b5a-7f32-83d0-43f852322ce2"
+          }
+        ],
+        "attack_category": "temporal_qualifier",
+        "case_id": "adv_temporal_qualifier_02",
+        "error_kind": null,
+        "family": "drift",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd",
+            "unit_id": "019f94ce-8b73-7340-ab68-6ee4972faa4f"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+            "unit_id": "019f94ce-8b84-7a40-a6c8-3aa3f0125b1d"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 31,
+              "input_chars_p50": 27,
+              "input_chars_p95": 31,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "893b0c4fbd57a851aa17fac80c1af88dc7e4e0367012361b27f35e88a54396ae",
+            "returned": [
+              {
+                "body_sha256": "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8b73-7340-ab68-6ee4972faa4f"
+              }
+            ],
+            "trace_id": "019f94ce-8baf-70a3-a77d-0ade0b733062"
+          },
+          {
+            "correction_id": "cor_019f94ce-8bc4-7df0-8c2f-75f3f25a096b",
+            "created": [
+              "019f94ce-8bc4-7df0-8c2f-75f3f25a096b",
+              "019f94ce-8bc4-7df0-8c2f-7604425bd83e"
+            ],
+            "operation": "supersede",
+            "query_sha256": "893b0c4fbd57a851aa17fac80c1af88dc7e4e0367012361b27f35e88a54396ae",
+            "selected_unit_id": "019f94ce-8b73-7340-ab68-6ee4972faa4f",
+            "superseded": [
+              "019f94ce-8b73-7340-ab68-6ee4972faa4f"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 31,
+              "input_chars_p50": 27,
+              "input_chars_p95": 31,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "d0d762c5f9c24dbec27f66e000459972caea01c068a36bb8f2823859404b3a30",
+            "returned": [
+              {
+                "body_sha256": "7763b0585bc0c3445e83c3d6ca78939f35e077e1f982eafcdb18c7c5dc50dab0",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8bc4-7df0-8c2f-75f3f25a096b"
+              }
+            ],
+            "trace_id": "019f94ce-8bed-7e12-93fc-4d689ca60d74"
+          },
+          {
+            "correction_id": "cor_019f94ce-8c02-7251-b7ae-52b5d9e77928",
+            "created": [
+              "019f94ce-8c02-7251-b7ae-52b5d9e77928",
+              "019f94ce-8c02-7251-b7ae-52c925aee63f"
+            ],
+            "operation": "supersede",
+            "query_sha256": "d0d762c5f9c24dbec27f66e000459972caea01c068a36bb8f2823859404b3a30",
+            "selected_unit_id": "019f94ce-8bc4-7df0-8c2f-75f3f25a096b",
+            "superseded": [
+              "019f94ce-8bc4-7df0-8c2f-75f3f25a096b"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 35,
+              "input_chars_p50": 27,
+              "input_chars_p95": 35,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "e9b1e398e202a56dba1177d4ac0e9eaf0c066229426825a2208ba2208191e5a7",
+            "returned": [
+              {
+                "body_sha256": "2399df19209ef364d1f8b8c03d4bcbdd7e07dcfa1029b230e2606b8d2d6d4f36",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-8c02-7251-b7ae-52b5d9e77928"
+              },
+              {
+                "body_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+                "fused_score": 0.06888749,
+                "unit_id": "019f94ce-8b84-7a40-a6c8-3aa3f0125b1d"
+              }
+            ],
+            "trace_id": "019f94ce-8c2a-7761-a499-0b2b49776bcb"
+          }
+        ],
+        "attack_category": "temporal_qualifier",
+        "case_id": "adv_temporal_qualifier_13",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b",
+            "unit_id": "019f94ce-8c41-7ae2-af18-66cb96cfd3bc"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+            "unit_id": "019f94ce-8c54-71b3-befd-61c79e7422f2"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+            "unit_id": "019f94ce-8c66-70f1-be07-34940f555481"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 3,
+              "candidate_limit": 64,
+              "docs_scored": 3,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 42,
+              "input_chars_p50": 41,
+              "input_chars_p95": 42,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "eac8f677e38ff36aae8d4e26b46470fc921afce476139eb21b69d7598646d2cc",
+            "returned": [
+              {
+                "body_sha256": "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8c41-7ae2-af18-66cb96cfd3bc"
+              },
+              {
+                "body_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+                "fused_score": 0.0272866,
+                "unit_id": "019f94ce-8c54-71b3-befd-61c79e7422f2"
+              },
+              {
+                "body_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+                "fused_score": 0.026853481,
+                "unit_id": "019f94ce-8c66-70f1-be07-34940f555481"
+              }
+            ],
+            "trace_id": "019f94ce-8c97-7de1-ac57-36eff67f15d0"
+          },
+          {
+            "operation": "release",
+            "query_sha256": "eac8f677e38ff36aae8d4e26b46470fc921afce476139eb21b69d7598646d2cc",
+            "receipts": [
+              {
+                "deletion_generation": 2,
+                "invalidated_units": [
+                  "019f94ce-8c41-7ae2-af18-66cb96cfd3bc"
+                ],
+                "policy": "hard_delete",
+                "selected_unit_id": "019f94ce-8c41-7ae2-af18-66cb96cfd3bc",
+                "trace_ref": null,
+                "verification": "authorized_transaction_committed"
+              }
+            ],
+            "selected_unit_ids": [
+              "019f94ce-8c41-7ae2-af18-66cb96cfd3bc"
+            ],
+            "selection_strategy": "rank_one",
+            "threshold": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 42,
+              "input_chars_p50": 40,
+              "input_chars_p95": 42,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "95d000b76d7032c0bea6fe0924f637af1afc30a22a4fbb677ca48157e5d18d24",
+            "returned": [
+              {
+                "body_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+                "fused_score": 0.0682165,
+                "unit_id": "019f94ce-8c66-70f1-be07-34940f555481"
+              },
+              {
+                "body_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8c54-71b3-befd-61c79e7422f2"
+              }
+            ],
+            "trace_id": "019f94ce-8ccb-7e43-ba47-81aec4cfb923"
+          }
+        ],
+        "attack_category": "shared_attribute",
+        "case_id": "adv_shared_attribute_01",
+        "error_kind": null,
+        "family": "amnesia",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "release"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7",
+            "unit_id": "019f94ce-8ce3-7d20-9a97-d513166584c7"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+            "unit_id": "019f94ce-8cf2-7332-b626-c3e71246a1d0"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+            "unit_id": "019f94ce-8d02-7b70-ab4b-61e29d5c304a"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 3,
+              "candidate_limit": 64,
+              "docs_scored": 3,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 51,
+              "input_chars_p50": 51,
+              "input_chars_p95": 51,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "3816931a77003405deaa04e795485121b3efe0f66b25863ece0b4323e387f87f",
+            "returned": [
+              {
+                "body_sha256": "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8ce3-7d20-9a97-d513166584c7"
+              },
+              {
+                "body_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+                "fused_score": 0.06756683,
+                "unit_id": "019f94ce-8cf2-7332-b626-c3e71246a1d0"
+              },
+              {
+                "body_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+                "fused_score": 0.06778338,
+                "unit_id": "019f94ce-8d02-7b70-ab4b-61e29d5c304a"
+              }
+            ],
+            "trace_id": "019f94ce-8d31-7650-9b6f-6f1dfb2303ae"
+          },
+          {
+            "operation": "release",
+            "query_sha256": "3816931a77003405deaa04e795485121b3efe0f66b25863ece0b4323e387f87f",
+            "receipts": [
+              {
+                "deletion_generation": 3,
+                "invalidated_units": [
+                  "019f94ce-8ce3-7d20-9a97-d513166584c7"
+                ],
+                "policy": "hard_delete",
+                "selected_unit_id": "019f94ce-8ce3-7d20-9a97-d513166584c7",
+                "trace_ref": null,
+                "verification": "authorized_transaction_committed"
+              }
+            ],
+            "selected_unit_ids": [
+              "019f94ce-8ce3-7d20-9a97-d513166584c7"
+            ],
+            "selection_strategy": "rank_one",
+            "threshold": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 51,
+              "input_chars_p50": 41,
+              "input_chars_p95": 51,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "b4f42a914aa2742ced0d90af5c30548555a5fe5eb92d3058d413db32b352cba1",
+            "returned": [
+              {
+                "body_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+                "fused_score": 0.06911114,
+                "unit_id": "019f94ce-8cf2-7332-b626-c3e71246a1d0"
+              },
+              {
+                "body_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+                "fused_score": 0.068440154,
+                "unit_id": "019f94ce-8d02-7b70-ab4b-61e29d5c304a"
+              }
+            ],
+            "trace_id": "019f94ce-8d69-7fa2-8097-9abc80fdd3f8"
+          }
+        ],
+        "attack_category": "shared_attribute",
+        "case_id": "adv_shared_attribute_20",
+        "error_kind": null,
+        "family": "amnesia",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "release"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b",
+            "unit_id": "019f94ce-8d7f-7c33-8615-e0474b77590c"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "e1633b727366a3e3e58315f72151bca93fcb19acd98a585d6364c1835d64e2c6",
+            "unit_id": "019f94ce-8d92-7d60-918e-c44728d55698"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 63,
+              "input_chars_p50": 43,
+              "input_chars_p95": 63,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "528b7b23a1be08062484234b922cc19f65c1115b37239c83f15f792b17fd37ba",
+            "returned": [
+              {
+                "body_sha256": "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-8d7f-7c33-8615-e0474b77590c"
+              }
+            ],
+            "trace_id": "019f94ce-8dc0-7dc1-bce5-3dc27470163a"
+          },
+          {
+            "correction_id": "cor_019f94ce-8dd4-7cd3-977e-73969398a4f8",
+            "created": [
+              "019f94ce-8dd4-7cd3-977e-73969398a4f8",
+              "019f94ce-8dd4-7cd3-977e-73a5eb7f0022"
+            ],
+            "operation": "supersede",
+            "query_sha256": "528b7b23a1be08062484234b922cc19f65c1115b37239c83f15f792b17fd37ba",
+            "selected_unit_id": "019f94ce-8d7f-7c33-8615-e0474b77590c",
+            "superseded": [
+              "019f94ce-8d7f-7c33-8615-e0474b77590c"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 56,
+              "input_chars_p50": 43,
+              "input_chars_p95": 56,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "fc2f0d8b3741fabc98693fd5cd87768831d4b7c8891ba13de605f3cdabfeb6c7",
+            "returned": [
+              {
+                "body_sha256": "e1633b727366a3e3e58315f72151bca93fcb19acd98a585d6364c1835d64e2c6",
+                "fused_score": 0.06888749,
+                "unit_id": "019f94ce-8d92-7d60-918e-c44728d55698"
+              },
+              {
+                "body_sha256": "890fbc0f087f92bc0da5c876a4f243c103897eaac7ec8f0a7a3d2e8426f37239",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-8dd4-7cd3-977e-73969398a4f8"
+              }
+            ],
+            "trace_id": "019f94ce-8dfc-7951-aad4-9aa2ca8a6b5f"
+          }
+        ],
+        "attack_category": "compound_fact",
+        "case_id": "adv_compound_fact_01",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [
+          0
+        ],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "fail",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e",
+            "unit_id": "019f94ce-8e13-7be3-b87c-97959e653ea4"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "e162be38ee0fab8907dc13339f44f408dafd7506dae15c0fbf9c268abde45a0f",
+            "unit_id": "019f94ce-8e26-7772-b421-b5119046b663"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 65,
+              "input_chars_p50": 51,
+              "input_chars_p95": 65,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "b6922875631d62ddef66e9a76e0bc54b39723bab402ad045c25571556075f67c",
+            "returned": [
+              {
+                "body_sha256": "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-8e13-7be3-b87c-97959e653ea4"
+              }
+            ],
+            "trace_id": "019f94ce-8e53-7310-8708-0a6a0a32be26"
+          },
+          {
+            "correction_id": "cor_019f94ce-8e67-75b2-a6f1-7c5334fcd751",
+            "created": [
+              "019f94ce-8e67-75b2-a6f1-7c5334fcd751",
+              "019f94ce-8e67-75b2-a6f1-7c68adcc9fd9"
+            ],
+            "operation": "supersede",
+            "query_sha256": "b6922875631d62ddef66e9a76e0bc54b39723bab402ad045c25571556075f67c",
+            "selected_unit_id": "019f94ce-8e13-7be3-b87c-97959e653ea4",
+            "superseded": [
+              "019f94ce-8e13-7be3-b87c-97959e653ea4"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 2,
+              "candidate_limit": 64,
+              "docs_scored": 2,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 65,
+              "input_chars_p50": 51,
+              "input_chars_p95": 65,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "f0ed218c91324b0e7c120061d91befe1562b56d16af1ec7f121be3239c42030e",
+            "returned": [
+              {
+                "body_sha256": "b8266f1c5fa15d79fa544abdb3d4721adfb759273ce1268ed8cd1506ddb18cba",
+                "fused_score": 0.06866382,
+                "unit_id": "019f94ce-8e67-75b2-a6f1-7c5334fcd751"
+              },
+              {
+                "body_sha256": "e162be38ee0fab8907dc13339f44f408dafd7506dae15c0fbf9c268abde45a0f",
+                "fused_score": 0.06888749,
+                "unit_id": "019f94ce-8e26-7772-b421-b5119046b663"
+              }
+            ],
+            "trace_id": "019f94ce-8e95-7d61-bab9-8f12e243f4c4"
+          }
+        ],
+        "attack_category": "compound_fact",
+        "case_id": "adv_compound_fact_20",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [
+          0
+        ],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "fail",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a",
+            "unit_id": "019f94ce-8ead-75c2-bae6-561f02bda24f"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 57,
+              "input_chars_p50": 57,
+              "input_chars_p95": 57,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "2e278eac37d672b3d0a9c37818f552862e6aa888063be02952e5e018ed6341d5",
+            "returned": [
+              {
+                "body_sha256": "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8ead-75c2-bae6-561f02bda24f"
+              }
+            ],
+            "trace_id": "019f94ce-8ed3-7172-809d-96f7f4cb894d"
+          },
+          {
+            "correction_id": "cor_019f94ce-8ee7-70b1-ae96-e978c114f563",
+            "created": [
+              "019f94ce-8ee7-70b1-ae96-e978c114f563",
+              "019f94ce-8ee7-70b1-ae96-e9863e2f7fe8"
+            ],
+            "operation": "supersede",
+            "query_sha256": "2e278eac37d672b3d0a9c37818f552862e6aa888063be02952e5e018ed6341d5",
+            "selected_unit_id": "019f94ce-8ead-75c2-bae6-561f02bda24f",
+            "superseded": [
+              "019f94ce-8ead-75c2-bae6-561f02bda24f"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 51,
+              "input_chars_p50": 51,
+              "input_chars_p95": 51,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "49468b1ef39b824bc37b4f02636f46aabd1f21fa49bde7562b0311d3ecb6f174",
+            "returned": [
+              {
+                "body_sha256": "22c7f14b856a5674f07fd7115d41de548b61dfbb1da64447a77e6c41e438d966",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8ee7-70b1-ae96-e978c114f563"
+              }
+            ],
+            "trace_id": "019f94ce-8f08-74f3-9363-ba62a4984288"
+          },
+          {
+            "correction_id": "cor_019f94ce-8f1d-7a81-8ef8-f895e05509c7",
+            "created": [
+              "019f94ce-8f1d-7a81-8ef8-f895e05509c7",
+              "019f94ce-8f1d-7a81-8ef8-f8a1d4a8f33e"
+            ],
+            "operation": "supersede",
+            "query_sha256": "49468b1ef39b824bc37b4f02636f46aabd1f21fa49bde7562b0311d3ecb6f174",
+            "selected_unit_id": "019f94ce-8ee7-70b1-ae96-e978c114f563",
+            "superseded": [
+              "019f94ce-8ee7-70b1-ae96-e978c114f563"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 68,
+              "input_chars_p50": 68,
+              "input_chars_p95": 68,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "336bdc09c8666683536b6228588fe3e4a4485bdfd9144dc710e7076c039b7219",
+            "returned": [
+              {
+                "body_sha256": "9aeb5f709313207e6b5a1b7d79473b0a899db13fcfa77e824d4f759966ce2d96",
+                "fused_score": 0.1040022,
+                "unit_id": "019f94ce-8f1d-7a81-8ef8-f895e05509c7"
+              }
+            ],
+            "trace_id": "019f94ce-8f43-7150-8da2-07bdc628232f"
+          }
+        ],
+        "attack_category": "recursive_supersession",
+        "case_id": "adv_recursive_supersession_01",
+        "error_kind": null,
+        "family": "drift",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0",
+            "unit_id": "019f94ce-8f59-7901-bb3d-7bf466a648f1"
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 50,
+              "input_chars_p50": 50,
+              "input_chars_p95": 50,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "8c08053de1a864374a631524e15a3722096cf06314f9dc9f924abb0630ee0c9d",
+            "returned": [
+              {
+                "body_sha256": "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8f59-7901-bb3d-7bf466a648f1"
+              }
+            ],
+            "trace_id": "019f94ce-8f7c-7661-9d93-574acdc33fa3"
+          },
+          {
+            "correction_id": "cor_019f94ce-8f90-76b2-8a53-a85495c2adb8",
+            "created": [
+              "019f94ce-8f90-76b2-8a53-a85495c2adb8",
+              "019f94ce-8f90-76b2-8a53-a86668a8f6ae"
+            ],
+            "operation": "supersede",
+            "query_sha256": "8c08053de1a864374a631524e15a3722096cf06314f9dc9f924abb0630ee0c9d",
+            "selected_unit_id": "019f94ce-8f59-7901-bb3d-7bf466a648f1",
+            "superseded": [
+              "019f94ce-8f59-7901-bb3d-7bf466a648f1"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 56,
+              "input_chars_p50": 56,
+              "input_chars_p95": 56,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "4f1f7259a1e0110889d230112a8781464071a4e56e045b78d089c6b9322f7053",
+            "returned": [
+              {
+                "body_sha256": "ce7ed7db9905469ecac72599220405bfc96e73e5a2556dfeb59b3fd80a9005ab",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8f90-76b2-8a53-a85495c2adb8"
+              }
+            ],
+            "trace_id": "019f94ce-8faf-7743-8e7b-b7dddb82f3f5"
+          },
+          {
+            "correction_id": "cor_019f94ce-8fc3-76f1-9e00-1c04268ca34e",
+            "created": [
+              "019f94ce-8fc3-76f1-9e00-1c04268ca34e",
+              "019f94ce-8fc3-76f1-9e00-1c1f07b5d60c"
+            ],
+            "operation": "supersede",
+            "query_sha256": "4f1f7259a1e0110889d230112a8781464071a4e56e045b78d089c6b9322f7053",
+            "selected_unit_id": "019f94ce-8f90-76b2-8a53-a85495c2adb8",
+            "superseded": [
+              "019f94ce-8f90-76b2-8a53-a85495c2adb8"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": {
+              "batch_size": 256,
+              "candidate_count": 1,
+              "candidate_limit": 64,
+              "docs_scored": 1,
+              "failure": "none",
+              "granularity": "unit_body",
+              "input_chars_max": 68,
+              "input_chars_p50": 68,
+              "input_chars_p95": 68,
+              "max_length": 512,
+              "model": "fastembed:bge-reranker-base",
+              "provider": "fastembed"
+            },
+            "operation": "recall",
+            "query_sha256": "d73e331b30786fe624d7c0e4807a722817a8eff2795f4eee58881ba275d71039",
+            "returned": [
+              {
+                "body_sha256": "f8e27a0485650b0e34ff3231989e88a268d48a6110306941973b1f75ee6a8d00",
+                "fused_score": 0.0693348,
+                "unit_id": "019f94ce-8fc3-76f1-9e00-1c04268ca34e"
+              }
+            ],
+            "trace_id": "019f94ce-8fe5-7940-9319-aca1cad40de9"
+          }
+        ],
+        "attack_category": "recursive_supersession",
+        "case_id": "adv_recursive_supersession_20",
+        "error_kind": null,
+        "family": "drift",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      }
+    ],
+    "failed": 3,
+    "families": {
+      "amnesia": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 2,
+        "total": 2
+      },
+      "decay": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 1,
+        "total": 1
+      },
+      "drift": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 3
+      },
+      "supersession": {
+        "failed": 3,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 6
+      }
+    },
+    "not_applicable": 0,
+    "passed": 9,
+    "total": 12,
+    "wall_seconds": 2.1023032500233967
+  },
+  "runtime": {
+    "adapter_path": "scripts/run_forgeteval.py",
+    "adapter_sha256": "2b3b985c169bc6a833cd58169a28ec25e36737e213c497a90ef7d168de1d0bcb",
+    "argv": [
+      "scripts/run_forgeteval.py",
+      "--database-url",
+      "postgres://memphant:memphant@localhost:5432/memphant",
+      "--official-dir",
+      "docs/build-log/artifacts/tri-sota-completion/forgeteval/official",
+      "--suite",
+      "adversarial",
+      "--out",
+      "docs/build-log/artifacts/next-evidence/forgeteval/n12-cross-rerank-rank-one.json",
+      "--port",
+      "39437",
+      "--release-selection",
+      "rank_one",
+      "--cross-rerank",
+      "--reranker",
+      "fastembed",
+      "--case-id",
+      "adv_paraphrase_supersession_01",
+      "--case-id",
+      "adv_paraphrase_supersession_20",
+      "--case-id",
+      "adv_negation_trap_01",
+      "--case-id",
+      "adv_negation_trap_02",
+      "--case-id",
+      "adv_temporal_qualifier_02",
+      "--case-id",
+      "adv_temporal_qualifier_13",
+      "--case-id",
+      "adv_shared_attribute_01",
+      "--case-id",
+      "adv_shared_attribute_20",
+      "--case-id",
+      "adv_compound_fact_01",
+      "--case-id",
+      "adv_compound_fact_20",
+      "--case-id",
+      "adv_recursive_supersession_01",
+      "--case-id",
+      "adv_recursive_supersession_20"
+    ],
+    "cli": "target/release/memphant-cli",
+    "cli_sha256": "8987ebe1d3a3a6f75cd7536dd206c2754cf2b31511a1382060ec4ff082b506bd",
+    "command": "python3 scripts/run_forgeteval.py --database-url postgres://memphant:memphant@localhost:5432/memphant --official-dir docs/build-log/artifacts/tri-sota-completion/forgeteval/official --suite adversarial --out docs/build-log/artifacts/next-evidence/forgeteval/n12-cross-rerank-rank-one.json --port 39437 --release-selection rank_one --cross-rerank --reranker fastembed --case-id adv_paraphrase_supersession_01 --case-id adv_paraphrase_supersession_20 --case-id adv_negation_trap_01 --case-id adv_negation_trap_02 --case-id adv_temporal_qualifier_02 --case-id adv_temporal_qualifier_13 --case-id adv_shared_attribute_01 --case-id adv_shared_attribute_20 --case-id adv_compound_fact_01 --case-id adv_compound_fact_20 --case-id adv_recursive_supersession_01 --case-id adv_recursive_supersession_20",
+    "cross_rerank": true,
+    "database": "run-owned ephemeral scratch Postgres",
+    "embed_model": "small",
+    "migrations": {
+      "aggregate_sha256": "4761986ff058077cef62bfb3c1bfeba8de0b987844f91b1fc3fff0c22ed80770",
+      "files": [
+        {
+          "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
+          "sha256": "1efe280d9bfdac73f22aeec53b92ca5e7b4827c4af96a0dc10cd42c406be70a5"
+        },
+        {
+          "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
+          "sha256": "5fa198008ce6775ca31ec8661b4ae70fd7d319de34bfaa47659a0702d4d79341"
+        },
+        {
+          "path": "memphant_migrations/versions/20260724_003_worker_claim_throughput.sql",
+          "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
+        }
+      ]
+    },
+    "mode": "fast",
+    "release_selection": "rank_one",
+    "repository": {
+      "git_head": "11f957f0d8e1d90643f3b068a0297a1f6080f0e3",
+      "tracked_diff_sha256": "a4b593b2e4433b088fc0b99890e2838c0a3b5d0c38885fd5fe1248b138eb8bfe",
+      "tracked_dirty": true,
+      "tracked_file_count": 1536,
+      "tracked_worktree_sha256": "33686c1c820ca71b709f2bd491321376eabc0e508bb58ce77a9d37c8dc5e3670"
+    },
+    "reranker": "fastembed",
+    "server": "target/release/memphant-server",
+    "server_sha256": "7e94f7314ac638105ff9c1a6051edddb76c3e1127a3c3a4e5be260e9f9b6a29e"
+  },
+  "suite": "adversarial",
+  "upstream": {
+    "adapter_sha256": "f1eff0efa89437e8c44ce6f60b5a88280592094c2c6b9b955524cc0262c3c307",
+    "adversarial_sha256": "cfdf125aba5b90975634ce48bdf0f078397a72a1cc9dd1aa5bb59ab067c322d3",
+    "commit": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
+    "license": "MIT",
+    "license_sha256": "cdf599e8c8ce18ca59dae4d6617f06cb59433752203e703c9defb274b40c6657",
+    "repository": "https://github.com/deeplethe/lethe.git",
+    "runner_sha256": "4fdc672e2c19eec7f3da30fda5a541699a0fe07e1a00a4bae67fa6343800162e",
+    "templates_sha256": "39072bea33402e5cbf66a6c1101504a337ab9f5f3bd90d5402afc7727c4516a8"
+  }
+}
