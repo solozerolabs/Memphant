@@ -35,21 +35,24 @@ Build a new branch from the actual reviewed landing base and cherry-pick logical
 groups in this order, resolving each group against that base and rerunning its
 narrow tests before continuing:
 
-1. B4 proof spine: `814f8d7f`.
-2. Current Python/public contracts: `2c2358d6`.
-3. Recall retirement plus proof: `2cd157a4`, `68192ee9`.
-4. Durable paid-run authorization/ledger: `197f0ddf`, `84f7445a`.
-5. ForgetEval adapter: `e9755cd4`.
-6. Free-gate and throughput/migration fixes: `cc5c6c7c` (includes migration
+1. Initial terminal audit scaffold: `2351fa6f`.
+2. B4 proof spine: `814f8d7f`.
+3. Current Python/public contracts: `2c2358d6`.
+4. Recall retirement plus proof: `2cd157a4`, `68192ee9`.
+5. Durable paid-run authorization/ledger: `197f0ddf`, `84f7445a`.
+6. ForgetEval adapter: `e9755cd4`.
+7. Free-gate and throughput/migration fixes: `cc5c6c7c` (includes migration
    `20260724_003_worker_claim_throughput.sql`).
-7. C3 identity/adapter chain: `1471ac82`, `8617fa93`, `a9d7e73a`, `c4a6c97b`,
+8. C3 identity/adapter chain: `1471ac82`, `8617fa93`, `a9d7e73a`, `c4a6c97b`,
    `d8933695`, `c3f610bc`, `e1d019c0`, `9c37fff3`.
-8. Unchunked canonical citation repair: `ee4de593`.
-9. Final C3/ForgetEval evidence: `8ccdc407` only after every implementation
+9. Unchunked canonical citation repair: `ee4de593`.
+10. Final C3/ForgetEval evidence: `8ccdc407` only after every implementation
    dependency above.
-10. Post-review proof-integrity implementation and evidence: `aae4b97a`,
+11. Initial terminal reconciliation documents: `8e6a2d1c`.
+12. Post-review proof-integrity implementation and evidence: `aae4b97a`,
     `847a5059`.
-11. Final regression-only repairs: `1915dfa8`, `6b1efe86`.
+13. Final regression-only repairs: `1915dfa8`, `6b1efe86`, `d590b7dc`.
+14. Apply the commit containing this corrected manifest last.
 
 The private Syndai branch is separate and depends on the B4 public receipt
 contract plus `ee4de593`. Land its exact private manifest only after compatible
