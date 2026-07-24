@@ -54,9 +54,11 @@ target. Those non-target events were not adjudicated distractors. Golden SHA-256
 The clean full-volume packaged run compiled all 64,056 jobs with 64,014
 episodic projections, 42 exact deduplications, zero dead/pending jobs, no
 degraded recalls, and both tenant negatives passing. No-model Fast retrieval
-scored Recall@5 = 0/40 and Recall@10 = 0/40. Machine proof:
-`docs/build-log/artifacts/c3-public-code-lane-v3/provenance-final.json`
+scored Recall@5 = 0/40 and Recall@10 = 0/40. The sealed historical provenance
+is `docs/build-log/artifacts/c3-public-code-lane-v3/provenance-final.json`
 (SHA-256 `ef80b2ddfacf5eb08313cd2a59f63b8d94f65a07ae627c8d79941a6aa9452581`).
+Its hash-bound machine-readable rejection receipt is
+`docs/build-log/artifacts/c3-public-code-lane-v3/rejection-receipt.json`.
 
 This v3 issue-to-late-diagnostic bank is rejected as an acceptance artifact.
 The source issue does not causally or semantically identify the automatically

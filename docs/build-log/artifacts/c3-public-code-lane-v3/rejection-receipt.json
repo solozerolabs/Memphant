@@ -1,0 +1,23 @@
+{
+  "schema": "memphant.eval.rejection-receipt.v1",
+  "status": "rejected_candidate_bank",
+  "artifact": "provenance-final.json",
+  "artifact_sha256": "ef80b2ddfacf5eb08313cd2a59f63b8d94f65a07ae627c8d79941a6aa9452581",
+  "golden_sha256": "2fc84252987e01bc84c7beea12d3b8d5bb414f7d9b175824be9a00569def91d5",
+  "result": {
+    "recall_at_5": 0.0,
+    "recall_at_10": 0.0,
+    "questions": 40
+  },
+  "rejection_reasons": [
+    "The source issue does not causally or semantically identify the automatically selected late diagnostic.",
+    "The non-target events were not adjudicated as distractors.",
+    "Nineteen of forty answers are path-varied instances of a generic file-not-found template."
+  ],
+  "non_claims": [
+    "The result does not measure MemPhant adversarial continuity.",
+    "The result does not establish failure or success against a validated distractor-controlled bank.",
+    "The historical deterministic_file_search field records input presence, not control execution."
+  ],
+  "interpretation": "Fast lexical recall did not return the arbitrary selected late targets from source-issue text."
+}

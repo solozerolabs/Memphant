@@ -241,7 +241,7 @@ def build_goldens(corpus: list[dict], count: int) -> list[dict]:
         if len(goldens) == count:
             break
     if len(goldens) != count:
-        raise ValueError(f"only {len(goldens)} adversarial diagnostic goldens available")
+        raise ValueError(f"only {len(goldens)} diagnostic goldens available")
     if len(repositories) < min(2, count):
         raise ValueError("goldens must span at least two repositories")
     return goldens
