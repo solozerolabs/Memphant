@@ -4,7 +4,7 @@
   "authorization": {
     "authorized_by": "user in Codex task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
     "authorized_at": "2026-07-24T18:54:35Z",
-    "authorization_scope_sha256": "409c76a5b95df670d8e5e372794de6c7dfe68eb622cfb767da2a3f606a89d696"
+    "authorization_scope_sha256": "a5ccda4047bd70fd76800e06bb48170e88427b29216b4943a7a2396f6e1c1eb3"
   },
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",

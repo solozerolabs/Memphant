@@ -51,6 +51,14 @@ def test_forgetting_child_packet_and_its_code_hashes_are_exact() -> None:
     child_path = ROOT / campaign["authoritative_child_packet"]
     assert campaign["authoritative_child_packet_sha256"] == sha256_file(child_path)
     child = json.loads(child_path.read_text(encoding="utf-8"))
+    scope = {
+        key: value
+        for key, value in child.items()
+        if key not in {"status", "authorization"}
+    }
+    assert child["authorization"]["authorization_scope_sha256"] == hashlib.sha256(
+        json.dumps(scope, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     assert child["code"]["proposal_generator_sha256"] == sha256_file(
         ROOT / child["code"]["proposal_generator"]
     )
