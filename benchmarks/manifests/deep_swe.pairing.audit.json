@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "status": "REJECTED_AS_N12_MEMORY_GATE_TOO_FEW_CAUSAL_PAIRS_USE_AS_UNPAIRED_ROBUSTNESS_ONLY",
+  "benchmark": "datacurve-ai/deep-swe",
+  "release": {
+    "git_revision": "e016041a6ccf8da29906afc9a3f5a8df940a1f78",
+    "git_tree": "da6af978736343573c9f9560648c7a7f5e527a73",
+    "task_count": 113,
+    "repeated_repository_task_count": 36,
+    "repeated_repository_count": 15,
+    "license": "Apache-2.0 for Datacurve contributions; upstream licenses remain separate",
+    "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "manifest_sha256": "f987b656fe75e20eeb7a050ec1b3c5d692cc8f102dfe7caca45906616b5ae879",
+    "dataset_toml_sha256": "546dc070d1f4349c08d8cf8e616e2488c5dbe212f8cc02eb7f50207cbe10f4b2",
+    "dataset_name": "datacurve/deep-swe-1-1",
+    "minimum_pier_version": "0.3.0"
+  },
+  "admission": {
+    "required_unique_target_pairs": 12,
+    "accepted_unique_target_pairs": 3,
+    "rule": "same repository is necessary but insufficient; require an upstream ancestor base plus exact shared subsystem and transferable error/workflow evidence",
+    "result": "insufficient causal pairs for a paired DeepSWE memory claim"
+  },
+  "visibility_contract": {
+    "target_agent_visible": ["task metadata excluding verifier and environment secrets", "instruction.md", "pristine repository at base commit"],
+    "target_agent_hidden": ["solution/", "tests/", "reference solution hashes", "target verifier output before grading"],
+    "treatment_memory_allowed": ["disjoint prior task agent trajectory", "disjoint prior task verifier output", "lesson derived only after the prior verifier settles"],
+    "treatment_memory_forbidden": ["prior reference solution/", "prior hidden tests/", "target solution/", "target tests/"],
+    "model_calls_executed": 0,
+    "container_runs_executed": 0
+  },
+  "accepted_pairs": [
+    {
+      "prior": "koota-deferred-mutation-buffer",
+      "target": "koota-query-predicates",
+      "prior_base": "31cbe9a1a26b3822a6c82ad50132508087cd24bc",
+      "target_base": "9c434858b2b522002f8c5eb4a554fa8836a7cf3c",
+      "lineage": "prior_base_is_upstream_ancestor_of_target_base",
+      "prior_commit_time": "2026-01-27T17:39:01-05:00",
+      "target_commit_time": "2026-03-18T17:37:19-04:00",
+      "subsystem": "Koota query iteration, deferred observability, trait mutation, and world settlement",
+      "reusable_lesson": "The prior task teaches scoped mutation queues, updateEach flush boundaries, and notifying from final state; the target must preserve the same delayed-observability invariant when predicate dependencies mutate during iteration.",
+      "non_leakage": "The prior task contains no predicate API, dependency validation, query truth-transition evaluator, or target tests.",
+      "shared_solution_files": ["packages/core/src/query/query-result.ts", "packages/core/src/trait/trait.ts", "packages/core/src/world/types.ts", "packages/core/src/world/world.ts"],
+      "prior_lock": ["sha256:5bfd7ae71da13f04b496f6d3d0cd3ec4922c726d8c7504b281d292cbb9b4eef1", "740e7847d71f883e8897b409693689ef06c0099bc333cfa78932f7e70e4b4077", "3160cc2a32668e3aba0b1fdd136a114e8094e856c7ebb76e76a19a21eeebc1a3", "af4f3463f8b40ed7dd999cff618c7b697db4e03318888cd653cf83bf235e49d3"],
+      "target_lock": ["sha256:eb321a0531267251d3e8beb436a6eebfe74f7b2abc4521727adc3d3ce48ae933", "eb244417839f2591a1ac02ddd06f719db942d8d81cbb703c873a6d71d7749e0e", "4fb7122afe882a7c9dfdb21c78bbda36e82e5ebcb004913b35d0b2baffb42681", "7960fb8e48de9b8a381d52e23c4cdaf64afd5e09d6e8a6e27da2b7a4d5ba3e9f"]
+    },
+    {
+      "prior": "koota-deferred-mutation-buffer",
+      "target": "koota-pair-relation-tracking",
+      "prior_base": "31cbe9a1a26b3822a6c82ad50132508087cd24bc",
+      "target_base": "9c434858b2b522002f8c5eb4a554fa8836a7cf3c",
+      "lineage": "prior_base_is_upstream_ancestor_of_target_base",
+      "prior_commit_time": "2026-01-27T17:39:01-05:00",
+      "target_commit_time": "2026-03-18T17:37:19-04:00",
+      "subsystem": "Koota relation-pair mutation identity and final-state query notifications",
+      "reusable_lesson": "The prior task teaches relation target identity, cancellation of opposing buffered events, exclusive replacement, destruction, and final-state notification; those are the target's exact pair-tracking error modes.",
+      "non_leakage": "The prior task contains no tracking modifier implementation, observation-window API, wildcard modifier behavior, or target tests.",
+      "shared_solution_files": ["packages/core/src/entity/entity-methods-patch.ts", "packages/core/src/query/query-result.ts", "packages/core/src/world/types.ts", "packages/core/src/world/world.ts"],
+      "prior_lock": ["sha256:5bfd7ae71da13f04b496f6d3d0cd3ec4922c726d8c7504b281d292cbb9b4eef1", "740e7847d71f883e8897b409693689ef06c0099bc333cfa78932f7e70e4b4077", "3160cc2a32668e3aba0b1fdd136a114e8094e856c7ebb76e76a19a21eeebc1a3", "af4f3463f8b40ed7dd999cff618c7b697db4e03318888cd653cf83bf235e49d3"],
+      "target_lock": ["sha256:6264a513cbd0960e5eb810cf6d5a7463f8cf6e984d5119ec5325dd32df81aaed", "7b15510d617d38ac1fab6cdf902aa577aedb34516e047bd469f4e8ec868d778b", "715d824128a7c8a6ed41b89f1a855de995f4cd9da933e987c4f708582e7acc8c", "a5702a062000b6c1e717e061bac7e5c1b8423b42ecbd7af34d19cdf596d03b3c"]
+    },
+    {
+      "prior": "testem-bail-on-test-failure",
+      "target": "testem-per-launcher-reports",
+      "prior_base": "06a1adb7a70e85e7322d8cfae3181508785de95d",
+      "target_base": "158f61ea91c9613d2011c41ee9be40ada1d7a307",
+      "lineage": "prior_base_is_upstream_ancestor_of_target_base",
+      "prior_commit_time": "2025-11-24T18:22:31Z",
+      "target_commit_time": "2026-03-10T08:44:39+01:00",
+      "subsystem": "Testem reporter lifecycle, launcher-scoped accounting, fanout, and finish-time settlement",
+      "reusable_lesson": "The prior task teaches Reporter state routing into TAP/XUnit, launcher-specific accounting, suppression, reset, and idempotent finalization; the target needs the same lifecycle discipline for partitioned output.",
+      "non_leakage": "The prior task contains no launcher path templates, ReportFile expansion, name sanitization, or target tests.",
+      "shared_solution_files": ["lib/config.js", "lib/reporters/tap_reporter.js", "lib/reporters/xunit_reporter.js", "lib/utils/reporter.js"],
+      "prior_lock": ["sha256:f233f37508d718f6fd59f1af0fdfe3da3b231959f50897009011aeb7c45d6053", "58a959e6c0b7a5db029b9958a940b3d66e66d4a3520acfaadc1171375451a1c4", "faf464f98d487368a83024ba64ca59087cdc4d113240c0b5f290ab45f7df7b58", "26ba87a5221ce6351f768bf5252731725e07fc8bf0d5634f0bf7d319cb0ec2bb"],
+      "target_lock": ["sha256:1ff2c57eec09b383fe8b17e76c63da5f4e9e59592ce40a0573345743c121838f", "f99cf0b15e79d005972f28c6c95c8eb5b5d623701afe21d348245f38ce6b9970", "8c10d688198461ea8a244d0575f220c19428dcd5163f7316e9601c0225d71ef1", "2f6be8bdd6d0f17b800c9213bd52d0cfcd780944fec4d8ed8164cb4d87980a9f"]
+    }
+  ],
+  "rejected_repository_groups": {
+    "PyCQA/bandit": "manager and Issue overlap does not establish a reusable contract across nosec parsing, taint analysis, and incremental caching; one task also uses a different base",
+    "Textualize/textual": "RichLog reflow and Kitty keyboard protocol are independent subsystems",
+    "abs-lang/abs": "module loading and stepped slice parsing share a runtime but no task-specific workflow",
+    "capricorn86/happy-dom": "IntersectionObserver geometry and fetch-body shutdown are independent subsystems",
+    "celery/kombu": "both tasks use the same base, so neither is an earlier experience for the other",
+    "d5/tengo": "destructuring syntax and callable isolation overlap only generic VM infrastructure and use the same base",
+    "dynamodb-toolbox/dynamodb-toolbox": "schema actions overlap, but both tasks use the same base and neither is prior",
+    "encode/httpx": "response parser proximity is real, but all three tasks use the same base and have no natural earlier trajectory",
+    "fastapi/fastapi": "route propagation overlap is real, but both tasks use the same base and neither is prior",
+    "helm/helm": "value coalescing and manifest output are separate mechanisms and use the same base",
+    "mattn/anko": "typed bindings and default arguments use different bases but no defensible shared target mechanism",
+    "open-policy-agent/opa": "template reconstruction and profiling overlap rego.go but use the same base and teach different mechanisms",
+    "platers/obsidian-linter": "rule-runner proximity is insufficient because all three tasks use the same base",
+    "pmndrs/koota": "only the three admitted directed relations survive; snapshot/rollback and composite aspects do not teach the target mechanisms",
+    "testem/testem": "only the admitted bail-to-report direction survives upstream chronology"
+  }
+}
