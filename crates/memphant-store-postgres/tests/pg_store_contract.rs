@@ -128,6 +128,7 @@ async fn connect() -> PgStore {
 #[tokio::test]
 #[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
 async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied() {
+    let latest = MIGRATIONS.last().expect("at least one embedded migration");
     let database_url = db_url();
     let pool = sqlx::PgPool::connect(&database_url)
         .await
@@ -149,8 +150,8 @@ async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied()
         .await
         .expect_err("bootstrap-only schema must be unready");
     assert!(
-        error.to_string().contains(SCHEMA_COMPAT_REVISION),
-        "readiness error must name the required schema floor: {error}"
+        error.to_string().contains(latest.0),
+        "readiness error must name the required migration head: {error}"
     );
 
     let app_login = format!("mp_readiness_{}", Uuid::new_v4().simple());
@@ -181,10 +182,12 @@ async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied()
         .await
         .expect_err("bootstrap-only schema must be unready under memphant_app");
 
-    sqlx::raw_sql(MIGRATIONS[1].1)
-        .execute(&pool)
-        .await
-        .expect("apply required forward migration");
+    for (_, migration) in MIGRATIONS.iter().skip(1) {
+        sqlx::raw_sql(*migration)
+            .execute(&pool)
+            .await
+            .expect("apply required forward migration");
+    }
     store
         .ping()
         .await
@@ -206,7 +209,7 @@ async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied()
                     coalesce(bool_or(version = $1 and schema_compat_revision = $2), false)
              from memphant.schema_migrations",
         )
-        .bind(MIGRATIONS[1].0)
+        .bind(MIGRATIONS.last().expect("embedded migration head").0)
         .bind(SCHEMA_COMPAT_REVISION)
         .fetch_one(&mut *app_tx)
         .await
@@ -216,7 +219,7 @@ async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied()
     assert_eq!(
         readiness_as_app(&pool).await,
         (
-            MIGRATIONS[1].0.to_string(),
+            latest.0.to_string(),
             SCHEMA_COMPAT_REVISION.to_string(),
             true,
         ),
@@ -2419,7 +2422,8 @@ async fn resource_retain_reflect_recall_round_trips_via_service() {
             source_ref: "pg-contract:resource".to_string(),
             observed_at: CLOCK.0.to_string(),
             kind: Some(memphant_types::ResourceKind::Document),
-            content_hash: "sha256:deploy-runbook".to_string(),
+            content_hash: "sha256:15cae6da6e921e32a0dd42efdb3fcec54e8de2b4b45824a46f2b7768dd78448b"
+                .to_string(),
             mime_type: "text/markdown".to_string(),
             revision: Some("rev-42".to_string()),
             body: Some("Deploy runbook: canary first, then roll forward regions.".to_string()),
