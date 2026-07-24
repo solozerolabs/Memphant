@@ -107,3 +107,21 @@ tenant-bound, auditable mutation contract and are not imported here.
 - `docs/build-log/artifacts/next-evidence/forgeteval/confirmations-selection-only-v3.385.json`
 - `docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-selection-only-confirmed.json`
 - `docs/build-log/artifacts/next-evidence/authorization-request.json`
+
+## Final verification
+
+After the last code change, the complete repository gate passed:
+
+- Python: 812 passed / 12 skipped; the skipped database tests were then run by
+  the explicit scratch-Postgres leg.
+- Public/private spec drift: clean.
+- `cargo fmt`, clippy with warnings denied, all-target/all-feature Rust tests,
+  and Rust doc tests: green.
+- Ephemeral scratch-Postgres store/worker tests: 77 passed.
+- Provider lint: clean for plain Postgres, Supabase, and Neon.
+- Migration dry-run: three ordered migrations.
+- Real server/worker/MCP/Postgres E2E: all checks passed.
+
+Final review found no credential material in the committed proposal or attempt
+artifacts. The public worktree and private mirror were clean after their final
+commits.
