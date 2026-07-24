@@ -567,6 +567,150 @@ pub struct RecallCitation {
     pub resource_id: Option<ResourceId>,
     #[serde(default)]
     pub derived_from_unit_ids: Vec<UnitId>,
+    pub verification: CitationVerification,
+}
+
+pub const EVIDENCE_RECEIPT_CONTRACT_REVISION: &str = "memphant.evidence_receipt.v1";
+pub const EVIDENCE_DISPOSITION_CONTRACT_REVISION: &str = "memphant.evidence_disposition.v1";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CitationVerification {
+    Verified { receipt: Box<EvidenceReceipt> },
+    Unverified { reason: CitationUnverifiedReason },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CitationUnverifiedReason {
+    DerivedReference,
+    MissingCanonicalCitation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceSourceKind {
+    Episode,
+    Resource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvidenceReceipt {
+    pub contract_revision: String,
+    pub citation_id: Uuid,
+    pub trace_id: TraceId,
+    pub tenant_id: TenantId,
+    pub data_subject_id: SubjectId,
+    pub scope_id: ScopeId,
+    pub actor_id: ActorId,
+    pub agent_node_id: AgentNodeId,
+    pub subject_generation: u64,
+    pub memory_unit_id: UnitId,
+    pub source_kind: EvidenceSourceKind,
+    pub source_id: Uuid,
+    pub source_ref: String,
+    pub source_revision: Option<String>,
+    pub source_body_sha256: String,
+    pub span: CitationSpan,
+    pub quote_sha256: String,
+    pub source_trust: TrustLevel,
+    pub query_hash: String,
+    pub policy_revision: String,
+    pub engine_version: String,
+    pub schema_compat_revision: String,
+    pub recalled_at: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum EvidenceStatus {
+    Supported,
+    ContradictsPremise,
+    NearMatch,
+    Insufficient,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AnswerPolicy {
+    AnswerNormally,
+    StatePremiseFalse,
+    SayExactTargetNotFound,
+    AbstainUnknown,
+}
+
+impl EvidenceStatus {
+    pub const fn answer_policy(self) -> AnswerPolicy {
+        match self {
+            Self::Supported => AnswerPolicy::AnswerNormally,
+            Self::ContradictsPremise => AnswerPolicy::StatePremiseFalse,
+            Self::NearMatch => AnswerPolicy::SayExactTargetNotFound,
+            Self::Insufficient => AnswerPolicy::AbstainUnknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvidenceDisposition {
+    pub contract_revision: String,
+    pub status: EvidenceStatus,
+    pub answer_policy: AnswerPolicy,
+    pub reason: String,
+}
+
+#[cfg(test)]
+mod evidence_contract_tests {
+    use super::{
+        AnswerPolicy, EVIDENCE_DISPOSITION_CONTRACT_REVISION, EvidenceDisposition, EvidenceStatus,
+    };
+
+    #[test]
+    fn evidence_status_values_and_answer_policies_are_closed_and_deterministic() {
+        let cases = [
+            (
+                EvidenceStatus::Supported,
+                "supported",
+                AnswerPolicy::AnswerNormally,
+            ),
+            (
+                EvidenceStatus::ContradictsPremise,
+                "contradicts-premise",
+                AnswerPolicy::StatePremiseFalse,
+            ),
+            (
+                EvidenceStatus::NearMatch,
+                "near-match",
+                AnswerPolicy::SayExactTargetNotFound,
+            ),
+            (
+                EvidenceStatus::Insufficient,
+                "insufficient",
+                AnswerPolicy::AbstainUnknown,
+            ),
+        ];
+        for (status, wire, policy) in cases {
+            assert_eq!(
+                serde_json::to_string(&status).unwrap(),
+                format!("\"{wire}\"")
+            );
+            assert_eq!(status.answer_policy(), policy);
+        }
+        assert!(serde_json::from_str::<EvidenceStatus>("\"unknown\"").is_err());
+    }
+
+    #[test]
+    fn evidence_disposition_rejects_unknown_fields() {
+        let value = serde_json::json!({
+            "contract_revision": EVIDENCE_DISPOSITION_CONTRACT_REVISION,
+            "status": "insufficient",
+            "answer_policy": "abstain_unknown",
+            "reason": "no exact support",
+            "confidence": 0.99
+        });
+        assert!(serde_json::from_value::<EvidenceDisposition>(value).is_err());
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -723,6 +867,7 @@ pub struct DeepRecallSummary {
     /// Ordered provider generation IDs for every accepted model turn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub generation_ids: Vec<String>,
+    pub evidence: EvidenceDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

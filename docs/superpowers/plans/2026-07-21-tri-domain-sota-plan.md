@@ -344,6 +344,18 @@ team verdict). Each item carries an n=12-style falsification gate.
    answer-policy protocol (supported / contradicts-premise / near-match /
    insufficient) in Deep's output contract. Post-Mem0/Zep-scandal, verifiable
    receipts are a positioning weapon no competitor has.
+   **OUTCOME (2026-07-23): BUILT / MECHANISM PROVEN.** Recall now rejoins
+   selected units to the existing canonical citation rows and immutable source
+   bytes, validates the exact tenant/context/source/span/content/quote/trust/ACL
+   bindings, and emits `memphant.evidence_receipt.v1` inside the existing trace.
+   ID-only and derived references are explicitly unverified. The MemPhant-owned
+   closed status quartet maps deterministically to answer policy; capped/partial
+   Deep is insufficient, and semantic claims without a verified receipt fail
+   closed. The official LongMemEval-V2 adapter does not expose this as a public
+   wire contract, so no upstream-compatibility claim is made. No migration,
+   second evidence store, paid call, Deep promotion, rung, launch, or SOTA claim
+   moved. Proof: `docs/build-log/2026-07-23-b4-verified-receipts.md` and
+   `docs/build-log/artifacts/b4-verified-receipts/gate-summary.json`.
 5. **B5 — Deletion list** (KISS; codebase team §f): retired heuristic rerank
    stage + trace fields, `RecallMode::Balanced` (behaviorally Fast, zero
    users), WS-0 spike stubs, l4-naming shims, spike dirs, synthetic rung YAML

@@ -1,0 +1,36 @@
+{
+  "schema_version": "memphant.b4_gate_summary.v1",
+  "date": "2026-07-23",
+  "verdict": "mechanism_pass",
+  "paid_calls": 0,
+  "settled_cost_usd": 0.0,
+  "tests": {
+    "passed": 91,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 255,
+    "skipped": 0
+  },
+  "suites": [
+    {"name": "memphant-types evidence_contract_tests", "passed": 2},
+    {"name": "memphant-core evidence_receipt_tests", "passed": 3},
+    {"name": "memphant-core deep_recall", "passed": 18},
+    {"name": "memphant-runtime deep_recall_openrouter", "passed": 37},
+    {"name": "memphant-core resource verified receipt", "passed": 1},
+    {"name": "memphant-server rest_contract", "passed": 24},
+    {"name": "memphant-mcp mcp_schema_contract", "passed": 5},
+    {"name": "memphant-eval trace schema snapshot", "passed": 1}
+  ],
+  "generated_artifacts": [
+    "openapi/memphant.v1.json",
+    "mcp/memphant.tools.v1.json",
+    "examples/evals/trace-schema.v1.json"
+  ],
+  "non_claims": [
+    "not a repository-wide gate",
+    "not reader-QA",
+    "not Deep promotion",
+    "not dogfood or cutover",
+    "not launch or SOTA"
+  ]
+}

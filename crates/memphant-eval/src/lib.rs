@@ -97,7 +97,12 @@ impl DeepRecallProvider for EvalDeepProvider {
             .into_iter()
             .take(8)
             .map(|(_, _, _, source_id)| source_id)
-            .collect();
+            .collect::<Vec<_>>();
+        let evidence_status = if source_ids.is_empty() {
+            EvidenceStatus::Insufficient
+        } else {
+            EvidenceStatus::Supported
+        };
         Box::pin(async move {
             Ok(DeepRecallProviderResult {
                 status: DeepRecallStatus::Completed,
@@ -110,6 +115,12 @@ impl DeepRecallProvider for EvalDeepProvider {
                 generation_ids: Vec::new(),
                 observed_provider: Some("memphant-eval-local".to_string()),
                 observed_model: Some("deterministic-manifest-search-v1".to_string()),
+                evidence: EvidenceDisposition {
+                    contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+                    status: evidence_status,
+                    answer_policy: evidence_status.answer_policy(),
+                    reason: "deterministic query-overlap evidence classification".to_string(),
+                },
             })
         })
     }
@@ -117,10 +128,11 @@ impl DeepRecallProvider for EvalDeepProvider {
 use memphant_types::{
     ActorId, AgentNodeId, ContextualChunk, DeepProviderIdentity, DeepRecallLimits,
     DeepRecallStatus, DeepRecallStopReason, DeepRecallSummary, DeepRecallUsage, ENGINE_VERSION,
-    ForgetRequest, ForgetSelector, LearnedRerankProfile, MarkOutcome, MarkRequest, MemoryEdgeKind,
-    MemoryKind, NewEpisode, NewMemoryEdge, NewMemoryUnit, RecallContextItem, RecallDropReason,
-    RecallMode, RecallRequest, RecallTime, ResolvedMemoryContext, RetrievalTrace, ScopeId,
-    SubjectId, TRACE_SCHEMA_VERSION, TenantId, TraceId, TrustLevel, UnitId, UnitState,
+    EVIDENCE_DISPOSITION_CONTRACT_REVISION, EvidenceDisposition, EvidenceStatus, ForgetRequest,
+    ForgetSelector, LearnedRerankProfile, MarkOutcome, MarkRequest, MemoryEdgeKind, MemoryKind,
+    NewEpisode, NewMemoryEdge, NewMemoryUnit, RecallContextItem, RecallDropReason, RecallMode,
+    RecallRequest, RecallTime, ResolvedMemoryContext, RetrievalTrace, ScopeId, SubjectId,
+    TRACE_SCHEMA_VERSION, TenantId, TraceId, TrustLevel, UnitId, UnitState,
 };
 use schemars::schema_for;
 use serde::{Deserialize, Serialize};
@@ -3192,6 +3204,12 @@ mod tests {
                 unsettled_spend_micros_upper_bound: 0,
             },
             generation_ids: vec!["gen-1".to_string()],
+            evidence: EvidenceDisposition {
+                contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+                status: EvidenceStatus::Supported,
+                answer_policy: EvidenceStatus::Supported.answer_policy(),
+                reason: "test evidence".to_string(),
+            },
         };
         let settlement = deep_settlement_from_summary(Some(&summary), &["unit-abc".to_string()])
             .expect("deep case settles");

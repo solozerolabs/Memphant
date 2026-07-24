@@ -8,6 +8,80 @@
       "format": "uuid",
       "type": "string"
     },
+    "AnswerPolicy": {
+      "enum": [
+        "answer_normally",
+        "state_premise_false",
+        "say_exact_target_not_found",
+        "abstain_unknown"
+      ],
+      "type": "string"
+    },
+    "CitationSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "CitationUnverifiedReason": {
+      "enum": [
+        "derived_reference",
+        "missing_canonical_citation"
+      ],
+      "type": "string"
+    },
+    "CitationVerification": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "receipt": {
+              "$ref": "#/$defs/EvidenceReceipt"
+            },
+            "status": {
+              "const": "verified",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "receipt"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "$ref": "#/$defs/CitationUnverifiedReason"
+            },
+            "status": {
+              "const": "unverified",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "CrossRerankFailure": {
       "enum": [
         "none",
@@ -154,6 +228,9 @@
     },
     "DeepRecallSummary": {
       "properties": {
+        "evidence": {
+          "$ref": "#/$defs/EvidenceDisposition"
+        },
         "generation_ids": {
           "description": "Ordered provider generation IDs for every accepted model turn.",
           "items": {
@@ -178,7 +255,8 @@
         "status",
         "stop_reason",
         "limits",
-        "usage"
+        "usage",
+        "evidence"
       ],
       "type": "object"
     },
@@ -245,6 +323,152 @@
     },
     "EpisodeId": {
       "format": "uuid",
+      "type": "string"
+    },
+    "EvidenceDisposition": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_policy": {
+          "$ref": "#/$defs/AnswerPolicy"
+        },
+        "contract_revision": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/EvidenceStatus"
+        }
+      },
+      "required": [
+        "contract_revision",
+        "status",
+        "answer_policy",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "EvidenceReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "$ref": "#/$defs/ActorId"
+        },
+        "agent_node_id": {
+          "$ref": "#/$defs/AgentNodeId"
+        },
+        "citation_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "contract_revision": {
+          "type": "string"
+        },
+        "data_subject_id": {
+          "$ref": "#/$defs/SubjectId"
+        },
+        "engine_version": {
+          "type": "string"
+        },
+        "memory_unit_id": {
+          "$ref": "#/$defs/UnitId"
+        },
+        "policy_revision": {
+          "type": "string"
+        },
+        "query_hash": {
+          "type": "string"
+        },
+        "quote_sha256": {
+          "type": "string"
+        },
+        "recalled_at": {
+          "type": "string"
+        },
+        "schema_compat_revision": {
+          "type": "string"
+        },
+        "scope_id": {
+          "$ref": "#/$defs/ScopeId"
+        },
+        "source_body_sha256": {
+          "type": "string"
+        },
+        "source_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/EvidenceSourceKind"
+        },
+        "source_ref": {
+          "type": "string"
+        },
+        "source_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_trust": {
+          "$ref": "#/$defs/TrustLevel"
+        },
+        "span": {
+          "$ref": "#/$defs/CitationSpan"
+        },
+        "subject_generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tenant_id": {
+          "$ref": "#/$defs/TenantId"
+        },
+        "trace_id": {
+          "$ref": "#/$defs/TraceId"
+        }
+      },
+      "required": [
+        "contract_revision",
+        "citation_id",
+        "trace_id",
+        "tenant_id",
+        "data_subject_id",
+        "scope_id",
+        "actor_id",
+        "agent_node_id",
+        "subject_generation",
+        "memory_unit_id",
+        "source_kind",
+        "source_id",
+        "source_ref",
+        "source_body_sha256",
+        "span",
+        "quote_sha256",
+        "source_trust",
+        "query_hash",
+        "policy_revision",
+        "engine_version",
+        "schema_compat_revision",
+        "recalled_at"
+      ],
+      "type": "object"
+    },
+    "EvidenceSourceKind": {
+      "enum": [
+        "episode",
+        "resource"
+      ],
+      "type": "string"
+    },
+    "EvidenceStatus": {
+      "enum": [
+        "supported",
+        "contradicts-premise",
+        "near-match",
+        "insufficient"
+      ],
       "type": "string"
     },
     "MemoryKind": {
@@ -456,10 +680,14 @@
         },
         "unit_id": {
           "$ref": "#/$defs/UnitId"
+        },
+        "verification": {
+          "$ref": "#/$defs/CitationVerification"
         }
       },
       "required": [
-        "unit_id"
+        "unit_id",
+        "verification"
       ],
       "type": "object"
     },

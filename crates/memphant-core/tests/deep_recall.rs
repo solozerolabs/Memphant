@@ -11,11 +11,22 @@ use memphant_core::service::{MemoryService, ServiceError};
 use memphant_core::{CoreError, FixedClock, InMemoryStore, MemoryStore, NoopEmbedding};
 use memphant_types::{
     ActorId, DeepProviderIdentity, DeepRecallLimits, DeepRecallStatus, DeepRecallStopReason,
-    DeepRecallUsage, MemoryKind, NewEpisode, NewMemoryUnit, RecallChannel, RecallMode,
-    RecallRequest, ReflectJob, ReflectJobKind, ScopeId, TenantId, TrustLevel, UnitId, UnitState,
+    DeepRecallUsage, EVIDENCE_DISPOSITION_CONTRACT_REVISION, EvidenceDisposition, EvidenceStatus,
+    MemoryKind, NewEpisode, NewMemoryUnit, RecallChannel, RecallMode, RecallRequest, ReflectJob,
+    ReflectJobKind, ScopeId, TenantId, TrustLevel, UnitId, UnitState,
 };
 
 const CLOCK: FixedClock = FixedClock("2026-07-20T00:00:00Z");
+
+fn evidence(_status: DeepRecallStatus) -> EvidenceDisposition {
+    let status = EvidenceStatus::Insufficient;
+    EvidenceDisposition {
+        contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+        status,
+        answer_policy: status.answer_policy(),
+        reason: "scripted test disposition".to_string(),
+    }
+}
 
 struct RecordingProvider {
     identity: DeepProviderIdentity,
@@ -28,6 +39,7 @@ struct RecordingProvider {
 
 impl RecordingProvider {
     fn completed(source_ids: Vec<uuid::Uuid>) -> Self {
+        let evidence_status = EvidenceStatus::Insufficient;
         Self {
             identity: DeepProviderIdentity {
                 provider: "test".to_string(),
@@ -44,6 +56,12 @@ impl RecordingProvider {
                 generation_ids: Vec::new(),
                 observed_provider: Some("test".to_string()),
                 observed_model: Some("test/deep".to_string()),
+                evidence: EvidenceDisposition {
+                    contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+                    status: evidence_status,
+                    answer_policy: evidence_status.answer_policy(),
+                    reason: "scripted test disposition".to_string(),
+                },
             }),
             calls: AtomicUsize::new(0),
             workspaces: Mutex::new(Vec::new()),
@@ -427,6 +445,7 @@ async fn observed_routing_is_distinct_from_configured_identity() {
         generation_ids: Vec::new(),
         observed_provider: Some("routed-provider".to_string()),
         observed_model: Some("routed/model-v2".to_string()),
+        evidence: evidence(DeepRecallStatus::Completed),
     });
     let service = MemoryService::new(
         Arc::new(store.clone()),
@@ -447,6 +466,45 @@ async fn observed_routing_is_distinct_from_configured_identity() {
         Some("routed-provider")
     );
     assert_eq!(trace.l4_observed_model.as_deref(), Some("routed/model-v2"));
+}
+
+#[tokio::test]
+async fn semantic_support_without_a_verified_citation_receipt_fails_closed() {
+    let (store, context, _, source_id) = seeded_service().await;
+    let status = EvidenceStatus::Supported;
+    let provider = RecordingProvider::with_result(DeepRecallProviderResult {
+        status: DeepRecallStatus::Completed,
+        stop_reason: DeepRecallStopReason::Completed,
+        source_ids: vec![source_id],
+        usage: DeepRecallUsage::default(),
+        generation_ids: Vec::new(),
+        observed_provider: Some("test".to_string()),
+        observed_model: Some("test/deep".to_string()),
+        evidence: EvidenceDisposition {
+            contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+            status,
+            answer_policy: status.answer_policy(),
+            reason: "source appears supportive but has no receipt".to_string(),
+        },
+    });
+    let service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(NoopEmbedding),
+    )
+    .with_deep_recall_provider(Arc::new(provider));
+
+    assert!(matches!(
+        service
+            .recall_internal(request(context, RecallMode::Deep))
+            .await,
+        Err(ServiceError::Core(CoreError::DeepProviderInvalidOutput))
+    ));
+    assert!(
+        store
+            .retrieval_traces(TenantId::from_u128(81_000))
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -513,6 +571,7 @@ async fn every_cap_returns_a_machine_readable_partial_result() {
             generation_ids: Vec::new(),
             observed_provider: Some("test-route".to_string()),
             observed_model: Some("test/deep".to_string()),
+            evidence: evidence(DeepRecallStatus::Capped),
         }));
         let service = MemoryService::new(
             Arc::new(store.clone()),
@@ -563,6 +622,7 @@ async fn paid_invalid_output_returns_checkpoint_and_truthful_outstanding_usage()
         generation_ids: vec!["gen-1".to_string(), "gen-2".to_string()],
         observed_provider: Some("Azure".to_string()),
         observed_model: Some("test/deep-routed".to_string()),
+        evidence: evidence(DeepRecallStatus::Partial),
     }));
     let service = MemoryService::new(
         Arc::new(store.clone()),
@@ -606,6 +666,7 @@ async fn provider_error_trace_stage_is_partial_not_capped() {
         generation_ids: vec!["gen-provider-error".to_string()],
         observed_provider: None,
         observed_model: None,
+        evidence: evidence(DeepRecallStatus::Partial),
     }));
     let service = MemoryService::new(
         Arc::new(store.clone()),
@@ -658,6 +719,7 @@ async fn settled_plus_outstanding_caps_use_checked_arithmetic() {
             generation_ids: vec!["gen-paid".to_string()],
             observed_provider: Some("Azure".to_string()),
             observed_model: Some("test/deep".to_string()),
+            evidence: evidence(DeepRecallStatus::Partial),
         }));
         let service = MemoryService::new(Arc::new(store), Arc::new(CLOCK), Arc::new(NoopEmbedding))
             .with_deep_recall_provider(provider);
@@ -699,6 +761,7 @@ async fn capped_zero_evidence_returns_an_ordinary_abstention() {
         generation_ids: Vec::new(),
         observed_provider: Some("test".to_string()),
         observed_model: Some("test/deep".to_string()),
+        evidence: evidence(DeepRecallStatus::Capped),
     }));
     let service = MemoryService::new(Arc::new(store), Arc::new(CLOCK), Arc::new(NoopEmbedding))
         .with_deep_recall_provider(provider);
@@ -758,6 +821,7 @@ async fn invalid_provider_results_fail_closed_without_a_success_trace() {
             generation_ids: Vec::new(),
             observed_provider: Some("test".to_string()),
             observed_model: Some("test/deep".to_string()),
+            evidence: evidence(DeepRecallStatus::Completed),
         },
         DeepRecallProviderResult {
             status: DeepRecallStatus::Completed,
@@ -767,6 +831,7 @@ async fn invalid_provider_results_fail_closed_without_a_success_trace() {
             generation_ids: Vec::new(),
             observed_provider: Some("test".to_string()),
             observed_model: Some("test/deep".to_string()),
+            evidence: evidence(DeepRecallStatus::Completed),
         },
         DeepRecallProviderResult {
             status: DeepRecallStatus::Completed,
@@ -779,6 +844,7 @@ async fn invalid_provider_results_fail_closed_without_a_success_trace() {
             generation_ids: Vec::new(),
             observed_provider: Some("test".to_string()),
             observed_model: Some("test/deep".to_string()),
+            evidence: evidence(DeepRecallStatus::Completed),
         },
         DeepRecallProviderResult {
             status: DeepRecallStatus::Completed,
@@ -788,6 +854,7 @@ async fn invalid_provider_results_fail_closed_without_a_success_trace() {
             generation_ids: Vec::new(),
             observed_provider: Some("test".to_string()),
             observed_model: Some(" ".to_string()),
+            evidence: evidence(DeepRecallStatus::Completed),
         },
         DeepRecallProviderResult {
             status: DeepRecallStatus::Partial,
@@ -797,6 +864,7 @@ async fn invalid_provider_results_fail_closed_without_a_success_trace() {
             generation_ids: vec!["generation".to_string()],
             observed_provider: Some("test".to_string()),
             observed_model: None,
+            evidence: evidence(DeepRecallStatus::Partial),
         },
     ];
 
@@ -836,6 +904,7 @@ async fn invalid_provider_results_fail_closed_without_a_success_trace() {
         generation_ids: Vec::new(),
         observed_provider: Some("test".to_string()),
         observed_model: Some("test/deep".to_string()),
+        evidence: evidence(DeepRecallStatus::Completed),
     };
     let service = MemoryService::new(Arc::new(store), Arc::new(CLOCK), Arc::new(NoopEmbedding))
         .with_deep_recall_provider(Arc::new(RecordingProvider::with_result(duplicate)));

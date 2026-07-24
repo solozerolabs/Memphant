@@ -28,19 +28,24 @@ use memphant_types::{
     CorrectRequest, CorrectResult, CorrectSelector, CorrectionPayload, CrossRerankFailure,
     CrossRerankTrace, DedupOutcome, DeepProviderIdentity, DeepRecallLimits, DeepRecallStatus,
     DeepRecallStopReason, DeepRecallSummary, DeepSnapshotEntry, DeepSnapshotSourceKind,
-    DeepWorkspace, DeepWorkspaceFile, EdgeId, EpisodeId, ForgetRequest, ForgetResult, ForgetTarget,
-    JobId, LearnedRerankProfile, LineageRelation, MarkOutcome, MarkRequest, MarkResult,
-    MemoryCitation, MemoryEdgeKind, MemoryKind, MemoryLineage, MemoryRecord, NewEpisode,
-    NewMemoryEdge, NewMemoryUnit, ProcedureTraceFact, QueuedReflectJob, RecallCandidateTrace,
-    RecallChannel, RecallCitation, RecallContextItem, RecallDropReason, RecallDroppedItem,
-    RecallMode, RecallPolicyFilter, RecallRequest, RecallResponse, RecallTime, RecordMaterial,
-    ReflectInput, ReflectJob, ReflectJobKind, ReflectStageFact, ReflectTrace, ResolvedMemorySource,
-    RetainOutcome, RetainRequest, RetainResourceOutcome, RetainResourceRequest, RetrievalTrace,
-    ReviewEvent, ScopeId, StoredCitation, StoredEpisode, StoredMemoryEdge, StoredMemoryUnit,
-    StoredResource, SubjectId, TenantId, TraceId, TrustLevel, UnitId, UnitState,
+    DeepWorkspace, DeepWorkspaceFile, EVIDENCE_DISPOSITION_CONTRACT_REVISION,
+    EVIDENCE_RECEIPT_CONTRACT_REVISION, EdgeId, EpisodeId, EvidenceReceipt, EvidenceSourceKind,
+    EvidenceStatus, ForgetRequest, ForgetResult, ForgetTarget, JobId, LearnedRerankProfile,
+    LineageRelation, MarkOutcome, MarkRequest, MarkResult, MemoryCitation, MemoryEdgeKind,
+    MemoryKind, MemoryLineage, MemoryRecord, NewEpisode, NewMemoryEdge, NewMemoryUnit,
+    ProcedureTraceFact, QueuedReflectJob, RecallCandidateTrace, RecallChannel, RecallCitation,
+    RecallContextItem, RecallDropReason, RecallDroppedItem, RecallMode, RecallPolicyFilter,
+    RecallRequest, RecallResponse, RecallTime, RecordMaterial, ReflectInput, ReflectJob,
+    ReflectJobKind, ReflectStageFact, ReflectTrace, ResolvedMemorySource, RetainOutcome,
+    RetainRequest, RetainResourceOutcome, RetainResourceRequest, RetrievalTrace, ReviewEvent,
+    SCHEMA_COMPAT_REVISION, ScopeId, StoredCitation, StoredEpisode, StoredMemoryEdge,
+    StoredMemoryUnit, StoredResource, SubjectId, TenantId, TraceId, TrustLevel, UnitId, UnitState,
     agent_level_allows_memory_kind,
 };
-use memphant_types::{NewResource, ResourceAcl, ResourceExtractorState, ResourceId};
+use memphant_types::{
+    CitationUnverifiedReason, CitationVerification, NewResource, ResourceAcl,
+    ResourceExtractorState, ResourceId,
+};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -6535,6 +6540,21 @@ fn validate_deep_provider_result(
     if !status_matches || !usage_fits || !observed_route_valid || !generation_ids_valid {
         return Err(CoreError::DeepProviderInvalidOutput);
     }
+    let evidence = &result.evidence;
+    let evidence_requires_sources = matches!(
+        evidence.status,
+        EvidenceStatus::Supported | EvidenceStatus::ContradictsPremise | EvidenceStatus::NearMatch
+    );
+    let incomplete_is_calibrated = result.status == DeepRecallStatus::Completed
+        || evidence.status == EvidenceStatus::Insufficient;
+    if evidence.contract_revision != EVIDENCE_DISPOSITION_CONTRACT_REVISION
+        || evidence.answer_policy != evidence.status.answer_policy()
+        || evidence.reason.trim().is_empty()
+        || (evidence_requires_sources && result.source_ids.is_empty())
+        || !incomplete_is_calibrated
+    {
+        return Err(CoreError::DeepProviderInvalidOutput);
+    }
     validate_deep_provider_identity(identity)?;
 
     let mut seen = HashSet::new();
@@ -6708,6 +6728,7 @@ where
                 limits,
                 usage: result.usage,
                 generation_ids: result.generation_ids,
+                evidence: result.evidence,
             },
             identity,
             observed_provider: result.observed_provider,
@@ -7147,7 +7168,7 @@ where
         }
     }
     let dropped_items = packed.dropped_items;
-    let abstention = packed.abstention;
+    let mut abstention = packed.abstention;
 
     let candidate_whitelist: Vec<_> = items.iter().map(|item| item.unit_id).collect();
     let mut suppression_labels = Vec::new();
@@ -7159,27 +7180,34 @@ where
             suppression_labels.push(label);
         }
     }
-    let citations: Vec<_> = items
-        .iter()
-        .filter(|item| {
-            item.citation_episode_id.is_some()
-                || item.citation_resource_id.is_some()
-                || !item.derived_from_unit_ids.is_empty()
-        })
-        .map(|item| RecallCitation {
-            unit_id: item.unit_id,
-            episode_id: item.citation_episode_id,
-            resource_id: item.citation_resource_id,
-            derived_from_unit_ids: item.derived_from_unit_ids.clone(),
-        })
-        .collect();
+    let trace_id = TraceId::new();
+    let query_hash = hash_query(&request.query);
+    let citations =
+        build_recall_citations(store, &request, &recall_time, trace_id, &query_hash, &items)
+            .await?;
+    if let Some(deep) = deep_run.as_ref() {
+        let evidence_status = deep.summary.evidence.status;
+        if evidence_status == EvidenceStatus::Insufficient {
+            abstention = true;
+        }
+        if matches!(
+            evidence_status,
+            EvidenceStatus::Supported
+                | EvidenceStatus::ContradictsPremise
+                | EvidenceStatus::NearMatch
+        ) && !citations
+            .iter()
+            .any(|citation| matches!(citation.verification, CitationVerification::Verified { .. }))
+        {
+            return Err(CoreError::DeepProviderInvalidOutput);
+        }
+    }
     let procedure_ids = items
         .iter()
         .filter(|item| item.kind == MemoryKind::Procedural)
         .map(|item| item.unit_id)
         .collect::<Vec<_>>();
     let procedure_validation_states = procedure_trace_facts(&tenant_units, &request);
-    let trace_id = TraceId::new();
     let mut feature_flags =
         recall_feature_flags(&request, vector_scores.is_some(), deep_run.is_some());
     if candidate_traces
@@ -7207,7 +7235,7 @@ where
         agent_node_id: request.context.agent_node_id,
         subject_generation: request.context.subject_generation,
         policy_revision: request.context.policy_revision.clone(),
-        query_hash: hash_query(&request.query),
+        query_hash,
         engine_version: request.engine_version.clone(),
         feature_flags,
         channel_runs: recall_stage_facts(vector_scores.is_some(), deep_run.as_ref()),
@@ -7284,6 +7312,577 @@ where
         deep: deep_run.map(|deep| deep.summary),
         recall_time,
     })
+}
+
+const MAX_VERIFIED_RECEIPTS: usize = 64;
+const MAX_VERIFIED_QUOTE_BYTES: usize = 64 * 1024;
+
+#[allow(clippy::too_many_arguments)]
+async fn build_recall_citations<S: MemoryStore>(
+    store: &S,
+    request: &RecallRequest,
+    recall_time: &RecallTime,
+    trace_id: TraceId,
+    query_hash: &str,
+    items: &[RecallContextItem],
+) -> Result<Vec<RecallCitation>, CoreError> {
+    let direct_ids = items
+        .iter()
+        .filter(|item| item.citation_episode_id.is_some() || item.citation_resource_id.is_some())
+        .map(|item| item.unit_id)
+        .collect::<Vec<_>>();
+    let materials = store
+        .fetch_record_material(&request.context, &direct_ids, recall_time)
+        .await?;
+    let materials = materials
+        .into_iter()
+        .map(|material| (material.unit.id, material))
+        .collect::<HashMap<_, _>>();
+    let mut output = Vec::new();
+
+    for item in items {
+        let direct = item.citation_episode_id.is_some() || item.citation_resource_id.is_some();
+        if !direct {
+            if !item.derived_from_unit_ids.is_empty() {
+                output.push(RecallCitation {
+                    unit_id: item.unit_id,
+                    episode_id: None,
+                    resource_id: None,
+                    derived_from_unit_ids: item.derived_from_unit_ids.clone(),
+                    verification: CitationVerification::Unverified {
+                        reason: CitationUnverifiedReason::DerivedReference,
+                    },
+                });
+            }
+            continue;
+        }
+
+        let material = materials.get(&item.unit_id).ok_or_else(|| {
+            CoreError::Invalid(
+                "selected citation unit has no canonical record material".to_string(),
+            )
+        })?;
+        let unit = &material.unit;
+        if unit.tenant_id != request.context.tenant_id
+            || unit.data_subject_id != request.context.data_subject_id
+            || unit.scope_id != request.context.scope_id
+            || unit.agent_node_id != request.context.agent_node_id
+            || unit.subject_generation != request.context.subject_generation
+            || unit.actor_id != Some(request.context.actor_id)
+            || unit.source_episode_id != item.citation_episode_id
+            || unit.source_resource_id != item.citation_resource_id
+        {
+            return Err(CoreError::PolicyDenied(
+                "citation unit is not bound to the recall context".to_string(),
+            ));
+        }
+
+        let matching = material
+            .citations
+            .iter()
+            .filter(|citation| {
+                citation.episode_id == item.citation_episode_id
+                    && citation.resource_id == item.citation_resource_id
+            })
+            .collect::<Vec<_>>();
+        if matching.is_empty() {
+            output.push(RecallCitation {
+                unit_id: item.unit_id,
+                episode_id: item.citation_episode_id,
+                resource_id: item.citation_resource_id,
+                derived_from_unit_ids: item.derived_from_unit_ids.clone(),
+                verification: CitationVerification::Unverified {
+                    reason: CitationUnverifiedReason::MissingCanonicalCitation,
+                },
+            });
+            continue;
+        }
+
+        for citation in matching {
+            if output.len() >= MAX_VERIFIED_RECEIPTS {
+                return Err(CoreError::Invalid(
+                    "verified citation receipt count exceeds limit".to_string(),
+                ));
+            }
+            if citation.tenant_id != request.context.tenant_id
+                || citation.data_subject_id != request.context.data_subject_id
+                || citation.scope_id != request.context.scope_id
+                || citation.agent_node_id != request.context.agent_node_id
+                || citation.subject_generation != request.context.subject_generation
+                || citation.memory_unit_id != item.unit_id
+                || citation.episode_id.is_some() == citation.resource_id.is_some()
+            {
+                return Err(CoreError::PolicyDenied(
+                    "canonical citation is not bound to the recall context".to_string(),
+                ));
+            }
+            let span = citation.span.clone().ok_or_else(|| {
+                CoreError::Invalid("canonical citation is missing its source span".to_string())
+            })?;
+            let quote_sha256 = citation.quote_hash.clone().ok_or_else(|| {
+                CoreError::Invalid("canonical citation is missing its quote hash".to_string())
+            })?;
+
+            let (source_kind, source_id, source_ref, source_revision, source_body, source_trust) =
+                match (citation.episode_id, citation.resource_id) {
+                    (Some(id), None) => {
+                        let episode = store
+                            .fetch_episode(&request.context, id)
+                            .await?
+                            .ok_or_else(|| {
+                                CoreError::Invalid(
+                                    "canonical citation episode is missing".to_string(),
+                                )
+                            })?;
+                        if episode.tenant_id != request.context.tenant_id
+                            || episode.data_subject_id != request.context.data_subject_id
+                            || episode.scope_id != request.context.scope_id
+                            || episode.agent_node_id != request.context.agent_node_id
+                            || episode.subject_generation != request.context.subject_generation
+                            || episode.actor_id != request.context.actor_id
+                            || episode.source_trust == TrustLevel::Quarantined
+                        {
+                            return Err(CoreError::PolicyDenied(
+                                "citation episode is unauthorized for this recall".to_string(),
+                            ));
+                        }
+                        (
+                            EvidenceSourceKind::Episode,
+                            id.as_uuid(),
+                            episode.source_ref,
+                            None,
+                            episode.body,
+                            episode.source_trust,
+                        )
+                    }
+                    (None, Some(id)) => {
+                        let resource = store
+                            .fetch_resource(&request.context, id)
+                            .await?
+                            .ok_or_else(|| {
+                                CoreError::Invalid(
+                                    "canonical citation resource is missing".to_string(),
+                                )
+                            })?;
+                        if resource.tenant_id != request.context.tenant_id
+                            || resource.data_subject_id != request.context.data_subject_id
+                            || resource.scope_id != request.context.scope_id
+                            || resource.agent_node_id != request.context.agent_node_id
+                            || resource.subject_generation != request.context.subject_generation
+                            || resource.actor_id != request.context.actor_id
+                            || resource.source_trust == TrustLevel::Quarantined
+                            || !resource.acl.is_empty()
+                        {
+                            return Err(CoreError::PolicyDenied(
+                                "citation resource is unauthorized for this recall".to_string(),
+                            ));
+                        }
+                        let body = resource.body.ok_or_else(|| {
+                            CoreError::Invalid(
+                                "canonical citation resource has no source text".to_string(),
+                            )
+                        })?;
+                        let body_sha256 = format!("sha256:{}", sha256_bytes_hex(body.as_bytes()));
+                        if resource.content_hash != body_sha256 {
+                            return Err(CoreError::Invalid(
+                                "canonical resource content hash does not match source text"
+                                    .to_string(),
+                            ));
+                        }
+                        (
+                            EvidenceSourceKind::Resource,
+                            id.as_uuid(),
+                            resource.source_ref,
+                            resource.revision,
+                            body,
+                            resource.source_trust,
+                        )
+                    }
+                    _ => {
+                        return Err(CoreError::Invalid(
+                            "canonical citation must identify exactly one source".to_string(),
+                        ));
+                    }
+                };
+
+            let start = usize::try_from(span.start)
+                .map_err(|_| CoreError::Invalid("citation span start is too large".to_string()))?;
+            let end = usize::try_from(span.end)
+                .map_err(|_| CoreError::Invalid("citation span end is too large".to_string()))?;
+            if end < start || end.saturating_sub(start) > MAX_VERIFIED_QUOTE_BYTES {
+                return Err(CoreError::Invalid(
+                    "citation span is malformed or exceeds the evidence limit".to_string(),
+                ));
+            }
+            let quote = source_body.get(start..end).ok_or_else(|| {
+                CoreError::Invalid(
+                    "citation span is out of bounds or not on UTF-8 boundaries".to_string(),
+                )
+            })?;
+            let actual_quote_sha256 = format!("sha256:{}", sha256_bytes_hex(quote.as_bytes()));
+            if quote_sha256 != actual_quote_sha256 {
+                return Err(CoreError::Invalid(
+                    "citation quote hash does not match canonical source text".to_string(),
+                ));
+            }
+            let source_body_sha256 = format!("sha256:{}", sha256_bytes_hex(source_body.as_bytes()));
+            output.push(RecallCitation {
+                unit_id: item.unit_id,
+                episode_id: item.citation_episode_id,
+                resource_id: item.citation_resource_id,
+                derived_from_unit_ids: item.derived_from_unit_ids.clone(),
+                verification: CitationVerification::Verified {
+                    receipt: Box::new(EvidenceReceipt {
+                        contract_revision: EVIDENCE_RECEIPT_CONTRACT_REVISION.to_string(),
+                        citation_id: citation.id,
+                        trace_id,
+                        tenant_id: request.context.tenant_id,
+                        data_subject_id: request.context.data_subject_id,
+                        scope_id: request.context.scope_id,
+                        actor_id: request.context.actor_id,
+                        agent_node_id: request.context.agent_node_id,
+                        subject_generation: request.context.subject_generation,
+                        memory_unit_id: item.unit_id,
+                        source_kind,
+                        source_id,
+                        source_ref,
+                        source_revision,
+                        source_body_sha256,
+                        span: span.clone(),
+                        quote_sha256,
+                        source_trust,
+                        query_hash: query_hash.to_string(),
+                        policy_revision: request.context.policy_revision.clone(),
+                        engine_version: request.engine_version.clone(),
+                        schema_compat_revision: SCHEMA_COMPAT_REVISION.to_string(),
+                        recalled_at: recall_time.evaluated_at.clone(),
+                    }),
+                },
+            });
+        }
+    }
+    Ok(output)
+}
+
+#[cfg(test)]
+mod evidence_receipt_tests {
+    use super::*;
+
+    const NOW: &str = "2026-07-23T00:00:00Z";
+
+    fn fixture() -> (
+        InMemoryStore,
+        RecallRequest,
+        RecallTime,
+        RecallContextItem,
+        StoredCitation,
+    ) {
+        let store = InMemoryStore::default();
+        let context = memphant_store_testkit::resolved_context(
+            TenantId::from_u128(70_001),
+            ScopeId::from_u128(70_002),
+            ActorId::from_u128(70_003),
+        );
+        store.seed_context_binding(&context);
+        let episode_id = EpisodeId::from_u128(70_004);
+        let unit_id = UnitId::from_u128(70_005);
+        let body = "alpha βeta canonical evidence".to_string();
+        let quote = "βeta canonical";
+        let start = body.find(quote).unwrap();
+        let end = start + quote.len();
+        let unit = StoredMemoryUnit {
+            id: unit_id,
+            tenant_id: context.tenant_id,
+            data_subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            kind: MemoryKind::Semantic,
+            state: UnitState::Active,
+            fact_key: Some("evidence:test".to_string()),
+            predicate: None,
+            body: quote.to_string(),
+            confidence: Some(1.0),
+            trust_level: TrustLevel::TrustedUser,
+            freshness_due_at: None,
+            churn_class: None,
+            actor_id: Some(context.actor_id),
+            source_kind: Some("user".to_string()),
+            source_ref: "test:evidence".to_string(),
+            observed_at: NOW.to_string(),
+            source_episode_id: Some(episode_id),
+            source_resource_id: None,
+            deletion_generation: None,
+            contextual_chunks: Vec::new(),
+            valid_from: None,
+            valid_to: None,
+            transaction_from: Some(NOW.to_string()),
+            transaction_to: None,
+            difficulty: None,
+            stability_days: None,
+            last_reinforced_at: None,
+            reinforcement_count: 0,
+        };
+        let citation = StoredCitation {
+            id: Uuid::from_u128(70_006),
+            tenant_id: context.tenant_id,
+            data_subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            memory_unit_id: unit_id,
+            episode_id: Some(episode_id),
+            resource_id: None,
+            span: Some(memphant_types::CitationSpan {
+                start: start as u64,
+                end: end as u64,
+            }),
+            quote_hash: Some(format!("sha256:{}", sha256_bytes_hex(quote.as_bytes()))),
+        };
+        let episode = StoredEpisode {
+            id: episode_id,
+            tenant_id: context.tenant_id,
+            data_subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            actor_id: context.actor_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            source_kind: "user".to_string(),
+            source_ref: "test:evidence".to_string(),
+            source_trust: TrustLevel::TrustedUser,
+            dedup_key: "test:evidence".to_string(),
+            body,
+            observation_count: 1,
+            first_observed_at: NOW.to_string(),
+            last_observed_at: NOW.to_string(),
+        };
+        {
+            let mut state = store.inner.lock().unwrap();
+            state
+                .memory_units
+                .entry(context.tenant_id)
+                .or_default()
+                .push(unit);
+            state
+                .episodes
+                .entry(context.tenant_id)
+                .or_default()
+                .push(episode);
+            state
+                .citations
+                .entry(context.tenant_id)
+                .or_default()
+                .push(citation.clone());
+        }
+        let request = RecallRequest {
+            context,
+            query: "canonical evidence".to_string(),
+            k: 1,
+            budget_tokens: 128,
+            mode: RecallMode::Fast,
+            include_beliefs: false,
+            edge_expansion_enabled: false,
+            context_packing_abstention_enabled: true,
+            rerank_enabled: false,
+            learned_rerank_profile: None,
+            query_decomposition_enabled: false,
+            procedure_recall_enabled: false,
+            decay_enabled: false,
+            engine_version: "test-engine".to_string(),
+            transaction_as_of: None,
+            valid_at: None,
+            aggregation_window: None,
+        };
+        let recall_time = RecallTime {
+            evaluated_at: NOW.to_string(),
+            transaction_as_of: NOW.to_string(),
+            valid_at: NOW.to_string(),
+        };
+        let item = RecallContextItem {
+            unit_id,
+            body: quote.to_string(),
+            kind: MemoryKind::Semantic,
+            derived_by: "test".to_string(),
+            inclusion_reason: "test".to_string(),
+            citation_episode_id: Some(episode_id),
+            citation_resource_id: None,
+            derived_from_unit_ids: Vec::new(),
+            suppression_labels: Vec::new(),
+        };
+        (store, request, recall_time, item, citation)
+    }
+
+    #[tokio::test]
+    async fn verified_receipt_binds_unicode_bytes_trace_query_policy_and_contract() {
+        let (store, request, recall_time, item, _) = fixture();
+        let trace_id = TraceId::from_u128(70_007);
+        let query_hash = hash_query(&request.query);
+        let citations = build_recall_citations(
+            &store,
+            &request,
+            &recall_time,
+            trace_id,
+            &query_hash,
+            &[item],
+        )
+        .await
+        .unwrap();
+        let CitationVerification::Verified { receipt } = &citations[0].verification else {
+            panic!("canonical citation must produce a verified receipt");
+        };
+        assert_eq!(receipt.trace_id, trace_id);
+        assert_eq!(receipt.query_hash, query_hash);
+        assert_eq!(receipt.policy_revision, request.context.policy_revision);
+        assert_eq!(
+            receipt.contract_revision,
+            EVIDENCE_RECEIPT_CONTRACT_REVISION
+        );
+        assert_eq!(receipt.span.end - receipt.span.start, 15);
+        let encoded = serde_json::to_vec(receipt).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&serde_json::from_slice::<EvidenceReceipt>(&encoded).unwrap())
+                .unwrap(),
+            encoded
+        );
+    }
+
+    #[tokio::test]
+    async fn tampered_hash_and_cross_tenant_replay_fail_closed() {
+        let (store, request, recall_time, item, citation) = fixture();
+        store
+            .inner
+            .lock()
+            .unwrap()
+            .citations
+            .get_mut(&request.context.tenant_id)
+            .unwrap()[0]
+            .quote_hash = Some("sha256:tampered".to_string());
+        let error = build_recall_citations(
+            &store,
+            &request,
+            &recall_time,
+            TraceId::new(),
+            &hash_query(&request.query),
+            std::slice::from_ref(&item),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, CoreError::Invalid(_)));
+
+        store
+            .inner
+            .lock()
+            .unwrap()
+            .citations
+            .get_mut(&request.context.tenant_id)
+            .unwrap()[0] = citation;
+        let mut replay = request.clone();
+        replay.context.tenant_id = TenantId::from_u128(70_999);
+        let error = build_recall_citations(
+            &store,
+            &replay,
+            &recall_time,
+            TraceId::new(),
+            &hash_query(&replay.query),
+            &[item],
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CoreError::Invalid(_) | CoreError::PolicyDenied(_) | CoreError::Store(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn protected_or_stale_resource_receipts_fail_closed() {
+        let (store, request, recall_time, mut item, _) = fixture();
+        let resource_id = ResourceId::from_u128(70_004);
+        let body = {
+            let mut state = store.inner.lock().unwrap();
+            let body = state
+                .episodes
+                .get_mut(&request.context.tenant_id)
+                .unwrap()
+                .pop()
+                .unwrap()
+                .body;
+            let unit = &mut state
+                .memory_units
+                .get_mut(&request.context.tenant_id)
+                .unwrap()[0];
+            unit.source_episode_id = None;
+            unit.source_resource_id = Some(resource_id);
+            let citation = &mut state.citations.get_mut(&request.context.tenant_id).unwrap()[0];
+            citation.episode_id = None;
+            citation.resource_id = Some(resource_id);
+            state
+                .resources
+                .entry(request.context.tenant_id)
+                .or_default()
+                .push(StoredResource {
+                    id: resource_id,
+                    tenant_id: request.context.tenant_id,
+                    data_subject_id: request.context.data_subject_id,
+                    scope_id: request.context.scope_id,
+                    actor_id: request.context.actor_id,
+                    agent_node_id: request.context.agent_node_id,
+                    subject_generation: request.context.subject_generation,
+                    uri: "test://evidence".to_string(),
+                    source_ref: "test:evidence".to_string(),
+                    observed_at: NOW.to_string(),
+                    kind: memphant_types::ResourceKind::Document,
+                    content_hash: format!("sha256:{}", sha256_bytes_hex(body.as_bytes())),
+                    mime_type: "text/plain".to_string(),
+                    revision: Some("r1".to_string()),
+                    body: Some(body.clone()),
+                    source_trust: TrustLevel::TrustedSystem,
+                    acl: ResourceAcl {
+                        protected: Some(
+                            memphant_types::ResourceProtectedCategory::CredentialsSecrets,
+                        ),
+                        ..ResourceAcl::default()
+                    },
+                    extractor_state: ResourceExtractorState::Embedded,
+                });
+            body
+        };
+        item.citation_episode_id = None;
+        item.citation_resource_id = Some(resource_id);
+        let error = build_recall_citations(
+            &store,
+            &request,
+            &recall_time,
+            TraceId::new(),
+            &hash_query(&request.query),
+            std::slice::from_ref(&item),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, CoreError::PolicyDenied(_)));
+
+        {
+            let mut state = store.inner.lock().unwrap();
+            let resource = &mut state.resources.get_mut(&request.context.tenant_id).unwrap()[0];
+            resource.acl = ResourceAcl::default();
+            resource.content_hash = format!("sha256:{}", sha256_bytes_hex(b"stale revision"));
+            assert_ne!(
+                resource.content_hash,
+                format!("sha256:{}", sha256_bytes_hex(body.as_bytes()))
+            );
+        }
+        let error = build_recall_citations(
+            &store,
+            &request,
+            &recall_time,
+            TraceId::new(),
+            &hash_query(&request.query),
+            &[item],
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, CoreError::Invalid(_)));
+    }
 }
 
 fn promote_vector_lexical_balanced(fused: &mut Vec<CandidateAccumulator>, candidate_limit: usize) {

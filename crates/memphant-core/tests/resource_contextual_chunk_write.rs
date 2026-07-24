@@ -12,9 +12,10 @@ use std::sync::Arc;
 use memphant_core::service::MemoryService;
 use memphant_core::{FixedClock, InMemoryStore, MemoryStore, StubEmbedding};
 use memphant_types::{
-    RecallHttpRequest, ResolvedMemoryContext, ResourceKind, RetainEpisodeHttpRequest,
-    RetainResourcePayload, TenantId, TrustLevel,
+    CitationVerification, EvidenceSourceKind, RecallHttpRequest, ResolvedMemoryContext,
+    ResourceKind, RetainEpisodeHttpRequest, RetainResourcePayload, TenantId, TrustLevel,
 };
+use sha2::{Digest, Sha256};
 
 const CLOCK: FixedClock = FixedClock("2026-07-11T00:00:00Z");
 const RESOURCE_URI: &str = "syndai/docs/deploy/configuration.md";
@@ -65,7 +66,7 @@ fn retain_resource_request(
         payload: memphant_types::RetainPayload::Resource(RetainResourcePayload {
             uri: RESOURCE_URI.to_string(),
             mime_type: "text/markdown".to_string(),
-            content_hash: format!("sha256:{}", RESOURCE_BODY.len()),
+            content_hash: format!("sha256:{:x}", Sha256::digest(RESOURCE_BODY.as_bytes())),
             kind: Some(kind),
             revision: Some("r1-gate".to_string()),
             body: Some(RESOURCE_BODY.to_string()),
@@ -288,4 +289,19 @@ async fn recall_surfaces_document_resource_via_chunk_and_cites_parent() {
         "recalled context carries the matched chunk content: {}",
         item.body
     );
+    let receipt = response
+        .citations
+        .iter()
+        .find_map(|citation| match &citation.verification {
+            CitationVerification::Verified { receipt }
+                if citation.resource_id == Some(resource_id) =>
+            {
+                Some(receipt)
+            }
+            _ => None,
+        })
+        .expect("resource citation is backed by a verified receipt");
+    assert_eq!(receipt.trace_id, response.trace_id);
+    assert_eq!(receipt.source_kind, EvidenceSourceKind::Resource);
+    assert_eq!(receipt.source_id, resource_id.as_uuid());
 }

@@ -3,7 +3,7 @@ use std::pin::Pin;
 
 use memphant_types::{
     DeepProviderIdentity, DeepRecallLimits, DeepRecallStatus, DeepRecallStopReason,
-    DeepRecallUsage, DeepWorkspace,
+    DeepRecallUsage, DeepWorkspace, EvidenceDisposition,
 };
 use uuid::Uuid;
 
@@ -22,6 +22,7 @@ pub struct DeepRecallProviderResult {
     pub generation_ids: Vec<String>,
     pub observed_provider: Option<String>,
     pub observed_model: Option<String>,
+    pub evidence: EvidenceDisposition,
 }
 
 #[derive(Debug, thiserror::Error)]

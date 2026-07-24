@@ -12,7 +12,8 @@ use memphant_core::deep_recall::{
 };
 use memphant_types::{
     DeepProviderIdentity, DeepRecallLimits, DeepRecallStatus, DeepRecallStopReason,
-    DeepRecallUsage, DeepWorkspace,
+    DeepRecallUsage, DeepWorkspace, EVIDENCE_DISPOSITION_CONTRACT_REVISION, EvidenceDisposition,
+    EvidenceStatus,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -421,7 +422,14 @@ impl OpenRouterDeepRecall {
             .is_some()
         {
             self.settle_outstanding(&mut state, deadline).await;
-            result = state.result(result.status, result.stop_reason, Some(result.source_ids));
+            result = state.result(
+                result.status,
+                result.stop_reason,
+                Some(FinishOutcome {
+                    source_ids: result.source_ids,
+                    evidence: result.evidence,
+                }),
+            );
         }
         result.usage.wall_time_ms = elapsed_millis(started.elapsed());
         Ok(result)
@@ -653,11 +661,11 @@ impl OpenRouterDeepRecall {
                 "tool_calls": assistant_calls
             }));
             state.messages.extend(tool_messages);
-            if let Some(source_ids) = finished {
+            if let Some(finish) = finished {
                 return Ok(state.result(
                     DeepRecallStatus::Completed,
                     DeepRecallStopReason::Completed,
-                    Some(source_ids),
+                    Some(finish),
                 ));
             }
         }
@@ -724,7 +732,7 @@ fn tool_definitions() -> Value {
         {"type":"function","function":{"name":"search_files","description":"Literal case-insensitive source search","parameters":{"type":"object","properties":{"query":{"type":"string"},"path_prefix":{"type":["string","null"]}},"required":["query"],"additionalProperties":false}}},
         {"type":"function","function":{"name":"read_file","description":"Read an inclusive line range","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer"},"end_line":{"type":"integer"}},"required":["path","start_line","end_line"],"additionalProperties":false}}},
         {"type":"function","function":{"name":"record_evidence","description":"Checkpoint source UUIDs","parameters":{"type":"object","properties":{"source_ids":{"type":"array","items":{"type":"string"}}},"required":["source_ids"],"additionalProperties":false}}},
-        {"type":"function","function":{"name":"finish","description":"Finish with ordered source UUIDs","parameters":{"type":"object","properties":{"source_ids":{"type":"array","items":{"type":"string"}}},"required":["source_ids"],"additionalProperties":false}}}
+        {"type":"function","function":{"name":"finish","description":"Finish with ordered source UUIDs and a calibrated evidence disposition","parameters":{"type":"object","properties":{"source_ids":{"type":"array","items":{"type":"string"}},"evidence_status":{"type":"string","enum":["supported","contradicts-premise","near-match","insufficient"]},"reason":{"type":"string","minLength":1,"maxLength":256}},"required":["source_ids","evidence_status","reason"],"additionalProperties":false}}}
     ])
 }
 
@@ -882,7 +890,7 @@ impl LoopState {
         &self,
         status: DeepRecallStatus,
         stop_reason: DeepRecallStopReason,
-        source_ids: Option<Vec<Uuid>>,
+        finish: Option<FinishOutcome>,
     ) -> DeepRecallProviderResult {
         let outstanding = self.outstanding.as_ref().map_or(
             Reservation {
@@ -894,14 +902,31 @@ impl LoopState {
         let mut usage = self.usage;
         usage.unsettled_context_tokens_upper_bound = outstanding.context_tokens;
         usage.unsettled_spend_micros_upper_bound = outstanding.spend_micros;
+        let source_ids = finish.as_ref().map_or_else(
+            || self.tools.checkpoint.clone(),
+            |finish| finish.source_ids.clone(),
+        );
+        let evidence = finish.map_or_else(
+            || {
+                let status = EvidenceStatus::Insufficient;
+                EvidenceDisposition {
+                    contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+                    status,
+                    answer_policy: status.answer_policy(),
+                    reason: format!("deep recall ended before a valid finish: {stop_reason:?}"),
+                }
+            },
+            |finish| finish.evidence,
+        );
         DeepRecallProviderResult {
             status,
             stop_reason,
-            source_ids: source_ids.unwrap_or_else(|| self.tools.checkpoint.clone()),
+            source_ids,
             usage,
             generation_ids: self.generation_ids.clone(),
             observed_provider: self.observed_provider.clone(),
             observed_model: self.observed_model.clone(),
+            evidence,
         }
     }
 }
@@ -1203,7 +1228,13 @@ fn parse_price_env(name: &str) -> Result<u64, String> {
 
 struct ToolOutcome {
     content: Value,
-    finish: Option<Vec<Uuid>>,
+    finish: Option<FinishOutcome>,
+}
+
+#[derive(Debug)]
+struct FinishOutcome {
+    source_ids: Vec<Uuid>,
+    evidence: EvidenceDisposition,
 }
 
 struct WorkspaceTools {
@@ -1454,9 +1485,48 @@ impl WorkspaceTools {
                 }
             }
         }
+        let disposition = if finish {
+            let Some(status) = args.get("evidence_status").and_then(Value::as_str) else {
+                return tool_error("invalid_arguments");
+            };
+            let status = match status {
+                "supported" => EvidenceStatus::Supported,
+                "contradicts-premise" => EvidenceStatus::ContradictsPremise,
+                "near-match" => EvidenceStatus::NearMatch,
+                "insufficient" => EvidenceStatus::Insufficient,
+                _ => return tool_error("invalid_arguments"),
+            };
+            let Some(reason) = args.get("reason").and_then(Value::as_str) else {
+                return tool_error("invalid_arguments");
+            };
+            let reason = reason.trim();
+            if reason.is_empty() || reason.chars().count() > MAX_QUERY_CHARS {
+                return tool_error("invalid_arguments");
+            }
+            if matches!(
+                status,
+                EvidenceStatus::Supported
+                    | EvidenceStatus::ContradictsPremise
+                    | EvidenceStatus::NearMatch
+            ) && ids.is_empty()
+            {
+                return tool_error("missing_evidence");
+            }
+            Some(EvidenceDisposition {
+                contract_revision: EVIDENCE_DISPOSITION_CONTRACT_REVISION.to_string(),
+                status,
+                answer_policy: status.answer_policy(),
+                reason: reason.to_string(),
+            })
+        } else {
+            None
+        };
         ToolOutcome {
             content: json!({"source_ids": if finish { &ids } else { &self.checkpoint }}),
-            finish: finish.then_some(ids),
+            finish: disposition.map(|evidence| FinishOutcome {
+                source_ids: ids,
+                evidence,
+            }),
         }
     }
 }
@@ -1852,8 +1922,45 @@ mod tests {
                 .content["source_ids"],
             json!([a, b])
         );
-        let finished = tools.call("finish", json!({"source_ids": [b, a, b]}));
-        assert_eq!(finished.finish, Some(vec![b, a]));
+        let finished = tools.call(
+            "finish",
+            json!({
+                "source_ids": [b, a, b],
+                "evidence_status": "supported",
+                "reason": "both sources directly support the answer"
+            }),
+        );
+        let finished = finished.finish.expect("valid finish");
+        assert_eq!(finished.source_ids, vec![b, a]);
+        assert_eq!(finished.evidence.status, EvidenceStatus::Supported);
+    }
+
+    #[test]
+    fn finish_rejects_unknown_or_uncalibrated_evidence_statuses() {
+        let (workspace, source_id, _) = workspace();
+        let mut tools = WorkspaceTools::new(workspace).unwrap();
+        for args in [
+            json!({"source_ids": [source_id]}),
+            json!({
+                "source_ids": [source_id],
+                "evidence_status": "probably",
+                "reason": "guess"
+            }),
+            json!({
+                "source_ids": [],
+                "evidence_status": "supported",
+                "reason": "unsupported confidence"
+            }),
+            json!({
+                "source_ids": [source_id],
+                "evidence_status": "contradicts-premise",
+                "reason": "   "
+            }),
+        ] {
+            let outcome = tools.call("finish", args);
+            assert!(outcome.finish.is_none());
+            assert!(outcome.content.get("error").is_some());
+        }
     }
 
     #[test]
@@ -2202,7 +2309,7 @@ mod tests {
                 vec![json!({
                     "model":"anthropic/claude-sonnet-5",
                     "provider":"Azure",
-                    "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-3","type":"function","function":{"name":"finish","arguments":format!("{{\"source_ids\":[\"{b}\",\"{a}\"]}}")}}]},"finish_reason":"tool_calls"}],
+                    "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-3","type":"function","function":{"name":"finish","arguments":format!("{{\"source_ids\":[\"{b}\",\"{a}\"],\"evidence_status\":\"supported\",\"reason\":\"direct support in both sources\"}}")}}]},"finish_reason":"tool_calls"}],
                     "usage":{"prompt_tokens":30,"completion_tokens":4,"cost":0.0003}
                 })],
             ),
@@ -2263,7 +2370,7 @@ mod tests {
                 vec![json!({
                     "model":"anthropic/claude-sonnet-5",
                     "provider":"Azure",
-                    "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-finish","type":"function","function":{"name":"finish","arguments":format!("{{\"source_ids\":[\"{b}\",\"{a}\"]}}")}}]},"finish_reason":"tool_calls"}],
+                    "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-finish","type":"function","function":{"name":"finish","arguments":format!("{{\"source_ids\":[\"{b}\",\"{a}\"],\"evidence_status\":\"supported\",\"reason\":\"direct support in both sources\"}}")}}]},"finish_reason":"tool_calls"}],
                     "usage":{"prompt_tokens":20,"completion_tokens":2,"cost":0.0002}
                 })],
             ),
@@ -2308,7 +2415,7 @@ mod tests {
             "ignored",
             vec![json!({
                 "model":"anthropic/claude-sonnet-5","provider":"Azure",
-                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}],
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}],
                 "usage":{"prompt_tokens":1,"completion_tokens":1,"cost":0.000001}
             })],
         );
@@ -2337,7 +2444,7 @@ mod tests {
             "gen-wrong-model",
             vec![json!({
                 "model":"anthropic/claude-opus-5","provider":"Azure",
-                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}],
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}],
                 "usage":{"prompt_tokens":10,"completion_tokens":1,"cost":0.00001}
             })],
         );
@@ -2368,7 +2475,7 @@ mod tests {
                 "gen-current",
                 vec![json!({
                     "model":"anthropic/claude-sonnet-5","provider":"Azure",
-                    "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-current","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}],
+                    "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-current","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}],
                     "usage":{"prompt_tokens":20,"completion_tokens":1,"cost":0.00002}
                 })],
             );
@@ -2512,7 +2619,7 @@ mod tests {
             "gen-wrong-content-type",
             vec![json!({
                 "model":"anthropic/claude-sonnet-5","provider":"Azure",
-                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}],
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}],
                 "usage":{"prompt_tokens":1,"completion_tokens":1,"cost":0.000001}
             })],
         );
@@ -2613,7 +2720,7 @@ mod tests {
             "gen-after-retry",
             vec![json!({
                 "model":"anthropic/claude-sonnet-5","provider":"Azure",
-                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}],
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}],
                 "usage":{"prompt_tokens":1,"completion_tokens":1,"cost":0.000001}
             })],
         );
@@ -2757,7 +2864,7 @@ mod tests {
             "gen-missing-usage",
             vec![json!({
                 "model":"anthropic/claude-sonnet-5","provider":"Azure",
-                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}]
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}]
             })],
         );
         let provider = OpenRouterDeepRecall::with_transport(
@@ -2992,7 +3099,7 @@ mod tests {
             assert_eq!(body["max_completion_tokens"], 4096);
             let event = json!({
                 "model":"anthropic/claude-sonnet-5","provider":"Azure",
-                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[]}"}}]}}],
+                "choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"finish","arguments":"{\"source_ids\":[],\"evidence_status\":\"insufficient\",\"reason\":\"no supporting source found\"}"}}]}}],
                 "usage":{"prompt_tokens":1,"completion_tokens":1,"cost":0.000001}
             });
             let response_body = format!("data: {event}\n\ndata: [DONE]\n\n");
