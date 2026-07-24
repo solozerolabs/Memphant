@@ -3,19 +3,17 @@
   "status": "AUTHORIZED_FOR_PAID_EXECUTION",
   "authorization": {
     "authorized_by": "user in Codex task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
-    "authorized_at": "2026-07-24T19:12:14Z",
-    "authorization_scope_sha256": "40609923518b0c9c97ea92bb9bc45fa2d2ff8bfa2932d76ac5660c1503c2aad3"
+    "authorized_at": "2026-07-24T19:20:52Z",
+    "authorization_scope_sha256": "e13006c2b485f26a683f23721aac315e24cfe591241a070978906865d304f132"
   },
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
-  "purpose": "Generate non-executing mutation proposals for the frozen ForgetEval n=12 gate. This packet does not authorize confirmation or mutation execution.",
+  "purpose": "Generate non-executing mutation proposals for the frozen ForgetEval 385-case winner expansion. This packet does not authorize confirmation or mutation execution.",
   "frozen_inputs": {
-    "proposal_inputs": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-inputs.n12.json",
-    "proposal_inputs_sha256": "33e82520c2f5c18bb5d1ba04951a2e0d48429e085990863f3b8ced031223a397",
-    "case_manifest": "benchmarks/manifests/forgeteval.next-evidence.n12.json",
-    "case_manifest_sha256": "212cc375be1cafd0e57d66ce345ef38b27c3e7a9c4691a1c5738a650aabd6d5a",
-    "case_count": 12,
-    "mutation_proposal_count": 16,
+    "proposal_inputs": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-inputs.385.json",
+    "proposal_inputs_sha256": "419edd957e9a63b00dda9860e1cb642ea3e3100084f3b3a8713a458f96af5793",
+    "case_count": 385,
+    "mutation_proposal_count": 259,
     "forgeteval_commit": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
     "memphant_base_commit": "f25a6805168b4bd465edbedaeb0d403fe3ada97a"
   },
@@ -27,29 +25,30 @@
     "proposal_system_prompt_sha256": "e0adc6c7352d876943c5866f900524ba5728e9eced716580776d4735041841b1"
   },
   "execution": {
-    "input_sha256": "33e82520c2f5c18bb5d1ba04951a2e0d48429e085990863f3b8ced031223a397",
-    "output": "docs/build-log/artifacts/next-evidence/forgeteval/proposals-v3.n12.json",
-    "attempt_ledger": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-attempts-v3.n12.jsonl",
-    "cache_dir": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-cache-v3-n12",
+    "input_sha256": "419edd957e9a63b00dda9860e1cb642ea3e3100084f3b3a8713a458f96af5793",
+    "output": "docs/build-log/artifacts/next-evidence/forgeteval/proposals-v3.385.json",
+    "attempt_ledger": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-attempts-v3.385.jsonl",
+    "cache_dir": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-cache-v3-385",
     "model": "openai/gpt-5.6-terra",
     "reasoning_effort": "medium",
-    "max_calls": 16,
-    "max_provider_attempts": 32,
+    "max_calls": 259,
+    "max_provider_attempts": 300,
     "max_output_tokens": 512,
-    "max_spend_usd": "0.50",
+    "max_spend_usd": "5.00",
     "max_price_prompt_per_million": "2.75",
     "max_price_completion_per_million": "16.5",
     "system_prompt_sha256": "e0adc6c7352d876943c5866f900524ba5728e9eced716580776d4735041841b1"
   },
   "liability_derivation": {
-    "frozen_prompt_and_system_bytes": 16988,
+    "frozen_prompt_and_system_bytes": 274137,
     "maximum_completion_tokens_per_logical_call": 512,
-    "maximum_provider_attempts": 32,
-    "two_attempt_upper_bound_usd": "0.42235050",
-    "campaign_ceiling_usd": "0.50"
+    "maximum_provider_attempts": 300,
+    "one_attempt_per_logical_call_upper_bound_usd": "3.40806675",
+    "all_attempts_at_largest_request_upper_bound_usd": "4.111800",
+    "campaign_ceiling_usd": "5.00"
   },
   "scratch_database": {
-    "proposal_generation": "none; input artifact was produced by an already-completed run-owned ephemeral scratch Postgres rehearsal",
+    "proposal_generation": "none; input artifact was produced by the completed run-owned ephemeral scratch Postgres 385-case preparation",
     "mutation_execution": "not authorized by this packet"
   },
   "retry_and_settlement": {
@@ -64,5 +63,5 @@
     "execution": "A separately authorized scratch-Postgres replay maps confirmed body hashes to exactly one current unit ID and uses the existing public exact mutation primitive.",
     "automatic_model_execution": false
   },
-  "command": "doppler run --project syndai --config dev -- python3 scripts/generate_forgeteval_proposals.py --inputs docs/build-log/artifacts/next-evidence/forgeteval/proposal-inputs.n12.json --out docs/build-log/artifacts/next-evidence/forgeteval/proposals-v3.n12.json --authorization-manifest docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json --attempt-ledger docs/build-log/artifacts/next-evidence/forgeteval/proposal-attempts-v3.n12.jsonl --cache-dir docs/build-log/artifacts/next-evidence/forgeteval/proposal-cache-v3-n12 --model openai/gpt-5.6-terra --reasoning-effort medium --max-calls 16 --max-provider-attempts 32 --max-output-tokens 512 --max-spend-usd 0.50 --max-price-prompt-per-million 2.75 --max-price-completion-per-million 16.5"
+  "command": "doppler run --project syndai --config dev -- python3 scripts/generate_forgeteval_proposals.py --inputs docs/build-log/artifacts/next-evidence/forgeteval/proposal-inputs.385.json --out docs/build-log/artifacts/next-evidence/forgeteval/proposals-v3.385.json --authorization-manifest docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json --attempt-ledger docs/build-log/artifacts/next-evidence/forgeteval/proposal-attempts-v3.385.jsonl --cache-dir docs/build-log/artifacts/next-evidence/forgeteval/proposal-cache-v3-385 --model openai/gpt-5.6-terra --reasoning-effort medium --max-calls 259 --max-provider-attempts 300 --max-output-tokens 512 --max-spend-usd 5.00 --max-price-prompt-per-million 2.75 --max-price-completion-per-million 16.5"
 }

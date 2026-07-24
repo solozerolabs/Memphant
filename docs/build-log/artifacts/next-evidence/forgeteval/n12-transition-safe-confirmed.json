@@ -1,0 +1,1216 @@
+{
+  "benchmark": "ForgetEval",
+  "capabilities": {
+    "inscribe": "synchronous direct-unit POST /v1/episodes",
+    "purge": "N/A: no selective hard purge-by-query public primitive",
+    "recall": "POST /v1/recall",
+    "release": "adaptive_gap over ranked recall then exact-unit POST /v1/forget",
+    "supersede": "rank-1 recall then exact-unit POST /v1/correct"
+  },
+  "case_generation": {
+    "distractors": null,
+    "scale_per_family": null,
+    "seed": null,
+    "selected_case_ids": [
+      "adv_paraphrase_supersession_01",
+      "adv_paraphrase_supersession_20",
+      "adv_negation_trap_01",
+      "adv_negation_trap_02",
+      "adv_temporal_qualifier_02",
+      "adv_temporal_qualifier_13",
+      "adv_shared_attribute_01",
+      "adv_shared_attribute_20",
+      "adv_compound_fact_01",
+      "adv_compound_fact_20",
+      "adv_recursive_supersession_01",
+      "adv_recursive_supersession_20"
+    ],
+    "source_case_count": 385
+  },
+  "operation_counts": {
+    "inscribe": 24,
+    "recall": 28,
+    "release": 3,
+    "resets": 12,
+    "supersede": 13
+  },
+  "results": {
+    "cases": [
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af",
+            "unit_id": "019f9590-ce47-7211-bd8d-084c574a8309"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "f11e9b82e7447cfe32f6658fd6a7c6cc5da839584b3bb0c40c500f57d0d0cb30",
+            "unit_id": "019f9590-ce6e-7393-927a-02bf9bdb18b9"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "6ae475e842b6b2ef024e299a72c0a9ebb99015a0cf385eb0bcd2ed9d28933e2c",
+            "returned": [
+              {
+                "body_sha256": "f11e9b82e7447cfe32f6658fd6a7c6cc5da839584b3bb0c40c500f57d0d0cb30",
+                "fused_score": 0.06888749,
+                "unit_id": "019f9590-ce6e-7393-927a-02bf9bdb18b9"
+              },
+              {
+                "body_sha256": "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af",
+                "fused_score": 0.06866382,
+                "unit_id": "019f9590-ce47-7211-bd8d-084c574a8309"
+              }
+            ],
+            "trace_id": "019f9590-ceb1-7143-8607-a426125c23ef"
+          },
+          {
+            "confirmation_input_sha256": "78958f3f78c504e52802b09302fe918322bf4b7615842b7c5455981a68f87126",
+            "correction_id": "cor_019f9590-ced4-70b1-8f7c-0b0d67d3f290",
+            "created": [
+              "019f9590-ced4-70b1-8f7c-0b0d67d3f290",
+              "019f9590-ced4-70b1-8f7c-0b18ab8b0136"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "53c47913c8e6d9dd0ea03846fc660853c771525364a94b82ebb249351135752b",
+            "query_sha256": "6ae475e842b6b2ef024e299a72c0a9ebb99015a0cf385eb0bcd2ed9d28933e2c",
+            "selected_unit_id": "019f9590-ce47-7211-bd8d-084c574a8309",
+            "superseded": [
+              "019f9590-ce47-7211-bd8d-084c574a8309"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "5a77d52359d9327d65b195aa2faee77c21662565a2fefa749832b4c6e11153da",
+            "returned": [
+              {
+                "body_sha256": "f11e9b82e7447cfe32f6658fd6a7c6cc5da839584b3bb0c40c500f57d0d0cb30",
+                "fused_score": 0.1040022,
+                "unit_id": "019f9590-ce6e-7393-927a-02bf9bdb18b9"
+              },
+              {
+                "body_sha256": "4469756dc1693cab6baf0a474174b745750dd500fecbe8dca7329fee270b6de1",
+                "fused_score": 0.10232475,
+                "unit_id": "019f9590-ced4-70b1-8f7c-0b0d67d3f290"
+              }
+            ],
+            "trace_id": "019f9590-cf02-7962-966f-f687044ada20"
+          }
+        ],
+        "attack_category": "paraphrase_supersession",
+        "case_id": "adv_paraphrase_supersession_01",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f",
+            "unit_id": "019f9590-cf27-7bb3-9d48-cccd8ac064a4"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "1bd6a72eb90418b0cf1d5ffa2753bc9a65a5d7c4a7e2b5a78e126282c25a59f6",
+            "unit_id": "019f9590-cf48-7bf3-8525-28d74a5cd876"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "5e8f5860c709b9cdc4d08d6e0a572551a18119fde3d3838ce601734855f01ca4",
+            "returned": [
+              {
+                "body_sha256": "1bd6a72eb90418b0cf1d5ffa2753bc9a65a5d7c4a7e2b5a78e126282c25a59f6",
+                "fused_score": 0.06888749,
+                "unit_id": "019f9590-cf48-7bf3-8525-28d74a5cd876"
+              },
+              {
+                "body_sha256": "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f",
+                "fused_score": 0.06866382,
+                "unit_id": "019f9590-cf27-7bb3-9d48-cccd8ac064a4"
+              }
+            ],
+            "trace_id": "019f9590-cf73-7a80-b19b-02ef76bac989"
+          },
+          {
+            "confirmation_input_sha256": "ddc764fb2cacaaa6b1e275cdbd7c639b48111dcc153c08db2a21cca8189b6997",
+            "correction_id": "cor_019f9590-cf8f-70a3-ada6-2d6dd23e3e55",
+            "created": [
+              "019f9590-cf8f-70a3-ada6-2d6dd23e3e55",
+              "019f9590-cf8f-70a3-ada6-2d7fe684ce0d"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "431fec06d366cb07eed1abe0360792f7b578570fc002000969f06811e8a09d4d",
+            "query_sha256": "5e8f5860c709b9cdc4d08d6e0a572551a18119fde3d3838ce601734855f01ca4",
+            "selected_unit_id": "019f9590-cf27-7bb3-9d48-cccd8ac064a4",
+            "superseded": [
+              "019f9590-cf27-7bb3-9d48-cccd8ac064a4"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "54fdebcc58db57d86df33b754e028ae30c63bec94ac2ea54864b345440f40d9c",
+            "returned": [
+              {
+                "body_sha256": "1bd6a72eb90418b0cf1d5ffa2753bc9a65a5d7c4a7e2b5a78e126282c25a59f6",
+                "fused_score": 0.10344305,
+                "unit_id": "019f9590-cf48-7bf3-8525-28d74a5cd876"
+              },
+              {
+                "body_sha256": "8a17d96431d1459b400485e8eaa8a8b1319f68beef738d81f419dd78fdd286a0",
+                "fused_score": 0.1028839,
+                "unit_id": "019f9590-cf8f-70a3-ada6-2d6dd23e3e55"
+              }
+            ],
+            "trace_id": "019f9590-cfb3-7ad3-968c-4cbdff3f26bf"
+          }
+        ],
+        "attack_category": "paraphrase_supersession",
+        "case_id": "adv_paraphrase_supersession_20",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "fail",
+        "present_must_not_contain_indexes": [
+          0
+        ]
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d",
+            "unit_id": "019f9590-cfd3-7d31-a40f-89c92a80dfce"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "de9cfce3951a00a595ed6240c5fe7539707ff13c67c25966bd8137352d40e867",
+            "unit_id": "019f9590-cfef-7323-b11e-f9fd07860b7a"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "18a69b5f96d07c213802583a9559d4e6534940ab01cb2ba06ccbcf2ffccec09d",
+            "returned": [
+              {
+                "body_sha256": "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-cfd3-7d31-a40f-89c92a80dfce"
+              },
+              {
+                "body_sha256": "de9cfce3951a00a595ed6240c5fe7539707ff13c67c25966bd8137352d40e867",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-cfef-7323-b11e-f9fd07860b7a"
+              }
+            ],
+            "trace_id": "019f9590-d016-78e1-be37-7c0d9be7b98c"
+          },
+          {
+            "confirmation_input_sha256": "65029a890b93718dcb23375366ac87cd38553142db5d5e6635016e1e1060f898",
+            "correction_id": "cor_019f9590-d030-7520-aacb-b394215e64dc",
+            "created": [
+              "019f9590-d030-7520-aacb-b394215e64dc",
+              "019f9590-d030-7520-aacb-b3a510620f0a"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "c18c35773f1dfb265bcdf5b93fd524f2066125f7d11d1f629797f7c6fd518879",
+            "query_sha256": "18a69b5f96d07c213802583a9559d4e6534940ab01cb2ba06ccbcf2ffccec09d",
+            "selected_unit_id": "019f9590-cfd3-7d31-a40f-89c92a80dfce",
+            "superseded": [
+              "019f9590-cfd3-7d31-a40f-89c92a80dfce"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "d7c4cd1f03d95933eecf46a56ff4305811cf4ab923c781d169de08e0507ab3da",
+            "returned": [
+              {
+                "body_sha256": "eca7ec1694cb98759ddb958929c124c586f9f8f8fdff345dd3ae069c99efda8e",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d030-7520-aacb-b394215e64dc"
+              },
+              {
+                "body_sha256": "de9cfce3951a00a595ed6240c5fe7539707ff13c67c25966bd8137352d40e867",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-cfef-7323-b11e-f9fd07860b7a"
+              }
+            ],
+            "trace_id": "019f9590-d051-7df1-a64a-2058b4570c3d"
+          }
+        ],
+        "attack_category": "negation_trap",
+        "case_id": "adv_negation_trap_01",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb",
+            "unit_id": "019f9590-d06a-78b2-b527-43b1e54a2b7a"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+            "unit_id": "019f9590-d082-7df1-93ee-40eff6fcbede"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "7a5394ccec4cde314afe64081bcd68e79a636c3f4c9245f72357395e6d21ca23",
+            "returned": [
+              {
+                "body_sha256": "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d06a-78b2-b527-43b1e54a2b7a"
+              },
+              {
+                "body_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d082-7df1-93ee-40eff6fcbede"
+              }
+            ],
+            "trace_id": "019f9590-d0a9-75d0-ad93-a0f743d7a7a7"
+          },
+          {
+            "confirmation_input_sha256": "7df4d97fad64b23921eb6914b5479d000aa63afc3d32fde12307d7a1c0a7cac6",
+            "operation": "release",
+            "proposal_sha256": "26128532c69e7a004b8c1de2da7df00ac38b3ae0b1c884b3fba430c384f35f61",
+            "query_sha256": "7a5394ccec4cde314afe64081bcd68e79a636c3f4c9245f72357395e6d21ca23",
+            "receipts": [
+              {
+                "deletion_generation": 1,
+                "invalidated_units": [
+                  "019f9590-d06a-78b2-b527-43b1e54a2b7a"
+                ],
+                "policy": "hard_delete",
+                "selected_unit_id": "019f9590-d06a-78b2-b527-43b1e54a2b7a",
+                "trace_ref": null,
+                "verification": "authorized_transaction_committed"
+              }
+            ],
+            "selected_unit_ids": [
+              "019f9590-d06a-78b2-b527-43b1e54a2b7a"
+            ],
+            "selection_strategy": "confirmed_proposal",
+            "threshold": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "8e557b02590f9e9f4423a95aca61ced2da906a800cb53df5edae01b47df071fb",
+            "returned": [
+              {
+                "body_sha256": "23ad82af06231f1c5b2e64f31987848918020cf29f240a46cbcefaa6783b063f",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d082-7df1-93ee-40eff6fcbede"
+              }
+            ],
+            "trace_id": "019f9590-d0d4-7393-85ff-10e54cae373e"
+          }
+        ],
+        "attack_category": "negation_trap",
+        "case_id": "adv_negation_trap_02",
+        "error_kind": null,
+        "family": "decay",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "release"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532",
+            "unit_id": "019f9590-d0eb-7a32-b13a-1339232d01b7"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+            "unit_id": "019f9590-d104-7313-bf67-c96b60ea9376"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "e1d3995a9970f921968325e7200ce892941c62f11b2d3bb7b645f27afa0202bf",
+            "returned": [
+              {
+                "body_sha256": "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d0eb-7a32-b13a-1339232d01b7"
+              },
+              {
+                "body_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d104-7313-bf67-c96b60ea9376"
+              }
+            ],
+            "trace_id": "019f9590-d12d-7fc1-948f-8eadbeeeab3d"
+          },
+          {
+            "confirmation_input_sha256": "5f5763fc07a520d798099ba801fb7f6123ded7197f437916571cb6a8081f9535",
+            "correction_id": "cor_019f9590-d14b-75f0-abc1-ff0def3c2f56",
+            "created": [
+              "019f9590-d14b-75f0-abc1-ff0def3c2f56",
+              "019f9590-d14b-75f0-abc1-ff18f73010c9"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "0c9a00a84c1f6613ed1c7c530ec1d501e712465ab4361ffb94024b2477df9a24",
+            "query_sha256": "e1d3995a9970f921968325e7200ce892941c62f11b2d3bb7b645f27afa0202bf",
+            "selected_unit_id": "019f9590-d0eb-7a32-b13a-1339232d01b7",
+            "superseded": [
+              "019f9590-d0eb-7a32-b13a-1339232d01b7"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "e11db319ecfc5cfb72e298a69a51da4788e08ef6f448c84e61ee7eb7cd2d0f20",
+            "returned": [
+              {
+                "body_sha256": "c8da1ed9634973865c97624fb6e29c769218ff50f6296de03bf572d6b882fdff",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d14b-75f0-abc1-ff0def3c2f56"
+              },
+              {
+                "body_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d104-7313-bf67-c96b60ea9376"
+              }
+            ],
+            "trace_id": "019f9590-d16b-7961-8374-7cfc695d009e"
+          },
+          {
+            "confirmation_input_sha256": "a199c7d051cf00a7a135a19a0ad33c38283ff9afee25933b68dea93e04679020",
+            "correction_id": "cor_019f9590-d183-7483-8500-4ce5cd39066e",
+            "created": [
+              "019f9590-d183-7483-8500-4ce5cd39066e",
+              "019f9590-d183-7483-8500-4cf346a3092f"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "b0a4316e155a25a912eca8b78ab154b891b5f143d01761767fe4c5777a376de3",
+            "query_sha256": "e11db319ecfc5cfb72e298a69a51da4788e08ef6f448c84e61ee7eb7cd2d0f20",
+            "selected_unit_id": "019f9590-d14b-75f0-abc1-ff0def3c2f56",
+            "superseded": [
+              "019f9590-d14b-75f0-abc1-ff0def3c2f56"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "5210d525a6c285df28c4a3061c8b5ba2d79e366136e24379b834c7cbc894006f",
+            "returned": [
+              {
+                "body_sha256": "97f7da1f1b9d4b57901d3b47c18f02bf72bb1865935fb2a627d85433d0b0784c",
+                "fused_score": 0.103331216,
+                "unit_id": "019f9590-d183-7483-8500-4ce5cd39066e"
+              },
+              {
+                "body_sha256": "693b580be8a8a78bd0d8cab5548c5e0f6d6f8a2397a5d0c015b52e5639eca06c",
+                "fused_score": 0.10299573,
+                "unit_id": "019f9590-d104-7313-bf67-c96b60ea9376"
+              }
+            ],
+            "trace_id": "019f9590-d1a4-7562-8e66-25a9792573ac"
+          }
+        ],
+        "attack_category": "temporal_qualifier",
+        "case_id": "adv_temporal_qualifier_02",
+        "error_kind": null,
+        "family": "drift",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd",
+            "unit_id": "019f9590-d1be-7433-a692-7a87d18fec52"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+            "unit_id": "019f9590-d1d6-7081-ab2e-f699b396b321"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "893b0c4fbd57a851aa17fac80c1af88dc7e4e0367012361b27f35e88a54396ae",
+            "returned": [
+              {
+                "body_sha256": "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d1be-7433-a692-7a87d18fec52"
+              },
+              {
+                "body_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d1d6-7081-ab2e-f699b396b321"
+              }
+            ],
+            "trace_id": "019f9590-d1fc-7630-8df7-6922f131066a"
+          },
+          {
+            "confirmation_input_sha256": "58afab8d9ca5a947286efeed5641eb15e2870361df66fe738f8d08442f7a2e4d",
+            "correction_id": "cor_019f9590-d214-7a90-ac75-1ac868e318c8",
+            "created": [
+              "019f9590-d214-7a90-ac75-1ac868e318c8",
+              "019f9590-d214-7a90-ac75-1ad13f3287e8"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "17d4ecb599b0491cceab22524f2afbc227c98e407090ace2267cb985fb9bae9f",
+            "query_sha256": "893b0c4fbd57a851aa17fac80c1af88dc7e4e0367012361b27f35e88a54396ae",
+            "selected_unit_id": "019f9590-d1be-7433-a692-7a87d18fec52",
+            "superseded": [
+              "019f9590-d1be-7433-a692-7a87d18fec52"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "d0d762c5f9c24dbec27f66e000459972caea01c068a36bb8f2823859404b3a30",
+            "returned": [
+              {
+                "body_sha256": "7763b0585bc0c3445e83c3d6ca78939f35e077e1f982eafcdb18c7c5dc50dab0",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d214-7a90-ac75-1ac868e318c8"
+              },
+              {
+                "body_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d1d6-7081-ab2e-f699b396b321"
+              }
+            ],
+            "trace_id": "019f9590-d231-76c3-b321-ad026d5bf13b"
+          },
+          {
+            "confirmation_input_sha256": "ef080d81a6e328565b4e669455c67a55646ae2a0127ffb6fcb5bed464772ed98",
+            "correction_id": "cor_019f9590-d24a-77b2-8348-def4e636483d",
+            "created": [
+              "019f9590-d24a-77b2-8348-def4e636483d",
+              "019f9590-d24a-77b2-8348-df03b9f06e93"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "9ff1c1c9921f4fe4c291d81bdb8f5aee27bb21f95883f71ea77c4a18c4dbeb9a",
+            "query_sha256": "d0d762c5f9c24dbec27f66e000459972caea01c068a36bb8f2823859404b3a30",
+            "selected_unit_id": "019f9590-d214-7a90-ac75-1ac868e318c8",
+            "superseded": [
+              "019f9590-d214-7a90-ac75-1ac868e318c8"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "e9b1e398e202a56dba1177d4ac0e9eaf0c066229426825a2208ba2208191e5a7",
+            "returned": [
+              {
+                "body_sha256": "7ca26294ca2ff46164a8f8624ecfcebeffa3ccfa0f603242385d193c23e40ead",
+                "fused_score": 0.06888749,
+                "unit_id": "019f9590-d1d6-7081-ab2e-f699b396b321"
+              },
+              {
+                "body_sha256": "2399df19209ef364d1f8b8c03d4bcbdd7e07dcfa1029b230e2606b8d2d6d4f36",
+                "fused_score": 0.06866382,
+                "unit_id": "019f9590-d24a-77b2-8348-def4e636483d"
+              }
+            ],
+            "trace_id": "019f9590-d267-7e92-989d-eff0f7e20f44"
+          }
+        ],
+        "attack_category": "temporal_qualifier",
+        "case_id": "adv_temporal_qualifier_13",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b",
+            "unit_id": "019f9590-d27d-7250-a114-575845bb07ea"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+            "unit_id": "019f9590-d293-7f62-bad0-b912428bba5e"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+            "unit_id": "019f9590-d2ab-7222-a565-d89a049b5cf6"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "eac8f677e38ff36aae8d4e26b46470fc921afce476139eb21b69d7598646d2cc",
+            "returned": [
+              {
+                "body_sha256": "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d27d-7250-a114-575845bb07ea"
+              },
+              {
+                "body_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+                "fused_score": 0.0272866,
+                "unit_id": "019f9590-d293-7f62-bad0-b912428bba5e"
+              },
+              {
+                "body_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+                "fused_score": 0.026853481,
+                "unit_id": "019f9590-d2ab-7222-a565-d89a049b5cf6"
+              }
+            ],
+            "trace_id": "019f9590-d2d1-78d2-b803-47ce78cd099d"
+          },
+          {
+            "confirmation_input_sha256": "eeec5d832db267440181c6e4bd59a1e0c54af3cbdd8e34c22174162cbc752d27",
+            "operation": "release",
+            "proposal_sha256": "449e6032a039ecfc20a732bf5ddf891523b8f927ff2812aec843a68271fa149f",
+            "query_sha256": "eac8f677e38ff36aae8d4e26b46470fc921afce476139eb21b69d7598646d2cc",
+            "receipts": [
+              {
+                "deletion_generation": 2,
+                "invalidated_units": [
+                  "019f9590-d27d-7250-a114-575845bb07ea"
+                ],
+                "policy": "hard_delete",
+                "selected_unit_id": "019f9590-d27d-7250-a114-575845bb07ea",
+                "trace_ref": null,
+                "verification": "authorized_transaction_committed"
+              }
+            ],
+            "selected_unit_ids": [
+              "019f9590-d27d-7250-a114-575845bb07ea"
+            ],
+            "selection_strategy": "confirmed_proposal",
+            "threshold": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "95d000b76d7032c0bea6fe0924f637af1afc30a22a4fbb677ca48157e5d18d24",
+            "returned": [
+              {
+                "body_sha256": "a2263dd53dfba1f036e52cf03db35c4ceb024d47b5b494014d77cb1b3d138f54",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d293-7f62-bad0-b912428bba5e"
+              },
+              {
+                "body_sha256": "34baea1da4a8784cc77c73c998c6ad1877b3a84c51dd3839973c8fd163912d82",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d2ab-7222-a565-d89a049b5cf6"
+              }
+            ],
+            "trace_id": "019f9590-d2fd-7fe0-9891-abfe9b2f09ff"
+          }
+        ],
+        "attack_category": "shared_attribute",
+        "case_id": "adv_shared_attribute_01",
+        "error_kind": null,
+        "family": "amnesia",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "release"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7",
+            "unit_id": "019f9590-d313-7942-a0c4-2a366725f508"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+            "unit_id": "019f9590-d328-7690-853b-209009093bd3"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+            "unit_id": "019f9590-d33e-78d2-b8b5-e128ead050ec"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "3816931a77003405deaa04e795485121b3efe0f66b25863ece0b4323e387f87f",
+            "returned": [
+              {
+                "body_sha256": "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d313-7942-a0c4-2a366725f508"
+              },
+              {
+                "body_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+                "fused_score": 0.06778338,
+                "unit_id": "019f9590-d33e-78d2-b8b5-e128ead050ec"
+              },
+              {
+                "body_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+                "fused_score": 0.06756683,
+                "unit_id": "019f9590-d328-7690-853b-209009093bd3"
+              }
+            ],
+            "trace_id": "019f9590-d360-7631-bfb5-e518a7d6f65b"
+          },
+          {
+            "confirmation_input_sha256": "5dc02f0d01ebacd57378245b796fc53cfe0ee82881aa793b307a03e422f043b5",
+            "operation": "release",
+            "proposal_sha256": "8b7aae93d873b998be285af221d5c60420ab13b88e951791cae246ea6126cdc5",
+            "query_sha256": "3816931a77003405deaa04e795485121b3efe0f66b25863ece0b4323e387f87f",
+            "receipts": [
+              {
+                "deletion_generation": 3,
+                "invalidated_units": [
+                  "019f9590-d313-7942-a0c4-2a366725f508"
+                ],
+                "policy": "hard_delete",
+                "selected_unit_id": "019f9590-d313-7942-a0c4-2a366725f508",
+                "trace_ref": null,
+                "verification": "authorized_transaction_committed"
+              }
+            ],
+            "selected_unit_ids": [
+              "019f9590-d313-7942-a0c4-2a366725f508"
+            ],
+            "selection_strategy": "confirmed_proposal",
+            "threshold": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "b4f42a914aa2742ced0d90af5c30548555a5fe5eb92d3058d413db32b352cba1",
+            "returned": [
+              {
+                "body_sha256": "80de3e9965e1ec52067e9935f8fc5ce126fd99ea49d22b03ddabd6740abe3dd1",
+                "fused_score": 0.06911114,
+                "unit_id": "019f9590-d328-7690-853b-209009093bd3"
+              },
+              {
+                "body_sha256": "d6d327f3316589ada3f897070530192ac4e0ccb6926515d08a4fb700bd8b9be7",
+                "fused_score": 0.068440154,
+                "unit_id": "019f9590-d33e-78d2-b8b5-e128ead050ec"
+              }
+            ],
+            "trace_id": "019f9590-d390-71b1-bb0f-e44b90368580"
+          }
+        ],
+        "attack_category": "shared_attribute",
+        "case_id": "adv_shared_attribute_20",
+        "error_kind": null,
+        "family": "amnesia",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "release"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b",
+            "unit_id": "019f9590-d3a5-7003-a797-ecffa8588790"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "e1633b727366a3e3e58315f72151bca93fcb19acd98a585d6364c1835d64e2c6",
+            "unit_id": "019f9590-d3bc-7460-b61a-2e9203ee456c"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "528b7b23a1be08062484234b922cc19f65c1115b37239c83f15f792b17fd37ba",
+            "returned": [
+              {
+                "body_sha256": "e1633b727366a3e3e58315f72151bca93fcb19acd98a585d6364c1835d64e2c6",
+                "fused_score": 0.06888749,
+                "unit_id": "019f9590-d3bc-7460-b61a-2e9203ee456c"
+              },
+              {
+                "body_sha256": "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b",
+                "fused_score": 0.06866382,
+                "unit_id": "019f9590-d3a5-7003-a797-ecffa8588790"
+              }
+            ],
+            "trace_id": "019f9590-d3df-7c42-876d-e0c5f8b4daa6"
+          },
+          {
+            "confirmation_input_sha256": "bdb14363d0aa59772737b922b85559b34760f68f18f78a1d29a0db282ffc9cbc",
+            "correction_id": "cor_019f9590-d3f9-7752-8dee-e9c1a354f9cb",
+            "created": [
+              "019f9590-d3f9-7752-8dee-e9c1a354f9cb",
+              "019f9590-d3f9-7752-8dee-e9d538492eb2"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "0483b6a942579c968c00e6c0ff21fa520422c6d39cf8942bee57f2eb8fd0de06",
+            "query_sha256": "528b7b23a1be08062484234b922cc19f65c1115b37239c83f15f792b17fd37ba",
+            "selected_unit_id": "019f9590-d3a5-7003-a797-ecffa8588790",
+            "superseded": [
+              "019f9590-d3a5-7003-a797-ecffa8588790"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "fc2f0d8b3741fabc98693fd5cd87768831d4b7c8891ba13de605f3cdabfeb6c7",
+            "returned": [
+              {
+                "body_sha256": "e1633b727366a3e3e58315f72151bca93fcb19acd98a585d6364c1835d64e2c6",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d3bc-7460-b61a-2e9203ee456c"
+              },
+              {
+                "body_sha256": "098598dda12523c375098c58f9c00f82dddb436adcb83851d55eb70ff09613ee",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d3f9-7752-8dee-e9c1a354f9cb"
+              }
+            ],
+            "trace_id": "019f9590-d414-7332-a2ee-106a9edcc0c3"
+          }
+        ],
+        "attack_category": "compound_fact",
+        "case_id": "adv_compound_fact_01",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e",
+            "unit_id": "019f9590-d42a-74c1-bdbf-6b450bd4d904"
+          },
+          {
+            "operation": "inscribe",
+            "text_sha256": "e162be38ee0fab8907dc13339f44f408dafd7506dae15c0fbf9c268abde45a0f",
+            "unit_id": "019f9590-d442-7f21-9dae-27024937ad00"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "b6922875631d62ddef66e9a76e0bc54b39723bab402ad045c25571556075f67c",
+            "returned": [
+              {
+                "body_sha256": "e162be38ee0fab8907dc13339f44f408dafd7506dae15c0fbf9c268abde45a0f",
+                "fused_score": 0.06888749,
+                "unit_id": "019f9590-d442-7f21-9dae-27024937ad00"
+              },
+              {
+                "body_sha256": "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e",
+                "fused_score": 0.06866382,
+                "unit_id": "019f9590-d42a-74c1-bdbf-6b450bd4d904"
+              }
+            ],
+            "trace_id": "019f9590-d464-7182-b913-b57c099fd6c0"
+          },
+          {
+            "confirmation_input_sha256": "457d3efcff6d954e7a4771b6df134e6a40caf31795c03520f73b31f4f781540b",
+            "correction_id": "cor_019f9590-d47e-7263-a1c5-654cdf7b4146",
+            "created": [
+              "019f9590-d47e-7263-a1c5-654cdf7b4146",
+              "019f9590-d47e-7263-a1c5-65556791253f"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "6b9c9e7ea235c2ee43ded94cf8296dc505a4be7b7fab5b4a08ecd3b028193f5f",
+            "query_sha256": "b6922875631d62ddef66e9a76e0bc54b39723bab402ad045c25571556075f67c",
+            "selected_unit_id": "019f9590-d42a-74c1-bdbf-6b450bd4d904",
+            "superseded": [
+              "019f9590-d42a-74c1-bdbf-6b450bd4d904"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "f0ed218c91324b0e7c120061d91befe1562b56d16af1ec7f121be3239c42030e",
+            "returned": [
+              {
+                "body_sha256": "88c5c201e9418d3cddaf983e0ae32144ae869c1d97cd25a7951362773861f9f3",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d47e-7263-a1c5-654cdf7b4146"
+              },
+              {
+                "body_sha256": "e162be38ee0fab8907dc13339f44f408dafd7506dae15c0fbf9c268abde45a0f",
+                "fused_score": 0.0682165,
+                "unit_id": "019f9590-d442-7f21-9dae-27024937ad00"
+              }
+            ],
+            "trace_id": "019f9590-d49b-7c90-96b9-f166576b3d93"
+          }
+        ],
+        "attack_category": "compound_fact",
+        "case_id": "adv_compound_fact_20",
+        "error_kind": null,
+        "family": "supersession",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a",
+            "unit_id": "019f9590-d4b2-7631-b81a-10b521866e21"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "2e278eac37d672b3d0a9c37818f552862e6aa888063be02952e5e018ed6341d5",
+            "returned": [
+              {
+                "body_sha256": "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d4b2-7631-b81a-10b521866e21"
+              }
+            ],
+            "trace_id": "019f9590-d4d5-7910-846f-ac60eceaeb1f"
+          },
+          {
+            "confirmation_input_sha256": "dc3e4ac1ba7694764d6c6ad7d5bb05e61bb554a76931b67c1dead03060934d4e",
+            "correction_id": "cor_019f9590-d4ee-7a30-89d9-585e1a6d80d5",
+            "created": [
+              "019f9590-d4ee-7a30-89d9-585e1a6d80d5",
+              "019f9590-d4ee-7a30-89d9-586af537af4b"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "0a5db730d5ee49cd0818bb824a80a6987fc6d8cee5b30141aae1740633c79de6",
+            "query_sha256": "2e278eac37d672b3d0a9c37818f552862e6aa888063be02952e5e018ed6341d5",
+            "selected_unit_id": "019f9590-d4b2-7631-b81a-10b521866e21",
+            "superseded": [
+              "019f9590-d4b2-7631-b81a-10b521866e21"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "49468b1ef39b824bc37b4f02636f46aabd1f21fa49bde7562b0311d3ecb6f174",
+            "returned": [
+              {
+                "body_sha256": "22c7f14b856a5674f07fd7115d41de548b61dfbb1da64447a77e6c41e438d966",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d4ee-7a30-89d9-585e1a6d80d5"
+              }
+            ],
+            "trace_id": "019f9590-d508-7f60-85e1-737963013241"
+          },
+          {
+            "confirmation_input_sha256": "f0e6edd8b38a2db5132fa964d44f321021ae6a2a6f9d2c14b5abc6123fa69111",
+            "correction_id": "cor_019f9590-d521-7370-9ac0-92c0b523db06",
+            "created": [
+              "019f9590-d521-7370-9ac0-92c0b523db06",
+              "019f9590-d521-7370-9ac0-92d7f8e88986"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "ca9a3b7c06f98c64324f2882b02616a8544c24e84473b3ff100148055e695172",
+            "query_sha256": "49468b1ef39b824bc37b4f02636f46aabd1f21fa49bde7562b0311d3ecb6f174",
+            "selected_unit_id": "019f9590-d4ee-7a30-89d9-585e1a6d80d5",
+            "superseded": [
+              "019f9590-d4ee-7a30-89d9-585e1a6d80d5"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "336bdc09c8666683536b6228588fe3e4a4485bdfd9144dc710e7076c039b7219",
+            "returned": [
+              {
+                "body_sha256": "9aeb5f709313207e6b5a1b7d79473b0a899db13fcfa77e824d4f759966ce2d96",
+                "fused_score": 0.1040022,
+                "unit_id": "019f9590-d521-7370-9ac0-92c0b523db06"
+              }
+            ],
+            "trace_id": "019f9590-d53d-7f12-b4a2-758052654b4c"
+          }
+        ],
+        "attack_category": "recursive_supersession",
+        "case_id": "adv_recursive_supersession_01",
+        "error_kind": null,
+        "family": "drift",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      },
+      {
+        "adapter_decisions": [
+          {
+            "operation": "inscribe",
+            "text_sha256": "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0",
+            "unit_id": "019f9590-d553-7ec2-a445-f282db420410"
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "8c08053de1a864374a631524e15a3722096cf06314f9dc9f924abb0630ee0c9d",
+            "returned": [
+              {
+                "body_sha256": "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d553-7ec2-a445-f282db420410"
+              }
+            ],
+            "trace_id": "019f9590-d572-7512-8bf2-fc72cc7e175c"
+          },
+          {
+            "confirmation_input_sha256": "3ee46c628e42593c3fa946f5bfd193e5e2abb77bdc0eeeb6b5e8f4b8d7892f9c",
+            "correction_id": "cor_019f9590-d589-7b30-90c5-23f01be0c2d9",
+            "created": [
+              "019f9590-d589-7b30-90c5-23f01be0c2d9",
+              "019f9590-d589-7b30-90c5-2409c4f32d82"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "38a397db334a9404cb21ddf75e59a5d99e3b8746f84072daa530062da7eb02b7",
+            "query_sha256": "8c08053de1a864374a631524e15a3722096cf06314f9dc9f924abb0630ee0c9d",
+            "selected_unit_id": "019f9590-d553-7ec2-a445-f282db420410",
+            "superseded": [
+              "019f9590-d553-7ec2-a445-f282db420410"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "4f1f7259a1e0110889d230112a8781464071a4e56e045b78d089c6b9322f7053",
+            "returned": [
+              {
+                "body_sha256": "ce7ed7db9905469ecac72599220405bfc96e73e5a2556dfeb59b3fd80a9005ab",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d589-7b30-90c5-23f01be0c2d9"
+              }
+            ],
+            "trace_id": "019f9590-d5a2-7921-b075-3f4764e3dbbc"
+          },
+          {
+            "confirmation_input_sha256": "5c6b42d57134cfe414c63847cafd303c989f1e8089c5aee9dcc9d8d6181048bd",
+            "correction_id": "cor_019f9590-d5bb-77e3-a345-ed7f8fae8523",
+            "created": [
+              "019f9590-d5bb-77e3-a345-ed7f8fae8523",
+              "019f9590-d5bb-77e3-a345-ed8e1786e671"
+            ],
+            "operation": "supersede",
+            "proposal_sha256": "66061d5376620dff5cf11ebb543a8c9853c8e83dc9c324d3b5a4c865cdff76d0",
+            "query_sha256": "4f1f7259a1e0110889d230112a8781464071a4e56e045b78d089c6b9322f7053",
+            "selected_unit_id": "019f9590-d589-7b30-90c5-23f01be0c2d9",
+            "superseded": [
+              "019f9590-d589-7b30-90c5-23f01be0c2d9"
+            ],
+            "trace_ref": null
+          },
+          {
+            "cross_rerank": null,
+            "operation": "recall",
+            "query_sha256": "d73e331b30786fe624d7c0e4807a722817a8eff2795f4eee58881ba275d71039",
+            "returned": [
+              {
+                "body_sha256": "f8e27a0485650b0e34ff3231989e88a268d48a6110306941973b1f75ee6a8d00",
+                "fused_score": 0.0693348,
+                "unit_id": "019f9590-d5bb-77e3-a345-ed7f8fae8523"
+              }
+            ],
+            "trace_id": "019f9590-d5d7-7481-b71d-04fbea801975"
+          }
+        ],
+        "attack_category": "recursive_supersession",
+        "case_id": "adv_recursive_supersession_20",
+        "error_kind": null,
+        "family": "drift",
+        "missing_must_contain_indexes": [],
+        "mutation_operations": [
+          "supersede",
+          "supersede"
+        ],
+        "outcome": "pass",
+        "present_must_not_contain_indexes": []
+      }
+    ],
+    "failed": 1,
+    "families": {
+      "amnesia": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 2,
+        "total": 2
+      },
+      "decay": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 1,
+        "total": 1
+      },
+      "drift": {
+        "failed": 0,
+        "not_applicable": 0,
+        "passed": 3,
+        "total": 3
+      },
+      "supersession": {
+        "failed": 1,
+        "not_applicable": 0,
+        "passed": 5,
+        "total": 6
+      }
+    },
+    "not_applicable": 0,
+    "passed": 11,
+    "total": 12,
+    "wall_seconds": 1.992114374996163
+  },
+  "runtime": {
+    "adapter_path": "scripts/run_forgeteval.py",
+    "adapter_sha256": "7bbdb7214534915d54f32e78752bd5ed5ea7d3e669dd57f38d8b523915b236f2",
+    "argv": [
+      "scripts/run_forgeteval.py",
+      "--database-url",
+      "postgres://memphant:memphant@localhost:5432/memphant",
+      "--official-dir",
+      "docs/build-log/artifacts/tri-sota-completion/forgeteval/official",
+      "--suite",
+      "adversarial",
+      "--embed-model",
+      "base",
+      "--out",
+      "docs/build-log/artifacts/next-evidence/forgeteval/n12-transition-safe-confirmed.json",
+      "--confirmation-ledger",
+      "docs/build-log/artifacts/next-evidence/forgeteval/confirmations-v3.n12.json",
+      "--port",
+      "39441",
+      "--case-id",
+      "adv_paraphrase_supersession_01",
+      "--case-id",
+      "adv_paraphrase_supersession_20",
+      "--case-id",
+      "adv_negation_trap_01",
+      "--case-id",
+      "adv_negation_trap_02",
+      "--case-id",
+      "adv_temporal_qualifier_02",
+      "--case-id",
+      "adv_temporal_qualifier_13",
+      "--case-id",
+      "adv_shared_attribute_01",
+      "--case-id",
+      "adv_shared_attribute_20",
+      "--case-id",
+      "adv_compound_fact_01",
+      "--case-id",
+      "adv_compound_fact_20",
+      "--case-id",
+      "adv_recursive_supersession_01",
+      "--case-id",
+      "adv_recursive_supersession_20"
+    ],
+    "cli": "target/release/memphant-cli",
+    "cli_sha256": "8987ebe1d3a3a6f75cd7536dd206c2754cf2b31511a1382060ec4ff082b506bd",
+    "command": "python3 scripts/run_forgeteval.py --database-url postgres://memphant:memphant@localhost:5432/memphant --official-dir docs/build-log/artifacts/tri-sota-completion/forgeteval/official --suite adversarial --embed-model base --out docs/build-log/artifacts/next-evidence/forgeteval/n12-transition-safe-confirmed.json --confirmation-ledger docs/build-log/artifacts/next-evidence/forgeteval/confirmations-v3.n12.json --port 39441 --case-id adv_paraphrase_supersession_01 --case-id adv_paraphrase_supersession_20 --case-id adv_negation_trap_01 --case-id adv_negation_trap_02 --case-id adv_temporal_qualifier_02 --case-id adv_temporal_qualifier_13 --case-id adv_shared_attribute_01 --case-id adv_shared_attribute_20 --case-id adv_compound_fact_01 --case-id adv_compound_fact_20 --case-id adv_recursive_supersession_01 --case-id adv_recursive_supersession_20",
+    "confirmation_ledger": "docs/build-log/artifacts/next-evidence/forgeteval/confirmations-v3.n12.json",
+    "confirmation_ledger_sha256": "50b141599d09a89f5e5d7c703be04ab79bbceb2102bff647ea2f1102599725de",
+    "confirmed_mutation_count": 16,
+    "cross_rerank": false,
+    "database": "run-owned ephemeral scratch Postgres",
+    "embed_model": "base",
+    "migrations": {
+      "aggregate_sha256": "4761986ff058077cef62bfb3c1bfeba8de0b987844f91b1fc3fff0c22ed80770",
+      "files": [
+        {
+          "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
+          "sha256": "1efe280d9bfdac73f22aeec53b92ca5e7b4827c4af96a0dc10cd42c406be70a5"
+        },
+        {
+          "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
+          "sha256": "5fa198008ce6775ca31ec8661b4ae70fd7d319de34bfaa47659a0702d4d79341"
+        },
+        {
+          "path": "memphant_migrations/versions/20260724_003_worker_claim_throughput.sql",
+          "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
+        }
+      ]
+    },
+    "mode": "fast",
+    "release_selection": "adaptive_gap",
+    "repository": {
+      "git_head": "ad18c7f361821617135c974ebee0ca9059a439ce",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tracked_dirty": false,
+      "tracked_file_count": 1593,
+      "tracked_worktree_sha256": "00460decd3672c3b2e6ed50ac9272cf9ff35793735254971e91be09ba2a9ccfc"
+    },
+    "reranker": null,
+    "server": "target/release/memphant-server",
+    "server_sha256": "7e94f7314ac638105ff9c1a6051edddb76c3e1127a3c3a4e5be260e9f9b6a29e"
+  },
+  "suite": "adversarial",
+  "upstream": {
+    "adapter_sha256": "f1eff0efa89437e8c44ce6f60b5a88280592094c2c6b9b955524cc0262c3c307",
+    "adversarial_sha256": "cfdf125aba5b90975634ce48bdf0f078397a72a1cc9dd1aa5bb59ab067c322d3",
+    "commit": "b6053b7bdacc78a91b9ea4bb25f32edad278c495",
+    "license": "MIT",
+    "license_sha256": "cdf599e8c8ce18ca59dae4d6617f06cb59433752203e703c9defb274b40c6657",
+    "repository": "https://github.com/deeplethe/lethe.git",
+    "runner_sha256": "4fdc672e2c19eec7f3da30fda5a541699a0fe07e1a00a4bae67fa6343800162e",
+    "templates_sha256": "39072bea33402e5cbf66a6c1101504a337ab9f5f3bd90d5402afc7727c4516a8"
+  }
+}

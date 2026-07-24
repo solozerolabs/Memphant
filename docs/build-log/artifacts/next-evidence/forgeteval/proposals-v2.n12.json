@@ -1,0 +1,51 @@
+{
+  "input_sha256": "33e82520c2f5c18bb5d1ba04951a2e0d48429e085990863f3b8ced031223a397",
+  "model": "openai/gpt-5.6-terra",
+  "paid": {
+    "logical_calls": 2,
+    "provider_attempts": 2,
+    "reported_spend_usd": "0.0026875",
+    "unsettled_liability_usd": "0E-8"
+  },
+  "proposals": [
+    {
+      "case_id": "adv_paraphrase_supersession_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "78958f3f78c504e52802b09302fe918322bf4b7615842b7c5455981a68f87126",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "f2e3e598ff4c3a2f11eb8f167934d5bac375aaa93d61404576f10f870aa4aeec",
+      "proposal_sha256": "53c47913c8e6d9dd0ea03846fc660853c771525364a94b82ebb249351135752b",
+      "replacement_text": "User quit the payments industry and joined an AI safety lab in San Francisco.",
+      "response_sha256": "21c3855bcb7f7632b743b8bac971fd4b74432884af699b70ac5d98983d6fbeb0",
+      "selected_body_sha256": [
+        "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af"
+      ],
+      "selected_indices": [
+        1
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_20",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "ddc764fb2cacaaa6b1e275cdbd7c639b48111dcc153c08db2a21cca8189b6997",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "88efb3e4ac7fca5ac1bb03a3272f71b033362568f568cae65144277df02ab26b",
+      "proposal_sha256": "431fec06d366cb07eed1abe0360792f7b578570fc002000969f06811e8a09d4d",
+      "replacement_text": "User left the architecture firm to start an urban farming collective.",
+      "response_sha256": "ebdf18ae86f5e9592a8829554041161e83f0812286f42262f01b5d362972e352",
+      "selected_body_sha256": [
+        "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f"
+      ],
+      "selected_indices": [
+        1
+      ]
+    }
+  ],
+  "reasoning_effort": "medium",
+  "schema_version": 1,
+  "status": "AWAITING_EXPLICIT_CONFIRMATION"
+}

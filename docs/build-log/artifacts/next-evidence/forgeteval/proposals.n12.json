@@ -1,0 +1,303 @@
+{
+  "input_sha256": "33e82520c2f5c18bb5d1ba04951a2e0d48429e085990863f3b8ced031223a397",
+  "model": "openai/gpt-5.6-terra",
+  "paid": {
+    "logical_calls": 16,
+    "provider_attempts": 18,
+    "reported_spend_usd": "0.0211100",
+    "unsettled_liability_usd": "0.01610125"
+  },
+  "proposals": [
+    {
+      "case_id": "adv_paraphrase_supersession_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "78958f3f78c504e52802b09302fe918322bf4b7615842b7c5455981a68f87126",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "cb1c09a1e696d2e2b044d5441e120a7f1f1ab86d9fe834b63c9223fd9e342696",
+      "proposal_sha256": "84c8313a9d6c3ee61a0e557d209870cadc2b36f1e96d0a459695bea023a22d7f",
+      "replacement_text": "User works at an AI safety lab in San Francisco as a senior backend engineer.",
+      "response_sha256": "d5527e4404c8754f2e98ca0f6ea414eb85addb1c8440793feb087480ecd27a4b",
+      "selected_body_sha256": [
+        "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af"
+      ],
+      "selected_indices": [
+        1
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_20",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "ddc764fb2cacaaa6b1e275cdbd7c639b48111dcc153c08db2a21cca8189b6997",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "773d91a1632d4c82aa7ddfccdd4cff07f9c5b2fff0f18ad0ae8c5a81ca57236c",
+      "proposal_sha256": "ac7bded5c8b61c89e077ef0df3e4b92c40821f7c8c1d0188ee3fdaa7f116f01a",
+      "replacement_text": "User left Foster + Partners to start an urban farming collective.",
+      "response_sha256": "bd4e81349402a4f37e27bda1798c0f8a830a9c378f73526201214f0596fb2561",
+      "selected_body_sha256": [
+        "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f"
+      ],
+      "selected_indices": [
+        1
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "65029a890b93718dcb23375366ac87cd38553142db5d5e6635016e1e1060f898",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "5f03a2676d366b2643c5eae6ee21696326f389ee55c0421773a3d1c28adae264",
+      "proposal_sha256": "9be6ac957538041c6c5ad8dbb9a4b6ca1310a60d0f2e4bca32c8d2afd0523fe3",
+      "replacement_text": "User joined Anthropic last quarter and has never interviewed there.",
+      "response_sha256": "aafeaa375da68bb1a67cd4ec5926085523b1a84b366ffa585f096c119763123a",
+      "selected_body_sha256": [
+        "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_02",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "7df4d97fad64b23921eb6914b5479d000aa63afc3d32fde12307d7a1c0a7cac6",
+      "mutation_index": 1,
+      "operation": "release",
+      "prompt_sha256": "88d9b12a7f579c2c7a1e1762787b573baab993b1df6e5aaa43afb1ca181f26f5",
+      "proposal_sha256": "26128532c69e7a004b8c1de2da7df00ac38b3ae0b1c884b3fba430c384f35f61",
+      "replacement_text": null,
+      "response_sha256": "8e9f4072045dee403631c4521fd7aa0fabd321bb14752cd15caa0672b6a779d0",
+      "selected_body_sha256": [
+        "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_02",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "5f5763fc07a520d798099ba801fb7f6123ded7197f437916571cb6a8081f9535",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "35eb21adefd88be26e01f4a98299f98785c24a5bf7e127d0910f8415adab2104",
+      "proposal_sha256": "0c9a00a84c1f6613ed1c7c530ec1d501e712465ab4361ffb94024b2477df9a24",
+      "replacement_text": "User lived in Berlin from 2018 to 2022.",
+      "response_sha256": "eec01b67f66ca7e63ec595437e0c7f2cc50d65c084531831a3880b0bc24fbda2",
+      "selected_body_sha256": [
+        "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_02",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "a199c7d051cf00a7a135a19a0ad33c38283ff9afee25933b68dea93e04679020",
+      "mutation_index": 2,
+      "operation": "supersede",
+      "prompt_sha256": "4c6dd86757fb70ff97d82c7dc0827b5b874840356273d81885403f6f380719b3",
+      "proposal_sha256": "2f8005265c283488a1ece853de0e2cb333a13396b3afb40cd8dd65c46c497806",
+      "replacement_text": "User lived in Berlin from 2018 to 2022 and has lived in Lisbon since 2022.",
+      "response_sha256": "dbb3adbc2310303eace1873c93de39a728b9c0313c54d7eedaa94b15f6402374",
+      "selected_body_sha256": [
+        "c8da1ed9634973865c97624fb6e29c769218ff50f6296de03bf572d6b882fdff"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_13",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "58afab8d9ca5a947286efeed5641eb15e2870361df66fe738f8d08442f7a2e4d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "f29012837719921c149866340d8498b6ef2b04c97bc5e59b1f8d93c0607afb09",
+      "proposal_sha256": "0f131bf7d0ee86afc8559086ae9c76e9dfdae938804e310600970f94753cf46b",
+      "replacement_text": "Eve lived in Paris during 2017 and moved to Barcelona in 2019.",
+      "response_sha256": "4d798863a3e1837b56e17341a63fcabb755efee163984621a8b38171518f5436",
+      "selected_body_sha256": [
+        "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_13",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "ef080d81a6e328565b4e669455c67a55646ae2a0127ffb6fcb5bed464772ed98",
+      "mutation_index": 2,
+      "operation": "supersede",
+      "prompt_sha256": "300c838522bd958de1c81f80923876eb643c4c74c01a34f94f135d9948a15727",
+      "proposal_sha256": "9ff1c1c9921f4fe4c291d81bdb8f5aee27bb21f95883f71ea77c4a18c4dbeb9a",
+      "replacement_text": "Eve relocated to Singapore in 2023.",
+      "response_sha256": "f0863935f85cda7f949746ff7699d97e376ec0336bb61bdca8a96da4f5a2c354",
+      "selected_body_sha256": [
+        "7763b0585bc0c3445e83c3d6ca78939f35e077e1f982eafcdb18c7c5dc50dab0"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "eeec5d832db267440181c6e4bd59a1e0c54af3cbdd8e34c22174162cbc752d27",
+      "mutation_index": 1,
+      "operation": "release",
+      "prompt_sha256": "e759664602fe4c570eff4881c1ce5d0f8923a01f3eff68486259b218f488a10b",
+      "proposal_sha256": "449e6032a039ecfc20a732bf5ddf891523b8f927ff2812aec843a68271fa149f",
+      "replacement_text": null,
+      "response_sha256": "8e9f4072045dee403631c4521fd7aa0fabd321bb14752cd15caa0672b6a779d0",
+      "selected_body_sha256": [
+        "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_20",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "5dc02f0d01ebacd57378245b796fc53cfe0ee82881aa793b307a03e422f043b5",
+      "mutation_index": 1,
+      "operation": "release",
+      "prompt_sha256": "38d9aa5d9276cf06c13cf2f251373544c26ba6e2faba511654ab073ea84f4d5f",
+      "proposal_sha256": "8b7aae93d873b998be285af221d5c60420ab13b88e951791cae246ea6126cdc5",
+      "replacement_text": null,
+      "response_sha256": "8e9f4072045dee403631c4521fd7aa0fabd321bb14752cd15caa0672b6a779d0",
+      "selected_body_sha256": [
+        "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "bdb14363d0aa59772737b922b85559b34760f68f18f78a1d29a0db282ffc9cbc",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "0172479a8f68e1b2ea0e70c73eb240b993fd669528f55ac55e01025a0cccb10e",
+      "proposal_sha256": "33c4694d1e1c0f836170c93d865dcb6da70cb2550b31ad01f21ed1228fb8b2f0",
+      "replacement_text": "User lives in Madrid and works at Stripe as a backend engineer.",
+      "response_sha256": "b242bdacb5650376fd32509f55ba74112ba7d0a034fa463af7c210e2868ed694",
+      "selected_body_sha256": [
+        "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b"
+      ],
+      "selected_indices": [
+        1
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_20",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "457d3efcff6d954e7a4771b6df134e6a40caf31795c03520f73b31f4f781540b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "0e7a0b392bf31ed8f127a17fd22c584d78759271a2e6ece78d6641cb431dba40",
+      "proposal_sha256": "e46819cbdad1c4776299c38463ca915f93c2b46e2bf31dc429edb0a68e2eb985",
+      "replacement_text": "User writes short stories in their spare time and is fluent in Japanese.",
+      "response_sha256": "cfd854a9b8adb5816bafc48d09961c9e6ab4492062ae5be099d12268e522bc00",
+      "selected_body_sha256": [
+        "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e"
+      ],
+      "selected_indices": [
+        1
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "dc3e4ac1ba7694764d6c6ad7d5bb05e61bb554a76931b67c1dead03060934d4e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "9639504f63a547937e81b7df33942bf560ab322adc96f3042e7e2963f4abbb57",
+      "proposal_sha256": "f93fdf15ae8accda8a795874b483bd0624ab9cda77f5da3fd47372181055fa88",
+      "replacement_text": "User switched to Brave as primary browser for privacy reasons in 2024.",
+      "response_sha256": "e6c271f2225281690d15928972943af9e4bbccdc8cb8424d0c36769b751f4f26",
+      "selected_body_sha256": [
+        "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_01",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "f0e6edd8b38a2db5132fa964d44f321021ae6a2a6f9d2c14b5abc6123fa69111",
+      "mutation_index": 2,
+      "operation": "supersede",
+      "prompt_sha256": "ea11b89d2ed0c58a356d121b023a090740f8c4d2fa4494d52b8c37c3e734499f",
+      "proposal_sha256": "089899e230dfdf30d5140453398b632507baf0fbd7798ef6e5f13118890eeaf9",
+      "replacement_text": "User switched back to Chrome in 2025 after Brave broke an extension; they had switched to Brave for privacy reasons in 2024.",
+      "response_sha256": "20879a5af47eb6e377910ff4f3ad735b87c0b5bbe24366297ad7b2398bd5c5ff",
+      "selected_body_sha256": [
+        "22c7f14b856a5674f07fd7115d41de548b61dfbb1da64447a77e6c41e438d966"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_20",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "3ee46c628e42593c3fa946f5bfd193e5e2abb77bdc0eeeb6b5e8f4b8d7892f9c",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "prompt_sha256": "302f30399b45074af2f1b9c7858fbf136c4d6c348c39d5857526b9de2ae0dff9",
+      "proposal_sha256": "e6380c35b82ebb4b958780263d52f28f78fd34c85e6ff51492bcc67ffd449c21",
+      "replacement_text": "Student studied Spanish as second language in 2021 for travel.",
+      "response_sha256": "a1b6aaab8669c9673fb9ec5cdc1756a4ebc0207f24c283529a35334906dc79dc",
+      "selected_body_sha256": [
+        "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0"
+      ],
+      "selected_indices": [
+        0
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_20",
+      "confirmed": false,
+      "confirmed_by": null,
+      "input_sha256": "5c6b42d57134cfe414c63847cafd303c989f1e8089c5aee9dcc9d8d6181048bd",
+      "mutation_index": 2,
+      "operation": "supersede",
+      "prompt_sha256": "0f33744c0169172c5404519b0c8be81403e03b96e0a9607c19d24b1ec1b35104",
+      "proposal_sha256": "66061d5376620dff5cf11ebb543a8c9853c8e83dc9c324d3b5a4c865cdff76d0",
+      "replacement_text": "Student resumed French studies in 2023 for scholarship requirements.",
+      "response_sha256": "650f50682cae692a1ba2c678f129d768f62aa8f6d1c3c752f5dd34d56eb049c0",
+      "selected_body_sha256": [
+        "ce7ed7db9905469ecac72599220405bfc96e73e5a2556dfeb59b3fd80a9005ab"
+      ],
+      "selected_indices": [
+        0
+      ]
+    }
+  ],
+  "reasoning_effort": "medium",
+  "schema_version": 1,
+  "status": "AWAITING_EXPLICIT_CONFIRMATION"
+}

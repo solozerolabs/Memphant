@@ -8,7 +8,7 @@
   },
   "paid_calls_executed": 0,
   "settled_cost_usd": "0",
-  "maximum_currently_authorizable_usd": "0.50",
+  "maximum_currently_authorizable_usd": "5.00",
   "authorizable_campaigns": ["forgetting_proposals"],
   "campaigns": {
     "packing": {
@@ -46,14 +46,14 @@
       "authorization": {
         "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json"
       },
-      "purpose": "Generate 16 non-executing mutation proposals for the frozen ForgetEval n=12 control-plane gate.",
+      "purpose": "Generate 259 non-executing mutation proposals for the frozen ForgetEval 385-case winner expansion.",
       "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json",
-      "authoritative_child_packet_sha256": "0d287660ddbdefdb1161aa40bf77d513b6ee7555917f12a1b81cd1f39891387c",
+      "authoritative_child_packet_sha256": "78804335ec6c324781af236b4f0f2f88facb645c1c4d02c33c9f6541b8b333eb",
       "hard_limits": {
-        "logical_calls": 16,
-        "max_provider_attempts": 32,
+        "logical_calls": 259,
+        "max_provider_attempts": 300,
         "max_output_tokens": 512,
-        "max_spend_usd": "0.50"
+        "max_spend_usd": "5.00"
       },
       "model": {
         "provider": "OpenRouter",

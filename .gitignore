@@ -61,6 +61,10 @@ benchmarks/data/coding_events_golden.jsonl
 docs/build-log/artifacts/*/reader-evidence-*.jsonl
 docs/build-log/artifacts/*/reader-cache/
 docs/build-log/artifacts/*/query-rewrite-cache/
+# ForgetEval proposal caches are resumable provider-response caches. The
+# hash-chained attempt ledgers and canonical proposal reports are the evidence.
+docs/build-log/artifacts/next-evidence/forgeteval/proposal-cache*/
+docs/build-log/artifacts/next-evidence/forgeteval/*.jsonl.lock
 # Public trajectory corpora and pinned upstream checkouts are reproducible
 # inputs, not repository artifacts. Commit their content hashes, transformed
 # goldens, and scored reports; never duplicate the 60+ MiB source rows or
