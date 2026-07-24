@@ -1,0 +1,4292 @@
+{
+  "confirmations": [
+    {
+      "case_id": "adv_substring_trap_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9526374a08cc8763d76b5b286e7568779be3be393d2efdded6087768bbc9879e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "f8dafe5caa51d74549146572ea29ecf5dac5479cf73a3b4acf90abb64092bb1b",
+      "replacement_text": "User moved to Oslo last month.",
+      "selected_body_sha256": [
+        "c2c37cc0e6c6382fd7e1bae99ae490cbdfe9d8635a18afef782f204b52ede720"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9a872b84e4269cdce3ec326ac2881158b9e98cb1f6f93ef69c55c2da760b753f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "f85823817c121a7f875a7e3b8119c29b25c770a4b515b4705695134c475eb880",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "197855e2ccb13a072ffb372d17880805abdecb4c684049e51045683d47b81ec5",
+        "0562e5348d271b30bf6afd5facfe664e0805be4b53d7dbf8553f1fe6a4c3dd43"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5a6b57da7fcae56b89f0e0ad68e7599878f99d1f52c19a69300f159c531919c7",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "0576aea6eec76684a8175f02b90ef2c15bd22c23a4a5a3ed61c6f73ffabdba84",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "a3a7493dafa793249e8809fef4228ea3e48e81c858156c5b93466770132f5af5"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "90215cf08bf0c1bd81beb9a0150ab52d43c4ec3e058d71499c579f6a29015aab",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d557d921de6ccad9f7aaff515dc24c602f0ab0845a5e2a184fed1ca555fd7d72",
+      "replacement_text": "User moved to Meta in 2022.",
+      "selected_body_sha256": [
+        "71a94acba522425e2f340bb46e36781eee9187accd7422a866042c28e7e99c61"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "040b8f0773a631da718689695a36f901e71027855efecfad9f0f6a13971a5c7a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a5d6f5ce48a00fdfab8df5864edc84638711ebb074bffcea782953a0a3b079e1",
+      "replacement_text": "User now eats pescatarian, including fish.",
+      "selected_body_sha256": [
+        "575a2a78ecfc35f3208c863f4cd9964ff2be4ed8c0ec2e9cb6020f3dc4dc5d2a"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a92d061fa4dd33b188f06c25f2d3338a22442ec05bb5a6ada570ffb1399d7735",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "02a391dc68799892f3bee4bcfd1aac7872ee03aaf8f1ed3970e323e0aa56d0de",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "fa9b7fba228c4561066f8b194c775247a89c6107ad4e88ea4d55286bb73b1140",
+        "89ef81c3e9691514dbb6818c10910f9e732df47c8ed6881dc779afb08a5e2cc6"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ef6246fcc9190f72128ff57232c06d2756186ff49ffbd49343202f6f1bf4ef0a",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "5103e5226a2d0842ac8f268d45db5c68a633493a0fdbf78dad6e3767b1ef7581",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "de2aab283e89b3f4cca8182d71d70ebeed6dd61a4d1d89c072ec97ee4794fe33"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1a25dd1087164033e3faad20a7276cf4b5bc7a3b8bc28409ea69865d3d86b97f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "188dee7bdfde3b72ccbc9725c3e7f9c6ca7398ca4098fb0abc98c620d676c97a",
+      "replacement_text": "Primary server IP: 10.0.0.42.",
+      "selected_body_sha256": [
+        "2d445b69944b777c245da9e3adbe61767d7ca0617538a5eebac2c5328dcf1585"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "29ca253c0d581fec183a141181bd7c0db2dafdc0940b034b0095967182d5b407",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "3460cedc206d3be794a952f0225598899a17718a8e0a0c0a506d07bcfe9b2349",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "45c8b315bc0c35825eb33a051499a6f2f4d75a43473cc8af93ce3bcadb7c5243",
+        "95bece0170ce2a91eb264481ab70865fd1aa047db34cb5b1a0ccefa48c22501a"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "361bc3f516341a30aae3812d1a89ca6bf131739edf8cf1ec330625324b9b2198",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5407733cda75639d9bfa7419c31dc23a090816bf58f747defa0186a5999a08ed",
+      "replacement_text": "The emergency contact number is now 555-5678.",
+      "selected_body_sha256": [
+        "ce53f9e4ed428f50110c21db8b5cf2f0a0406d980934aa04a0c85855620516d1"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8c175671ced0e32b347ed04d7a4a95eeaa557065f9f10403f8be9f5a05e3091f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "29c6ad1e5ac0052de9fcdd9c3491872d5f0857f3b4177a3193fd855262ddfb4b",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "8c62c887359bc12e9d76ee52761d657bc6b6123aec197ca9fe20697c5f2d4b26",
+        "22b92787adf9fbacb4335a72059083668cf4803b9719d6d31742574cacac1188"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_19",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9eb7a2f74e8ef0737bc3c127ad608e651ce4a8f89a7814667ca43e8c54ffa66d",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "d61f7acde19e04e0802430bfe0c0c9bfbf853cb02a6fc8c0fbce0342def46087",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "d1772aed71438684e80e212b22d109594642030a8f6138a2638f639b02bb6e40",
+        "1728f672577138e76c08e6002a3ec2f265005a648299fd4c1b5c9d239795545c"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b21f0c3d78cfcaa4436c54d42185f2c6537be71a57360e4e22cb01c22347763e",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "6f3d9eb07c85bc756acb352429c9e0719b044edecf977ed0dc8b504c2037eee7",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "153d181a2550c436edf3421f95e121c45f13928c12f25d29f50a88642bf64b71"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_21",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "06025d44a3cd0c0e768109711832f9719d508c8d49882568287e94e926344c6f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "0def2600fd8a1747bf198b7976d5f6ed9a2430cc27bbc69f76534d82c0b9fdf4",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "ed17edb310e83209230011b15ea780fe05f623d6aab884eeba9b6af3b171d5f1"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "abbae9786063daac1392f90a211f09e5222cb3412bdddce8da61bcf25ddad56c",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2dc2d6c9e8113cf3589967effb2f7881f110e761c69fe7d56a354d9b982ff754",
+      "replacement_text": "Main server IP: 10.0.0.42",
+      "selected_body_sha256": [
+        "4436a259ffd09a845f92ec8055a5040433c1edb21fade1f6a92e66a8f0901e8b"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "6f34bbfd2d306672ba99eda6a4d2c604a48d98c6e6196ee693432bbd5fadc3e7",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "7997d62c339ec98ee722f47f15b82772bfb1de4af56b931bf22b992807a82168",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "44a0268aaa8f0d670f3f7cdfb80707629d3e2583184f6bebdcffc64d5046f8f2",
+        "69ead16cd5f1755a1af90247ef409960a547eaaae14c10496f7cca6593d3d52e"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5cc9b92de8966ebd6426a6efe0875be7fdfe6e88f090487c585c79cb9076902b",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "c89e190c368dee9acca2a1aec5bd583f4830e27416517ea22dc8f36e55bd6804",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "7cc1ba8d35c6c7a1e60b71cef0d29d984d90b1e61ed5c7c2448dc82a6e03cde9",
+        "63a4ef12ebd6db6a2031ea354d140a0c64519d72bc3728a41331f8c5e15f8f03"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a2fa85e10a7074388a9aa7a59756e54fec65b290d568ca5c4f68d55f4c99ba49",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4f420095e20a1f50356bdb28f12d867270fd3df01e0b8ed92b8e52fd2c4d80b1",
+      "replacement_text": "The backup server IP is now 192.168.1.Go.",
+      "selected_body_sha256": [
+        "e5c6ccebd5e840b309649524b1605cab0e9f5509ade92866867cbdc1b45fb608"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8f73302ee360d614792fd2b87dad2c6fec8e50af85671a1cc3ef289d38c6d27d",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "0f7686fcff43cbb700f55b378bcf15ff53281ede6d112342387370115f400e31",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "daaeb654908296b071a9afb7fc667cf6ee7331a723a54e827396d74b44a476af",
+        "d567afa051057bab56c03eb1b43682561b9b6bf22cbb8713b79687a78f45a3f6"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_35",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "896b5579a4fa543b92c3367106a028b73853703e4bf869159167d4330113408d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5454798f7af3c38cf8ead8a7c1779b44c0aee98c8935f7debeb876e5b9d7e3cf",
+      "replacement_text": "The project codename is now Hydra.",
+      "selected_body_sha256": [
+        "eec380f4e1891d5471c51eb56becde77a335cfdfd4c812cabb7d22cae73dc570"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "31e34ab05a17e8028dacb79f69959f2fee45892ae24ceb84eed0215699ed0a52",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "b65e173698389cdfed64d8ff547d39582eec0b5d61ea60af9cb8d10ba4d7f8ae",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "b841a4506a448e39432acf408f87d75cc5de894db215a9de536bb7ee71447b80",
+        "14c505b03e8c11cd767d32c8647c7e890dafff0e444f2ffab31f382e3767a6a0"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_34",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9d9fefc061b35ac7e6f03b168c0493875de0a533287d0a5ead3100994d3e5494",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "06e33e97a6f5fedbf79526c07e8149816eed6b2796dc9a6c7c319fb8d042a356",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "6b64ecb15511212c05bfefb64da912ced807bb1ae9699bb916731179550096c0"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2c9c53cbe848d96af4780fafd2125b48f4ed46661c707c022a0cecbc3175077a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c17cd6f14cec43e493122401a0e95d1969e3e33fa3028e9f6858b764b158e2ef",
+      "replacement_text": "Main office relocated to Denver, Colorado.",
+      "selected_body_sha256": [
+        "7b7a88634db70c99565db8ecfc6bfc024b3a0be8f4f5f42d0e4dc8cf69bc6455"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "22998bc9a505e1f52689d7a1c93dec1eddf691879833366d39693d4d6af6f5ae",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "7afa0f39ddc32fc593dbd9fd6db3416563d991c17d40a3565488fa04eb995ca6",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "dabb5949389671c3cce32245fd8098433159f81c4b482f40eab877796597f6ca"
+      ]
+    },
+    {
+      "case_id": "adv_substring_trap_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a906a1e201257df80c7eff3d3f141d835c2a03e75735153277a45bfaed783d5c",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "e3e5232f7e0c13ebe2814ea167ca3070468adf155a423434c6fdf9e9e8e4a215",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "d8c209c7997781b7c187c1c5a9788ffc635fea96bc5f1ea87a75d44c68598007"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "78958f3f78c504e52802b09302fe918322bf4b7615842b7c5455981a68f87126",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "53c47913c8e6d9dd0ea03846fc660853c771525364a94b82ebb249351135752b",
+      "replacement_text": "User quit the payments industry and joined an AI safety lab in San Francisco.",
+      "selected_body_sha256": [
+        "eaeee186ae47a2776371e996244143b4ddd46871f61439a8acd2aa8c59de52af"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_02",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a6cfa465967907dad7b71a286c97c415aaa46dccb6c906860ec80114c4fb5842",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5546f284860fb8a5dc4c2f8eac575c1f1c8c11b9acef2da207d2a1abcc084c1b",
+      "replacement_text": "User now consumes fish as the only animal product, citing omega-3 needs.",
+      "selected_body_sha256": [
+        "b97dfabb145bb9836bafd974527977c8ffe83faca9ad3151c01d002f99ab13b2"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9700f7a7ad2e462e3039eb06dbd21365d380491d20cdf85eb49b95d0e9b6fb8d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b03ee73d552874b532e0a377d6769731ab5efd9674bd56d05fd1fdad42941f37",
+      "replacement_text": "User relocated to Lisbon last spring to escape the German winter.",
+      "selected_body_sha256": [
+        "4465be4f4c6c2a9590cb99ee6e48e842ce22f8f90fc152fc21ae77d84c4d9747"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b9fbd503a9411d718b392c8c094e638ae7e1020667015b3476c64962cc81111f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4879bbca0d33370d4482c37f42602520e685c4a96c81c6e92015ff3fd5491a8d",
+      "replacement_text": "User has rebuilt the team's microservices in Rust over the last six months.",
+      "selected_body_sha256": [
+        "28fa8a8020e2fe9555577d5163a0030a7c6859ce549dac20f712ed1bb2d44ec5"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "97ac205bb40d29234bdbe830729d4cd6e724bbb50bc74eb984890bc043a216a3",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "34ba329eba24afee7a8499b05ad36a91a60d62a36effa48604d88a2eeb65dddc",
+      "replacement_text": "User filed for divorce earlier this year and now lives alone.",
+      "selected_body_sha256": [
+        "23910449883100da9c4838442acfda6a4816d50d2cf2eb6a580d00b7c0697e12"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "217fd84df04f0814dd9d742b78047a018b82401d2ec8aced01a78d1a9bb2211b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "224035117d5328d4865f57daf11a768780ad025572866c47dcc3f7cc1f9f4ef6",
+      "replacement_text": "Departed Mountain View, took a role at a hedge fund in NYC in 2020.",
+      "selected_body_sha256": [
+        "a4d2baea01037c1ad31c76c9479ebd3087471947a20dd2c32c3a2d48304b0737"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_07",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "7d0cf0d896a66df63a7f7fbf6ce1e7308866a355585b18a28f9efb94a69f2d3b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ea33be5584c64c1f8c0166f1d9c4b76b911f1923b4936791b737fcedab43ccfc",
+      "replacement_text": "User sold the car and now commutes exclusively by bicycle, refusing to drive.",
+      "selected_body_sha256": [
+        "d2d52fc7b6a05dc4df0ee3522a3e0b237bb313796ff24832a4e83e10f8532931"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a1427d0d97468f6e2fea82ecbec8b93889042b94a3469cfde431b52a8a95626a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b0a5321f8f94b837dd8fea6fc6ecaf37cd2a0661af5b114702faea12c48e35a8",
+      "replacement_text": "User is now organizing a 200-person developer meetup every month and hosts a weekly podcast.",
+      "selected_body_sha256": [
+        "bf1b345efb597f41628a0ea038ca95aa71721fc498497bb46d52a8b7a77ab25f"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_09",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a48fe0d25c1147c45c0acb914f102a05ae24686c0c039b510bdb967e00dc02c9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "f09b1859cae07d32236454c5d91dabee2595eb8604213cf2365bc8de70b49a0c",
+      "replacement_text": "User left social media to lead climate modeling at a nonprofit.",
+      "selected_body_sha256": [
+        "7ac9fce156533a10894f543950c9ab4e6ce04bf11f270d1315e9474223c5e9c9"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_10",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "56fa9bd5ffeea46dea2717b5a162b133c76332602efbade853699a259fcef2a1",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "e1fb87b012027214f7269ad6be50aab0233b2cca76704ad1b1c74a907103137f",
+      "replacement_text": "User switched to public transit after selling the electric car.",
+      "selected_body_sha256": [
+        "b571cb314d759a5be808a1f0d4f3da97e788767020c749630eb3800984502b35"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e0ab4cb4430a335e635eaa49f6b26c2c721c5a6eba45a25063bc3497f0e16e55",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "524f53b82ab88a995d990eb18746f3c398105f2fabcf478e3919fc308265f38f",
+      "replacement_text": "User shifted focus to learning Arabic for diplomatic work.",
+      "selected_body_sha256": [
+        "1470b88e26e3663a54bb3e9aea1c85acfe3025c7760a52cd28ee96347a81a13a"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_12",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f50dc6963f3719d61fca1f11888ee079eb10bd992ad1fd46d7c70f8294688bfe",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4377291a9962dc89b5f6c91a294efc7850bfbf40555787dfbb34b893c8c3e8af",
+      "replacement_text": "User adopted a rescue greyhound after Max passed away.",
+      "selected_body_sha256": [
+        "8c749fa33db4e2db015969546364cafef95cdca92bb05346e5d08ca2379688a4"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "004b661837634ce81baa2a16c12605526d2c0b22b9200d37f2f587e6808f7b7b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c4abb13988e653e9b286cd874d3ad81c7b1fb12611a36acfa51f23d14ecd3565",
+      "replacement_text": "User outgrew the nut allergy but developed a shellfish sensitivity.",
+      "selected_body_sha256": [
+        "854dcd36c445a6be4b0f4d8e8756454417a83db1b1c2a735754ded75e7455a5f"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9ff150f76cf2ddf66f984abe19c7f6710669cb6c0b078eeeb2030b4fd20f1495",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "03b61c443037bdeaeb2a7368349a6bd010067ab6b89c1d7cbf3b785da0cef701",
+      "replacement_text": "User left academia to start a mindfulness coaching business.",
+      "selected_body_sha256": [
+        "9bc3c2a85243551b8eab01baa4f783526a91d2ecc222d9660d004ba2e6b0db3c"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_15",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "43b014d984db9ae0856b2edf4b8f1717d93a1489eca035241e59c63834b0de4f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "1e6fc3ad0444fa5befff3d835119836ba0007a48a7e0c2a68552c00884f8dcd5",
+      "replacement_text": "User moved to a rural cottage near Banff for a quieter life.",
+      "selected_body_sha256": [
+        "70f80a1c8d9db703f03ae0d5227694d2ef3adb88bf900347998885f6f074914f"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a6a9e485c4baa855cd1e00148a0d871dbef9442afdcf92de22e516b9dc4bcfe3",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9ee0aece92bd1f9120e3f180bbddbace28962f4e47bc67c8d59aec75b6775ee8",
+      "replacement_text": "User now exclusively reads contemporary science fiction novels.",
+      "selected_body_sha256": [
+        "1189bbe78a2b17cba6f8e0dc258346cdf67e1174833a996f456780363b04c131"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_17",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "46f4f70c560ffb84f674bd5fa0e88c2f1128e4714f1c082cb2a93a9938569d04",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6259c8acf412cba3931f4b175033275608dc0620757d174fa369a46d20db24fd",
+      "replacement_text": "User switched to a Polestar 2 after selling the electric sedan.",
+      "selected_body_sha256": [
+        "b571cb314d759a5be808a1f0d4f3da97e788767020c749630eb3800984502b35"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b14ee661f897f8568b7a171a521af967171ed075a546be8c2130ba7f8fb8d534",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "181343bd121d9029ce19aa56093693d2941b03d3f5310a8c0d5f832ee05c3f51",
+      "replacement_text": "User has outgrown the peanut allergy but developed a sensitivity to shellfish.",
+      "selected_body_sha256": [
+        "854dcd36c445a6be4b0f4d8e8756454417a83db1b1c2a735754ded75e7455a5f"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ddc764fb2cacaaa6b1e275cdbd7c639b48111dcc153c08db2a21cca8189b6997",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "431fec06d366cb07eed1abe0360792f7b578570fc002000969f06811e8a09d4d",
+      "replacement_text": "User left the architecture firm to start an urban farming collective.",
+      "selected_body_sha256": [
+        "cc327619d116d8373d12bd03ff4e464f09c1c498d6c5f5861317265bcd2f392f"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_21",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "dee04214938ae0086e15ac03242def2781f3a33fb6ff5c239a34b1e99b266fd2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a1d48a49eab3806d4e45f993d52f68ba37c3f8afcbe240babd8c23940666492b",
+      "replacement_text": "User now cares for a rescued greyhound after Max passed away.",
+      "selected_body_sha256": [
+        "c1dacd0f4b5415692ed60ab3a82ebdd36f51d65a3b65d8a4e909d7d3d76feff0"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_22",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "417f8d6472d41d1a77146e4569b42bb718d17e5ad57f0144ef3bca6ef995ac0a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "552cbc376a158db9386bb1907355e3113ac0714ce8e5946b0a12a40fb369f4c0",
+      "replacement_text": "User became an independent voter after growing disillusioned with party politics.",
+      "selected_body_sha256": [
+        "28178c9072e0db8f1d649626a0c6ff8b9330b2ed8be24bd0f18de61dd40a1d85"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_23",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "4354f2d4d1ae58e410c0ccf387d4aff22484c5687e3c951f9898a4940b2ba12e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "e9a5016fb12ee24014c103c09a1d59ab1500726b5ed0a7b2197f9512edb28b5f",
+      "replacement_text": "User switched to triathlons after knee surgery prevented marathon running.",
+      "selected_body_sha256": [
+        "a39f40b99e593359c5207a5dd298bab689af651227742bc93ce6a3fc193f7462"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_24",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c0fe2c78ad17f7dd9c3633ddf8bc9875f4b116da483f6686b0d31ce365f5d1a9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "e7ee0ae3645f980a0b8483360c9ee9b874189bcbed3aca74a8902559bb9143cb",
+      "replacement_text": "User transitioned from academia to professional poker, leveraging probability skills.",
+      "selected_body_sha256": [
+        "ee64e5ab528d52df34688832d2887bfd3726dde741834d878fa451ca193ce2bb"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c51b5c47df441a77f2a617ea5a2b20bc2bbbc1d65e19e664a7a69c39d059e706",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "340693aa585255c7f5753f9f3156532f797426df47484f406b5b0386f9c414c4",
+      "replacement_text": "User now tolerates trace peanut exposure after immunotherapy.",
+      "selected_body_sha256": [
+        "854dcd36c445a6be4b0f4d8e8756454417a83db1b1c2a735754ded75e7455a5f"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "91247639807058ae8576b6afb54d14b7a84c4d706d0f7dae661938e5cfdb4be2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9577ffde6345fc003808e4835aeb29f3908c9d3e77342bc0ac4189e44be00c06",
+      "replacement_text": "User has mostly forgotten French after years of disuse, now focusing on Mandarin.",
+      "selected_body_sha256": [
+        "5b6d480c82230cbedfd1728167d56b877a91049c3c3f215677526d86fc090e88"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_27",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f2b77cdf3acc09b3f01440b2a8ef6718e808ab9947106bf03991d6a9201de9fb",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ae1c5619a6cb6e06043f684e318182aa3b621ed2ee1ec9f2f6fda2bc5b49342f",
+      "replacement_text": "User and Alex divorced amicably last year.",
+      "selected_body_sha256": [
+        "a08978047763bcdb78dd405c0001a92fdceca1a1f9af24c1fdb8082e8e8f5687"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e0564eea84e64ccf1c48862da408214270323ac172ace6f9321504607ddbd4b1",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a10765e0be7861f6609568503ecb9dc3bce1c741b49203553f51d2bb50ab71d1",
+      "replacement_text": "User adopted a rescue cat named Luna after Max passed away.",
+      "selected_body_sha256": [
+        "c1dacd0f4b5415692ed60ab3a82ebdd36f51d65a3b65d8a4e909d7d3d76feff0"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_29",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "db57d9079856ceb63702917c8943338c3934acba5fe9fccba77d58b31621ff12",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ea3770690b4656d936c637b44f7825b3977b4e0586b922dcd6e3b07fad213ad5",
+      "replacement_text": "User left the Democratic party and registered as an Independent.",
+      "selected_body_sha256": [
+        "28178c9072e0db8f1d649626a0c6ff8b9330b2ed8be24bd0f18de61dd40a1d85"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_30",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "259d1da11257efa2f4abc8e6075f7b12e16cb919a869698aa9ea4e20b1b47a74",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5ff10d2d32878d2ab0a6a67a5b6297d284a3e7bc69be23035736879301a5a636",
+      "replacement_text": "User abandoned academia and completed a coding bootcamp instead.",
+      "selected_body_sha256": [
+        "0e2b3cef9a2b55dc68958bcef1270a320724cbf557b8025b192b7dfab2944b47"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "17ee604dc3af6570e0c460628de56a3524ae74f2658bef206e7ca230e3ad4b79",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "81be3e7ef3008a8afb66b73e09021ea2ccff61c112d2a3d299be1c407ab47800",
+      "replacement_text": "User started working night shifts and now sleeps during the day.",
+      "selected_body_sha256": [
+        "2b32ea69a012f07419bbf35bb67565e77d3d3aec34b9cf82c896238d3f304db0"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e9107692562e497ea7bcc03dbb935e4ef866a9d688d3f611ac6862ec83d4f4a2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9b7b10c5d20ad560430d8aaa789f15ea65095f40fec111168db518f755762007",
+      "replacement_text": "Recent medical tests show user only has sensitivity to tree nuts now.",
+      "selected_body_sha256": [
+        "1b2c3c8bea177c4973e8a6cc29bd7a8fa03ea44ff0e3d7156e81bfabfb1f5f68"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_34",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "09f532741d4b27d1bc28ea3e70fdeffd7739f9a4e73a711d92b5fe05b0484f30",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5cc0d07e48a063170a172b5216da680e8548197b7824cf558bbace750069b22c",
+      "replacement_text": "User now considers Everything Everywhere All At Once as their top cinematic experience.",
+      "selected_body_sha256": [
+        "bbff381fcac8b36d7baf9d427768b7892415c63a9a0b5d14787c26e0c61be1ef"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_35",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "19a2f5d64a976e2bf8421444ca351f869541507e3a157f6e1f50c602694ff548",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "fd8bc359bb10798e9a3330a8590f923b5b1ab5a9d3651b9ef2d22c983327f354",
+      "replacement_text": "User transitioned to neuroscience research after their physics work.",
+      "selected_body_sha256": [
+        "0f0f82575083570f5f2f65557b19d496e12871f0c1bfe96c0c9b47ee4516c25a"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "606640ee69b7cb7cd2950ed90594bebf30cabff14923ebe1fbd0b51d7863f70a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4f6634615bb4f73d129c4423cceff08728ba3e7b661171607785a80d8861ee94",
+      "replacement_text": "User left corporate architecture to teach design at RISD.",
+      "selected_body_sha256": [
+        "90dcf622991377a712f93c48b75c7eb0e2b9ef35b4ddb4966929993789c53dc9"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_38",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "55f38251636bfb2daee9c2c4b83d91246190a18df091f0cb8fdb4976686f42f4",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "56ad4b41eb2bf50bc0f210653329b58b5ae5b851626d639c03b0b33a063667dc",
+      "replacement_text": "User considers Vancouver their true home after living there for 15 years.",
+      "selected_body_sha256": [
+        "4bf1eb8a1b191eb51b2bbfeb6ae59ee748fbc7a4f97ecd95b4305cac1fa5ce1d"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "180ff72fd98c822a503d07ce9158e0bff80c7ff04628c5b99516931c1faa3e81",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0df2184591407c6656fa08edd01cfae9f6e11e6f9c0a5763574507053cde1d9e",
+      "replacement_text": "User switched to public transit and sold their electric car last month.",
+      "selected_body_sha256": [
+        "b571cb314d759a5be808a1f0d4f3da97e788767020c749630eb3800984502b35"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ea4d32dad0bf7f0cad4abd2060cecb7e832368bed54e1e3070d8bd467ee88ff4",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b5af4b5fe0d1ca0826c98f40c9e75089ba319a5c6c931df2284d3dbe8e2178ed",
+      "replacement_text": "User left medicine to become a philosophy professor.",
+      "selected_body_sha256": [
+        "099c4f3b41377255af90033514f840cdf3884529b16688ca674060953e9e97f9"
+      ]
+    },
+    {
+      "case_id": "adv_paraphrase_supersession_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5cfba5ffaa9466fabbfa7032f2a8100a7abbd894250ee6f611813869387b2e9e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "79633d3dc61d2cfd42c9912800f927c6983a0903071a1bf25239d37befe5bbbe",
+      "replacement_text": "User adopted a rescue cat after their dog passed away.",
+      "selected_body_sha256": [
+        "c1dacd0f4b5415692ed60ab3a82ebdd36f51d65a3b65d8a4e909d7d3d76feff0"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "65029a890b93718dcb23375366ac87cd38553142db5d5e6635016e1e1060f898",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c18c35773f1dfb265bcdf5b93fd524f2066125f7d11d1f629797f7c6fd518879",
+      "replacement_text": "User actually joined Anthropic last quarter.",
+      "selected_body_sha256": [
+        "6dddf783a15053d5e097d0e23b046b6f8e83d2d1286d29ade4189977318ce37d"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_02",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "7df4d97fad64b23921eb6914b5479d000aa63afc3d32fde12307d7a1c0a7cac6",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "26128532c69e7a004b8c1de2da7df00ac38b3ae0b1c884b3fba430c384f35f61",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "aeed1694187d9a069aab3fdeed709893fc8569e1a8c23eca12884bb4e609febb"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0af915191be830a32a4d69e8808d0b4f2842b43d2e3d94889d9a1443c4a5b681",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a0aec89a1e6d85d8173deca67f42b1181b7351b00909978954a157d8e4ddb751",
+      "replacement_text": "User adopted a golden retriever named Mochi last month.",
+      "selected_body_sha256": [
+        "b6e1217f0e358eabb7d1cec30bf1e736d3e08baba19bda48e35d8d34891653ba"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ed34334307da687d9f7e110f7c285df9331c332ffaa88fdc8d1cb3ebb6bbc4f2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "21605e64bdf534c7606f5bc2a904f1440d7e233e6aa116f0197cc013695adb7a",
+      "replacement_text": "Patient was admitted with severe peanut anaphylaxis last week.",
+      "selected_body_sha256": [
+        "5758876843effe990a80e9785c71ae4329a0b85683e4a1f9ea62c1967380567b"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "55a52f239597effcbed8049de46a5fc231ae18e327a556e52e5dd4c6235afd53",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "f4c072c51c383fb6fcf07097b8fc2f829399283c844806800d412686cfad9cb8",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "b7cb7b5171615b34eda5fefcc646fdddbee0e98cf14422eecc3f1503e4a01c51"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b0116a415fee378da73c8b586a4c6134e3cc5a7914d7f31a8c942e8d48a1e82e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "3e9c2e2afeec460a1840b48bba30e298db121a2059f54513b291fb2b41506d14",
+      "replacement_text": "User started using Slack daily after team-wide rollout.",
+      "selected_body_sha256": [
+        "4a5e9dcea2c94c6be63a8b137fb01cb565431fb7fa59cfe9c5f71670036f74a0"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_07",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "6bdea6c3469037573dfe23164925de3e5eb2b2769d8e2c70f356ae874cbb8906",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "ccabfa46e47e9dd573a0e22784a791b73de5c81e08b2da0186258fc154491b89",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "72d7672dfd8cf7d24921025c93f9dfb23fcb377f43861d0431b1a996b96a7227"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8546e56ebe3f3ec20b7b86426dcabd4f8081110f300e4493f01971c44ea32468",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "254ce5e3d16f883c1914c095f68e69a72e7a1faf8ab7c2dbc33c6ec69eec6354",
+      "replacement_text": "User started leasing a Tesla Model Y this summer.",
+      "selected_body_sha256": [
+        "f42c4159220fa88faf8aa8cfcf6abd02ad53b44cd3ade52eb727e2a55c7192f1"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_09",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "29d4d993eab9d2e7f9341dbe846de84b990496bb2db5865fc42c8c7da819aaa3",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "85573661828f7ba6f7e0300e1bb78ef271778c8c36056148fdb59f6ebfb08cbb",
+      "replacement_text": "User bought a Tesla Model 3 last week.",
+      "selected_body_sha256": [
+        "12c18e2b3b5c3e18afbe2765b969c54beca7b31eb50e8aa2287dffd1e385a614"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_10",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b8cb300049ffa031e80d4ec36adefac444bcb6b611330fdec7dd6aa198d2fe51",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "b186949ea5de5a470b3d678475f755e0dab5bbe2bc4dcc1d2a29381b0cb25b56",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "3f2f730c6ae4d36b52388173e591f056428825d744d3fd2731b6b6c2934447f4"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8d2ac5279e26002512aaee557cdc7dc0a62d41815e8b37488996068e64c29a17",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "28e467935ac67ad4d6606ece7f999bb9a115a8d2cf9d672584590aa794e8fbec",
+      "replacement_text": "User has recovered and now enjoys spicy Thai food.",
+      "selected_body_sha256": [
+        "7df1e1c10c4c9633155f932d31fc2540f04f6ad240b039cdb471ce9c2e201caf"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_12",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "eb2f3db1c76b8ed6174d0bd10d0ce83a06a28e6333bb8ef40de203c123376d51",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "eb75e38f79a305dc392ceb91c4bbba43c1ebe478b8f31d8b86d3516ace1f2cda",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "25908e233d32919535a91c7809af19942c4f14367d8066b7d616640d98563fb8"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "bec3c18df043b7fe99471051198a1e4ab0e3d1bc068338739a54696c226b4875",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c2d786be2f1306b3aa6d2f4a8e35084e923929dfc09719f2c0f6b57a1c0d71e9",
+      "replacement_text": "User has returned to New York for a new job opportunity.",
+      "selected_body_sha256": [
+        "d363f16eb62dc386ed05f276de2b1b49514de7ceff42d313fba9f506dadb7b34"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9097416a05336f28c39be7c41f66fe401f4d11fb59f1331808bc824849ffcb8e",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "55ab2863a81c10202a99ccbeab9a86d8e7ee2d60f169cd7c37facd3998306c74",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "5e56f20f8e346bca33483f17278ecd6ae1af88bbdb821bfd9d74709bac73d0f6"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_15",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a5b79cee7c2ebc0b83744481cd5d25c570cf7ecf37e9608bf1d0e83d80b97d2a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d2ae5b8030dcc57f07a9fb27eb2f5cffeefd37cc4d7629138b1ddd5d8dd43c8e",
+      "replacement_text": "User accepted a position at Google as a Senior Engineer.",
+      "selected_body_sha256": [
+        "8b9790787370f341f1fea3503f733d9bf81183a1fa37a837ceea6cb4c6203216"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e067353698b0e9423c5a71bff2ac9541967b42578002f16d34222c6a85202ac9",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "eee2e917250646ef65b466911cf12e5c0bed6194b5992ec85a0bfb77d8ca5713",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "925517f69151220c136294cb8cc32f725d6759a7f573a279f3bd7710ddcb24b1"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_17",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e7cd0998cce0bda0142fe079238ca33119dc1229f30d59b9b3c2b651a0fc7f09",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "560eaa8c95b0788fb0e5483f7382ef7a9b7c4116e55e4f8d0590b7cef8f68a8d",
+      "replacement_text": "User recently purchased a Tesla Model 3.",
+      "selected_body_sha256": [
+        "84cff45e49f0efffd87f2879063110c58e93df15dd6b9784188c693b43be9f4e"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "07abffbe1bca714580258ad8824cfeee5a57e7e984ccde422af5f9449ef2c49e",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "390a72208afd508b1d102ff46df16679a1b75bfb751677d4aad2b11df162bea7",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "7df1e1c10c4c9633155f932d31fc2540f04f6ad240b039cdb471ce9c2e201caf"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_19",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "cabf807aa9df0d58ae82f19d0b4bb266e4fa17369b6a0b9a759b5fd41e8e5eef",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6f22f4ec0ccb1237253161ca4d9e1bcc2da9a31d27da73514187b886af0ae256",
+      "replacement_text": "User completed a French immersion program last summer.",
+      "selected_body_sha256": [
+        "4d12d1f4013602410f52903d08ca8493c5afc6484cfaf8ddd699168c55b73a2b"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "20d1f406e433d560ab203400d0ce951977f4e087bc8b0d112f986cee5de589b4",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "27cb2cea85722293d2e808b2464b78c47cae4ba5bb6658fa2326bb27b10f6edc",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "7ca3fe2ca7f533b448df7967d1bc9ffe4911ffe380094611af31044305a7910f"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_21",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f4ebce9d26d94172d305879b6f8388dc4dfbaaa5443f4a2bd847fa8ef730e646",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "17706e192a0bb62d6b5e2ef404eaab312dc9cb98db2a44e6f449b48718501d4d",
+      "replacement_text": "User spent two weeks in Tokyo last spring.",
+      "selected_body_sha256": [
+        "8c47019bb08d71021b583fdc3e098477ebab030bfa571873149ead0674358f2b"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_22",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ba4035ec967973117cd70a0a58db1870ed44c457536007632c8605fa003c74e9",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "ba986a3826789d0a34de8a489fe51305adf92c20a09aa9170df7e1d6d390b8da",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "89154541f4a23c55d2692b01af10a3e795539b5d8805c70228cf249173c855d3"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_23",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ef3515640cd8ebc4ac9464eae5fa63d216f4f12d1b23430cbd04ca1115ddee8a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "3560d145ebe623cf0189d6eeb946a42f98dcac6a1e7687a51692e37ce2f95503",
+      "replacement_text": "User installed a Nest thermostat last winter.",
+      "selected_body_sha256": [
+        "4a9e391d8c03d2f25e6aa935d2515b2702cea41544855489400509918ece3725"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_24",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2cd7b1485adc450708927baf9fb04c9e925d990c869593447e2bb6989cb6a11b",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "d20f556426262178a255fe80a6713d1d08c446ac1d15b3dd546ceab1262ad4ce",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "6f7940e2f8b6da9ae704baba0fb01aedaf70ed93e80d2d2e2122db350755e4e8"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "31c71be01a07839ce6a0516a81cdc04830d33eec35ac1f79160b1dd72144733b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "138fd52e0fcf24b6f5c16603645c087346b3ca4397364779f169c0e1d8e82149",
+      "replacement_text": "User bought a Tesla Model 3 last week.",
+      "selected_body_sha256": [
+        "84cff45e49f0efffd87f2879063110c58e93df15dd6b9784188c693b43be9f4e"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "79aa85b33da70391d1a6f069b8ea638f381df30514c5635eb0aec147f126e184",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "4e3fe1ddedd535f15f0d4149efb462caa71cf04cfebaa2630975b7161c989493",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "81376e9d88c3046a05fed28cb3dd76c761e944de76026ece8590e3b245ef4ad8"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_27",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "78efe40d3513d516ede933d6f8cda806a720a4291c2ad8cd79aad85db2a7cfae",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c4ea831b962bdf1beb541cab99d3ebbfe5f5ecac59fbb5ec0e7d4145a8a34fbe",
+      "replacement_text": "User became fluent in Spanish after living in Barcelona.",
+      "selected_body_sha256": [
+        "4f8b3f11c54fdb5beea819ecf7cd3d06ecd5102e9afe606c5c2b903bf5829187"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "787af3e34e8236890e9f2672895833cb8aec814b86e514314bc0d35adeb44592",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "2bc52256c729bdbd269620590026a3088e670de4bb857d30d6d2d5dc50bc902d",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "a2cac99688b6d089ea07ca1f3f3947cd52cbe96d5af0ab5aeb83902f34e2742d"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_29",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "943ae57a07621d6c3f68117f64c0eef95143147c5acda9e83d9974ea6389ba6c",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a1e33667a9cf84b83cc597399a1b36410d070fe6d42599499a4470df1bcb592d",
+      "replacement_text": "User discovered they have a half-sister through DNA testing.",
+      "selected_body_sha256": [
+        "20764c58437cc5af2814466f9f1ee189d29a1dfb5a2864e19df21033f9f6b12c"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_30",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "178ce389da523f243089a8a376a59b2379a34673ae209d43d771c6a06b73e915",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "e3da8691e916eb913964c960481fc939c698dc77a7b538a8b5a0828b0ffdf138",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "5e56f20f8e346bca33483f17278ecd6ae1af88bbdb821bfd9d74709bac73d0f6"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "155accb0acc45501072da6b3289f35494c22154383be967d3e148ab8fb4fe42a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "57a24cbd46b2633088100958cf8bd5d9bd37809557cf72f6709a1c240bfb51ef",
+      "replacement_text": "User spent two months backpacking across Southeast Asia last year.",
+      "selected_body_sha256": [
+        "6d7f3019649da92514fca04997d82aa7cbc80e52f883df20cb16e67278d227d8"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_32",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0188e1ebbfa5217b1c9a0282dbc63a6773cd01fef8c7205e4a4cddbd8ad6c4b5",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "d2fc30cfd0001ef4d3291640c72496ec9507c0652f33a08fb55bef09a1c84e4a",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "4ac44b1b0d7e07bc6407cc1d87f01a1c23dce56989402595f3b4e0836d026979"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "16b4f5fe57fc020aeeeb48817bd28bf12dbd489e5def8d31f123c00089ff7800",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a4b7989b4cb8c75fac84bc220823728f4a045fb81f21136b0113e3fc10cde735",
+      "replacement_text": "User bought a Tesla Model 3 last week.",
+      "selected_body_sha256": [
+        "12c18e2b3b5c3e18afbe2765b969c54beca7b31eb50e8aa2287dffd1e385a614"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_34",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0eb8f51256092a74512490bd29fc26a1c2a7d038ec9f04793424b1367d2f2cad",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "eb9640d4024d4941c21a566aa0dfaf68f6262f90f3b0bdfb41ba3cb445a16e6a",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "7df1e1c10c4c9633155f932d31fc2540f04f6ad240b039cdb471ce9c2e201caf"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_35",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1b6e4c918c177102102c6a5079907cd526758212502a127261d9935074dc8d80",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b7fa51ffff3cd463991b3707ec6da5f6f492d1309331f50307a034fc03094f37",
+      "replacement_text": "User has been playing piano for 3 years.",
+      "selected_body_sha256": [
+        "3f2f730c6ae4d36b52388173e591f056428825d744d3fd2731b6b6c2934447f4"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "24c9ff0db522b77caa21b510b17c2f68bf4a147d7bb5ced2fc235405d07b79af",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "49f0fea55c758de07d3da0492b8c7023ee8eb682c4340abee31da9086588052d",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "65afa1b208b889d4096897bb881b724e8295822c1844543a4b977bd3f4ae89e3"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "46c7613bd96de414b6ab209ad69588473d900e27e6bc62a2526fd55392e915db",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6f58c3042a14d70ef374f550bfb36c34d24a754a6700213a69fa1d866150ed4a",
+      "replacement_text": "User became fluent in French after immersion program.",
+      "selected_body_sha256": [
+        "84c1bcbfa3e29b6f214a9198688de5a7def1c59c3112acbe127da9738317c33f"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_38",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1b965b7006a1bb316fd387026d64811ea3ef85cc97220054af050c3c1aa6757e",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "694ad28e1ef25c0347932b280ec25ebbfafbcd07c9eab864e77b0c767972ddf2",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "67f7713c6d1cfb2a4f73019048b05b7f8d4320eb1dec761ff5d60297fb4701e7"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b331092952e6a73b72e19c493cb49969aae7ac26521e716b3fa976e02cfc2100",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d6f8d8fe6c3e2322d9b41613e9f964f94541c916cd27e7bf18dd78ce2cb7d78f",
+      "replacement_text": "User spent two weeks in Tokyo last summer.",
+      "selected_body_sha256": [
+        "8b5e88d0eef3b185bad283cba55dcd7256ead555347f79a2f9a7f5e36f13bd98"
+      ]
+    },
+    {
+      "case_id": "adv_negation_trap_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "301ee95c18ad96812cdd8c9c06de3a40b2c67b971aab6d968e9cb755ec06938b",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "9b8d46cdd38ba53876b1b33cbdb7417669f8197773808df7ddf6e75cc8227c9d",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "5e56f20f8e346bca33483f17278ecd6ae1af88bbdb821bfd9d74709bac73d0f6"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "95a08c4f85876c42525e28eea32e2ebb17c3b4bee5ec1e2503332d46e10b3c45",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "adb5a37eaa6498901d6adb850246e6d07b30f94981e1fd4f29d0ebdcb6422cd7",
+      "replacement_text": "User moved to Meta in June 2022.",
+      "selected_body_sha256": [
+        "3e80d9e799ee8bfc5db3f1d980d4e73ffbc56b3728805faa61410af783a1780e"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_02",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5f5763fc07a520d798099ba801fb7f6123ded7197f437916571cb6a8081f9535",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0c9a00a84c1f6613ed1c7c530ec1d501e712465ab4361ffb94024b2477df9a24",
+      "replacement_text": "User lived in Berlin from 2018 to 2022.",
+      "selected_body_sha256": [
+        "134aae6a5330f1ded3997aa6b6c41bdabc94f80b9a193218662b77254de58532"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "3850f7f514f7aab481a76691d9ba84b919aadcdef851318c2ee4414e7df92501",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "725c444c104dddf53cb65cb6d54bd84b8337760d4a389066ff561692711ecd55",
+      "replacement_text": "User left Google and joined Meta in 2022.",
+      "selected_body_sha256": [
+        "832ba547c8ac792eb5cf4e6be698cef47ee51d081c135fbb72a39f493fda3b6c"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e516fa28b3269697e46fca4214b94b421ce49fdef200091e3b3c3ea2c6a0ecff",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "49ce68dbf75f4d55e5f8f820a6748828b988e01f3709fad31e2d744c3486ad49",
+      "replacement_text": "Starting January 2024, user switched to a Mediterranean diet for cardiovascular reasons.",
+      "selected_body_sha256": [
+        "bc580a3a1624e37a770ae9aac0fb0dc7557a4601f8e2d06e09d52b073ca3d322"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5aed271cbf81f82076e852f07729aafe7fd0985e9bd4b776a7bbe93e8ce6a816",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "74fbeb4fb9fe5f2b4eba22b6de751dfe19011f74c1ca442bb3dc690a971a5971",
+      "replacement_text": "User registered as Democrat in 2018.",
+      "selected_body_sha256": [
+        "29f0a5508adc1c3950ca317f01cb5ef3c1dcf98edb8ab5a9306425b41fd31270"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "86466a07370bf730b603e8f117e67afab16b6586320c6f8dc986ff68aa65f708",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "716fcc7e80b2809d46f4f1b29fb55da0324f11691a87fa931c565439b380a277",
+      "replacement_text": "User sold 14 Birch Street in October 2024 and now rents downtown.",
+      "selected_body_sha256": [
+        "e7275f8d9c01794b26debf63b5014d8569d6d1579255cdac69ae324519d48014"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_07",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2f4b51bdfb216b0020bc0590a8e6ef19cc2d1875d50aa839932eccfc29fc28b7",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2c3b645aeb5bbe4c23e769484f95e95334468bae029f5c75dc1e1e4770d87add",
+      "replacement_text": "Customer downgraded to Free plan on 2025-02-10 after cancellation.",
+      "selected_body_sha256": [
+        "19b82c6fe6e6fe425af214edc735fdae0f2939a63110b6bca2dcddee13525e46"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8ba37bc7e1d04b83f5e6418646bcd1f81ab74230a66f53968afa3a5edb22a48d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "3ced2b7d00c817ed0f3a3b2ec3ac910dc80f69aadf316c93737e5a71a287b089",
+      "replacement_text": "User got engaged in 2020.",
+      "selected_body_sha256": [
+        "02b2cd4b326ca77dcb6592ef94e764e19c11844fed4610a37632eb90ab4dc963"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_09",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e32874f0b43668e401b5203010c4b7a882a76cf40be46d055bf6a1aa57eaa978",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d5e37b37d7153be570bffa13e833beefb182f70c24477cc4315ecbc2567dec20",
+      "replacement_text": "Alice joined Apple in January 2021.",
+      "selected_body_sha256": [
+        "73b9e8edaca01185ee8929c2d62205ed4d2792ee9f8a9e3129d74c3651d2acef"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_10",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "3385ee5ffdb1dbf864c3329db701e32349c69a5fabf63a51fbf60efe2c775186",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "f18dfbe36406a68fdfbfa6d8f912688147198d18e18b58221c62166f7992195d",
+      "replacement_text": "Bob earned a PhD from MIT between 2014 and 2020.",
+      "selected_body_sha256": [
+        "f04765e8921fd73cd6f1f67dab4a5175c437c3640ff7db0bea13d4e7339a5fe1"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "687905933630d69e6329189b96d54511ff18d68cb1bdadf58a5fd0826331f1f7",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "df3257a93e196a06148607f38544adc523db1f2fc84ba51ee8097e4846a9e2a7",
+      "replacement_text": "Charlie switched to a Rivian truck in 2023.",
+      "selected_body_sha256": [
+        "eb8e84375ac7918871fdc9e120ae328fbb0eb1e27d910e07066c450133737bb3"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_12",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5047a2f29bd4260ee3dc6f334b2eace13a306758d9a67373a336ea09422a208b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6171617d930ebfb83374c138cf3673449a5e1cb4288b5bba369bbe19c249f154",
+      "replacement_text": "Diana became CTO of Beta Inc from 2019 to 2022.",
+      "selected_body_sha256": [
+        "130de860fa1a9f8916005e17dfa32bf080792c408697516ee102e85b226306c1"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "58afab8d9ca5a947286efeed5641eb15e2870361df66fe738f8d08442f7a2e4d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "17d4ecb599b0491cceab22524f2afbc227c98e407090ace2267cb985fb9bae9f",
+      "replacement_text": "Eve moved to Barcelona in 2019.",
+      "selected_body_sha256": [
+        "8f8dbb54e703a201ba710e2940413c23f51da155b8d2a7616af97aadfe8ad6fd"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "71ec2e6143c77d57ae76291a2da8c8f57b1aab1b889733c53c3f6d39ecfa7889",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "05a9bdd33be1b2adb2af7853661b126336bb0666b212dd753f9dd220fce16f2f",
+      "replacement_text": "Frank's diabetes went into remission in 2021.",
+      "selected_body_sha256": [
+        "6f92da3edf2e15f059ea36fc5273d9889a2008cd0becb55b599cf8bdc313074b"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_15",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "92ca4502dfd6fca4edb3280a5f8a069edbb054975aec7a841c0a9fe8dd327238",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4b057262c3d52be4a4548b34f8d5bdabd3952770e85a7b744c999e8ac70cecde",
+      "replacement_text": "Grace released her second book in 2015.",
+      "selected_body_sha256": [
+        "0af4ff5ce6401038ea16166bf59487631bd6a312672e72cb23f7a955349c9c4d"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ea40d6350b17fb9365412520acb37bb6e688dccced57db57c856d49603186ac0",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "60563e9586f62dfb07a44c6f027d239ef92bcfe998b6b3bc4b5c1016f689d8db",
+      "replacement_text": "Henry remarried to Emily in 2022.",
+      "selected_body_sha256": [
+        "175053c4d3aa117a112d754c1ba3888fd194a3eb59ff6c8ad18b9521ba7f845d"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_17",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "71ee5886072cfe0981f7d2488707d61c5b67029667dbdf5dbf11fa8899ddca0f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c586727a746ea60ed1caa29c86eb01f2fef24bbe51b409226d95aaaae09f859f",
+      "replacement_text": "Alice joined Amazon in January 2022 as a senior developer.",
+      "selected_body_sha256": [
+        "cb48b761130972d2dd163bc194216a0a967a78bbec4f58662b71fc3bd38412bc"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "94337713e1bf1e7c17274e6c080ecc2b0d5daaaca18ad04d5403d0890788720e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ad23d01907e1dabe78fc340a4ba1b17b8d4c8d525632fc5ef0e43a95f93cf6d3",
+      "replacement_text": "Bob pursued a Master's at MIT from 2014 to 2016.",
+      "selected_body_sha256": [
+        "4cd36720567a50564ab608801873cc2066539c977e97b715ad9e63defbf8abe6"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_19",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "bc647ed2aa8a0341cadff38b3d4300aafa492732a87b2089418e1e403935be32",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c4ebbe258cfcc9cec6bff392a79fe28d2855886054c0ee53e3c3146f08e1512e",
+      "replacement_text": "Carol joined SpaceX in 2019 as a lead engineer.",
+      "selected_body_sha256": [
+        "9a4f91afd80038d07ab02feb201b474891bc8f725e378e8f1978b90b5f2b846f"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "709b899199b384bb2de7ee90d7dca294974b9d949d1d005443b87f1f92fb0114",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "e2fe23968be520054694416ace4f8eede2c8ac0852c4ccf48b241eb0a47ca183",
+      "replacement_text": "Dave moved to London in 2016.",
+      "selected_body_sha256": [
+        "01df649bd0bd3ea4b730bf899a863fa45af93e39ea406cbed59faee888420a8a"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_22",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "778d417e2c5284d47b297ddf72d6f5a0dd5719389c94e369ed3116d3f5dfd934",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "432f29ec2d69a1f5216a1d39680eaf5935d700b6d3340de892ce0a8cb629d4fb",
+      "replacement_text": "Frank bought a Tesla Model 3 in 2019.",
+      "selected_body_sha256": [
+        "0649866fe8e85b978712c4d3e343c3c8a1f2d28336447b7111cd50df34046a01"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_23",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "dba16fba876321566d7d623320ddeea0a45bc870b0156ce343f7bb3fbf0b00f2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "070b4775b91c1418970f655a6fa04badfcc97f6e97a6dc0d83760daa2a3f0436",
+      "replacement_text": "Grace joined Disney+ in 2021 as a content strategist.",
+      "selected_body_sha256": [
+        "063bbb54271980b1bcc7b22861b4fd34f88d3680e30042612da1783d5a7352f9"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_24",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f855f546a9c43b71287b3eb3d69f66812bf383290d6ad2485a00f83f452d2009",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9c6ec2ca726ae106e1625dfcb2065fe24f265828d745cd080e60bfef23c4a045",
+      "replacement_text": "Henry moved to Melbourne in 2017.",
+      "selected_body_sha256": [
+        "f9d65ba543446558108bcaea8908f12f255f357d839acc652e72a3b18fecf993"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8726555ac6b981222a287c605a693557f22aef9046718fa93c7ebab24c5d7e46",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "abe7620393468e8ddd5f54435310005c8bd8d940dce056a009922a58a4897373",
+      "replacement_text": "Bob pursued a master's at MIT from 2020 to 2022.",
+      "selected_body_sha256": [
+        "4a47c7f00ba686fece42a3b3a42ff8a6214d885f947a5625886e11c36bd43f88"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "86b364094b33532eed76e50d551c1ffec96c98d4d850fca838a123025cdbe7d7",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "27fa1c586d7a5cef40bb3620681510b4e16f6eb68fdeeeea28fba435356c413c",
+      "replacement_text": "Charlie switched to a Rivian R1T in March 2023.",
+      "selected_body_sha256": [
+        "47540bb8438d327cfe23aa29b6cbc8845e0cabf14ca915d8a766946081418bc3"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_27",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8508f10354569080e60729e798c51c8e8f018a5c197a15f91555865d871e8c83",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "65c295593132f61d35c51a2a1c452d635f285549fa5386541f6740979056e91a",
+      "replacement_text": "Diana moved to Barcelona in 2021.",
+      "selected_body_sha256": [
+        "098a4d7ecbc5d8107095aa02f915a815db30105ec9a9bc4aafa886a9ff62922e"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e0223d2b5a6b1f1c3d8b078920246c7eccb4f3440ba90c6ac01bfcc18bd4d9b6",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "30da1a02d66fb0376216cae24ef232f5bb7309749d49c63683cf91d909819547",
+      "replacement_text": "Emma switched to iPhone in 2022.",
+      "selected_body_sha256": [
+        "6d188fa56d2bc9bd22e71dcfcc1dd8195465ba436b1dbad1a92fffeb140bd599"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_29",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5cc515154eef31ec4bd200a77bcbbf4a54f68a0039bddf5d5157c119ccbbeaf7",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "e9ca21fc36503a62e61a286f5ebfb6e2eaee0569b99fa8b4e9b90648db96e8d6",
+      "replacement_text": "Frank became CEO of SpaceX in 2015.",
+      "selected_body_sha256": [
+        "2fa1b0f6bd35ba01714f21e02fc7f1f65cbc5fbd60270867a5a974de1c532931"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_30",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "019c0b546a8a0aac176807f5319ba2307cd71bb8dbd37b061123688080d40775",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2fd491e20fb331f57d929764cbf90dd97b3a622be6aa799e7963d12d5d7e0d49",
+      "replacement_text": "Grace joined The Washington Post in 2020.",
+      "selected_body_sha256": [
+        "96059f5af3ea8ef15852a0952bec72236413405fb9f2eb4f5c9ce32eca11dfe7"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9109293098604c3790c6ab6b22ef910954f7cd300143c08e7a6205a40beac211",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "de1860fd9909366096e2fc4a08d572b2d0df725647e22e4d013c76e24d04ae73",
+      "replacement_text": "Henry joined Bain & Company in 2019.",
+      "selected_body_sha256": [
+        "07d2edd450be78fc1abb7ac30893fb4855ab20fc4df6f8b9b849729c40f3e593"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2667d7337a121906690ec712bbf0e463553a0ec90ba7f1b1aaf2fc3399c2b9f1",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6e3cee4314e9b974d795f36095772eca1f159d5ee463bd877c5f0db9fc16cde1",
+      "replacement_text": "Charlie upgraded to a Rivian R1T in 2023.",
+      "selected_body_sha256": [
+        "eb8e84375ac7918871fdc9e120ae328fbb0eb1e27d910e07066c450133737bb3"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_34",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "23fb26ecf0763d6719559992746367ca1f24d46acdceb0eebf55f0c5a52f4f54",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c918f2d5f7e2f2fdcafaf7b15153ea56d6f1a8cef14f89e2e89c4f3a6ba20f70",
+      "replacement_text": "Diana moved to Singapore in 2018.",
+      "selected_body_sha256": [
+        "c57cba9123a13e8acb3f6fa1000dca052b21be3ea485a3e04ad28afe03d53349"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "3d6753388158668dac7f423bd5176261374f15f4782234621db35c2893ba0c9d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "857370cdcfbc7aeed553749f417b288ca41004152979c044c5e4f001ead18a8f",
+      "replacement_text": "Frank became VP at TechCorp from 2017 to 2020.",
+      "selected_body_sha256": [
+        "5415f7261ad979ef8e997a66e9d307b9eadd57f26e2c588268c4106495438460"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "613a9ef6cfa3dc9574e67b7412d666a6d7a8683020e3566f6ed2e85282eeffae",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "8e7bd8e1935277fa0367b3699a174d23d29fc81d9c2b82640625d83adecdcd50",
+      "replacement_text": "Grace moved to Vancouver in 2021.",
+      "selected_body_sha256": [
+        "7295fba7a6c04168a56d9ccd1e056ffded2a700c7b7b4442a80a04c0cf8a79b8"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_38",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "24dc1c2f1576e1e5e84e5640cbea423af3f42af3c69ffb48ae2ef7b81b3a74c4",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "68bf1ceb78e2d377b1fa2cfb8069a3f52c4b6be9e26d86a2e132194b3f1c994a",
+      "replacement_text": "Henry joined Yale as department chair in 2018.",
+      "selected_body_sha256": [
+        "2162ca561c87f01469c18aa9b2d02739f185746b1666e3099d7bbae3f232d292"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ec8c113a7e8b2a8b0fb4cea477e6f3cd7aecdf9e2418e78f31b01ef31908e909",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b73ec017e7e86e86ac9e0e3e8e68a3617ed767354163839b79b9992ccc4022a4",
+      "replacement_text": "Professor Smith moved to MIT in 2012.",
+      "selected_body_sha256": [
+        "b95dc88a5070ab0b4ec67d902042ed54273645ca0f609320e0fbf353d9287714"
+      ]
+    },
+    {
+      "case_id": "adv_temporal_qualifier_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "4a26b18508b00a6658f4768bc14f90aaa91216153fa44c4203320944d6c59f93",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "33b7afc3894c59f7a56ed7659ee30d32d8017816c1657d534dcfa5fa1df8a24a",
+      "replacement_text": "Ms. Rodriguez became the new national team coach in 2021.",
+      "selected_body_sha256": [
+        "038e68ac6076930e3d606148b127a97af87b70bdb15cce4bab73c9b42fae3a96"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "eeec5d832db267440181c6e4bd59a1e0c54af3cbdd8e34c22174162cbc752d27",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "449e6032a039ecfc20a732bf5ddf891523b8f927ff2812aec843a68271fa149f",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "e8cebe6a616cc6b9139e443928c63f7f98ec3d5fc6f07fbe1cd2d44f57b61b3b"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_02",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "65c788ecb9482422fc7e346c124a2e0003535174e387b93aee86b8e5e9086323",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "08b2a2132fd0ccc69007ba472afbf50368cf8d4a0e13b43acb4fccfdbd4f7710",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "a426cae4b5ad5366a4e8716c6821c1e42893059639c6294e974e2c264dd8fa89"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9f1387e9854cf7bf16da7756341bf59a5ce60131e0a66d830768183e580c58fc",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "0815e7d3813a2a1fa2f5479a605a37469d25717e84b410619d69021635e01178",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "e7744e725a9810cee261758e11c8477a2ccde5eaa5c3261751bd2e45ded7814b"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "27cc2a4445d211e3fe48e6e88ee52cb7058078f41f9cd0b3e7aff3422b466736",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "525f6cb235363dccdfac3a8735f511ce040e9954e10477a7e4b42c42e4096f8e",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "446f75a442e15e09c66d6758cafa52e43b8ea56705caa1da7503713a5953252e",
+        "fcc9a0d09a9950698d87b81ea328cf13881ea337c90932f94be7cff2b9afd8ee"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1e2d751d218c72f306b0f0f36a6f4938a091b62984fa43c4ffa7e068b897d19f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "a49c07eb9fe22b1cf526becbd8aec575a4df3ef2740ab73342baa676a4ca33c4",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "cdb81f34a34a63ca8d6c17abc7bf24bf712002ae1391062dd71177c2d33055ee"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "05e46b7a423c40962655158cf37974030958e3a070425dc117ec0ee241333ab9",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "e97c6538cf03d9cce15448e5acff1103cd59b0434e251c9587c991d4c725d402",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "22987967ed9dcdcdd9e8a56fa461565ba71c0c4da2966f96b437c7da3b869a15"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_07",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8f792d53aca960f10378a6cfd7ab350707c03c32e9d84bd853fb18ba006f3c17",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "114f278d02c71af907010034f46732a7d235f8bf26293d729e4199bb5c8396ea",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "055f80839ca1dcc07f573e0a74383c1fdaf3dd7375a19297ec8493aa4a18547f"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "d61f2f33a2a3aaa7f1e87b564fb04328249ab4cb92872492d439b37bc6f3d20f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "6a9a41fb520d49e8e9707db38aa3d0a47326ba6981449ecb7ebd8befb03e2024",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "4750f7fe1e9945747fefdf695ee0be2bcee7f14edb03efac0046c82e12da9315"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_09",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f2b8646496f0f4fb3ea7b13a2c3213fbaf19af295eeb1e25e8d27356a40a192f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "d5ad4bf5dfc3440218650932b0b63b687a86877449fb10f309edc23061337b08",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "596f88cc531c35058b97f14ee0aef0222715ac554570d600a59c6d07a601e2e8"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_10",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "43f0e3fa9b93a60926bf3dd47d138746727ac1d8b3db13cf92c5175b2e837077",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "d20a27c4fce5ea798cc1da86444d9d9485c0cee1915277712721ee8158d83c9c",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "b1a0284f2ee3db2173c7b7b7d233dd6ba2e32c6a4c0dd6ece6f08654135b2411"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1ee567dba3428a11e3c05ba0e0054170efb4ce62916bb4c3e8ef214cee983314",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "3b998436cc2749d38418cd7c5cfa57e4ef360f5ca919d6fd04bffd5a89a7d117",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "4efc764bd3cfd232143bf486502f74ed43c60b05325f2d419f36baedc2a81db7"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_12",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c6dfdaa0b082255a32dc01afa050cddd377bdee88edb2f110cf94d19bce623d9",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "5d8a2baacc23bdcea29cce5552457ddd262b3327a3e3da5295e522ee35375d3c",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "8c5582845673bfd551c73740d54b6462c6eb45db11e615ff60435c3e8cc9874c"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "aa2560b5c2498d237585604f06fc29a6369d0b9a9d4eb0676d85233882d9d1e9",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "3aa107a0112b8027a015e5a9f9ca75f022a243ad8de56250a71fb1444d8c15a6",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "de426d595b7d8824946abfb9a1221b3070d917f40d3f9dc0ea2e62accbd60dfb"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b4db99f011255826fa44d93dbe483f7ed659c7277800a5b2a93998519513d424",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "21a3c3d2dc4e57f3b844af0f9944746c0364ee53f3bc483d905da8b9325d0ece",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "e18c152ba0db7e4680d5209fd97021677e4ccaec29f34f3a97c51f01be7e8f42"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_15",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "7416939628657413589a7a0b46754a78902689f73779a78f5a3e03ae7e121d8a",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "b2d72523a1592ec45152ae5d1fadb7316c9ef3c68b11177f8b3950696d071a8e",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "b3127fd835f979c41e0e39a83296593ee53586c8cdd66bcfead1cd6ce43f98fd"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1cc7c83b5874f803b6c8c74b7a73ef5fff03cba586d5b57ed90ddc36cbe6de7d",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "72e4d2d77e56670971ca1030a46fcf210c0e7a4e4456e489a70aff81927482d8",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "12bd5dba2f21a5adc8b6795ac1c9ab28f39f7a6a28dfdaf9a788d42dc0c1bfb6"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_17",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "6892c71624f9c59fa3cbd38a41110769f2d4d6cf2cdc3ccb39a54e2c9b59e13e",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "89fb566833d5c3296a8c19b16421e36c202ca63b13f0b40641345a0175592adf",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "fe2106936b6cdbbfe389c192d5a9f43258188dd1e75c5ae3930c167d6a084b1a"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1da6e707d83e09bc419805b9ab3f0d76615a74cfdb4a8261f4c51e9c5f170af3",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "687913ae5e50a4a9feace5d87b6e11cd3fc54bac9b55bfbd657fe6228554cf13",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "87e545fed4e82b3b57051f25d2282b20aedd370b3f7b816130d91f5cca26c9f3"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_19",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e2d15c799353c19a12d4dbffef674123d971e94be78505ddd4ea63e8b7aa0061",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "7279235cc57e12070d475cee39537df8178eacfd435babad987ee7fcc53894a4",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "00f1a2560e783e1b361de138113992e6e40fc4e604293aba2f4eb0a4fdbb8a71"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5dc02f0d01ebacd57378245b796fc53cfe0ee82881aa793b307a03e422f043b5",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "8b7aae93d873b998be285af221d5c60420ab13b88e951791cae246ea6126cdc5",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "f2215b241c55dfd3a5e572a345d8c4c5b954ab912261e316f2fab0f55afcf1b7"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_21",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ab757609d142c62688246853e1686f385c22d1366630c5f72501b4310c045e62",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "29d78a531c83f714877aaa77d615199718cf2ad814dd759e05b7538212748f15",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "30e7738822c22a4c54efe3d12c483501d35dfa33e4d057c0bb1e1b64c249c18a"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_22",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "989195b36ef2fb47999d87e1b15992c30317f328c90b0b0f8f6e88be64763162",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "6f3937a3864cb3e2d4a9219e19283a672115bfd4b3de0b5a35475b35ef2774b3",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "a5c3d7686529f4351e0cf96beca04f31846f0566735e374a46219536a3b3db9a"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_23",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ae3d84ca80f641de26fca375d3d7e15d45e60835c4099507f57c0b68fa028c0a",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "054076fd25099b402cbc8cdf899a779f73c0ae395c93c62aa577bddd00e2b24f",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "6d95582601ed071491e23c99d36126606470d82701680f747deae8eb0fb1ad3e"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_24",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "236a122627715392edf0b344adb87c1277d9f055f6a10b4b8e11fc8b870a6181",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "63ec38dff96bd671e5a8fdfa817e4da1755037b20c87244db1238c9489024ccd",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "37affdde367f949e58fa34185983a6a322e70fe138d6f16a877553248d3faa45"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c5faf288099041cb8e0896c5eac18bf846083e660e395c459989576262a7a9b6",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "3f1b457f2f052871f811b9753a4c36d2fc64cbc896b8f8515862c2a3cc84a3fc",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "d97bd027fb181a0108ab1b6ee8da2092e2bbd345e0f81cb99da4ed9bb0515c2c"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "d5173c13b1093e3926a22360df15258b3438d36232be01d3302cf896791a5034",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "717a154ab47a99cff0943c484bb5a5d35dfac1d52fa09ad0dab359a74ed8470e",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "984d2f03d5b0e8dc223fd1f1c17aeacc4254e6abcaa35502943ed57f375ae23e"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_27",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "24188d380eed4a614458ef497a5e2d9f072b1a60dbef030b519819dc5ed80c68",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "7c9e7559f164513aaee5f5b1cd976e65b2e2ad45c4af4ace80239231b7e30e38",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "45660efd137a32fdea24259729f20b9389f99c6fd3c3896a1ae93df556fe8ff6"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a2a1b127664a421d6011f8485935e50730620528fe95899134e9e15b2a0be75c",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "6c2a9aa5a80b631676e75cd815c8b43aa5395fc9af94a6e7fccac9d66d2683d8",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "8422fc4675f16933651ea2cc5fdfa10f7b0003bace87f997d2d7b737c779bfb0"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_29",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2e3dc4d856da33a546f7fa075ccb1043a68715e5e6f61c13733f7d34efca014f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "783855a4bff16d36a9b89d8b105c79dcf207c63293f1b77658c96a927a6303fb",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "e21b7571f1070a980450ab5a8a6f4296770d9f8c38da021cdcd192d50e2b7cf0"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_30",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "19b1da1a5f601a09ea997ce8e4a453f296f7a07cadde33ada91a3db51d55acda",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "e196ba10f30baa90890bc61205c8a89685a0bfeaba9dc4dc0a1dcbee24d79b1c",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "1044b2e7e62bc951bf25ee95f46636eaa4581e5a180cfaff1008a20ccb1379a3"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "cb9f913cad66a3c5b73883c86e42b77142b648003969ba7a592128ded050127a",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "fb6e01eb7274fa0e58e16f916009afa47a0dbf0766df7fb1216e1679bf1f2261",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "b2a0e4f7e2bdaadb9c08445a323db5e6ae6aa8c8efa39bf004fd283a804c4e53"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_32",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "948d668ef427901f3df4c68c15ed77a70a4b716b5e6bf06bde3be8f4bd161225",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "833122277efb0242b5a36d4c277e96122270852a62a16071c460310f54a77b88",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "42db48522aa62744315cae2af29c16f019fb158332def69e38110638e90965f2"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f846e79e5f7f575a416e2481c7f2ab64ff51cdd35f243ee7de895acc5c871196",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "21ca7c49bb7a4d5e292a853859bbf56b4e5df2cde17ec4b18e4f316b8620787b",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "1841dd1bf6a4a950f32f2456bd147d99250d4c24aaa7b7f84b0829b6917ee70e"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_34",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "df72bf864456040168995c77132b7bc84e0f478f18581f30ea8d6485995c8370",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "13dc6437ac13b5604206fe0726a23a79a2c70dd7428453693b32dbb540e14675",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "6c2f84e72534c37b5a65d3516aff2fed9e581d6f91b7c58531a17665753f836b"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_35",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "35f56d69cc8863160016227ecda09eb4ce2de7c74601c839740b23c539eb20b3",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "a2a23dab2fcbef4c3b947f1bc1f4b4e0df6846f6a2776cad7621869a2f94a664",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "6ab0dc3c1c060ea7b587df1210f8999c8b56a766e4d6514148516848aa4814bd"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "31fa47abbb331bb31add2cbd79480d4474e7ffcbbf1ecab4e593e82cab19b15f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "a8ffe637ab364a7af7f1e5319ecd6ca007f2a50d00a0f3ac6e804c8f28e9d9b4",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "af8ef00ad63d43397586988f0e7a75ed015605d6ffb6fa361cc0ccd474228ee8"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2a1795bfdfcf5ab0a54955e945f586dbeb74213eeb8001783689af31c3fb9c2a",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "cb65c72f3bc56265b604b1968a1790cee48a1add5f95dbbb1e5f69e5c8e26c63",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "8d78e4dd31b786bc49d61ce57ae50748aba4e646ad31bc4804deb022907058ef"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_38",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8b9e2d82c79c1578c0294e5a6be33485ac46ea90eb79468a4ebb997314b70876",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "e49a83e6148c60db6a292c222d3d4077bcbec54bbbc27f8b8df2f6731a462101",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "94317acaeeadcfba9d2df5c02b36bfc63a60658c3a2cebe3da06c6ba4875094f"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "50c3fbb4a7bfb5e0f0c582cc3ad018a7d021801784a84f0e82464735ef0e9c86",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "aaddb6e272370b4ced59e0994982a8602a4ed04c94a3ec357df09bbac2221451",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "454b3009f4f753b26f76efbc8c0970e656e8b0447dffab4549f7bbebaed70cb6"
+      ]
+    },
+    {
+      "case_id": "adv_shared_attribute_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "69e3fd3200dcf3ab01e671d87727a09f830c393a6cf748df3ed65bfe8395305f",
+      "mutation_index": 1,
+      "operation": "release",
+      "proposal_sha256": "66de0197c82c7a5524b68481f87c8ec9f990d2f76136646d8a1f8c825fdafbff",
+      "replacement_text": null,
+      "selected_body_sha256": [
+        "a78c02d02347ea892a1f6fab8a4bcb32e44e6b5120425eb4b7b5d15bd3c5ae2f"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "bdb14363d0aa59772737b922b85559b34760f68f18f78a1d29a0db282ffc9cbc",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0483b6a942579c968c00e6c0ff21fa520422c6d39cf8942bee57f2eb8fd0de06",
+      "replacement_text": "User relocated to Madrid and continues working remotely.",
+      "selected_body_sha256": [
+        "96ac6bd150ead3b0b2245721fa5e1ccbdcc8f71d57e78400a328522dd36ef08b"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_02",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e956f23a53abb52c96e17955c430127b2ddfb96a3eaf6c900868b293f503abe2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "86f077d869472386fc604fe35f0b2148357340c5e5b538c8c5da4c708ff4678a",
+      "replacement_text": "User joined Anthropic as a research engineer.",
+      "selected_body_sha256": [
+        "441f55b7bd4565d6a853e637652f2965f48ae6895332a0cf4e8dcd2ef73b7458"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "d541c720f8655de0c2f807360c51e64a58c63ef0b99fa98ca06c9928e090d380",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2a39eba547b95249698e6aaea66296661e99f0baf295b3346f09eb843c7886b8",
+      "replacement_text": "User switched to a strict vegan diet for ethical reasons.",
+      "selected_body_sha256": [
+        "cc6856a0125343d4245f311b6ca541fddfc8fb08a5c5a0d3d07e50b552001b11"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "6d128dc64c4a6a523e5dfd79364e2b7cb9a5d456ad392de0fb5fbaba63a79898",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2cf588a025cdc4e1ac2a84883b5050cc8fa2dd6a188d0586a678b29f9f53e3d4",
+      "replacement_text": "User moved to Toronto last autumn for a new opportunity.",
+      "selected_body_sha256": [
+        "ece6bdb62f39b62cee0fbc8b008d59c48e908e17abeaf80a71beb294bacfd2bb"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b15698cf3683912eb2a595bd7ce4137de5678cbe75435cf48dfbfd2f0d128542",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4ba46149a3ccb535c6d0b096d1f588ab7f2cc13f65e8314528967212a468dac8",
+      "replacement_text": "User upgraded to a new electric pickup truck.",
+      "selected_body_sha256": [
+        "c56d9e8991a33fdfcd40e3dde4aa53d9954d7bc99166a2e044b0fc11e1462097"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "272d975edbd8499f234a7b39fc2b8e0879cb37714ad9e4e73020b0254f0c74d1",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "bd3c5dfc0e68b23f2293cde1c82cdeab9fe5b1206625997085e1a08a816f550a",
+      "replacement_text": "User left finance entirely and joined a nonprofit climate research lab.",
+      "selected_body_sha256": [
+        "d5673fa067a238cc90d2b363e5b20f6f4889a0b0d2d33d0da12b6fd84f7a69af"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_07",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e8ecb2e8acc0433580ebaa21e3f17b16eba479e4db0b58e39b6e7b689105f06b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2c431ce5aac5f5ba59c99dd55f27e844df00e75c9f14df108ae64aa62997bfd9",
+      "replacement_text": "Customer updated payment method to credit card on file.",
+      "selected_body_sha256": [
+        "f79cfb341fd5d52f627ed1238e78bec70a7548da6044b102950ee7c1d19b2845"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e7f4261df07ebd724e5cd43430592ca14c763470326fe410c72fa0a2373c32bc",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ef04ab03364230ccb4420230e12b40038d361704c02ba04cd3b936f609836978",
+      "replacement_text": "User now reports directly to the CTO after a reorg.",
+      "selected_body_sha256": [
+        "19663bbe2f6e7ef8aef5e10db04afd7d739bbbe49a8bd6286d154166c39d98e2"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_09",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b9f4416408d8708f440d19094e824764852ced4b66e4b8179834309fcfe20a4b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "eb0fc9a5e5b7e01fe1cb0b1d15aa651f173ce2200c53e89c55cdbefc101d5965",
+      "replacement_text": "User recently upgraded to a Rivian R1T.",
+      "selected_body_sha256": [
+        "07c137aaf03e21d87b37ce72506bb68abe2ef8543351f5f2ec202c449eaca873"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_10",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0e05b60ea3ca5522f7f7e4c54a8855757fa95c87aba68ccd4d91952b59c18dd3",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "836331e50575630d8c7891a9d2dd138842ba44246f4627b9d199d55d3a71d750",
+      "replacement_text": "User outgrew their peanut allergy but developed a shellfish allergy.",
+      "selected_body_sha256": [
+        "05725a671adf62ed97264262d2851f5a981ce7cf1455d72789831e513b7a2c67"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8a6b8547f1a78b42d157a9449ed751c92509dbd2114fd482bff1455e25caeca0",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "82a96c39d1a3b865b1e2644c847fb623770946313c5c0bd2bc3ce4eff6f92003",
+      "replacement_text": "User accepted a professorship at MIT this semester.",
+      "selected_body_sha256": [
+        "10617efc4f66ce82f265fc1871e4d8d01bce8a32d77f15b522dde7285b09f895"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_12",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "462f640031b93774346dfb0b20f9e96aeb301ca3210591628c91c00ea68fc485",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "539f1b28e829710f133f31662b529859bcb99d8776b91c8b3efa9a4ec6f3b6dc",
+      "replacement_text": "User switched allegiance to the Socialist Party last election.",
+      "selected_body_sha256": [
+        "cf024a195ca1c9b75c3363dd865182e742de765e23b36e7a1fcd7a7a39ab0335"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "10fa49f34f1b37fec03747cad88cb7477436f2568787e8ae8bbf1e482b353985",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "bbb1acd9ad94b2e590ca90edc6f94cf19239c724d2bbbea192131d4e92a7bdcc",
+      "replacement_text": "User has shifted focus to ultramarathons, completing their first 100-miler.",
+      "selected_body_sha256": [
+        "d06cdc79bb908ff2e234d4d3d8b9e6d7ede8664efd17e0083ddc447f4438e6a8"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0e95924e8dd88bcbbefbaa2dded959bab0baf3d70178ea9710909a088b0f7cc2",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "98ea71a740b1db7b8d46a46efd573cd9eb5aa13c346c9931679584d5975652ea",
+      "replacement_text": "User liquidated all crypto holdings after the FTX collapse.",
+      "selected_body_sha256": [
+        "729a27e084292e23086e174e3ed8647aede63e78330e27ff800c589c39c5c31d"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_15",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b8df84e9217a41280c2b80146b0180226dfaeee1396fb0ec5be429bc07be4653",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "32562e1cb76fffc55b6653a17e733829f7e0ccc113dcfcbf222972da851836ac",
+      "replacement_text": "User let their pilot's license expire last year.",
+      "selected_body_sha256": [
+        "f8c063e407312d64c090491c1b3d3e54ffac8fac0c999e03f391b8061fbf388e"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c0412640f1e54204002b9561a91418a8b32074b5ae2c9cf774c334ebc83f41d9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "dea235fcce0b9aaac8ed0fac3cd82b377d9bbcef84cf2d10fdb4160fcf6d79fd",
+      "replacement_text": "User stepped back from firefighting due to back injuries.",
+      "selected_body_sha256": [
+        "f4cd2995c4ff76f353fa1add5794317edaeff1955a11a56c4990bb80ebc54ba3"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_17",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "4a502684213944c1f9005c56d0ea9480c41de50d42be7f6212819ede324344af",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "7dbe8a208d642ee8886164496683958ce90e721d460fb2f0e186864e470bfc58",
+      "replacement_text": "User recently upgraded to a Rivian R1T.",
+      "selected_body_sha256": [
+        "a073021bef9f63de8a40ef75dc9d1e92f408ffa6453b4c03f5168de22e291946"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0bac442e7475dc75392535855f85d74a6cc28e302c8dc417aca8a5683c8e3c01",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "405b05a5b7e3f6b3f1496d8d841bba163e0ec69576d4755a246df1ac4f4d7580",
+      "replacement_text": "User now focuses on Go as their primary strategy game.",
+      "selected_body_sha256": [
+        "d4edd98ae77b09a8c27790f1756a65875c002eb80d559b645fe8eb55ebe4a4b9"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_19",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "ca9f5af0c2689042a8e6b47b952ebe300587bf7284b4397d1f62692f3ab55aa6",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9b11a7d78dddf3ccb827994c24d09cbda9236f0aa08a6bdf678f4a0bdbe90ac4",
+      "replacement_text": "User has outgrown their peanut allergy through immunotherapy.",
+      "selected_body_sha256": [
+        "b3be6b3e15675cf602e3ef5f81825dbf2ba97549ac933034fd917135b8de5077"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "457d3efcff6d954e7a4771b6df134e6a40caf31795c03520f73b31f4f781540b",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6b9c9e7ea235c2ee43ded94cf8296dc505a4be7b7fab5b4a08ecd3b028193f5f",
+      "replacement_text": "User has transitioned to writing short stories instead of poetry.",
+      "selected_body_sha256": [
+        "e085d55420bae0082c9a1f3c9e7b54c47fec9a95551a5aad634f2de7b75b602e"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_21",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c7acb6f60df548333245eee2366fe89155dbb1a1db8df6ad254d07594df8123d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9e8eabaf8f5d8025814a9b741ef53e19c21916559c9db1facd0d199c9a79ce30",
+      "replacement_text": "User has switched to competitive shooting sports.",
+      "selected_body_sha256": [
+        "baf3254af0ceb0e58f3843e0d91bcc06c6da1fbe8f8e43131897a247d2b56add"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_22",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a19f871908cfb2c6231718c7536e08c0ee3709105d959552e432471896998195",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "7e70ecc34615a21a3513f2d79d30acad7b60e69cd70b2e5d919e05beec2b58e8",
+      "replacement_text": "User let their pilot license expire due to time constraints.",
+      "selected_body_sha256": [
+        "16fa088bc1700701866ffa1fac98ce7f7932f0867de277be23f43f6056d7b484"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_23",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c7d61c2374884a87be82580035411df3c5cead53dd5ac9a1a60a473d33b765ab",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0fb0777098b093da1df40274e107784bf260a8ccc4d5d7382f34d43f464688f4",
+      "replacement_text": "User moved to a lakeside cottage last month.",
+      "selected_body_sha256": [
+        "83b14afbf7bade266db852b968a3f501583ea94d247076a834d58214332cc994"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_24",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a2df32e8ed8080add7112b0b4f51348e4b65f66fb7968aebbbdb3675f99cd7ab",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "4867902da768e921d6da32bd005db70cf39cbd8ad7b874da7c25a90754df5adc",
+      "replacement_text": "User has completed their 15th marathon this year.",
+      "selected_body_sha256": [
+        "ac1a2dffbb4ad9ac68e784b8fe24a0ac57ef570dc017ce00c52d57680bd42325"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "3ee2861e39496dcdc4d772ef49ecf9da0a4981da4759a24be15166b4bb747578",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "3aae61cb0586dd107c9854e7efa71a1972609c95d9a226df6ffb6e63f16fa826",
+      "replacement_text": "User recently upgraded to a Ford Mustang Mach-E.",
+      "selected_body_sha256": [
+        "07c137aaf03e21d87b37ce72506bb68abe2ef8543351f5f2ec202c449eaca873"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "74209c9276300d4018a113028c5cfaed45182d9641dd2f3ea97899980c4b3486",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d21ca81b8833d87e1b4276516c794f7f28753ec4e0936390f07f2279fd75f1d2",
+      "replacement_text": "User stopped practicing Taekwondo due to an injury.",
+      "selected_body_sha256": [
+        "6ee4d14faece488876465cc702cb010c8c68b352598ccf048b1321aa9bc0d028"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_27",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1465b88dc60a8ef6e8ac8aa15384bb56f0494afc4e6f41797e9f74631c504b6f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "032a71c3b367a4ed5d27630c56056254ee29854a017424af4fc67d00f12c3154",
+      "replacement_text": "User obtained an MD degree from Harvard Medical School.",
+      "selected_body_sha256": [
+        "bda94869c72fc68612e3580e5ac1a7f69c6d8690fb46aadc47221e400c0a0403"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "652548dfcc770c67f4077f2d95a67df68e078f95d0df58dda40981c025e6a7ca",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0e41caa9b06c7ebc7b5d488893efd4dbab2fc02cc716fffe062f342aa080e471",
+      "replacement_text": "User accepted a position as CTO at a startup.",
+      "selected_body_sha256": [
+        "98e2c577a840ca3ee48a0386d3ea10c5c2ee25d5093e4e13fa36c7514dfaaded"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_29",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1a31b3e5a65f6aaaef36181e76903135026f1ac06462e66bc22089228e57e970",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "15c34a44509f0ae803280285e227e4f899255ca19aa5ce411ed816067ddb4f8f",
+      "replacement_text": "User moved to Kyoto last month.",
+      "selected_body_sha256": [
+        "5833e424f37ba562e03b26adeb8744e871868bd391dfbaa96e64cf575f8c335f"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_30",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "1e2e60f8e27fb8b0359868f8dd8895dc96d6a831bda9654ea37428a6923d05b8",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "80a12e3291cfcb87d162a774598a975656f81e5134c533f7aeeb2d223243e81d",
+      "replacement_text": "User sold the coffee shop and now runs a bookstore.",
+      "selected_body_sha256": [
+        "37fea6ba5fd513f697efc4946c7477707de5d2281f7c038f64185e17e9db6281"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e8f25d236c5103c8a58b91bfb65a557082998515b9abf4ed00e8f41413b55b61",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "12b2323f0ae7a45516fafc512feccd88b8b898383ebb9663bc28eed042a87647",
+      "replacement_text": "User retired from competitive tennis to focus on coaching.",
+      "selected_body_sha256": [
+        "f4af7258f497089407ba17dba7484dadd22ad246ee71b2b285d3904ae4d5b502"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_32",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "65329194532ed196f27e5822a25884abc28cafdcdca166cb51cf02c2086baacd",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ea66d04f9dd8262f96e664d03362056a769bb4fe90d3edf8d0345eaede1386ba",
+      "replacement_text": "User transitioned to environmental law.",
+      "selected_body_sha256": [
+        "bc45582046af3f991ecfe8f81cb5622844de6b7ede2ec06cb4815c9df0e864d7"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b5ed818215bb1b6d34c362d693f0a8646aa4f8d87fe303b0382f415e89ab7659",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "48fc540146b7975f7c7b4560d5823ab9fd2f9eea2f8af22190a69146ac87cb33",
+      "replacement_text": "User recently upgraded to a Rivian R1T.",
+      "selected_body_sha256": [
+        "07c137aaf03e21d87b37ce72506bb68abe2ef8543351f5f2ec202c449eaca873"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_34",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a3b6cc82ed564dc590e3576551f70724edf5310035f107a164d0d1db536f5ce6",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "89ad2f6ab8d4ca853161dbe0e49c6d1da802e458feeb091cef72fe9b1a09fea1",
+      "replacement_text": "User transitioned to emergency medicine last year.",
+      "selected_body_sha256": [
+        "933187a202e5e00a869632027ee8017ecb3aa984cf68649af172f65a79a3c87e"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_35",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "88dde6a7fff80cdd1755aae5958b7d08abc23f863fd92e6a48c578517c173dab",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6ad18b28309e13fccbf98f29586277097f5226e32afef076c0466f95610c2be0",
+      "replacement_text": "User moved to Vancouver for a job opportunity.",
+      "selected_body_sha256": [
+        "c5fabbd9c193ef931b5315b8676606aa84586c081e4a81d25ee8272ec9540150"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "d49643c1bc277c8a883b24de4366191937a47b2abf40ffc424b27480b8da4231",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b5bd0c05f63db5237aa7926e4f9e6a5e2740c459528907d6c4cd53bdb930c9df",
+      "replacement_text": "User developed a shellfish allergy last summer.",
+      "selected_body_sha256": [
+        "be30129811fa92dedb650afaf02c94391f7c6a83d28346168bc9522267492d80"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9561b2dca71a2ba35a6a3593003afc8df80be0bf383c0ee223894535fb9e04da",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "7bec2593a65714e8f11dda3410771621441343ab43d1d8a9cc9bd6bc45d68547",
+      "replacement_text": "User sold the coffee shop and now runs a bookstore.",
+      "selected_body_sha256": [
+        "1d5d03f39b1f6f9b48c9739f0ef54e3a12e3a3924f02e371ff9c07a2eab96fca"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_38",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a693c1e32f51560c30cd34ea4ddd965b66ac40a125669e9787b6ff50c2d3804f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "ec6324a859f259f6451e16f2eb13fd239299cb0618c103c1f335aa1070386ee5",
+      "replacement_text": "User overcame their fear through exposure therapy.",
+      "selected_body_sha256": [
+        "c50afb15b3bddaf125fe31c07fe2d21094349cfa61dd17e2518b74d8f4e24354"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "30f1850e9795a26efea3eb68ba3d86d8d995eeeab3bb4db17644c154ba9d33b9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "df65d3d809230a7c66bd5d25d8ef82abb06a4a925a8d5a859d9329496a6f5163",
+      "replacement_text": "User now volunteers at an after-school tutoring program.",
+      "selected_body_sha256": [
+        "aecefed3c6eb447372755487d7a9b8aecde5309d9be27fdaee0842e720d70103"
+      ]
+    },
+    {
+      "case_id": "adv_compound_fact_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c442c906fc2288aec176dd13a6bd2d541605a1cc1627ae3d3e9dc27447478b98",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a643b0902ccd0a40d07af91b318b82d7c64f45d2ee29bdc31f2fa1d2f9936f4c",
+      "replacement_text": "User accepted a research position at DeepMind.",
+      "selected_body_sha256": [
+        "253e770fe124712a2b599923fda54aac96a37aca6b31256f2349bd9a52197726"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_01",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "dc3e4ac1ba7694764d6c6ad7d5bb05e61bb554a76931b67c1dead03060934d4e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0a5db730d5ee49cd0818bb824a80a6987fc6d8cee5b30141aae1740633c79de6",
+      "replacement_text": "User switched to Brave for privacy reasons in 2024.",
+      "selected_body_sha256": [
+        "2fb41a630939d9e9d0369b294e6c803e2b17fbe232646b4926a4aac48adc611a"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_02",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "10f72a785079b31ba33ec42ba5b9c73e2689f3613b6afeec59d30ac08f268cbb",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d41947aaaa79dcd0ae8b301b5fb7c61fd77bd05b78dcaf24f58ddee7b2b690b3",
+      "replacement_text": "User started eating meat in 2021 for protein.",
+      "selected_body_sha256": [
+        "7e396889e42e621e5462d4ad1cd5d264f826c1caa47b48f61839a32a10cba0ee"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_03",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "65a2aa73a3f5a3212a1864357ac69d4003eccb1d3c799086f29ae35d186d4ebe",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "dbaf1a4e7acd8cc5306277a9f4f3df0c4213cf24ce0f7c11f385a8ba84946124",
+      "replacement_text": "User switched to a Samsung Galaxy in 2023 for the camera.",
+      "selected_body_sha256": [
+        "cfda89b6194586b7d2ee1fb52b044f09eab2f02cbf0e6cd492bb6aa8c5c82bee"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_04",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "07c295971c6015ec7de39cdd4013c21703393f8301bda91d54a9e6e17b4dbdc5",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "9c525e7f7333825ac617df3c84a70036736dc759c315aa0b2ba8646307065d9a",
+      "replacement_text": "User moved to Lisbon in 2020 for the climate.",
+      "selected_body_sha256": [
+        "14a624fc3d5d16f4b5f2826c37671ac7b77ab6939135162d5d97c58fe3b2cf92"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_05",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "722bac1339d54e7ce0b2c8fa4d454a7377fbcab9159bf3438191f5124a887589",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "893736dfcd768a791ea441c6dac409995374dea1af383aa131760f0fdd8f0d1a",
+      "replacement_text": "Developer switched to Ubuntu Linux in 2023 for kernel work.",
+      "selected_body_sha256": [
+        "38964581cbb6607f29b5acf513b1a81d0a35835624531e0d3f62b2a9a6dfe50f"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_06",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5b91210eca1e74b253b9bd798449fef33b3995d48e803316730754b33b135cb9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "1d3065c17f2acdacfcce360457bcbf2e3d76d897dbe6553a1f7cf61e57e6485d",
+      "replacement_text": "User adopted two cats in 2021 after Buddy passed away.",
+      "selected_body_sha256": [
+        "3a5b1fd456b59b9d3af0219b0962aca40825672a6979a81f3763a85ad151ccaf"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_07",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "78cb5bef50baa95457b849518d8fd3c25f0db27e4788452012bbb86d0c1bb283",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "e6d69c5a1d0fd0f690af614f7ee70cb16e40a52a33a8fbfdac7ad6f6b40c995c",
+      "replacement_text": "User got divorced from Alex in 2020.",
+      "selected_body_sha256": [
+        "4e6a1787020419f11cc385ec2d5e727cfe9e4de1b5cda17de98fee7def120b5b"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_08",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "81a81e1ed8f96b1e1bd40f1ab495197144c359e43f298c688ad3df5400b13829",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "09cffcdae928c0d31ebb073c091f0f2af7fb7a3c543172640a413f281a4e71fe",
+      "replacement_text": "Team migrated to Discord in 2023 to save on costs.",
+      "selected_body_sha256": [
+        "ae9dc347adaec3cb38ab79f73aa9c3b73bc29da25887aa926f0e645bf61c2f53"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_09",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "2c65d4d1873d4c7976956655da95e7331b22e9ea7eedc030ed45a02d3619e1ed",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "8a8a7d828ecdfccef4a81d66719c73b20b62b748e71b962935d496efe31c62d8",
+      "replacement_text": "Employee transferred to London office in 2021 for promotion.",
+      "selected_body_sha256": [
+        "434b12d2ab0a9eaff6ca82722c78ac24af1a26e40aeed110c2db844b148da54a"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_10",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5649dc81c68c7a3c0a1418f2ed8ce8e1199ade72a76a9b4a7922f8f5cd60ecb4",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b8ef2bf739d204652ae37ced0e8ef36da1723e93158c9160fe4e7a5b62c190d8",
+      "replacement_text": "Patient switched to Crestor in 2022 due to side effects.",
+      "selected_body_sha256": [
+        "7141ebb0053b98a93b16dc94e49d1422c708a6660e956697bec67de45724a9d0"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_11",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c9678fa42ca0f290fea70bc410642ca8ebb833f4780a66af700a9861bd23c8e0",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6fe8c3ec1be4c2bf3d1c214d39ee0cdf565b6fbdac99038915be0a1f359a328e",
+      "replacement_text": "Company migrated to PostgreSQL in 2021 for cost savings.",
+      "selected_body_sha256": [
+        "5ffb49a306f243fb2409b06279d7e9eb4c141bc2c242fc44e2692a30705b2d8d"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_12",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "170a3019a77acb72241a4fec582bc7b15e2ef3d945782a1334a7f2ab4336f9d7",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "95bca6a9ffd807104c38417458815edb523e4ec801a00bbed57d94390a933c18",
+      "replacement_text": "Student transferred to MIT in 2022 for graduate studies.",
+      "selected_body_sha256": [
+        "e588396d862ba79e6c6039afa3f424b8cbeb340740c514b9d877d7e5b1d77b1e"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_13",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "30b2c0b2794e60f69170f0cbbb8b5715b7254f62d85b6596a7ebb14ca27bb826",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "440f5c8e10e78bab0cc751bc0a3aa2352facd9a04b54e64cb250c05e22013baa",
+      "replacement_text": "City switched to electric buses in 2020 for environmental reasons.",
+      "selected_body_sha256": [
+        "43ced9e559a67c312b140f3c6261a8a2cf731a25d77d5d845f9d399d465d9f34"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_14",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b04619b5b35e2d898e72a41b2ce03ebd664f9f27b07eb3150f93595ad62d9b16",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "6a43703f4290860bc1dea65a13024b1b3dec522e93caeef25bbffd6ea758a4f0",
+      "replacement_text": "Team switched to Kanban in 2020 for more flexibility.",
+      "selected_body_sha256": [
+        "6f57cdb8657dd079e7784105f1fd549bf163b2a11139f17330fa4471097f199b"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_15",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "0e7bf52c149a5c6e8b4121c15fc90080f8fd899acb91c5fd3c26af2132fd43ff",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "fa084088b021d52deed902f7ce88b8b088597b13797c5922a23a6b29b03fcbc7",
+      "replacement_text": "Artist switched to acrylics in 2019 for faster drying time.",
+      "selected_body_sha256": [
+        "5c19c43936c467c079915c132ffd64adaee392462d89d035c0dc44f6e8d60a1b"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_16",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "a6f6708db09aa75bf869c5e6f761339c4c0df7c3faf90b6497e3d93384467af0",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "cb058fd904fb953251ae6b51ac140b931bb7d0a4963b58a313945ff02dd0d2d1",
+      "replacement_text": "Employee joined Google as a senior engineer in 2021.",
+      "selected_body_sha256": [
+        "88a372e80a30dc2d2b14939dd5217b6809a7542d98fdf8e93e3317cc83e9648e"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_17",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b7be4e915b2027c487a2c69a9a64b3d36d4d4706bbf4a8be9899ec6d48512af9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "c7690c4fe9f06484767ff2e2cc939b8bb5c75f5b5bff959d10a192a11c71053f",
+      "replacement_text": "User switched to Disney+ in 2023 for Marvel content.",
+      "selected_body_sha256": [
+        "2e687650daa988cee47d7a32bbfc03593ae669087c49c7adc645ea2754006934"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_18",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "66a73a3457a00e6883e934020d5faafb66db0b0bcf32b31209b8debe8073c89e",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "1e1840a909b9023ad8631fee7829f30be9293cf29e10e9903e3f1d8636e0da61",
+      "replacement_text": "Patient switched to Crestor in 2022 due to side effects.",
+      "selected_body_sha256": [
+        "f7ad657f85d96e2f1fffa7ac62f42a5065355d6ecfaa912e797cb15f0daa93ed"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_19",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "21a0885724880314c7da639c42c0637ed47ec10cdee61f3109414df12f9507f9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "f40bcf06ecb99b81c16fe979b298b6c90027016cf3956540f77729fc43e0da1a",
+      "replacement_text": "Company migrated to Azure in 2022 for better integration.",
+      "selected_body_sha256": [
+        "3e5b37ee6f4b0a6617a57dfcc1cb780023c0189c8c9a4e3f9e63b2dfa883e396"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_20",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "3ee46c628e42593c3fa946f5bfd193e5e2abb77bdc0eeeb6b5e8f4b8d7892f9c",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "38a397db334a9404cb21ddf75e59a5d99e3b8746f84072daa530062da7eb02b7",
+      "replacement_text": "Student switched to learning Spanish in 2021 for travel.",
+      "selected_body_sha256": [
+        "2a59ab7c8921eeb7e725aa03820732bbb3c8fec07a8d8af09ebdd68a088a17d0"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_21",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "c4e8581f0279f5893a0a7c9c20089b892b839e83bae6cb1474e2bd5d11739b49",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "1c01481e20a56ef7e44dcdc4fe1def8a6fc16435d130ef362f0d9d918ecdf0d9",
+      "replacement_text": "City switched to electric buses in 2021 for environmental reasons.",
+      "selected_body_sha256": [
+        "f80066e6e3585f90f8ed4ebb61ff47a4cc5a93b2a51fc76d73ae9d8d13fa23fd"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_22",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "af5985f6253382cd5f78f514e6e3aec1f5b45cf0be0b94c50b0e2c3db04f5fa9",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "30da50384c020410b5b27bd81c0960ded19bad7142b0b5d19e9a12bb24e6ce44",
+      "replacement_text": "Author started writing science fiction in 2020 for creative exploration.",
+      "selected_body_sha256": [
+        "efd574f5343f60ad3c59ee7267bde9dfc57eb1b373428e309cf2379aa22eb3a1"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_23",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "3f5bd4a8f8ab02c63e9a6ff112ebd2f9201b9093465171677a42d5b59ed9a345",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "2fb59630366f6eb14f1d63c67a99181b66b702c5b8832b5b0f68290f53b82741",
+      "replacement_text": "Team adopted Kanban in 2022 for more flexibility.",
+      "selected_body_sha256": [
+        "328eac57ff7616e55c43823b0548a0fa2b7fbd86eb3773c7a060349a1a6c4c92"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_24",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "f5c4dbb11c7cc97d927cba297e376a8d0a7de36e36c90c3e31145e04aa3c3561",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "b3d6e8ac062d80129eb77f960c06bd8110f9c8ed52958202b497d593cf65c999",
+      "replacement_text": "Alice preferred green during college years.",
+      "selected_body_sha256": [
+        "6e8334b212aae7bb5a624461653ef72116840d662cd2d1cc8fdef276bebf6007"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_25",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "69bb1ca19c6f01f6d7049b220abb23257a837e58967238cd0b7ffe5c23d018f6",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0260bab745de00ae4b740b7f24801bef7a92515dd9116a345eae0131b670980c",
+      "replacement_text": "Company X migrated to Go for better performance in 2020.",
+      "selected_body_sha256": [
+        "9cf441a7893a9c2027167fa6ee01100c8c2ac70a3a31e72f246508c8aa812929"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_26",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5f5008291a1ec53fc1cd2b0766d1fb622b971a93d44e3ecd9334527921526713",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "48d6eb855aac07ac352d66c50573ec6c73b8f9d14ab08c255b866091fb5c5fa8",
+      "replacement_text": "Professor Smith switched to teaching Linear Algebra in Fall 2021.",
+      "selected_body_sha256": [
+        "58d6e5578093d149138256a991bc2b5e5fe09d13accaf7e66830b1ec01245ce7"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_27",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "61fc0bba547fb543693a20fb18ac5a97a766011a445c99b6f7f3d33fa6de5758",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "46c52c723da7a7dd94954e6adc9713964504ad187459f139ee95b9ef1522efa5",
+      "replacement_text": "The museum replaced Renaissance with Modern art in Gallery A in 2021.",
+      "selected_body_sha256": [
+        "3bc1a5ef18c0aa8c85b709f85e95d087661bc173b5600065a71252834ef92a90"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_28",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "8c2304b97f3874e18dda288dd3cbe9e65f1fc6b91961e558dc9ca02ef8719dbb",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5f57ed66decc0ff914072c1f5e3918c106e755e898235e4a2b32284243faf1b8",
+      "replacement_text": "Team A adopted Kanban in 2020 for more flexibility.",
+      "selected_body_sha256": [
+        "a7b126d78107324e2e5b2c0eac884d55e5fb5e1d0f52f4b576f3ded960afd2f1"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_29",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b11da6bf7cf5203fb2c02324db3f675b457f5ab0ff655f4d5485031bed005c0c",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "a4dda9c1f7a5f6121d2354a29fc39ac710e3dec218b0db1e13262ea33d264ce7",
+      "replacement_text": "The town replaced oak trees with maple trees in 2021.",
+      "selected_body_sha256": [
+        "2f52fe9a09f02295045a2f37c70ebfc0791c0c55a32a8f41f78bf5b686f3ef78"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_30",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "72c2622c6ab060a2ccbd0c1363a3b39c54e5c52c478f23c1b3be8e37a0a93e11",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "bd3f0fccce8528e2a5ce31b497b816a464edc1f2f05943d14679e60ee8d77b27",
+      "replacement_text": "The cafe added tea to its menu in 2020.",
+      "selected_body_sha256": [
+        "4e5463a6c1189e6515db9f145b36f20ef13ad64527550a37adb6989ee2dbdea1"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_31",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "9e3c9fb3a95b523a721f2e270b318f48b2bed80937f3fb910e86663369308a39",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "98d5db6c62057d7e55d4c073e2b76a15969e204bc3680539b448463e2599f9fb",
+      "replacement_text": "Lisa switched to iOS in 2021 for better apps.",
+      "selected_body_sha256": [
+        "34bad56e81e8b6ef1fd2e3e0c28ec9502b618d8e978fd8ff9167c7503d9f21c0"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_32",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "16756f85c9572f5e2d0995b49cdc39f2c4fbe0b79fe3e6d73094e025e86deab5",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "51236cca6bfac5290a5fb34bb2035210d35bed5cfba02ae95774d39438efcf07",
+      "replacement_text": "User joined Google in 2021 for better opportunities.",
+      "selected_body_sha256": [
+        "02de3c05c6ad845f1740ad559a11f4aaa627f01e6208f9b4f775a51b07514d37"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_33",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "d903ef33396b62a6c720af1f3a770c4504d1cdac1c328ea7d1784b9bc93f1f5a",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "3e7161ffd3e1f07192578514d964a271597a9f42e9d5ac9cd54c4cc77091511f",
+      "replacement_text": "User moved to Los Angeles in 2022 for a job.",
+      "selected_body_sha256": [
+        "855ce5c3412de6e51080f86735ddcb43bdb7e6860e016746d16523764429b191"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_35",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "53675379a554aa31067cbbdb9d0d4b6647c8fb19aac3686b138042c3471730f5",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "5275535a3c0fae1f2326f796ad71210d5fc0b63a14d39a7d96ecae4482ea8899",
+      "replacement_text": "User bought a Honda Accord in 2021 for better fuel efficiency.",
+      "selected_body_sha256": [
+        "92ce27ea7fa49b44dc7cec6933cd5c25c8abf0563bb001c950c3bd52090e7cd1"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_36",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "b179e96b4c7a877088dc7392a6d1a554b1b0d21eb02bc0af596377db20e4f64d",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "94d7f6092ce15cc68ffc93edb4d75fbd338ba4896d346cf9a283f39be901611a",
+      "replacement_text": "User became a fan of the Warriors in 2022 after their championship win.",
+      "selected_body_sha256": [
+        "ca054a5517ffcb6eaee1ca857b3ea303fabf14b5767fd67c2f1e9fd43d23d879"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_37",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "94127cedf065afb93e9445b2d139989cca3555d4cc710e1c077d2e5fb7f4711f",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "0fb042215f7f98bbb2c44edd33577804f0c329885087d4482cea06c1ffcee6fa",
+      "replacement_text": "User switched to Apple Music in 2021 for better integration.",
+      "selected_body_sha256": [
+        "a866044627009195e170d1a6cb1ba286197fee7988b576a3f9dfa31072dd9c71"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_38",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "5469f3eef278cf5f91a15e10335693ce465568bdfe02d73a2e0d04820c514db7",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "51dfbd8622b1ef780496a41689f70a0e0d011973c90ba0aead4521e4fcb76409",
+      "replacement_text": "User adopted a dog named Max in 2023 for companionship.",
+      "selected_body_sha256": [
+        "91b5d0ad3f52496912055fb69f8811161ef9bff04deb531bc5204ff112feb446"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_39",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "6646c2b392ebea984b49f78098f110fce6d5846986dd2427644eb1fdbf471bf6",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "be6bb930365639545e2fdf8b292dba602fb8fcf05aef5e46cccb61007be87092",
+      "replacement_text": "User started eating meat in 2020 for health reasons.",
+      "selected_body_sha256": [
+        "97ba9a95de0df7890c47d9218f032edfdad0ef1b796d7aa66871a2d64d512928"
+      ]
+    },
+    {
+      "case_id": "adv_recursive_supersession_40",
+      "confirmed": true,
+      "confirmed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+      "input_sha256": "e34ec1dcefece8768c8503263077c9b6206a606fe600b3c43e1aa76882857325",
+      "mutation_index": 1,
+      "operation": "supersede",
+      "proposal_sha256": "d04ed7c30da32245132c28695a9f76ac50bee95c3af994c03707729edb50d145",
+      "replacement_text": "Employee transferred to the London office in 2022 for a project.",
+      "selected_body_sha256": [
+        "f59a609f59770892f85a29ea6f60295bc3c55fa7679e7f406a504aa541e68470"
+      ]
+    }
+  ],
+  "override_file_sha256": "04fb7b6f6c2ce96a738df559e748abf3eca148fb6b38d6992d538733fe301165",
+  "replacement_policy": "exact_new_fact",
+  "review_summary": {
+    "override_count": 0,
+    "proposal_count": 259,
+    "state_oracle_failed": 107,
+    "state_oracle_failures": [
+      {
+        "case_id": "adv_substring_trap_05",
+        "missing_must_contain": [
+          "joined Anthropic"
+        ],
+        "present_must_not_contain": [
+          "moved to Meta"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_06",
+        "missing_must_contain": [
+          "robotics",
+          "Boston"
+        ],
+        "present_must_not_contain": [
+          "hedge fund in NYC"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_12",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "Max"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_13",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "nut allergy"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_20",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "architect"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_21",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "Max"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_28",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "Max"
+        ]
+      },
+      {
+        "case_id": "adv_paraphrase_supersession_37",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "architect"
+        ]
+      },
+      {
+        "case_id": "adv_negation_trap_13",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "San Francisco"
+        ]
+      },
+      {
+        "case_id": "adv_negation_trap_15",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "Microsoft"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_02",
+        "missing_must_contain": [
+          "Lisbon",
+          "since 2022"
+        ],
+        "present_must_not_contain": [
+          "Berlin from 2018"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_05",
+        "missing_must_contain": [
+          "Green",
+          "2025"
+        ],
+        "present_must_not_contain": [
+          "registered as Democrat"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_08",
+        "missing_must_contain": [
+          "divorce",
+          "2024"
+        ],
+        "present_must_not_contain": [
+          "got engaged in 2020"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_10",
+        "missing_must_contain": [
+          "Stanford",
+          "starting 2020"
+        ],
+        "present_must_not_contain": [
+          "MIT between 2014"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_12",
+        "missing_must_contain": [
+          "Gamma Ventures"
+        ],
+        "present_must_not_contain": [
+          "Beta Inc"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_13",
+        "missing_must_contain": [
+          "Singapore",
+          "2023"
+        ],
+        "present_must_not_contain": [
+          "Barcelona"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_15",
+        "missing_must_contain": [
+          "third novel",
+          "bestseller in 2021"
+        ],
+        "present_must_not_contain": [
+          "second book in 2015"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_18",
+        "missing_must_contain": [
+          "PhD",
+          "Cambridge University",
+          "2019"
+        ],
+        "present_must_not_contain": [
+          "MIT from 2014"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_20",
+        "missing_must_contain": [
+          "Singapore",
+          "2020"
+        ],
+        "present_must_not_contain": [
+          "London in 2016"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_22",
+        "missing_must_contain": [
+          "Porsche Taycan",
+          "2022"
+        ],
+        "present_must_not_contain": [
+          "Tesla Model 3"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_24",
+        "missing_must_contain": [
+          "Dubai",
+          "2021"
+        ],
+        "present_must_not_contain": [
+          "Melbourne in 2017"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_27",
+        "missing_must_contain": [
+          "Singapore",
+          "2023"
+        ],
+        "present_must_not_contain": [
+          "Barcelona"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_29",
+        "missing_must_contain": [
+          "Tesla",
+          "2020"
+        ],
+        "present_must_not_contain": [
+          "SpaceX"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_31",
+        "missing_must_contain": [
+          "Boston Consulting Group",
+          "2021"
+        ],
+        "present_must_not_contain": [
+          "Bain"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_34",
+        "missing_must_contain": [
+          "Sydney",
+          "2022"
+        ],
+        "present_must_not_contain": [
+          "moved to Singapore"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_36",
+        "missing_must_contain": [
+          "founded his own company",
+          "NewVentures"
+        ],
+        "present_must_not_contain": [
+          "VP at TechCorp"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_38",
+        "missing_must_contain": [
+          "dean at Princeton",
+          "2022"
+        ],
+        "present_must_not_contain": [
+          "joined Yale as department chair"
+        ]
+      },
+      {
+        "case_id": "adv_temporal_qualifier_39",
+        "missing_must_contain": [
+          "Stanford University",
+          "2020"
+        ],
+        "present_must_not_contain": [
+          "MIT in 2012"
+        ]
+      },
+      {
+        "case_id": "adv_compound_fact_01",
+        "missing_must_contain": [
+          "Stripe"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_02",
+        "missing_must_contain": [
+          "married to Jamie"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_03",
+        "missing_must_contain": [
+          "Italian"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_04",
+        "missing_must_contain": [
+          "cello"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_05",
+        "missing_must_contain": [
+          "Border Collie",
+          "Rex"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_06",
+        "missing_must_contain": [
+          "PhD in physics",
+          "MIT"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_07",
+        "missing_must_contain": [
+          "Enterprise"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_08",
+        "missing_must_contain": [
+          "Atlas"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_09",
+        "missing_must_contain": [
+          "Max"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_10",
+        "missing_must_contain": [
+          "violin"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_11",
+        "missing_must_contain": [
+          "judo"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_12",
+        "missing_must_contain": [
+          "Toronto"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_13",
+        "missing_must_contain": [
+          "neurosurgeon"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_14",
+        "missing_must_contain": [
+          "Mandarin"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_15",
+        "missing_must_contain": [
+          "sourdough bread"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_16",
+        "missing_must_contain": [
+          "quantum physics"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_17",
+        "missing_must_contain": [
+          "golden retriever"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_18",
+        "missing_must_contain": [
+          "PhD in neuroscience"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_19",
+        "missing_must_contain": [
+          "firefighter"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_20",
+        "missing_must_contain": [
+          "Japanese"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_21",
+        "missing_must_contain": [
+          "coffee shop"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_22",
+        "missing_must_contain": [
+          "heirloom tomatoes"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_23",
+        "missing_must_contain": [
+          "cello"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_24",
+        "missing_must_contain": [
+          "marine biologist"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_25",
+        "missing_must_contain": [
+          "Max"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_26",
+        "missing_must_contain": [
+          "violin"
+        ],
+        "present_must_not_contain": [
+          "Taekwondo"
+        ]
+      },
+      {
+        "case_id": "adv_compound_fact_27",
+        "missing_must_contain": [
+          "Mandarin"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_28",
+        "missing_must_contain": [
+          "peanuts"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_29",
+        "missing_must_contain": [
+          "three"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_30",
+        "missing_must_contain": [
+          "yoga instructor"
+        ],
+        "present_must_not_contain": [
+          "coffee shop"
+        ]
+      },
+      {
+        "case_id": "adv_compound_fact_31",
+        "missing_must_contain": [
+          "left-handed"
+        ],
+        "present_must_not_contain": [
+          "tennis"
+        ]
+      },
+      {
+        "case_id": "adv_compound_fact_32",
+        "missing_must_contain": [
+          "twin brother"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_33",
+        "missing_must_contain": [
+          "Max"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_34",
+        "missing_must_contain": [
+          "black belt"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_35",
+        "missing_must_contain": [
+          "chess"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_36",
+        "missing_must_contain": [
+          "flight attendant"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_37",
+        "missing_must_contain": [
+          "twin sister named Emily"
+        ],
+        "present_must_not_contain": [
+          "coffee shop"
+        ]
+      },
+      {
+        "case_id": "adv_compound_fact_38",
+        "missing_must_contain": [
+          "Mandarin"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_39",
+        "missing_must_contain": [
+          "prescription glasses"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_compound_fact_40",
+        "missing_must_contain": [
+          "violin"
+        ],
+        "present_must_not_contain": []
+      },
+      {
+        "case_id": "adv_recursive_supersession_01",
+        "missing_must_contain": [
+          "Chrome"
+        ],
+        "present_must_not_contain": [
+          "switched to Brave"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_02",
+        "missing_must_contain": [
+          "vegetarian"
+        ],
+        "present_must_not_contain": [
+          "started eating meat in 2021"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_03",
+        "missing_must_contain": [
+          "iPhone 15 Pro"
+        ],
+        "present_must_not_contain": [
+          "Samsung Galaxy"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_04",
+        "missing_must_contain": [
+          "Berlin"
+        ],
+        "present_must_not_contain": [
+          "moved to Lisbon in 2020"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_05",
+        "missing_must_contain": [
+          "macOS"
+        ],
+        "present_must_not_contain": [
+          "Ubuntu Linux in 2023"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_06",
+        "missing_must_contain": [
+          "Border Collie"
+        ],
+        "present_must_not_contain": [
+          "adopted two cats in 2021"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_07",
+        "missing_must_contain": [
+          "married Jordan"
+        ],
+        "present_must_not_contain": [
+          "divorced from Alex"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_08",
+        "missing_must_contain": [
+          "Slack"
+        ],
+        "present_must_not_contain": [
+          "migrated to Discord in 2023"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_09",
+        "missing_must_contain": [
+          "New York"
+        ],
+        "present_must_not_contain": [
+          "London"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_10",
+        "missing_must_contain": [
+          "Lipitor"
+        ],
+        "present_must_not_contain": [
+          "Crestor"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_11",
+        "missing_must_contain": [
+          "Oracle"
+        ],
+        "present_must_not_contain": [
+          "PostgreSQL"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_12",
+        "missing_must_contain": [
+          "Stanford"
+        ],
+        "present_must_not_contain": [
+          "MIT"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_13",
+        "missing_must_contain": [
+          "diesel"
+        ],
+        "present_must_not_contain": [
+          "electric"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_14",
+        "missing_must_contain": [
+          "Scrum"
+        ],
+        "present_must_not_contain": [
+          "Kanban"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_15",
+        "missing_must_contain": [
+          "oils"
+        ],
+        "present_must_not_contain": [
+          "acrylics"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_16",
+        "missing_must_contain": [
+          "Microsoft"
+        ],
+        "present_must_not_contain": [
+          "Google"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_17",
+        "missing_must_contain": [
+          "Netflix"
+        ],
+        "present_must_not_contain": [
+          "Disney+"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_18",
+        "missing_must_contain": [
+          "Lipitor"
+        ],
+        "present_must_not_contain": [
+          "Crestor"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_19",
+        "missing_must_contain": [
+          "AWS"
+        ],
+        "present_must_not_contain": [
+          "Azure"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_20",
+        "missing_must_contain": [
+          "French"
+        ],
+        "present_must_not_contain": [
+          "Spanish"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_21",
+        "missing_must_contain": [
+          "diesel"
+        ],
+        "present_must_not_contain": [
+          "electric"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_22",
+        "missing_must_contain": [
+          "fantasy"
+        ],
+        "present_must_not_contain": [
+          "science fiction"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_23",
+        "missing_must_contain": [
+          "Scrum"
+        ],
+        "present_must_not_contain": [
+          "Kanban"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_24",
+        "missing_must_contain": [
+          "blue"
+        ],
+        "present_must_not_contain": [
+          "green"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_25",
+        "missing_must_contain": [
+          "Java"
+        ],
+        "present_must_not_contain": [
+          "Go"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_26",
+        "missing_must_contain": [
+          "Calculus I"
+        ],
+        "present_must_not_contain": [
+          "Linear Algebra"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_27",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "Modern"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_28",
+        "missing_must_contain": [
+          "Scrum"
+        ],
+        "present_must_not_contain": [
+          "Kanban"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_29",
+        "missing_must_contain": [],
+        "present_must_not_contain": [
+          "maple"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_30",
+        "missing_must_contain": [
+          "coffee"
+        ],
+        "present_must_not_contain": [
+          "tea"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_31",
+        "missing_must_contain": [
+          "Android"
+        ],
+        "present_must_not_contain": [
+          "iOS"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_32",
+        "missing_must_contain": [
+          "Microsoft"
+        ],
+        "present_must_not_contain": [
+          "joined Google in 2021"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_33",
+        "missing_must_contain": [
+          "New York"
+        ],
+        "present_must_not_contain": [
+          "moved to Los Angeles in 2022"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_35",
+        "missing_must_contain": [
+          "Toyota Camry"
+        ],
+        "present_must_not_contain": [
+          "bought a Honda Accord in 2021"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_36",
+        "missing_must_contain": [
+          "Lakers"
+        ],
+        "present_must_not_contain": [
+          "became a fan of the Warriors in 2022"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_37",
+        "missing_must_contain": [
+          "Spotify"
+        ],
+        "present_must_not_contain": [
+          "switched to Apple Music in 2021"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_38",
+        "missing_must_contain": [
+          "Whiskers"
+        ],
+        "present_must_not_contain": [
+          "adopted a dog named Max in 2023"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_39",
+        "missing_must_contain": [
+          "vegetarian"
+        ],
+        "present_must_not_contain": [
+          "started eating meat in 2020"
+        ]
+      },
+      {
+        "case_id": "adv_recursive_supersession_40",
+        "missing_must_contain": [
+          "New York"
+        ],
+        "present_must_not_contain": [
+          "London"
+        ]
+      }
+    ],
+    "state_oracle_passed": 152,
+    "transition_chain_failures": 0
+  },
+  "reviewed_at": "2026-07-24T20:02:00Z",
+  "reviewed_by": "Codex deterministic transition review under user authorization in task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+  "schema_version": 1,
+  "scope": "scratch_benchmark_evaluation_only",
+  "source_inputs": "docs/build-log/artifacts/next-evidence/forgeteval/proposal-inputs.385.json",
+  "source_inputs_sha256": "419edd957e9a63b00dda9860e1cb642ea3e3100084f3b3a8713a458f96af5793",
+  "source_proposals": "docs/build-log/artifacts/next-evidence/forgeteval/proposals-v3.385.json",
+  "source_proposals_sha256": "c3bc56ec780a86759eb71f66038ab1f8015ad196f1d2170b7bdea5f281d0e5d2"
+}

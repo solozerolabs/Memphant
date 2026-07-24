@@ -2,7 +2,7 @@
 
 Date: 2026-07-24. This sequence was intentionally economical: every technique
 was screened on a frozen n=12 set, only one forgetting mixture was broadened,
-and no model call was made. This is not an overall SOTA, deployment, production
+and the subsequently authorized proposal campaign is now closed. This is not an overall SOTA, deployment, production
 dogfood, tenant-safety, or real-user-value claim.
 
 ## Terminal decisions
@@ -10,7 +10,7 @@ dogfood, tenant-safety, or real-user-value claim.
 | domain | free result | decision | next boundary |
 |---|---|---|---|
 | packing | render cap 1200 recovered 8/8 scored retrieval cases but regressed deterministic exact abstention from 3/4 to 1/4; naive density rejected; submodular ordering tied cap-only | reject all tested candidates before paid calls; defaults unchanged | research a new technique, then require both free predicates before any reader request |
-| forgetting | cross-rerank + rank-one improved n=12 from 6/12 to 9/12 and full aggregate 133 to 182 passes, but regressed 16 prior passes | deterministic semantic deletion selector rejected; exact-ID mutation stays authoritative | frozen 16-proposal, $0.50 non-executing control-plane request |
+| forgetting | cross-rerank + rank-one improved n=12 from 6/12 to 9/12; the paid proposal arm reached 11/12, then full aggregate 188/385 but regressed drift from 56/61 to 2/61 | both semantic selector and model proposal treatments rejected as global policies; exact-ID mutation stays authoritative | transition-verifier research only; no further paid run |
 | coding | SWE-ContextBench packaged adapter rehearsed 24 related/unrelated experiences with receipts/traces and future mark-payload construction; DeepSWE admitted only 3/12 causal pairs | SWE task efficacy blocked; DeepSWE paired memory rejected | license clarification plus separately frozen agent request; DeepSWE unpaired only |
 
 ## Packing proof boundary
@@ -41,6 +41,14 @@ separate lineage/state and end-answer gates.
 Similarity may propose candidates but cannot execute destructive mutation.
 Exact current unit IDs, confirmation, drift detection, and the existing public
 mutation primitive remain mandatory.
+
+The authorized full proposal campaign is complete: 259 proposals from 258
+provider calls plus one cache hit, $0.3632000 settled, zero unsettled. Including
+the bounded n=12 prompt screens, the sequence used 293 calls and $0.4150225.
+The full proposal replay scored 188 pass / 71 fail / 126 N/A, but regressed 55
+baseline passes; a selection-only control localized the failure to target
+selection. Proof and recent consolidation research:
+`docs/build-log/2026-07-24-forgeteval-proposal-control-plane.md`.
 
 ## Coding proof boundary
 

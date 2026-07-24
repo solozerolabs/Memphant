@@ -13,18 +13,19 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_combined_packet_authorizes_only_the_forgetting_winner_expansion() -> None:
+def test_combined_packet_closes_the_paid_forgetting_campaign() -> None:
     packet = json.loads(PACKET.read_text(encoding="utf-8"))
-    assert packet["status"] == "AUTHORIZED_FOR_PAID_EXECUTION"
-    assert packet["paid_calls_executed"] == 0
-    assert packet["settled_cost_usd"] == "0"
-    assert packet["maximum_currently_authorizable_usd"] == "5.00"
-    assert packet["authorizable_campaigns"] == ["forgetting_proposals"]
+    assert packet["status"] == "COMPLETED_PAID_EXECUTION"
+    assert packet["paid_calls_executed"] == 293
+    assert packet["settled_cost_usd"] == "0.4150225"
+    assert packet["maximum_currently_authorizable_usd"] == "0"
+    assert packet["authorizable_campaigns"] == []
     assert packet["campaigns"]["packing"]["authorization"] is None
-    assert packet["campaigns"]["forgetting_proposals"]["status"] == "AUTHORIZED_FOR_PAID_EXECUTION"
-    assert packet["campaigns"]["forgetting_proposals"]["authorization"] == {
-        "authoritative_child_packet": packet["campaigns"]["forgetting_proposals"]["authoritative_child_packet"]
-    }
+    forgetting = packet["campaigns"]["forgetting_proposals"]
+    assert forgetting["status"] == "COMPLETED_PAID_PROPOSALS"
+    assert forgetting["authorization"] is None
+    assert forgetting["completion"]["full_provider_attempts"] == 258
+    assert forgetting["completion"]["unsettled_cost_usd"] == "0"
     assert packet["campaigns"]["swe_contextbench"]["status"] == "BLOCKED_NOT_AUTHORIZABLE"
     assert packet["campaigns"]["deep_swe_pairing"]["status"].startswith("REJECTED_")
 
@@ -51,6 +52,15 @@ def test_forgetting_child_packet_and_its_code_hashes_are_exact() -> None:
     child_path = ROOT / campaign["authoritative_child_packet"]
     assert campaign["authoritative_child_packet_sha256"] == sha256_file(child_path)
     child = json.loads(child_path.read_text(encoding="utf-8"))
+    assert child["status"] == "COMPLETED_PAID_PROPOSALS"
+    assert child["paid_calls_executed"] == 258
+    assert child["settled_cost_usd"] == "0.3632000"
+    assert child["completion"]["proposal_output_sha256"] == sha256_file(
+        ROOT / child["execution"]["output"]
+    )
+    assert child["completion"]["attempt_ledger_sha256"] == sha256_file(
+        ROOT / child["execution"]["attempt_ledger"]
+    )
     scope = {
         key: value
         for key, value in child.items()

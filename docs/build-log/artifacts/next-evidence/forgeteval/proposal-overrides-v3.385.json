@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "overrides": {
+    "3aae61cb0586dd107c9854e7efa71a1972609c95d9a226df6ffb6e63f16fa826": {
+      "reason": "Remove leaked NEW_FACT label while preserving the exact new fact and independent pet clause.",
+      "replacement_text": "User recently upgraded to a Ford Mustang Mach-E. User owns a golden retriever named Max."
+    },
+    "3e7161ffd3e1f07192578514d964a271597a9f42e9d5ac9cd54c4cc77091511f": {
+      "reason": "Remove leaked NEW_FACT label while preserving the exact new fact.",
+      "replacement_text": "User moved to Los Angeles in 2022 for a job."
+    }
+  }
+}
