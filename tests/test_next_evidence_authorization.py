@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKET = ROOT / "docs/build-log/artifacts/next-evidence/authorization-request.json"
+OLD_PACKET = ROOT / "docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.json"
+OLD_REPORT = ROOT / "docs/build-log/2026-07-23-rung7-packing-reader-authorization.md"
 
 
 def sha256_file(path: Path) -> str:
@@ -52,3 +54,14 @@ def test_forgetting_child_packet_and_its_code_hashes_are_exact() -> None:
     assert child["code"]["provider_attempt_journal_sha256"] == sha256_file(
         ROOT / "scripts/provider_attempts.py"
     )
+
+
+def test_prior_packing_request_is_a_non_actionable_supersession_tombstone() -> None:
+    packet = json.loads(OLD_PACKET.read_text(encoding="utf-8"))
+    report = OLD_REPORT.read_text(encoding="utf-8")
+    assert packet["status"] == "SUPERSEDED_REJECTED_BY_2026_07_24_FREE_EXACT_ABSTENTION_GATE"
+    assert packet["authorization"] is None
+    assert packet["superseded_by"] == "docs/build-log/artifacts/next-evidence/authorization-request.json"
+    assert "superseded, rejected, and not authorizable" in report
+    assert "doppler run" not in report
+    assert "If separately authorized" not in report
