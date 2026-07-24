@@ -43,6 +43,7 @@ def fixture_documents(replacement: str) -> tuple[dict, dict, list]:
     case = SimpleNamespace(
         id="case-a",
         setup_facts=[old],
+        mutations=[("supersede", "user employer", new)],
         must_contain=["Anthropic"],
         must_not_contain=["Stripe"],
     )
@@ -119,3 +120,14 @@ def test_exact_new_fact_policy_discards_model_rewrite() -> None:
     assert result["confirmations"][0]["replacement_text"] == (
         "User now works at Anthropic."
     )
+
+
+def test_incomplete_supported_transition_chain_fails_closed() -> None:
+    proposals, inputs, cases = fixture_documents("User now works at Anthropic.")
+    cases[0].mutations = [
+        ("supersede", "user employer", "User now works at Anthropic."),
+        ("supersede", "user employer", "User now works at OpenAI."),
+    ]
+
+    with pytest.raises(ValueError, match="incomplete transition chain"):
+        build(proposals, inputs, cases, {"overrides": {}})

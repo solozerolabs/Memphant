@@ -101,14 +101,28 @@ def build_confirmation(
         reviewed.append(row)
         by_case[row["case_id"]].append(row)
 
-    transition_failures = []
-    oracle_failures = []
-    oracle_passes = 0
     case_map = {case.id: case for case in cases}
     for case_id, rows in by_case.items():
         case = case_map.get(case_id)
         if case is None:
             raise ValueError(f"proposal references unknown official case: {case_id}")
+        expected = [
+            (index, mutation[0])
+            for index, mutation in enumerate(case.mutations, start=1)
+            if mutation[0] != "purge"
+        ]
+        actual = sorted((row["mutation_index"], row["operation"]) for row in rows)
+        if actual != expected:
+            raise ValueError(
+                f"incomplete transition chain for {case_id}: "
+                f"expected {expected}, got {actual}"
+            )
+
+    transition_failures = []
+    oracle_failures = []
+    oracle_passes = 0
+    for case_id, rows in by_case.items():
+        case = case_map[case_id]
         state = list(case.setup_facts)
         for row in sorted(rows, key=lambda value: value["mutation_index"]):
             selected = set(row["selected_body_sha256"])
