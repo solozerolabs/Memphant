@@ -552,6 +552,7 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
 
     # Simulate process death after ReaderCli atomically cached the paid response,
     # but before execute_groups could checkpoint the answer/proof row.
+    first_ledger.close()
     resumed_ledger = generator.ProviderAttemptLedger(ledger_path, "fp")
     resumed = generator.OpenRouterReader(cache_dir, 4)
     resumed.set_attempt_ledger(resumed_ledger)
@@ -701,6 +702,7 @@ def test_checkpoint_rejects_deleted_or_divergent_attempt_ledger(tmp_path: Path) 
     proof_path = tmp_path / "proof.json"
     generator.write_checkpoint(checkpoint, answers, proof_path, output, proof)
 
+    ledger.close()
     ledger_path.unlink()
     deleted = generator.ProviderAttemptLedger(ledger_path, "fp")
     with pytest.raises(ValueError, match="truncated"):
