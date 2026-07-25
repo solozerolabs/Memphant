@@ -22,12 +22,13 @@ executed a destructive mutation.
 ## Reviewed state
 
 - Public branch: `codex/memphant-tri-sota-completion`.
-- Reviewed public implementation/evidence checkpoint:
-  `c70feead5b748383c587fc5f46b15161ff92af12`. The final fail-closed evidence
-  and reconciliation commit follows it.
+- Reviewed public fail-closed evidence checkpoint:
+  `0fa5cb7f` (coding execution checkpoint
+  `c70feead5b748383c587fc5f46b15161ff92af12`). The documentation-only
+  final-head reconciliation follows it.
 - The complete ordered next-evidence chain is recorded in the terminal
   reconciliation manifest; it includes the authorization, forgetting,
-  packing, and coding commits through `c70feead`.
+  packing, coding, and fail-closed closure commits through `0fa5cb7f`.
 - Private status-mirror branch: `codex/memphant-active-read` at
   implementation/evidence checkpoint
   `ac9c1c979cc525220213474f93facc021a025016`.

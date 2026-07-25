@@ -68,9 +68,12 @@ narrow tests before continuing:
     `8a786689`, `e0a44371`, `ee69e9aa`.
 21. Packing sufficiency rejection: `017078c5`.
 22. Coding gate implementation and baseline-ceiling rejection: `c70feead`.
-23. Apply the final fail-closed coding-evidence and reconciliation commit last;
-    it consumes the child authorization, preserves the bounded evidence bundle,
-    hardens the test-path policy, and updates this manifest and clean handoff.
+23. Final fail-closed coding-evidence and reconciliation implementation:
+    `0fa5cb7f`. It consumes the child authorization, preserves the bounded
+    evidence bundle, hardens the test-path policy, and updates the terminal
+    handoff.
+24. Apply the documentation-only commit containing the final reviewed heads
+    and this manifest last.
 
 The private Syndai branch is separate and depends on the B4 public receipt
 contract plus `ee4de593`. Land its exact private manifest only after compatible
