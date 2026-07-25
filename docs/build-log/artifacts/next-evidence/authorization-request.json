@@ -67,7 +67,14 @@
         "unsettled_cost_usd": "0",
         "proposal_output_sha256": "c3bc56ec780a86759eb71f66038ab1f8015ad196f1d2170b7bdea5f281d0e5d2",
         "attempt_ledger_sha256": "d91b19098da47d09fac29b318e4e87fe6c549afc1462d89ab9cab16a4f8c5bac",
-        "decision": "reject as a global mutation policy because the full proposal arm regressed drift from 56/61 to 2/61 despite improving aggregate passes from 133 to 188"
+        "lineage_completion_provider_attempts": 0,
+        "lineage_completion_settled_cost_usd": "0",
+        "supported_transition_count": 321,
+        "lineage_confirmation_ledger_sha256": "474932f4840fc2a87fec3a109617a388301412c365b35370886e610cd8f2cbe4",
+        "lineage_full_replay_sha256": "bc753f4bc3bbc3ac61a7652374ea5de08a8e0f8371f342b3ef624978d6dc18f4",
+        "official_result": "244 pass / 15 fail / 126 N/A",
+        "paired_vs_baseline": "111 gains / 0 regressions",
+        "decision": "retain as a non-executing first-transition proposal control plane; complete chained supersessions only through exact previous-confirmed-body lineage verification; no default or SOTA move"
       }
     },
     "swe_contextbench": {

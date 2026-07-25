@@ -10,7 +10,7 @@ dogfood, tenant-safety, or real-user-value claim.
 | domain | free result | decision | next boundary |
 |---|---|---|---|
 | packing | render cap 1200 recovered 8/8 scored retrieval cases but regressed deterministic exact abstention from 3/4 to 1/4; naive density rejected; submodular ordering tied cap-only | reject all tested candidates before paid calls; defaults unchanged | research a new technique, then require both free predicates before any reader request |
-| forgetting | cross-rerank + rank-one improved n=12 from 6/12 to 9/12; the paid proposal arm reached 11/12, then full aggregate 188/385 but regressed drift from 56/61 to 2/61 | both semantic selector and model proposal treatments rejected as global policies; exact-ID mutation stays authoritative | transition-verifier research only; no further paid run |
+| forgetting | model proposal reached 11/12; deterministic lineage consolidation then reached a decisive drift-heavy 12/12 and full 244 pass / 15 fail / 126 N/A, with 111 gains and zero baseline regressions | retain proposals as non-executing first-transition input and exact-hash lineage as verifier-led evidence; exact-ID mutation stays authoritative | two genuine multi-unit conflicts remain; official score ties Lethe and is not SOTA |
 | coding | SWE-ContextBench packaged adapter rehearsed 24 related/unrelated experiences with receipts/traces and future mark-payload construction; DeepSWE admitted only 3/12 causal pairs | SWE task efficacy blocked; DeepSWE paired memory rejected | license clarification plus separately frozen agent request; DeepSWE unpaired only |
 
 ## Packing proof boundary
@@ -45,9 +45,15 @@ mutation primitive remain mandatory.
 The authorized full proposal campaign is complete: 259 proposals from 258
 provider calls plus one cache hit, $0.3632000 settled, zero unsettled. Including
 the bounded n=12 prompt screens, the sequence used 293 calls and $0.4150225.
-The full proposal replay scored 188 pass / 71 fail / 126 N/A, but regressed 55
-baseline passes; a selection-only control localized the failure to target
-selection. Proof and recent consolidation research:
+The initial full replay scored 188 pass / 71 fail / 126 N/A because its 259-row
+ledger covered only the first transition in each non-purge case, not all 321
+supported transitions. The new completeness guard catches this fail-closed.
+Deterministic offline lineage completion added the missing 62 transitions by
+exactly matching the immediately prior confirmed replacement body. It required
+no new model calls and produced 244 pass / 15 fail / 126 N/A, 111 gains and zero
+regressions versus baseline. Thirteen residual official misses are evaluator
+substring conflicts and two are genuine multi-unit contradictions. Proof and
+recent consolidation research:
 `docs/build-log/2026-07-24-forgeteval-proposal-control-plane.md`.
 
 ## Coding proof boundary
