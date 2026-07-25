@@ -15,15 +15,15 @@ launch.
 | B1 | rejected/deleted | `2026-07-22-b1-observation-block.md`. |
 | B2/B3/B6 | locally complete | Existing B2/B3 proofs and local CI-honesty legs; remote CI unproven. |
 | B4 receipts/status/policy | complete locally | `2026-07-23-b4-verified-receipts.md`; verified receipts fail closed and calibrated policy is deterministic. |
-| Rung 7 packing | rejected at free exact-abstention gate | The current n=12 screen moved scored hit@10 from 2/8 to 8/8 but regressed exact abstention from 3/4 to 1/4. Paid execution surface was deleted; zero calls and $0. Default remains off. |
+| Rung 7 packing | all tested techniques rejected | Cap 1200 plus local rerank stayed at 8/8 scored retrieval and 1/4 abstention. A decision-aware screen stopped at 5/12 calls when 8/8 supported became impossible; $0.114075625 settled. Default remains off. |
 | B5 cleanup | complete/rejected as adjudicated | `2026-07-23-b5-recall-stage-retirement.md`; heuristic, learned wrapper, decomposition and Balanced deleted; cross-encoder seam remains default-off. |
 | C0/C1 | correctness complete; parity/live L0 open | Existing C0/C1 proofs; no new production corpus authorization. |
 | C2 | rejected/deleted | Free kill-gate remains binding. |
 | C3 public volume | volume/isolation complete; candidate stress bank rejected; valid adversarial continuity blocked | `2026-07-24-c3-public-code-lane.md`; 64,055 events, action-repetition lexical R@10 18/40. A clean issue-text to auto-selected late-diagnostic probe scored 0/40, but its targets were not causally identified and its non-target events were not adjudicated distractors. The probe rejects the bank, not MemPhant continuity. A valid causal-paraphrase bank, reader, validator-backed tasks, and live production ingestion remain authorization-blocked/open. |
 | WS-F active-read mechanism | local integration complete; dogfood gate open | Private companion evidence passes retain/compile/verified receipt/loader/trace/isolation/auth paths. Feature is not an enabled production cutover. Exact private landing identity stays in the private repository. |
-| D2 ForgetEval | instrument complete; measured gaps remain | `2026-07-24-forgeteval-public-api.md`; 133/126/126 on adversarial. |
+| D2 ForgetEval | deterministic lineage evidence complete; not SOTA | Sleep-inspired exact-hash offline consolidation completed all 321 supported transitions and scored 244 pass / 15 fail / 126 N/A, with 111 gains and zero baseline regressions. Thirteen residuals are official substring conflicts and two are genuine multi-unit conflicts. |
 | D4 SWE-Explore | immutable-input external block | The pinned JSONL omits issue text/base commits. Official code includes a reconstruction helper, but its auxiliary datasets are unpinned, required issue-map/trajectory inputs are absent, and mappings are incomplete for pro/multilingual cells. |
-| D4 SWE Context Bench | no-model smoke complete; benchmark unauthorized | Pinned artifacts under `tri-sota-completion/swe-contextbench`; exact task/adapter/model/compute budgets and authorization absent. |
+| D4 SWE Context Bench | first-tranche gate rejected | Twelve authorized Codex calls completed. The official evaluator resolved the first 3/3 no-memory baselines, making the required +2 related-arm gain impossible (maximum +1); nine patches were intentionally ungraded and the remaining 24 calls did not run. |
 | WS-G/public launch/restraint/GateMem | open | Local mechanisms and synthetic fixtures do not close reopened launch predicates. |
 | Rungs 5/6/8/10/11/13/15 | open/rejected exactly as STATUS records | No new real promotion evidence in this program. Rung 9 remains rejected/deleted. |
 | Public/private spec mirror | complete in the authorized worktrees | `check_spec_drift.py` passes when `MEMPHANT_PRIVATE_SPEC_DIR` names the Syndai mirror. Its default sibling lookup skips in this linked-worktree topology, so the final gate must set that boundary explicitly. |
@@ -69,5 +69,5 @@ Generated OpenAPI/MCP artifacts travel with their owning commits. The worker
 throughput migration travels before any binary that declares it as migration
 head. After assembly, run the complete MemPhant gate and the complete Syndai
 gate plus the cross-repo scratch integration. Remote CI, push, PR, merge,
-deployment, production enablement, paid packing reader work, and D4 model work
-all require separate authorization.
+deployment, production enablement, a materially different packing treatment,
+or a materially harder coding-memory gate all require separate authorization.

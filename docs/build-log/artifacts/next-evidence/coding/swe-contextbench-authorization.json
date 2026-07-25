@@ -1,0 +1,54 @@
+{
+  "agent": {
+    "cli": "codex",
+    "cli_version": "codex-cli 0.145.0-alpha.24",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "retries": 0,
+    "sandbox": "workspace-write",
+    "timeout_seconds": 900
+  },
+  "authorization": {
+    "authorized_by": "repository_owner",
+    "license_basis": "The user explicitly confirmed full permission to use all benchmark materials; no upstream code will be copied into the public repository.",
+    "paid_calls": true,
+    "scope": "local benchmark execution only"
+  },
+  "campaign": "swe_contextbench_codex_n12",
+  "caps": {
+    "first_tranche_max_task_runs": 12,
+    "first_tranche_max_wall_seconds": 10800,
+    "provider_retries": 0,
+    "token_cap": "Codex CLI does not expose a per-run token ceiling; the exact task count, no-retry rule, and 900-second process timeout are binding.",
+    "usd_cap": "Codex subscription execution does not expose per-run dollar settlement; no OpenRouter or other metered API is authorized by this packet."
+  },
+  "continuation": {
+    "minimum_related_gain_over_no_memory": 2,
+    "require_zero_invalid_receipts": true,
+    "require_zero_unrelated_gain": true,
+    "require_zero_unsafe_reuse": true,
+    "remaining_target_runs_if_passed": 24
+  },
+  "inputs": {
+    "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
+    "manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
+    "official_code_commit": "31bb04155f52b184bf31b220e3cff0607ac9c953",
+    "rehearsal_sha256": "ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc"
+  },
+  "schema_version": 1,
+  "status": "AUTHORIZED_FIRST_TRANCHE",
+  "tranche": {
+    "arms": [
+      "no_memory",
+      "unrelated_memory",
+      "related_memphant_memory"
+    ],
+    "max_task_runs": 12,
+    "target_ids": [
+      "astropy__astropy-15082",
+      "django__django-34176",
+      "django__django-35356",
+      "matplotlib__matplotlib-24818"
+    ]
+  }
+}

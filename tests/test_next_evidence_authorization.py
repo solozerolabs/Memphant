@@ -13,11 +13,13 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_combined_packet_closes_the_paid_forgetting_campaign() -> None:
+def test_combined_packet_closes_all_paid_campaigns() -> None:
     packet = json.loads(PACKET.read_text(encoding="utf-8"))
     assert packet["status"] == "COMPLETED_PAID_EXECUTION"
-    assert packet["paid_calls_executed"] == 293
-    assert packet["settled_cost_usd"] == "0.4150225"
+    assert packet["paid_calls_executed"] == 310
+    assert packet["metered_provider_calls_executed"] == 298
+    assert packet["subscription_task_calls_executed"] == 12
+    assert packet["settled_cost_usd"] == "0.529098125"
     assert packet["maximum_currently_authorizable_usd"] == "0"
     assert packet["authorizable_campaigns"] == []
     assert packet["campaigns"]["packing"]["authorization"] is None
@@ -26,7 +28,14 @@ def test_combined_packet_closes_the_paid_forgetting_campaign() -> None:
     assert forgetting["authorization"] is None
     assert forgetting["completion"]["full_provider_attempts"] == 258
     assert forgetting["completion"]["unsettled_cost_usd"] == "0"
-    assert packet["campaigns"]["swe_contextbench"]["status"] == "BLOCKED_NOT_AUTHORIZABLE"
+    coding = packet["campaigns"]["swe_contextbench"]
+    assert coding["status"] == "COMPLETED_REJECTED_AT_FIRST_TRANCHE_BASELINE_CEILING"
+    assert coding["official_resolved_baselines"] == 3
+    assert coding["maximum_possible_related_gain"] == 1
+    assert coding["remaining_task_calls_executed"] == 0
+    assert coding["authoritative_child_packet_sha256"] == sha256_file(
+        ROOT / coding["authoritative_child_packet"]
+    )
     assert packet["campaigns"]["deep_swe_pairing"]["status"].startswith("REJECTED_")
 
 

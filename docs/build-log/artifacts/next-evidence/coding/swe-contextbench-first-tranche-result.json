@@ -1,0 +1,79 @@
+{
+  "authorization_sha256": "38ae85494e7e11af529a39e39e31227314d810e733200cd948cf4ee6f480d7de",
+  "classification": "validator_backed_first_tranche_rejected_at_baseline_ceiling_not_a_memory_efficacy_or_sota_claim",
+  "codex": {
+    "cached_input_tokens": 19076864,
+    "cli_version": "codex-cli 0.145.0-alpha.24",
+    "input_tokens": 20203523,
+    "model": "gpt-5.6-sol",
+    "output_tokens": 92673,
+    "reasoning_effort": "medium",
+    "reasoning_output_tokens": 28333,
+    "task_calls": 12,
+    "usd_settlement": "unavailable_for_subscription_execution"
+  },
+  "decision": {
+    "graded_baselines": 3,
+    "maximum_possible_related_gain": 1,
+    "remaining_task_calls_executed": 0,
+    "required_related_gain": 2,
+    "resolved_baselines": 3,
+    "result": "REJECTED_STOP_NO_BROADENING",
+    "ungraded_baselines": 1,
+    "ungraded_generated_patches": 9
+  },
+  "execution": {
+    "attempt_ledger_sha256": "873315ea562583ad817dd0711b11567e819acf88049f12640e523e5f6a57be8a",
+    "completed_calls": 12,
+    "failed_calls": 0,
+    "invalid_receipts": 0,
+    "model_patch_reference_hash_matches": 0,
+    "retries": 0,
+    "test_path_violations": 0,
+    "total_duration_seconds": 2727.527,
+    "executed_runner_sha256": "f7a8e122310d0e7449fb2d2d4e9efdef4db7257b631b7e8149c0768607dd72e7"
+  },
+  "frozen_inputs": {
+    "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
+    "evaluation_dataset_sha256": "cf5d81e2556f1b251bb970a43aab012044b8b0638b0706a2e34333f19fb53abf",
+    "manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
+    "no_memory_predictions_sha256": "dd29925dcafa624c54ab5589146383d0ead3f8cdd913f05f17eb3807fc7cd859",
+    "official_code_commit": "31bb04155f52b184bf31b220e3cff0607ac9c953",
+    "official_evaluator_sha256": "e6b29452302df417cfde1493ab38817ac2d4ebb19750b374d60e383271ad5b69",
+    "rehearsal_sha256": "ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc"
+  },
+  "official_partial_evaluation": [
+    {
+      "fail_to_pass_failed": 0,
+      "fail_to_pass_passed": 3,
+      "instance_id": "astropy__astropy-15082",
+      "pass_to_pass_failed": 0,
+      "pass_to_pass_passed": 132,
+      "patch_applied": true,
+      "report_sha256": "821f374db12e50ff257075becb5e11af1bc7e7ddfd3638be27989ee92d63c786",
+      "resolved": true
+    },
+    {
+      "fail_to_pass_failed": 0,
+      "fail_to_pass_passed": 6,
+      "instance_id": "django__django-34176",
+      "pass_to_pass_failed": 0,
+      "pass_to_pass_passed": 166,
+      "patch_applied": true,
+      "report_sha256": "33da9273fa65b7854504db1d9f1d5492e1b45b0d122ff8cdf9be4136764246c7",
+      "resolved": true
+    },
+    {
+      "fail_to_pass_failed": 0,
+      "fail_to_pass_passed": 1,
+      "instance_id": "django__django-35356",
+      "pass_to_pass_failed": 0,
+      "pass_to_pass_passed": 17,
+      "patch_applied": true,
+      "report_sha256": "a87db3b4365f6f58d5c14c9af518f38270f56d90589dc8ecb42026842ffb48b4",
+      "resolved": true
+    }
+  ],
+  "schema_version": 1,
+  "stop_rule": "After three of four no-memory baselines resolved, even perfect related-arm results could improve at most one target; the preregistered gain of at least two became impossible, so Docker grading stopped and the remaining 24 model task runs were not authorized or executed."
+}

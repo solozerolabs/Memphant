@@ -3,22 +3,20 @@
 Date: 2026-07-24. Machine packet:
 `docs/build-log/artifacts/next-evidence/authorization-request.json`.
 
-The packet is deliberately non-authorizing. Only the ForgetEval proposal
-campaign remains `AWAITING_EXPLICIT_PAID_AUTHORIZATION`, with
-`authorization: null`. Packing is rejected before paid execution. Zero model
-calls were made and $0 settled.
+The packet is now closed and non-authorizing. Authorized work completed, every
+continuation failed its bounded gate, `authorizable_campaigns` is empty, and
+maximum currently authorizable liability is $0.
 
 ## Minimum current request
 
 | campaign | purpose | logical calls | provider attempts | ceiling | current state |
 |---|---|---:|---:|---:|---|
-| LongMemEval-V2 packing | 12 cases, five paired arms; reader plus judge | 0 | 0 | $0 | rejected: free exact abstention regressed 3/4 to 1/4 |
-| ForgetEval proposals | 16 non-executing proposals over 12 cases | 16 | 32 | $0.50 | awaiting explicit authorization |
-| SWE-ContextBench | four-target operational tranche, then conditional n=12 | 12 then at most 36 task runs | not frozen | not frozen | blocked, not authorizable |
+| LongMemEval-V2 packing | decision-aware sufficiency screen | 5 | 5 | $0.114075625 settled | stopped when the 8/8 supported predicate became impossible |
+| ForgetEval proposals | screens plus 259 first transitions | 293 | 293 | $0.4150225 settled | completed; deterministic lineage replay 244/385 raw, not SOTA |
+| SWE-ContextBench | four-target operational tranche, then conditional n=12 | 12 completed; 24 withheld | frozen Codex subscription calls | no itemized dollar settlement | rejected after 3/3 graded baselines made required +2 gain impossible |
 | DeepSWE paired memory | required 12 causal targets | 0 | 0 | $0 | rejected at 3/12 pairs |
 
-The current maximum authorizable dollar liability is therefore **$0.50**, for
-non-executing ForgetEval proposals only.
+The current maximum authorizable dollar liability is **$0**.
 
 ## Packing stop decision
 
@@ -39,15 +37,17 @@ designed and reviewed.
 
 ## Forgetting controls
 
-The forgetting child packet remains the executable authority and preserves its
-$0.50 cap. It generates proposals only. Every proposal is emitted
-`confirmed=false`; a later reviewer must approve exact body hashes in a new
-confirmation ledger. Deterministic execution through the public exact-ID
-mutation primitive requires separate authorization and is excluded here.
+The forgetting child packet is closed. It generated proposals only; reviewed
+confirmation and deterministic exact-ID lineage replay remained separate and
+fail-closed. No natural-language proposal directly executed a destructive
+mutation, and no further spend is authorized.
 
-## Coding boundary
+## Coding closure
 
-The SWE-ContextBench packet is not executable: the pinned official repository
-had no observed license file, and the model/agent/compute ceiling has not been
-frozen. DeepSWE is not eligible for a paired memory request because only three
-causal pairs survived the 12-pair admission rule.
+The repository owner explicitly authorized local SWE-ContextBench use. The
+child packet froze Codex 0.145.0-alpha.24, `gpt-5.6-sol` medium, four targets,
+three arms, zero retries, and 900 seconds per call. All 12 task calls completed.
+Official Docker grading resolved the first three no-memory baselines, so the
+related arm could gain at most +1 versus the required +2. Grading and the
+remaining 24 task calls stopped. DeepSWE remains ineligible for a paired memory
+request because only three causal pairs survived the 12-pair admission rule.

@@ -26,12 +26,14 @@
       "code_repository": "https://github.com/jiayuanz3/SWEContextBench",
       "code_revision": "31bb04155f52b184bf31b220e3cff0607ac9c953",
       "code_license": "NO_LICENSE_FILE_OBSERVED",
-      "code_boundary": "No upstream code copied; official execution blocked pending explicit license clarification.",
+      "code_boundary": "No upstream code copied; repository owner explicitly authorized local benchmark execution. Public redistribution remains excluded.",
       "dataset_repository": "https://huggingface.co/datasets/jiayuanz3/SWEContextBench",
       "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
       "dataset_license": "MIT",
       "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
-      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a"
+      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
+      "state": "first tranche rejected after 3/3 graded no-memory baselines made the required related-arm gain impossible",
+      "result": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json"
     },
     "deep_swe": {
       "purpose": "secondary unpaired robustness benchmark only",

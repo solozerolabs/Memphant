@@ -4,9 +4,11 @@
   "authorization": {
     "authorized_by": "user in Codex task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
     "authorized_at": "2026-07-24T18:54:35Z",
-    "campaigns": ["forgetting_proposals"]
+    "campaigns": ["forgetting_proposals", "packing_sufficiency", "swe_contextbench_first_tranche"]
   },
-  "paid_calls_executed": 298,
+  "paid_calls_executed": 310,
+  "metered_provider_calls_executed": 298,
+  "subscription_task_calls_executed": 12,
   "settled_cost_usd": "0.529098125",
   "maximum_currently_authorizable_usd": "0",
   "authorizable_campaigns": [],
@@ -88,13 +90,23 @@
       }
     },
     "swe_contextbench": {
-      "status": "BLOCKED_NOT_AUTHORIZABLE",
+      "status": "COMPLETED_REJECTED_AT_FIRST_TRANCHE_BASELINE_CEILING",
       "authorization": null,
-      "reason": "The pinned official code repository had no license file. No official agent execution or Docker grading may be requested until that boundary is clarified and model, call, and compute caps are frozen.",
+      "reason": "The repository owner explicitly authorized local benchmark use. Twelve frozen Codex task calls completed, then official Docker grading stopped after three of four no-memory baselines resolved because the required related-arm gain of at least two was mathematically impossible.",
       "free_rehearsal": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-n12-rehearsal.json",
       "free_rehearsal_sha256": "ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc",
       "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
-      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a"
+      "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
+      "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-authorization.json",
+      "authoritative_child_packet_sha256": "38ae85494e7e11af529a39e39e31227314d810e733200cd948cf4ee6f480d7de",
+      "result": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json",
+      "model_task_calls": 12,
+      "official_graded_baselines": 3,
+      "official_resolved_baselines": 3,
+      "maximum_possible_related_gain": 1,
+      "required_related_gain": 2,
+      "remaining_task_calls_executed": 0,
+      "decision": "reject current coding-memory gate; no broader n=12 execution and no SOTA claim"
     },
     "deep_swe_pairing": {
       "status": "REJECTED_NOT_AUTHORIZABLE_AS_PAIRED_MEMORY_GATE",

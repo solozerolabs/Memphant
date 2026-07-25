@@ -1,7 +1,8 @@
 # SWE-ContextBench and DeepSWE next evidence
 
-Date: 2026-07-24. This is free adapter and provenance evidence. No coding
-agent, model, official Docker evaluator, hidden test, or paid call was run.
+Date: 2026-07-24. This report now includes the authorized economical Codex
+first tranche and its validator-backed early-stop decision. It is not a
+coding-memory efficacy, full-n=12, SOTA, deployment, or production claim.
 
 ## SWE-ContextBench result
 
@@ -17,10 +18,11 @@ All 12 official Lite evaluator image tags were resolved to registry digests
 without pulling or running the images. The official dataset is MIT at revision
 `5bec275a2095768a53ac804ae4fdf90b1723b8af`; its three required parquet files
 are byte- and hash-bound in the manifest. The official code is pinned at
-`31bb04155f52b184bf31b220e3cff0607ac9c953`, but no license file was observed
-at the audited revision. No upstream code was copied. Official execution is
-therefore externally blocked pending explicit license clarification as well as
-a separately frozen agent/model/compute request.
+`31bb04155f52b184bf31b220e3cff0607ac9c953`; no license file was observed at
+the audited revision and no upstream code was copied. The repository owner
+explicitly authorized local benchmark use. Exact model, task-count, retry,
+sandbox, timeout, and continuation bounds are frozen in
+`docs/build-log/artifacts/next-evidence/coding/swe-contextbench-authorization.json`.
 
 The packaged-REST rehearsal created, retained, recalled, and traced all 24
 related and unrelated source experiences in a migrated scratch database. It
@@ -43,12 +45,27 @@ the three packaged binary hashes.
 This proves adapter/runtime integrity only, not task resolution or coding-memory
 benefit.
 
-If the license and paid boundaries are later cleared, the minimum economical
-sequence is four targets across all three arms (12 task runs). Only a related
-arm improvement of at least two validator-resolved targets over no-memory,
-with no unrelated-arm benefit, unsafe reuse, leakage, or invalid receipt,
-permits running the remaining eight targets. The final n=12 ceiling is 36 task
-runs.
+## Authorized first-tranche result
+
+The minimum sequence ran four targets across all three frozen arms with
+`gpt-5.6-sol`, medium reasoning, a 900-second per-task timeout, and zero
+retries. All 12 calls completed in 2,727.527 seconds total. The eight memory
+arms reconstructed the exact hash-bound recalled bodies and carried their
+verified trace and receipt identities. No patch matched a target reference
+hash or touched a test path.
+
+Official Docker grading then resolved the first three no-memory baselines:
+
+- Astropy 15082: 3/3 fail-to-pass and 132/132 pass-to-pass;
+- Django 34176: 6/6 fail-to-pass and 166/166 pass-to-pass;
+- Django 35356: 1/1 fail-to-pass and 17/17 pass-to-pass.
+
+At that point the related arm could improve at most one of four targets, below
+the preregistered requirement of at least two. Grading stopped immediately;
+nine generated patches remain intentionally ungraded, and the remaining 24
+model task runs were not executed. This rejects the current coding-memory gate
+before broadening. It does not estimate a related-arm effect. Canonical result:
+`docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json`.
 
 ## DeepSWE pairing audit
 
@@ -76,4 +93,5 @@ hash of compare status, ahead/behind counts, total commits, and merge base. The
 validator recomputes that projection and requires zero behind plus a merge base
 equal to the prior base commit.
 
-Focused verification: 6 SWE adapter tests and 2 DeepSWE audit tests passed.
+Focused verification after the execution runner and early-stop contract: 7
+agent-gate tests, 6 SWE adapter tests, and 2 DeepSWE audit tests passed.

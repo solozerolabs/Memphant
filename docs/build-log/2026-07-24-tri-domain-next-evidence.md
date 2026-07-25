@@ -11,7 +11,7 @@ dogfood, tenant-safety, or real-user-value claim.
 |---|---|---|---|
 | packing | render cap, submodular ordering, and local cross-rerank all reached 8/8 retrieval but only 1/4 abstention; a decision-aware sufficiency-card screen was then killed after 5/12 calls at 1/2 supported and 2/2 abstention, plus one invalid overlapping selection/rejection | reject all tested candidates; defaults unchanged | no broader packing or reader run; research must produce a materially different small-gate candidate |
 | forgetting | model proposal reached 11/12; deterministic lineage consolidation then reached a decisive drift-heavy 12/12 and full 244 pass / 15 fail / 126 N/A, with 111 gains and zero baseline regressions | retain proposals as non-executing first-transition input and exact-hash lineage as verifier-led evidence; exact-ID mutation stays authoritative | two genuine multi-unit conflicts remain; official score ties Lethe and is not SOTA |
-| coding | SWE-ContextBench packaged adapter rehearsed 24 related/unrelated experiences with receipts/traces and future mark-payload construction; DeepSWE admitted only 3/12 causal pairs | SWE task efficacy blocked; DeepSWE paired memory rejected | license clarification plus separately frozen agent request; DeepSWE unpaired only |
+| coding | SWE-ContextBench adapter rehearsed 24/24 receipt/trace chains; 12 frozen Codex task calls completed; official grading resolved the first 3/3 no-memory baselines | reject at baseline ceiling: related gain could be at most +1, below required +2; DeepSWE paired memory rejected at 3/12 causal pairs | no broader coding run; materially harder small gate required before another paid request |
 
 ## Packing proof boundary
 
@@ -65,10 +65,16 @@ recent consolidation research:
 
 ## Coding proof boundary
 
-SWE-ContextBench free rehearsal proves the memory transport and visibility
-contract, not validator success. Target patch/tests/outcomes remain hidden;
-only the permitted prior outcome is retained. Exact evaluator-image digests are
-frozen. Official task execution remains blocked by license and authorization.
+SWE-ContextBench's free rehearsal proves the memory transport and visibility
+contract. Target patch/tests/outcomes stayed hidden; only permitted prior
+outcomes were retained, and exact evaluator-image digests were frozen. After
+explicit owner authorization, all 12 first-tranche Codex calls completed with
+zero retries or patch-policy violations. The official evaluator resolved the
+first three no-memory baselines with 10/10 aggregate fail-to-pass and 315/315
+aggregate pass-to-pass tests. That made the required +2 related-arm gain
+impossible on four targets, so grading stopped and the remaining 24 task calls
+were not run. This is validator-backed rejection at the baseline ceiling, not
+an estimate of memory efficacy.
 
 DeepSWE's 113 tasks are valuable validator-backed work, but the release has no
 relation graph. Same repository was not treated as causality. Only three
