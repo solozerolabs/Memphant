@@ -1,5 +1,12 @@
 # ForgetEval next evidence: economical selector screen and control-plane boundary
 
+> **Superseded historical screen.** This page freezes the pre-authorization
+> selector result and original request; it is not a current authorization or
+> accounting source. The completed proposal campaign, deterministic lineage
+> replay, 293 provider calls, and $0.4150225 settled cost are authoritative in
+> `2026-07-24-forgeteval-proposal-control-plane.md`. No further spend is
+> authorized.
+
 ## Outcome
 
 The free selector screen is complete. The best deterministic mixture was local
@@ -9,7 +16,8 @@ passes to 182. It is **rejected for promotion** because the paired full-set
 comparison repaired 65 baseline failures while regressing 16 baseline passes.
 The improvement is real but not monotone or safe.
 
-No paid or model call was made. The default did not change.
+At this historical checkpoint, no paid or model call had been made. The default
+did not change then and did not change after the later completed campaign.
 
 ## Minimum experiment sequence
 
@@ -89,14 +97,15 @@ and a hash of the complete prompt input. The next treatment must pass at least
 10/12, regress zero baseline passes, have zero unacknowledged exact mutations,
 and execute zero unconfirmed mutations before any broader request.
 
-The paid packet is staged at
+At this historical checkpoint, the paid packet was staged at
 `docs/build-log/artifacts/next-evidence/forgeteval/proposal-authorization-request.json`.
-It authorizes at most 16 logical proposal calls, 32 provider attempts, 256
-output tokens per attempt, and $0.50. Its current status is
-`AWAITING_EXPLICIT_PAID_AUTHORIZATION`, so the command verifies its signed
+It described at most 16 logical proposal calls, 32 provider attempts, 256
+output tokens per attempt, and $0.50. Its status at that checkpoint was
+`AWAITING_EXPLICIT_PAID_AUTHORIZATION`, so the command verified its signed
 scope plus generator, reader, journal, and prompt hashes before reading the
-provider credential. Even if proposal generation is later authorized, mutation
-execution still requires separate confirmation and authorization.
+provider credential. The later campaign completed under a replacement
+authorization; mutation execution still required separate confirmation and
+authorization.
 
 ## Proof artifacts
 
@@ -109,4 +118,6 @@ execution still requires separate confirmation and authorization.
 - `scripts/analyze_forgeteval.py`
 - `scripts/generate_forgeteval_proposals.py`
 
-Focused verification: 64 tests passed. Paid calls: 0. Settled cost: $0.
+Historical focused verification: 64 tests passed. Paid calls at this
+checkpoint: 0. Settled cost at this checkpoint: $0. See the superseding source
+above for final accounting.

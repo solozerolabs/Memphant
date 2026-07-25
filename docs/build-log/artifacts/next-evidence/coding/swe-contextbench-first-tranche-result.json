@@ -1,5 +1,6 @@
 {
-  "authorization_sha256": "38ae85494e7e11af529a39e39e31227314d810e733200cd948cf4ee6f480d7de",
+  "executed_authorization_bundle_entry": "executed/swe-contextbench-authorization.json",
+  "executed_authorization_sha256": "38ae85494e7e11af529a39e39e31227314d810e733200cd948cf4ee6f480d7de",
   "classification": "validator_backed_first_tranche_rejected_at_baseline_ceiling_not_a_memory_efficacy_or_sota_claim",
   "codex": {
     "cached_input_tokens": 19076864,
@@ -31,7 +32,9 @@
     "retries": 0,
     "test_path_violations": 0,
     "total_duration_seconds": 2727.527,
-    "executed_runner_sha256": "f7a8e122310d0e7449fb2d2d4e9efdef4db7257b631b7e8149c0768607dd72e7"
+    "executed_runner_sha256": "f7a8e122310d0e7449fb2d2d4e9efdef4db7257b631b7e8149c0768607dd72e7",
+    "evidence_bundle": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-evidence.bundle.json",
+    "evidence_bundle_sha256": "3b0d7a514a6dafb51a3d237c365f204e48aa0a1065fa8108b860dc98ed940996"
   },
   "frozen_inputs": {
     "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
@@ -51,6 +54,7 @@
       "pass_to_pass_passed": 132,
       "patch_applied": true,
       "report_sha256": "821f374db12e50ff257075becb5e11af1bc7e7ddfd3638be27989ee92d63c786",
+      "report_projection_entry": "grading/report-projections.json",
       "resolved": true
     },
     {
@@ -61,6 +65,7 @@
       "pass_to_pass_passed": 166,
       "patch_applied": true,
       "report_sha256": "33da9273fa65b7854504db1d9f1d5492e1b45b0d122ff8cdf9be4136764246c7",
+      "report_projection_entry": "grading/report-projections.json",
       "resolved": true
     },
     {
@@ -71,6 +76,7 @@
       "pass_to_pass_passed": 17,
       "patch_applied": true,
       "report_sha256": "a87db3b4365f6f58d5c14c9af518f38270f56d90589dc8ecb42026842ffb48b4",
+      "report_projection_entry": "grading/report-projections.json",
       "resolved": true
     }
   ],

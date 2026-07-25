@@ -1,37 +1,42 @@
 # Tri-domain next-evidence clean review handoff
 
 Date: 2026-07-24. This is a clean **unlanded** handoff. It records the reviewed
-branch state; it does not claim merge, push, deployment, production use, paid
-execution, or overall SOTA.
+branch state; it does not claim merge, push, deployment, production use, or
+overall SOTA.
 
 ## Terminal decisions
 
 | Domain | Minimum evidence run | Decision |
 |---|---|---|
-| Packing | frozen n=12 free screen | reject all tested candidates; cap 1200 recovered 8/8 scored retrieval cases but exact abstention regressed 3/4 to 1/4; paid surface deleted |
-| Forgetting | frozen n=12 technique screen plus one 385-case winner expansion | reject deterministic semantic execution; operation-boundary triage leaves product RCA open; exact-ID confirmation remains authoritative |
-| Coding | n=12 SWE-ContextBench transport rehearsal plus DeepSWE 12-pair admission audit | task efficacy blocked by license/authorization; paired DeepSWE rejected at 3/12 causal pairs |
+| Packing | frozen free n=12 screen, then 5/12 authorized answer-quality calls | reject all tested candidates; cap 1200 plus rerank stayed at 8/8 scored retrieval and 1/4 abstention, while the decision-aware treatment stopped as soon as 8/8 supported became impossible |
+| Forgetting | bounded proposal screens, 259-row proposal expansion, and deterministic 385-case lineage replay | sleep-inspired offline consolidation reached 244 pass / 15 fail / 126 N/A, with 111 gains and zero baseline regressions; this ties Lethe and is not SOTA |
+| Coding | four frozen SWE-ContextBench tasks across three arms, 12 authorized Codex calls | reject first tranche at the no-memory baseline ceiling: the official evaluator resolved the first 3/3 baselines, so the required +2 related-arm gain was mathematically impossible; nine patches remained intentionally ungraded and the 24-call broader tranche did not run |
 
-No model call was made and settled cost is $0. The only staged paid request is
-16 non-executing ForgetEval proposals, capped at $0.50. Its status remains
-`AWAITING_EXPLICIT_PAID_AUTHORIZATION` with `authorization: null`; mutation
-execution is excluded.
+The closed program executed 310 calls: 293 metered forgetting-provider calls,
+5 metered packing-provider calls, and 12 Codex subscription task calls. Settled
+provider cost is **$0.529098125** ($0.4150225 forgetting plus $0.114075625
+packing); Codex did not expose an itemized dollar settlement. No campaign
+remains authorizable. Natural-language forgetting proposals never directly
+executed a destructive mutation.
 
 ## Reviewed state
 
 - Public branch: `codex/memphant-tri-sota-completion`.
-- Reviewed public head: `b3d98795536310a4a7794e0c6e9d72077326e15b`.
-- Next-evidence commit chain: `665a1be3`, `fc873e75`, `adbf55ef`,
-  `7dfae997`, `5ebd868e`, `ece26197`, `702097ee`, `f25a6805`, `5a99a0e3`,
-  `a1f89b18`, `b3d98795`.
+- Reviewed public implementation/evidence checkpoint:
+  `c70feead5b748383c587fc5f46b15161ff92af12`. The final fail-closed evidence
+  and reconciliation commit follows it.
+- The complete ordered next-evidence chain is recorded in the terminal
+  reconciliation manifest; it includes the authorization, forgetting,
+  packing, and coding commits through `c70feead`.
 - Private status-mirror branch: `codex/memphant-active-read` at
-  `0637d839fe552f6ab46d622f9f3ed6c95f9e64a7`.
-- Public worktree, private mirror worktree, and `/Users/sidsharma/Memphant`
-  were clean before this documentation-only handoff commit.
+  implementation/evidence checkpoint
+  `ac9c1c979cc525220213474f93facc021a025016`.
+- Public worktree, private mirror worktree, and the user's main checkout were
+  clean before this final fail-closed evidence and reconciliation change.
 
 ## Verification after the last implementation/test change
 
-- Python: 808 passed, 12 skipped. The skipped tests were reported as skipped,
+- Python: 844 passed, 12 skipped. The skipped tests were reported as skipped,
   not passing.
 - Public/private spec drift: clean with the private mirror path explicit.
 - `cargo fmt --check`: passed.
@@ -43,24 +48,29 @@ execution is excluded.
 - Provider lint: plain-postgres, Supabase, and Neon passed.
 - Migration dry run: three migrations planned.
 - Real server/CLI/worker/Postgres/MCP E2E probe: all checks passed.
-- Fresh pinned DeepSWE checkout validator: three accepted pairs, twelve
-  required, zero model calls, zero container runs.
+- Official SWE-ContextBench Docker grading: the first 3/3 no-memory baselines
+  resolved, with 10/10 FAIL_TO_PASS and 315/315 PASS_TO_PASS tests. The
+  impossible-gain stop rule then prevented further grading and the broad
+  tranche.
 
 ## Independent specialist review
 
-- Forgetting: PASS at `a1f89b18`; the 385-case triage reproduces byte-for-byte,
-  all 126 failures contain assertion evidence, root cause remains explicitly
-  open, and confirmation/authorization paths fail closed.
-- Coding: PASS at `a1f89b18`; live compare projections match both canonical
-  ancestry hashes, hidden target material remains excluded, and artifact hashes
-  match the inventory/authorization packet.
-- Packing: PASS at `b3d98795`; the rejected paid surface is absent, both old and
-  current packets are non-authorizing, the old page is a regression-protected
-  tombstone, and only forgetting proposals remain potentially authorizable.
+- Forgetting: PASS. The historical screen is explicitly superseded; lineage,
+  arithmetic, dependency graph, claims, and public/private STATUS mirror
+  reconcile.
+- Packing: PASS. Logical-proposal versus provider-call accounting, total calls,
+  cost, child/result/bundle hashes, empty authorization state, handoff, and
+  landing graph reconcile.
+- Coding: PASS. Only the canonical consumed packet can reach execution; the
+  historical authorization is inert bundle evidence. The six-entry bundle is
+  bounded, license-safe, and parent/result hash-bound, with independently
+  derived path/test/reference, usage, ledger, and grader checks.
 
-The change after the coding and forgetting reviews only tombstoned the stale
-packing document and added its regression assertion. The complete gate was
-rerun after that change. No specialist reported a remaining blocker.
+No specialist reported a remaining blocker on the final diff.
+
+The complete gate above ran after the final evidence-preservation, authorization
+closure, test-path-policy, and regression-test changes. Later edits to this
+handoff record verification results only.
 
 ## Landing boundary
 
@@ -68,7 +78,7 @@ This branch remains intentionally unmerged and unpushed. It inherits prior
 program history and must not be merged wholesale. Any landing should follow the
 ordered dependency chain in
 `docs/build-log/2026-07-24-tri-sota-terminal-reconciliation.md`, cherry-pick the
-next-evidence commits as one reviewed terminal group after their dependencies,
-then rerun the complete public gate and compatible private gate on the actual
-landing branch. Remote CI, deployment, production enablement, model execution,
-and SOTA claims remain separate gates.
+next-evidence commits as the ordered groups recorded there, then rerun the
+complete public gate and compatible private gate on the actual landing branch.
+Remote CI, deployment, production enablement, another paid/model campaign, and
+SOTA claims remain separate gates.

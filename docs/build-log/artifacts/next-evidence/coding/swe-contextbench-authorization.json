@@ -8,12 +8,7 @@
     "sandbox": "workspace-write",
     "timeout_seconds": 900
   },
-  "authorization": {
-    "authorized_by": "repository_owner",
-    "license_basis": "The user explicitly confirmed full permission to use all benchmark materials; no upstream code will be copied into the public repository.",
-    "paid_calls": true,
-    "scope": "local benchmark execution only"
-  },
+  "authorization": null,
   "campaign": "swe_contextbench_codex_n12",
   "caps": {
     "first_tranche_max_task_runs": 12,
@@ -29,6 +24,12 @@
     "require_zero_unsafe_reuse": true,
     "remaining_target_runs_if_passed": 24
   },
+  "execution_closure": {
+    "executed_authorization_bundle_entry": "executed/swe-contextbench-authorization.json",
+    "executed_authorization_sha256": "38ae85494e7e11af529a39e39e31227314d810e733200cd948cf4ee6f480d7de",
+    "result": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json",
+    "result_state": "REJECTED_STOP_NO_BROADENING"
+  },
   "inputs": {
     "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
     "manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
@@ -36,7 +37,7 @@
     "rehearsal_sha256": "ac0d25221c176a6431816b3d52c560982045e98541b5ca6265fa9c7ebbf34cbc"
   },
   "schema_version": 1,
-  "status": "AUTHORIZED_FIRST_TRANCHE",
+  "status": "COMPLETED_REJECTED_AT_FIRST_TRANCHE_BASELINE_CEILING",
   "tranche": {
     "arms": [
       "no_memory",

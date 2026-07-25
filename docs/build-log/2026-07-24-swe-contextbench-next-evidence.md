@@ -21,8 +21,9 @@ are byte- and hash-bound in the manifest. The official code is pinned at
 `31bb04155f52b184bf31b220e3cff0607ac9c953`; no license file was observed at
 the audited revision and no upstream code was copied. The repository owner
 explicitly authorized local benchmark use. Exact model, task-count, retry,
-sandbox, timeout, and continuation bounds are frozen in
-`docs/build-log/artifacts/next-evidence/coding/swe-contextbench-authorization.json`.
+sandbox, timeout, and continuation bounds are preserved in the executed
+authorization snapshot. The live child packet is now consumed, has null
+authorization, and fails closed; it cannot launch the tranche again.
 
 The packaged-REST rehearsal created, retained, recalled, and traced all 24
 related and unrelated source experiences in a migrated scratch database. It
@@ -67,6 +68,18 @@ model task runs were not executed. This rejects the current coding-memory gate
 before broadening. It does not estimate a related-arm effect. Canonical result:
 `docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json`.
 
+The result and closed parent packet hash-bind a deterministic evidence bundle.
+It preserves the exact MemPhant-owned executed authorization and runner, the 12
+attempt rows, per-run usage/raw-hash projections, patch-hash/byte/path
+projections, and three compact grader projections with original report hashes.
+It intentionally excludes upstream patch bodies, source excerpts, test names,
+and raw Codex streams. Regression checks preflight the aggregate decompression
+bound, reject duplicate or traversal paths, verify every decoded byte count and
+SHA-256, recompute ledger/projection/report links, and reproduce the published
+token totals. The current runner additionally
+recognizes Python, Ruby, Go, and JavaScript/TypeScript test/spec conventions;
+manual review confirmed that the historical 12 patches touched none of them.
+
 ## DeepSWE pairing audit
 
 The requested release was pinned exactly at
@@ -93,5 +106,6 @@ hash of compare status, ahead/behind counts, total commits, and merge base. The
 validator recomputes that projection and requires zero behind plus a merge base
 equal to the prior base commit.
 
-Focused verification after the execution runner and early-stop contract: 7
+Focused verification after execution closure, evidence preservation, the
+runner policy repair, and the early-stop contract: 24
 agent-gate tests, 6 SWE adapter tests, and 2 DeepSWE audit tests passed.

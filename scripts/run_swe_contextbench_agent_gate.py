@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -33,7 +34,6 @@ DEFAULT_AUTHORIZATION = (
     / "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-authorization.json"
 )
 ARMS = ("no_memory", "unrelated_memory", "related_memphant_memory")
-DIFF_PATH_RE = re.compile(r"^diff --git a/(.+?) b/(.+?)$", re.MULTILINE)
 
 
 def require(condition: bool, message: str) -> None:
@@ -194,19 +194,39 @@ def codex_command(
 def is_test_path(path: str) -> bool:
     parts = Path(path).parts
     name = Path(path).name.lower()
+    test_directories = {"test", "tests", "testing", "spec", "specs", "__tests__"}
+    test_configs = {"conftest.py", "pytest.ini", "tox.ini", ".rspec"}
     return (
-        any(part.lower() in {"test", "tests", "testing"} for part in parts)
-        or name.startswith("test_")
-        or name.endswith("_test.py")
+        any(part.lower() in test_directories for part in parts)
+        or name in test_configs
+        or bool(re.match(r"^(jest|vitest|karma)\.(config|conf)\.", name))
+        or bool(re.search(r"(^|[._-])(test|tests|spec|specs)([._-]|$)", name))
     )
+
+
+def changed_paths_from_patch(patch: str) -> list[str]:
+    paths: list[str] = []
+    for line in patch.splitlines():
+        if not line.startswith("diff --git "):
+            continue
+        fields = shlex.split(line)
+        require(
+            len(fields) == 4
+            and fields[0:2] == ["diff", "--git"]
+            and fields[2].startswith("a/")
+            and fields[3].startswith("b/"),
+            "model patch contains an invalid diff path header",
+        )
+        paths.extend((fields[2][2:], fields[3][2:]))
+    return paths
 
 
 def validate_model_patch(patch: str, *, target_patch_sha256: str) -> None:
     require(sha256_text(patch) != target_patch_sha256, "model patch equals reference solution")
-    for old_path, new_path in DIFF_PATH_RE.findall(patch):
+    for path in changed_paths_from_patch(patch):
         require(
-            not is_test_path(old_path) and not is_test_path(new_path),
-            f"model patch touched a test path: {new_path}",
+            not is_test_path(path),
+            f"model patch touched a test path: {path}",
         )
 
 
@@ -316,7 +336,7 @@ def append_ledger(path: Path, record: dict[str, object]) -> None:
 def execute(args: argparse.Namespace) -> int:
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     rehearsal = json.loads(args.rehearsal.read_text(encoding="utf-8"))
-    authorization = json.loads(args.authorization.read_text(encoding="utf-8"))
+    authorization = json.loads(DEFAULT_AUTHORIZATION.read_text(encoding="utf-8"))
     codex_version = run_checked([args.codex_bin, "--version"], cwd=ROOT)
     validate_authorization(
         authorization,
@@ -447,18 +467,21 @@ def execute(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("execute",))
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--rehearsal", type=Path, default=DEFAULT_REHEARSAL)
-    parser.add_argument("--authorization", type=Path, default=DEFAULT_AUTHORIZATION)
     parser.add_argument("--experience-parquet", type=Path, required=True)
     parser.add_argument("--related-parquet", type=Path, required=True)
     parser.add_argument("--relationship-parquet", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--codex-bin", default=shutil.which("codex") or "codex")
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     return execute(args)
 
 

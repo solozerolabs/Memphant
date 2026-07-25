@@ -7,6 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKET = ROOT / "docs/build-log/artifacts/next-evidence/authorization-request.json"
 OLD_PACKET = ROOT / "docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.json"
 OLD_REPORT = ROOT / "docs/build-log/2026-07-23-rung7-packing-reader-authorization.md"
+FORGETTING_SCREEN = ROOT / "docs/build-log/2026-07-24-forgeteval-next-evidence.md"
+AUTHORIZATION_REPORT = ROOT / "docs/build-log/2026-07-24-next-evidence-authorization.md"
+CLEAN_HANDOFF = ROOT / "docs/build-log/2026-07-24-next-evidence-clean-landing.md"
+TERMINAL_MANIFEST = ROOT / "docs/build-log/2026-07-24-tri-sota-terminal-reconciliation.md"
 
 
 def sha256_file(path: Path) -> str:
@@ -95,3 +99,29 @@ def test_prior_packing_request_is_a_non_actionable_supersession_tombstone() -> N
     assert "superseded, rejected, and not authorizable" in report
     assert "doppler run" not in report
     assert "If separately authorized" not in report
+
+
+def test_terminal_handoff_cannot_regress_to_pre_execution_accounting() -> None:
+    forgetting_screen = FORGETTING_SCREEN.read_text(encoding="utf-8")
+    authorization_report = AUTHORIZATION_REPORT.read_text(encoding="utf-8")
+    handoff = CLEAN_HANDOFF.read_text(encoding="utf-8")
+    manifest = TERMINAL_MANIFEST.read_text(encoding="utf-8")
+
+    assert "Superseded historical screen" in forgetting_screen
+    assert "293 provider calls" in forgetting_screen
+    assert "$0.4150225 settled cost" in forgetting_screen
+    assert "294 proposals" in authorization_report
+    assert "293 provider calls" in authorization_report
+    assert "310 calls" in handoff
+    assert "$0.529098125" in handoff
+    assert "c70feead5b748383c587fc5f46b15161ff92af12" in handoff
+    assert "ac9c1c979cc525220213474f93facc021a025016" in handoff
+    assert "No model call was made and settled cost is $0" not in handoff
+    assert "AWAITING_EXPLICIT_PAID_AUTHORIZATION" not in handoff
+    for commit in (
+        "8ef48afd",
+        "ee69e9aa",
+        "017078c5",
+        "c70feead",
+    ):
+        assert commit in manifest

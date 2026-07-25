@@ -33,7 +33,8 @@
       "case_manifest": "benchmarks/manifests/swe_contextbench.kill.n12.json",
       "case_manifest_sha256": "ee13c16b847c87084cad2828b6833de2b73159af317887e8605e3773bcdd229a",
       "state": "first tranche rejected after 3/3 graded no-memory baselines made the required related-arm gain impossible",
-      "result": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json"
+      "result": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json",
+      "result_sha256": "f38672ecc0d34272125f215b640adeea6935fa5c8ee086db2c98d879c29fe986"
     },
     "deep_swe": {
       "purpose": "secondary unpaired robustness benchmark only",

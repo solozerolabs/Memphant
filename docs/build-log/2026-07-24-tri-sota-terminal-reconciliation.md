@@ -58,7 +58,19 @@ narrow tests before continuing:
 16. Rejected-bank adjudication, runner honesty repair, sealed v3 provenance,
     and corrected manifest: `965ad632`.
 17. Hash-bound rejection receipt plus regression: `ad9b217a`.
-18. Apply the documentation-only commit containing this final manifest last.
+18. Initial next-evidence handoff: `11f957f0`, `665a1be3`, `fc873e75`,
+    `adbf55ef`, `7dfae997`, `5ebd868e`, `ece26197`, `702097ee`, `f25a6805`,
+    `5a99a0e3`, `a1f89b18`, `b3d98795`, `23ef9a10`.
+19. Authorized forgetting proposal control plane and bounded evidence:
+    `8ef48afd`, `8a39e940`, `bea8e309`, `e6304ad1`, `779141f5`, `ad18c7f3`,
+    `470cf9e0`, `e8f087e1`, `52e67bdd`.
+20. Forgetting lineage correctness and terminal evidence: `10b075fe`,
+    `8a786689`, `e0a44371`, `ee69e9aa`.
+21. Packing sufficiency rejection: `017078c5`.
+22. Coding gate implementation and baseline-ceiling rejection: `c70feead`.
+23. Apply the final fail-closed coding-evidence and reconciliation commit last;
+    it consumes the child authorization, preserves the bounded evidence bundle,
+    hardens the test-path policy, and updates this manifest and clean handoff.
 
 The private Syndai branch is separate and depends on the B4 public receipt
 contract plus `ee4de593`. Land its exact private manifest only after compatible

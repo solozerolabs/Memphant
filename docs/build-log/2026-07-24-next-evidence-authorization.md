@@ -9,10 +9,10 @@ maximum currently authorizable liability is $0.
 
 ## Minimum current request
 
-| campaign | purpose | logical calls | provider attempts | ceiling | current state |
+| campaign | purpose | logical proposals/tasks | external calls/attempts | ceiling | current state |
 |---|---|---:|---:|---:|---|
 | LongMemEval-V2 packing | decision-aware sufficiency screen | 5 | 5 | $0.114075625 settled | stopped when the 8/8 supported predicate became impossible |
-| ForgetEval proposals | screens plus 259 first transitions | 293 | 293 | $0.4150225 settled | completed; deterministic lineage replay 244/385 raw, not SOTA |
+| ForgetEval proposals | screens plus 259 first transitions | 294 proposals | 293 provider calls | $0.4150225 settled | completed; one full-run proposal was a cache hit; deterministic lineage replay 244/385 raw, not SOTA |
 | SWE-ContextBench | four-target operational tranche, then conditional n=12 | 12 completed; 24 withheld | frozen Codex subscription calls | no itemized dollar settlement | rejected after 3/3 graded baselines made required +2 gain impossible |
 | DeepSWE paired memory | required 12 causal targets | 0 | 0 | $0 | rejected at 3/12 pairs |
 
