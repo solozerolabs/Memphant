@@ -631,6 +631,22 @@ def test_forgeteval_release_schema_allows_empty_selection() -> None:
     assert "minItems" not in schema["properties"]["selected_indices"]
 
 
+def test_packing_sufficiency_schema_is_strict_and_bounded() -> None:
+    reader = _load_run_reader()
+    contract = reader.response_contract(
+        "openrouter", "packing_sufficiency", "openai/gpt-5.6-terra"
+    )
+    schema = contract["response_format"]["json_schema"]["schema"]
+
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"])
+    assert schema["properties"]["selected_ranks"]["items"] == {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10,
+    }
+
+
 def test_judge_parser_requires_schema_valid_exact_enum() -> None:
     reader = _load_run_reader()
     assert reader.parse_judge_output('{"verdict":"yes"}', "openrouter") == "yes"

@@ -18,6 +18,7 @@ sentinels, and two stable scored controls.
 | cap 1200 + utility / rendered token | 3/8 | 4/4 | reject |
 | submodular order | 2/8 | 3/4 | no retrieval gain |
 | cap 1200 + submodular order | **8/8** | 1/4 | reject: no ordering gain and exact-abstention non-regression failed |
+| cap 1200 + local cross-rerank | **8/8** | 1/4 | reject: relevance reranking did not repair abstention |
 
 The naive density method over-rewarded short distractors. Adding the render cap
 did not repair it, so the session-quota mixture was not run: earlier complete
@@ -32,6 +33,7 @@ Artifacts (SHA-256):
 - `lme-s-pilot-cap1200-utility.json`: `235e6de51afac05009d63232f2d188ad20b85aa1ad601703234f8528cd1b6497`
 - `lme-s-pilot-submodular.json`: `18ae18cdf824612ea71e316aad29a75fc31723f2d0160738b2d9ec1262601ed8`
 - `lme-s-pilot-cap1200-submodular.json`: `472efe1a051fa416a3585988538852432f605a1bb4df835c86fe8aa78b992de3`
+- `lme-s-pilot-cap1200-cross-rerank.json`: `196ec28d0b8f476500a8d2bebfb92e8826edf17dd23344f08ccc2ccf4f83b21d`
 
 Every run used a new migrated scratch database, the same 12 source rows, local
 `bge-small-en-v1.5`, `k=10`, pool 64, and an 8,192-token pack budget. Zero model
@@ -66,6 +68,53 @@ preserved both stable controls and tied cap-only on aggregate retrieval and
 abstention, but it did not improve either: several gold spans moved later in the
 pack. It therefore has no retrieval claim and is rejected with the other tested
 candidates.
+
+## Decision-aware sufficiency-card rejection
+
+The failed relevance mixtures motivated one materially different 2026 method:
+judge whether evidence is sufficient and likely to change the decision, rather
+than whether it is merely similar. [InfMem](https://arxiv.org/abs/2602.02704)
+uses sufficiency-aware retrieval and stopping. [Decision-Aware Memory
+Cards](https://arxiv.org/abs/2606.08151) scores necessity, expected outcome
+uplift, and negative-transfer risk under an auditable schema; its released
+[CICL implementation](https://github.com/stephen-guan-researcher/CICL) confirms
+that hosted judges, local surrogates, and lightweight rankers share the same
+typed boundary. [Learning What to Remember](https://arxiv.org/abs/2606.12945)
+independently finds a multi-factor value model stronger than recency or any
+single factor in its blind regime.
+
+A hash-authorized n=12 screen adapted only that boundary. The controller saw
+the question, date, rank, source session, and evidence body. Gold answers and
+official answer-session IDs never entered its prompts. It had to choose the
+smallest fully sufficient set, list missing evidence, and identify negative
+transfer. Hard limits were 12 logical calls, 14 provider attempts, 512 output
+tokens, and $1.25 maximum liability.
+
+The kill gate fired after five calls, so the remaining seven were not spent.
+Among the first four valid decisions, both abstentions were correctly rejected,
+but only one of two answerable cases remained sufficient with an official
+answer session. The 8/8 supported predicate was therefore already impossible.
+The fifth response also put the same rank in `selected_ranks` and
+`negative_transfer_ranks`; the local semantic parser rejected it even though
+the provider's structural JSON schema could not express set disjointness. The
+screen ended at **5 calls / $0.114075625 settled / $0 unsettled**.
+
+The runner now persists a hash-only failure record and current settlement state
+before re-raising any semantic parse error, preventing a partial result from
+under-reporting a settled attempt. This post-run durability fix does not alter
+or resume the rejected campaign.
+
+Immutable closure artifacts:
+
+- evidence input: `61f00323a444822e8d53f1c45dc77f1352b7991790b27b73c07fd4f86c9f71ff`
+- partial decisions + failure: `4d86974ebbf4f2278fbd31f23cb912a956151d8bcaa64faf807c24694d65c04e`
+- compiled partial evidence: `e2b35845d28a0cdf46bfabeeb61da179d842bcea6ea755a0d48c4eb8f89eaa13`
+- paid attempt ledger: `ec4f92fd0f74bbac7ad983d8691249e779a7b774b8da2c243befcce0c5e9c737`
+- closed authorization packet:
+  `docs/build-log/artifacts/next-evidence/packing/sufficiency-authorization-request.json`
+
+The technique is rejected; no downstream reader campaign, broader packing run,
+default change, or packing promotion is justified.
 
 ## Rejected LongMemEval-V2 reader hypothesis
 

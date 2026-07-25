@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "status": "COMPLETED_REJECTED_AT_N12",
+  "authorization": {
+    "authorized_by": "user in Codex task 019f94b9-6e58-78c2-85aa-52f6c2ba2c56",
+    "authorized_at": "2026-07-25T00:13:49Z",
+    "authorization_scope_sha256": "03a9b8579a291d46582f48cfc7f532c9a377c985f921ab41e74319c6a4e702e5"
+  },
+  "purpose": "Twelve-call read-only screen of decision-aware evidence sufficiency on the frozen packing n=12 bank; no memory mutation or product-default change is authorized.",
+  "frozen_inputs": {
+    "evidence": "docs/build-log/artifacts/next-evidence/packing/lme-s-pilot-cap1200-evidence.jsonl",
+    "evidence_sha256": "61f00323a444822e8d53f1c45dc77f1352b7991790b27b73c07fd4f86c9f71ff",
+    "dataset": "docs/build-log/artifacts/next-evidence/packing/lme-s-pilot-n12.json",
+    "dataset_sha256": "c6ba0d2ca3f6e661e26fcfeb2374304bbf4a31c163e6e6172d7476e80adcabf1",
+    "rows": 12,
+    "scored_rows": 8,
+    "abstention_rows": 4,
+    "gold_answer_prompt_boundary": "gold_answer and answer_session_ids are never included in model prompts"
+  },
+  "code": {
+    "screen_runner": "scripts/run_packing_sufficiency_screen.py",
+    "screen_runner_sha256": "0adb6621d5f539fbb20efc7595dfc031c35eb13154d3d9390c5b46c2f7ffab1d",
+    "reader_client_sha256": "c2040a36d2d4e76376b827f968beb4dfc65f5f4c9d40707e256f0ddec3b3531a",
+    "provider_attempt_journal_sha256": "4c581a109a3a4887a5e3b7a34ebe32b784e9086af4815d394fff14dc74204fdd",
+    "system_prompt_sha256": "a041e5744073ff03d4ea8a3835393e3bc4916da1dd357332ee05f9bac4eecf86"
+  },
+  "execution": {
+    "evidence_sha256": "61f00323a444822e8d53f1c45dc77f1352b7991790b27b73c07fd4f86c9f71ff",
+    "dataset_sha256": "c6ba0d2ca3f6e661e26fcfeb2374304bbf4a31c163e6e6172d7476e80adcabf1",
+    "output": "docs/build-log/artifacts/next-evidence/packing/sufficiency-decisions.n12.json",
+    "compiled_output": "docs/build-log/artifacts/next-evidence/packing/sufficiency-evidence.n12.jsonl",
+    "attempt_ledger": "docs/build-log/artifacts/next-evidence/packing/sufficiency-attempts.n12.jsonl",
+    "cache_dir": "docs/build-log/artifacts/next-evidence/packing/sufficiency-cache-n12",
+    "model": "openai/gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "max_calls": 12,
+    "max_provider_attempts": 14,
+    "max_output_tokens": 512,
+    "max_spend_usd": "1.25",
+    "max_price_prompt_per_million": "2.75",
+    "max_price_completion_per_million": "16.5",
+    "system_prompt_sha256": "a041e5744073ff03d4ea8a3835393e3bc4916da1dd357332ee05f9bac4eecf86"
+  },
+  "pass_predicates": [
+    "all 12 decisions parse under the strict schema with zero errors",
+    "all 8 answerable rows remain sufficient and select at least one official answer session",
+    "all 4 abstention rows are marked insufficient",
+    "all attempts are durably settled within the call, attempt, output-token, price, and spend caps"
+  ],
+  "kill_predicates": [
+    "any frozen input or code hash drift",
+    "any missing or duplicate question decision",
+    "scored hit@10 below 8/8 or abstention below 4/4",
+    "any unsettled provider liability or cap violation"
+  ],
+  "liability_derivation": {
+    "total_prompt_bytes": 299213,
+    "largest_prompt_bytes": 25340,
+    "maximum_completion_tokens_per_attempt": 512,
+    "maximum_provider_attempts": 14,
+    "largest-request_all-attempts_upper_bound_usd": "1.094002",
+    "campaign_ceiling_usd": "1.25"
+  },
+  "post_screen_boundary": "A pass authorizes only a separately frozen downstream reader comparison. A failure stops this technique. No server default or public claim moves from this screen.",
+  "completion": {
+    "stopped_at": "2026-07-25T00:16:00Z",
+    "logical_calls": 5,
+    "provider_attempts": 5,
+    "settled_cost_usd": "0.114075625",
+    "unsettled_cost_usd": "0",
+    "completed_decisions": 4,
+    "partial_score": "1/2 supported hit@10 and 2/2 abstention",
+    "failure": "fifth response selected and marked the same rank as negative transfer; the parser rejected it",
+    "decision": "reject at n=12 because 8/8 supported hit@10 was already impossible after four valid decisions",
+    "decision_artifact_sha256": "4d86974ebbf4f2278fbd31f23cb912a956151d8bcaa64faf807c24694d65c04e",
+    "compiled_partial_sha256": "e2b35845d28a0cdf46bfabeeb61da179d842bcea6ea755a0d48c4eb8f89eaa13",
+    "attempt_ledger_sha256": "ec4f92fd0f74bbac7ad983d8691249e779a7b774b8da2c243befcce0c5e9c737",
+    "post_failure_runner_sha256": "ccc067cdbfb8deec5548cb357cff1b915dbf1824524d3930e79b5f0e0151fc46"
+  }
+}

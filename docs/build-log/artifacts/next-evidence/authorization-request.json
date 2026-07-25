@@ -6,8 +6,8 @@
     "authorized_at": "2026-07-24T18:54:35Z",
     "campaigns": ["forgetting_proposals"]
   },
-  "paid_calls_executed": 293,
-  "settled_cost_usd": "0.4150225",
+  "paid_calls_executed": 298,
+  "settled_cost_usd": "0.529098125",
   "maximum_currently_authorizable_usd": "0",
   "authorizable_campaigns": [],
   "campaigns": {
@@ -39,7 +39,17 @@
         "scripts/run_longmemeval_v2_packing_campaign.py",
         "scripts/analyze_longmemeval_v2_packing_campaign.py"
       ],
-      "future_boundary": "A materially different technique must pass both free utility and exact-abstention gates before a new paid campaign can be proposed."
+      "research_sufficiency_screen": {
+        "status": "COMPLETED_REJECTED_AT_N12",
+        "authoritative_child_packet": "docs/build-log/artifacts/next-evidence/packing/sufficiency-authorization-request.json",
+        "logical_calls": 5,
+        "provider_attempts": 5,
+        "settled_cost_usd": "0.114075625",
+        "unsettled_cost_usd": "0",
+        "partial_score": "1/2 supported hit@10 and 2/2 abstention",
+        "decision": "stopped because the 8/8 supported predicate was already impossible; the fifth response also failed the disjoint selection/negative-transfer invariant"
+      },
+      "future_boundary": "Cap plus local cross-rerank and the decision-aware sufficiency-card treatment are rejected. A materially different technique must pass a newly frozen small gate before any broader campaign."
     },
     "forgetting_proposals": {
       "status": "COMPLETED_PAID_PROPOSALS",

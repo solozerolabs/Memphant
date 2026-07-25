@@ -9,7 +9,7 @@ dogfood, tenant-safety, or real-user-value claim.
 
 | domain | free result | decision | next boundary |
 |---|---|---|---|
-| packing | render cap 1200 recovered 8/8 scored retrieval cases but regressed deterministic exact abstention from 3/4 to 1/4; naive density rejected; submodular ordering tied cap-only | reject all tested candidates before paid calls; defaults unchanged | research a new technique, then require both free predicates before any reader request |
+| packing | render cap, submodular ordering, and local cross-rerank all reached 8/8 retrieval but only 1/4 abstention; a decision-aware sufficiency-card screen was then killed after 5/12 calls at 1/2 supported and 2/2 abstention, plus one invalid overlapping selection/rejection | reject all tested candidates; defaults unchanged | no broader packing or reader run; research must produce a materially different small-gate candidate |
 | forgetting | model proposal reached 11/12; deterministic lineage consolidation then reached a decisive drift-heavy 12/12 and full 244 pass / 15 fail / 126 N/A, with 111 gains and zero baseline regressions | retain proposals as non-executing first-transition input and exact-hash lineage as verifier-led evidence; exact-ID mutation stays authoritative | two genuine multi-unit conflicts remain; official score ties Lethe and is not SOTA |
 | coding | SWE-ContextBench packaged adapter rehearsed 24 related/unrelated experiences with receipts/traces and future mark-payload construction; DeepSWE admitted only 3/12 causal pairs | SWE task efficacy blocked; DeepSWE paired memory rejected | license clarification plus separately frozen agent request; DeepSWE unpaired only |
 
@@ -26,6 +26,13 @@ only query-local state; a regression test proves sequential query isolation.
 
 The free exact-abstention regression rejects the current packing treatment
 before downstream calls. Retrieval alone is insufficient.
+
+Recent sufficiency-aware and decision-aware research justified one separately
+authorized n=12 control-plane screen. It stopped after five calls because the
+8/8 supported predicate was already impossible; the fifth response also
+violated the disjoint selection/negative-transfer invariant. Cost was
+$0.114075625 settled with zero unsettled. No broader or reader run followed.
+Proof: `docs/build-log/2026-07-24-packing-technique-screen.md`.
 
 ## Forgetting proof boundary
 

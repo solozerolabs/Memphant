@@ -391,6 +391,33 @@ FORGET_RELEASE_JSON_SCHEMA = {
     "required": ["selected_indices"],
     "additionalProperties": False,
 }
+PACKING_SUFFICIENCY_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "selected_ranks": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1, "maximum": 10},
+        },
+        "sufficient": {"type": "boolean"},
+        "negative_transfer_ranks": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1, "maximum": 10},
+        },
+        "missing_evidence": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "reason": {"type": "string"},
+    },
+    "required": [
+        "selected_ranks",
+        "sufficient",
+        "negative_transfer_ranks",
+        "missing_evidence",
+        "reason",
+    ],
+    "additionalProperties": False,
+}
 RAG_SUPPORTED_SCHEMA_ID = "rag-supported-v1"
 RAG_SUPPORTED_JUDGE_SYSTEM_PROMPT = (
     "Grade whether the answer is correct and fully supported by its retrieved "
@@ -594,6 +621,7 @@ def response_contract(engine: str, kind: str, model: str | None = None) -> dict:
         "generate_multi": GENERATE_MULTI_JSON_SCHEMA,
         "forget_supersede": FORGET_SUPERSEDE_JSON_SCHEMA,
         "forget_release": FORGET_RELEASE_JSON_SCHEMA,
+        "packing_sufficiency": PACKING_SUFFICIENCY_JSON_SCHEMA,
     }
     try:
         schema = schemas[kind]

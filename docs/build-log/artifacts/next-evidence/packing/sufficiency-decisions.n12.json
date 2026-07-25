@@ -1,0 +1,96 @@
+{
+  "dataset_sha256": "c6ba0d2ca3f6e661e26fcfeb2374304bbf4a31c163e6e6172d7476e80adcabf1",
+  "decisions": [
+    {
+      "decision_sha256": "b05b7cec8d341398774fcf140c93b7c67eabded2f53fca96bfe917623fd32cab",
+      "input_sha256": "b3afe9173c7305439963946f2e1d3d775ebf6e3c6a8ddab61fdd921de1e6ec09",
+      "missing_evidence": [
+        "Whether the $60 coffee mug splurge was the total spent or the price per mug.",
+        "The number of coffee mugs/coworkers, if $60 was the total cost."
+      ],
+      "negative_transfer_ranks": [],
+      "prompt_sha256": "eb3a3421119b069a12ba892ede05b6ca9670fbac996111fba6ebeb6c7d472a27",
+      "question_id": "0100672e",
+      "reason": "The evidence mentions a $60 coffee mug splurge but does not unambiguously establish the per-mug amount.",
+      "response_sha256": "c23e914657e3cc5ef0e3e73f5bdb8b5da67a0afde7fb300b3169d07b81c2d9f0",
+      "selected_ranks": [
+        1
+      ],
+      "sufficient": false
+    },
+    {
+      "decision_sha256": "283f35ac08311b56732696f14df768c161e23fa8b54956020946aecc94d1ed1a",
+      "input_sha256": "a39a6a9c402d22e6f4e979832f1fd55e45dbb2c54c09913e357fdff0a7551399",
+      "missing_evidence": [
+        "The hamster's name is not stated in any ranked evidence."
+      ],
+      "negative_transfer_ranks": [],
+      "prompt_sha256": "23c0c1f04264fd9a4299f6b270f3d4a36450712ed46366cda04734f324e6caaa",
+      "question_id": "0862e8bf_abs",
+      "reason": "None of the evidence identifies a hamster or gives its name.",
+      "response_sha256": "61809a5d9f1ee3a07c42c16a8e0179f2f4158e87362a341abdfbbce7d28aba29",
+      "selected_ranks": [],
+      "sufficient": false
+    },
+    {
+      "decision_sha256": "7387fc7098e9c7cee647918c3633edf4d8b2cdb21c01b61adf5ee1ca7231f0a3",
+      "input_sha256": "0591abdca2e786cf4fa0938d188c4e61afcc785a47e07405f652e4918bad66e9",
+      "missing_evidence": [
+        "Exact Airport Limousine Bus fare from the relevant airport to the user's specific hotel",
+        "Exact taxi fare from the same airport to the same hotel",
+        "Relevant airport and hotel/route, if needed to determine those fares"
+      ],
+      "negative_transfer_ranks": [
+        2,
+        3
+      ],
+      "prompt_sha256": "004b3cdba6b8325f1a077f79908b56a73ce57e53dd285786f01cc925956b6d9a",
+      "question_id": "09ba9854_abs",
+      "reason": "Rank 1 provides only broad bus and taxi price ranges and does not establish an exact same-route comparison, so the savings cannot be calculated unambiguously.",
+      "response_sha256": "fbe15ee11be1962f6c847859f9d949b8196a684b96f4e6ed35d109419270df98",
+      "selected_ranks": [
+        1
+      ],
+      "sufficient": false
+    },
+    {
+      "decision_sha256": "d7be9967b84e5cb85829a1775475526083207460913ce059ebe61bc9ad388dc2",
+      "input_sha256": "e36983d03f0b334143f681937e6e3186df2e6417dd9cdc266e53331305b0a66f",
+      "missing_evidence": [],
+      "negative_transfer_ranks": [],
+      "prompt_sha256": "c8336075da2283b13377b4925cb77ff8e37783e6547de2b1b6ff6042a89771d6",
+      "question_id": "0ddfec37",
+      "reason": "Rank 1 directly states that 15 autographed baseballs were added since collection began three months earlier, exactly covering the first three months.",
+      "response_sha256": "b55e7003979f850348460678a0fb8f9aa16ba756c901cfb247a95fa416faa2e5",
+      "selected_ranks": [
+        1
+      ],
+      "sufficient": true
+    }
+  ],
+  "evidence_sha256": "61f00323a444822e8d53f1c45dc77f1352b7991790b27b73c07fd4f86c9f71ff",
+  "failure": {
+    "error": "selected and negative-transfer ranks must be disjoint",
+    "error_kind": "ValueError",
+    "input_sha256": "03b54d5a641903e89d08e1cf17a168d56305b68b911ec582f98d213d7c80cc60",
+    "question_id": "118b2229",
+    "response_sha256": "ca839d5cda475adb13401939e122ccd83771580e427022b25dcb8fb51f0e6554"
+  },
+  "model": "openai/gpt-5.6-terra",
+  "paid": {
+    "logical_calls": 5,
+    "provider_attempts": 5,
+    "reported_spend_usd": "0.114075625",
+    "unsettled_liability_usd": "0"
+  },
+  "reasoning_effort": "medium",
+  "schema_version": 1,
+  "status": "REJECTED_INVALID_DECISION",
+  "summary": {
+    "abstention": 2,
+    "abstention_correct": 2,
+    "scored": 2,
+    "scored_hit_at_10": 1,
+    "total": 4
+  }
+}
