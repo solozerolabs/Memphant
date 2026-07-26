@@ -32,6 +32,11 @@ from datetime import datetime, timezone
 from typing import Any
 import urllib.request
 
+from benchmarks.longmemeval_v2.construction_authority import (
+    load_canonical_binding as _load_canonical_construction_binding,
+    validate_cache_receipt as _validate_exact_cache_receipt,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OPENING_NANOS = 4_258_002_400
@@ -98,6 +103,7 @@ def _campaign_artifact_paths(root: Path) -> dict[str, str]:
         "construction_settlement": "CONSTRUCTION-SETTLEMENT.json",
         "observation_cache": "observation-cache",
         "cache_hits": "cache-hits",
+        "construction_bindings": "CONSTRUCTION-BINDINGS",
         "scratch": "scratch",
         "case_banks": "case-banks",
         "private_reader_outputs": "private-reader-outputs",
@@ -350,6 +356,7 @@ def validate_paired_results(package: dict[str, object]) -> dict[str, object]:
 
 PROOF_KEYS = {
     "schema_version",
+    "binding_sha256",
     "authorization",
     "selection",
     "compiler",
@@ -406,6 +413,7 @@ def validate_construction_proof_v2(proof: object) -> dict[str, object]:
         if not isinstance(value, dict) or set(value) != keys:
             raise RuntimeError(f"construction proof {section} shape is invalid")
     hashes = [
+        proof["binding_sha256"],
         proof["authorization"]["authorization_sha256"],
         proof["authorization"]["campaign_sha256"],
         proof["selection"]["selection_sha256"],
@@ -2201,6 +2209,37 @@ def _create_json(path: Path, value: dict[str, object]) -> None:
         raise RuntimeError(f"immutable campaign artifact already exists: {path}") from error
 
 
+def _atomically_create_json(path: Path, value: dict[str, object]) -> None:
+    """Publish a fully fsynced immutable file with one create-only link."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        delete=False,
+    ) as handle:
+        temporary = Path(handle.name)
+        json.dump(value, handle, sort_keys=True, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    try:
+        try:
+            os.link(temporary, path)
+        except FileExistsError as error:
+            raise RuntimeError(
+                f"immutable campaign artifact already exists: {path}"
+            ) from error
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def mint_campaign_authorization() -> dict[str, object]:
     """Mint the sole immutable packet after a live public provider refresh."""
     census = validate_campaign_authorization(
@@ -2225,6 +2264,199 @@ def _create_or_validate_json(path: Path, value: object) -> None:
             raise RuntimeError(f"immutable campaign artifact drift: {path}")
         return
     _create_json(path, value)
+
+
+def _ledger_prefix_identity(path: Path) -> dict[str, object]:
+    body = path.read_bytes() if path.is_file() else b""
+    return {
+        "path": str(path.resolve()),
+        "prefix_bytes": len(body),
+        "prefix_sha256": hashlib.sha256(body).hexdigest(),
+    }
+
+
+def _build_construction_binding(
+    *,
+    authorization_path: Path,
+    census_path: Path,
+    manifest_path: Path,
+    wave_path: Path,
+    binding_root: Path,
+    plans: list[dict[str, object]],
+) -> tuple[Path, dict[str, object]]:
+    """Derive the sole pre-worker binding from frozen campaign authorities."""
+    packet = json.loads(authorization_path.read_text(encoding="utf-8"))
+    census = json.loads(census_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    wave = json.loads(wave_path.read_text(encoding="utf-8"))
+    scope = {
+        key: value
+        for key, value in packet.items()
+        if key not in {"schema_version", "status", "authorization"}
+    }
+    authorization_sha256 = packet.get("authorization", {}).get(
+        "authorization_scope_sha256"
+    )
+    normalized, _, plan_subset_sha256 = _plan_inventory(plans)
+    construction = census.get("construction", {})
+    manifest_construction = manifest.get("construction", {})
+    inventory = construction.get("plan_inventory")
+    inventory_by_key = {
+        plan.get("extraction_key"): plan for plan in inventory or []
+    }
+    artifacts = packet.get("artifacts")
+    if (
+        packet.get("status") != "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
+        or authorization_sha256 != sha256_json(scope)
+        or census.get("census_sha256")
+        != sha256_json({key: value for key, value in census.items() if key != "census_sha256"})
+        or packet.get("inputs", {}).get("census_sha256") != census.get("census_sha256")
+        or packet.get("inputs", {}).get("census_file_sha256") != _sha256_file(census_path)
+        or packet.get("inputs", {}).get("manifest_sha256") != _sha256_file(manifest_path)
+        or census.get("manifest_sha256") != _sha256_file(manifest_path)
+        or not isinstance(artifacts, dict)
+        or not isinstance(inventory, list)
+        or construction.get("plan_inventory_sha256") != sha256_json(inventory)
+        or len(inventory_by_key) != len(inventory)
+        or any(inventory_by_key.get(plan["extraction_key"]) != plan for plan in normalized)
+        or wave.get("plans") != inventory
+        or wave.get("ordered_plans_sha256") != construction.get("plan_inventory_sha256")
+        or wave.get("campaign_census_sha256") != census.get("census_sha256")
+    ):
+        raise RuntimeError("construction binding authority chain drift")
+    wave_core = {
+        key: value
+        for key, value in wave.items()
+        if key not in {"wave_sha256", "ledger_request_key"}
+    }
+    if wave.get("wave_sha256") != sha256_json(wave_core):
+        raise RuntimeError("construction binding wave identity drift")
+    expected_paths = {
+        "authorization_path": authorization_path.resolve(),
+        "census_path": census_path.resolve(),
+        "manifest_path": manifest_path.resolve(),
+        "wave_path": wave_path.resolve(),
+        "binding_root": binding_root.resolve(),
+    }
+    subledger = Path(artifacts["construction_subledger"]).resolve()
+    campaign_journal = Path(artifacts["journal"]).resolve()
+    cache_root = Path(artifacts["cache_hits"]).resolve()
+    observation_cache = Path(artifacts["observation_cache"]).resolve()
+    source_receipts = cache_root / plan_subset_sha256
+    source_receipts.mkdir(parents=True, exist_ok=True)
+    prefix = _ledger_prefix_identity(subledger)
+    binding_path = binding_root.resolve() / f"{plan_subset_sha256}.json"
+    runtime_path = "crates/memphant-runtime/src/structured_state_openrouter.rs"
+    provider_code_sha256 = manifest_construction.get("code_sha256s", {}).get(runtime_path)
+    if not _valid_sha256(provider_code_sha256):
+        raise RuntimeError("construction binding provider compiler identity is missing")
+    schema_authority = {
+        "construction_identity_sha256": construction.get("construction_identity_sha256"),
+        "provider_code_sha256": provider_code_sha256,
+        "contract": "structured-state-response-schema-v1",
+    }
+    authority = {
+        "authorization_path": str(expected_paths["authorization_path"]),
+        "authorization_file_sha256": _sha256_file(authorization_path),
+        "authorization_scope_sha256": authorization_sha256,
+        "census_path": str(expected_paths["census_path"]),
+        "census_file_sha256": _sha256_file(census_path),
+        "census_sha256": census["census_sha256"],
+        "manifest_path": str(expected_paths["manifest_path"]),
+        "manifest_sha256": _sha256_file(manifest_path),
+        "wave_path": str(expected_paths["wave_path"]),
+        "wave_file_sha256": _sha256_file(wave_path),
+        "wave_sha256": wave["wave_sha256"],
+        "plan_inventory_sha256": construction["plan_inventory_sha256"],
+        "plan_subset_sha256": plan_subset_sha256,
+        "canonical_artifact_paths_sha256": sha256_json(artifacts),
+        "binding_path": str(binding_path),
+    }
+    keys = [plan["extraction_key"] for plan in normalized]
+    core = {
+        "schema_version": 1,
+        "authority": authority,
+        "authorization": {
+            "authorization_sha256": authorization_sha256,
+            "campaign_sha256": census["census_sha256"],
+            "screen_id": "state-aware-full",
+        },
+        "selection": {
+            "selection_sha256": plan_subset_sha256,
+            "input_manifest_sha256": construction["input_manifest_sha256"],
+            "state_mode": manifest_construction["state_mode"],
+        },
+        "compiler": {
+            "prompt_sha256": manifest_construction["prompt_sha256"],
+            "schema_sha256": sha256_json(schema_authority),
+            "provider_code_sha256": provider_code_sha256,
+        },
+        "provider": {
+            "requested_model": manifest_construction["model"],
+            "served_model": manifest_construction["response_model"],
+            "requested_provider": manifest_construction["provider"],
+            "served_provider": manifest_construction["provider"],
+            "input_price_nanos_per_million": manifest_construction[
+                "input_price_nanos_per_million"
+            ],
+            "output_price_nanos_per_million": manifest_construction[
+                "output_price_nanos_per_million"
+            ],
+            "maximum_output_tokens": manifest_construction["maximum_output_tokens"],
+            "maximum_attempts": manifest_construction["maximum_attempts"],
+        },
+        "cache": {
+            "namespace": packet["execution"]["cache_namespace"],
+            "observation_cache_path": str(observation_cache),
+            "source_receipts_path": str(source_receipts),
+        },
+        "ledger": {
+            "subledger_path": str(subledger),
+            "campaign_journal_path": str(campaign_journal),
+            "source_ledger_prefix_bytes": prefix["prefix_bytes"],
+            "source_ledger_prefix_sha256": prefix["prefix_sha256"],
+            "before_event_sha256": prefix["prefix_sha256"],
+            "campaign_journal_sha256": (
+                _sha256_file(campaign_journal)
+                if campaign_journal.is_file()
+                else hashlib.sha256(b"").hexdigest()
+            ),
+        },
+        "coverage": {
+            "plans": normalized,
+            "expected_extraction_keys": keys,
+            "expected_extraction_keys_sha256": sha256_json(keys),
+        },
+    }
+    return binding_path, {**core, "binding_sha256": sha256_json(core)}
+
+
+def create_construction_binding(
+    authorization_path: Path,
+    plans: list[dict[str, object]],
+) -> Path:
+    """Create, once, the canonical adapter binding for an exact plan subset."""
+    if authorization_path.resolve() != CANONICAL_CAMPAIGN_AUTHORIZATION.resolve():
+        raise RuntimeError("construction binding requires the canonical authorization path")
+    artifacts = campaign_artifact_paths()
+    binding_path, binding = _build_construction_binding(
+        authorization_path=authorization_path,
+        census_path=CANONICAL_CAMPAIGN_CENSUS,
+        manifest_path=CANONICAL_CAMPAIGN_MANIFEST,
+        wave_path=Path(artifacts["construction_wave"]),
+        binding_root=Path(artifacts["construction_bindings"]),
+        plans=plans,
+    )
+    _atomically_create_json(binding_path, binding)
+    _load_canonical_construction_binding(
+        binding_path,
+        authorization_path=authorization_path,
+        census_path=CANONICAL_CAMPAIGN_CENSUS,
+        manifest_path=CANONICAL_CAMPAIGN_MANIFEST,
+        wave_path=Path(artifacts["construction_wave"]),
+        binding_root=Path(artifacts["construction_bindings"]),
+    )
+    return binding_path
 
 
 def _prefix_source_hashes(data_root: Path, prefix_count: int) -> tuple[list[str], list[str], set[str]]:
@@ -2355,6 +2587,7 @@ def prewarm_sealed_prefix(
         raise RuntimeError("authorized construction binary is unavailable")
 
     def launch() -> None:
+        source_ledger = _ledger_prefix_identity(paths["construction_subledger"])
         environment = os.environ.copy()
         environment.update(
             {
@@ -2371,6 +2604,11 @@ def prewarm_sealed_prefix(
                 "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256": authorization_sha256,
                 "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256": census["census_sha256"],
                 "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE": packet["execution"]["cache_namespace"],
+                "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER": source_ledger["path"],
+                "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES": str(source_ledger["prefix_bytes"]),
+                "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256": source_ledger["prefix_sha256"],
+                "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL": construction["response_model"],
+                "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER": "DeepInfra",
                 "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS": str(census["construction"]["construction_liability_nanos"]),
                 "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT": "1",
                 "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "off",
@@ -2673,83 +2911,39 @@ def _validated_construction_cache_hits(
     planned: dict[tuple[object, object], dict[str, object]],
     receipts: list[dict[str, object]],
     authorization_sha256: str | None,
+    source_events: list[dict[str, object]],
+    cache_namespace: str | None,
 ) -> dict[tuple[object, object], dict[str, object]]:
-    if receipts and not _valid_sha256(authorization_sha256):
+    if receipts and (
+        not _valid_sha256(authorization_sha256)
+        or not isinstance(cache_namespace, str)
+        or not cache_namespace
+    ):
         raise RuntimeError("construction cache hits require exact authorization identity")
     validated = {}
     for receipt in receipts:
         core = receipt.get("core") if isinstance(receipt, dict) else None
-        if (
-            not isinstance(core, dict)
-            or receipt.get("cache_hit_sha256") != sha256_rust_json(core)
-            or core.get("schema_version") != 1
-            or core.get("authorization_sha256") != authorization_sha256
-            or core.get("campaign_sha256") != wave.get("campaign_census_sha256")
-            or not isinstance(core.get("cache_namespace"), str)
-            or not core["cache_namespace"]
-            or core.get("reservation_status") != "cache_hit"
-            or core.get("settled_nanos") != 0
-        ):
+        if not isinstance(core, dict):
             raise RuntimeError("construction cache-hit receipt identity drift")
         pair = (core.get("extraction_key"), core.get("request_sha256"))
         plan = planned.get(pair)
         if plan is None or pair in validated:
             raise RuntimeError("construction paid/cache union has duplicate or foreign coverage")
-        if (
-            core.get("requested_model") != wave.get("requested_model")
-            or core.get("served_model") != wave.get("response_model")
-            or not isinstance(core.get("served_provider"), str)
-            or core["served_provider"].casefold()
-            != str(wave.get("requested_provider", "")).casefold()
-            or core.get("source_kind") != plan.get("source_kind")
-            or core.get("source_body_sha256") != plan.get("source_body_sha256")
-            or core.get("batch_index") != plan.get("batch_index")
-            or core.get("evidence_slices_sha256")
-            != plan.get("evidence_slices_sha256")
-            or any(
-                not _valid_sha256(core.get(field))
-                for field in (
-                    "cache_entry_sha256",
-                    "source_started_event_sha256",
-                    "source_result_event_sha256",
-                    "provider_result_sha256",
-                    "observation_sha256",
-                )
-            )
-            or not isinstance(core.get("source_attempt_id"), str)
-            or not core["source_attempt_id"]
-            or not isinstance(core.get("response_id"), str)
-            or not core["response_id"]
-        ):
-            raise RuntimeError("construction cache-hit receipt route or source drift")
-        slices = core.get("evidence_slices")
-        observations = core.get("observations")
-        if (
-            not isinstance(slices, list)
-            or sha256_rust_json(slices) != core.get("evidence_slices_sha256")
-            or not isinstance(observations, list)
-            or len(observations) != core.get("observation_count")
-            or sha256_rust_json(observations) != core.get("observation_sha256")
-        ):
-            raise RuntimeError("construction cache-hit content hash drift")
-        slice_bodies = {
-            item.get("id"): item.get("body")
-            for item in slices
-            if isinstance(item, dict)
-            and isinstance(item.get("id"), str)
-            and isinstance(item.get("body"), str)
+        binding = {
+            "authorization": {
+                "authorization_sha256": authorization_sha256,
+                "campaign_sha256": wave.get("campaign_census_sha256"),
+            },
+            "cache": {"namespace": cache_namespace},
+            "provider": {
+                "requested_model": wave.get("requested_model"),
+                "served_model": wave.get("response_model"),
+                "served_provider": wave.get("requested_provider"),
+            },
         }
-        if len(slice_bodies) != len(slices) or any(
-            not isinstance(observation, dict)
-            or not isinstance(observation.get("evidence_quote"), str)
-            or not observation["evidence_quote"]
-            or observation.get("evidence_slice_id") not in slice_bodies
-            or observation["evidence_quote"]
-            not in slice_bodies[observation["evidence_slice_id"]]
-            for observation in observations
-        ):
-            raise RuntimeError("construction cache-hit quote is not grounded")
-        validated[pair] = core
+        validated[pair] = _validate_exact_cache_receipt(
+            receipt, binding=binding, plan=plan, source_events=source_events
+        )
     return validated
 
 
@@ -2761,6 +2955,7 @@ def validate_and_settle_construction_wave(
     cache_hit_receipts: list[dict[str, object]] | None = None,
     *,
     authorization_sha256: str | None = None,
+    cache_namespace: str | None = None,
 ) -> dict[str, object]:
     """Settle after the exact union of paid chains and validated cache hits."""
     wave_core = {
@@ -2778,9 +2973,17 @@ def validate_and_settle_construction_wave(
         for plan in wave["plans"]
     }
     cache_hits = _validated_construction_cache_hits(
-        wave, planned, list(cache_hit_receipts or []), authorization_sha256
+        wave,
+        planned,
+        list(cache_hit_receipts or []),
+        authorization_sha256,
+        subledger_events,
+        cache_namespace,
     )
-    paid_pairs = set(planned) - set(cache_hits)
+    # Every cache hit is authenticated by a settled source result in this same
+    # authorization-bound construction ledger. Hits prove zero-cost reuse; they
+    # never erase the paid source attempt from campaign settlement.
+    paid_pairs = set(planned)
     expected_attempts = {(pair, 1) for pair in paid_pairs}
     cumulative_retry_reservation = 0
     for index, retry_wave in enumerate(retry_waves, start=2):
@@ -2797,7 +3000,6 @@ def validate_and_settle_construction_wave(
             or plans_sha256 != retry_wave.get("ordered_plans_sha256")
             or any(
                 (plan["extraction_key"], plan["request_sha256"]) not in planned
-                or (plan["extraction_key"], plan["request_sha256"]) in cache_hits
                 or plan != planned[(plan["extraction_key"], plan["request_sha256"])]
                 for plan in normalized
             )

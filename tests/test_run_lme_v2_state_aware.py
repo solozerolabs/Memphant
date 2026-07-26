@@ -611,6 +611,7 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
 
     slices = [{"id": "slice-2", "body": "Paris is home.", "source_span": "0:14"}]
     observations = [{"namespace": "profile", "item_key": "city", "fields": {"value": "Paris"}, "disposition": "state", "evidence_slice_id": "slice-2", "evidence_quote": "Paris", "valid_from": None, "valid_to": None}]
+    events[3]["observation_sha256"] = runner.sha256_rust_json(observations)
     hit_core = {
         "schema_version": 1,
         "authorization_sha256": "9" * 64,
@@ -627,11 +628,11 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
         "requested_model": wave["requested_model"],
         "served_model": wave["response_model"],
         "served_provider": "DeepInfra",
-        "response_id": "cached-generation",
-        "source_attempt_id": "cached-attempt",
-        "source_started_event_sha256": "b" * 64,
-        "source_result_event_sha256": "c" * 64,
-        "provider_result_sha256": "d" * 64,
+        "response_id": "generation-1",
+        "source_attempt_id": "attempt-1",
+        "source_started_event_sha256": runner.sha256_rust_json(events[2]),
+        "source_result_event_sha256": runner.sha256_rust_json(events[3]),
+        "provider_result_sha256": "5" * 64,
         "observation_count": 1,
         "observation_sha256": runner.sha256_json(observations),
         "observations": observations,
@@ -642,15 +643,16 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
     cache_proof = runner.validate_and_settle_construction_wave(
         _WaveLedger(),
         wave,
-        events[:2],
+        events,
         cache_hit_receipts=[hit],
         authorization_sha256="9" * 64,
+        cache_namespace="longmemeval-v2-construction-v1",
     )
-    assert cache_proof["paid_key_count"] == 1
+    assert cache_proof["paid_key_count"] == 2
     assert cache_proof["cache_hit_key_count"] == 1
     with pytest.raises(RuntimeError, match="authorization identity"):
         runner.validate_and_settle_construction_wave(
-            _WaveLedger(), wave, events[:2], cache_hit_receipts=[hit]
+            _WaveLedger(), wave, events, cache_hit_receipts=[hit]
         )
 
     retry_events = [dict(event) for event in events]
@@ -955,6 +957,7 @@ def test_external_sota_requires_accepted_strict_leaderboard_win() -> None:
 def _proof(runner):
     core = {
         "schema_version": 2,
+        "binding_sha256": "9" * 64,
         "authorization": {
             "authorization_sha256": "a" * 64,
             "campaign_sha256": "b" * 64,
@@ -1002,6 +1005,100 @@ def _proof(runner):
         "pairing": {"trajectory_count": 1},
     }
     return {**core, "construction_proof_sha256": runner.sha256_json(core)}
+
+
+def test_runner_creates_canonical_construction_binding_once(monkeypatch, tmp_path):
+    runner = _load_runner()
+    artifact_root = tmp_path / "campaign"
+    artifact_root.mkdir()
+    paths = runner._campaign_artifact_paths(artifact_root)
+    Path(paths["construction_subledger"]).write_bytes(b"")
+    Path(paths["journal"]).write_bytes(b"")
+    Path(paths["observation_cache"]).mkdir()
+    Path(paths["cache_hits"]).mkdir()
+    plan = {
+        "extraction_key": "8" * 64,
+        "request_sha256": "7" * 64,
+        "per_attempt_reservation_nanos": 10,
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "maximum_attempts": 3,
+        "source_kind": "resource",
+        "source_body_sha256": "6" * 64,
+        "batch_index": 0,
+        "evidence_slices_sha256": "5" * 64,
+    }
+    construction = {
+        "state_mode": "structured-resource-v1",
+        "model": "qwen/qwen3.5-9b-20260310",
+        "response_model": "qwen/qwen3.5-9b",
+        "provider": "deepinfra",
+        "prompt_sha256": "4" * 64,
+        "code_sha256s": {
+            "crates/memphant-runtime/src/structured_state_openrouter.rs": "3" * 64
+        },
+        "input_price_nanos_per_million": 100_000_000,
+        "output_price_nanos_per_million": 150_000_000,
+        "maximum_output_tokens": 4096,
+        "maximum_attempts": 3,
+    }
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps({"construction": construction}))
+    census_core = {
+        "manifest_sha256": runner._sha256_file(manifest_path),
+        "construction": {
+            "plan_inventory": [plan],
+            "plan_inventory_sha256": runner.sha256_json([plan]),
+            "input_manifest_sha256": "2" * 64,
+            "construction_identity_sha256": runner.sha256_json(construction),
+        },
+    }
+    census = {**census_core, "census_sha256": runner.sha256_json(census_core)}
+    census_path = artifact_root / "CAMPAIGN-CENSUS.json"
+    census_path.write_text(json.dumps(census))
+    wave_core = {
+        "schema_version": 1,
+        "campaign_census_sha256": census["census_sha256"],
+        "ordered_plans_sha256": census["construction"]["plan_inventory_sha256"],
+        "plans": [plan],
+    }
+    wave = {**wave_core, "wave_sha256": runner.sha256_json(wave_core)}
+    wave_path = Path(paths["construction_wave"])
+    wave_path.write_text(json.dumps(wave))
+    scope = {
+        "inputs": {
+            "census_sha256": census["census_sha256"],
+            "census_file_sha256": runner._sha256_file(census_path),
+            "manifest_sha256": runner._sha256_file(manifest_path),
+        },
+        "artifacts": paths,
+        "execution": {"cache_namespace": "fixture-v1"},
+    }
+    packet = {
+        "schema_version": 1,
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        **scope,
+        "authorization": {
+            "authorization_scope_sha256": runner.sha256_json(scope)
+        },
+    }
+    authorization_path = artifact_root / "CAMPAIGN-AUTHORIZATION.json"
+    authorization_path.write_text(json.dumps(packet))
+    monkeypatch.setattr(runner, "CAMPAIGN_ARTIFACT_ROOT", artifact_root)
+    monkeypatch.setattr(runner, "CANONICAL_CAMPAIGN_AUTHORIZATION", authorization_path)
+    monkeypatch.setattr(runner, "CANONICAL_CAMPAIGN_CENSUS", census_path)
+    monkeypatch.setattr(runner, "CANONICAL_CAMPAIGN_MANIFEST", manifest_path)
+
+    binding_path = runner.create_construction_binding(authorization_path, [plan])
+    binding = json.loads(binding_path.read_text())
+
+    assert binding_path == Path(paths["construction_bindings"]) / (
+        runner.sha256_json([plan]) + ".json"
+    )
+    assert binding["authority"]["authorization_scope_sha256"] == runner.sha256_json(
+        scope
+    )
+    with pytest.raises(RuntimeError, match="immutable campaign artifact already exists"):
+        runner.create_construction_binding(authorization_path, [plan])
 
 
 @pytest.mark.parametrize(

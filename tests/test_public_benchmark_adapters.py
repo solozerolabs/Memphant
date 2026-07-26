@@ -32,32 +32,178 @@ def load_adapter():
     return module
 
 
-def install_construction_binding(monkeypatch, tmp_path):
+def _sha256_json(value):
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def install_construction_binding(adapter, monkeypatch, tmp_path):
     extraction_key = "8" * 64
-    subledger = tmp_path / "construction-attempts.jsonl"
+    artifact_root = tmp_path / "campaign"
+    artifact_root.mkdir()
+    subledger = artifact_root / "CONSTRUCTION-ATTEMPTS.jsonl"
+    request_sha256 = "7" * 64
+    source_body_sha256 = "6" * 64
+    evidence_slices_sha256 = "5" * 64
+    plan = {
+        "extraction_key": extraction_key,
+        "request_sha256": request_sha256,
+        "per_attempt_reservation_nanos": 10,
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "maximum_attempts": 3,
+        "source_kind": "resource",
+        "source_body_sha256": source_body_sha256,
+        "batch_index": 0,
+        "evidence_slices_sha256": evidence_slices_sha256,
+    }
     events = [
-        {"event": "started", "attempt_id": "attempt-1", "campaign_attempt": 1, "extraction_key": extraction_key, "requested_model": "qwen/qwen3.5-9b-20260310"},
-        {"event": "result", "attempt_id": "attempt-1", "campaign_attempt": 1, "extraction_key": extraction_key, "requested_model": "qwen/qwen3.5-9b-20260310", "reservation_status": "settled", "parse_status": "decoded", "error": None, "usage": {"cost": "0.000000001"}},
+        {
+            "event": "started",
+            "attempt_id": "attempt-1",
+            "campaign_attempt": 1,
+            "extraction_key": extraction_key,
+            "request_sha256": request_sha256,
+            "source_kind": "resource",
+            "source_body_sha256": source_body_sha256,
+            "batch_index": 0,
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+        },
+        {
+            "event": "result",
+            "attempt_id": "attempt-1",
+            "campaign_attempt": 1,
+            "extraction_key": extraction_key,
+            "request_sha256": request_sha256,
+            "source_kind": "resource",
+            "source_body_sha256": source_body_sha256,
+            "batch_index": 0,
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_model": "qwen/qwen3.5-9b",
+            "served_provider": "DeepInfra",
+            "reservation_status": "settled",
+            "parse_status": "decoded",
+            "error": None,
+            "usage": {"cost": "0.000000001"},
+        },
     ]
     subledger.write_text("".join(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n" for event in events))
-    campaign_journal = tmp_path / "campaign-attempts.jsonl"
+    campaign_journal = artifact_root / "CAMPAIGN-ATTEMPTS.jsonl"
     campaign_journal.write_text("aggregate-reserved\n")
-    cache_hits = tmp_path / "cache-hits"
+    observation_cache = artifact_root / "observation-cache"
+    observation_cache.mkdir()
+    cache_hits_root = artifact_root / "cache-hits"
+    cache_hits_root.mkdir()
+    binding_root = artifact_root / "CONSTRUCTION-BINDINGS"
+    binding_root.mkdir()
+    manifest = {
+        "construction": {
+            "state_mode": "structured-resource-v1",
+            "model": "qwen/qwen3.5-9b-20260310",
+            "response_model": "qwen/qwen3.5-9b",
+            "provider": "deepinfra",
+            "prompt_sha256": "e" * 64,
+            "code_sha256s": {
+                "crates/memphant-runtime/src/structured_state_openrouter.rs": "1" * 64
+            },
+            "maximum_output_tokens": 4096,
+            "maximum_attempts": 3,
+            "input_price_nanos_per_million": 100_000_000,
+            "output_price_nanos_per_million": 150_000_000,
+        }
+    }
+    manifest_path = artifact_root / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    census_core = {
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "construction": {
+            "plan_inventory": [plan],
+            "plan_inventory_sha256": _sha256_json([plan]),
+            "input_manifest_sha256": "d" * 64,
+            "construction_identity_sha256": _sha256_json(manifest["construction"]),
+        },
+    }
+    census = {**census_core, "census_sha256": _sha256_json(census_core)}
+    census_path = artifact_root / "CAMPAIGN-CENSUS.json"
+    census_path.write_text(json.dumps(census))
+    wave_core = {
+        "schema_version": 1,
+        "campaign_census_sha256": census["census_sha256"],
+        "ordered_plans_sha256": census["construction"]["plan_inventory_sha256"],
+        "plans": [plan],
+    }
+    wave = {**wave_core, "wave_sha256": _sha256_json(wave_core)}
+    wave_path = artifact_root / "CONSTRUCTION-WAVE.json"
+    wave_path.write_text(json.dumps(wave))
+    artifact_paths = {
+        "journal": str(campaign_journal.resolve()),
+        "construction_subledger": str(subledger.resolve()),
+        "observation_cache": str(observation_cache.resolve()),
+        "cache_hits": str(cache_hits_root.resolve()),
+    }
+    scope = {
+        "inputs": {
+            "census_sha256": census["census_sha256"],
+            "census_file_sha256": hashlib.sha256(census_path.read_bytes()).hexdigest(),
+            "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        },
+        "artifacts": artifact_paths,
+        "execution": {"cache_namespace": "fixture-v1"},
+    }
+    authorization_sha256 = _sha256_json(scope)
+    packet = {
+        "schema_version": 1,
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        **scope,
+        "authorization": {"authorization_scope_sha256": authorization_sha256},
+    }
+    authorization_path = artifact_root / "CAMPAIGN-AUTHORIZATION.json"
+    authorization_path.write_text(json.dumps(packet))
+    plan_subset_sha256 = _sha256_json([plan])
+    cache_hits = cache_hits_root / plan_subset_sha256
     cache_hits.mkdir()
-    binding = {
+    ledger_prefix_sha256 = hashlib.sha256(subledger.read_bytes()).hexdigest()
+    authority = {
+        "authorization_path": str(authorization_path.resolve()),
+        "authorization_file_sha256": hashlib.sha256(authorization_path.read_bytes()).hexdigest(),
+        "authorization_scope_sha256": authorization_sha256,
+        "census_path": str(census_path.resolve()),
+        "census_file_sha256": hashlib.sha256(census_path.read_bytes()).hexdigest(),
+        "census_sha256": census["census_sha256"],
+        "manifest_path": str(manifest_path.resolve()),
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "wave_path": str(wave_path.resolve()),
+        "wave_file_sha256": hashlib.sha256(wave_path.read_bytes()).hexdigest(),
+        "wave_sha256": wave["wave_sha256"],
+        "plan_inventory_sha256": census["construction"]["plan_inventory_sha256"],
+        "plan_subset_sha256": plan_subset_sha256,
+        "canonical_artifact_paths_sha256": _sha256_json(artifact_paths),
+        "binding_path": str((binding_root / f"{plan_subset_sha256}.json").resolve()),
+    }
+    binding_core = {
+        "schema_version": 1,
+        "authority": authority,
         "authorization": {
-            "authorization_sha256": "a" * 64,
-            "campaign_sha256": "b" * 64,
+            "authorization_sha256": authorization_sha256,
+            "campaign_sha256": census["census_sha256"],
             "screen_id": "state-aware-full",
         },
         "selection": {
-            "selection_sha256": "c" * 64,
+            "selection_sha256": plan_subset_sha256,
             "input_manifest_sha256": "d" * 64,
             "state_mode": "structured-resource-v1",
         },
         "compiler": {
             "prompt_sha256": "e" * 64,
-            "schema_sha256": "f" * 64,
+            "schema_sha256": _sha256_json(
+                {
+                    "construction_identity_sha256": census["construction"][
+                        "construction_identity_sha256"
+                    ],
+                    "provider_code_sha256": "1" * 64,
+                    "contract": "structured-state-response-schema-v1",
+                }
+            ),
             "provider_code_sha256": "1" * 64,
         },
         "provider": {
@@ -70,25 +216,113 @@ def install_construction_binding(monkeypatch, tmp_path):
             "maximum_output_tokens": 4096,
             "maximum_attempts": 3,
         },
-        "cache": {"namespace": "fixture-v1", "source_receipts_path": str(cache_hits)},
+        "cache": {
+            "namespace": "fixture-v1",
+            "observation_cache_path": str(observation_cache.resolve()),
+            "source_receipts_path": str(cache_hits.resolve()),
+        },
         "ledger": {
-            "subledger_path": str(subledger),
-            "campaign_journal_path": str(campaign_journal),
-            "before_event_sha256": hashlib.sha256(subledger.read_bytes()).hexdigest(),
+            "subledger_path": str(subledger.resolve()),
+            "campaign_journal_path": str(campaign_journal.resolve()),
+            "source_ledger_prefix_bytes": len(subledger.read_bytes()),
+            "source_ledger_prefix_sha256": ledger_prefix_sha256,
+            "before_event_sha256": ledger_prefix_sha256,
             "campaign_journal_sha256": hashlib.sha256(campaign_journal.read_bytes()).hexdigest(),
         },
-        "coverage": {"expected_extraction_keys": [extraction_key], "expected_extraction_keys_sha256": hashlib.sha256(json.dumps([extraction_key], sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
+        "coverage": {
+            "plans": [plan],
+            "expected_extraction_keys": [extraction_key],
+            "expected_extraction_keys_sha256": _sha256_json([extraction_key]),
+        },
     }
-    path = tmp_path / "construction-binding.json"
+    binding = {**binding_core, "binding_sha256": _sha256_json(binding_core)}
+    path = binding_root / f"{plan_subset_sha256}.json"
     path.write_text(json.dumps(binding), encoding="utf-8")
+    for name, value in {
+        "CANONICAL_AUTHORIZATION_PATH": authorization_path,
+        "CANONICAL_CENSUS_PATH": census_path,
+        "CANONICAL_MANIFEST_PATH": manifest_path,
+        "CANONICAL_WAVE_PATH": wave_path,
+        "CANONICAL_BINDING_ROOT": binding_root,
+    }.items():
+        monkeypatch.setattr(adapter, name, value)
     monkeypatch.setenv("MEMPHANT_LME_CONSTRUCTION_BINDING", str(path))
-    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256", "a" * 64)
-    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256", "b" * 64)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256", authorization_sha256)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256", census["census_sha256"])
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_HITS", str(cache_hits))
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE", "fixture-v1")
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER", str(subledger))
     monkeypatch.setenv("MEMPHANT_CAMPAIGN_ATTEMPT_LEDGER", str(campaign_journal))
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER", str(subledger.resolve()))
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES", str(len(subledger.read_bytes())))
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256", ledger_prefix_sha256)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL", "qwen/qwen3.5-9b")
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER", "DeepInfra")
     return binding
+
+
+def test_self_minted_construction_binding_is_rejected_before_worker(
+    monkeypatch, tmp_path
+):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    binding = install_construction_binding(adapter, monkeypatch, tmp_path)
+    path = Path(os.environ["MEMPHANT_LME_CONSTRUCTION_BINDING"])
+    alternate = tmp_path / "self-minted.json"
+    alternate.write_bytes(path.read_bytes())
+    monkeypatch.setenv("MEMPHANT_LME_CONSTRUCTION_BINDING", str(alternate))
+
+    with pytest.raises(RuntimeError, match="canonical authority"):
+        adapter._load_construction_binding()
+
+
+def test_canonical_binding_allows_only_later_source_ledger_suffixes(
+    monkeypatch, tmp_path
+):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    binding = install_construction_binding(adapter, monkeypatch, tmp_path)
+
+    assert adapter._load_construction_binding() == binding
+    with Path(binding["ledger"]["subledger_path"]).open("a", encoding="utf-8") as handle:
+        handle.write('{"event":"later-authorized-attempt"}\n')
+
+    assert adapter._load_construction_binding() == binding
+
+
+def test_binding_with_wrong_canonical_wave_hash_is_rejected_before_worker(
+    monkeypatch, tmp_path
+):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    binding = install_construction_binding(adapter, monkeypatch, tmp_path)
+    wave_path = adapter.CANONICAL_WAVE_PATH
+    wave = json.loads(wave_path.read_text())
+    wave["wave_sha256"] = "0" * 64
+    wave_path.write_text(json.dumps(wave))
+    binding["authority"]["wave_sha256"] = wave["wave_sha256"]
+    binding["authority"]["wave_file_sha256"] = hashlib.sha256(
+        wave_path.read_bytes()
+    ).hexdigest()
+    core = {key: value for key, value in binding.items() if key != "binding_sha256"}
+    binding["binding_sha256"] = _sha256_json(core)
+    Path(os.environ["MEMPHANT_LME_CONSTRUCTION_BINDING"]).write_text(json.dumps(binding))
+
+    with pytest.raises(RuntimeError, match="wave drift"):
+        adapter._load_construction_binding()
+
+
+def test_binding_with_changed_subledger_path_is_rejected_before_worker(
+    monkeypatch, tmp_path
+):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    binding = install_construction_binding(adapter, monkeypatch, tmp_path)
+    alternate = tmp_path / "alternate-ledger.jsonl"
+    alternate.write_bytes(Path(binding["ledger"]["subledger_path"]).read_bytes())
+    binding["ledger"]["subledger_path"] = str(alternate.resolve())
+    core = {key: value for key, value in binding.items() if key != "binding_sha256"}
+    binding["binding_sha256"] = _sha256_json(core)
+    Path(os.environ["MEMPHANT_LME_CONSTRUCTION_BINDING"]).write_text(json.dumps(binding))
+
+    with pytest.raises(RuntimeError, match="ledger path drift"):
+        adapter._load_construction_binding()
 
 
 def test_longmemeval_v2_release_is_immutably_pinned_and_native_scored():
@@ -317,7 +551,7 @@ def test_memphant_memory_uses_isolated_rest_scope_and_emits_trace_proof(
     monkeypatch, tmp_path
 ):
     adapter, registry = load_memphant_adapter(monkeypatch)
-    install_construction_binding(monkeypatch, tmp_path)
+    binding = install_construction_binding(adapter, monkeypatch, tmp_path)
     monkeypatch.setenv("MEMPHANT_SCRATCH_ACTIVE", "1")
     monkeypatch.setenv("MEMPHANT_TEST_DATABASE_URL", "postgres://fixture")
     monkeypatch.setenv("MEMPHANT_LME_SERVER_URL", "http://fixture")
@@ -519,6 +753,7 @@ def test_memphant_memory_uses_isolated_rest_scope_and_emits_trace_proof(
     assert construction["pairing"]["trajectory_count"] == 1
     assert construction["pairing"]["resource_count"] == 1
     assert construction["pairing"]["worker"]["completed_sources"] == 1
+    assert construction["binding_sha256"] == binding["binding_sha256"]
     assert construction["isolation"]["tenant_id"] == memory.tenant_id
     assert construction["isolation"]["context"] == memory.context
     assert "api_key" not in json.dumps(construction)
@@ -528,7 +763,7 @@ def test_memphant_query_only_reuses_frozen_construction_without_writes(
     monkeypatch, tmp_path
 ):
     adapter, registry = load_memphant_adapter(monkeypatch)
-    install_construction_binding(monkeypatch, tmp_path)
+    install_construction_binding(adapter, monkeypatch, tmp_path)
     cli_bin = tmp_path / "cli"
     server_bin = tmp_path / "server"
     worker_bin = tmp_path / "worker"
@@ -717,6 +952,7 @@ def test_memphant_query_only_fails_closed_on_tampered_or_out_of_order_proof(
     config = json.loads(MEMPHANT_CONFIG.read_text())["memory_params"]
     core = {
         "schema_version": 2,
+        "binding_sha256": "9" * 64,
         "authorization": {
             "authorization_sha256": "a" * 64,
             "campaign_sha256": "b" * 64,
@@ -837,7 +1073,7 @@ def test_memphant_memory_fails_closed_when_worker_pairing_is_incomplete(
     monkeypatch, tmp_path
 ):
     adapter, registry = load_memphant_adapter(monkeypatch)
-    install_construction_binding(monkeypatch, tmp_path)
+    install_construction_binding(adapter, monkeypatch, tmp_path)
     cli_bin = tmp_path / "cli"
     server_bin = tmp_path / "server"
     worker_bin = tmp_path / "worker"

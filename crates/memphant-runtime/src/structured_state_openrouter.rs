@@ -51,6 +51,13 @@ const AUTHORIZATION_SHA256_ENV: &str = "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_
 const CAMPAIGN_SHA256_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256";
 const CACHE_NAMESPACE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE";
 const CACHE_ONLY_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY";
+const CACHE_SOURCE_LEDGER_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER";
+const CACHE_SOURCE_LEDGER_PREFIX_BYTES_ENV: &str =
+    "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES";
+const CACHE_SOURCE_LEDGER_PREFIX_SHA256_ENV: &str =
+    "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256";
+const CACHE_SERVED_MODEL_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL";
+const CACHE_SERVED_PROVIDER_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER";
 const QWEN_CHAT_TEMPLATE_OVERHEAD_TOKENS: u64 = 15;
 const QWEN_TOKENIZER_SHA256: &str =
     "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42";
@@ -432,18 +439,30 @@ pub fn structured_state_provider_from_env()
         std::env::var_os(AUTHORIZATION_SHA256_ENV),
         std::env::var_os(CAMPAIGN_SHA256_ENV),
         std::env::var_os(CACHE_NAMESPACE_ENV),
+        std::env::var_os(CACHE_SOURCE_LEDGER_ENV),
+        std::env::var_os(CACHE_SOURCE_LEDGER_PREFIX_BYTES_ENV),
+        std::env::var_os(CACHE_SOURCE_LEDGER_PREFIX_SHA256_ENV),
+        std::env::var_os(CACHE_SERVED_MODEL_ENV),
+        std::env::var_os(CACHE_SERVED_PROVIDER_ENV),
     ];
     if cache_values.iter().any(Option::is_some) {
-        provider = provider.with_campaign_cache(
-            PathBuf::from(required_env(OBSERVATION_CACHE_ENV)?),
-            PathBuf::from(required_env(CACHE_HITS_ENV)?),
-            required_env(AUTHORIZATION_SHA256_ENV)?,
-            required_env(CAMPAIGN_SHA256_ENV)?,
-            required_env(CACHE_NAMESPACE_ENV)?,
-        )?;
+        provider = provider.with_campaign_cache(CampaignCache {
+            root: PathBuf::from(required_env(OBSERVATION_CACHE_ENV)?),
+            hit_root: PathBuf::from(required_env(CACHE_HITS_ENV)?),
+            authorization_sha256: required_env(AUTHORIZATION_SHA256_ENV)?,
+            campaign_sha256: required_env(CAMPAIGN_SHA256_ENV)?,
+            namespace: required_env(CACHE_NAMESPACE_ENV)?,
+            source_ledger: PathBuf::from(required_env(CACHE_SOURCE_LEDGER_ENV)?),
+            source_ledger_prefix_bytes: parse_nonnegative_usize_env(
+                CACHE_SOURCE_LEDGER_PREFIX_BYTES_ENV,
+            )?,
+            source_ledger_prefix_sha256: required_env(CACHE_SOURCE_LEDGER_PREFIX_SHA256_ENV)?,
+            served_model: required_env(CACHE_SERVED_MODEL_ENV)?,
+            served_provider: required_env(CACHE_SERVED_PROVIDER_ENV)?,
+        })?;
     } else if model == LME_V2_QWEN_MODEL {
         return Err(format!(
-            "{OBSERVATION_CACHE_ENV}, {CACHE_HITS_ENV}, {AUTHORIZATION_SHA256_ENV}, {CAMPAIGN_SHA256_ENV}, and {CACHE_NAMESPACE_ENV} are required for the Qwen campaign route"
+            "{OBSERVATION_CACHE_ENV}, {CACHE_HITS_ENV}, {AUTHORIZATION_SHA256_ENV}, {CAMPAIGN_SHA256_ENV}, {CACHE_NAMESPACE_ENV}, {CACHE_SOURCE_LEDGER_ENV}, {CACHE_SOURCE_LEDGER_PREFIX_BYTES_ENV}, {CACHE_SOURCE_LEDGER_PREFIX_SHA256_ENV}, {CACHE_SERVED_MODEL_ENV}, and {CACHE_SERVED_PROVIDER_ENV} are required for the Qwen campaign route"
         ));
     }
     provider.cache_only = match std::env::var(CACHE_ONLY_ENV).as_deref() {
@@ -486,6 +505,12 @@ fn parse_positive_u64_env(name: &str) -> Result<u64, String> {
         .ok_or_else(|| format!("{name} must be a positive integer"))
 }
 
+fn parse_nonnegative_usize_env(name: &str) -> Result<usize, String> {
+    required_env(name)?
+        .parse::<usize>()
+        .map_err(|_| format!("{name} must be a non-negative integer"))
+}
+
 pub fn load_structured_state_prompt(path: &Path) -> Result<String, String> {
     let prompt = fs::read_to_string(path).map_err(|error| {
         format!(
@@ -511,6 +536,11 @@ struct CampaignCache {
     authorization_sha256: String,
     campaign_sha256: String,
     namespace: String,
+    source_ledger: PathBuf,
+    source_ledger_prefix_bytes: usize,
+    source_ledger_prefix_sha256: String,
+    served_model: String,
+    served_provider: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -629,12 +659,14 @@ impl CampaignCache {
             || !is_sha256(&core.source_started_event_sha256)
             || !is_sha256(&core.source_result_event_sha256)
             || !is_sha256(&core.provider_result_sha256)
-            || core.served_model.trim().is_empty()
-            || core.served_provider.trim().is_empty()
+            || core.served_model != self.served_model
+            || core.served_provider != self.served_provider
             || core.response_id.trim().is_empty()
+            || core.source_attempt_id.trim().is_empty()
         {
             return Err(invalid("structured-state campaign cache identity drift"));
         }
+        self.validate_source_ledger(core)?;
         validate_cached_observations(request, &core.observations)?;
         let receipt_core = CacheHitReceiptCore {
             schema_version: 1,
@@ -674,6 +706,98 @@ impl CampaignCache {
         Ok(Some(core.observations.clone()))
     }
 
+    fn validate_source_ledger(
+        &self,
+        core: &CacheEntryCore,
+    ) -> Result<(), StructuredStateProviderError> {
+        let bytes = fs::read(&self.source_ledger).map_err(cache_error)?;
+        if bytes.len() < self.source_ledger_prefix_bytes
+            || sha256(&bytes[..self.source_ledger_prefix_bytes]) != self.source_ledger_prefix_sha256
+        {
+            return Err(invalid(
+                "structured-state campaign cache source ledger prefix identity drift",
+            ));
+        }
+        let text =
+            std::str::from_utf8(&bytes[..self.source_ledger_prefix_bytes]).map_err(cache_error)?;
+        let mut started = None;
+        let mut result = None;
+        for line in text.lines() {
+            let event: Value = serde_json::from_str(line).map_err(cache_error)?;
+            let event_sha256 = canonical_sha256(&event);
+            if event_sha256 == core.source_started_event_sha256 {
+                if started.replace(event).is_some() {
+                    return Err(invalid(
+                        "structured-state campaign cache source event is duplicated",
+                    ));
+                }
+            } else if event_sha256 == core.source_result_event_sha256
+                && result.replace(event).is_some()
+            {
+                return Err(invalid(
+                    "structured-state campaign cache source event is duplicated",
+                ));
+            }
+        }
+        let Some(started) = started else {
+            return Err(invalid(
+                "structured-state campaign cache source start is not in the frozen ledger",
+            ));
+        };
+        let Some(result) = result else {
+            return Err(invalid(
+                "structured-state campaign cache source result is not in the frozen ledger",
+            ));
+        };
+        let source_kind = serde_json::to_value(core.source_kind).map_err(cache_error)?;
+        let shared_identity = |event: &Value| {
+            event.get("attempt_id").and_then(Value::as_str) == Some(core.source_attempt_id.as_str())
+                && event.get("source_kind") == Some(&source_kind)
+                && event.get("extraction_key").and_then(Value::as_str)
+                    == Some(core.extraction_key.as_str())
+                && event.get("request_sha256").and_then(Value::as_str)
+                    == Some(core.request_sha256.as_str())
+                && event.get("source_body_sha256").and_then(Value::as_str)
+                    == Some(core.source_body_sha256.as_str())
+                && event.get("batch_index").and_then(Value::as_u64) == Some(core.batch_index as u64)
+                && event.get("requested_model").and_then(Value::as_str)
+                    == Some(core.requested_model.as_str())
+        };
+        if started.get("schema_version").and_then(Value::as_u64) != Some(3)
+            || started.get("event").and_then(Value::as_str) != Some("started")
+            || started.get("reservation_status").and_then(Value::as_str) != Some("reserved")
+            || started.get("attempt").and_then(Value::as_u64) != Some(1)
+            || !shared_identity(&started)
+            || result.get("schema_version").and_then(Value::as_u64) != Some(3)
+            || result.get("event").and_then(Value::as_str) != Some("result")
+            || result.get("reservation_status").and_then(Value::as_str) != Some("settled")
+            || result.get("attempt").and_then(Value::as_u64) != Some(1)
+            || result.get("campaign_attempt") != started.get("campaign_attempt")
+            || result.get("maximum_attempts") != started.get("maximum_attempts")
+            || result.get("per_attempt_reservation_nanos")
+                != started.get("per_attempt_reservation_nanos")
+            || result.get("parse_status").and_then(Value::as_str) != Some("decoded")
+            || result.get("error").is_some()
+            || !shared_identity(&result)
+            || result.get("served_model").and_then(Value::as_str)
+                != Some(self.served_model.as_str())
+            || result.get("served_provider").and_then(Value::as_str)
+                != Some(self.served_provider.as_str())
+            || result.get("response_id").and_then(Value::as_str) != Some(core.response_id.as_str())
+            || result.get("result_sha256").and_then(Value::as_str)
+                != Some(core.provider_result_sha256.as_str())
+            || result.get("observation_count").and_then(Value::as_u64)
+                != Some(core.observation_count as u64)
+            || result.get("observation_sha256").and_then(Value::as_str)
+                != Some(core.observation_sha256.as_str())
+        {
+            return Err(invalid(
+                "structured-state campaign cache paid-source provenance drift",
+            ));
+        }
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn store(
         &self,
@@ -685,6 +809,13 @@ impl CampaignCache {
         observations: &[StructuredObservation],
     ) -> Result<(), StructuredStateProviderError> {
         validate_cached_observations(request, observations)?;
+        if completed.served_model.as_deref() != Some(self.served_model.as_str())
+            || completed.served_provider.as_deref() != Some(self.served_provider.as_str())
+        {
+            return Err(invalid(
+                "settled cache source differs from the exact authorized route",
+            ));
+        }
         let core = CacheEntryCore {
             schema_version: 1,
             authorization_sha256: self.authorization_sha256.clone(),
@@ -870,27 +1001,17 @@ impl OpenRouterStructuredState {
         }
     }
 
-    fn with_campaign_cache(
-        mut self,
-        root: PathBuf,
-        hit_root: PathBuf,
-        authorization_sha256: String,
-        campaign_sha256: String,
-        namespace: String,
-    ) -> Result<Self, String> {
-        if !is_sha256(&authorization_sha256)
-            || !is_sha256(&campaign_sha256)
-            || namespace.trim().is_empty()
+    fn with_campaign_cache(mut self, cache: CampaignCache) -> Result<Self, String> {
+        if !is_sha256(&cache.authorization_sha256)
+            || !is_sha256(&cache.campaign_sha256)
+            || !is_sha256(&cache.source_ledger_prefix_sha256)
+            || cache.namespace.trim().is_empty()
+            || cache.served_model.trim().is_empty()
+            || cache.served_provider.trim().is_empty()
         {
             return Err("structured-state campaign cache identity is malformed".to_string());
         }
-        self.campaign_cache = Some(CampaignCache {
-            root,
-            hit_root,
-            authorization_sha256,
-            campaign_sha256,
-            namespace,
-        });
+        self.campaign_cache = Some(cache);
         Ok(self)
     }
 
@@ -2023,6 +2144,11 @@ mod tests {
         events
     }
 
+    fn ledger_prefix(ledger: &Path) -> (usize, String) {
+        let bytes = fs::read(ledger).unwrap_or_default();
+        (bytes.len(), sha256(&bytes))
+    }
+
     fn wire_observation(slice_id: &str) -> Value {
         json!({
             "namespace": "profile",
@@ -2564,28 +2690,104 @@ mod tests {
         });
         let paid_transport = FakeTransport::new(vec![Ok(response(content))]);
         let (paid, paid_ledger) = provider_with_ledger(paid_transport.clone());
+        let (empty_prefix_bytes, empty_prefix_sha256) = ledger_prefix(&paid_ledger);
         let paid = paid
-            .with_campaign_cache(
-                cache_root.clone(),
-                hit_root.clone(),
-                authorization.clone(),
-                campaign.clone(),
-                "longmemeval-v2-construction-v1".to_string(),
-            )
+            .with_campaign_cache(CampaignCache {
+                root: cache_root.clone(),
+                hit_root: hit_root.clone(),
+                authorization_sha256: authorization.clone(),
+                campaign_sha256: campaign.clone(),
+                namespace: "longmemeval-v2-construction-v1".to_string(),
+                source_ledger: paid_ledger.clone(),
+                source_ledger_prefix_bytes: empty_prefix_bytes,
+                source_ledger_prefix_sha256: empty_prefix_sha256,
+                served_model: "served/model".to_string(),
+                served_provider: "served-provider".to_string(),
+            })
             .unwrap();
         let expected = paid.extract_sync(&request).unwrap();
         assert_eq!(paid_transport.posted.lock().unwrap().len(), 1);
-        assert_eq!(read_events(&paid_ledger).len(), 2);
+        let (paid_prefix_bytes, paid_prefix_sha256) = ledger_prefix(&paid_ledger);
+        assert_eq!(fs::read_to_string(&paid_ledger).unwrap().lines().count(), 2);
+
+        let plan = paid.plan(&request).unwrap();
+        let cache_path = cache_root.join(format!("{}.json", plan.extraction_key));
+        let original_entry: Value =
+            serde_json::from_slice(&fs::read(&cache_path).unwrap()).unwrap();
+
+        let mut foreign_route = original_entry.clone();
+        foreign_route["core"]["served_model"] = json!("foreign/model");
+        foreign_route["core"]["served_provider"] = json!("ForeignProvider");
+        foreign_route["cache_entry_sha256"] = json!(canonical_sha256(&foreign_route["core"]));
+        fs::write(&cache_path, serde_json::to_vec(&foreign_route).unwrap()).unwrap();
+        let foreign_transport = FakeTransport::new(vec![]);
+        let (foreign, foreign_ledger) = provider_with_ledger(foreign_transport.clone());
+        let foreign = foreign
+            .with_campaign_cache(CampaignCache {
+                root: cache_root.clone(),
+                hit_root: temporary.path().join("foreign-hits"),
+                authorization_sha256: authorization.clone(),
+                campaign_sha256: campaign.clone(),
+                namespace: "longmemeval-v2-construction-v1".to_string(),
+                source_ledger: paid_ledger.clone(),
+                source_ledger_prefix_bytes: paid_prefix_bytes,
+                source_ledger_prefix_sha256: paid_prefix_sha256.clone(),
+                served_model: "served/model".to_string(),
+                served_provider: "served-provider".to_string(),
+            })
+            .unwrap();
+        assert!(foreign.extract_sync(&request).is_err());
+        assert!(foreign_transport.posted.lock().unwrap().is_empty());
+        assert!(!foreign_ledger.exists());
+
+        let mut invented_source = original_entry.clone();
+        invented_source["core"]["source_result_event_sha256"] = json!("f".repeat(64));
+        invented_source["cache_entry_sha256"] = json!(canonical_sha256(&invented_source["core"]));
+        fs::write(&cache_path, serde_json::to_vec(&invented_source).unwrap()).unwrap();
+        let invented_transport = FakeTransport::new(vec![]);
+        let (invented, invented_ledger) = provider_with_ledger(invented_transport.clone());
+        let invented = invented
+            .with_campaign_cache(CampaignCache {
+                root: cache_root.clone(),
+                hit_root: temporary.path().join("invented-hits"),
+                authorization_sha256: authorization.clone(),
+                campaign_sha256: campaign.clone(),
+                namespace: "longmemeval-v2-construction-v1".to_string(),
+                source_ledger: paid_ledger.clone(),
+                source_ledger_prefix_bytes: paid_prefix_bytes,
+                source_ledger_prefix_sha256: paid_prefix_sha256.clone(),
+                served_model: "served/model".to_string(),
+                served_provider: "served-provider".to_string(),
+            })
+            .unwrap();
+        assert!(invented.extract_sync(&request).is_err());
+        assert!(invented_transport.posted.lock().unwrap().is_empty());
+        assert!(!invented_ledger.exists());
+
+        fs::write(&cache_path, serde_json::to_vec(&original_entry).unwrap()).unwrap();
 
         let hit_transport = FakeTransport::new(vec![]);
         let (hit, hit_ledger) = provider_with_ledger(hit_transport.clone());
         let hit = hit
-            .with_campaign_cache(
-                cache_root.clone(),
-                hit_root.clone(),
-                authorization,
-                campaign,
-                "longmemeval-v2-construction-v1".to_string(),
+            .with_campaign_cache(CampaignCache {
+                root: cache_root.clone(),
+                hit_root: hit_root.clone(),
+                authorization_sha256: authorization,
+                campaign_sha256: campaign,
+                namespace: "longmemeval-v2-construction-v1".to_string(),
+                source_ledger: paid_ledger.clone(),
+                source_ledger_prefix_bytes: paid_prefix_bytes,
+                source_ledger_prefix_sha256: paid_prefix_sha256.clone(),
+                served_model: "served/model".to_string(),
+                served_provider: "served-provider".to_string(),
+            })
+            .unwrap();
+        OpenOptions::new()
+            .append(true)
+            .open(&paid_ledger)
+            .unwrap()
+            .write_all(
+                b"{\"schema_version\":3,\"event\":\"started\",\"attempt_id\":\"later-suffix\"}\n",
             )
             .unwrap();
         assert_eq!(hit.extract_sync(&request).unwrap(), expected);
@@ -2615,13 +2817,18 @@ mod tests {
         let drift_transport = FakeTransport::new(vec![]);
         let (drift, drift_ledger) = provider_with_ledger(drift_transport.clone());
         let drift = drift
-            .with_campaign_cache(
-                cache_root,
-                temporary.path().join("drift-hits"),
-                "c".repeat(64),
-                "b".repeat(64),
-                "longmemeval-v2-construction-v1".to_string(),
-            )
+            .with_campaign_cache(CampaignCache {
+                root: cache_root,
+                hit_root: temporary.path().join("drift-hits"),
+                authorization_sha256: "c".repeat(64),
+                campaign_sha256: "b".repeat(64),
+                namespace: "longmemeval-v2-construction-v1".to_string(),
+                source_ledger: paid_ledger,
+                source_ledger_prefix_bytes: paid_prefix_bytes,
+                source_ledger_prefix_sha256: paid_prefix_sha256,
+                served_model: "served/model".to_string(),
+                served_provider: "served-provider".to_string(),
+            })
             .unwrap();
         assert!(drift.extract_sync(&request).is_err());
         assert!(drift_transport.posted.lock().unwrap().is_empty());
@@ -2629,14 +2836,20 @@ mod tests {
 
         let miss_transport = FakeTransport::new(vec![]);
         let (mut miss, miss_ledger) = provider_with_ledger(miss_transport.clone());
+        let (miss_prefix_bytes, miss_prefix_sha256) = ledger_prefix(&miss_ledger);
         miss = miss
-            .with_campaign_cache(
-                temporary.path().join("empty-cache"),
-                temporary.path().join("empty-hits"),
-                "a".repeat(64),
-                "b".repeat(64),
-                "longmemeval-v2-construction-v1".to_string(),
-            )
+            .with_campaign_cache(CampaignCache {
+                root: temporary.path().join("empty-cache"),
+                hit_root: temporary.path().join("empty-hits"),
+                authorization_sha256: "a".repeat(64),
+                campaign_sha256: "b".repeat(64),
+                namespace: "longmemeval-v2-construction-v1".to_string(),
+                source_ledger: miss_ledger.clone(),
+                source_ledger_prefix_bytes: miss_prefix_bytes,
+                source_ledger_prefix_sha256: miss_prefix_sha256,
+                served_model: "served/model".to_string(),
+                served_provider: "served-provider".to_string(),
+            })
             .unwrap();
         miss.cache_only = true;
         assert!(miss.extract_sync(&request).is_err());

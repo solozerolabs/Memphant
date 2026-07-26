@@ -9,21 +9,40 @@ the harness query context are deliberately never read or transmitted.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
 from typing import Any
 
 from memory_modules.memory import Memory, MemoryContextItem, register_memory
+
+
+def _load_construction_authority_module():
+    path = Path(__file__).with_name("construction_authority.py")
+    spec = importlib.util.spec_from_file_location(
+        "longmemeval_v2_construction_authority", path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load construction authority: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_CONSTRUCTION_AUTHORITY = _load_construction_authority_module()
+_derive_construction_receipts = _CONSTRUCTION_AUTHORITY.derive_construction_receipts
+_load_canonical_binding = _CONSTRUCTION_AUTHORITY.load_canonical_binding
 
 
 EXPECTED_PARAMS = {
@@ -56,6 +75,17 @@ FORBIDDEN_EVALUATION_KEYS = {
     "reference",
 }
 CONSTRUCTION_BINDING_ENV = "MEMPHANT_LME_CONSTRUCTION_BINDING"
+ROOT = Path(__file__).resolve().parents[2]
+CAMPAIGN_ARTIFACT_ROOT = (
+    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot"
+)
+CANONICAL_AUTHORIZATION_PATH = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
+CANONICAL_CENSUS_PATH = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
+CANONICAL_MANIFEST_PATH = (
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json"
+)
+CANONICAL_WAVE_PATH = CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-WAVE.json"
+CANONICAL_BINDING_ROOT = CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-BINDINGS"
 TENANT_PATTERN = re.compile(r"tenant_created id=([0-9a-fA-F-]{36})")
 # Keep each retain safely below the server request-body ceiling while preserving
 # state boundaries. The runtime compiler owns bounded, complete chunk evidence;
@@ -84,12 +114,6 @@ def _canonical_json(value: object) -> bytes:
 
 def _sha256_json(value: object) -> str:
     return hashlib.sha256(_canonical_json(value)).hexdigest()
-
-
-def _sha256_rust_json(value: object) -> str:
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
-    ).hexdigest()
 
 
 def _sha256_file(path: Path) -> str:
@@ -291,6 +315,7 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         set(value)
         == {
             "schema_version",
+            "binding_sha256",
             "authorization",
             "selection",
             "compiler",
@@ -317,6 +342,11 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         "construction proof sha256 mismatch",
     )
     _require(value["schema_version"] == 2, "unsupported construction proof schema")
+    _require(
+        isinstance(value["binding_sha256"], str)
+        and re.fullmatch(r"[0-9a-f]{64}", value["binding_sha256"]) is not None,
+        "construction proof binding sha256 is invalid",
+    )
 
     authorization = value["authorization"]
     selection = value["selection"]
@@ -603,16 +633,13 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
 def _load_construction_binding() -> dict[str, object]:
     path_value = _required_env(CONSTRUCTION_BINDING_ENV)
     path = Path(path_value).resolve()
-    _require(path.is_file(), f"construction binding is missing: {path}")
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError("construction binding is not valid JSON") from error
-    _require(
-        isinstance(value, dict)
-        and set(value)
-        == {"authorization", "selection", "compiler", "provider", "cache", "ledger", "coverage"},
-        "construction binding contract drift",
+    value = _load_canonical_binding(
+        path,
+        authorization_path=CANONICAL_AUTHORIZATION_PATH,
+        census_path=CANONICAL_CENSUS_PATH,
+        manifest_path=CANONICAL_MANIFEST_PATH,
+        wave_path=CANONICAL_WAVE_PATH,
+        binding_root=CANONICAL_BINDING_ROOT,
     )
     compiler = value.get("compiler")
     _require(
@@ -635,7 +662,7 @@ def _load_construction_binding() -> dict[str, object]:
     )
     _require(
         isinstance(cache, dict)
-        and set(cache) == {"namespace", "source_receipts_path"}
+        and set(cache) == {"namespace", "observation_cache_path", "source_receipts_path"}
         and Path(str(cache["source_receipts_path"])).resolve()
         == Path(_required_env("MEMPHANT_STRUCTURED_STATE_CACHE_HITS")).resolve()
         and cache["namespace"] == _required_env("MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE"),
@@ -644,14 +671,30 @@ def _load_construction_binding() -> dict[str, object]:
     _require(
         isinstance(ledger, dict)
         and set(ledger)
-        == {"subledger_path", "campaign_journal_path", "before_event_sha256", "campaign_journal_sha256"}
+        == {
+            "subledger_path",
+            "campaign_journal_path",
+            "source_ledger_prefix_bytes",
+            "source_ledger_prefix_sha256",
+            "before_event_sha256",
+            "campaign_journal_sha256",
+        }
         and Path(str(ledger["subledger_path"])).resolve()
         == Path(_required_env("MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER")).resolve()
         and Path(str(ledger["campaign_journal_path"])).resolve()
         == Path(_required_env("MEMPHANT_CAMPAIGN_ATTEMPT_LEDGER")).resolve()
-        and _path_sha256(Path(str(ledger["subledger_path"]))) == ledger["before_event_sha256"]
         and _path_sha256(Path(str(ledger["campaign_journal_path"])))
-        == ledger["campaign_journal_sha256"],
+        == ledger["campaign_journal_sha256"]
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER")
+        == str(Path(str(ledger["subledger_path"])).resolve())
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES")
+        == str(ledger["source_ledger_prefix_bytes"])
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256")
+        == ledger["source_ledger_prefix_sha256"]
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL")
+        == value["provider"]["served_model"]
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER")
+        == value["provider"]["served_provider"],
         "construction binding ledger path or pre-worker identity drift",
     )
     keys = coverage.get("expected_extraction_keys") if isinstance(coverage, dict) else None
@@ -672,91 +715,7 @@ def _path_sha256(path: Path) -> str:
 
 def _construction_receipts(binding: dict[str, object]) -> tuple[dict[str, object], dict[str, object]]:
     """Derive post-worker proof fields from canonical receipts, never predictions."""
-    expected = set(binding["coverage"]["expected_extraction_keys"])
-    subledger = Path(binding["ledger"]["subledger_path"])
-    _require(subledger.is_file(), "construction subledger is missing after worker")
-    events = [json.loads(line) for line in subledger.read_text(encoding="utf-8").splitlines() if line]
-    started: dict[tuple[str, int], dict[str, object]] = {}
-    results: dict[tuple[str, int], dict[str, object]] = {}
-    for event in events:
-        key = event.get("extraction_key")
-        if key not in expected:
-            continue
-        identity = (key, event.get("campaign_attempt"))
-        _require(event.get("event") in {"started", "result"}, "construction subledger event is malformed")
-        target = started if event["event"] == "started" else results
-        _require(identity not in target, "construction subledger duplicates one attempt")
-        target[identity] = event
-    for identity, result in results.items():
-        _require(
-            identity in started
-            and started[identity].get("attempt_id") == result.get("attempt_id")
-            and result.get("requested_model") == binding["provider"]["requested_model"],
-            "construction subledger start/result identity drift",
-        )
-    receipt_root = Path(binding["cache"]["source_receipts_path"])
-    cache_receipts: dict[str, dict[str, object]] = {}
-    receipt_hashes = []
-    for key in sorted(expected):
-        path = receipt_root / f"{key}.json"
-        if not path.is_file():
-            continue
-        receipt = json.loads(path.read_text(encoding="utf-8"))
-        core = receipt.get("core") if isinstance(receipt, dict) else None
-        _require(
-            isinstance(core, dict)
-            and receipt.get("cache_hit_sha256") == _sha256_rust_json(core)
-            and core.get("extraction_key") == key
-            and core.get("authorization_sha256") == binding["authorization"]["authorization_sha256"]
-            and core.get("campaign_sha256") == binding["authorization"]["campaign_sha256"]
-            and core.get("cache_namespace") == binding["cache"]["namespace"]
-            and core.get("reservation_status") == "cache_hit"
-            and core.get("settled_nanos") == 0,
-            "construction cache-hit receipt identity drift",
-        )
-        cache_receipts[key] = core
-        receipt_hashes.append({"extraction_key": key, "sha256": _sha256_file(path)})
-    decoded: dict[str, dict[str, object]] = {}
-    unresolved_nanos = 0
-    for (key, _), result in sorted(results.items()):
-        if result.get("reservation_status") == "settled" and result.get("parse_status") == "decoded" and result.get("error") is None:
-            decoded[key] = result
-        elif result.get("reservation_status") != "not_charged":
-            unresolved_nanos += int(result.get("per_attempt_reservation_nanos", 0))
-    covered = set(decoded) | set(cache_receipts)
-    _require(covered == expected, "construction receipts lack exact extraction-key coverage")
-    for key in set(decoded) & set(cache_receipts):
-        _require(
-            cache_receipts[key].get("source_result_event_sha256") == _sha256_rust_json(decoded[key]),
-            "construction cache hit does not bind its paid source result",
-        )
-    settled_nanos = 0
-    for result in decoded.values():
-        usage = result.get("usage")
-        _require(isinstance(usage, dict) and usage.get("cost") is not None, "construction settled usage is missing")
-        settled_nanos += int(
-            (Decimal(str(usage["cost"])) * Decimal(1_000_000_000)).to_integral_value(
-                rounding=ROUND_CEILING
-            )
-        )
-    campaign_journal = Path(binding["ledger"]["campaign_journal_path"])
-    _require(
-        _path_sha256(campaign_journal) == binding["ledger"]["campaign_journal_sha256"],
-        "campaign journal changed during an internally subledgered construction slice",
-    )
-    cache = {
-        "namespace": binding["cache"]["namespace"],
-        "source_receipts_sha256": _sha256_json(receipt_hashes),
-    }
-    ledger = {
-        "attempt_ids": sorted({result["attempt_id"] for result in results.values()}),
-        "before_event_sha256": binding["ledger"]["before_event_sha256"],
-        "after_event_sha256": _sha256_file(subledger),
-        "campaign_journal_sha256": _sha256_file(campaign_journal),
-        "settled_nanos": settled_nanos,
-        "unresolved_nanos": unresolved_nanos,
-    }
-    return cache, ledger
+    return _derive_construction_receipts(binding)
 
 
 def _validate_trajectory(
@@ -1227,6 +1186,7 @@ class MemphantMemory(Memory):
             bound_compiler = binding["compiler"]
             core = {
                 "schema_version": 2,
+                "binding_sha256": binding["binding_sha256"],
                 "authorization": binding["authorization"],
                 "selection": binding["selection"],
                 "compiler": {
