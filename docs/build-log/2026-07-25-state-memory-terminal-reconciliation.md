@@ -21,8 +21,7 @@ decision, not as a SOTA result.
   economical pilot. The official full matrix is therefore deferred and
   forbidden under this run's gate.
 - Private Syndai mirror parity: **externally blocked** by the separately dirty
-  private `08-api-sdk-mcp-spec.md` and `STATUS.md`; this branch does not edit the
-  private checkout.
+  private `STATUS.md`; this branch does not edit the private checkout.
 
 ## Benchmark inventory
 
