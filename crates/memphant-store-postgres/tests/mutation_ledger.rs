@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use std::sync::Barrier;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
 use memphant_core::service::MemoryService;
@@ -10,9 +10,10 @@ use memphant_core::{
 };
 use memphant_store_postgres::PgStore;
 use memphant_types::{
-    COMPILER_VERSION, MemoryKind, NewEpisode, ResolvedMemoryContext, RetainEpisodeHttpRequest,
+    COMPILER_VERSION, CorrectRequest, CorrectResult, CorrectSelector, CorrectionPayload,
+    MemoryKind, NewEpisode, ResolvedMemoryContext, RetainEpisodeHttpRequest,
     RetainEpisodeHttpResponse, RetainEpisodePayload, RetainPayload, RetainResourcePayload,
-    RetainUnitPayload, TenantId, TrustLevel,
+    RetainUnitPayload, TenantId, TrustLevel, UnitId,
 };
 use uuid::Uuid;
 
@@ -108,14 +109,28 @@ fn direct_request(context: &ResolvedMemoryContext) -> RetainEpisodeHttpRequest {
 }
 
 struct BarrierEmbedding {
-    barrier: Barrier,
+    rendezvous: (Mutex<usize>, Condvar),
     calls: AtomicUsize,
 }
 
 impl EmbeddingProvider for BarrierEmbedding {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.barrier.wait();
+        let (arrivals, ready) = &self.rendezvous;
+        let mut arrivals = arrivals.lock().unwrap();
+        *arrivals += 1;
+        if *arrivals == 2 {
+            ready.notify_all();
+        } else {
+            let (observed, timeout) = ready
+                .wait_timeout_while(arrivals, Duration::from_secs(2), |arrivals| *arrivals < 2)
+                .unwrap();
+            if timeout.timed_out() && *observed < 2 {
+                return Err(EmbedError::Unavailable(
+                    "second concurrent embedding never reached the rendezvous".to_string(),
+                ));
+            }
+        }
         Ok(vec![vec![1.0]; texts.len()])
     }
 
@@ -125,6 +140,27 @@ impl EmbeddingProvider for BarrierEmbedding {
 
     fn id(&self) -> &str {
         "pg-service-barrier"
+    }
+}
+
+fn correct_request(context: &ResolvedMemoryContext, unit_id: UnitId) -> CorrectRequest {
+    CorrectRequest {
+        subject_id: context.data_subject_id,
+        scope_id: context.scope_id,
+        actor_id: context.actor_id,
+        agent_node_id: context.agent_node_id,
+        subject_generation: context.subject_generation,
+        selector: CorrectSelector {
+            memory_unit_id: unit_id,
+        },
+        correction: CorrectionPayload {
+            value: "timezone is mountain time".to_string(),
+            reason: "user correction".to_string(),
+            source_ref: "pg-service:correction-race".to_string(),
+            observed_at: CLOCK.0.to_string(),
+            valid_from: None,
+            valid_to: None,
+        },
     }
 }
 
@@ -676,7 +712,7 @@ async fn retain_service_direct_concurrent_winner_commits_once() {
     let store = store().await;
     let context = context(&store).await;
     let embedder = Arc::new(BarrierEmbedding {
-        barrier: Barrier::new(2),
+        rendezvous: (Mutex::new(0), Condvar::new()),
         calls: AtomicUsize::new(0),
     });
     let service = Arc::new(MemoryService::new(
@@ -777,6 +813,98 @@ async fn retain_service_direct_concurrent_winner_commits_once() {
             .unwrap()
             .is_some()
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn correct_service_releases_claim_before_embedding_and_commits_once() {
+    let store = store().await;
+    let context = context(&store).await;
+    let seed_service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(NoopEmbedding),
+    );
+    let seed = seed_service
+        .retain(
+            &context,
+            "pg-correct-race-seed",
+            TrustLevel::TrustedUser,
+            direct_request(&context),
+        )
+        .await
+        .unwrap();
+    let seed: RetainEpisodeHttpResponse = serde_json::from_slice(seed.body()).unwrap();
+    let unit_id = seed.unit_ids[0];
+
+    let embedder = Arc::new(BarrierEmbedding {
+        rendezvous: (Mutex::new(0), Condvar::new()),
+        calls: AtomicUsize::new(0),
+    });
+    let service = Arc::new(MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        embedder.clone(),
+    ));
+    let request = correct_request(&context, unit_id);
+    let first = {
+        let service = Arc::clone(&service);
+        let context = context.clone();
+        let request = request.clone();
+        tokio::spawn(async move { service.correct(&context, "pg-correct-race", request).await })
+    };
+    let second = {
+        let service = Arc::clone(&service);
+        let context = context.clone();
+        tokio::spawn(async move { service.correct(&context, "pg-correct-race", request).await })
+    };
+
+    let (first, second) = tokio::join!(first, second);
+    let first = first.unwrap().unwrap();
+    let second = second.unwrap().unwrap();
+    assert_eq!(first, second);
+    assert_eq!(embedder.calls.load(Ordering::SeqCst), 2);
+    let result: CorrectResult = serde_json::from_slice(first.body()).unwrap();
+    assert_eq!(result.superseded, vec![unit_id]);
+    assert_eq!(result.created.len(), 2);
+
+    let mut tx = store.pool().begin().await.unwrap();
+    sqlx::query("select memphant.bind_tenant($1)")
+        .bind(context.tenant_id.as_uuid())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let units: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.memory_unit
+         where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3",
+    )
+    .bind(context.tenant_id.as_uuid())
+    .bind(context.data_subject_id.as_uuid())
+    .bind(context.subject_generation as i64)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    let edges: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.memory_edge
+         where tenant_id = $1 and scope_id = $2",
+    )
+    .bind(context.tenant_id.as_uuid())
+    .bind(context.scope_id.as_uuid())
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    let receipts: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.mutation_ledger
+         where tenant_id = $1 and verb = 'correct'
+           and idempotency_key = 'pg-correct-race' and response_body is not null",
+    )
+    .bind(context.tenant_id.as_uuid())
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.rollback().await.unwrap();
+
+    assert_eq!((units, edges, receipts), (3, 2, 1));
 }
 
 #[tokio::test]

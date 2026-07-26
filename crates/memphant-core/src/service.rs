@@ -4196,57 +4196,70 @@ impl<S: MemoryStore> MemoryService<S> {
             idempotency_key,
             canonical_mutation_request_hash(MutationVerb::Correct, &request)?,
         )?;
+        let mut probe = self.store.begin(context).await?;
+        match self
+            .store
+            .stage_mutation_claim(&mut probe, claim.clone())
+            .await?
+        {
+            MutationClaimOutcome::Replay(response) => {
+                self.store.commit(probe).await?;
+                return Ok(response);
+            }
+            MutationClaimOutcome::Execute => self.store.rollback(probe).await?,
+        }
+
+        let embedding = if self.embedder.dimensions() > 0 {
+            run_embedding_task(
+                Arc::clone(&self.embedder),
+                vec![request.correction.value.clone()],
+                EmbeddingTaskKind::Document,
+            )
+            .await
+            .map_err(|error| {
+                CoreError::Store(StoreError::Backend(format!("embedding failed: {error}")))
+            })?
+            .into_iter()
+            .next()
+            .filter(|vector| !vector.is_empty())
+            .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
+        } else {
+            None
+        };
+
         let mut tx = self.store.begin(context).await?;
         match self.store.stage_mutation_claim(&mut tx, claim).await? {
             MutationClaimOutcome::Replay(response) => {
                 self.store.commit(tx).await?;
-                Ok(response)
+                return Ok(response);
             }
-            MutationClaimOutcome::Execute => {
-                let embedding = if self.embedder.dimensions() > 0 {
-                    run_embedding_task(
-                        Arc::clone(&self.embedder),
-                        vec![request.correction.value.clone()],
-                        EmbeddingTaskKind::Document,
-                    )
-                    .await
-                    .map_err(|error| {
-                        CoreError::Store(StoreError::Backend(format!("embedding failed: {error}")))
-                    })?
-                    .into_iter()
-                    .next()
-                    .filter(|vector| !vector.is_empty())
-                    .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
-                } else {
-                    None
-                };
-                let result = self
-                    .store
-                    .stage_correction(
-                        &mut tx,
-                        CorrectionWrite {
-                            selector: request.selector,
-                            source_ref: request.correction.source_ref.clone(),
-                            observed_at: request.correction.observed_at.clone(),
-                            correction: request.correction,
-                            now: self.clock.now_rfc3339(),
-                            embedding,
-                            unit_ids: Default::default(),
-                        },
-                    )
-                    .await
-                    .map_err(|error| match error {
-                        StoreError::NotFound(entity) => CoreError::NotFound(entity.to_string()),
-                        other => CoreError::Store(other),
-                    })?;
-                let response = serialized_mutation_response(200, &result)?;
-                self.store
-                    .stage_mutation_response(&mut tx, response.clone())
-                    .await?;
-                self.store.commit(tx).await?;
-                Ok(response)
-            }
+            MutationClaimOutcome::Execute => {}
         }
+        let result = self
+            .store
+            .stage_correction(
+                &mut tx,
+                CorrectionWrite {
+                    selector: request.selector,
+                    source_ref: request.correction.source_ref.clone(),
+                    observed_at: request.correction.observed_at.clone(),
+                    correction: request.correction,
+                    now: self.clock.now_rfc3339(),
+                    embedding,
+                    unit_ids: Default::default(),
+                },
+            )
+            .await
+            .map_err(|error| match error {
+                StoreError::NotFound(entity) => CoreError::NotFound(entity.to_string()),
+                other => CoreError::Store(other),
+            })?;
+        let response = serialized_mutation_response(200, &result)?;
+        self.store
+            .stage_mutation_response(&mut tx, response.clone())
+            .await?;
+        self.store.commit(tx).await?;
+        Ok(response)
     }
 
     pub async fn forget(

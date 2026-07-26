@@ -664,6 +664,70 @@ async fn correct_replays_exact_response_and_changed_request_does_not_mutate() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn concurrent_correct_releases_the_claim_before_embedding_and_commits_once() {
+    let store = InMemoryStore::default();
+    let context = context(&store, TenantId::new()).await;
+    let unit_id = seed_unit(&store, &context, "Timezone is UTC.").await;
+    let embedder = Arc::new(BarrierEmbedding {
+        rendezvous: (Mutex::new(0), Condvar::new()),
+        calls: AtomicUsize::new(0),
+    });
+    let service = Arc::new(MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        embedder.clone(),
+    ));
+    let request = CorrectRequest {
+        subject_id: context.data_subject_id,
+        scope_id: context.scope_id,
+        actor_id: context.actor_id,
+        agent_node_id: context.agent_node_id,
+        subject_generation: context.subject_generation,
+        selector: CorrectSelector {
+            memory_unit_id: unit_id,
+        },
+        correction: CorrectionPayload {
+            value: "Timezone is PST.".to_string(),
+            reason: "user correction".to_string(),
+            source_ref: "test:correction-race".to_string(),
+            observed_at: CLOCK.0.to_string(),
+            valid_from: None,
+            valid_to: None,
+        },
+    };
+    let first = {
+        let service = Arc::clone(&service);
+        let context = context.clone();
+        let request = request.clone();
+        tokio::spawn(async move { service.correct(&context, "correct-race", request).await })
+    };
+    let second = {
+        let service = Arc::clone(&service);
+        let context = context.clone();
+        tokio::spawn(async move { service.correct(&context, "correct-race", request).await })
+    };
+
+    let (first, second) = tokio::join!(first, second);
+    let first = first.unwrap().unwrap();
+    let second = second.unwrap().unwrap();
+    assert_eq!(first, second);
+    assert_eq!(embedder.calls.load(Ordering::SeqCst), 2);
+    let result: CorrectResult = serde_json::from_slice(first.body()).unwrap();
+    assert_eq!(result.superseded, vec![unit_id]);
+    assert_eq!(result.created.len(), 2);
+    let units = store.memory_units(context.tenant_id);
+    assert_eq!(units.len(), 3);
+    assert_eq!(
+        units
+            .iter()
+            .filter(|unit| unit.body == "Timezone is PST.")
+            .count(),
+        1
+    );
+    assert_eq!(store.memory_edges(context.tenant_id).len(), 2);
+}
+
 #[tokio::test]
 async fn correct_replay_does_not_call_the_embedder_again() {
     let store = InMemoryStore::default();
