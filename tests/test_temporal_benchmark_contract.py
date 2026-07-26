@@ -110,14 +110,15 @@ def test_campaign_authorization_opens_one_scope_and_journal_for_every_screen(
     attempts = load_attempts()
     journal = tmp_path / "campaign.jsonl"
     packet = tmp_path / "authorization.json"
+    opening = 5_141_664_250
     scope = {"campaign": {
         "journal_path": journal.name,
         "hard_ceiling_nanos": attempts.CAMPAIGN_HARD_CEILING_NANOS,
-        "opening_liability_nanos": attempts.CAMPAIGN_OPENING_LIABILITY_NANOS,
+        "opening_liability_nanos": opening,
         "unallocated_reserve_nanos": attempts.CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
         "opening_reservations": [{
             "reservation_id": "historical-opening",
-            "reserved_nanos": attempts.CAMPAIGN_OPENING_LIABILITY_NANOS,
+            "reserved_nanos": opening,
             "receipt_sha256": "b" * 64,
             "proof_sha256": "c" * 64,
         }],
@@ -146,6 +147,39 @@ def test_campaign_authorization_opens_one_scope_and_journal_for_every_screen(
             screen_id="screen-c",
             expected_journal_path=tmp_path / "alternate.jsonl",
         )
+
+
+def test_campaign_authorization_accepts_its_scoped_opening_reservations(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+    opening = 5_434_506_750
+    scope = {"campaign": {
+        "journal_path": "campaign.jsonl",
+        "hard_ceiling_nanos": attempts.CAMPAIGN_HARD_CEILING_NANOS,
+        "opening_liability_nanos": opening,
+        "unallocated_reserve_nanos": attempts.CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
+        "opening_reservations": [{
+            "reservation_id": "sealed-prior-campaign",
+            "reserved_nanos": opening,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
+    }}
+    packet = tmp_path / "authorization.json"
+    packet.write_text(json.dumps({
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        "authorization": {
+            "authorization_scope_sha256": attempts._sha256_json(scope),
+        },
+        **scope,
+    }))
+
+    ledger = attempts.open_campaign_ledger(packet, screen_id="screen-a")
+    try:
+        assert ledger.snapshot()["opening_liability_nanos"] == opening
+    finally:
+        ledger.close()
 
 
 def test_campaign_start_preserves_exact_ten_dollar_reserve(tmp_path: Path) -> None:

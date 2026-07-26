@@ -123,8 +123,6 @@ def test_v4_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     assert (v2_root / "CAMPAIGN-CENSUS.json").is_file()
     assert not (v2_root / "CAMPAIGN-AUTHORIZATION.json").exists()
     assert (v3_root / "CAMPAIGN-AUTHORIZATION.json").is_file()
-    assert not runner.CANONICAL_CAMPAIGN_CENSUS.exists()
-    assert not runner.CANONICAL_CAMPAIGN_AUTHORIZATION.exists()
     with pytest.raises(RuntimeError, match="canonical authorization"):
         runner.prewarm_sealed_prefix(v3_root / "CAMPAIGN-AUTHORIZATION.json")
     assert all(

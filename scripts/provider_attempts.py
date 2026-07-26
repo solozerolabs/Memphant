@@ -22,7 +22,6 @@ from typing import Any
 _LEDGER_LOCK = threading.RLock()
 CAMPAIGN_HARD_CEILING_NANOS = 200_000_000_000
 CAMPAIGN_UNALLOCATED_RESERVE_NANOS = 10_000_000_000
-CAMPAIGN_OPENING_LIABILITY_NANOS = 5_141_664_250
 CAMPAIGN_AUTHORIZATION_STATUS = "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
 
 
@@ -698,8 +697,6 @@ def open_campaign_ledger(
     ):
         raise ValueError("campaign authorization unallocated reserve mismatch")
     opening = campaign.get("opening_liability_nanos")
-    if opening != CAMPAIGN_OPENING_LIABILITY_NANOS:
-        raise ValueError("campaign authorization opening liability mismatch")
     reservations = _validate_opening_reservations(
         campaign.get("opening_reservations"), opening
     )
