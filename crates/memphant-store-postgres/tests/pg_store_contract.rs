@@ -20,7 +20,8 @@ use std::sync::{Arc, Mutex};
 use memphant_core::service::{MemoryService, file_sync_plan_sha256};
 use memphant_core::{
     EmbedError, EmbeddingProvider, FixedClock, JobFilter, MemoryStore, MutationClaim,
-    MutationLedgerStore, MutationVerb, NoopEmbedding, StructuredStateOp, StructuredStateOperation,
+    MutationLedgerStore, MutationVerb, NoopEmbedding, StructuredObservation,
+    StructuredObservationDisposition, StructuredStateOp, StructuredStateOperation,
     StructuredStateProvider, StructuredStateProviderError, StructuredStateProviderIdentity,
     StructuredStateRequest, canonical_mutation_request_hash, derive_fact_key, recall,
     reflect_recorded, retain_episode, retain_resource,
@@ -68,41 +69,32 @@ impl StructuredStateProvider for FixedStructuredProvider {
         request: &'a StructuredStateRequest,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<Vec<StructuredStateOp>, StructuredStateProviderError>>
+            dyn Future<Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>>
                 + Send
                 + 'a,
         >,
     > {
-        let mut operations = self.operations.clone();
-        for operation in &mut operations {
-            if operation.operation != StructuredStateOperation::Create {
-                continue;
-            }
-            let targets = request
-                .active_items
-                .iter()
-                .filter(|item| {
-                    item.namespace == operation.namespace
-                        && item.item_key == operation.item_key
-                        && item
-                            .valid_from
-                            .as_deref()
-                            .zip(operation.valid_to.as_deref())
-                            .is_none_or(|(from, to)| from < to)
-                        && operation
-                            .valid_from
-                            .as_deref()
-                            .zip(item.valid_to.as_deref())
-                            .is_none_or(|(from, to)| from < to)
-                })
-                .map(|item| item.unit_id)
-                .collect::<Vec<_>>();
-            if !targets.is_empty() {
-                operation.operation = StructuredStateOperation::Replace;
-                operation.target_unit_ids = targets;
-            }
-        }
-        Box::pin(async move { Ok(operations) })
+        let evidence_slice_id = request.evidence_slices[0].id.clone();
+        let observations = self
+            .operations
+            .clone()
+            .into_iter()
+            .map(|operation| StructuredObservation {
+                namespace: operation.namespace,
+                item_key: operation.item_key,
+                fields: operation.fields,
+                disposition: if operation.operation == StructuredStateOperation::Append {
+                    StructuredObservationDisposition::Event
+                } else {
+                    StructuredObservationDisposition::State
+                },
+                evidence_slice_id: evidence_slice_id.clone(),
+                evidence_quote: operation.evidence_quote,
+                valid_from: operation.valid_from,
+                valid_to: operation.valid_to,
+            })
+            .collect();
+        Box::pin(async move { Ok(observations) })
     }
 }
 

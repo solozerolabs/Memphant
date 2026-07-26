@@ -7,7 +7,7 @@ use std::time::Duration;
 use memphant_core::service::MemoryService;
 use memphant_core::{
     FixedClock, InMemoryStore, JobFilter, MemoryStore, NoopEmbedding, ReflectJobRow,
-    StructuredStateOp, StructuredStateProvider, StructuredStateProviderError,
+    StructuredObservation, StructuredStateProvider, StructuredStateProviderError,
     StructuredStateProviderIdentity, StructuredStateRequest, reflect_recorded, retain_episode,
 };
 use memphant_types::{
@@ -143,7 +143,7 @@ impl StructuredStateProvider for BlockingProvider {
         _request: &'a StructuredStateRequest,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<Vec<StructuredStateOp>, StructuredStateProviderError>>
+            dyn Future<Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>>
                 + Send
                 + 'a,
         >,

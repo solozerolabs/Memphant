@@ -157,6 +157,7 @@ pub mod api_embeddings;
 mod api_reranking;
 pub mod deep_recall_openrouter;
 mod structured_state_openrouter;
+pub use structured_state_openrouter::{StructuredStateRequestPlan, plan_structured_state_request};
 
 /// Single source of truth mapping an embedder selector id to a provider, shared
 /// by the runtime `MEMPHANT_EMBEDDINGS` env var (via [`build_embedder`]) AND

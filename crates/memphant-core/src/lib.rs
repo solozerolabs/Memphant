@@ -9,11 +9,14 @@ pub use memphant_types::CrossRerankGranularity;
 pub use memphant_types::ResolvedMemoryContext;
 pub use mutation_contract::{canonical_mutation_request_hash, validate_idempotency_key};
 pub use structured_state::{
-    ActiveStructuredState, ProjectedStructuredState, QuantityEvent, StructuredStateOp,
-    StructuredStateOperation, StructuredStateProvider, StructuredStateProviderError,
-    StructuredStateProviderIdentity, StructuredStateRequest, active_structured_state,
-    ground_user_evidence_quote, project_structured_state, quantity_event_from_body,
-    quantity_event_from_fields, structured_compiler_identity, user_evidence_turns,
+    ActiveStructuredState, EvidenceSlice, ProjectedStructuredState, QuantityEvent,
+    StructuredObservation, StructuredObservationDisposition, StructuredSourceKind,
+    StructuredStateOp, StructuredStateOperation, StructuredStateProvider,
+    StructuredStateProviderError, StructuredStateProviderIdentity, StructuredStateRequest,
+    active_structured_state, evidence_slices_for_episode, evidence_slices_for_resource,
+    fold_structured_observations, ground_user_evidence_quote, project_structured_state,
+    quantity_event_from_body, quantity_event_from_fields, structured_compiler_identity,
+    user_evidence_turns,
 };
 
 use std::collections::{BTreeMap, HashMap, HashSet};

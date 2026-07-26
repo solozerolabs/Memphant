@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use memphant_types::{
-    AdmissionAction, ContextualChunk, EpisodeId, MemoryKind, StoredMemoryUnit, UnitId, UnitState,
+    AdmissionAction, ContextualChunk, MemoryKind, StoredMemoryUnit, UnitId, UnitState,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -69,11 +69,57 @@ pub struct StructuredStateProviderIdentity {
     pub schema_hash: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum StructuredSourceKind {
+    Episode,
+    Resource,
+}
+
+impl StructuredSourceKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Episode => "episode",
+            Self::Resource => "resource",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EvidenceSlice {
+    pub id: String,
+    pub body: String,
+    pub source_span: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum StructuredObservationDisposition {
+    State,
+    Event,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StructuredObservation {
+    pub namespace: String,
+    pub item_key: String,
+    pub fields: BTreeMap<String, Value>,
+    pub disposition: StructuredObservationDisposition,
+    pub evidence_slice_id: String,
+    pub evidence_quote: String,
+    pub valid_from: Option<String>,
+    pub valid_to: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StructuredStateRequest {
-    pub episode_id: EpisodeId,
-    pub episode_body: String,
-    pub active_items: Vec<ActiveStructuredState>,
+    pub source_kind: StructuredSourceKind,
+    pub source_body_sha256: String,
+    pub batch_index: usize,
+    pub evidence_slices: Vec<EvidenceSlice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -91,7 +137,7 @@ pub trait StructuredStateProvider: Send + Sync {
         request: &'a StructuredStateRequest,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<Vec<StructuredStateOp>, StructuredStateProviderError>>
+            dyn Future<Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>>
                 + Send
                 + 'a,
         >,
@@ -138,17 +184,297 @@ pub fn structured_compiler_identity(
     format!("{compiler}+structured-{suffix}")
 }
 
+pub fn evidence_slices_for_episode(
+    source_body: &str,
+) -> Result<Vec<EvidenceSlice>, StructuredStateProviderError> {
+    user_turn_ranges(source_body)
+        .into_iter()
+        .filter(|(start, end)| start < end)
+        .map(|(start, end)| evidence_slice(StructuredSourceKind::Episode, source_body, start, end))
+        .collect()
+}
+
+pub fn evidence_slices_for_resource(
+    source_body: &str,
+    chunks: &[ContextualChunk],
+) -> Result<Vec<EvidenceSlice>, StructuredStateProviderError> {
+    if chunks.is_empty() {
+        return if source_body.is_empty() {
+            Ok(Vec::new())
+        } else {
+            evidence_slice(
+                StructuredSourceKind::Resource,
+                source_body,
+                0,
+                source_body.len(),
+            )
+            .map(|slice| vec![slice])
+        };
+    }
+
+    let mut slices = chunks
+        .iter()
+        .map(|chunk| {
+            let (start, end) = chunk
+                .source_span
+                .as_deref()
+                .ok_or_else(|| invalid_output("resource evidence slice has no source span"))
+                .and_then(|span| {
+                    parse_span(span).map_err(|_| {
+                        invalid_output("resource evidence slice has invalid source span")
+                    })
+                })?;
+            if source_body.get(start..end) != Some(chunk.body.as_str()) {
+                return Err(invalid_output(
+                    "resource evidence slice does not match its parent source",
+                ));
+            }
+            evidence_slice(StructuredSourceKind::Resource, source_body, start, end)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    slices.sort_by_key(|slice| parse_span(&slice.source_span).expect("validated source span"));
+    for pair in slices.windows(2) {
+        let (_, left_end) = parse_span(&pair[0].source_span).expect("validated source span");
+        let (right_start, _) = parse_span(&pair[1].source_span).expect("validated source span");
+        if left_end > right_start {
+            return Err(invalid_output("resource evidence slices overlap"));
+        }
+    }
+    Ok(slices)
+}
+
+fn evidence_slice(
+    source_kind: StructuredSourceKind,
+    source_body: &str,
+    start: usize,
+    end: usize,
+) -> Result<EvidenceSlice, StructuredStateProviderError> {
+    let body = source_body
+        .get(start..end)
+        .filter(|body| !body.is_empty())
+        .ok_or_else(|| invalid_output("evidence slice has invalid UTF-8 source span"))?;
+    let source_span = format!("{start}-{end}");
+    Ok(EvidenceSlice {
+        id: neutral_slice_id(source_kind, &source_span, body),
+        body: body.to_string(),
+        source_span,
+    })
+}
+
+fn neutral_slice_id(source_kind: StructuredSourceKind, source_span: &str, body: &str) -> String {
+    let body_sha256 = sha256_hex(body.as_bytes());
+    let mut hasher = Sha256::new();
+    for component in [source_kind.as_str(), source_span, body_sha256.as_str()] {
+        hasher.update((component.len() as u64).to_be_bytes());
+        hasher.update(component.as_bytes());
+    }
+    format!("slice-{}", hex_digest(hasher.finalize().as_slice()))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    hex_digest(Sha256::digest(bytes).as_slice())
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+struct GroundedObservation<'a> {
+    observation: &'a StructuredObservation,
+    namespace: String,
+    item_key: String,
+    start: usize,
+    end: usize,
+}
+
+pub fn fold_structured_observations(
+    source_body: &str,
+    request: &StructuredStateRequest,
+    observations: &[StructuredObservation],
+    active_items: &[ActiveStructuredState],
+) -> Result<Vec<StructuredStateOp>, StructuredStateProviderError> {
+    if request.source_body_sha256 != sha256_hex(source_body.as_bytes()) {
+        return Err(invalid_output("structured source body hash changed"));
+    }
+
+    let canonical_episode_slices = if request.source_kind == StructuredSourceKind::Episode {
+        Some(evidence_slices_for_episode(source_body)?)
+    } else {
+        None
+    };
+    let mut slices = BTreeMap::new();
+    for slice in &request.evidence_slices {
+        let (start, end) = parse_span(&slice.source_span)
+            .map_err(|_| invalid_output("evidence slice has invalid source span"))?;
+        let expected = evidence_slice(request.source_kind, source_body, start, end)?;
+        if &expected != slice
+            || canonical_episode_slices
+                .as_ref()
+                .is_some_and(|canonical| !canonical.contains(slice))
+            || slices.insert(slice.id.as_str(), (slice, start)).is_some()
+        {
+            return Err(invalid_output(
+                "evidence slice does not match its parent source",
+            ));
+        }
+    }
+
+    let mut grounded = observations
+        .iter()
+        .map(|observation| {
+            let (slice, parent_start) = slices
+                .get(observation.evidence_slice_id.as_str())
+                .copied()
+                .ok_or_else(|| invalid_output("observation names an unknown evidence slice"))?;
+            if observation.evidence_quote.is_empty() {
+                return Err(invalid_output("observation evidence quote is empty"));
+            }
+            let mut matches = slice.body.match_indices(&observation.evidence_quote);
+            let (slice_start, matched) = matches.next().ok_or_else(|| {
+                invalid_output("observation evidence quote does not match its slice")
+            })?;
+            if matches.next().is_some() {
+                return Err(invalid_output(
+                    "observation evidence quote is ambiguous in its slice",
+                ));
+            }
+            let start = parent_start + slice_start;
+            let end = start + matched.len();
+            if source_body.get(start..end) != Some(observation.evidence_quote.as_str()) {
+                return Err(invalid_output(
+                    "observation evidence quote does not match its source",
+                ));
+            }
+            validate_valid_interval(
+                observation.valid_from.as_deref(),
+                observation.valid_to.as_deref(),
+            )
+            .map_err(|error| invalid_output(error.to_string()))?;
+            let namespace = canonical_key(&observation.namespace);
+            let item_key = canonical_key(&observation.item_key);
+            if namespace.is_empty() || item_key.is_empty() {
+                return Err(invalid_output(
+                    "structured-state identity is not canonicalizable",
+                ));
+            }
+            if observation.disposition == StructuredObservationDisposition::Event
+                && observation.fields.is_empty()
+            {
+                return Err(invalid_output("structured event fields are empty"));
+            }
+            Ok(GroundedObservation {
+                observation,
+                namespace,
+                item_key,
+                start,
+                end,
+            })
+        })
+        .collect::<Result<Vec<_>, StructuredStateProviderError>>()?;
+    grounded.sort_by_key(|item| (item.start, item.end));
+
+    let mut last_state = BTreeMap::new();
+    for (index, item) in grounded.iter().enumerate() {
+        if item.observation.disposition == StructuredObservationDisposition::State {
+            last_state.insert((item.namespace.clone(), item.item_key.clone()), index);
+        }
+    }
+
+    let mut operations = Vec::new();
+    for (index, item) in grounded.into_iter().enumerate() {
+        let observation = item.observation;
+        if observation.disposition == StructuredObservationDisposition::State
+            && last_state.get(&(item.namespace.clone(), item.item_key.clone())) != Some(&index)
+        {
+            continue;
+        }
+        let mut target_unit_ids = active_items
+            .iter()
+            .filter(|active| {
+                canonical_key(&active.namespace) == item.namespace
+                    && canonical_key(&active.item_key) == item.item_key
+                    && intervals_overlap(observation, active)
+            })
+            .map(|active| active.unit_id)
+            .collect::<Vec<_>>();
+        target_unit_ids.sort_by_key(|unit_id| unit_id.as_uuid());
+        let operation = match observation.disposition {
+            StructuredObservationDisposition::Event => {
+                target_unit_ids.clear();
+                StructuredStateOperation::Append
+            }
+            StructuredObservationDisposition::State if observation.fields.is_empty() => {
+                if target_unit_ids.is_empty() {
+                    return Err(invalid_output(
+                        "structured-state delete has no active target",
+                    ));
+                }
+                StructuredStateOperation::Delete
+            }
+            StructuredObservationDisposition::State if target_unit_ids.is_empty() => {
+                StructuredStateOperation::Create
+            }
+            StructuredObservationDisposition::State => StructuredStateOperation::Replace,
+        };
+        if observation.fields.get("type").and_then(Value::as_str) == Some(QUANTITY_EVENT_TYPE) {
+            let event = quantity_event_from_fields(&observation.fields)
+                .ok_or_else(|| invalid_output("quantity fields violate the canonical contract"))?;
+            let grounded_date = crate::parse_content_date(source_body)
+                .map(|date| date.to_string())
+                .filter(|date| event.occurred_at.starts_with(date));
+            if operation != StructuredStateOperation::Append
+                || (grounded_date.is_none()
+                    && !observation.evidence_quote.contains(&event.occurred_at))
+            {
+                return Err(invalid_output("quantity occurrence date is not grounded"));
+            }
+        }
+        operations.push(StructuredStateOp {
+            operation,
+            namespace: item.namespace,
+            item_key: item.item_key,
+            target_unit_ids,
+            fields: observation.fields.clone(),
+            evidence_quote: observation.evidence_quote.clone(),
+            source_span: format!("{}-{}", item.start, item.end),
+            valid_from: observation.valid_from.clone(),
+            valid_to: observation.valid_to.clone(),
+        });
+    }
+    Ok(operations)
+}
+
+fn intervals_overlap(observation: &StructuredObservation, active: &ActiveStructuredState) -> bool {
+    if observation.valid_from.is_none() && observation.valid_to.is_none() {
+        return active.valid_to.is_none();
+    }
+    observation
+        .valid_from
+        .as_deref()
+        .is_none_or(|start| active.valid_to.as_deref().is_none_or(|end| start < end))
+        && observation
+            .valid_to
+            .as_deref()
+            .is_none_or(|end| active.valid_from.as_deref().is_none_or(|start| start < end))
+}
+
+fn invalid_output(message: impl Into<String>) -> StructuredStateProviderError {
+    StructuredStateProviderError::InvalidOutput(message.into())
+}
+
 /// Converts provider output into deterministic compiler candidates. Provider
 /// text is evidence discovery, never authority. Any invalid operation fails the
 /// response closed so model omissions cannot be mistaken for clean extraction.
 /// Only an exact quote at the claimed span inside a USER turn can become
 /// canonical state.
 pub fn project_structured_state(
-    episode_id: EpisodeId,
-    episode_body: &str,
+    source_kind: StructuredSourceKind,
+    local_source_id: &str,
+    source_body: &str,
     operations: &[StructuredStateOp],
 ) -> Result<Vec<ProjectedStructuredState>, StructuredStateProviderError> {
-    let user_ranges = user_turn_ranges(episode_body);
+    let user_ranges =
+        (source_kind == StructuredSourceKind::Episode).then(|| user_turn_ranges(source_body));
     let mut projected = Vec::new();
     let mut state_identities = BTreeSet::new();
     let mut used_target_ids = HashSet::new();
@@ -159,13 +485,15 @@ pub fn project_structured_state(
             )
         })?;
         if start >= end
-            || end > episode_body.len()
-            || !episode_body.is_char_boundary(start)
-            || !episode_body.is_char_boundary(end)
-            || episode_body.get(start..end) != Some(operation.evidence_quote.as_str())
-            || !user_ranges
-                .iter()
-                .any(|&(range_start, range_end)| start >= range_start && end <= range_end)
+            || end > source_body.len()
+            || !source_body.is_char_boundary(start)
+            || !source_body.is_char_boundary(end)
+            || source_body.get(start..end) != Some(operation.evidence_quote.as_str())
+            || user_ranges.as_ref().is_some_and(|ranges| {
+                !ranges
+                    .iter()
+                    .any(|&(range_start, range_end)| start >= range_start && end <= range_end)
+            })
         {
             return Err(StructuredStateProviderError::InvalidOutput(
                 "evidence span is not an exact user quote".to_string(),
@@ -208,7 +536,7 @@ pub fn project_structured_state(
                     "quantity fields violate the canonical contract".to_string(),
                 )
             })?;
-            let grounded_date = crate::parse_content_date(episode_body)
+            let grounded_date = crate::parse_content_date(source_body)
                 .map(|date| date.to_string())
                 .filter(|date| event.occurred_at.starts_with(date));
             if operation.operation != StructuredStateOperation::Append
@@ -222,7 +550,10 @@ pub fn project_structured_state(
         }
         let predicate = match operation.operation {
             StructuredStateOperation::Append => {
-                format!("{item_key}@{}:{}-{}", episode_id.as_uuid(), start, end)
+                format!(
+                    "{item_key}@{}:{local_source_id}:{start}-{end}",
+                    source_kind.as_str()
+                )
             }
             StructuredStateOperation::Create
             | StructuredStateOperation::Replace
@@ -259,7 +590,10 @@ pub fn project_structured_state(
             body,
             admission_hint,
             contextual_chunks: vec![ContextualChunk {
-                id: format!("evidence-{}-{start}-{end}", episode_id.as_uuid()),
+                id: format!(
+                    "evidence-{}-{local_source_id}-{start}-{end}",
+                    source_kind.as_str()
+                ),
                 header: "[structured-state evidence]".to_string(),
                 body: operation.evidence_quote.clone(),
                 source_span: Some(operation.source_span.clone()),
@@ -339,45 +673,6 @@ pub fn active_structured_state(unit: &StoredMemoryUnit) -> Option<ActiveStructur
         valid_from: unit.valid_from.clone(),
         valid_to: unit.valid_to.clone(),
     })
-}
-
-const ACTIVE_STATE_SELECTION_THRESHOLD: usize = 32;
-const ACTIVE_STATE_SEED_LIMIT: usize = 4;
-
-pub(crate) fn select_relevant_active_state(
-    mut items: Vec<ActiveStructuredState>,
-    episode_body: &str,
-) -> Vec<ActiveStructuredState> {
-    items.sort_by_key(|item| item.unit_id.as_uuid());
-    if items.len() <= ACTIVE_STATE_SELECTION_THRESHOLD {
-        return items;
-    }
-
-    let query_tokens = crate::tokenize(episode_body);
-    let mut ranked = items
-        .iter()
-        .map(|item| {
-            let fields = serde_json::to_string(&item.fields).unwrap_or_default();
-            let body = format!("{} item {}: {fields}", item.namespace, item.item_key);
-            (crate::lexical_text_score(&body, &query_tokens), item)
-        })
-        .filter(|(score, _)| *score > 0.0)
-        .collect::<Vec<_>>();
-    if ranked.is_empty() {
-        return items;
-    }
-    ranked.sort_by(|(left_score, left), (right_score, right)| {
-        right_score
-            .total_cmp(left_score)
-            .then_with(|| left.unit_id.as_uuid().cmp(&right.unit_id.as_uuid()))
-    });
-    let namespaces = ranked
-        .into_iter()
-        .take(ACTIVE_STATE_SEED_LIMIT)
-        .map(|(_, item)| item.namespace.clone())
-        .collect::<BTreeSet<_>>();
-    items.retain(|item| namespaces.contains(item.namespace.as_str()));
-    items
 }
 
 pub fn quantity_event_from_body(body: &str) -> Option<QuantityEvent> {
@@ -557,127 +852,4 @@ fn role_prefix(line: &str) -> Option<(&str, usize)> {
         return None;
     }
     Some((role, role.len()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn item(id: u128, namespace: &str, item_key: &str, value: &str) -> ActiveStructuredState {
-        ActiveStructuredState {
-            unit_id: UnitId::from_u128(id),
-            namespace: namespace.to_string(),
-            item_key: item_key.to_string(),
-            fields: BTreeMap::from([("value".to_string(), Value::String(value.to_string()))]),
-            valid_from: None,
-            valid_to: None,
-        }
-    }
-
-    fn large_state() -> Vec<ActiveStructuredState> {
-        let mut items = vec![
-            item(
-                1,
-                "accessibility_review",
-                "action_item",
-                "Yuki Tanaka spatial audio refactor",
-            ),
-            item(2, "accessibility_review", "title", "VR navigation module"),
-        ];
-        items.extend((3..=33).map(|id| {
-            item(
-                id,
-                &format!("unrelated_{id}"),
-                "detail",
-                &format!("noise_{id}"),
-            )
-        }));
-        items
-    }
-
-    #[test]
-    fn large_state_selects_exact_target_and_its_namespace_siblings() {
-        let selected = select_relevant_active_state(
-            large_state(),
-            "user_agent: Remove Yuki Tanaka's spatial audio refactor.\n\
-             ai_agent: Understood. Is there anything else?\n",
-        );
-        let ids = selected.iter().map(|item| item.unit_id).collect::<Vec<_>>();
-
-        assert!(ids.contains(&UnitId::from_u128(1)));
-        assert!(ids.contains(&UnitId::from_u128(2)));
-        assert!(selected.len() < 33);
-    }
-
-    #[test]
-    fn small_state_passes_through_in_deterministic_unit_order() {
-        let selected = select_relevant_active_state(
-            vec![
-                item(2, "todos", "second", "beta"),
-                item(1, "todos", "first", "alpha"),
-            ],
-            "user: alpha",
-        );
-
-        assert_eq!(
-            selected.iter().map(|item| item.unit_id).collect::<Vec<_>>(),
-            vec![UnitId::from_u128(1), UnitId::from_u128(2)]
-        );
-    }
-
-    #[test]
-    fn large_state_selection_is_deterministic_across_input_order() {
-        let items = large_state();
-        let mut reversed = items.clone();
-        reversed.reverse();
-        let episode = "user: Remove Yuki Tanaka's spatial audio refactor.";
-
-        assert_eq!(
-            select_relevant_active_state(items, episode),
-            select_relevant_active_state(reversed, episode)
-        );
-    }
-
-    #[test]
-    fn no_meaningful_user_signal_falls_back_to_all_state() {
-        let selected = select_relevant_active_state(large_state(), "user: zyzzyva quokka");
-
-        assert_eq!(selected.len(), 33);
-    }
-
-    #[test]
-    fn assistant_target_context_resolves_anaphoric_user_mutation() {
-        let mut items = (1..=33)
-            .map(|id| {
-                item(
-                    id,
-                    &format!("unrelated_{id}"),
-                    "detail",
-                    &format!("noise_{id}"),
-                )
-            })
-            .collect::<Vec<_>>();
-        items.push(item(
-            100,
-            "accessibility_review",
-            "action",
-            "Yuki Tanaka spatial audio refactor",
-        ));
-        items.push(item(
-            101,
-            "accessibility_review",
-            "title",
-            "VR navigation module",
-        ));
-        let selected = select_relevant_active_state(
-            items,
-            "ai_agent: Do you mean the Yuki Tanaka spatial audio refactor?\n\
-             user_agent: Yes, remove that item.\n",
-        );
-        assert!(
-            selected
-                .iter()
-                .any(|item| item.unit_id == UnitId::from_u128(100))
-        );
-    }
 }

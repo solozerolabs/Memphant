@@ -5,21 +5,332 @@ use std::sync::{Arc, Mutex};
 
 use memphant_core::service::MemoryService;
 use memphant_core::{
-    FixedClock, InMemoryStore, MemoryStore, NoopEmbedding, StructuredStateOp,
-    StructuredStateOperation, StructuredStateProvider, StructuredStateProviderError,
-    StructuredStateProviderIdentity, StructuredStateRequest, derive_fact_key,
-    project_structured_state,
+    ActiveStructuredState, EvidenceSlice, FixedClock, InMemoryStore, MemoryStore, NoopEmbedding,
+    StructuredObservation, StructuredObservationDisposition, StructuredSourceKind,
+    StructuredStateOp, StructuredStateOperation, StructuredStateProvider,
+    StructuredStateProviderError, StructuredStateProviderIdentity, StructuredStateRequest,
+    derive_fact_key, evidence_slices_for_episode, evidence_slices_for_resource,
+    fold_structured_observations, project_structured_state as project_source_state,
 };
 use memphant_types::{
     EpisodeId, MemoryKind, RecallHttpRequest, ResolvedMemoryContext, RetainEpisodeHttpRequest,
     TenantId, TrustLevel, UnitState,
 };
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+
+fn sha256(body: &str) -> String {
+    Sha256::digest(body.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn neutral_slice_id(kind: &str, span: &str, body: &str) -> String {
+    let body_sha = sha256(body);
+    let mut hasher = Sha256::new();
+    for component in [kind, span, body_sha.as_str()] {
+        hasher.update((component.len() as u64).to_be_bytes());
+        hasher.update(component.as_bytes());
+    }
+    format!("slice-{:x}", hasher.finalize())
+}
+
+fn observation(
+    namespace: &str,
+    item_key: &str,
+    fields: BTreeMap<String, Value>,
+    disposition: StructuredObservationDisposition,
+    slice: &EvidenceSlice,
+    quote: &str,
+) -> StructuredObservation {
+    StructuredObservation {
+        namespace: namespace.to_string(),
+        item_key: item_key.to_string(),
+        fields,
+        disposition,
+        evidence_slice_id: slice.id.clone(),
+        evidence_quote: quote.to_string(),
+        valid_from: None,
+        valid_to: None,
+    }
+}
+
+#[test]
+fn resource_slices_are_exact_source_neutral_and_fall_back_to_the_short_body() {
+    let body = "deploy notes";
+    let resource_id = memphant_types::ResourceId::from_u128(7);
+    let request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Resource,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices: evidence_slices_for_resource(body, &[]).unwrap(),
+    };
+
+    assert_eq!(request.evidence_slices[0].source_span, "0-12");
+    assert_eq!(request.evidence_slices[0].body, body);
+    assert!(
+        !request.evidence_slices[0]
+            .id
+            .contains(resource_id.as_uuid().to_string().as_str())
+    );
+
+    let folded = fold_structured_observations(
+        body,
+        &request,
+        &[observation(
+            "deployment",
+            "notes",
+            fields(&[("value", json!("deploy notes"))]),
+            StructuredObservationDisposition::State,
+            &request.evidence_slices[0],
+            body,
+        )],
+        &[],
+    )
+    .unwrap();
+    assert_eq!(folded[0].source_span, "0-12");
+    assert_eq!(folded[0].evidence_quote, body);
+}
+
+#[test]
+fn episode_slices_admit_only_exact_user_and_user_agent_quotes() {
+    let body = "system: hidden\nuser: keep me\nassistant: not me\nuser_agent: keep me too";
+    let slices = evidence_slices_for_episode(body).unwrap();
+    assert_eq!(slices.len(), 2);
+    let request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Episode,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices: slices,
+    };
+    let rejected = observation(
+        "profile",
+        "instruction",
+        fields(&[("value", json!("not me"))]),
+        StructuredObservationDisposition::State,
+        &request.evidence_slices[0],
+        "not me",
+    );
+
+    assert!(fold_structured_observations(body, &request, &[rejected], &[]).is_err());
+
+    let assistant_quote = "not me";
+    let assistant_start = body.find(assistant_quote).unwrap();
+    let assistant_span = format!(
+        "{assistant_start}-{}",
+        assistant_start + assistant_quote.len()
+    );
+    let forged_slice = EvidenceSlice {
+        id: neutral_slice_id("episode", &assistant_span, assistant_quote),
+        body: assistant_quote.to_string(),
+        source_span: assistant_span,
+    };
+    let forged_request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Episode,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices: vec![forged_slice.clone()],
+    };
+    let forged = observation(
+        "profile",
+        "instruction",
+        fields(&[("value", json!(assistant_quote))]),
+        StructuredObservationDisposition::State,
+        &forged_slice,
+        assistant_quote,
+    );
+    assert!(fold_structured_observations(body, &forged_request, &[forged], &[]).is_err());
+}
+
+#[test]
+fn neutral_slice_identity_is_stable_across_local_source_ids() {
+    let body = "same resource";
+    let first_local_id = memphant_types::ResourceId::from_u128(1);
+    let second_local_id = memphant_types::ResourceId::from_u128(2);
+    let first = evidence_slices_for_resource(body, &[]).unwrap();
+    let second = evidence_slices_for_resource(body, &[]).unwrap();
+
+    assert_ne!(first_local_id, second_local_id);
+    assert_eq!(first, second);
+    assert!(!first[0].id.contains(&first_local_id.as_uuid().to_string()));
+    assert!(!first[0].id.contains(&second_local_id.as_uuid().to_string()));
+}
+
+#[test]
+fn fold_rejects_slice_substitution_span_shift_quote_mismatch_and_utf8_breaks() {
+    let body = "évidence exact";
+    let slices = evidence_slices_for_resource(body, &[]).unwrap();
+    let observation = observation(
+        "proof",
+        "text",
+        fields(&[("value", json!("exact"))]),
+        StructuredObservationDisposition::State,
+        &slices[0],
+        "exact",
+    );
+    let request = |evidence_slices| StructuredStateRequest {
+        source_kind: StructuredSourceKind::Resource,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices,
+    };
+
+    let mut substituted = slices.clone();
+    substituted[0].body = "different".to_string();
+    assert!(
+        fold_structured_observations(
+            body,
+            &request(substituted),
+            std::slice::from_ref(&observation),
+            &[],
+        )
+        .is_err()
+    );
+
+    let mut shifted = slices.clone();
+    shifted[0].source_span = format!("2-{}", body.len());
+    assert!(
+        fold_structured_observations(
+            body,
+            &request(shifted),
+            std::slice::from_ref(&observation),
+            &[],
+        )
+        .is_err()
+    );
+
+    let mut mismatched = observation.clone();
+    mismatched.evidence_quote = "absent".to_string();
+    assert!(
+        fold_structured_observations(body, &request(slices.clone()), &[mismatched], &[]).is_err()
+    );
+
+    let mut invalid_utf8 = slices;
+    invalid_utf8[0].source_span = format!("1-{}", body.len());
+    assert!(
+        fold_structured_observations(body, &request(invalid_utf8), &[observation], &[]).is_err()
+    );
+}
+
+#[test]
+fn ordered_fold_keeps_only_the_last_state_and_resolves_fresh_targets_once() {
+    let body = "city Oslo. city Bergen. walked 12 steps.";
+    let request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Resource,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices: evidence_slices_for_resource(body, &[]).unwrap(),
+    };
+    let slice = &request.evidence_slices[0];
+    let active = ActiveStructuredState {
+        unit_id: memphant_types::UnitId::from_u128(9),
+        namespace: "profile".to_string(),
+        item_key: "city".to_string(),
+        fields: fields(&[("value", json!("Paris"))]),
+        valid_from: None,
+        valid_to: None,
+    };
+    let observations = vec![
+        observation(
+            "profile",
+            "city",
+            fields(&[("value", json!("Oslo"))]),
+            StructuredObservationDisposition::State,
+            slice,
+            "city Oslo.",
+        ),
+        observation(
+            "profile",
+            "city",
+            fields(&[("value", json!("Bergen"))]),
+            StructuredObservationDisposition::State,
+            slice,
+            "city Bergen.",
+        ),
+        observation(
+            "steps",
+            "daily",
+            fields(&[("count", json!(12))]),
+            StructuredObservationDisposition::Event,
+            slice,
+            "walked 12 steps.",
+        ),
+    ];
+
+    let folded = fold_structured_observations(body, &request, &observations, &[active]).unwrap();
+    assert_eq!(folded.len(), 2);
+    assert_eq!(folded[0].operation, StructuredStateOperation::Replace);
+    assert_eq!(folded[0].fields["value"], "Bergen");
+    assert_eq!(
+        folded[0].target_unit_ids,
+        [memphant_types::UnitId::from_u128(9)]
+    );
+    assert_eq!(folded[1].operation, StructuredStateOperation::Append);
+    assert!(folded[1].target_unit_ids.is_empty());
+}
+
+#[test]
+fn append_predicate_binds_source_kind_local_id_and_canonical_span() {
+    let body = "deploy notes";
+    let operation = StructuredStateOp {
+        operation: StructuredStateOperation::Append,
+        namespace: "workflow".to_string(),
+        item_key: "deploy".to_string(),
+        target_unit_ids: vec![],
+        fields: fields(&[("value", json!("done"))]),
+        evidence_quote: body.to_string(),
+        source_span: "0-12".to_string(),
+        valid_from: None,
+        valid_to: None,
+    };
+    let local_id = "00000000-0000-0000-0000-000000000007";
+    let resource = project_source_state(
+        StructuredSourceKind::Resource,
+        local_id,
+        body,
+        std::slice::from_ref(&operation),
+    )
+    .unwrap();
+    let episode = project_source_state(
+        StructuredSourceKind::Episode,
+        local_id,
+        "user: deploy notes",
+        &[StructuredStateOp {
+            evidence_quote: body.to_string(),
+            source_span: "6-18".to_string(),
+            ..operation
+        }],
+    )
+    .unwrap();
+
+    assert_eq!(
+        resource[0].predicate,
+        "deploy@resource:00000000-0000-0000-0000-000000000007:0-12"
+    );
+    assert_eq!(
+        episode[0].predicate,
+        "deploy@episode:00000000-0000-0000-0000-000000000007:6-18"
+    );
+}
 
 #[derive(Debug)]
 struct FakeProvider {
     identity: StructuredStateProviderIdentity,
     responses: Mutex<VecDeque<Result<Vec<StructuredStateOp>, StructuredStateProviderError>>>,
+}
+
+fn project_structured_state(
+    episode_id: EpisodeId,
+    body: &str,
+    operations: &[StructuredStateOp],
+) -> Result<Vec<memphant_core::ProjectedStructuredState>, StructuredStateProviderError> {
+    project_source_state(
+        StructuredSourceKind::Episode,
+        &episode_id.as_uuid().to_string(),
+        body,
+        operations,
+    )
 }
 
 #[test]
@@ -178,7 +489,7 @@ impl StructuredStateProvider for FakeProvider {
         request: &'a StructuredStateRequest,
     ) -> Pin<
         Box<
-            dyn Future<Output = Result<Vec<StructuredStateOp>, StructuredStateProviderError>>
+            dyn Future<Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>>
                 + Send
                 + 'a,
         >,
@@ -189,41 +500,32 @@ impl StructuredStateProvider for FakeProvider {
             .unwrap()
             .pop_front()
             .unwrap_or_else(|| Ok(Vec::new()))
-            .map(|mut operations| {
-                for operation in &mut operations {
-                    let targets = request
-                        .active_items
-                        .iter()
-                        .filter(|item| {
-                            item.namespace == operation.namespace
-                                && item.item_key == operation.item_key
-                                && if operation.valid_from.is_none() && operation.valid_to.is_none()
-                                {
-                                    item.valid_to.is_none()
-                                } else {
-                                    operation.valid_from.as_deref().is_none_or(|start| {
-                                        item.valid_to.as_deref().is_none_or(|end| start < end)
-                                    }) && operation.valid_to.as_deref().is_none_or(|end| {
-                                        item.valid_from.as_deref().is_none_or(|start| start < end)
-                                    })
-                                }
-                        })
-                        .map(|item| item.unit_id)
-                        .collect::<Vec<_>>();
-                    match operation.operation {
-                        StructuredStateOperation::Create if !targets.is_empty() => {
-                            operation.operation = StructuredStateOperation::Replace;
-                            operation.target_unit_ids = targets;
-                        }
-                        StructuredStateOperation::Delete
-                            if operation.target_unit_ids.is_empty() =>
-                        {
-                            operation.target_unit_ids = targets;
-                        }
-                        _ => {}
-                    }
-                }
+            .map(|operations| {
                 operations
+                    .into_iter()
+                    .map(|operation| {
+                        let evidence_slice_id = request
+                            .evidence_slices
+                            .iter()
+                            .find(|slice| slice.body.contains(&operation.evidence_quote))
+                            .map_or_else(|| "unknown-slice".to_string(), |slice| slice.id.clone());
+                        StructuredObservation {
+                            namespace: operation.namespace,
+                            item_key: operation.item_key,
+                            fields: operation.fields,
+                            disposition: if operation.operation == StructuredStateOperation::Append
+                            {
+                                StructuredObservationDisposition::Event
+                            } else {
+                                StructuredObservationDisposition::State
+                            },
+                            evidence_slice_id,
+                            evidence_quote: operation.evidence_quote,
+                            valid_from: operation.valid_from,
+                            valid_to: operation.valid_to,
+                        }
+                    })
+                    .collect()
             });
         Box::pin(async move { response })
     }
@@ -813,20 +1115,14 @@ fn memora_roles_accept_user_agent_and_reject_ai_agent_evidence() {
         body,
         "I walked 99999 steps.",
     );
-    let projected = memphant_core::project_structured_state(
-        memphant_types::EpisodeId::from_u128(43),
-        body,
-        &[accepted],
-    )
-    .unwrap();
+    let projected =
+        project_structured_state(memphant_types::EpisodeId::from_u128(43), body, &[accepted])
+            .unwrap();
     assert_eq!(projected.len(), 1);
     assert!(projected[0].body.contains("8432"));
-    let error = memphant_core::project_structured_state(
-        memphant_types::EpisodeId::from_u128(43),
-        body,
-        &[rejected],
-    )
-    .unwrap_err();
+    let error =
+        project_structured_state(memphant_types::EpisodeId::from_u128(43), body, &[rejected])
+            .unwrap_err();
     assert!(
         error
             .to_string()
@@ -870,7 +1166,7 @@ fn user_evidence_accepts_utf8_multiline_continuations_until_the_next_role() {
         )
     });
 
-    let projected = memphant_core::project_structured_state(
+    let projected = project_structured_state(
         memphant_types::EpisodeId::from_u128(45),
         body,
         &[accepted, note],
@@ -881,14 +1177,10 @@ fn user_evidence_accepts_utf8_multiline_continuations_until_the_next_role() {
     assert_eq!(projected[0].contextual_chunks[0].body, accepted_quote);
     for operation in rejected {
         assert!(
-            memphant_core::project_structured_state(
-                memphant_types::EpisodeId::from_u128(45),
-                body,
-                &[operation],
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("evidence span is not an exact user quote")
+            project_structured_state(memphant_types::EpisodeId::from_u128(45), body, &[operation],)
+                .unwrap_err()
+                .to_string()
+                .contains("evidence span is not an exact user quote")
         );
     }
 }
@@ -913,17 +1205,14 @@ fn unlabelled_continuation_before_the_first_role_is_rejected() {
         "My city is Zürich.",
     );
 
-    let projected = memphant_core::project_structured_state(
-        memphant_types::EpisodeId::from_u128(46),
-        body,
-        &[labelled],
-    )
-    .unwrap();
+    let projected =
+        project_structured_state(memphant_types::EpisodeId::from_u128(46), body, &[labelled])
+            .unwrap();
 
     assert_eq!(projected.len(), 1);
     assert!(projected[0].body.contains("Zürich"));
     assert!(
-        memphant_core::project_structured_state(
+        project_structured_state(
             memphant_types::EpisodeId::from_u128(46),
             body,
             &[unlabelled],
@@ -957,7 +1246,7 @@ fn unlabelled_prose_and_invalid_validity_never_become_canonical_state() {
     invalid_interval.valid_to = Some("2026-01-01T00:00:00Z".to_string());
 
     assert!(
-        memphant_core::project_structured_state(
+        project_structured_state(
             memphant_types::EpisodeId::from_u128(44),
             body,
             &[unlabelled],
@@ -967,7 +1256,7 @@ fn unlabelled_prose_and_invalid_validity_never_become_canonical_state() {
         .contains("evidence span is not an exact user quote")
     );
     assert!(
-        memphant_core::project_structured_state(
+        project_structured_state(
             memphant_types::EpisodeId::from_u128(44),
             body,
             &[invalid_interval],
@@ -1039,10 +1328,8 @@ async fn compiler_identity_and_append_mapping_are_retry_stable() {
     );
     let provider = FakeProvider::new(vec![]);
     let episode = memphant_types::EpisodeId::from_u128(42);
-    let first =
-        memphant_core::project_structured_state(episode, body, std::slice::from_ref(&operation))
-            .unwrap();
-    let retry = memphant_core::project_structured_state(episode, body, &[operation]).unwrap();
+    let first = project_structured_state(episode, body, std::slice::from_ref(&operation)).unwrap();
+    let retry = project_structured_state(episode, body, &[operation]).unwrap();
     assert_eq!(first, retry);
     assert_eq!(
         memphant_core::structured_compiler_identity("compiler-v1", provider.identity()),

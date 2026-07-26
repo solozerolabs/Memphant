@@ -33,11 +33,12 @@ use crate::{
     DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, FileSyncTransitionSnapshot, ForgetWrite,
     JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome, MutationLedgerStore,
     MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite, ReflectJobRow, ScopePage,
-    StoreError, StructuredStateProvider, StructuredStateRequest, VectorQuery,
+    StoreError, StructuredSourceKind, StructuredStateProvider, StructuredStateRequest, VectorQuery,
     apply_correction_transition, apply_unit_forget_transition, canonical_mutation_request_hash,
     correction_rectangles_with_ids, derive_episode_dedup_key, embedding_profile_for,
-    normalize_component, parse_content_date, prepare_compiled_write,
-    prepare_compiled_write_from_snapshot, project_structured_state, recall_scope_admitted,
+    evidence_slices_for_episode, fold_structured_observations, normalize_component,
+    parse_content_date, prepare_compiled_write, prepare_compiled_write_from_snapshot,
+    project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed,
     structured_compiler_identity, tokenize, validate_valid_interval,
 };
@@ -2332,7 +2333,8 @@ mod structured_provider_retry_tests {
 
     use super::*;
     use crate::{
-        FixedClock, InMemoryStore, NoopEmbedding, StructuredStateOp, StructuredStateOperation,
+        FixedClock, InMemoryStore, NoopEmbedding, StructuredObservation,
+        StructuredObservationDisposition, StructuredStateOp, StructuredStateOperation,
         StructuredStateProviderError, StructuredStateProviderIdentity,
     };
     use serde_json::json;
@@ -2428,8 +2430,9 @@ mod structured_provider_retry_tests {
             request: &'a StructuredStateRequest,
         ) -> Pin<
             Box<
-                dyn Future<Output = Result<Vec<StructuredStateOp>, StructuredStateProviderError>>
-                    + Send
+                dyn Future<
+                        Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>,
+                    > + Send
                     + 'a,
             >,
         > {
@@ -2437,12 +2440,12 @@ mod structured_provider_retry_tests {
             let current = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
             self.max_in_flight.fetch_max(current, Ordering::SeqCst);
             let in_flight = Arc::clone(&self.in_flight);
-            let body = request.episode_body.clone();
-            let target = request.active_items.first().cloned();
+            let slice = request.evidence_slices[0].clone();
+            let body = format!("user: {}", slice.body);
             self.active_item_counts
                 .lock()
                 .unwrap()
-                .push((body.clone(), request.active_items.len()));
+                .push((body.clone(), 0));
             Box::pin(async move {
                 let delay = if body.contains("Oslo") {
                     40
@@ -2454,25 +2457,16 @@ mod structured_provider_retry_tests {
                 tokio::time::sleep(Duration::from_millis(delay)).await;
                 in_flight.fetch_sub(1, Ordering::SeqCst);
                 let quote = body.strip_prefix("user: ").unwrap();
-                Ok(vec![StructuredStateOp {
-                    operation: if target.is_some() {
-                        StructuredStateOperation::Replace
-                    } else {
-                        StructuredStateOperation::Create
-                    },
-                    namespace: target
-                        .as_ref()
-                        .map_or_else(|| "profile".to_string(), |item| item.namespace.clone()),
-                    item_key: target
-                        .as_ref()
-                        .map_or_else(|| "home_city".to_string(), |item| item.item_key.clone()),
-                    target_unit_ids: target.iter().map(|item| item.unit_id).collect(),
+                Ok(vec![StructuredObservation {
+                    namespace: "profile".to_string(),
+                    item_key: "home_city".to_string(),
                     fields: BTreeMap::from([(
                         "value".to_string(),
                         json!(quote.trim_end_matches('.').rsplit(' ').next().unwrap()),
                     )]),
+                    disposition: StructuredObservationDisposition::State,
+                    evidence_slice_id: slice.id,
                     evidence_quote: quote.to_string(),
-                    source_span: format!("6-{}", body.len()),
                     valid_from: None,
                     valid_to: None,
                 }])
@@ -2487,15 +2481,41 @@ mod structured_provider_retry_tests {
 
         fn extract<'a>(
             &'a self,
-            _: &'a StructuredStateRequest,
+            request: &'a StructuredStateRequest,
         ) -> Pin<
             Box<
-                dyn Future<Output = Result<Vec<StructuredStateOp>, StructuredStateProviderError>>
-                    + Send
+                dyn Future<
+                        Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>,
+                    > + Send
                     + 'a,
             >,
         > {
-            let response = self.responses.lock().unwrap().pop_front().unwrap();
+            let response = self
+                .responses
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap()
+                .map(|operations| {
+                    operations
+                        .into_iter()
+                        .map(|operation| StructuredObservation {
+                            namespace: operation.namespace,
+                            item_key: operation.item_key,
+                            fields: operation.fields,
+                            disposition: if operation.operation == StructuredStateOperation::Append
+                            {
+                                StructuredObservationDisposition::Event
+                            } else {
+                                StructuredObservationDisposition::State
+                            },
+                            evidence_slice_id: request.evidence_slices[0].id.clone(),
+                            evidence_quote: operation.evidence_quote,
+                            valid_from: operation.valid_from,
+                            valid_to: operation.valid_to,
+                        })
+                        .collect()
+                });
             Box::pin(async move { response })
         }
     }
@@ -2690,7 +2710,7 @@ mod structured_provider_retry_tests {
             *active_item_counts.lock().unwrap(),
             vec![
                 ("user: My home city is Oslo.".to_string(), 0),
-                ("user: My home city is Lima.".to_string(), 1),
+                ("user: My home city is Lima.".to_string(), 0),
             ]
         );
         let active = store
@@ -5158,21 +5178,15 @@ impl<S: MemoryStore> MemoryService<S> {
         let Some(episode) = self.store.fetch_episode(context, episode_id).await? else {
             return Ok(Vec::new());
         };
-        let active_items = self
-            .store
-            .fetch_scope_open_units(context)
-            .await?
-            .iter()
-            .filter_map(crate::active_structured_state)
-            .collect::<Vec<_>>();
-        let active_items =
-            crate::structured_state::select_relevant_active_state(active_items, &episode.body);
         let request = StructuredStateRequest {
-            episode_id,
-            episode_body: episode.body.clone(),
-            active_items,
+            source_kind: StructuredSourceKind::Episode,
+            source_body_sha256: format!("{:x}", Sha256::digest(episode.body.as_bytes())),
+            batch_index: 0,
+            evidence_slices: evidence_slices_for_episode(&episode.body).map_err(|error| {
+                ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+            })?,
         };
-        let operations = provider
+        let observations = provider
             .extract(&request)
             .await
             .map_err(|error| match error {
@@ -5183,8 +5197,25 @@ impl<S: MemoryStore> MemoryService<S> {
                     ServiceError::Core(CoreError::ProviderInvalid(message))
                 }
             })?;
-        let projections = project_structured_state(episode_id, &episode.body, &operations)
-            .map_err(|error| ServiceError::Core(CoreError::ProviderInvalid(error.to_string())))?;
+        let active_items = self
+            .store
+            .fetch_scope_open_units(context)
+            .await?
+            .iter()
+            .filter_map(crate::active_structured_state)
+            .collect::<Vec<_>>();
+        let operations =
+            fold_structured_observations(&episode.body, &request, &observations, &active_items)
+                .map_err(|error| {
+                    ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+                })?;
+        let projections = project_structured_state(
+            StructuredSourceKind::Episode,
+            &episode_id.as_uuid().to_string(),
+            &episode.body,
+            &operations,
+        )
+        .map_err(|error| ServiceError::Core(CoreError::ProviderInvalid(error.to_string())))?;
         self.store
             .store_prepared_structured_state(job, projections.clone())
             .await?;
