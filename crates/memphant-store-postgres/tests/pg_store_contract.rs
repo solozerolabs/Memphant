@@ -19,12 +19,13 @@ use std::sync::{Arc, Mutex};
 
 use memphant_core::service::{MemoryService, file_sync_plan_sha256};
 use memphant_core::{
-    EmbedError, EmbeddingProvider, FixedClock, JobFilter, MemoryStore, MutationClaim,
-    MutationLedgerStore, MutationVerb, NoopEmbedding, StructuredObservation,
-    StructuredObservationDisposition, StructuredStateOp, StructuredStateOperation,
-    StructuredStateProvider, StructuredStateProviderError, StructuredStateProviderIdentity,
-    StructuredStateRequest, canonical_mutation_request_hash, derive_fact_key, recall,
-    reflect_recorded, retain_episode, retain_resource,
+    EmbedError, EmbeddingProvider, EvidenceSlice, FixedClock, JobFilter, MemoryStore,
+    MutationClaim, MutationLedgerStore, MutationVerb, NoopEmbedding, StructuredExtractionPacket,
+    StructuredObservation, StructuredObservationDisposition, StructuredSourceKind,
+    StructuredStateOp, StructuredStateOperation, StructuredStateProvider,
+    StructuredStateProviderError, StructuredStateProviderIdentity, StructuredStateRequest,
+    canonical_mutation_request_hash, derive_fact_key, recall, reflect_recorded, retain_episode,
+    retain_resource, structured_extraction_receipt_sha256, structured_input_manifest_sha256,
 };
 use memphant_store_postgres::{MIGRATIONS, PgStore};
 use memphant_store_testkit::StoreHarness;
@@ -2080,23 +2081,50 @@ async fn prepared_structured_state_survives_reclaim_without_splitting_scope_lane
     );
 
     let prepared_job = claimed[1].job.id;
-    let input_manifest_sha256 = "1".repeat(64);
-    let extraction_receipt_sha256s = vec!["2".repeat(64)];
+    let provider_identity = StructuredStateProviderIdentity {
+        model: "test/prepared-pg".to_string(),
+        prompt_hash: "prompt".to_string(),
+        schema_hash: "schema".to_string(),
+    };
+    let batches = ["first", "second"]
+        .into_iter()
+        .enumerate()
+        .map(|(batch_index, body)| StructuredStateRequest {
+            source_kind: StructuredSourceKind::Episode,
+            source_body_sha256: "1".repeat(64),
+            batch_index,
+            evidence_slices: vec![EvidenceSlice {
+                id: format!("slice-{batch_index}"),
+                body: body.to_string(),
+                source_span: format!("{batch_index}-{}", batch_index + body.len()),
+            }],
+        })
+        .collect::<Vec<_>>();
+    let extraction_packets = batches
+        .iter()
+        .map(|batch| StructuredExtractionPacket {
+            batch_index: batch.batch_index,
+            receipt_sha256: structured_extraction_receipt_sha256(&provider_identity, batch, &[])
+                .expect("receipt"),
+            observations: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let input_manifest_sha256 = structured_input_manifest_sha256(&batches).expect("manifest");
     store_a
         .store_prepared_structured_state(
             &claimed[1],
-            input_manifest_sha256.clone(),
-            extraction_receipt_sha256s,
-            Vec::new(),
+            &batches,
+            &provider_identity,
+            extraction_packets.clone(),
         )
         .await
         .expect("persist preparation");
     assert_eq!(
         store_b
-            .fetch_prepared_structured_state(&claimed[1], &input_manifest_sha256)
+            .fetch_prepared_structured_state(&claimed[1], &batches, &provider_identity)
             .await
             .expect("fresh-pool preparation read"),
-        Some(Vec::new())
+        Some(extraction_packets.clone())
     );
 
     sqlx::query(
@@ -2150,31 +2178,143 @@ async fn prepared_structured_state_survives_reclaim_without_splitting_scope_lane
     assert_eq!(released_state, "queued");
     assert_eq!(
         store_b
-            .fetch_prepared_structured_state(&reclaimed[1], &input_manifest_sha256)
+            .fetch_prepared_structured_state(&reclaimed[1], &batches, &provider_identity)
             .await
             .expect("reclaimed preparation"),
-        Some(Vec::new()),
+        Some(extraction_packets.clone()),
         "reclaim must not lose the paid preparation"
     );
 
-    sqlx::query(
-        "update memphant.job_state
-         set result = jsonb_set(result, '{input_manifest_sha256}', to_jsonb($3::text))
-         where tenant_id = $1 and id = $2",
-    )
-    .bind(tenant.as_uuid())
-    .bind(prepared_job.as_uuid())
-    .bind("f".repeat(64))
-    .execute(store_a.pool())
-    .await
-    .expect("tamper prepared manifest");
+    let valid_result = memphant_core::ReflectJobResult::Prepared {
+        input_manifest_sha256,
+        extraction_packets: extraction_packets.clone(),
+    };
+    let tampered_packets = [
+        extraction_packets[..1].to_vec(),
+        {
+            let mut inserted = extraction_packets.clone();
+            inserted.push(extraction_packets[1].clone());
+            inserted
+        },
+        {
+            let mut swapped = extraction_packets.clone();
+            swapped.swap(0, 1);
+            swapped
+        },
+    ];
+    for packets in tampered_packets {
+        let tampered = serde_json::to_value(memphant_core::ReflectJobResult::Prepared {
+            input_manifest_sha256: structured_input_manifest_sha256(&batches).unwrap(),
+            extraction_packets: packets,
+        })
+        .unwrap();
+        sqlx::query(
+            "update memphant.job_state set result = $3
+             where tenant_id = $1 and id = $2",
+        )
+        .bind(tenant.as_uuid())
+        .bind(prepared_job.as_uuid())
+        .bind(tampered)
+        .execute(store_a.pool())
+        .await
+        .expect("tamper prepared packets");
+        assert!(
+            store_b
+                .fetch_prepared_structured_state(&reclaimed[1], &batches, &provider_identity)
+                .await
+                .is_err(),
+            "persisted packet deletion, insertion, and swapping must fail closed"
+        );
+    }
+    sqlx::query("update memphant.job_state set result = $3 where tenant_id = $1 and id = $2")
+        .bind(tenant.as_uuid())
+        .bind(prepared_job.as_uuid())
+        .bind(serde_json::to_value(valid_result).unwrap())
+        .execute(store_a.pool())
+        .await
+        .expect("restore prepared packets");
+    let mut reordered_batches = batches.clone();
+    reordered_batches.swap(0, 1);
     assert!(
         store_b
-            .fetch_prepared_structured_state(&reclaimed[1], &input_manifest_sha256)
+            .fetch_prepared_structured_state(&reclaimed[1], &reordered_batches, &provider_identity,)
             .await
             .is_err(),
-        "persisted prepared state must fail closed when its manifest hash changes"
+        "persisted preparation must reject a reordered input manifest"
     );
+}
+
+#[tokio::test]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn stale_compiler_claim_requeues_in_place_under_live_identity() {
+    let store = connect().await;
+    let tenant = fresh_tenant(&store).await;
+    let context = fresh_memory_context(&store, tenant).await;
+    retain_episode(
+        &store,
+        &context,
+        retain_request(&context, "Compiler identity drift fixture.", None),
+    )
+    .await
+    .expect("retain source");
+    let claim = store
+        .claim_reflect_jobs(
+            JobFilter {
+                tenant: Some(tenant),
+                scope: Some(context.scope_id),
+            },
+            1,
+        )
+        .await
+        .expect("claim stale compiler")
+        .pop()
+        .expect("claimed job");
+    let original_order: i64 = sqlx::query_scalar(
+        "select queue_order from memphant.job_state where tenant_id = $1 and id = $2",
+    )
+    .bind(tenant.as_uuid())
+    .bind(claim.job.id.as_uuid())
+    .fetch_one(store.pool())
+    .await
+    .expect("original queue order");
+
+    assert_eq!(
+        store
+            .requeue_reflect_job_with_compiler(&claim, "compiler-pg-current")
+            .await
+            .expect("atomic compiler requeue"),
+        memphant_core::ClaimMutationOutcome::Applied
+    );
+    assert_eq!(
+        store.complete_reflect_job(&claim).await.unwrap(),
+        memphant_core::ClaimMutationOutcome::Stale,
+        "the old compiler claim must be retired"
+    );
+    let reclaimed = store
+        .claim_reflect_jobs(
+            JobFilter {
+                tenant: Some(tenant),
+                scope: Some(context.scope_id),
+            },
+            1,
+        )
+        .await
+        .expect("claim current compiler")
+        .pop()
+        .expect("requeued job");
+    assert_eq!(reclaimed.job.id, claim.job.id);
+    assert_eq!(reclaimed.job.compiler_version, "compiler-pg-current");
+    assert_eq!(reclaimed.attempts, 1);
+    assert!(reclaimed.claim_generation > claim.claim_generation);
+    let current_order: i64 = sqlx::query_scalar(
+        "select queue_order from memphant.job_state where tenant_id = $1 and id = $2",
+    )
+    .bind(tenant.as_uuid())
+    .bind(reclaimed.job.id.as_uuid())
+    .fetch_one(store.pool())
+    .await
+    .expect("current queue order");
+    assert_eq!(current_order, original_order);
 }
 
 #[tokio::test]

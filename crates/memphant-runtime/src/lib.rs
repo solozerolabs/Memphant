@@ -1068,26 +1068,35 @@ impl MemoryStore for AnyStore {
         delegate!(self, store => store.complete_reflect_job(claim).await)
     }
 
+    async fn requeue_reflect_job_with_compiler(
+        &self,
+        claim: &ReflectJobRow,
+        compiler_version: &str,
+    ) -> Result<memphant_core::ClaimMutationOutcome, StoreError> {
+        delegate!(self, store => store.requeue_reflect_job_with_compiler(claim, compiler_version).await)
+    }
+
     async fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        input_manifest_sha256: &str,
-    ) -> Result<Option<Vec<memphant_core::ProjectedStructuredState>>, StoreError> {
-        delegate!(self, store => store.fetch_prepared_structured_state(claim, input_manifest_sha256).await)
+        expected_batches: &[memphant_core::StructuredStateRequest],
+        provider_identity: &memphant_core::StructuredStateProviderIdentity,
+    ) -> Result<Option<Vec<memphant_core::StructuredExtractionPacket>>, StoreError> {
+        delegate!(self, store => store.fetch_prepared_structured_state(claim, expected_batches, provider_identity).await)
     }
 
     async fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        input_manifest_sha256: String,
-        extraction_receipt_sha256s: Vec<String>,
-        projections: Vec<memphant_core::ProjectedStructuredState>,
+        expected_batches: &[memphant_core::StructuredStateRequest],
+        provider_identity: &memphant_core::StructuredStateProviderIdentity,
+        extraction_packets: Vec<memphant_core::StructuredExtractionPacket>,
     ) -> Result<(), StoreError> {
         delegate!(self, store => store.store_prepared_structured_state(
             claim,
-            input_manifest_sha256,
-            extraction_receipt_sha256s,
-            projections,
+            expected_batches,
+            provider_identity,
+            extraction_packets,
         ).await)
     }
 

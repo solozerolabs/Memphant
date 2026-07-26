@@ -1,14 +1,48 @@
-use memphant_core::{InMemoryStore, JobFilter, MemoryStore, ReflectJobResult};
+use memphant_core::{
+    EvidenceSlice, InMemoryStore, JobFilter, MemoryStore, ReflectJobResult,
+    StructuredExtractionPacket, StructuredSourceKind, StructuredStateProviderIdentity,
+    StructuredStateRequest, structured_extraction_receipt_sha256, structured_input_manifest_sha256,
+};
 use memphant_types::{
     ActorId, AgentNodeId, ContextBindingAgentRef, ContextBindingEntityRef, ContextBindingRequest,
     ContextBindingScopeRef, NewEpisode, ReflectJob, ReflectJobKind, ScopeId, SubjectId, TenantId,
     TrustLevel,
 };
 
-const INPUT_MANIFEST_SHA256: &str =
-    "1111111111111111111111111111111111111111111111111111111111111111";
-const EXTRACTION_RECEIPT_SHA256: &str =
-    "2222222222222222222222222222222222222222222222222222222222222222";
+fn prepared_fixture() -> (
+    Vec<StructuredStateRequest>,
+    StructuredStateProviderIdentity,
+    Vec<StructuredExtractionPacket>,
+) {
+    let identity = StructuredStateProviderIdentity {
+        model: "test/prepared".to_string(),
+        prompt_hash: "prompt".to_string(),
+        schema_hash: "schema".to_string(),
+    };
+    let batches = ["first", "second"]
+        .into_iter()
+        .enumerate()
+        .map(|(batch_index, body)| StructuredStateRequest {
+            source_kind: StructuredSourceKind::Episode,
+            source_body_sha256: "1".repeat(64),
+            batch_index,
+            evidence_slices: vec![EvidenceSlice {
+                id: format!("slice-{batch_index}"),
+                body: body.to_string(),
+                source_span: format!("{batch_index}-{}", batch_index + body.len()),
+            }],
+        })
+        .collect::<Vec<_>>();
+    let packets = batches
+        .iter()
+        .map(|batch| StructuredExtractionPacket {
+            batch_index: batch.batch_index,
+            receipt_sha256: structured_extraction_receipt_sha256(&identity, batch, &[]).unwrap(),
+            observations: Vec::new(),
+        })
+        .collect();
+    (batches, identity, packets)
+}
 
 fn scope_job(context: &memphant_types::ResolvedMemoryContext) -> ReflectJob {
     ReflectJob {
@@ -317,6 +351,7 @@ async fn post_claim_operations_require_the_exact_claim_token() {
         .unwrap()
         .pop()
         .unwrap();
+    let (batches, identity, packets) = prepared_fixture();
     let mut forged = Vec::new();
     for mutation in 0..6 {
         let mut token = claim.clone();
@@ -333,12 +368,7 @@ async fn post_claim_operations_require_the_exact_claim_token() {
 
     for token in &forged {
         store
-            .store_prepared_structured_state(
-                token,
-                INPUT_MANIFEST_SHA256.to_string(),
-                vec![EXTRACTION_RECEIPT_SHA256.to_string()],
-                Vec::new(),
-            )
+            .store_prepared_structured_state(token, &batches, &identity, packets.clone())
             .await
             .unwrap();
         store
@@ -354,7 +384,7 @@ async fn post_claim_operations_require_the_exact_claim_token() {
 
     assert_eq!(
         store
-            .fetch_prepared_structured_state(&claim, INPUT_MANIFEST_SHA256)
+            .fetch_prepared_structured_state(&claim, &batches, &identity)
             .await
             .unwrap(),
         None
@@ -369,30 +399,24 @@ async fn post_claim_operations_require_the_exact_claim_token() {
     );
 
     store
-        .store_prepared_structured_state(
-            &claim,
-            INPUT_MANIFEST_SHA256.to_string(),
-            vec![EXTRACTION_RECEIPT_SHA256.to_string()],
-            Vec::new(),
-        )
+        .store_prepared_structured_state(&claim, &batches, &identity, packets.clone())
         .await
         .unwrap();
     assert_eq!(
         store
-            .fetch_prepared_structured_state(&claim, INPUT_MANIFEST_SHA256)
+            .fetch_prepared_structured_state(&claim, &batches, &identity)
             .await
             .unwrap(),
-        Some(Vec::new())
+        Some(packets.clone())
     );
+    let mut reordered_batches = batches.clone();
+    reordered_batches.swap(0, 1);
     assert!(
         store
-            .fetch_prepared_structured_state(
-                &claim,
-                "3333333333333333333333333333333333333333333333333333333333333333",
-            )
+            .fetch_prepared_structured_state(&claim, &reordered_batches, &identity)
             .await
             .is_err(),
-        "prepared state must reject an input-manifest hash mismatch"
+        "prepared state must reject a reordered input manifest"
     );
     store
         .release_reflect_job(&claim, 0, "retry".to_string())
@@ -407,10 +431,10 @@ async fn post_claim_operations_require_the_exact_claim_token() {
     assert_eq!(reclaimed.attempts, claim.attempts + 1);
     assert_eq!(
         store
-            .fetch_prepared_structured_state(&reclaimed, INPUT_MANIFEST_SHA256)
+            .fetch_prepared_structured_state(&reclaimed, &batches, &identity)
             .await
             .unwrap(),
-        Some(Vec::new()),
+        Some(packets),
         "prepared state survives a valid release and reclaim"
     );
     store.complete_reflect_job(&claim).await.unwrap();
@@ -426,16 +450,86 @@ async fn post_claim_operations_require_the_exact_claim_token() {
 }
 
 #[test]
-fn prepared_result_serialization_binds_input_and_extraction_receipts() {
+fn prepared_result_serialization_contains_only_source_neutral_packets() {
+    let (batches, identity, packets) = prepared_fixture();
     let result = ReflectJobResult::Prepared {
-        input_manifest_sha256: INPUT_MANIFEST_SHA256.to_string(),
-        extraction_receipt_sha256s: vec![EXTRACTION_RECEIPT_SHA256.to_string()],
-        projections: Vec::new(),
+        input_manifest_sha256: structured_input_manifest_sha256(&batches).unwrap(),
+        extraction_packets: packets.clone(),
     };
     let value = serde_json::to_value(result).unwrap();
-    assert_eq!(value["input_manifest_sha256"], INPUT_MANIFEST_SHA256);
     assert_eq!(
-        value["extraction_receipt_sha256s"],
-        serde_json::json!([EXTRACTION_RECEIPT_SHA256])
+        value["input_manifest_sha256"],
+        structured_input_manifest_sha256(&batches).unwrap()
     );
+    assert_eq!(value["extraction_packets"][0]["batch_index"], 0);
+    assert_eq!(
+        value["extraction_packets"][0]["receipt_sha256"],
+        structured_extraction_receipt_sha256(&identity, &batches[0], &[]).unwrap()
+    );
+    assert!(value.get("projections").is_none());
+}
+
+#[tokio::test]
+async fn in_memory_prepared_packets_reject_deleted_inserted_or_swapped_receipts() {
+    let store = InMemoryStore::default();
+    let tenant = TenantId::new();
+    let context = bound_context(&store, tenant).await;
+    let mut tx = store.begin(&context).await.unwrap();
+    let episode = store
+        .stage_episode(
+            &mut tx,
+            NewEpisode {
+                tenant_id: tenant,
+                data_subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                source_kind: "user".to_string(),
+                source_ref: "test:packet-tamper".to_string(),
+                observed_at: "2026-07-15T00:00:00Z".to_string(),
+                source_trust: TrustLevel::TrustedUser,
+                dedup_key: "packet-tamper".to_string(),
+                body: "first second".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    store
+        .enqueue_reflect(
+            &mut tx,
+            ReflectJob {
+                episode_id: Some(episode.episode_id),
+                kind: ReflectJobKind::ReflectEpisode,
+                compiler_version: "packet-tamper".to_string(),
+                ..scope_job(&context)
+            },
+        )
+        .await
+        .unwrap();
+    store.commit(tx).await.unwrap();
+    let claim = store
+        .claim_reflect_jobs(JobFilter::default(), 1)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    let (batches, identity, packets) = prepared_fixture();
+
+    let mut mutations = vec![packets[..1].to_vec(), {
+        let mut inserted = packets.clone();
+        inserted.push(packets[1].clone());
+        inserted
+    }];
+    let mut swapped = packets.clone();
+    swapped.swap(0, 1);
+    mutations.push(swapped);
+    for tampered in mutations {
+        assert!(
+            store
+                .store_prepared_structured_state(&claim, &batches, &identity, tampered)
+                .await
+                .is_err()
+        );
+    }
 }

@@ -35,6 +35,61 @@ struct ResourceStructuredProvider {
     calls: Mutex<Vec<StructuredStateRequest>>,
 }
 
+struct WorkflowStateProvider {
+    identity: StructuredStateProviderIdentity,
+    namespace: String,
+}
+
+impl WorkflowStateProvider {
+    fn new(namespace: &str) -> Self {
+        Self {
+            identity: StructuredStateProviderIdentity {
+                model: "test/workflow-compiler".to_string(),
+                prompt_hash: "workflow-prompt".to_string(),
+                schema_hash: "workflow-schema".to_string(),
+            },
+            namespace: namespace.to_string(),
+        }
+    }
+}
+
+impl StructuredStateProvider for WorkflowStateProvider {
+    fn identity(&self) -> &StructuredStateProviderIdentity {
+        &self.identity
+    }
+
+    fn extract<'a>(
+        &'a self,
+        request: &'a StructuredStateRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        let slice = request.evidence_slices[0].clone();
+        let namespace = self.namespace.clone();
+        Box::pin(async move {
+            let fields = if slice.body.starts_with("Retire ") {
+                BTreeMap::new()
+            } else {
+                BTreeMap::from([("step".to_string(), json!(slice.body))])
+            };
+            Ok(vec![StructuredObservation {
+                namespace,
+                item_key: "migration".to_string(),
+                fields,
+                disposition: StructuredObservationDisposition::State,
+                evidence_slice_id: slice.id,
+                evidence_quote: slice.body,
+                valid_from: None,
+                valid_to: None,
+            }])
+        })
+    }
+}
+
 impl ResourceStructuredProvider {
     fn new() -> Self {
         Self {
@@ -319,6 +374,69 @@ async fn resource_observation_batches_fold_once_in_source_order() {
         compiled[0].body,
         format!("deployment item region: {{\"value\":{expected_last}}}")
     );
+}
+
+#[tokio::test]
+async fn procedural_resource_state_replaces_then_retires_across_jobs() {
+    for namespace in ["workflow", "procedure", "gotcha"] {
+        let store = InMemoryStore::default();
+        let service = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(CLOCK),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_provider(Arc::new(WorkflowStateProvider::new(namespace)));
+        let context = memphant_store_testkit::bind_context(&store, TenantId::new()).await;
+
+        for (index, body) in [
+            "Run database migrations before rollout.",
+            "Run database migrations after backup.",
+            "Retire the database migration workflow.",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            service
+                .retain(
+                    &context,
+                    &format!("{namespace}-state-{index}"),
+                    TrustLevel::TrustedSystem,
+                    structured_resource_request(&context, body),
+                )
+                .await
+                .expect("retain procedural state");
+            assert_eq!(service.run_worker_tick(1).await.expect("reflect"), 1);
+
+            let active = store
+                .scope_memory_page(&context, None, 100)
+                .await
+                .expect("scope page")
+                .items
+                .into_iter()
+                .filter(|unit| {
+                    unit.kind == MemoryKind::Procedural
+                        && unit.state == memphant_types::UnitState::Active
+                        && unit.valid_to.is_none()
+                        && unit
+                            .body
+                            .starts_with(&format!("{namespace} item migration:"))
+                })
+                .collect::<Vec<_>>();
+            match index {
+                0 => assert_eq!(active.len(), 1),
+                1 => {
+                    assert_eq!(
+                        active.len(),
+                        1,
+                        "replacement must retire the prior {namespace}"
+                    );
+                    assert!(active[0].body.contains("after backup"));
+                }
+                2 => assert!(active.is_empty(), "retirement must remove the {namespace}"),
+                _ => unreachable!(),
+            }
+        }
+    }
 }
 
 #[tokio::test]

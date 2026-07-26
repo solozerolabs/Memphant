@@ -341,12 +341,11 @@ struct GroundedObservation<'a> {
     end: usize,
 }
 
-pub fn fold_structured_observations(
+fn grounded_structured_observations<'a>(
     source_body: &str,
     request: &StructuredStateRequest,
-    observations: &[StructuredObservation],
-    active_items: &[ActiveStructuredState],
-) -> Result<Vec<StructuredStateOp>, StructuredStateProviderError> {
+    observations: &'a [StructuredObservation],
+) -> Result<Vec<GroundedObservation<'a>>, StructuredStateProviderError> {
     if request.source_body_sha256 != sha256_hex(source_body.as_bytes()) {
         return Err(invalid_output("structured source body hash changed"));
     }
@@ -397,18 +396,36 @@ pub fn fold_structured_observations(
                     "observation evidence quote does not match its source",
                 ));
             }
-            let namespace = canonical_key(&observation.namespace);
-            let item_key = canonical_key(&observation.item_key);
             Ok(GroundedObservation {
                 observation,
-                namespace,
-                item_key,
+                namespace: canonical_key(&observation.namespace),
+                item_key: canonical_key(&observation.item_key),
                 start,
                 end,
             })
         })
         .collect::<Result<Vec<_>, StructuredStateProviderError>>()?;
     grounded.sort_by_key(|item| (item.start, item.end));
+    Ok(grounded)
+}
+
+/// Revalidates a source-neutral extraction packet against its exact source
+/// batch before it may be persisted or replayed.
+pub fn validate_structured_observations_for_request(
+    source_body: &str,
+    request: &StructuredStateRequest,
+    observations: &[StructuredObservation],
+) -> Result<(), StructuredStateProviderError> {
+    grounded_structured_observations(source_body, request, observations).map(|_| ())
+}
+
+pub fn fold_structured_observations(
+    source_body: &str,
+    request: &StructuredStateRequest,
+    observations: &[StructuredObservation],
+    active_items: &[ActiveStructuredState],
+) -> Result<Vec<StructuredStateOp>, StructuredStateProviderError> {
+    let grounded = grounded_structured_observations(source_body, request, observations)?;
 
     let mut last_state = BTreeMap::new();
     for (index, item) in grounded.iter().enumerate() {
@@ -760,7 +777,7 @@ fn validate_operation_shape(
 /// are deliberately excluded.
 pub fn active_structured_state(unit: &StoredMemoryUnit) -> Option<ActiveStructuredState> {
     if unit.state != UnitState::Active
-        || unit.kind != MemoryKind::Semantic
+        || !matches!(unit.kind, MemoryKind::Semantic | MemoryKind::Procedural)
         || unit.transaction_to.is_some()
         || unit.contextual_chunks.first()?.header != "[structured-state evidence]"
     {

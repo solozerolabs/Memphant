@@ -33,14 +33,15 @@ use crate::{
     DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, FileSyncTransitionSnapshot, ForgetWrite,
     JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome, MutationLedgerStore,
     MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite, ReflectJobRow, ScopePage,
-    StoreError, StructuredSourceKind, StructuredStateProvider, StructuredStateRequest, VectorQuery,
-    apply_correction_transition, apply_unit_forget_transition, canonical_mutation_request_hash,
-    correction_rectangles_with_ids, derive_episode_dedup_key, embedding_profile_for,
-    evidence_slices_for_episode, evidence_slices_for_resource, fold_structured_observations,
-    normalize_component, parse_content_date, prepare_compiled_write,
+    StoreError, StructuredExtractionPacket, StructuredSourceKind, StructuredStateProvider,
+    StructuredStateRequest, VectorQuery, apply_correction_transition, apply_unit_forget_transition,
+    canonical_mutation_request_hash, correction_rectangles_with_ids, derive_episode_dedup_key,
+    embedding_profile_for, evidence_slices_for_episode, evidence_slices_for_resource,
+    fold_structured_observations, normalize_component, parse_content_date, prepare_compiled_write,
     prepare_compiled_write_from_snapshot, project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed,
-    structured_compiler_identity, tokenize, validate_valid_interval,
+    structured_compiler_identity, structured_extraction_receipt_sha256, tokenize,
+    validate_structured_observations_for_request, validate_valid_interval,
 };
 
 pub const DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY: usize = 4;
@@ -2960,6 +2961,228 @@ mod structured_provider_retry_tests {
             "completed persistence must make the job unclaimable"
         );
     }
+
+    #[tokio::test]
+    async fn prepared_observations_refold_against_intervening_active_state_without_provider_call() {
+        let oslo_body = "user: My home city is Oslo.";
+        let lima_body = "user: My home city is Lima.";
+        let operation = |body: &str, value: &str| StructuredStateOp {
+            operation: StructuredStateOperation::Create,
+            namespace: "profile".to_string(),
+            item_key: "home_city".to_string(),
+            target_unit_ids: Vec::new(),
+            fields: BTreeMap::from([("value".to_string(), json!(value))]),
+            evidence_quote: body.strip_prefix("user: ").unwrap().to_string(),
+            source_span: format!("6-{}", body.len()),
+            valid_from: None,
+            valid_to: None,
+        };
+        let identity = || StructuredStateProviderIdentity {
+            model: "test/recovery".to_string(),
+            prompt_hash: "prompt".to_string(),
+            schema_hash: "schema".to_string(),
+        };
+        let provider = Arc::new(RetryProvider {
+            identity: identity(),
+            responses: Mutex::new(VecDeque::from([
+                Ok(vec![operation(oslo_body, "Oslo")]),
+                Ok(vec![operation(lima_body, "Lima")]),
+            ])),
+        });
+        let store = InMemoryStore::default();
+        let tenant = TenantId::new();
+        let context = bind_test_context(&store, tenant, "prepared-refold").await;
+        let first = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(FixedClock("2026-07-13T00:00:00Z")),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_provider(provider);
+        first
+            .retain(
+                &context,
+                "prepared-refold-oslo",
+                TrustLevel::TrustedUser,
+                episode_request(&context, "prepared-refold-oslo", oslo_body),
+            )
+            .await
+            .unwrap();
+        assert_eq!(first.run_worker_tick(1).await.unwrap(), 1);
+        first
+            .retain(
+                &context,
+                "prepared-refold-lima",
+                TrustLevel::TrustedUser,
+                episode_request(&context, "prepared-refold-lima", lima_body),
+            )
+            .await
+            .unwrap();
+        let claim = store
+            .claim_reflect_jobs(
+                JobFilter {
+                    tenant: Some(tenant),
+                    scope: Some(context.scope_id),
+                },
+                1,
+            )
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        let resolved = first.resolve_job_context(&claim).await.unwrap();
+        first
+            .prepare_structured_state(&claim, &resolved)
+            .await
+            .unwrap();
+        store
+            .release_reflect_job(&claim, 0, "simulated crash".to_string())
+            .await
+            .unwrap();
+
+        let oslo = store
+            .memory_units(tenant)
+            .into_iter()
+            .find(|unit| {
+                unit.state == memphant_types::UnitState::Active
+                    && unit.valid_to.is_none()
+                    && unit.body == "profile item home_city: {\"value\":\"Oslo\"}"
+            })
+            .unwrap();
+        first
+            .correct(
+                &context,
+                "prepared-refold-intervening-correction",
+                CorrectRequest {
+                    subject_id: context.data_subject_id,
+                    scope_id: context.scope_id,
+                    actor_id: context.actor_id,
+                    agent_node_id: context.agent_node_id,
+                    subject_generation: context.subject_generation,
+                    selector: memphant_types::CorrectSelector {
+                        memory_unit_id: oslo.id,
+                    },
+                    correction: CorrectionPayload {
+                        value: "profile item home_city: {\"value\":\"Rome\"}".to_string(),
+                        reason: "intervening state".to_string(),
+                        source_ref: "test:prepared-refold-intervening".to_string(),
+                        observed_at: "2026-07-13T00:01:00Z".to_string(),
+                        valid_from: None,
+                        valid_to: None,
+                    },
+                },
+            )
+            .await
+            .unwrap();
+
+        let replay_provider = Arc::new(RetryProvider {
+            identity: identity(),
+            responses: Mutex::new(VecDeque::from([Err(
+                StructuredStateProviderError::Unavailable("must not extract again".to_string()),
+            )])),
+        });
+        let replay = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(FixedClock("2026-07-13T00:02:00Z")),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_provider(replay_provider.clone());
+        assert_eq!(replay.run_worker_tick(1).await.unwrap(), 1);
+        assert_eq!(replay_provider.responses.lock().unwrap().len(), 1);
+        let current = store
+            .memory_units(tenant)
+            .into_iter()
+            .filter(|unit| {
+                unit.state == memphant_types::UnitState::Active
+                    && unit.valid_to.is_none()
+                    && unit
+                        .fact_key
+                        .as_deref()
+                        .is_some_and(|key| key.ends_with(":profile:home_city"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(current.len(), 1);
+        assert_eq!(
+            current[0].body,
+            "profile item home_city: {\"value\":\"Lima\"}"
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_requeues_stale_compiler_identity_before_extraction() {
+        let body = "user: My home city is Lima.";
+        let operation = StructuredStateOp {
+            operation: StructuredStateOperation::Create,
+            namespace: "profile".to_string(),
+            item_key: "home_city".to_string(),
+            target_unit_ids: Vec::new(),
+            fields: BTreeMap::from([("value".to_string(), json!("Lima"))]),
+            evidence_quote: "My home city is Lima.".to_string(),
+            source_span: format!("6-{}", body.len()),
+            valid_from: None,
+            valid_to: None,
+        };
+        let provider_a = Arc::new(RetryProvider {
+            identity: StructuredStateProviderIdentity {
+                model: "test/provider-a".to_string(),
+                prompt_hash: "prompt-a".to_string(),
+                schema_hash: "schema".to_string(),
+            },
+            responses: Mutex::new(VecDeque::from([Err(
+                StructuredStateProviderError::Unavailable("A must not run".to_string()),
+            )])),
+        });
+        let provider_b = Arc::new(RetryProvider {
+            identity: StructuredStateProviderIdentity {
+                model: "test/provider-b".to_string(),
+                prompt_hash: "prompt-b".to_string(),
+                schema_hash: "schema".to_string(),
+            },
+            responses: Mutex::new(VecDeque::from([Ok(vec![operation])])),
+        });
+        let store = InMemoryStore::default();
+        let tenant = TenantId::new();
+        let context = bind_test_context(&store, tenant, "identity-drift").await;
+        let enqueue = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(FixedClock("2026-07-13T00:00:00Z")),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_provider(provider_a.clone());
+        enqueue
+            .retain(
+                &context,
+                "identity-drift",
+                TrustLevel::TrustedUser,
+                episode_request(&context, "identity-drift", body),
+            )
+            .await
+            .unwrap();
+        let compiler_a = store.reflect_jobs(tenant)[0].compiler_version.clone();
+
+        let worker = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(FixedClock("2026-07-13T00:01:00Z")),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_provider(provider_b.clone());
+        assert_eq!(worker.run_worker_tick(1).await.unwrap(), 0);
+        assert_eq!(provider_a.responses.lock().unwrap().len(), 1);
+        assert_eq!(provider_b.responses.lock().unwrap().len(), 1);
+        assert!(
+            store
+                .reflect_traces(tenant)
+                .iter()
+                .all(|trace| trace.compiler_version != compiler_a)
+        );
+
+        assert_eq!(worker.run_worker_tick(1).await.unwrap(), 1);
+        assert!(provider_b.responses.lock().unwrap().is_empty());
+        let compiler_b =
+            service_structured_compiler_identity(COMPILER_VERSION, provider_b.as_ref());
+        let traces = store.reflect_traces(tenant);
+        assert_eq!(traces.len(), 1);
+        assert_eq!(traces[0].compiler_version, compiler_b);
+    }
 }
 
 impl From<StoreError> for ServiceError {
@@ -4839,6 +5062,17 @@ impl<S: MemoryStore> MemoryService<S> {
                             .await?;
                         continue;
                     }
+                    if let Some(live_compiler_version) =
+                        service.live_structured_compiler_identity(job.job.kind)
+                        && job.job.compiler_version != live_compiler_version
+                    {
+                        service
+                            .store
+                            .requeue_reflect_job_with_compiler(&job, &live_compiler_version)
+                            .await?;
+                        blocked = true;
+                        continue;
+                    }
                     let prepared = async {
                         let context = service.resolve_job_context(&job).await?;
                         let projections = service.prepare_structured_state(&job, &context).await?;
@@ -5269,47 +5503,58 @@ impl<S: MemoryStore> MemoryService<S> {
                 evidence_slices: vec![evidence_slice],
             })
             .collect::<Vec<_>>();
-        let input_manifest_sha256 = format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&batches).map_err(|error| {
-                ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
-            })?)
-        );
-        if let Some(prepared) = self
+        let provider_identity = provider.identity();
+        let extraction_packets = if let Some(prepared) = self
             .store
-            .fetch_prepared_structured_state(job, &input_manifest_sha256)
+            .fetch_prepared_structured_state(job, &batches, provider_identity)
             .await?
         {
-            return Ok(prepared);
-        }
-        let mut observations = Vec::new();
-        let mut extraction_receipt_sha256s = Vec::with_capacity(batches.len());
-        for batch in &batches {
-            let batch_observations =
-                provider.extract(batch).await.map_err(|error| match error {
-                    crate::StructuredStateProviderError::Unavailable(message) => {
-                        ServiceError::Core(CoreError::ProviderUnavailable(message))
-                    }
-                    crate::StructuredStateProviderError::InvalidOutput(message) => {
-                        ServiceError::Core(CoreError::ProviderInvalid(message))
-                    }
-                })?;
-            let identity = provider.identity();
-            let receipt = (
-                identity.model.as_str(),
-                identity.prompt_hash.as_str(),
-                identity.schema_hash.as_str(),
-                batch,
-                &batch_observations,
-            );
-            extraction_receipt_sha256s.push(format!(
-                "{:x}",
-                Sha256::digest(serde_json::to_vec(&receipt).map_err(|error| {
+            prepared
+        } else {
+            let mut packets = Vec::with_capacity(batches.len());
+            for batch in &batches {
+                let batch_observations =
+                    provider.extract(batch).await.map_err(|error| match error {
+                        crate::StructuredStateProviderError::Unavailable(message) => {
+                            ServiceError::Core(CoreError::ProviderUnavailable(message))
+                        }
+                        crate::StructuredStateProviderError::InvalidOutput(message) => {
+                            ServiceError::Core(CoreError::ProviderInvalid(message))
+                        }
+                    })?;
+                validate_structured_observations_for_request(
+                    &source_body,
+                    batch,
+                    &batch_observations,
+                )
+                .map_err(|error| {
                     ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
-                })?)
-            ));
-            observations.extend(batch_observations);
+                })?;
+                packets.push(StructuredExtractionPacket {
+                    batch_index: batch.batch_index,
+                    receipt_sha256: structured_extraction_receipt_sha256(
+                        provider_identity,
+                        batch,
+                        &batch_observations,
+                    )?,
+                    observations: batch_observations,
+                });
+            }
+            self.store
+                .store_prepared_structured_state(job, &batches, provider_identity, packets.clone())
+                .await?;
+            packets
+        };
+        for (batch, packet) in batches.iter().zip(&extraction_packets) {
+            validate_structured_observations_for_request(&source_body, batch, &packet.observations)
+                .map_err(|error| {
+                    ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+                })?;
         }
+        let observations = extraction_packets
+            .iter()
+            .flat_map(|packet| packet.observations.iter().cloned())
+            .collect::<Vec<_>>();
         let active_items = self
             .store
             .fetch_scope_open_units(context)
@@ -5327,15 +5572,19 @@ impl<S: MemoryStore> MemoryService<S> {
                 .map_err(|error| {
                     ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
                 })?;
-        self.store
-            .store_prepared_structured_state(
-                job,
-                input_manifest_sha256,
-                extraction_receipt_sha256s,
-                projections.clone(),
-            )
-            .await?;
         Ok(projections)
+    }
+
+    fn live_structured_compiler_identity(&self, kind: ReflectJobKind) -> Option<String> {
+        match (kind, self.structured_state_provider.as_ref()) {
+            (ReflectJobKind::ReflectEpisode | ReflectJobKind::ReflectResource, Some(provider)) => {
+                Some(service_structured_compiler_identity(
+                    COMPILER_VERSION,
+                    provider.as_ref(),
+                ))
+            }
+            _ => None,
+        }
     }
 
     async fn resolve_job_context(

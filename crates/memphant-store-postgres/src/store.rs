@@ -3931,11 +3931,112 @@ impl MemoryStore for PgStore {
         })
     }
 
+    async fn requeue_reflect_job_with_compiler(
+        &self,
+        claim: &ReflectJobRow,
+        compiler_version: &str,
+    ) -> Result<ClaimMutationOutcome, StoreError> {
+        if compiler_version.trim().is_empty() {
+            return Err(StoreError::Conflict(
+                "reflect compiler identity must not be empty".to_string(),
+            ));
+        }
+        let tenant = claim.job.tenant_id;
+        let mut tx = self.tenant_tx(tenant).await?;
+        let source: Option<(String, Uuid, i64)> = sqlx::query_as(
+            "select job_type, target_id, queue_order from memphant.job_state
+             where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+               and scope_id = $4 and agent_node_id = $5 and actor_id = $6
+               and id = $7 and compiler_version = $8 and attempts = $9
+               and claim_generation = $10 and state = 'running'
+             for update",
+        )
+        .bind(tenant.as_uuid())
+        .bind(claim.job.data_subject_id.as_uuid())
+        .bind(claim.job.subject_generation as i64)
+        .bind(claim.job.scope_id.as_uuid())
+        .bind(claim.job.agent_node_id.as_uuid())
+        .bind(claim.job.actor_id.as_uuid())
+        .bind(claim.job.id.as_uuid())
+        .bind(&claim.job.compiler_version)
+        .bind(claim.attempts as i32)
+        .bind(claim.claim_generation as i64)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(backend)?;
+        let Some((job_type, target_id, queue_order)) = source else {
+            tx.commit().await.map_err(backend)?;
+            return Ok(ClaimMutationOutcome::Stale);
+        };
+        let authoritative_id: Option<Uuid> = sqlx::query_scalar(
+            "select id from memphant.job_state
+               where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+                 and scope_id = $4 and agent_node_id = $5 and actor_id = $6
+                 and job_type = $7 and target_id = $8 and compiler_version = $9 and id <> $10
+               order by queue_order limit 1",
+        )
+        .bind(tenant.as_uuid())
+        .bind(claim.job.data_subject_id.as_uuid())
+        .bind(claim.job.subject_generation as i64)
+        .bind(claim.job.scope_id.as_uuid())
+        .bind(claim.job.agent_node_id.as_uuid())
+        .bind(claim.job.actor_id.as_uuid())
+        .bind(&job_type)
+        .bind(target_id)
+        .bind(compiler_version)
+        .bind(claim.job.id.as_uuid())
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(backend)?;
+        if let Some(authoritative_id) = authoritative_id {
+            sqlx::query(
+                "update memphant.job_state set queue_order = least(queue_order, $3)
+                 where tenant_id = $1 and id = $2",
+            )
+            .bind(tenant.as_uuid())
+            .bind(authoritative_id)
+            .bind(queue_order)
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
+            sqlx::query(
+                "update memphant.job_state
+                 set state = 'dead', claimed_at = null, result = null,
+                     claim_generation = claim_generation + 1,
+                     last_error = 'stale compiler identity', updated_at = now()
+                 where tenant_id = $1 and id = $2",
+            )
+            .bind(tenant.as_uuid())
+            .bind(claim.job.id.as_uuid())
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
+        } else {
+            sqlx::query(
+                "update memphant.job_state
+                 set compiler_version = $3, state = 'queued', claimed_at = null,
+                     run_after = now(), attempts = 0,
+                     claim_generation = claim_generation + 1, result = null,
+                     last_error = 'stale compiler identity', updated_at = now()
+                 where tenant_id = $1 and id = $2",
+            )
+            .bind(tenant.as_uuid())
+            .bind(claim.job.id.as_uuid())
+            .bind(compiler_version)
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
+        }
+        tx.commit().await.map_err(backend)?;
+        Ok(ClaimMutationOutcome::Applied)
+    }
+
     async fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        expected_input_manifest_sha256: &str,
-    ) -> Result<Option<Vec<memphant_core::ProjectedStructuredState>>, StoreError> {
+        expected_batches: &[memphant_core::StructuredStateRequest],
+        provider_identity: &memphant_core::StructuredStateProviderIdentity,
+    ) -> Result<Option<Vec<memphant_core::StructuredExtractionPacket>>, StoreError> {
         let tenant = claim.job.tenant_id;
         let mut tx = self.tenant_tx(tenant).await?;
         // `queued` is included so a valid release does not lose the paid
@@ -3970,15 +4071,15 @@ impl MemoryStore for PgStore {
         {
             Some(memphant_core::ReflectJobResult::Prepared {
                 input_manifest_sha256,
-                extraction_receipt_sha256s,
-                projections,
+                extraction_packets,
             }) => {
                 memphant_core::validate_prepared_structured_state_binding(
-                    expected_input_manifest_sha256,
+                    expected_batches,
+                    provider_identity,
                     &input_manifest_sha256,
-                    &extraction_receipt_sha256s,
+                    &extraction_packets,
                 )?;
-                Ok(Some(projections))
+                Ok(Some(extraction_packets))
             }
             Some(memphant_core::ReflectJobResult::Completed { .. }) | None => Ok(None),
         }
@@ -3987,19 +4088,21 @@ impl MemoryStore for PgStore {
     async fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        input_manifest_sha256: String,
-        extraction_receipt_sha256s: Vec<String>,
-        projections: Vec<memphant_core::ProjectedStructuredState>,
+        expected_batches: &[memphant_core::StructuredStateRequest],
+        provider_identity: &memphant_core::StructuredStateProviderIdentity,
+        extraction_packets: Vec<memphant_core::StructuredExtractionPacket>,
     ) -> Result<(), StoreError> {
+        let input_manifest_sha256 =
+            memphant_core::structured_input_manifest_sha256(expected_batches)?;
         memphant_core::validate_prepared_structured_state_binding(
+            expected_batches,
+            provider_identity,
             &input_manifest_sha256,
-            &input_manifest_sha256,
-            &extraction_receipt_sha256s,
+            &extraction_packets,
         )?;
         let value = serde_json::to_value(memphant_core::ReflectJobResult::Prepared {
             input_manifest_sha256,
-            extraction_receipt_sha256s,
-            projections,
+            extraction_packets,
         })
         .map_err(|error| StoreError::Backend(error.to_string()))?;
         let tenant = claim.job.tenant_id;

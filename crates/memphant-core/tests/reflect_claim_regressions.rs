@@ -9,10 +9,12 @@ use memphant_core::{
     FixedClock, InMemoryStore, JobFilter, MemoryStore, NoopEmbedding, ReflectJobRow,
     StructuredObservation, StructuredStateProvider, StructuredStateProviderError,
     StructuredStateProviderIdentity, StructuredStateRequest, reflect_recorded, retain_episode,
+    structured_compiler_identity,
 };
 use memphant_types::{
-    ContextBindingAgentRef, ContextBindingEntityRef, ContextBindingRequest, ContextBindingScopeRef,
-    JobId, MemoryKind, ReflectCandidate, ReflectInput, RetainRequest, TenantId, TrustLevel,
+    COMPILER_VERSION, ContextBindingAgentRef, ContextBindingEntityRef, ContextBindingRequest,
+    ContextBindingScopeRef, JobId, MemoryKind, ReflectCandidate, ReflectInput, RetainRequest,
+    TenantId, TrustLevel,
 };
 
 const CLOCK: FixedClock = FixedClock("2030-01-01T00:00:00Z");
@@ -163,6 +165,11 @@ async fn worker_completed_count_excludes_a_stale_claim_noop() {
     let store = Arc::new(InMemoryStore::default());
     let tenant = TenantId::new();
     let context = context(&store, tenant, "worker").await;
+    let provider_identity = StructuredStateProviderIdentity {
+        model: "blocking-test".to_string(),
+        prompt_hash: "prompt".to_string(),
+        schema_hash: "schema".to_string(),
+    };
     retain_episode(
         store.as_ref(),
         &context,
@@ -181,7 +188,10 @@ async fn worker_completed_count_excludes_a_stale_claim_noop() {
             subject: None,
             predicate: None,
             body: "user: I live in Oslo.".to_string(),
-            compiler_version: "stale-count".to_string(),
+            compiler_version: structured_compiler_identity(
+                &format!("{COMPILER_VERSION}+source-slice-batches-v1"),
+                &provider_identity,
+            ),
         },
     )
     .await
@@ -192,19 +202,19 @@ async fn worker_completed_count_excludes_a_stale_claim_noop() {
     let release = Arc::new(AtomicBool::new(false));
     let service = MemoryService::new(Arc::clone(&store), Arc::new(CLOCK), Arc::new(NoopEmbedding))
         .with_structured_state_provider(Arc::new(BlockingProvider {
-            identity: StructuredStateProviderIdentity {
-                model: "blocking-test".to_string(),
-                prompt_hash: "prompt".to_string(),
-                schema_hash: "schema".to_string(),
-            },
+            identity: provider_identity,
             entered: Arc::clone(&entered),
             release: Arc::clone(&release),
         }));
 
     let tick = tokio::spawn(async move { service.run_worker_tick(1).await });
-    while !entered.load(Ordering::SeqCst) {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !entered.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .expect("worker must reach extraction before stale-claim simulation");
     let first_claim = ReflectJobRow {
         job: queued,
         attempts: 1,

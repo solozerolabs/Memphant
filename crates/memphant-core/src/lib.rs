@@ -17,6 +17,7 @@ pub use structured_state::{
     fold_structured_observations, ground_user_evidence_quote, project_structured_state,
     quantity_event_from_body, quantity_event_from_fields, structured_compiler_identity,
     user_evidence_turns, validate_structured_observation,
+    validate_structured_observations_for_request,
 };
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -783,38 +784,85 @@ pub enum ClaimMutationOutcome {
 pub enum ReflectJobResult {
     Prepared {
         input_manifest_sha256: String,
-        extraction_receipt_sha256s: Vec<String>,
-        projections: Vec<ProjectedStructuredState>,
+        extraction_packets: Vec<StructuredExtractionPacket>,
     },
     Completed {
         trace: ReflectTrace,
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StructuredExtractionPacket {
+    pub batch_index: usize,
+    pub receipt_sha256: String,
+    pub observations: Vec<StructuredObservation>,
+}
+
+pub fn structured_input_manifest_sha256(
+    batches: &[StructuredStateRequest],
+) -> Result<String, StoreError> {
+    let bytes =
+        serde_json::to_vec(batches).map_err(|error| StoreError::Backend(error.to_string()))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+pub fn structured_extraction_receipt_sha256(
+    identity: &StructuredStateProviderIdentity,
+    batch: &StructuredStateRequest,
+    observations: &[StructuredObservation],
+) -> Result<String, StoreError> {
+    let receipt = (
+        identity.model.as_str(),
+        identity.prompt_hash.as_str(),
+        identity.schema_hash.as_str(),
+        batch,
+        observations,
+    );
+    let bytes =
+        serde_json::to_vec(&receipt).map_err(|error| StoreError::Backend(error.to_string()))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
 pub fn validate_prepared_structured_state_binding(
-    expected_input_manifest_sha256: &str,
+    expected_batches: &[StructuredStateRequest],
+    provider_identity: &StructuredStateProviderIdentity,
     input_manifest_sha256: &str,
-    extraction_receipt_sha256s: &[String],
+    extraction_packets: &[StructuredExtractionPacket],
 ) -> Result<(), StoreError> {
-    let is_sha256 = |value: &str| {
-        value.len() == 64
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    };
-    if !is_sha256(input_manifest_sha256)
-        || extraction_receipt_sha256s
-            .iter()
-            .any(|receipt| !is_sha256(receipt))
+    if expected_batches
+        .iter()
+        .enumerate()
+        .any(|(index, batch)| batch.batch_index != index)
     {
         return Err(StoreError::Conflict(
-            "prepared structured-state binding is not a canonical SHA-256".to_string(),
+            "structured-state input batches are not in canonical index order".to_string(),
         ));
     }
+    let expected_input_manifest_sha256 = structured_input_manifest_sha256(expected_batches)?;
     if input_manifest_sha256 != expected_input_manifest_sha256 {
         return Err(StoreError::Conflict(
             "prepared structured-state input manifest changed".to_string(),
         ));
+    }
+    if extraction_packets.len() != expected_batches.len() {
+        return Err(StoreError::Conflict(
+            "prepared structured-state extraction packet count changed".to_string(),
+        ));
+    }
+    for (index, (batch, packet)) in expected_batches.iter().zip(extraction_packets).enumerate() {
+        if batch.batch_index != index || packet.batch_index != index {
+            return Err(StoreError::Conflict(
+                "prepared structured-state extraction packet order changed".to_string(),
+            ));
+        }
+        let expected_receipt =
+            structured_extraction_receipt_sha256(provider_identity, batch, &packet.observations)?;
+        if packet.receipt_sha256 != expected_receipt {
+            return Err(StoreError::Conflict(
+                "prepared structured-state extraction receipt changed".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -1666,17 +1714,25 @@ pub trait MemoryStore: Send + Sync {
         &self,
         claim: &ReflectJobRow,
     ) -> impl Future<Output = Result<ClaimMutationOutcome, StoreError>> + Send;
+    /// Atomically invalidates a stale compiler claim and makes the same source
+    /// job claimable under the worker's live compiler identity.
+    fn requeue_reflect_job_with_compiler(
+        &self,
+        claim: &ReflectJobRow,
+        compiler_version: &str,
+    ) -> impl Future<Output = Result<ClaimMutationOutcome, StoreError>> + Send;
     fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        input_manifest_sha256: &str,
-    ) -> impl Future<Output = Result<Option<Vec<ProjectedStructuredState>>, StoreError>> + Send;
+        expected_batches: &[StructuredStateRequest],
+        provider_identity: &StructuredStateProviderIdentity,
+    ) -> impl Future<Output = Result<Option<Vec<StructuredExtractionPacket>>, StoreError>> + Send;
     fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        input_manifest_sha256: String,
-        extraction_receipt_sha256s: Vec<String>,
-        projections: Vec<ProjectedStructuredState>,
+        expected_batches: &[StructuredStateRequest],
+        provider_identity: &StructuredStateProviderIdentity,
+        extraction_packets: Vec<StructuredExtractionPacket>,
     ) -> impl Future<Output = Result<(), StoreError>> + Send;
     fn release_reflect_job(
         &self,
@@ -4960,11 +5016,69 @@ impl MemoryStore for InMemoryStore {
         Ok(ClaimMutationOutcome::Applied)
     }
 
+    async fn requeue_reflect_job_with_compiler(
+        &self,
+        claim: &ReflectJobRow,
+        compiler_version: &str,
+    ) -> Result<ClaimMutationOutcome, StoreError> {
+        if compiler_version.trim().is_empty() {
+            return Err(StoreError::Conflict(
+                "reflect compiler identity must not be empty".to_string(),
+            ));
+        }
+        let mut state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        if !state.claim_is_current(claim) {
+            return Ok(ClaimMutationOutcome::Stale);
+        }
+        let jobs = state
+            .reflect_jobs
+            .get_mut(&claim.job.tenant_id)
+            .ok_or(StoreError::NotFound("reflect_job"))?;
+        let same_source = |job: &QueuedReflectJob| {
+            job.id != claim.job.id
+                && job.tenant_id == claim.job.tenant_id
+                && job.data_subject_id == claim.job.data_subject_id
+                && job.subject_generation == claim.job.subject_generation
+                && job.scope_id == claim.job.scope_id
+                && job.agent_node_id == claim.job.agent_node_id
+                && job.actor_id == claim.job.actor_id
+                && job.kind == claim.job.kind
+                && job.episode_id == claim.job.episode_id
+                && job.resource_id == claim.job.resource_id
+                && job.compiler_version == compiler_version
+        };
+        let stale_index = jobs
+            .iter()
+            .position(|job| job.id == claim.job.id)
+            .ok_or(StoreError::NotFound("reflect_job"))?;
+        let authoritative_index = jobs.iter().position(same_source);
+        if let Some(authoritative_index) = authoritative_index {
+            jobs.swap(stale_index, authoritative_index);
+            let meta = state.job_meta.entry(claim.job.id).or_default();
+            meta.claimed = false;
+            meta.terminal = true;
+            meta.claim_generation = meta.claim_generation.saturating_add(1);
+        } else {
+            jobs[stale_index].compiler_version = compiler_version.to_string();
+            let meta = state.job_meta.entry(claim.job.id).or_default();
+            meta.attempts = 0;
+            meta.claim_generation = meta.claim_generation.saturating_add(1);
+            meta.claimed = false;
+            meta.completed = false;
+            meta.terminal = false;
+        }
+        state
+            .prepared_structured_state
+            .remove(&(claim.job.tenant_id, claim.job.id));
+        Ok(ClaimMutationOutcome::Applied)
+    }
+
     async fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        expected_input_manifest_sha256: &str,
-    ) -> Result<Option<Vec<ProjectedStructuredState>>, StoreError> {
+        expected_batches: &[StructuredStateRequest],
+        provider_identity: &StructuredStateProviderIdentity,
+    ) -> Result<Option<Vec<StructuredExtractionPacket>>, StoreError> {
         let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
         if !state.claim_is_current(claim) {
             return Ok(None);
@@ -4975,15 +5089,15 @@ impl MemoryStore for InMemoryStore {
         {
             Some(ReflectJobResult::Prepared {
                 input_manifest_sha256,
-                extraction_receipt_sha256s,
-                projections,
+                extraction_packets,
             }) => {
                 validate_prepared_structured_state_binding(
-                    expected_input_manifest_sha256,
+                    expected_batches,
+                    provider_identity,
                     input_manifest_sha256,
-                    extraction_receipt_sha256s,
+                    extraction_packets,
                 )?;
-                Ok(Some(projections.clone()))
+                Ok(Some(extraction_packets.clone()))
             }
             Some(ReflectJobResult::Completed { .. }) | None => Ok(None),
         }
@@ -4992,14 +5106,16 @@ impl MemoryStore for InMemoryStore {
     async fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
-        input_manifest_sha256: String,
-        extraction_receipt_sha256s: Vec<String>,
-        projections: Vec<ProjectedStructuredState>,
+        expected_batches: &[StructuredStateRequest],
+        provider_identity: &StructuredStateProviderIdentity,
+        extraction_packets: Vec<StructuredExtractionPacket>,
     ) -> Result<(), StoreError> {
+        let input_manifest_sha256 = structured_input_manifest_sha256(expected_batches)?;
         validate_prepared_structured_state_binding(
+            expected_batches,
+            provider_identity,
             &input_manifest_sha256,
-            &input_manifest_sha256,
-            &extraction_receipt_sha256s,
+            &extraction_packets,
         )?;
         let mut state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
         if !state.claim_is_current(claim) {
@@ -5010,8 +5126,7 @@ impl MemoryStore for InMemoryStore {
             .entry((claim.job.tenant_id, claim.job.id))
             .or_insert(ReflectJobResult::Prepared {
                 input_manifest_sha256,
-                extraction_receipt_sha256s,
-                projections,
+                extraction_packets,
             });
         Ok(())
     }
@@ -11001,6 +11116,7 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
                 &candidate.body,
             )
         });
+        let structured_target_kind = candidate.kind.unwrap_or(MemoryKind::Semantic);
 
         let targeted_indices = if let Some(target_ids) = &candidate.target_unit_ids {
             let unique_targets = target_ids.iter().copied().collect::<HashSet<_>>();
@@ -11017,7 +11133,7 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
                         && unit.scope_id == input.scope_id
                         && unit.fact_key.as_deref() == Some(fact_key.as_str())
                         && unit.state == UnitState::Active
-                        && unit.kind == MemoryKind::Semantic
+                        && unit.kind == structured_target_kind
                         && unit.transaction_to.is_none()
                         && candidate_targets_unit(&candidate, unit, &now)
                 })
@@ -11033,7 +11149,7 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
                     unit.scope_id == input.scope_id
                         && unit.fact_key.as_deref() == Some(fact_key.as_str())
                         && unit.state == UnitState::Active
-                        && unit.kind == MemoryKind::Semantic
+                        && unit.kind == structured_target_kind
                         && unit.transaction_to.is_none()
                 })
             {
