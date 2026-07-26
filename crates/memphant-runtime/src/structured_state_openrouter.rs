@@ -1,9 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 use fs2::FileExt;
 use memphant_core::{
@@ -39,6 +42,7 @@ const GLOBAL_TIMEOUT: Duration = Duration::from_secs(240);
 const RESPONSE_LIMIT: u64 = 4 * 1024 * 1024;
 const PROMPT_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH";
 const LEDGER_ENV: &str = "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER";
+const DISPATCH_ROOT_ENV: &str = "MEMPHANT_STRUCTURED_STATE_DISPATCH_ROOT";
 const INPUT_PRICE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION";
 const OUTPUT_PRICE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION";
 const TOKENIZER_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH";
@@ -405,6 +409,14 @@ pub fn structured_state_provider_from_env()
             "{LEDGER_ENV} is required for the Qwen campaign route"
         ));
     }
+    let dispatch_root = std::env::var_os(DISPATCH_ROOT_ENV)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
+    if model == LME_V2_QWEN_MODEL && dispatch_root.is_none() {
+        return Err(format!(
+            "{DISPATCH_ROOT_ENV} is required for the Qwen campaign route"
+        ));
+    }
     let aggregate_reservation_nanos = if ledger.is_some() {
         Some(parse_positive_u64_env(AGGREGATE_RESERVATION_ENV)?)
     } else {
@@ -433,6 +445,7 @@ pub fn structured_state_provider_from_env()
     };
     provider = provider.with_campaign_attempt(campaign_attempt)?;
     provider.aggregate_reservation_nanos = aggregate_reservation_nanos;
+    provider.dispatch_root = dispatch_root;
     let cache_values = [
         std::env::var_os(OBSERVATION_CACHE_ENV),
         std::env::var_os(CACHE_HITS_ENV),
@@ -804,7 +817,8 @@ impl CampaignCache {
         request: &StructuredStateRequest,
         plan: &StructuredStateRequestPlan,
         requested_model: &str,
-        started: &AttemptEvent,
+        source_started_event_sha256: String,
+        source_result_event_sha256: String,
         completed: &AttemptEvent,
         observations: &[StructuredObservation],
     ) -> Result<(), StructuredStateProviderError> {
@@ -841,8 +855,8 @@ impl CampaignCache {
                 .clone()
                 .ok_or_else(|| invalid("settled cache source omitted response id"))?,
             source_attempt_id: completed.attempt_id.clone(),
-            source_started_event_sha256: attempt_event_sha256(started),
-            source_result_event_sha256: attempt_event_sha256(completed),
+            source_started_event_sha256,
+            source_result_event_sha256,
             provider_result_sha256: completed
                 .result_sha256
                 .clone()
@@ -957,6 +971,7 @@ struct OpenRouterStructuredState {
     identity: StructuredStateProviderIdentity,
     transport: Arc<dyn Transport>,
     ledger: Option<PathBuf>,
+    dispatch_root: Option<PathBuf>,
     ledger_lock: Arc<Mutex<()>>,
     reasoning_effort: Option<String>,
     tokenizer: Option<StructuredStateTokenizer>,
@@ -991,6 +1006,7 @@ impl OpenRouterStructuredState {
             output_price_nanos_per_million,
             transport,
             ledger,
+            dispatch_root: None,
             ledger_lock: Arc::new(Mutex::new(())),
             reasoning_effort: None,
             tokenizer: None,
@@ -1098,6 +1114,10 @@ impl OpenRouterStructuredState {
                 "structured-state cache-only materialization rejected a cache miss".to_string(),
             ));
         }
+        if let Some(outcome) = self.resume_exact_attempt(request, &plan)? {
+            drop(cache_lock);
+            return outcome;
+        }
         let attempt = MAX_ATTEMPTS;
         let attempt_id = uuid::Uuid::new_v4().to_string();
         let started = Instant::now();
@@ -1125,6 +1145,7 @@ impl OpenRouterStructuredState {
                 ));
             }
         };
+        self.persist_dispatch_response(&started_event, &response, "response")?;
         if !(200..300).contains(&response.status) {
             self.record_attempt(
                 &AttemptEvent::http_error(
@@ -1146,22 +1167,9 @@ impl OpenRouterStructuredState {
         }
         let reconciled = match reconcile_generation(self.transport.as_ref(), &response) {
             Ok(reconciled) => reconciled,
-            Err(error) => {
-                self.record_attempt(
-                    &AttemptEvent::generation_lookup_failed(
-                        &attempt_id,
-                        request,
-                        &plan,
-                        &self.model,
-                        attempt,
-                        &response,
-                        started.elapsed(),
-                    )
-                    .for_campaign_attempt(self.campaign_attempt),
-                )?;
-                return Err(StructuredStateProviderError::Unavailable(error));
-            }
+            Err(error) => return Err(StructuredStateProviderError::Unavailable(error)),
         };
+        self.persist_dispatch_response(&started_event, &reconciled, "generation")?;
         let observations = match decode_response(reconciled.body.clone(), request) {
             Ok(observations) => observations,
             Err(error) => {
@@ -1200,7 +1208,8 @@ impl OpenRouterStructuredState {
                 request,
                 &plan,
                 &self.model,
-                &started_event,
+                attempt_event_sha256(&started_event),
+                attempt_event_sha256(&completed_event),
                 &completed_event,
                 &observations,
             )?;
@@ -1223,6 +1232,204 @@ impl OpenRouterStructuredState {
                 "structured-state attempt ledger write failed: {error}"
             ))
         })
+    }
+
+    fn dispatch_path(&self, plan: &StructuredStateRequestPlan, stage: &str) -> Option<PathBuf> {
+        self.dispatch_root.as_ref().map(|root| {
+            root.join(format!(
+                "{}-{}-{stage}.json",
+                self.campaign_attempt, plan.extraction_key
+            ))
+        })
+    }
+
+    fn persist_dispatch_response(
+        &self,
+        started: &AttemptEvent,
+        response: &HttpResponse,
+        stage: &str,
+    ) -> Result<(), StructuredStateProviderError> {
+        let Some(path) = self.dispatch_path_for_event(started, stage) else {
+            return Ok(());
+        };
+        let core = json!({
+            "schema_version": 1,
+            "stage": stage,
+            "campaign_attempt": started.campaign_attempt,
+            "attempt_id": started.attempt_id,
+            "extraction_key": started.extraction_key,
+            "request_sha256": started.request_sha256,
+            "status": response.status,
+            "body": response.body,
+        });
+        let record = json!({
+            "core": core,
+            "dispatch_sha256": canonical_sha256(&core),
+        });
+        write_private_create_only(&path, &record).map_err(|error| {
+            StructuredStateProviderError::Unavailable(format!(
+                "structured-state dispatch journal write failed: {error}"
+            ))
+        })
+    }
+
+    fn dispatch_path_for_event(&self, event: &AttemptEvent, stage: &str) -> Option<PathBuf> {
+        self.dispatch_root.as_ref().map(|root| {
+            root.join(format!(
+                "{}-{}-{stage}.json",
+                event.campaign_attempt, event.extraction_key
+            ))
+        })
+    }
+
+    fn resume_exact_attempt(
+        &self,
+        request: &StructuredStateRequest,
+        plan: &StructuredStateRequestPlan,
+    ) -> Result<
+        Option<Result<Vec<StructuredObservation>, StructuredStateProviderError>>,
+        StructuredStateProviderError,
+    > {
+        let Some(path) = &self.ledger else {
+            return Ok(None);
+        };
+        let state = exact_attempt_state(path, plan, self.campaign_attempt)?;
+        let attempt_id = match state {
+            ExactAttemptState::Absent => return Ok(None),
+            ExactAttemptState::Terminal { decoded: false, .. } => return Ok(Some(Ok(Vec::new()))),
+            ExactAttemptState::Started {
+                attempt_id,
+                started_event_sha256,
+            } => (attempt_id, started_event_sha256),
+            ExactAttemptState::Terminal {
+                attempt_id,
+                decoded: true,
+                started_event_sha256,
+                result_event_sha256,
+            } => {
+                let generation_path = self.dispatch_path(plan, "generation").ok_or_else(|| {
+                    StructuredStateProviderError::Unavailable(
+                        "decoded terminal attempt lacks dispatch journal authority".to_string(),
+                    )
+                })?;
+                let reconciled = load_dispatch_response(
+                    &generation_path,
+                    &attempt_id,
+                    plan,
+                    self.campaign_attempt,
+                    "generation",
+                )?;
+                let observations = decode_response(reconciled.body.clone(), request)?;
+                let completed = AttemptEvent::completed(
+                    &attempt_id,
+                    request,
+                    plan,
+                    &self.model,
+                    MAX_ATTEMPTS,
+                    &reconciled,
+                    &observations,
+                    Duration::ZERO,
+                )
+                .for_campaign_attempt(self.campaign_attempt);
+                if let Some(cache) = &self.campaign_cache {
+                    cache.store(
+                        request,
+                        plan,
+                        &self.model,
+                        started_event_sha256,
+                        result_event_sha256,
+                        &completed,
+                        &observations,
+                    )?;
+                }
+                return Ok(Some(Ok(observations)));
+            }
+        };
+        let (attempt_id, started_event_sha256) = attempt_id;
+        let response_path = self.dispatch_path(plan, "response").ok_or_else(|| {
+            StructuredStateProviderError::Unavailable(
+                "structured-state started attempt has no dispatch journal authority".to_string(),
+            )
+        })?;
+        if !response_path.is_file() {
+            return Err(StructuredStateProviderError::Unavailable(
+                "structured-state started attempt is ambiguous and non-dispatchable".to_string(),
+            ));
+        }
+        let response = load_dispatch_response(
+            &response_path,
+            &attempt_id,
+            plan,
+            self.campaign_attempt,
+            "response",
+        )?;
+        let started = AttemptEvent::started(&attempt_id, request, plan, &self.model, MAX_ATTEMPTS)
+            .for_campaign_attempt(self.campaign_attempt);
+        if !(200..300).contains(&response.status) {
+            self.record_attempt(
+                &AttemptEvent::http_error(
+                    &attempt_id,
+                    request,
+                    plan,
+                    &self.model,
+                    MAX_ATTEMPTS,
+                    &response,
+                    Duration::ZERO,
+                )
+                .for_campaign_attempt(self.campaign_attempt),
+            )?;
+            return Ok(Some(Err(StructuredStateProviderError::Unavailable(
+                format!("OpenRouter HTTP {}", response.status),
+            ))));
+        }
+        if response.body.get("id").and_then(Value::as_str).is_none() {
+            return Err(StructuredStateProviderError::Unavailable(
+                "structured-state captured response has no generation id and is non-dispatchable"
+                    .to_string(),
+            ));
+        }
+        let generation_path = self
+            .dispatch_path(plan, "generation")
+            .expect("dispatch root exists");
+        let reconciled = if generation_path.is_file() {
+            load_dispatch_response(
+                &generation_path,
+                &attempt_id,
+                plan,
+                self.campaign_attempt,
+                "generation",
+            )?
+        } else {
+            let value = reconcile_generation(self.transport.as_ref(), &response)
+                .map_err(StructuredStateProviderError::Unavailable)?;
+            self.persist_dispatch_response(&started, &value, "generation")?;
+            value
+        };
+        let observations = decode_response(reconciled.body.clone(), request)?;
+        let completed = AttemptEvent::completed(
+            &attempt_id,
+            request,
+            plan,
+            &self.model,
+            MAX_ATTEMPTS,
+            &reconciled,
+            &observations,
+            Duration::ZERO,
+        )
+        .for_campaign_attempt(self.campaign_attempt);
+        self.record_attempt(&completed)?;
+        if let Some(cache) = &self.campaign_cache {
+            cache.store(
+                request,
+                plan,
+                &self.model,
+                started_event_sha256,
+                attempt_event_sha256(&completed),
+                &completed,
+                &observations,
+            )?;
+        }
+        Ok(Some(Ok(observations)))
     }
 }
 
@@ -1467,9 +1674,191 @@ fn decode_response(
         .collect()
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 struct HttpResponse {
     status: u16,
     body: Value,
+}
+
+enum ExactAttemptState {
+    Absent,
+    Started {
+        attempt_id: String,
+        started_event_sha256: String,
+    },
+    Terminal {
+        attempt_id: String,
+        decoded: bool,
+        started_event_sha256: String,
+        result_event_sha256: String,
+    },
+}
+
+fn exact_attempt_state(
+    path: &Path,
+    plan: &StructuredStateRequestPlan,
+    campaign_attempt: usize,
+) -> Result<ExactAttemptState, StructuredStateProviderError> {
+    if !path.is_file() {
+        return Ok(ExactAttemptState::Absent);
+    }
+    let mut file = File::open(path).map_err(|error| {
+        StructuredStateProviderError::Unavailable(format!(
+            "structured-state attempt ledger read failed: {error}"
+        ))
+    })?;
+    file.lock_shared().map_err(|error| {
+        StructuredStateProviderError::Unavailable(format!(
+            "structured-state attempt ledger lock failed: {error}"
+        ))
+    })?;
+    let mut body = String::new();
+    file.read_to_string(&mut body).map_err(|error| {
+        StructuredStateProviderError::Unavailable(format!(
+            "structured-state attempt ledger read failed: {error}"
+        ))
+    })?;
+    file.unlock().map_err(|error| {
+        StructuredStateProviderError::Unavailable(format!(
+            "structured-state attempt ledger unlock failed: {error}"
+        ))
+    })?;
+    let mut started: Option<(String, String)> = None;
+    let mut terminal: Option<(bool, String)> = None;
+    for line in body.lines() {
+        let event: Value = serde_json::from_str(line).map_err(|error| {
+            StructuredStateProviderError::Unavailable(format!(
+                "structured-state attempt ledger is malformed: {error}"
+            ))
+        })?;
+        if event.get("extraction_key").and_then(Value::as_str) != Some(plan.extraction_key.as_str())
+            || event.get("request_sha256").and_then(Value::as_str)
+                != Some(plan.request_sha256.as_str())
+            || event.get("campaign_attempt").and_then(Value::as_u64)
+                != Some(campaign_attempt as u64)
+        {
+            continue;
+        }
+        match event.get("event").and_then(Value::as_str) {
+            Some("started") if started.is_none() && terminal.is_none() => {
+                let attempt_id = event
+                    .get("attempt_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let Some(attempt_id) = attempt_id else {
+                    return Err(StructuredStateProviderError::Unavailable(
+                        "structured-state started attempt id is missing".to_string(),
+                    ));
+                };
+                started = Some((attempt_id, canonical_sha256(&event)));
+            }
+            Some("result") if started.is_some() && terminal.is_none() => {
+                if event.get("attempt_id").and_then(Value::as_str)
+                    != started.as_ref().map(|(attempt_id, _)| attempt_id.as_str())
+                {
+                    return Err(StructuredStateProviderError::Unavailable(
+                        "structured-state terminal attempt identity drift".to_string(),
+                    ));
+                }
+                terminal = Some((
+                    event.get("parse_status").and_then(Value::as_str) == Some("decoded"),
+                    canonical_sha256(&event),
+                ));
+            }
+            _ => {
+                return Err(StructuredStateProviderError::Unavailable(
+                    "structured-state exact attempt history is forked".to_string(),
+                ));
+            }
+        }
+    }
+    if let Some((decoded, result_event_sha256)) = terminal {
+        let (attempt_id, started_event_sha256) = started.expect("terminal event has a start");
+        Ok(ExactAttemptState::Terminal {
+            attempt_id,
+            decoded,
+            started_event_sha256,
+            result_event_sha256,
+        })
+    } else if let Some((attempt_id, started_event_sha256)) = started {
+        Ok(ExactAttemptState::Started {
+            attempt_id,
+            started_event_sha256,
+        })
+    } else {
+        Ok(ExactAttemptState::Absent)
+    }
+}
+
+fn write_private_create_only(path: &Path, value: &Value) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(path)?;
+    serde_json::to_writer(&mut file, value)?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    if let Some(parent) = path.parent() {
+        File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
+fn load_dispatch_response(
+    path: &Path,
+    attempt_id: &str,
+    plan: &StructuredStateRequestPlan,
+    campaign_attempt: usize,
+    stage: &str,
+) -> Result<HttpResponse, StructuredStateProviderError> {
+    let record: Value = serde_json::from_slice(&fs::read(path).map_err(|error| {
+        StructuredStateProviderError::Unavailable(format!(
+            "structured-state dispatch journal read failed: {error}"
+        ))
+    })?)
+    .map_err(|error| {
+        StructuredStateProviderError::Unavailable(format!(
+            "structured-state dispatch journal is malformed: {error}"
+        ))
+    })?;
+    let value = record.get("core").ok_or_else(|| {
+        StructuredStateProviderError::Unavailable(
+            "structured-state dispatch journal core is missing".to_string(),
+        )
+    })?;
+    let core_sha256 = canonical_sha256(value);
+    if record.get("dispatch_sha256").and_then(Value::as_str) != Some(core_sha256.as_str())
+        || value.get("schema_version").and_then(Value::as_u64) != Some(1)
+        || value.get("stage").and_then(Value::as_str) != Some(stage)
+        || value.get("campaign_attempt").and_then(Value::as_u64) != Some(campaign_attempt as u64)
+        || value.get("attempt_id").and_then(Value::as_str) != Some(attempt_id)
+        || value.get("extraction_key").and_then(Value::as_str) != Some(plan.extraction_key.as_str())
+        || value.get("request_sha256").and_then(Value::as_str) != Some(plan.request_sha256.as_str())
+    {
+        return Err(StructuredStateProviderError::Unavailable(
+            "structured-state dispatch journal authority drift".to_string(),
+        ));
+    }
+    Ok(HttpResponse {
+        status: value
+            .get("status")
+            .and_then(Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok())
+            .ok_or_else(|| {
+                StructuredStateProviderError::Unavailable(
+                    "structured-state dispatch status is invalid".to_string(),
+                )
+            })?,
+        body: value.get("body").cloned().ok_or_else(|| {
+            StructuredStateProviderError::Unavailable(
+                "structured-state dispatch body is missing".to_string(),
+            )
+        })?,
+    })
 }
 
 trait Transport: Send + Sync {
@@ -1781,39 +2170,6 @@ impl AttemptEvent {
         if is_typed_not_charged_pre_generation(response) {
             event.reservation_status = "not_charged";
         }
-        event
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn generation_lookup_failed(
-        attempt_id: &str,
-        request: &StructuredStateRequest,
-        plan: &StructuredStateRequestPlan,
-        model: &str,
-        attempt: usize,
-        response: &HttpResponse,
-        elapsed: Duration,
-    ) -> Self {
-        let mut event = Self::failed(
-            attempt_id,
-            request,
-            plan,
-            model,
-            attempt,
-            "generation_stats_lookup_failed",
-            elapsed,
-        );
-        event.http_status = Some(response.status);
-        event.response_id = response
-            .body
-            .get("id")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
-        event.result_sha256 = Some(sha256(
-            serde_json::to_vec(&response.body)
-                .expect("provider response serializes")
-                .as_slice(),
-        ));
         event
     }
 
@@ -2146,8 +2502,27 @@ mod tests {
             transport,
             Some(ledger.clone()),
         );
+        provider.dispatch_root = Some(ledger.with_extension("dispatch"));
         provider.aggregate_reservation_nanos = Some(u64::MAX);
         (provider, ledger)
+    }
+
+    fn restarted_provider(
+        transport: Arc<dyn Transport>,
+        ledger: &Path,
+        dispatch_root: &Path,
+    ) -> OpenRouterStructuredState {
+        let mut provider = OpenRouterStructuredState::new(
+            DEFAULT_MODEL.to_string(),
+            "prompt".to_string(),
+            INPUT_PRICE,
+            OUTPUT_PRICE,
+            transport,
+            Some(ledger.to_path_buf()),
+        );
+        provider.dispatch_root = Some(dispatch_root.to_path_buf());
+        provider.aggregate_reservation_nanos = Some(u64::MAX);
+        provider
     }
 
     fn read_events(ledger: &Path) -> Vec<Value> {
@@ -2349,6 +2724,7 @@ mod tests {
             "observations": [wire_observation(&request.evidence_slices[0].id)]
         })))]);
         let (mut first, ledger) = provider_with_ledger(first_transport);
+        let dispatch_root = first.dispatch_root.clone().unwrap();
         let one_attempt = first.plan(&request).unwrap().per_attempt_reservation_nanos;
         first.aggregate_reservation_nanos = Some(one_attempt);
         first.extract_sync(&request).unwrap();
@@ -2356,18 +2732,13 @@ mod tests {
         let duplicate_transport = FakeTransport::new(vec![Ok(response(json!({
             "observations": [wire_observation(&request.evidence_slices[0].id)]
         })))]);
-        let mut restarted = OpenRouterStructuredState::new(
-            DEFAULT_MODEL.to_string(),
-            "prompt".to_string(),
-            INPUT_PRICE,
-            OUTPUT_PRICE,
-            duplicate_transport.clone(),
-            Some(ledger.clone()),
-        );
+        let mut restarted =
+            restarted_provider(duplicate_transport.clone(), &ledger, &dispatch_root);
         restarted.aggregate_reservation_nanos = Some(one_attempt);
-        assert!(restarted.extract_sync(&request).is_err());
+        restarted.extract_sync(&request).unwrap();
         assert!(duplicate_transport.posted.lock().unwrap().is_empty());
         fs::remove_file(&ledger).unwrap();
+        fs::remove_dir_all(&dispatch_root).unwrap();
 
         fs::write(&ledger, b"{malformed\n").unwrap();
         let malformed_transport = FakeTransport::new(vec![Ok(response(json!({
@@ -2677,20 +3048,104 @@ mod tests {
     }
 
     #[test]
-    fn generation_lookup_failure_keeps_response_id_and_unresolved_reservation() {
+    fn response_before_terminal_resumes_generation_without_redispatch() {
         let request = request("user: I live in Oslo.");
-        let transport = FakeTransport::with_generation_response(
+        let first_transport = FakeTransport::with_generation_response(
             vec![Ok(response(json!({"observations": []})))],
             Err("generation unavailable".to_string()),
         );
-        let (provider, ledger) = provider_with_ledger(transport);
+        let (provider, ledger) = provider_with_ledger(first_transport.clone());
+        let dispatch_root = provider.dispatch_root.clone().unwrap();
         assert!(provider.extract_sync(&request).is_err());
+        let events = fs::read_to_string(&ledger).unwrap();
+        assert_eq!(events.lines().count(), 1);
+        assert_eq!(first_transport.posted.lock().unwrap().len(), 1);
+
+        let resumed_transport = FakeTransport::with_generation_response(
+            vec![],
+            Ok(json!({"data": {
+                "id": "generation-1",
+                "model": "served/model",
+                "provider_name": "served-provider",
+                "tokens_prompt": 10,
+                "tokens_completion": 5,
+                "total_cost": 0.001
+            }})),
+        );
+        let resumed = restarted_provider(resumed_transport.clone(), &ledger, &dispatch_root);
+        assert!(resumed.extract_sync(&request).unwrap().is_empty());
+        assert!(resumed_transport.posted.lock().unwrap().is_empty());
         let events = read_events(&ledger);
-        let result = &events[1];
-        assert_eq!(result["response_id"], "generation-1");
-        assert_eq!(result["parse_status"], "generation_stats_lookup_failed");
-        assert_eq!(result["reservation_status"], "unresolved");
-        assert!(result.get("usage").is_none());
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1]["parse_status"], "decoded");
+        fs::remove_dir_all(dispatch_root).unwrap();
+    }
+
+    #[test]
+    fn terminal_before_cache_progress_reuses_the_exact_ledger_event_hashes() {
+        let request = request("user: I live in Oslo.");
+        let content = json!({
+            "observations": [wire_observation(&request.evidence_slices[0].id)]
+        });
+        let first_transport = FakeTransport::new(vec![Ok(response(content))]);
+        let (first, ledger) = provider_with_ledger(first_transport);
+        let dispatch_root = first.dispatch_root.clone().unwrap();
+        first.extract_sync(&request).unwrap();
+        let (prefix_bytes, prefix_sha256) = ledger_prefix(&ledger);
+        let temporary = tempfile::tempdir().unwrap();
+        let cache = CampaignCache {
+            root: temporary.path().join("cache"),
+            hit_root: temporary.path().join("hits"),
+            authorization_sha256: "a".repeat(64),
+            campaign_sha256: "b".repeat(64),
+            namespace: "terminal-resume".to_string(),
+            source_ledger: ledger.clone(),
+            source_ledger_prefix_bytes: prefix_bytes,
+            source_ledger_prefix_sha256: prefix_sha256,
+            served_model: "served/model".to_string(),
+            served_provider: "served-provider".to_string(),
+        };
+        let resume_transport = FakeTransport::new(vec![]);
+        let resumed = restarted_provider(resume_transport.clone(), &ledger, &dispatch_root)
+            .with_campaign_cache(cache.clone())
+            .unwrap();
+        resumed.extract_sync(&request).unwrap();
+        assert!(resume_transport.posted.lock().unwrap().is_empty());
+
+        let cache_transport = FakeTransport::new(vec![]);
+        let cached = restarted_provider(cache_transport.clone(), &ledger, &dispatch_root)
+            .with_campaign_cache(cache)
+            .unwrap();
+        cached.extract_sync(&request).unwrap();
+        assert!(cache_transport.posted.lock().unwrap().is_empty());
+        fs::remove_file(ledger).unwrap();
+        fs::remove_dir_all(dispatch_root).unwrap();
+    }
+
+    #[test]
+    fn started_without_captured_response_is_non_dispatchable() {
+        let request = request("user: crash after start");
+        let transport = FakeTransport::new(vec![Ok(response(json!({"observations": []})))]);
+        let (provider, ledger) = provider_with_ledger(transport.clone());
+        let dispatch_root = provider.dispatch_root.clone().unwrap();
+        let plan = provider.plan(&request).unwrap();
+        let started = AttemptEvent::started(
+            "crash-after-start",
+            &request,
+            &plan,
+            DEFAULT_MODEL,
+            MAX_ATTEMPTS,
+        );
+        append_json_line(&ledger, &started, Some(u64::MAX)).unwrap();
+
+        let error = provider.extract_sync(&request).unwrap_err().to_string();
+        assert!(error.contains("ambiguous and non-dispatchable"));
+        assert!(transport.posted.lock().unwrap().is_empty());
+        assert_eq!(fs::read_to_string(&ledger).unwrap().lines().count(), 1);
+        fs::remove_file(ledger).unwrap();
+        if dispatch_root.exists() {
+            fs::remove_dir_all(dispatch_root).unwrap();
+        }
     }
 
     #[test]

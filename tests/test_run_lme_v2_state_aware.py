@@ -913,6 +913,37 @@ def test_construction_aggregate_reservation_resumes_once_across_crash_boundaries
     assert len(ledger.attempts) == 1
 
 
+@pytest.mark.parametrize("phase", ["prefix", "tail", "retry"])
+def test_construction_phase_selector_preserves_exact_crash_state(phase: str) -> None:
+    runner = _load_runner()
+    plan = {"extraction_key": "1" * 64, "request_sha256": "2" * 64}
+    started = {
+        "event": "started",
+        "campaign_attempt": 1,
+        "extraction_key": plan["extraction_key"],
+        "request_sha256": plan["request_sha256"],
+    }
+    with pytest.raises(RuntimeError, match="must resume in place"):
+        runner._failed_construction_plans([plan], [started], 1)
+
+    decoded = {
+        **started,
+        "event": "result",
+        "parse_status": "decoded",
+        "reservation_status": "settled",
+    }
+    assert runner._failed_construction_plans([plan], [started, decoded], 1) == []
+
+    ambiguous = {
+        **decoded,
+        "parse_status": "provider_error",
+        "reservation_status": "unresolved",
+    }
+    with pytest.raises(RuntimeError, match="manual adjudication"):
+        runner._failed_construction_plans([plan], [started, ambiguous], 1)
+    assert phase in {"prefix", "tail", "retry"}
+
+
 def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
     runner = _load_runner()
     qwen = {
@@ -3035,6 +3066,204 @@ def _official_pairs():
     ]
 
 
+def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runner = _load_runner()
+    lock = json.loads(
+        (ROOT / "benchmarks/manifests/longmemeval_v2.lock.json").read_text()
+    )
+    plan = {
+        "execution_plan_sha256": "1" * 64,
+        "reservation_plan_sha256": "2" * 64,
+        "rows": [
+            {
+                "sequence": index + 1,
+                "question_id": "q-000",
+                "row_key": f"q-000:{arm}",
+                "arm": arm,
+                "native_judge_required": False,
+            }
+            for index, arm in enumerate(("fast", "deep"))
+        ],
+    }
+    pinned = {
+        "official_harness_sha256": lock["code"]["files"]["evaluation/harness.py"],
+        "official_scorer_sha256": lock["code"]["files"]["evaluation/qa_eval_metrics.py"],
+    }
+    hash_mode = {"harness": pinned["official_harness_sha256"]}
+    real_file_hash = runner._sha256_file
+
+    def fake_file_hash(path):
+        path = str(path)
+        if path.endswith("evaluation/harness.py"):
+            return hash_mode["harness"]
+        if path.endswith("evaluation/qa_eval_metrics.py"):
+            return pinned["official_scorer_sha256"]
+        if path.endswith("leaderboard/compute_lafs.py"):
+            return lock["code"]["files"]["leaderboard/compute_lafs.py"]
+        return real_file_hash(Path(path))
+
+    monkeypatch.setattr(runner, "_sha256_file", fake_file_hash)
+    monkeypatch.setattr(runner, "validate_complete_row_settlement", lambda *_: {"ok": True})
+    monkeypatch.setattr(runner, "_load_official_harness", lambda *_: object())
+    arms = {
+        "fast": {
+            "overall": {"overall_full_set": 0.5},
+            "memory_query": {"avg_seconds": 1.0},
+        },
+        "deep": {
+            "overall": {"overall_full_set": 1.0},
+            "memory_query": {"avg_seconds": 2.0},
+        },
+    }
+    monkeypatch.setattr(runner, "_aggregate_scored_official_rows", lambda *_: arms)
+    lafs_core = {
+        "schema_version": 1,
+        "compute_lafs_sha256": lock["code"]["files"]["leaderboard/compute_lafs.py"],
+        "summary": {"lafs_gain": 0.1},
+    }
+    monkeypatch.setattr(
+        runner,
+        "official_lafs_summary",
+        lambda *_: {**lafs_core, "lafs_proof_sha256": runner.sha256_json(lafs_core)},
+    )
+    attempts = []
+    private_rows = {}
+    authority = {
+        key: f"{index + 10:064x}"
+        for index, key in enumerate(sorted(runner.PRIVATE_OUTPUT_AUTHORITY_FIELDS))
+    }
+    authority.update(
+        execution_plan_sha256=plan["execution_plan_sha256"],
+        reservation_plan_sha256=plan["reservation_plan_sha256"],
+        official_harness_sha256=pinned["official_harness_sha256"],
+        official_scorer_sha256=pinned["official_scorer_sha256"],
+    )
+    judge_root = tmp_path / "judges"
+    for row in plan["rows"]:
+        response = {"response": {"id": f"reader-{row['sequence']}"}}
+        receipt = {
+            "response_id": f"reader-{row['sequence']}",
+            "result_sha256": runner.sha256_json(response),
+        }
+        provider_core = {
+            "schema_version": 1,
+            "status": "PRIVATE_OUTPUT_FSYNCED",
+            "row_key": row["row_key"],
+            "component": "reader",
+            "authority": authority,
+            "response": response,
+            "receipt": receipt,
+        }
+        provider = {
+            **provider_core,
+            "private_output_sha256": runner.sha256_json(provider_core),
+        }
+        official = {
+            "question_id": row["question_id"],
+            "category": "static",
+            "is_abstention_problem": False,
+            "memory_query_duration_seconds": 1.0,
+        }
+        private_rows[row["row_key"]] = {
+            "row_key": row["row_key"],
+            "arm": row["arm"],
+            "official_row": official,
+            "provider_record": provider,
+            **({"deep_provider_record": provider} if row["arm"] == "deep" else {}),
+        }
+        # Keep this focused on package-source authority; deep-recall coverage is
+        # represented by the same immutable fixture record.
+        if row["arm"] == "deep":
+            deep = json.loads(json.dumps(provider))
+            deep["component"] = "deep_recall"
+            deep_core = {key: value for key, value in deep.items() if key != "private_output_sha256"}
+            deep["private_output_sha256"] = runner.sha256_json(deep_core)
+            private_rows[row["row_key"]]["deep_provider_record"] = deep
+            attempts.append(
+                {
+                    "request_key": f"lme-v2-row:{row['sequence']}:{row['row_key']}:deep_recall",
+                    "result": {"response": receipt},
+                }
+            )
+        attempts.append(
+            {
+                "request_key": f"lme-v2-row:{row['sequence']}:{row['row_key']}:reader",
+                "result": {"response": receipt},
+            }
+        )
+        score_core = {
+            "schema_version": 1,
+            "row_key": row["row_key"],
+            "official_row_sha256": runner.sha256_json(official),
+            "score_bool": row["arm"] == "deep",
+            "score": int(row["arm"] == "deep"),
+            "eval_name": "fixture",
+            "is_unknown": False,
+            "native_judge_required": False,
+            "native_judge_settled": True,
+        }
+        score_dir = judge_root / f"{row['sequence']:04d}"
+        score_dir.mkdir(parents=True)
+        (score_dir / "SCORE.private.json").write_text(
+            json.dumps({**score_core, "score_sha256": runner.sha256_json(score_core)})
+        )
+    snapshot = {"attempts": attempts}
+    output = tmp_path / "DERIVATION.json"
+    runtime_core = {
+        "schema_version": 1,
+        "commit": lock["code"]["commit"],
+        "release_lock_sha256": real_file_hash(
+            ROOT / "benchmarks/manifests/longmemeval_v2.lock.json"
+        ),
+        "archive": {"bytes": 1, "sha256": "e" * 64},
+        "files": lock["code"]["files"],
+        "files_sha256": runner.sha256_json(lock["code"]["files"]),
+    }
+    runtime = {
+        **runtime_core,
+        "proof_sha256": runner.sha256_json(runtime_core),
+    }
+    runner.derive_native_official_artifact(
+        reservation_plan=plan, ledger_snapshot=snapshot, private_rows=private_rows,
+        judge_root=judge_root, official_dir=tmp_path, runtime_code=runtime,
+        output_path=output,
+    )
+
+    score_path = judge_root / "0001/SCORE.private.json"
+    score = json.loads(score_path.read_text())
+    score["score_bool"] = not score["score_bool"]
+    score["score"] = int(score["score_bool"])
+    score_core = {key: value for key, value in score.items() if key != "score_sha256"}
+    score["score_sha256"] = runner.sha256_json(score_core)
+    score_path.write_text(json.dumps(score))
+    with pytest.raises(RuntimeError, match="immutable campaign artifact drift"):
+        runner.derive_native_official_artifact(
+            reservation_plan=plan, ledger_snapshot=snapshot,
+            private_rows=private_rows, judge_root=judge_root,
+            official_dir=tmp_path, runtime_code=runtime, output_path=output,
+        )
+
+    provider = private_rows["q-000:fast"]["provider_record"]
+    provider["response"]["response"]["id"] = "tampered"
+    with pytest.raises(RuntimeError, match="private provider checkpoint"):
+        runner.derive_native_official_artifact(
+            reservation_plan=plan, ledger_snapshot=snapshot,
+            private_rows=private_rows, judge_root=judge_root,
+            official_dir=tmp_path, runtime_code=runtime,
+        )
+
+    provider["response"]["response"]["id"] = "reader-1"
+    hash_mode["harness"] = "0" * 64
+    with pytest.raises(RuntimeError, match="code identity drift"):
+        runner.derive_native_official_artifact(
+            reservation_plan=plan, ledger_snapshot=snapshot,
+            private_rows=private_rows, judge_root=judge_root,
+            official_dir=tmp_path, runtime_code=runtime,
+        )
+
+
 def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
     runner = _load_runner()
     plan = _strict_row_plan(runner)
@@ -3074,20 +3303,48 @@ def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
         },
         "lafs": lafs,
     }
-    official_metrics = {
-        **metrics_core,
-        "official_metrics_sha256": runner.sha256_json(metrics_core),
+    pairs = _official_pairs()
+    sources = [
+        {"row_key": f"source-{index}", "score_sha256": f"{index + 1:064x}"}
+        for index in range(902)
+    ]
+    row_settlement = runner.validate_complete_row_settlement(plan, ledger.snapshot())
+    derivation_core = {
+        "schema_version": 1,
+        "execution_plan_sha256": plan["execution_plan_sha256"],
+        "reservation_plan_sha256": plan["reservation_plan_sha256"],
+        "row_settlement": row_settlement,
+        "runtime_code_proof_sha256": "e" * 64,
+        "pinned": {
+            "code_commit": release_lock["code"]["commit"],
+            "dataset_revision": release_lock["dataset"]["revision"],
+            "official_harness_sha256": release_lock["code"]["files"][
+                "evaluation/harness.py"
+            ],
+            "official_scorer_sha256": release_lock["code"]["files"][
+                "evaluation/qa_eval_metrics.py"
+            ],
+            "compute_lafs_sha256": release_lock["code"]["files"][
+                "leaderboard/compute_lafs.py"
+            ],
+        },
+        "sources": sources,
+        "sources_sha256": runner.sha256_json(sources),
+        "pairs": pairs,
+        "pairs_sha256": runner.sha256_json(pairs),
+        "arms": metrics_core["arms"],
+        "arms_sha256": runner.sha256_json(metrics_core["arms"]),
+        "lafs": lafs,
     }
-    package = runner.build_native_official_package(
-        pairs=_official_pairs(),
+    derivation = {
+        **derivation_core,
+        "derivation_sha256": runner.sha256_json(derivation_core),
+    }
+    official_metrics = runner.official_metrics_from_derivation(derivation)
+    package = runner._build_native_official_package_from_derivation(
+        derivation_artifact=derivation,
         reservation_plan=plan,
         ledger_snapshot=ledger.snapshot(),
-        official_metrics_artifact=official_metrics,
-        upstream_identity={
-            "code_commit": release_lock["code"]["commit"],
-            "dataset_revision": "b" * 40,
-            "native_harness_sha256": "c" * 64,
-        },
     )
     assert package["row_settlement"]["row_attempt_count"] == 1665
     assert package["official_metrics"]["pairs"] == 451
@@ -3098,6 +3355,7 @@ def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
         ledger=ledger,
         reservation_plan=plan,
         native_package=package,
+        derivation_artifact=derivation,
         official_metrics_artifact=official_metrics,
         closure_path=Path("closure.json"),
     )
