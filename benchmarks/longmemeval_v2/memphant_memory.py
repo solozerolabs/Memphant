@@ -663,6 +663,10 @@ def _load_construction_binding() -> dict[str, object]:
     _require(
         isinstance(cache, dict)
         and set(cache) == {"namespace", "observation_cache_path", "source_receipts_path"}
+        and Path(str(cache["observation_cache_path"])).resolve()
+        == Path(
+            _required_env("MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE")
+        ).resolve()
         and Path(str(cache["source_receipts_path"])).resolve()
         == Path(_required_env("MEMPHANT_STRUCTURED_STATE_CACHE_HITS")).resolve()
         and cache["namespace"] == _required_env("MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE"),

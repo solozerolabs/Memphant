@@ -1097,6 +1097,9 @@ def test_runner_creates_canonical_construction_binding_once(monkeypatch, tmp_pat
     assert binding["authority"]["authorization_scope_sha256"] == runner.sha256_json(
         scope
     )
+    assert Path(binding["cache"]["observation_cache_path"]) == Path(
+        paths["observation_cache"]
+    ).resolve()
     with pytest.raises(RuntimeError, match="immutable campaign artifact already exists"):
         runner.create_construction_binding(authorization_path, [plan])
 

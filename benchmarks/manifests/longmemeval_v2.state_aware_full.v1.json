@@ -173,7 +173,7 @@
     "crates/memphant-runtime/src/structured_state_openrouter.rs": "7dd4208b43ecadcc9ac79e808867681475fa9eeb7a3d0c2ac283ab96c1c9957a",
       "crates/memphant-core/src/service.rs": "1452bfd8de38f72510fa5a31fd49bc0e1391089d6d8e98cba195f2ecb9e71fb3",
       "crates/memphant-core/src/structured_state.rs": "7b12b07517514ec837fbf7c3eaf56e0679d63cc60ecf226908a0e154b82d58c6",
-    "benchmarks/longmemeval_v2/memphant_memory.py": "b0f9d86efa7faf576395e16979c822fd1ecdfd01d1d51f7f671cef108ea95b55",
+    "benchmarks/longmemeval_v2/memphant_memory.py": "08b58a9b11cbf081deaa3575df77f562e60a2b1252e38abd8470c0a2711f06ce",
       "benchmarks/longmemeval_v2/construction_authority.py": "a7048243701f36879768f41eb8ba7ca9e350eb9074728eda9a99b1a8768b2fb8",
       "benchmarks/longmemeval_v2/qwen_reader_census.py": "251ef6a46713d6d72dabd0444325a232639842163decf98798bbe0a9aa38ca76",
       "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt": "979a7b3725fcc45809e6e707565b8f0d5ee2e749593ce52ae50a706653d160b0",

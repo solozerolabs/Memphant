@@ -249,6 +249,9 @@ def install_construction_binding(adapter, monkeypatch, tmp_path):
     monkeypatch.setenv("MEMPHANT_LME_CONSTRUCTION_BINDING", str(path))
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256", authorization_sha256)
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256", census["census_sha256"])
+    monkeypatch.setenv(
+        "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE", str(observation_cache.resolve())
+    )
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_HITS", str(cache_hits))
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE", "fixture-v1")
     monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER", str(subledger))
@@ -323,6 +326,73 @@ def test_binding_with_changed_subledger_path_is_rejected_before_worker(
 
     with pytest.raises(RuntimeError, match="ledger path drift"):
         adapter._load_construction_binding()
+
+
+def test_alternate_observation_cache_is_rejected_before_tenant_or_worker(
+    monkeypatch, tmp_path
+):
+    adapter, registry = load_memphant_adapter(monkeypatch)
+    install_construction_binding(adapter, monkeypatch, tmp_path)
+    alternate = tmp_path / "alternate-observation-cache"
+    alternate.mkdir()
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE", str(alternate))
+    for name, body in {
+        "MEMPHANT_CLI_BIN": b"cli",
+        "MEMPHANT_LME_SERVER_BIN": b"server",
+        "MEMPHANT_LME_WORKER_BIN": b"worker",
+    }.items():
+        path = tmp_path / name.lower()
+        path.write_bytes(body)
+        monkeypatch.setenv(name, str(path))
+    for name, value in {
+        "MEMPHANT_SCRATCH_ACTIVE": "1",
+        "MEMPHANT_TEST_DATABASE_URL": "postgres://fixture",
+        "MEMPHANT_LME_SERVER_URL": "http://fixture",
+        "MEMPHANT_LME_PROOF_DIR": str(tmp_path / "proof"),
+        "MEMPHANT_LME_RUN_ID": "fixture",
+    }.items():
+        monkeypatch.setenv(name, value)
+    reached = []
+
+    def provision_reached(**_kwargs):
+        reached.append("tenant")
+        raise RuntimeError("tenant provisioning reached")
+
+    monkeypatch.setattr(adapter, "_provision_tenant", provision_reached)
+    monkeypatch.setattr(
+        adapter,
+        "_drain_worker",
+        lambda *_args, **_kwargs: reached.append("worker"),
+    )
+
+    with pytest.raises(RuntimeError, match="cache path or namespace drift"):
+        registry["memphant"](
+            json.loads(MEMPHANT_CONFIG.read_text())["memory_params"]
+        )
+    assert reached == []
+
+
+def test_observation_cache_environment_is_required_and_resolved(
+    monkeypatch, tmp_path
+):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    binding = install_construction_binding(adapter, monkeypatch, tmp_path)
+    monkeypatch.delenv("MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE")
+    with pytest.raises(RuntimeError, match="MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE"):
+        adapter._load_construction_binding()
+
+    canonical = Path(binding["cache"]["observation_cache_path"])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(
+        "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE",
+        os.path.relpath(canonical, tmp_path),
+    )
+    assert adapter._load_construction_binding() == binding
+
+    alias = tmp_path / "canonical-observation-cache-alias"
+    alias.symlink_to(canonical, target_is_directory=True)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE", str(alias))
+    assert adapter._load_construction_binding() == binding
 
 
 def test_longmemeval_v2_release_is_immutably_pinned_and_native_scored():

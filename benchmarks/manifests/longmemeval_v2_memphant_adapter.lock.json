@@ -5,7 +5,7 @@
   "upstream_release_lock_sha256": "e24388725b23d50766f1cf7e77ea6b41396d664dc1dce309cafe30cb897fe77d",
   "openapi_sha256": "a5bac765d7c4c862a342d95b49049c27d3af57aea9f80af6d3a0a489ac055271",
   "files": {
-    "benchmarks/longmemeval_v2/memphant_memory.py": "b0f9d86efa7faf576395e16979c822fd1ecdfd01d1d51f7f671cef108ea95b55",
+    "benchmarks/longmemeval_v2/memphant_memory.py": "08b58a9b11cbf081deaa3575df77f562e60a2b1252e38abd8470c0a2711f06ce",
     "benchmarks/longmemeval_v2/construction_authority.py": "a7048243701f36879768f41eb8ba7ca9e350eb9074728eda9a99b1a8768b2fb8",
     "benchmarks/longmemeval_v2/harness_bootstrap.py": "97b17ebc7091ffd624859ff62b509ab4c7e96586448c7904f208c31ddd8ac8e6",
     "benchmarks/longmemeval_v2/memphant.memory.json": "a2fbdbf36101d9e863006121ef84860e496f9d7d11967de96322e58479b0fe29",
