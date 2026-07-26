@@ -23,7 +23,7 @@ const FLASH_PROVIDER: &str = "google-ai-studio";
 const DEEPSEEK_MODEL: &str = "deepseek/deepseek-v4-flash";
 const DEEPSEEK_PROVIDERS: [&str; 2] = ["deepinfra", "wandb"];
 const MAX_ATTEMPTS: usize = 3;
-const MAX_OUTPUT_TOKENS: u64 = 4096;
+const MAX_OUTPUT_TOKENS: u64 = 16_384;
 const MAX_REQUEST_BYTES: usize = 128 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 // Accuracy-first reasoning can legitimately emit >15k hidden reasoning tokens.
@@ -324,6 +324,11 @@ fn provider_preferences(model: &str) -> Value {
             "only": DEEPSEEK_PROVIDERS,
             "allow_fallbacks": true
         })
+    } else if model == DEFAULT_MODEL {
+        json!({
+            "require_parameters": true,
+            "max_price": {"prompt": 1.1, "completion": 6.6}
+        })
     } else {
         json!({"require_parameters": true})
     }
@@ -335,8 +340,10 @@ fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> Strin
         identity.push_str(";provider=google-ai-studio");
     } else if model == DEEPSEEK_MODEL {
         identity.push_str(";providers=deepinfra,wandb");
+    } else if model == DEFAULT_MODEL {
+        identity.push_str(";max_price_prompt=1.1;max_price_completion=6.6");
     }
-    identity.push_str(";seed=0;max_tokens=4096;max_request_bytes=131072");
+    identity.push_str(";seed=0;max_tokens=16384;max_request_bytes=131072");
     if model == FLASH_MODEL {
         identity.push_str(";temperature=0");
     }
@@ -2220,7 +2227,7 @@ mod tests {
         assert!(value.get("temperature").is_none());
         assert_eq!(value["seed"], 0);
         assert_eq!(value["stream"], false);
-        assert_eq!(value["max_tokens"], 4096);
+        assert_eq!(value["max_tokens"], 16384);
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(value["response_format"]["json_schema"]["strict"], true);
         let schema = &value["response_format"]["json_schema"]["schema"];
@@ -2992,7 +2999,7 @@ mod tests {
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(
             provider.identity().model,
-            "google/gemini-3.5-flash;provider=google-ai-studio;seed=0;max_tokens=4096;max_request_bytes=131072;temperature=0;reasoning_effort=high"
+            "google/gemini-3.5-flash;provider=google-ai-studio;seed=0;max_tokens=16384;max_request_bytes=131072;temperature=0;reasoning_effort=high"
         );
         assert_eq!(value["seed"], 0);
         assert_eq!(value["temperature"], 0);
@@ -3014,7 +3021,7 @@ mod tests {
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(
             provider.identity().model,
-            "deepseek/deepseek-v4-flash;providers=deepinfra,wandb;seed=0;max_tokens=4096;max_request_bytes=131072"
+            "deepseek/deepseek-v4-flash;providers=deepinfra,wandb;seed=0;max_tokens=16384;max_request_bytes=131072"
         );
     }
 
@@ -3027,9 +3034,11 @@ mod tests {
         assert_eq!(
             provider.identity().model,
             format!(
-                "{DEFAULT_MODEL};seed=0;max_tokens=4096;max_request_bytes=131072;reasoning_effort=high"
+                "{DEFAULT_MODEL};max_price_prompt=1.1;max_price_completion=6.6;seed=0;max_tokens=16384;max_request_bytes=131072;reasoning_effort=high"
             )
         );
+        assert_eq!(value["provider"]["max_price"]["prompt"], 1.1);
+        assert_eq!(value["provider"]["max_price"]["completion"], 6.6);
     }
 
     async fn assert_live_state_mutation(provider: &dyn StructuredStateProvider) {
