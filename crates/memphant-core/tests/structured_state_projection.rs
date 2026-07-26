@@ -312,6 +312,32 @@ fn quantity_fold_requires_the_exact_numeric_lexeme_with_only_comma_normalization
             "ungrounded quantity {absent} must fail closed"
         );
     }
+
+    let malformed_body = "[date 2025-06-01]\nuser: I walked 7,64,0 steps.";
+    let malformed_request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Episode,
+        source_body_sha256: sha256(malformed_body),
+        batch_index: 0,
+        evidence_slices: evidence_slices_for_episode(malformed_body).unwrap(),
+    };
+    let malformed_observation = observation(
+        "activity",
+        "daily_steps",
+        quantity_fields("7640"),
+        StructuredObservationDisposition::Event,
+        &malformed_request.evidence_slices[0],
+        "I walked 7,64,0 steps.",
+    );
+    assert!(
+        fold_structured_observations(
+            malformed_body,
+            &malformed_request,
+            &[malformed_observation],
+            &[],
+        )
+        .is_err(),
+        "malformed comma grouping must not authorize the canonical value"
+    );
 }
 
 #[test]

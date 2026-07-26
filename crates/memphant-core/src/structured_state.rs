@@ -524,11 +524,45 @@ fn quantity_value_is_grounded(value: &str, evidence: &str) -> bool {
             && bytes
                 .get(index)
                 .is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_');
-        if bounded && evidence[start..index].replace(',', "") == value {
+        if bounded && numeric_lexeme_matches(value, &evidence[start..index]) {
             return true;
         }
     }
     false
+}
+
+fn numeric_lexeme_matches(value: &str, lexeme: &str) -> bool {
+    if !valid_decimal(value) {
+        return false;
+    }
+    if lexeme == value {
+        return true;
+    }
+    valid_grouped_decimal(lexeme) && lexeme.replace(',', "") == value
+}
+
+fn valid_grouped_decimal(value: &str) -> bool {
+    let unsigned = value.strip_prefix('-').unwrap_or(value);
+    let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    if unsigned.matches('.').count() > 1
+        || value.ends_with('.')
+        || fraction.len() > 18
+        || (!fraction.is_empty() && !fraction.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return false;
+    }
+    let mut groups = whole.split(',');
+    let Some(leading) = groups.next() else {
+        return false;
+    };
+    let trailing = groups.collect::<Vec<_>>();
+    (1..=3).contains(&leading.len())
+        && leading.bytes().all(|byte| byte.is_ascii_digit())
+        && !trailing.is_empty()
+        && trailing
+            .iter()
+            .all(|group| group.len() == 3 && group.bytes().all(|byte| byte.is_ascii_digit()))
+        && valid_decimal(&value.replace(',', ""))
 }
 
 fn invalid_output(message: impl Into<String>) -> StructuredStateProviderError {
