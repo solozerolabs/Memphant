@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "status": "REJECTED_PREPAID_FEASIBILITY_NO_RUN",
+  "paid_models_run": false,
+  "future_paid_campaign_budget_ceiling_usd": "200",
+  "decision": "REJECTED_STOP_NO_BROADENING",
+  "benchmark": {
+    "name": "LongMemEval-V2",
+    "code_commit": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
+    "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+    "license": "Apache-2.0",
+    "questions": 451,
+    "memory_context_max_tokens": 200000,
+    "reader": "Qwen/Qwen3.5-9B",
+    "judge": "gpt-5.2",
+    "verification": {
+      "verified": true,
+      "native_metrics": true,
+      "upstream_checksum_entries": 37,
+      "upstream_checksum_exceptions": 1,
+      "separately_locked_files": 6
+    }
+  },
+  "inputs": {
+    "selection_manifest": "benchmarks/manifests/longmemeval_v2.p1_t6.json",
+    "selection_manifest_sha256": "09d149423ad0ec1591f34a07bcc46b106a5c2111a043c6c1d8bb384c254b74c2",
+    "selection_sha256": "d7762dbaffff7acfe779162d4993c8c09ef0440e3c1a25e0d3408127d73e25fa",
+    "selection_exposure": "development-only",
+    "tier": "medium",
+    "haystack_sha256": "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59",
+    "trajectories_sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6",
+    "adapter_sha256": "56c2a7264112e012f9376178cc2ef3383d70705f21255d4182e92bf62f8e206c",
+    "service_sha256": "30b93fbd0d28551b0aa1a298e0453a0d56a1090fcaf687c91422bb4a4c227ad3",
+    "structured_provider_sha256": "66026cd4c67fcbad3a263ca5c77e8ab471e41343197d27e352060e958ea31a81",
+    "structured_prompt_sha256": "915c0adc64c5839bc7094fb3fb92be301436f5b7d68df363d6862768d53cafee"
+  },
+  "cases": [
+    {"question_id":"658fa827","domain":"enterprise","ability":"dynamic_state","trajectories":500,"states":23526,"canonical_body_bytes":479106204,"resources":707,"resources_over_128_kib":640},
+    {"question_id":"8e21c6e5","domain":"enterprise","ability":"environment_gotchas","trajectories":500,"states":24047,"canonical_body_bytes":485092168,"resources":713,"resources_over_128_kib":651},
+    {"question_id":"6fdda2fc","domain":"enterprise","ability":"premise_awareness","trajectories":500,"states":21827,"canonical_body_bytes":445659360,"resources":682,"resources_over_128_kib":589},
+    {"question_id":"19367bc7","domain":"enterprise","ability":"static_state","trajectories":500,"states":19907,"canonical_body_bytes":420135298,"resources":670,"resources_over_128_kib":556},
+    {"question_id":"aedd338d","domain":"enterprise","ability":"static_state","trajectories":500,"states":24076,"canonical_body_bytes":482364677,"resources":709,"resources_over_128_kib":646},
+    {"question_id":"52dd33bb","domain":"enterprise","ability":"workflow_knowledge","trajectories":500,"states":22113,"canonical_body_bytes":444961429,"resources":682,"resources_over_128_kib":608},
+    {"question_id":"dae9f7e9","domain":"web","ability":"dynamic_state","trajectories":500,"states":7484,"canonical_body_bytes":239221096,"resources":624,"resources_over_128_kib":372},
+    {"question_id":"f2b221fd","domain":"web","ability":"environment_gotchas","trajectories":500,"states":7430,"canonical_body_bytes":248825539,"resources":638,"resources_over_128_kib":380},
+    {"question_id":"21f3228c","domain":"web","ability":"premise_awareness","trajectories":500,"states":7350,"canonical_body_bytes":245715918,"resources":636,"resources_over_128_kib":372},
+    {"question_id":"b05cf470","domain":"web","ability":"premise_awareness","trajectories":479,"states":7373,"canonical_body_bytes":246646491,"resources":613,"resources_over_128_kib":371},
+    {"question_id":"2c45ecbb","domain":"web","ability":"static_state","trajectories":500,"states":7462,"canonical_body_bytes":242953332,"resources":630,"resources_over_128_kib":373},
+    {"question_id":"86fa86eb","domain":"web","ability":"workflow_knowledge","trajectories":500,"states":7424,"canonical_body_bytes":243180685,"resources":630,"resources_over_128_kib":373}
+  ],
+  "totals": {
+    "cases": 12,
+    "trajectory_uses": 5979,
+    "unique_trajectories": 1338,
+    "states": 180019,
+    "canonical_body_bytes": 4223862197,
+    "resources": 7934,
+    "resource_uses_over_128_kib": 5931,
+    "unique_resources": 1723,
+    "unique_resources_over_128_kib": 1275,
+    "max_resource_bytes": 1048326
+  },
+  "blocking_contracts": [
+    "The official adapter retains trajectories as resources and queues ReflectResource.",
+    "The canonical structured-state compiler accepts ReflectEpisode only, so enabling the environment flag would create no compiled state and would not test the candidate mechanism.",
+    "The extractor caps serialized requests at 131072 bytes; 5931 of 7934 resource bodies already exceed that cap before JSON and prompt overhead."
+  ],
+  "naive_resource_extension_liability": {
+    "model": "google/gemini-3.5-flash-20260519",
+    "provider": "google-ai-studio",
+    "input_usd_per_million_tokens": "1.50",
+    "output_usd_per_million_tokens": "9.00",
+    "max_input_bytes_per_attempt": 131072,
+    "max_output_tokens_per_attempt": 4096,
+    "max_attempts_per_resource": 3,
+    "one_attempt_max_token_liability_usd": "1852.366848",
+    "three_attempt_max_token_liability_usd": "5557.100544",
+    "note": "This is a conservative liability bound for the obvious resource-extraction extension, not incurred spend. The extension would still fail the input-size contract."
+  },
+  "gate_failures": [
+    "candidate mechanism absent from the adapter construction path",
+    "zero-error predicate impossible under the current request-size contract",
+    "projected paid construction is not a bounded economical pilot",
+    "STALE prerequisite Deep/no-oracle/settlement failures remain unresolved"
+  ],
+  "next_authorizable_design": [
+    "compile provenance-correct tool/resource observations from bounded contextual chunks instead of relabeling them as user evidence",
+    "bind state mode, model, prompt/schema hashes, attempts, usage, cost, and settlement into the immutable construction proof",
+    "content-address extraction by prompt/model/input hash so repeated trajectories can be reused while tenant-bound state mutations and receipts remain fresh",
+    "pass a no-oracle structured-extraction smoke and a valid fully settled Deep finish before freezing a new unseen paired pilot"
+  ]
+}
