@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "status": "CONSUMED_REJECTED_STOP_NO_BROADENING",
+  "authorization_sha256": "0e0a5eebec6d05e577ba41acceda271593ba741264b081edeb3e32b57e8b5690",
+  "closed_at": "2026-07-25T21:43:00-07:00",
+  "current_arm": {
+    "completed_queries": 12,
+    "deep_invalid_output": 12,
+    "verified_receipts": 25,
+    "reader_attempts": 12,
+    "reader_settled_cost_usd": "0.2931619",
+    "answers_sha256": "e3295046e665d567ee0e9fe1c3e33f17379ac0f9fc86e3a6c316ffc7f84a956a",
+    "proof_sha256": "ec39b5107b13fe3c5069825f8218a75baa7954df66a5f47b4bade0198764b621",
+    "attempt_ledger_sha256": "7aeb0e32cde8ed7b51811fe658e7d2881aacbd5aad391ddd59bc915198310858"
+  },
+  "candidate_arm": {
+    "completed_queries": 0,
+    "structured_attempts_started": 4,
+    "http_400": 1,
+    "paid_decode_failures": 3,
+    "extractor_settled_cost_usd": "0.1313685",
+    "structured_attempt_ledger_sha256": "d6048e7b0629dfb7a69fce4bcb4ad0badbbb741f7db74bc3f655035d845435e0"
+  },
+  "known_settled_cost_usd": "0.4245304",
+  "deep_cost_status": "UNRECONCILED: the STALE proof does not retain Deep provider attempt receipts; this independently fails the gate.",
+  "native_judge": "NOT_RUN_KILL_GATE",
+  "full_400_scenario_run": "FORBIDDEN_NO_BROADENING",
+  "decision": "REJECTED_STOP_NO_BROADENING",
+  "blocker": "Current Deep recall returned InvalidOutput on 12/12 probes and lacks reconcilable Deep call receipts; the state-aware candidate additionally failed structured extraction before recall."
+}

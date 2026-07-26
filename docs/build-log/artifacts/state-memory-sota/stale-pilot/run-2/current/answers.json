@@ -1,0 +1,444 @@
+{
+  "data": [
+    {
+      "target_model": "openai/gpt-5.6-luna-pro-20260709",
+      "target_model_meta": {
+        "dim1_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 4.2742452080128714,
+          "evidence_sha256": "d227f5adca71c0db6046469470cc43b5aec33a103d94fc492417864980da40f9",
+          "fresh_call": true,
+          "returned_items": 1,
+          "trace_id": "019f9cb0-87a3-70d1-ab32-3b90b93e659d",
+          "usage": {
+            "completion_tokens": 541,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 317
+            },
+            "cost": 0.0149544,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.003246,
+              "upstream_inference_cost": 0.0149544,
+              "upstream_inference_prompt_cost": 0.0117084
+            },
+            "is_byok": false,
+            "prompt_tokens": 19605,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 8774,
+              "video_tokens": 0
+            },
+            "total_tokens": 20146
+          }
+        },
+        "dim2_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 6.61751104099676,
+          "evidence_sha256": "93f000f21ec3cfdd1fcbf08051e0723a6f991a8a0773bb6a15e933bb7264e6da",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb0-cb26-7502-9f47-5413055c5f6e",
+          "usage": {
+            "completion_tokens": 1086,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 662
+            },
+            "cost": 0.024016,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.006516,
+              "upstream_inference_cost": 0.024016,
+              "upstream_inference_prompt_cost": 0.0175
+            },
+            "is_byok": false,
+            "prompt_tokens": 27048,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 6160,
+              "cached_tokens": 12320,
+              "video_tokens": 0
+            },
+            "total_tokens": 28134
+          }
+        },
+        "dim3_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 18.872620291018393,
+          "evidence_sha256": "241bb68d42d38ca8a0efe6bab271f2b8dadb52ae9b7cf9123c683d4aea0e4157",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb1-12ae-73d0-943b-a4d5bdd4845d",
+          "usage": {
+            "completion_tokens": 2893,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 2171
+            },
+            "cost": 0.033883,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.017358,
+              "upstream_inference_cost": 0.033883,
+              "upstream_inference_prompt_cost": 0.016525
+            },
+            "is_byok": false,
+            "prompt_tokens": 25081,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 5520,
+              "cached_tokens": 11040,
+              "video_tokens": 0
+            },
+            "total_tokens": 27974
+          }
+        }
+      },
+      "target_model_responses": {
+        "dim1_response": "The conversation history does not provide enough information to determine whether the user still lives in Seattle.",
+        "dim2_response": "The available evidence is insufficient to recommend specific Seattle resources by name. Based on the neighborhood guidance, you should look for resources covering: (1) winter transit reliability, especially light rail and bus corridors; (2) events and activity near Capitol Hill\u2019s light-rail station, Ballard\u2019s Market/Ballard Ave core, and Fremont Ave/34th; and (3) local caf\u00e9s, restaurants, bookstores, and other indoor third places. I can\u2019t identify particular sign-up resources from the retrieved information alone.",
+        "dim3_response": "Assuming you mean the San Francisco Bay Area, a few scenic weekend spots that may be good for relaxing are:\n\n- **Marin Headlands:** Coastal scenery, Pacific views, and striking views of the Golden Gate Bridge.\n- **Mount Tamalpais and Panoramic Highway:** Panoramic Bay Area views and peaceful rolling hills near Mill Valley.\n- **Point Reyes Station and the surrounding West Marin coast:** A quieter coastal-and-rural setting with scenic landscapes.\n- **Golden Gate Bridge area:** Great for taking in the bay and city skyline; be prepared for strong afternoon winds.\n- **Livermore Valley:** Vineyards, rural roads, and rolling hills for a slower countryside outing.\n\nThe available information is primarily about cycling routes, so I can\u2019t confirm specific parks, caf\u00e9s, facilities, or weekend crowd conditions at these locations."
+      },
+      "uid": "7c0ae4e7-6b5a-42a2-891b-0ccf553bfe7f"
+    },
+    {
+      "target_model": "openai/gpt-5.6-luna-pro-20260709",
+      "target_model_meta": {
+        "dim1_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 3.212935290997848,
+          "evidence_sha256": "58621d46d563f8c72e2f0c26fdb6b45140101cedf619f76625141428503100f9",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb1-a7d7-7391-aa16-ac70327c003e",
+          "usage": {
+            "completion_tokens": 409,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 206
+            },
+            "cost": 0.0171586,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.002454,
+              "upstream_inference_cost": 0.0171586,
+              "upstream_inference_prompt_cost": 0.0147046
+            },
+            "is_byok": false,
+            "prompt_tokens": 25051,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 11496,
+              "video_tokens": 0
+            },
+            "total_tokens": 25460
+          }
+        },
+        "dim2_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 11.418521124986,
+          "evidence_sha256": "640339aac6087034950daa080b216d3164d7415ac9626611fce81a9ad11dfa8b",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb2-01fe-70c1-ac82-70f7d26903ab",
+          "usage": {
+            "completion_tokens": 1637,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 1104
+            },
+            "cost": 0.0232452,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.009822,
+              "upstream_inference_cost": 0.0232452,
+              "upstream_inference_prompt_cost": 0.0134232
+            },
+            "is_byok": false,
+            "prompt_tokens": 22038,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 9572,
+              "video_tokens": 0
+            },
+            "total_tokens": 23675
+          }
+        },
+        "dim3_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 14.900899833999574,
+          "evidence_sha256": "65d0ed2e38b08bcb48e70556484e1ddc5f88a86c7a3e3baa36531e09b27b1c3b",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb2-7e97-75d2-8556-7c3d219aa9b1",
+          "usage": {
+            "completion_tokens": 2406,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 1947
+            },
+            "cost": 0.03290275,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.014436,
+              "upstream_inference_cost": 0.03290275,
+              "upstream_inference_prompt_cost": 0.01846675
+            },
+            "is_byok": false,
+            "prompt_tokens": 28162,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 6255,
+              "cached_tokens": 12510,
+              "video_tokens": 0
+            },
+            "total_tokens": 30568
+          }
+        }
+      },
+      "target_model_responses": {
+        "dim1_response": "Insufficient evidence to determine whether the user still lives in Portland.",
+        "dim2_response": "The available evidence isn\u2019t sufficient to recommend specific Portland neighborhoods, caf\u00e9s, or rainy-day attractions by name. A safe week-long framework would be:\n\n- Day 1: Explore a nearby neighborhood at an unhurried pace, then spend time reading in a caf\u00e9.\n- Day 2: Visit a different neighborhood and choose a caf\u00e9 where you can observe the local rhythm.\n- Day 3: Make the day literary\u2014browse a bookstore or library and read somewhere cozy, especially since you enjoy literary fiction.\n- Day 4: Choose an indoor cultural activity, such as a museum, gallery, lecture, or author event.\n- Day 5: Spend a rainy day moving between a caf\u00e9 and another sheltered indoor venue, leaving generous time between stops.\n- Day 6: Arrange a relaxed social plan in a neighborhood you have enjoyed, without overpacking the schedule.\n- Day 7: Revisit your favorite neighborhood and caf\u00e9 from the week, then note which places and routines made Portland feel most comfortable.\n\nFor a genuinely local itinerary with named places, I\u2019d need additional evidence about Portland\u2019s neighborhoods and venues.",
+        "dim3_response": "The available memory does not establish where you live, so I can\u2019t reliably tailor year-round home-comfort advice to your location. If you mean Hawaii, the evidence suggests keeping lightweight, breathable clothing, a light jacket or sweater for cooler evenings and air-conditioned spaces, and rain-ready items for occasional showers. Regional conditions vary, with Oahu and Maui generally drier than Kauai and the Big Island, while mountainous areas can be cooler and misty."
+      },
+      "uid": "704cac18-885e-4437-b136-a7600650ba01"
+    },
+    {
+      "target_model": "openai/gpt-5.6-luna-pro-20260709",
+      "target_model_meta": {
+        "dim1_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 6.061658332997467,
+          "evidence_sha256": "b4e236031f318082fb4b82e7fe2bc37094cd4e45772971afa60579a7123bc12b",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb2-e7d1-7133-a106-ec2ab3958978",
+          "usage": {
+            "completion_tokens": 410,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 210
+            },
+            "cost": 0.0179108,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00246,
+              "upstream_inference_cost": 0.0179108,
+              "upstream_inference_prompt_cost": 0.0154508
+            },
+            "is_byok": false,
+            "prompt_tokens": 26411,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 12178,
+              "video_tokens": 0
+            },
+            "total_tokens": 26821
+          }
+        },
+        "dim2_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 7.406016624998301,
+          "evidence_sha256": "974bc47f3a9f7976ec1de551874a0ab00b79841011f6b50890d857599a5bd6df",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb3-4d2c-7f03-81cf-26aff2d3cf48",
+          "usage": {
+            "completion_tokens": 1141,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 773
+            },
+            "cost": 0.0211138,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.006846,
+              "upstream_inference_cost": 0.0211138,
+              "upstream_inference_prompt_cost": 0.0142678
+            },
+            "is_byok": false,
+            "prompt_tokens": 24076,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 10898,
+              "video_tokens": 0
+            },
+            "total_tokens": 25217
+          }
+        },
+        "dim3_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 7.534050542046316,
+          "evidence_sha256": "99559eb09fb4b211dbb456e64ac2427180439bd5daeab7edf1dc5cd56536d22a",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb3-a08d-7562-947c-ebccf80dae2c",
+          "usage": {
+            "completion_tokens": 1572,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 1048
+            },
+            "cost": 0.0251904,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.009432,
+              "upstream_inference_cost": 0.0251904,
+              "upstream_inference_prompt_cost": 0.0157584
+            },
+            "is_byok": false,
+            "prompt_tokens": 26373,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 11794,
+              "video_tokens": 0
+            },
+            "total_tokens": 27945
+          }
+        }
+      },
+      "target_model_responses": {
+        "dim1_response": "The evidence is insufficient to determine whether the user still lives in Seattle.",
+        "dim2_response": "The available evidence doesn\u2019t establish that you\u2019ve been staying in Seattle, and it doesn\u2019t contain enough Seattle-specific information to recommend neighborhoods reliably. If you share your office area, commute preferences, budget, and the errands or amenities you prioritize, I can help narrow down suitable neighborhoods.",
+        "dim3_response": "I can suggest good options, but the evidence doesn\u2019t include your city or neighborhood, so I can\u2019t reliably name nearby places yet. For after-work outings, focus on general areas such as a waterfront or beach, a scenic park or trail, a walkable downtown with restaurants and caf\u00e9s, a cultural or live-music district, or a charming nearby town. These fit your interests in scenic views, outdoor activities, food, music, and unwinding. Share your city or approximate area for specific recommendations."
+      },
+      "uid": "34566789-711a-4361-856e-2f758a4f685e"
+    },
+    {
+      "target_model": "openai/gpt-5.6-luna-pro-20260709",
+      "target_model_meta": {
+        "dim1_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 6.05774699995527,
+          "evidence_sha256": "0ba772ba55ba84d34266860f746f70b8b3e49bbfe004d37245a988b264b40061",
+          "fresh_call": true,
+          "returned_items": 2,
+          "trace_id": "019f9cb3-e41c-76d2-90eb-646946507887",
+          "usage": {
+            "completion_tokens": 845,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 549
+            },
+            "cost": 0.0200636,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.00507,
+              "upstream_inference_cost": 0.0200636,
+              "upstream_inference_prompt_cost": 0.0149936
+            },
+            "is_byok": false,
+            "prompt_tokens": 25475,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 11646,
+              "video_tokens": 0
+            },
+            "total_tokens": 26320
+          }
+        },
+        "dim2_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 13.60827862500446,
+          "evidence_sha256": "b8ebf44d241c58a212136738501303a023f7f3995ad4782ecdc59ff6f53ae697",
+          "fresh_call": true,
+          "returned_items": 3,
+          "trace_id": "019f9cb4-43df-74b0-bbe1-dbc13de9b9da",
+          "usage": {
+            "completion_tokens": 3010,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 1384
+            },
+            "cost": 0.0348216,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.01806,
+              "upstream_inference_cost": 0.0348216,
+              "upstream_inference_prompt_cost": 0.0167616
+            },
+            "is_byok": false,
+            "prompt_tokens": 27522,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 0,
+              "cached_tokens": 11956,
+              "video_tokens": 0
+            },
+            "total_tokens": 30532
+          }
+        },
+        "dim3_meta": {
+          "cache_hit": false,
+          "degraded": false,
+          "elapsed_seconds": 7.959606625023298,
+          "evidence_sha256": "726163c09f3a694ddc9ff2107b17573b2ba8165c852c23ab9de0a3e40ea79e6c",
+          "fresh_call": true,
+          "returned_items": 3,
+          "trace_id": "019f9cb4-a5f6-7341-80a5-bb72e1be8846",
+          "usage": {
+            "completion_tokens": 1822,
+            "completion_tokens_details": {
+              "audio_tokens": 0,
+              "image_tokens": 0,
+              "reasoning_tokens": 877
+            },
+            "cost": 0.02790175,
+            "cost_details": {
+              "upstream_inference_completions_cost": 0.010932,
+              "upstream_inference_cost": 0.02790175,
+              "upstream_inference_prompt_cost": 0.01696975
+            },
+            "is_byok": false,
+            "prompt_tokens": 25766,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": 5675,
+              "cached_tokens": 11350,
+              "video_tokens": 0
+            },
+            "total_tokens": 27588
+          }
+        }
+      },
+      "target_model_responses": {
+        "dim1_response": "The evidence is insufficient to determine whether the user still lives somewhere where coastal dampness and late-October frost regularly affect their room.",
+        "dim2_response": "Saturday \u2014 seal the largest drafts first:\n1. Gather medium-density adhesive foam weatherstripping, paintable exterior-grade silicone or latex-silicone caulk, a caulk gun, scraper or putty knife, mild cleaner, rags, and\u2014if needed\u2014a small dehumidifier or moisture absorber.\n2. With the window closed, use your hand or a strip of tissue to locate drafts. Air at the moving sash, meeting rail, or side channels indicates a sash leak; air where the frame meets the wall or trim indicates a trim/frame leak.\n3. Scrape away loose exterior caulk, clean and dry the seams, and apply a fresh bead to trim-to-wall or frame gaps. Smooth it with a damp finger.\n4. Let the caulk cure for the time stated on the tube\u2014typically a few hours to overnight. Avoid disturbing it while it sets.\n\nSunday \u2014 tighten the sash:\n1. If the draft is at the sash, apply adhesive foam weatherstripping along the vertical sides where the sash meets the tracks and along the horizontal meeting rail where the upper and lower sashes meet when closed. If the upper sash is loose, seal its top edge as well.\n2. Keep the bottom edge clear so drainage is not blocked, and place the strips only where the sash presses when locked.\n3. Open and close the window once to confirm it still operates smoothly.\n4. If the draft is actually at the trim, touch up only the missed or poorly bonded spot with a little more caulk and let it dry.\n\nAfter sealing \u2014 prevent moisture buildup:\n\u2022 Pull curtains back slightly so air can circulate around the glass.\n\u2022 Air out the room briefly if condensation appears, and avoid blocking airflow at the window.\n\u2022 Run a small dehumidifier or use a moisture absorber if needed, especially overnight.\n\u2022 Wipe condensation from the window area regularly so mold does not get a foothold.",
+        "dim3_response": "Given the coastal dampness and late-October frost you previously mentioned, prioritize your windows this weekend:\n\n1. Check for drafts with your hand or a strip of tissue around the sash, meeting rail, side channels, and trim-to-wall seams.\n2. Seal trim or frame gaps first with fresh exterior caulk, after removing loose caulk and cleaning the surface. Let it cure according to the product instructions.\n3. Add adhesive foam weatherstripping to leaking sash areas\u2014especially the vertical sides, the meeting rail, and any loose top edge. Avoid sealing the bottom drainage area.\n4. After sealing, check that the window still opens, closes, and locks properly.\n5. Control moisture by airing out the room briefly, pulling curtains back from the glass, and using a dehumidifier or moisture absorber if condensation appears.\n\nThe evidence does not include your current location or live climate conditions, so I can\u2019t tailor this to today\u2019s weather beyond the coastal dampness and frost conditions you previously described."
+      },
+      "uid": "feef3933-9375-4fa2-ba80-ae65963e7466"
+    }
+  ],
+  "summary": {
+    "canonical_model_snapshot": "openai/gpt-5.6-luna-pro-20260709",
+    "complete": true,
+    "expected_items": 4,
+    "generation_fingerprint": "41cb3554b47024bbe4c0d592d8d9a76c6d201d55f74342cc6533aedf8246cca0",
+    "num_items": 4,
+    "promotion_ineligible": true,
+    "reasoning_effort": "high",
+    "smoke_only": false,
+    "source_record_count": 400,
+    "target_model": "openai/gpt-5.6-luna-pro-20260709"
+  }
+}
