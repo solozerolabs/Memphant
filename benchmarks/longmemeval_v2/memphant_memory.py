@@ -19,6 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +84,12 @@ def _canonical_json(value: object) -> bytes:
 
 def _sha256_json(value: object) -> str:
     return hashlib.sha256(_canonical_json(value)).hexdigest()
+
+
+def _sha256_rust_json(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def _sha256_file(path: Path) -> str:
@@ -356,6 +363,7 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
             "attempt_ids",
             "before_event_sha256",
             "after_event_sha256",
+            "campaign_journal_sha256",
             "settled_nanos",
             "unresolved_nanos",
         },
@@ -369,6 +377,7 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         cache.get("source_receipts_sha256"),
         ledger.get("before_event_sha256"),
         ledger.get("after_event_sha256"),
+        ledger.get("campaign_journal_sha256"),
     ]
     _require(
         all(isinstance(item, str) and re.fullmatch(r"[0-9a-f]{64}", item) is not None for item in sha_fields),
@@ -380,7 +389,6 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         and isinstance(cache.get("namespace"), str)
         and cache["namespace"]
         and isinstance(ledger.get("attempt_ids"), list)
-        and ledger["attempt_ids"]
         and all(isinstance(item, str) and item for item in ledger["attempt_ids"])
         and len(ledger["attempt_ids"]) == len(set(ledger["attempt_ids"]))
         and all(
@@ -603,7 +611,7 @@ def _load_construction_binding() -> dict[str, object]:
     _require(
         isinstance(value, dict)
         and set(value)
-        == {"authorization", "selection", "compiler", "provider", "cache", "ledger"},
+        == {"authorization", "selection", "compiler", "provider", "cache", "ledger", "coverage"},
         "construction binding contract drift",
     )
     compiler = value.get("compiler")
@@ -612,7 +620,143 @@ def _load_construction_binding() -> dict[str, object]:
         and set(compiler) == {"prompt_sha256", "schema_sha256", "provider_code_sha256"},
         "construction binding compiler contract drift",
     )
+    authorization = value.get("authorization")
+    cache = value.get("cache")
+    ledger = value.get("ledger")
+    coverage = value.get("coverage")
+    _require(
+        isinstance(authorization, dict)
+        and set(authorization) == {"authorization_sha256", "campaign_sha256", "screen_id"}
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256")
+        == authorization["authorization_sha256"]
+        and os.environ.get("MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256")
+        == authorization["campaign_sha256"],
+        "construction binding authorization differs from worker environment",
+    )
+    _require(
+        isinstance(cache, dict)
+        and set(cache) == {"namespace", "source_receipts_path"}
+        and Path(str(cache["source_receipts_path"])).resolve()
+        == Path(_required_env("MEMPHANT_STRUCTURED_STATE_CACHE_HITS")).resolve()
+        and cache["namespace"] == _required_env("MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE"),
+        "construction binding cache path or namespace drift",
+    )
+    _require(
+        isinstance(ledger, dict)
+        and set(ledger)
+        == {"subledger_path", "campaign_journal_path", "before_event_sha256", "campaign_journal_sha256"}
+        and Path(str(ledger["subledger_path"])).resolve()
+        == Path(_required_env("MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER")).resolve()
+        and Path(str(ledger["campaign_journal_path"])).resolve()
+        == Path(_required_env("MEMPHANT_CAMPAIGN_ATTEMPT_LEDGER")).resolve()
+        and _path_sha256(Path(str(ledger["subledger_path"]))) == ledger["before_event_sha256"]
+        and _path_sha256(Path(str(ledger["campaign_journal_path"])))
+        == ledger["campaign_journal_sha256"],
+        "construction binding ledger path or pre-worker identity drift",
+    )
+    keys = coverage.get("expected_extraction_keys") if isinstance(coverage, dict) else None
+    _require(
+        isinstance(keys, list)
+        and keys
+        and len(keys) == len(set(keys))
+        and all(isinstance(key, str) and re.fullmatch(r"[0-9a-f]{64}", key) for key in keys)
+        and coverage.get("expected_extraction_keys_sha256") == _sha256_json(keys),
+        "construction binding extraction coverage is invalid",
+    )
     return value
+
+
+def _path_sha256(path: Path) -> str:
+    return _sha256_file(path) if path.is_file() else hashlib.sha256(b"").hexdigest()
+
+
+def _construction_receipts(binding: dict[str, object]) -> tuple[dict[str, object], dict[str, object]]:
+    """Derive post-worker proof fields from canonical receipts, never predictions."""
+    expected = set(binding["coverage"]["expected_extraction_keys"])
+    subledger = Path(binding["ledger"]["subledger_path"])
+    _require(subledger.is_file(), "construction subledger is missing after worker")
+    events = [json.loads(line) for line in subledger.read_text(encoding="utf-8").splitlines() if line]
+    started: dict[tuple[str, int], dict[str, object]] = {}
+    results: dict[tuple[str, int], dict[str, object]] = {}
+    for event in events:
+        key = event.get("extraction_key")
+        if key not in expected:
+            continue
+        identity = (key, event.get("campaign_attempt"))
+        _require(event.get("event") in {"started", "result"}, "construction subledger event is malformed")
+        target = started if event["event"] == "started" else results
+        _require(identity not in target, "construction subledger duplicates one attempt")
+        target[identity] = event
+    for identity, result in results.items():
+        _require(
+            identity in started
+            and started[identity].get("attempt_id") == result.get("attempt_id")
+            and result.get("requested_model") == binding["provider"]["requested_model"],
+            "construction subledger start/result identity drift",
+        )
+    receipt_root = Path(binding["cache"]["source_receipts_path"])
+    cache_receipts: dict[str, dict[str, object]] = {}
+    receipt_hashes = []
+    for key in sorted(expected):
+        path = receipt_root / f"{key}.json"
+        if not path.is_file():
+            continue
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        core = receipt.get("core") if isinstance(receipt, dict) else None
+        _require(
+            isinstance(core, dict)
+            and receipt.get("cache_hit_sha256") == _sha256_rust_json(core)
+            and core.get("extraction_key") == key
+            and core.get("authorization_sha256") == binding["authorization"]["authorization_sha256"]
+            and core.get("campaign_sha256") == binding["authorization"]["campaign_sha256"]
+            and core.get("cache_namespace") == binding["cache"]["namespace"]
+            and core.get("reservation_status") == "cache_hit"
+            and core.get("settled_nanos") == 0,
+            "construction cache-hit receipt identity drift",
+        )
+        cache_receipts[key] = core
+        receipt_hashes.append({"extraction_key": key, "sha256": _sha256_file(path)})
+    decoded: dict[str, dict[str, object]] = {}
+    unresolved_nanos = 0
+    for (key, _), result in sorted(results.items()):
+        if result.get("reservation_status") == "settled" and result.get("parse_status") == "decoded" and result.get("error") is None:
+            decoded[key] = result
+        elif result.get("reservation_status") != "not_charged":
+            unresolved_nanos += int(result.get("per_attempt_reservation_nanos", 0))
+    covered = set(decoded) | set(cache_receipts)
+    _require(covered == expected, "construction receipts lack exact extraction-key coverage")
+    for key in set(decoded) & set(cache_receipts):
+        _require(
+            cache_receipts[key].get("source_result_event_sha256") == _sha256_rust_json(decoded[key]),
+            "construction cache hit does not bind its paid source result",
+        )
+    settled_nanos = 0
+    for result in decoded.values():
+        usage = result.get("usage")
+        _require(isinstance(usage, dict) and usage.get("cost") is not None, "construction settled usage is missing")
+        settled_nanos += int(
+            (Decimal(str(usage["cost"])) * Decimal(1_000_000_000)).to_integral_value(
+                rounding=ROUND_CEILING
+            )
+        )
+    campaign_journal = Path(binding["ledger"]["campaign_journal_path"])
+    _require(
+        _path_sha256(campaign_journal) == binding["ledger"]["campaign_journal_sha256"],
+        "campaign journal changed during an internally subledgered construction slice",
+    )
+    cache = {
+        "namespace": binding["cache"]["namespace"],
+        "source_receipts_sha256": _sha256_json(receipt_hashes),
+    }
+    ledger = {
+        "attempt_ids": sorted({result["attempt_id"] for result in results.values()}),
+        "before_event_sha256": binding["ledger"]["before_event_sha256"],
+        "after_event_sha256": _sha256_file(subledger),
+        "campaign_journal_sha256": _sha256_file(campaign_journal),
+        "settled_nanos": settled_nanos,
+        "unresolved_nanos": unresolved_nanos,
+    }
+    return cache, ledger
 
 
 def _validate_trajectory(
@@ -916,6 +1060,9 @@ class MemphantMemory(Memory):
         self.construction_proof = (
             _load_construction_proof(prebuilt_path) if prebuilt_path else None
         )
+        self.binding_authority = (
+            None if self.construction_proof is not None else _load_construction_binding()
+        )
         if self.construction_proof is not None:
             frozen_contract = self.construction_proof["compiler"]
             _require(
@@ -1068,10 +1215,15 @@ class MemphantMemory(Memory):
         _require(self._queried_question_id is None, "cannot prepare after query")
         _require(self.inserted_trajectory_ids, "cannot prepare empty MemPhant memory")
         if self.construction_proof is None:
+            _require(
+                _load_construction_binding() == self.binding_authority,
+                "construction binding changed after adapter initialization",
+            )
             self.worker_proof = _drain_worker(
                 self.worker_bin, self.database_url, self.resource_count
             )
-            binding = _load_construction_binding()
+            binding = self.binding_authority
+            cache_proof, ledger_proof = _construction_receipts(binding)
             bound_compiler = binding["compiler"]
             core = {
                 "schema_version": 2,
@@ -1090,8 +1242,8 @@ class MemphantMemory(Memory):
                     "binaries": self.binaries,
                 },
                 "provider": binding["provider"],
-                "cache": binding["cache"],
-                "ledger": binding["ledger"],
+                "cache": cache_proof,
+                "ledger": ledger_proof,
                 "isolation": {
                     "tenant_id": self.tenant_id,
                     "instance_id": self.instance_id,

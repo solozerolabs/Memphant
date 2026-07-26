@@ -31,3 +31,6 @@ fastembed = ["dep:fastembed"]
 # ort/ONNX). Additive, NOT in `default` — the R0 campaign builds once with
 # this on; default builds stay exactly as heavy as today.
 qwen3 = ["fastembed", "fastembed/qwen3", "dep:candle-core"]
+
+[dev-dependencies]
+tempfile.workspace = true

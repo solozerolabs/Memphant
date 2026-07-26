@@ -1,11 +1,11 @@
 {
   "benchmark": "LongMemEval-V2",
   "adapter": "MemPhant packaged REST",
-  "schema_version": 8,
+  "schema_version": 9,
   "upstream_release_lock_sha256": "e24388725b23d50766f1cf7e77ea6b41396d664dc1dce309cafe30cb897fe77d",
   "openapi_sha256": "a5bac765d7c4c862a342d95b49049c27d3af57aea9f80af6d3a0a489ac055271",
   "files": {
-    "benchmarks/longmemeval_v2/memphant_memory.py": "70c81b21efbd4755cc9b473e40f23689f3aefb56bf170469846d577fab817b71",
+    "benchmarks/longmemeval_v2/memphant_memory.py": "a97519f48aa4a757716db79c5b4ed97f57330137cf5f348e6e19a136a423e8ab",
     "benchmarks/longmemeval_v2/harness_bootstrap.py": "97b17ebc7091ffd624859ff62b509ab4c7e96586448c7904f208c31ddd8ac8e6",
     "benchmarks/longmemeval_v2/memphant.memory.json": "a2fbdbf36101d9e863006121ef84860e496f9d7d11967de96322e58479b0fe29",
     "benchmarks/longmemeval_v2/memphant.fast.memory.json": "ead5ac67d24df597587b53d5f105598d627adcb380a708197be6e40a512c9e5f",
@@ -65,7 +65,7 @@
       "worker_stdout_sha256",
       "worker_stderr_sha256"
     ],
-    "construction": "prepare drains the packaged worker exactly once and seals ordered trajectory IDs and hashes, retain and worker proofs, tenant/context, binary fingerprints, and construction-relevant adapter/config hashes without credentials",
+    "construction": "initialization validates immutable authorization, selection, compiler, provider, cache, subledger, and campaign-journal paths before any worker access; prepare revalidates the unchanged binding, drains once, and derives cache and ledger proof fields from post-worker receipts",
     "query_only": "MEMPHANT_LME_PREBUILT_PROOF fails closed on proof, adapter, construction-parameter, binary, trajectory-order, or trajectory-hash drift; query-only performs no retains or worker invocation and emits the construction proof SHA-256",
     "pairing": "query fails unless the packaged worker compiles every retained resource exactly once, trace tenant/scope/actor/context/citations exactly match public recall, and the only schema mutation during recall is one retrieval_trace audit row"
   },

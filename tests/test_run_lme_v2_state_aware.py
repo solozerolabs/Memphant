@@ -552,8 +552,8 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
         runtime_hashes={"structured": "f" * 64},
     )
     plans = [
-        {"extraction_key": "1" * 64, "request_sha256": "2" * 64, "per_attempt_reservation_nanos": 40, "requested_model": "qwen/qwen3.5-9b-20260310", "maximum_attempts": 3},
-        {"extraction_key": "3" * 64, "request_sha256": "4" * 64, "per_attempt_reservation_nanos": 60, "requested_model": "qwen/qwen3.5-9b-20260310", "maximum_attempts": 3},
+        {"extraction_key": "1" * 64, "request_sha256": "2" * 64, "per_attempt_reservation_nanos": 40, "requested_model": "qwen/qwen3.5-9b-20260310", "maximum_attempts": 3, "source_kind": "resource", "source_body_sha256": "7" * 64, "batch_index": 0, "evidence_slices_sha256": runner.sha256_json([{"id": "slice-1", "body": "Oslo is home.", "source_span": "0:13"}])},
+        {"extraction_key": "3" * 64, "request_sha256": "4" * 64, "per_attempt_reservation_nanos": 60, "requested_model": "qwen/qwen3.5-9b-20260310", "maximum_attempts": 3, "source_kind": "resource", "source_body_sha256": "8" * 64, "batch_index": 0, "evidence_slices_sha256": runner.sha256_json([{"id": "slice-2", "body": "Paris is home.", "source_span": "0:14"}])},
     ]
     ledger = _WaveLedger()
     launched = []
@@ -609,6 +609,50 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
     with pytest.raises(RuntimeError, match="exact planned-key coverage"):
         runner.validate_and_settle_construction_wave(_WaveLedger(), wave, events[:-2])
 
+    slices = [{"id": "slice-2", "body": "Paris is home.", "source_span": "0:14"}]
+    observations = [{"namespace": "profile", "item_key": "city", "fields": {"value": "Paris"}, "disposition": "state", "evidence_slice_id": "slice-2", "evidence_quote": "Paris", "valid_from": None, "valid_to": None}]
+    hit_core = {
+        "schema_version": 1,
+        "authorization_sha256": "9" * 64,
+        "campaign_sha256": wave["campaign_census_sha256"],
+        "cache_namespace": "longmemeval-v2-construction-v1",
+        "cache_entry_sha256": "a" * 64,
+        "extraction_key": plans[1]["extraction_key"],
+        "request_sha256": plans[1]["request_sha256"],
+        "source_kind": "resource",
+        "source_body_sha256": plans[1]["source_body_sha256"],
+        "batch_index": 0,
+        "evidence_slices_sha256": runner.sha256_json(slices),
+        "evidence_slices": slices,
+        "requested_model": wave["requested_model"],
+        "served_model": wave["response_model"],
+        "served_provider": "DeepInfra",
+        "response_id": "cached-generation",
+        "source_attempt_id": "cached-attempt",
+        "source_started_event_sha256": "b" * 64,
+        "source_result_event_sha256": "c" * 64,
+        "provider_result_sha256": "d" * 64,
+        "observation_count": 1,
+        "observation_sha256": runner.sha256_json(observations),
+        "observations": observations,
+        "reservation_status": "cache_hit",
+        "settled_nanos": 0,
+    }
+    hit = {"core": hit_core, "cache_hit_sha256": runner.sha256_json(hit_core)}
+    cache_proof = runner.validate_and_settle_construction_wave(
+        _WaveLedger(),
+        wave,
+        events[:2],
+        cache_hit_receipts=[hit],
+        authorization_sha256="9" * 64,
+    )
+    assert cache_proof["paid_key_count"] == 1
+    assert cache_proof["cache_hit_key_count"] == 1
+    with pytest.raises(RuntimeError, match="authorization identity"):
+        runner.validate_and_settle_construction_wave(
+            _WaveLedger(), wave, events[:2], cache_hit_receipts=[hit]
+        )
+
     retry_events = [dict(event) for event in events]
     retry_events[1] = {
         "event": "result",
@@ -652,6 +696,183 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
         runner.validate_and_settle_construction_wave(
             _WaveLedger(), wave, retry_events, [retry_one]
         )
+
+
+def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    census = runner.recost_census_values(
+        _synthetic_parent_census(runner),
+        reader_inventory=_synthetic_reader_inventory(runner, 1),
+        s_term=1,
+        retry_pool_nanos=100,
+        manifest_path="manifest.json",
+        manifest_sha256="e" * 64,
+        runtime_hashes={"structured": "f" * 64},
+    )
+    plan = {
+        "extraction_key": "1" * 64,
+        "request_sha256": "2" * 64,
+        "per_attempt_reservation_nanos": 100,
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "maximum_attempts": 3,
+        "source_kind": "resource",
+        "source_body_sha256": "3" * 64,
+        "batch_index": 0,
+        "evidence_slices_sha256": "4" * 64,
+    }
+    census["construction"].update(
+        {
+            "plan_inventory": [plan],
+            "plan_inventory_sha256": runner.sha256_json([plan]),
+            "processed_plans": 1,
+        }
+    )
+    census["census_sha256"] = runner.sha256_json(
+        {key: value for key, value in census.items() if key != "census_sha256"}
+    )
+    census_path = tmp_path / "CAMPAIGN-CENSUS.json"
+    manifest_path = tmp_path / "manifest.json"
+    census_path.write_text(json.dumps(census), encoding="utf-8")
+    manifest_path.write_text("{}", encoding="utf-8")
+    qwen = {
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "response_model": "qwen/qwen3.5-9b",
+        "provider": "DeepInfra",
+    }
+    normalized = {
+        "qwen_deepinfra": qwen,
+        "openai_native_judge": {
+            "requested_model": "gpt-5.2-2025-12-11",
+            "reasoning_effort": "medium",
+        },
+    }
+    refresh = {
+        "normalized": normalized,
+        "normalized_sha256": runner.sha256_json(normalized),
+        "sources": {"public": "5" * 64},
+    }
+    opening = [
+        {
+            "reservation_id": "historical",
+            "reserved_nanos": runner.OPENING_NANOS,
+            "receipt_sha256": "6" * 64,
+            "proof_sha256": "7" * 64,
+        }
+    ]
+    packet = runner._build_campaign_authorization(
+        census, census_path, manifest_path, refresh, tmp_path, opening
+    )
+    scope = {
+        key: value
+        for key, value in packet.items()
+        if key not in {"schema_version", "status", "authorization"}
+    }
+    assert packet["authorization"]["authorization_scope_sha256"] == runner.sha256_json(scope)
+    assert packet["inputs"]["plan_inventory_sha256"] == runner.sha256_json([plan])
+    assert packet["execution"]["construction_max_workers"] == 32
+    assert packet["execution"]["construction_hidden_retries"] == 0
+    output = tmp_path / "CAMPAIGN-AUTHORIZATION.json"
+    runner._create_json(output, packet)
+    with pytest.raises(RuntimeError, match="already exists"):
+        runner._create_json(output, packet)
+
+
+def test_construction_aggregate_reservation_resumes_once_across_crash_boundaries(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    census = runner.recost_census_values(
+        _synthetic_parent_census(runner),
+        reader_inventory=_synthetic_reader_inventory(runner, 1),
+        s_term=1,
+        retry_pool_nanos=100,
+        manifest_path="current.json",
+        manifest_sha256="e" * 64,
+        runtime_hashes={"structured": "f" * 64},
+    )
+    plans = [
+        {"extraction_key": "1" * 64, "request_sha256": "2" * 64, "per_attempt_reservation_nanos": 40, "requested_model": "qwen/qwen3.5-9b-20260310", "maximum_attempts": 3},
+        {"extraction_key": "3" * 64, "request_sha256": "4" * 64, "per_attempt_reservation_nanos": 60, "requested_model": "qwen/qwen3.5-9b-20260310", "maximum_attempts": 3},
+    ]
+
+    class Ledger:
+        def __init__(self):
+            self.attempts = []
+            self.fail_record_once = False
+
+        def record(self, event, request_key, payload):
+            assert event == "start"
+            if self.fail_record_once:
+                self.fail_record_once = False
+                raise RuntimeError("crash before reservation append")
+            self.attempts.append({"request_key": request_key, "start": payload})
+
+        def snapshot(self):
+            return {"attempts": list(self.attempts)}
+
+    ledger = Ledger()
+    wave_path = tmp_path / "CONSTRUCTION-WAVE.json"
+    ledger.fail_record_once = True
+    with pytest.raises(RuntimeError, match="before reservation"):
+        runner.authorize_or_resume_construction_wave(
+            ledger, census, plans, wave_path, launch=lambda: None
+        )
+    assert wave_path.is_file()
+    assert ledger.attempts == []
+
+    with pytest.raises(RuntimeError, match="crash inside launch"):
+        runner.authorize_or_resume_construction_wave(
+            ledger,
+            census,
+            plans,
+            wave_path,
+            launch=lambda: (_ for _ in ()).throw(RuntimeError("crash inside launch")),
+        )
+    assert len(ledger.attempts) == 1
+    runner.authorize_or_resume_construction_wave(
+        ledger, census, plans, wave_path, launch=lambda: None
+    )
+    assert len(ledger.attempts) == 1
+
+
+def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
+    runner = _load_runner()
+    qwen = {
+        "data": {
+            "id": "qwen/qwen3.5-9b",
+            "endpoints": [
+                {
+                    "provider_name": "DeepInfra",
+                    "pricing": {"prompt": "0.0000001", "completion": "0.00000015"},
+                    "context_length": 262144,
+                    "max_completion_tokens": 81920,
+                    "supported_parameters": ["seed", "response_format", "structured_outputs", "max_tokens"],
+                    "status": 0,
+                }
+            ],
+        }
+    }
+    html = " ".join(
+        [
+            "gpt-5.2-2025-12-11",
+            "400,000<!-- --> context window",
+            "128,000<!-- --> max output tokens",
+            "$1.75",
+            "$14.00",
+            "Reasoning.effort supports: none (default), low, medium, high and xhigh.",
+        ]
+    ).encode()
+    seen = []
+
+    def fetch(url):
+        seen.append(url)
+        return json.dumps(qwen).encode() if "openrouter" in url else html
+
+    refresh = runner.refresh_campaign_provider_authority(fetch)
+    assert seen == [runner.QWEN_ENDPOINTS_URL, runner.OPENAI_GPT52_URL]
+    assert refresh["normalized"]["openai_native_judge"]["reasoning_effort"] == "medium"
 
 
 def test_exact_mcnemar_uses_the_frozen_one_sided_integer_tail() -> None:
@@ -773,6 +994,7 @@ def _proof(runner):
             "attempt_ids": ["attempt-1"],
             "before_event_sha256": "4" * 64,
             "after_event_sha256": "5" * 64,
+            "campaign_journal_sha256": "8" * 64,
             "settled_nanos": 1,
             "unresolved_nanos": 0,
         },
@@ -794,6 +1016,7 @@ def _proof(runner):
         ("cache", "source_receipts_sha256"),
         ("ledger", "attempt_ids"),
         ("ledger", "after_event_sha256"),
+        ("ledger", "campaign_journal_sha256"),
         ("ledger", "settled_nanos"),
         ("ledger", "unresolved_nanos"),
     ],

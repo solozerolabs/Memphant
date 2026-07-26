@@ -33,6 +33,17 @@ def load_adapter():
 
 
 def install_construction_binding(monkeypatch, tmp_path):
+    extraction_key = "8" * 64
+    subledger = tmp_path / "construction-attempts.jsonl"
+    events = [
+        {"event": "started", "attempt_id": "attempt-1", "campaign_attempt": 1, "extraction_key": extraction_key, "requested_model": "qwen/qwen3.5-9b-20260310"},
+        {"event": "result", "attempt_id": "attempt-1", "campaign_attempt": 1, "extraction_key": extraction_key, "requested_model": "qwen/qwen3.5-9b-20260310", "reservation_status": "settled", "parse_status": "decoded", "error": None, "usage": {"cost": "0.000000001"}},
+    ]
+    subledger.write_text("".join(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n" for event in events))
+    campaign_journal = tmp_path / "campaign-attempts.jsonl"
+    campaign_journal.write_text("aggregate-reserved\n")
+    cache_hits = tmp_path / "cache-hits"
+    cache_hits.mkdir()
     binding = {
         "authorization": {
             "authorization_sha256": "a" * 64,
@@ -59,18 +70,24 @@ def install_construction_binding(monkeypatch, tmp_path):
             "maximum_output_tokens": 4096,
             "maximum_attempts": 3,
         },
-        "cache": {"namespace": "fixture-v1", "source_receipts_sha256": "2" * 64},
+        "cache": {"namespace": "fixture-v1", "source_receipts_path": str(cache_hits)},
         "ledger": {
-            "attempt_ids": ["attempt-1"],
-            "before_event_sha256": "3" * 64,
-            "after_event_sha256": "4" * 64,
-            "settled_nanos": 1,
-            "unresolved_nanos": 0,
+            "subledger_path": str(subledger),
+            "campaign_journal_path": str(campaign_journal),
+            "before_event_sha256": hashlib.sha256(subledger.read_bytes()).hexdigest(),
+            "campaign_journal_sha256": hashlib.sha256(campaign_journal.read_bytes()).hexdigest(),
         },
+        "coverage": {"expected_extraction_keys": [extraction_key], "expected_extraction_keys_sha256": hashlib.sha256(json.dumps([extraction_key], sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
     }
     path = tmp_path / "construction-binding.json"
     path.write_text(json.dumps(binding), encoding="utf-8")
     monkeypatch.setenv("MEMPHANT_LME_CONSTRUCTION_BINDING", str(path))
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256", "a" * 64)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256", "b" * 64)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_HITS", str(cache_hits))
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE", "fixture-v1")
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER", str(subledger))
+    monkeypatch.setenv("MEMPHANT_CAMPAIGN_ATTEMPT_LEDGER", str(campaign_journal))
     return binding
 
 
@@ -737,6 +754,7 @@ def test_memphant_query_only_fails_closed_on_tampered_or_out_of_order_proof(
             "attempt_ids": ["attempt-1"],
             "before_event_sha256": "3" * 64,
             "after_event_sha256": "4" * 64,
+            "campaign_journal_sha256": "5" * 64,
             "settled_nanos": 1,
             "unresolved_nanos": 0,
         },
@@ -819,6 +837,7 @@ def test_memphant_memory_fails_closed_when_worker_pairing_is_incomplete(
     monkeypatch, tmp_path
 ):
     adapter, registry = load_memphant_adapter(monkeypatch)
+    install_construction_binding(monkeypatch, tmp_path)
     cli_bin = tmp_path / "cli"
     server_bin = tmp_path / "server"
     worker_bin = tmp_path / "worker"

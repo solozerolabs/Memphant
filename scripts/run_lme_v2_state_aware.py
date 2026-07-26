@@ -28,6 +28,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from typing import Any
 import urllib.request
 
@@ -51,6 +52,12 @@ ORACLE_KEYS = {
     "reference",
     "score",
 }
+CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot"
+CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
+CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json"
+CANONICAL_CAMPAIGN_AUTHORIZATION = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
+QWEN_ENDPOINTS_URL = "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints"
+OPENAI_GPT52_URL = "https://developers.openai.com/api/docs/models/gpt-5.2"
 
 # These builders mirror the two pinned official qa_eval_metrics.py prompt
 # shapes.  Their source file hash is checked before they are used; keeping the
@@ -72,6 +79,122 @@ def canonical_json(value: object) -> bytes:
 
 def sha256_json(value: object) -> str:
     return hashlib.sha256(canonical_json(value)).hexdigest()
+
+
+def sha256_rust_json(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _campaign_artifact_paths(root: Path) -> dict[str, str]:
+    names = {
+        "journal": "CAMPAIGN-ATTEMPTS.jsonl",
+        "construction_subledger": "CONSTRUCTION-ATTEMPTS.jsonl",
+        "construction_wave": "CONSTRUCTION-WAVE.json",
+        "construction_progress": "CONSTRUCTION-PROGRESS.json",
+        "construction_input": "CONSTRUCTION-RESOURCES.jsonl",
+        "prefix_plans": "PREFIX-12-CONSTRUCTION-PLANS.json",
+        "construction_settlement": "CONSTRUCTION-SETTLEMENT.json",
+        "observation_cache": "observation-cache",
+        "cache_hits": "cache-hits",
+        "scratch": "scratch",
+        "case_banks": "case-banks",
+        "private_reader_outputs": "private-reader-outputs",
+        "sealed_prefix": "PREFIX-12.sealed",
+        "public_prefix_status": "PREFIX-12-STATUS.json",
+        "remaining_commitment": "REMAINING-439-COMMITMENT.json",
+        "judge_outputs": "private-judge-outputs",
+        "official_metrics": "OFFICIAL-METRICS.json",
+        "native_package": "NATIVE-OFFICIAL-PACKAGE.json",
+        "closure": "CAMPAIGN-CLOSURE.json",
+    }
+    return {key: str((root / name).resolve()) for key, name in names.items()}
+
+
+def campaign_artifact_paths() -> dict[str, str]:
+    """The sole canonical path set; paid entrypoints must not accept overrides."""
+    return _campaign_artifact_paths(CAMPAIGN_ARTIFACT_ROOT)
+
+
+def _fetch_public_bytes(url: str) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": "memphant-campaign-authority/1"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        if response.status != 200:
+            raise RuntimeError(f"provider authority refresh failed: HTTP {response.status}")
+        return response.read()
+
+
+def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, object]:
+    """Refresh public route/price authority without reading provider credentials."""
+    qwen_bytes = fetch(QWEN_ENDPOINTS_URL)
+    openai_bytes = fetch(OPENAI_GPT52_URL)
+    qwen = json.loads(qwen_bytes)
+    endpoints = qwen.get("data", {}).get("endpoints", [])
+    deepinfra = [
+        endpoint
+        for endpoint in endpoints
+        if isinstance(endpoint, dict) and endpoint.get("provider_name") == "DeepInfra"
+    ]
+    if len(deepinfra) != 1:
+        raise RuntimeError("Qwen DeepInfra route authority is missing or ambiguous")
+    endpoint = deepinfra[0]
+    required_parameters = {"seed", "response_format", "structured_outputs", "max_tokens"}
+    normalized_qwen = {
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "response_model": qwen.get("data", {}).get("id"),
+        "provider": endpoint.get("provider_name"),
+        "input_price_usd_per_token": endpoint.get("pricing", {}).get("prompt"),
+        "output_price_usd_per_token": endpoint.get("pricing", {}).get("completion"),
+        "context_length": endpoint.get("context_length"),
+        "max_completion_tokens": endpoint.get("max_completion_tokens"),
+        "required_parameters_supported": required_parameters.issubset(
+            set(endpoint.get("supported_parameters", []))
+        ),
+        "status": endpoint.get("status"),
+    }
+    if normalized_qwen != {
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "response_model": "qwen/qwen3.5-9b",
+        "provider": "DeepInfra",
+        "input_price_usd_per_token": "0.0000001",
+        "output_price_usd_per_token": "0.00000015",
+        "context_length": 262144,
+        "max_completion_tokens": 81920,
+        "required_parameters_supported": True,
+        "status": 0,
+    }:
+        raise RuntimeError("Qwen DeepInfra route or price authority drift")
+    openai = openai_bytes.decode("utf-8")
+    required_openai_fragments = (
+        "gpt-5.2-2025-12-11",
+        "400,000<!-- --> context window",
+        "128,000<!-- --> max output tokens",
+        "$1.75",
+        "$14.00",
+        "Reasoning.effort supports: none (default), low, medium, high and xhigh.",
+    )
+    if any(fragment not in openai for fragment in required_openai_fragments):
+        raise RuntimeError("native GPT-5.2 route or price authority drift")
+    normalized_openai = {
+        "requested_model": "gpt-5.2-2025-12-11",
+        "provider": "OpenAI",
+        "input_price_usd_per_million": "1.75",
+        "output_price_usd_per_million": "14.00",
+        "context_length": 400000,
+        "max_output_tokens": 128000,
+        "reasoning_effort": "medium",
+    }
+    normalized = {"qwen_deepinfra": normalized_qwen, "openai_native_judge": normalized_openai}
+    return {
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "normalized": normalized,
+        "normalized_sha256": sha256_json(normalized),
+        "sources": {
+            QWEN_ENDPOINTS_URL: hashlib.sha256(qwen_bytes).hexdigest(),
+            OPENAI_GPT52_URL: hashlib.sha256(openai_bytes).hexdigest(),
+        },
+    }
 
 
 def exact_mcnemar(wins: int, losses: int) -> Fraction:
@@ -263,6 +386,7 @@ PROOF_SECTION_KEYS = {
         "attempt_ids",
         "before_event_sha256",
         "after_event_sha256",
+        "campaign_journal_sha256",
         "settled_nanos",
         "unresolved_nanos",
     },
@@ -294,6 +418,7 @@ def validate_construction_proof_v2(proof: object) -> dict[str, object]:
         proof["cache"]["source_receipts_sha256"],
         proof["ledger"]["before_event_sha256"],
         proof["ledger"]["after_event_sha256"],
+        proof["ledger"]["campaign_journal_sha256"],
     ]
     if not all(_valid_sha256(value) for value in hashes):
         raise RuntimeError("construction proof contains an invalid sha256")
@@ -332,7 +457,6 @@ def validate_construction_proof_v2(proof: object) -> dict[str, object]:
     ledger = proof["ledger"]
     if (
         not isinstance(ledger["attempt_ids"], list)
-        or not ledger["attempt_ids"]
         or len(set(ledger["attempt_ids"])) != len(ledger["attempt_ids"])
         or not all(isinstance(value, str) and value for value in ledger["attempt_ids"])
         or type(ledger["settled_nanos"]) is not int
@@ -1480,6 +1604,13 @@ def _full_census(
         if completed.returncode != 0:
             raise RuntimeError(f"production census planner failed: {completed.stderr.strip()}")
         planned = json.loads(completed.stdout)
+    plan_inventory = planned.get("plan_inventory")
+    if (
+        not isinstance(plan_inventory, list)
+        or len(plan_inventory) != planned.get("unique_extraction_keys")
+        or planned.get("plan_inventory_sha256") != sha256_json(plan_inventory)
+    ):
+        raise RuntimeError("production census plan inventory drift")
     request_shapes = _official_request_shape_bounds(
         data_root, reader_proof, reader_fixture, reader
     )
@@ -1731,6 +1862,13 @@ def _plan_inventory(plans: list[dict[str, object]]) -> tuple[list[dict[str, obje
         reservation = plan.get("per_attempt_reservation_nanos")
         requested_model = plan.get("requested_model")
         maximum_attempts = plan.get("maximum_attempts")
+        optional_source = {
+            "source_kind": plan.get("source_kind"),
+            "source_body_sha256": plan.get("source_body_sha256"),
+            "batch_index": plan.get("batch_index"),
+            "evidence_slices_sha256": plan.get("evidence_slices_sha256"),
+        }
+        has_source_identity = any(value is not None for value in optional_source.values())
         if (
             not isinstance(key, str)
             or not SHA256.fullmatch(key)
@@ -1745,19 +1883,29 @@ def _plan_inventory(plans: list[dict[str, object]]) -> tuple[list[dict[str, obje
             or maximum_attempts <= 0
         ):
             raise RuntimeError("construction wave plan inventory is malformed")
+        if has_source_identity and (
+            optional_source["source_kind"] not in {"episode", "resource"}
+            or not _valid_sha256(optional_source["source_body_sha256"])
+            or type(optional_source["batch_index"]) is not int
+            or optional_source["batch_index"] < 0
+            or not _valid_sha256(optional_source["evidence_slices_sha256"])
+        ):
+            raise RuntimeError("construction wave plan source identity is malformed")
         seen.add(key)
-        normalized.append(
-            {
+        normalized_plan = {
                 "extraction_key": key,
                 "request_sha256": request_hash,
                 "per_attempt_reservation_nanos": reservation,
                 "requested_model": requested_model,
                 "maximum_attempts": maximum_attempts,
             }
-        )
+        if has_source_identity:
+            normalized_plan.update(optional_source)
+        normalized.append(normalized_plan)
         total += reservation
     if not normalized:
         raise RuntimeError("construction wave plan inventory is empty")
+    normalized.sort(key=lambda plan: plan["extraction_key"])
     return normalized, total, sha256_json(normalized)
 
 
@@ -1919,6 +2067,351 @@ def validate_campaign_authorization(
     return census
 
 
+def _opening_reservations() -> list[dict[str, object]]:
+    evidence = [
+        (
+            "stale-settled-cost",
+            424_530_400,
+            ROOT / "docs/build-log/artifacts/state-memory-sota/stale-pilot/run-2/current/proof.json.attempts.json",
+            ROOT / "docs/build-log/artifacts/state-memory-sota/stale-pilot/AUTHORIZATION-2-CLOSURE.json",
+        ),
+        (
+            "stale-deep-unreconciled-liability",
+            3_600_000_000,
+            ROOT / "docs/build-log/artifacts/state-memory-sota/stale-pilot/run-2/current/proof.json",
+            ROOT / "docs/build-log/2026-07-25-state-memory-terminal-reconciliation.md",
+        ),
+        (
+            "structured-http400-unpriced-liability",
+            233_472_000,
+            ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/FEASIBILITY.json",
+            ROOT / "docs/build-log/2026-07-25-state-memory-terminal-reconciliation.md",
+        ),
+    ]
+    reservations = []
+    for reservation_id, amount, receipt, proof in evidence:
+        if not receipt.is_file() or not proof.is_file():
+            raise RuntimeError("campaign opening-liability evidence is missing")
+        reservations.append(
+            {
+                "reservation_id": reservation_id,
+                "reserved_nanos": amount,
+                "receipt_sha256": _sha256_file(receipt),
+                "proof_sha256": _sha256_file(proof),
+            }
+        )
+    if sum(item["reserved_nanos"] for item in reservations) != OPENING_NANOS:
+        raise RuntimeError("campaign opening-liability evidence does not sum exactly")
+    return reservations
+
+
+def _build_campaign_authorization(
+    census: dict[str, object],
+    census_path: Path,
+    manifest_path: Path,
+    refresh: dict[str, object],
+    artifact_root: Path,
+    opening_reservations: list[dict[str, object]],
+) -> dict[str, object]:
+    _validate_census_hash(census, label="campaign")
+    construction = census.get("construction")
+    admission = census.get("admission")
+    if (
+        not isinstance(construction, dict)
+        or not isinstance(admission, dict)
+        or admission.get("authorized") is not True
+        or admission.get("total_nanos") > HARD_CEILING_NANOS
+        or census.get("paid_models_run") is not False
+        or census.get("spend_nanos") != 0
+    ):
+        raise RuntimeError("campaign authorization requires admitted zero-spend census")
+    plans = construction.get("plan_inventory")
+    normalized, first_reservation, plans_sha256 = _plan_inventory(plans)
+    if (
+        normalized != plans
+        or plans_sha256 != construction.get("plan_inventory_sha256")
+        or len(normalized) != construction.get("processed_plans")
+        or first_reservation != construction.get("first_attempt_liability_nanos")
+    ):
+        raise RuntimeError("campaign authorization plan inventory drift")
+    normalized_refresh = refresh.get("normalized")
+    if (
+        not isinstance(normalized_refresh, dict)
+        or refresh.get("normalized_sha256") != sha256_json(normalized_refresh)
+        or normalized_refresh.get("qwen_deepinfra", {}).get("requested_model")
+        != construction.get("requested_model")
+        or normalized_refresh.get("qwen_deepinfra", {}).get("response_model")
+        != construction.get("response_model")
+        or normalized_refresh.get("qwen_deepinfra", {}).get("provider").casefold()
+        != construction.get("requested_provider", "").casefold()
+    ):
+        raise RuntimeError("campaign provider refresh differs from census route")
+    paths = _campaign_artifact_paths(artifact_root)
+    campaign = {
+        "journal_path": Path(paths["journal"]).name,
+        "hard_ceiling_nanos": HARD_CEILING_NANOS,
+        "opening_liability_nanos": OPENING_NANOS,
+        "unallocated_reserve_nanos": CONTINGENCY_NANOS,
+        "opening_reservations": opening_reservations,
+        "aggregate_construction_reservation_nanos": construction[
+            "construction_liability_nanos"
+        ],
+    }
+    scope = {
+        "campaign": campaign,
+        "inputs": {
+            "census_path": str(census_path.resolve()),
+            "census_file_sha256": _sha256_file(census_path),
+            "census_sha256": census["census_sha256"],
+            "manifest_path": str(manifest_path.resolve()),
+            "manifest_sha256": _sha256_file(manifest_path),
+            "plan_inventory_sha256": plans_sha256,
+            "plan_count": len(normalized),
+        },
+        "provider_authority": refresh,
+        "artifacts": paths,
+        "execution": {
+            "construction_max_workers": 32,
+            "construction_hidden_retries": 0,
+            "reader_max_workers": 8,
+            "sealed_prefix_count": 12,
+            "remaining_count": 439,
+            "official_question_count": QUESTION_COUNT,
+            "cache_namespace": "longmemeval-v2-construction-v1",
+            "resume_key": "extraction_key",
+        },
+    }
+    return {
+        "schema_version": 1,
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        **scope,
+        "authorization": {"authorization_scope_sha256": sha256_json(scope)},
+    }
+
+
+def _create_json(path: Path, value: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8") as handle:
+            json.dump(value, handle, sort_keys=True, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError as error:
+        raise RuntimeError(f"immutable campaign artifact already exists: {path}") from error
+
+
+def mint_campaign_authorization() -> dict[str, object]:
+    """Mint the sole immutable packet after a live public provider refresh."""
+    census = validate_campaign_authorization(
+        CANONICAL_CAMPAIGN_CENSUS, CANONICAL_CAMPAIGN_MANIFEST
+    )
+    refresh = refresh_campaign_provider_authority()
+    packet = _build_campaign_authorization(
+        census,
+        CANONICAL_CAMPAIGN_CENSUS,
+        CANONICAL_CAMPAIGN_MANIFEST,
+        refresh,
+        CAMPAIGN_ARTIFACT_ROOT,
+        _opening_reservations(),
+    )
+    _create_json(CANONICAL_CAMPAIGN_AUTHORIZATION, packet)
+    return packet
+
+
+def _create_or_validate_json(path: Path, value: object) -> None:
+    if path.exists():
+        if json.loads(path.read_text(encoding="utf-8")) != value:
+            raise RuntimeError(f"immutable campaign artifact drift: {path}")
+        return
+    _create_json(path, value)
+
+
+def _prefix_source_hashes(data_root: Path, prefix_count: int) -> tuple[list[str], list[str], set[str]]:
+    haystack = json.loads(
+        (data_root / "haystacks/lme_v2_medium.json").read_text(encoding="utf-8")
+    )
+    case_order = sorted(haystack)
+    if len(case_order) != QUESTION_COUNT or prefix_count != 12:
+        raise RuntimeError("construction prewarm requires the sealed 12/439 split")
+    prefix_ids = case_order[:prefix_count]
+    trajectory_ids = {
+        trajectory_id
+        for question_id in prefix_ids
+        for trajectory_id in haystack[question_id]
+    }
+    adapter = _load_adapter()
+    found = set()
+    source_hashes = set()
+    with (data_root / "trajectories.jsonl").open(encoding="utf-8") as source:
+        for line in source:
+            trajectory = json.loads(line)
+            trajectory_id = trajectory.get("id") if isinstance(trajectory, dict) else None
+            if trajectory_id not in trajectory_ids:
+                continue
+            found.add(trajectory_id)
+            for row in adapter.census_resource_rows(trajectory, uses=1):
+                source_hashes.add(hashlib.sha256(row["source_body"].encode()).hexdigest())
+    if found != trajectory_ids:
+        raise RuntimeError("sealed prefix trajectory selection is incomplete")
+    return prefix_ids, case_order[prefix_count:], source_hashes
+
+
+def prewarm_sealed_prefix(
+    authorization_path: Path,
+    *,
+    data_root: Path | None = None,
+) -> dict[str, object]:
+    """Reserve the full construction envelope once, then prewarm only prefix keys."""
+    if authorization_path.resolve() != CANONICAL_CAMPAIGN_AUTHORIZATION.resolve():
+        raise RuntimeError("prefix prewarm requires the canonical authorization path")
+    packet = json.loads(authorization_path.read_text(encoding="utf-8"))
+    scope = {
+        key: value
+        for key, value in packet.items()
+        if key not in {"schema_version", "status", "authorization"}
+    }
+    authorization_sha256 = packet.get("authorization", {}).get(
+        "authorization_scope_sha256"
+    )
+    if (
+        packet.get("status") != "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
+        or authorization_sha256 != sha256_json(scope)
+        or packet.get("artifacts") != campaign_artifact_paths()
+        or packet.get("execution", {}).get("sealed_prefix_count") != 12
+        or packet.get("execution", {}).get("construction_hidden_retries") != 0
+    ):
+        raise RuntimeError("prefix prewarm authorization is not active and canonical")
+    current_refresh = refresh_campaign_provider_authority()
+    if current_refresh["normalized_sha256"] != packet["provider_authority"]["normalized_sha256"]:
+        raise RuntimeError("provider route or price authority changed after authorization")
+    census = validate_campaign_authorization(
+        CANONICAL_CAMPAIGN_CENSUS, CANONICAL_CAMPAIGN_MANIFEST
+    )
+    if (
+        packet["inputs"]["census_file_sha256"] != _sha256_file(CANONICAL_CAMPAIGN_CENSUS)
+        or packet["inputs"]["census_sha256"] != census["census_sha256"]
+        or packet["inputs"]["manifest_sha256"] != _sha256_file(CANONICAL_CAMPAIGN_MANIFEST)
+    ):
+        raise RuntimeError("prefix prewarm input authority drift")
+    paths = {key: Path(value) for key, value in packet["artifacts"].items()}
+    resolved_data_root = data_root or Path(
+        os.environ.get(
+            "MEMPHANT_LME_V2_DATA_ROOT",
+            Path.home() / ".cache/memphant/longmemeval-v2",
+        )
+    )
+    paths["construction_input"].parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=paths["construction_input"].parent, delete=False
+    ) as handle:
+        temporary_input = Path(handle.name)
+    try:
+        enumeration = _materialize_cli_input(resolved_data_root, temporary_input)
+        if enumeration["input_jsonl_sha256"] != census["construction"]["input_manifest_sha256"]:
+            raise RuntimeError("prefix prewarm resource input differs from census")
+        if paths["construction_input"].exists():
+            if _sha256_file(paths["construction_input"]) != _sha256_file(temporary_input):
+                raise RuntimeError("immutable construction resource input drift")
+        else:
+            os.replace(temporary_input, paths["construction_input"])
+    finally:
+        temporary_input.unlink(missing_ok=True)
+    prefix_ids, remaining_ids, prefix_source_hashes = _prefix_source_hashes(
+        resolved_data_root, 12
+    )
+    plans = census["construction"]["plan_inventory"]
+    prefix_plans = [
+        plan for plan in plans if plan.get("source_body_sha256") in prefix_source_hashes
+    ]
+    if not prefix_plans or any(
+        plan.get("source_body_sha256") not in prefix_source_hashes for plan in prefix_plans
+    ):
+        raise RuntimeError("sealed prefix plan subset is empty or foreign")
+    _create_or_validate_json(paths["prefix_plans"], prefix_plans)
+    remaining = {
+        "schema_version": 1,
+        "prefix_ids_sha256": sha256_json(prefix_ids),
+        "remaining_count": len(remaining_ids),
+        "remaining_ids_sha256": sha256_json(remaining_ids),
+        "full_plan_inventory_sha256": census["construction"]["plan_inventory_sha256"],
+    }
+    _create_or_validate_json(paths["remaining_commitment"], remaining)
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from provider_attempts import open_campaign_ledger
+
+    ledger = open_campaign_ledger(
+        authorization_path,
+        screen_id="longmemeval-v2-state-aware",
+        expected_journal_path=paths["journal"],
+    )
+    manifest = json.loads(CANONICAL_CAMPAIGN_MANIFEST.read_text(encoding="utf-8"))
+    construction = manifest["construction"]
+    binary_sha256 = census["construction"]["census_binary_provenance"]["binary_sha256"]
+    binary = ROOT / "target/state-memory-census-bin" / binary_sha256 / (
+        "memphant-cli.exe" if sys.platform == "win32" else "memphant-cli"
+    )
+    if not binary.is_file() or _sha256_file(binary) != binary_sha256:
+        raise RuntimeError("authorized construction binary is unavailable")
+
+    def launch() -> None:
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "MEMPHANT_STRUCTURED_STATE": "on",
+                "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
+                "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
+                "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
+                "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(construction["output_price_nanos_per_million"]),
+                "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH": str(resolved_data_root / construction["tokenizer_path"]),
+                "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH": str(resolved_data_root / construction["tokenizer_config_path"]),
+                "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER": str(paths["construction_subledger"]),
+                "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE": str(paths["observation_cache"]),
+                "MEMPHANT_STRUCTURED_STATE_CACHE_HITS": str(paths["cache_hits"]),
+                "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256": authorization_sha256,
+                "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256": census["census_sha256"],
+                "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE": packet["execution"]["cache_namespace"],
+                "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS": str(census["construction"]["construction_liability_nanos"]),
+                "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT": "1",
+                "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "off",
+            }
+        )
+        completed = subprocess.run(
+            [
+                str(binary), "structured-state", "execute",
+                "--input-jsonl", str(paths["construction_input"]),
+                "--allowed-plans-json", str(paths["prefix_plans"]),
+                "--max-workers", str(packet["execution"]["construction_max_workers"]),
+            ],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError("sealed prefix construction prewarm failed: " + completed.stderr.strip())
+        progress = json.loads(completed.stdout)
+        _atomic_write_json(paths["construction_progress"], {
+            **progress,
+            "authorization_sha256": authorization_sha256,
+            "campaign_census_sha256": census["census_sha256"],
+            "prefix_ids_sha256": remaining["prefix_ids_sha256"],
+        })
+
+    wave = authorize_or_resume_construction_wave(
+        ledger, census, plans, paths["construction_wave"], launch=launch
+    )
+    return {
+        "schema_version": 1,
+        "phase": "sealed-prefix-construction-prewarm",
+        "wave_sha256": wave["wave_sha256"],
+        "prefix_plan_count": len(prefix_plans),
+        "remaining_count": len(remaining_ids),
+        "progress_path": str(paths["construction_progress"]),
+    }
+
+
 def authorize_construction_wave(
     ledger: object,
     census_path: Path,
@@ -1948,6 +2441,20 @@ def _authorize_validated_construction_wave(
     launch,
 ) -> dict[str, object]:
     """Reserve an aggregate wave before invoking a credential-bearing launcher."""
+    wave = _build_validated_construction_wave(census, plans, wave_kind=wave_kind)
+    request_key = f"state-aware-construction-wave:{wave['wave_sha256']}"
+    ledger.record("start", request_key, _construction_start_payload(wave))
+    launch()
+    return {**wave, "ledger_request_key": request_key}
+
+
+def _build_validated_construction_wave(
+    census: dict[str, object],
+    plans: list[dict[str, object]],
+    *,
+    wave_kind: str,
+) -> dict[str, object]:
+    """Build the deterministic full reservation artifact without side effects."""
     _validate_census_hash(census, label="campaign")
     if census.get("paid_models_run") is not False or census.get("spend_nanos") != 0:
         raise RuntimeError("construction wave requires a no-model campaign census")
@@ -1991,6 +2498,10 @@ def _authorize_validated_construction_wave(
     if (
         reservation != construction.get("first_attempt_liability_nanos")
         or len(normalized) != construction.get("processed_plans")
+        or (
+            construction.get("plan_inventory_sha256") is not None
+            and plans_sha256 != construction.get("plan_inventory_sha256")
+        )
     ):
         raise RuntimeError("first construction wave differs from the exact census")
     aggregate_reservation = construction.get("construction_liability_nanos")
@@ -2029,31 +2540,58 @@ def _authorize_validated_construction_wave(
         "plans": normalized,
     }
     wave = {**wave_core, "wave_sha256": sha256_json(wave_core)}
-    request_key = f"state-aware-construction-wave:{wave['wave_sha256']}"
-    ledger.record(
-        "start",
-        request_key,
-        {
-            "max_liability_nanos": aggregate_reservation,
-            "retry_index": 0,
-            "context": {
-                "campaign_census_sha256": census["census_sha256"],
-                "reader_liability_inventory_sha256": reader_inventory[
-                    "inventory_sha256"
-                ],
-                "reader_arm_liability_nanos": reader_inventory[
-                    "reader_arm_liability_nanos"
-                ],
-                "wave_kind": wave_kind,
-                "ordered_plans_sha256": plans_sha256,
-                "plan_count": len(normalized),
-                "campaign_attempt": 1,
-                "retry_pool_nanos": retry_pool,
-            },
+    return wave
+
+
+def _construction_start_payload(wave: dict[str, object]) -> dict[str, object]:
+    return {
+        "max_liability_nanos": wave["aggregate_reservation_nanos"],
+        "retry_index": 0,
+        "context": {
+            "campaign_census_sha256": wave["campaign_census_sha256"],
+            "reader_liability_inventory_sha256": wave[
+                "reader_liability_inventory_sha256"
+            ],
+            "reader_arm_liability_nanos": wave["reader_arm_liability_nanos"],
+            "wave_kind": wave["wave_kind"],
+            "ordered_plans_sha256": wave["ordered_plans_sha256"],
+            "plan_count": wave["plan_count"],
+            "campaign_attempt": 1,
+            "retry_pool_nanos": wave["retry_pool_nanos"],
         },
-    )
-    # This callback is deliberately last: ledger reservation and fsync happen
-    # before any caller is allowed to construct a credential-bearing worker.
+    }
+
+
+def authorize_or_resume_construction_wave(
+    ledger: object,
+    census: dict[str, object],
+    plans: list[dict[str, object]],
+    wave_path: Path,
+    *,
+    launch,
+) -> dict[str, object]:
+    """Create+fsync authority, reserve once, and resume the same launch safely."""
+    wave = _build_validated_construction_wave(census, plans, wave_kind="first_attempt")
+    if wave_path.exists():
+        try:
+            prior = json.loads(wave_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise RuntimeError("construction wave artifact is unreadable") from error
+        if prior != wave:
+            raise RuntimeError("construction wave artifact differs from current authority")
+    else:
+        _create_json(wave_path, wave)
+    request_key = f"state-aware-construction-wave:{wave['wave_sha256']}"
+    payload = _construction_start_payload(wave)
+    snapshot = ledger.snapshot()
+    attempts = snapshot.get("attempts") if isinstance(snapshot, dict) else None
+    if not isinstance(attempts, list):
+        raise RuntimeError("campaign ledger snapshot is malformed")
+    matches = [attempt for attempt in attempts if attempt.get("request_key") == request_key]
+    if not matches:
+        ledger.record("start", request_key, payload)
+    elif len(matches) != 1 or matches[0].get("start") != payload:
+        raise RuntimeError("construction aggregate reservation resume identity drift")
     launch()
     return {**wave, "ledger_request_key": request_key}
 
@@ -2130,13 +2668,101 @@ def _usage_cost_nanos(usage: object) -> int:
     return int((cost * Decimal(1_000_000_000)).to_integral_value(rounding=ROUND_CEILING))
 
 
+def _validated_construction_cache_hits(
+    wave: dict[str, object],
+    planned: dict[tuple[object, object], dict[str, object]],
+    receipts: list[dict[str, object]],
+    authorization_sha256: str | None,
+) -> dict[tuple[object, object], dict[str, object]]:
+    if receipts and not _valid_sha256(authorization_sha256):
+        raise RuntimeError("construction cache hits require exact authorization identity")
+    validated = {}
+    for receipt in receipts:
+        core = receipt.get("core") if isinstance(receipt, dict) else None
+        if (
+            not isinstance(core, dict)
+            or receipt.get("cache_hit_sha256") != sha256_rust_json(core)
+            or core.get("schema_version") != 1
+            or core.get("authorization_sha256") != authorization_sha256
+            or core.get("campaign_sha256") != wave.get("campaign_census_sha256")
+            or not isinstance(core.get("cache_namespace"), str)
+            or not core["cache_namespace"]
+            or core.get("reservation_status") != "cache_hit"
+            or core.get("settled_nanos") != 0
+        ):
+            raise RuntimeError("construction cache-hit receipt identity drift")
+        pair = (core.get("extraction_key"), core.get("request_sha256"))
+        plan = planned.get(pair)
+        if plan is None or pair in validated:
+            raise RuntimeError("construction paid/cache union has duplicate or foreign coverage")
+        if (
+            core.get("requested_model") != wave.get("requested_model")
+            or core.get("served_model") != wave.get("response_model")
+            or not isinstance(core.get("served_provider"), str)
+            or core["served_provider"].casefold()
+            != str(wave.get("requested_provider", "")).casefold()
+            or core.get("source_kind") != plan.get("source_kind")
+            or core.get("source_body_sha256") != plan.get("source_body_sha256")
+            or core.get("batch_index") != plan.get("batch_index")
+            or core.get("evidence_slices_sha256")
+            != plan.get("evidence_slices_sha256")
+            or any(
+                not _valid_sha256(core.get(field))
+                for field in (
+                    "cache_entry_sha256",
+                    "source_started_event_sha256",
+                    "source_result_event_sha256",
+                    "provider_result_sha256",
+                    "observation_sha256",
+                )
+            )
+            or not isinstance(core.get("source_attempt_id"), str)
+            or not core["source_attempt_id"]
+            or not isinstance(core.get("response_id"), str)
+            or not core["response_id"]
+        ):
+            raise RuntimeError("construction cache-hit receipt route or source drift")
+        slices = core.get("evidence_slices")
+        observations = core.get("observations")
+        if (
+            not isinstance(slices, list)
+            or sha256_rust_json(slices) != core.get("evidence_slices_sha256")
+            or not isinstance(observations, list)
+            or len(observations) != core.get("observation_count")
+            or sha256_rust_json(observations) != core.get("observation_sha256")
+        ):
+            raise RuntimeError("construction cache-hit content hash drift")
+        slice_bodies = {
+            item.get("id"): item.get("body")
+            for item in slices
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and isinstance(item.get("body"), str)
+        }
+        if len(slice_bodies) != len(slices) or any(
+            not isinstance(observation, dict)
+            or not isinstance(observation.get("evidence_quote"), str)
+            or not observation["evidence_quote"]
+            or observation.get("evidence_slice_id") not in slice_bodies
+            or observation["evidence_quote"]
+            not in slice_bodies[observation["evidence_slice_id"]]
+            for observation in observations
+        ):
+            raise RuntimeError("construction cache-hit quote is not grounded")
+        validated[pair] = core
+    return validated
+
+
 def validate_and_settle_construction_wave(
     ledger: object,
     wave: dict[str, object],
     subledger_events: list[dict[str, object]],
     retry_waves: list[dict[str, object]] | None = None,
+    cache_hit_receipts: list[dict[str, object]] | None = None,
+    *,
+    authorization_sha256: str | None = None,
 ) -> dict[str, object]:
-    """Settle an aggregate wave only after exact Rust subledger coverage."""
+    """Settle after the exact union of paid chains and validated cache hits."""
     wave_core = {
         key: value
         for key, value in wave.items()
@@ -2151,7 +2777,11 @@ def validate_and_settle_construction_wave(
         (plan["extraction_key"], plan["request_sha256"]): plan
         for plan in wave["plans"]
     }
-    expected_attempts = {(pair, 1) for pair in planned}
+    cache_hits = _validated_construction_cache_hits(
+        wave, planned, list(cache_hit_receipts or []), authorization_sha256
+    )
+    paid_pairs = set(planned) - set(cache_hits)
+    expected_attempts = {(pair, 1) for pair in paid_pairs}
     cumulative_retry_reservation = 0
     for index, retry_wave in enumerate(retry_waves, start=2):
         core = {key: value for key, value in retry_wave.items() if key != "retry_wave_sha256"}
@@ -2167,6 +2797,7 @@ def validate_and_settle_construction_wave(
             or plans_sha256 != retry_wave.get("ordered_plans_sha256")
             or any(
                 (plan["extraction_key"], plan["request_sha256"]) not in planned
+                or (plan["extraction_key"], plan["request_sha256"]) in cache_hits
                 or plan != planned[(plan["extraction_key"], plan["request_sha256"])]
                 for plan in normalized
             )
@@ -2265,7 +2896,7 @@ def validate_and_settle_construction_wave(
             raise RuntimeError("construction subledger lacks exact planned-key coverage")
     if set(started) != expected_attempts or set(results) != expected_attempts:
         raise RuntimeError("construction subledger lacks exact planned-key coverage")
-    for pair in planned:
+    for pair in paid_pairs:
         attempts = sorted(
             attempt for candidate, attempt in expected_attempts if candidate == pair
         )
@@ -2291,6 +2922,11 @@ def validate_and_settle_construction_wave(
         "ordered_plans_sha256": wave["ordered_plans_sha256"],
         "settled_nanos": settled_nanos,
         "response_ids_sha256": sha256_json(sorted(response_ids)),
+        "paid_key_count": len(paid_pairs),
+        "cache_hit_key_count": len(cache_hits),
+        "cache_hit_receipts_sha256": sha256_json(
+            sorted(receipt["cache_hit_sha256"] for receipt in (cache_hit_receipts or []))
+        ),
         "exact_planned_key_coverage": True,
     }
     return {**proof_core, "wave_settlement_sha256": sha256_json(proof_core)}
@@ -2461,6 +3097,11 @@ def main() -> int:
     recost_parser.add_argument("--parent-manifest", type=Path, required=True)
     recost_parser.add_argument("--manifest", type=Path, required=True)
     recost_parser.add_argument("--output", type=Path, required=True)
+    subparsers.add_parser("authorize")
+    prewarm_parser = subparsers.add_parser("prewarm-prefix")
+    prewarm_parser.add_argument("--authorization", type=Path, required=True)
+    prewarm_parser.add_argument("--sealed-prefix", type=int, choices=[12], required=True)
+    prewarm_parser.add_argument("--data-root", type=Path)
     seal_parser = subparsers.add_parser("seal-prefix")
     seal_parser.add_argument("--private-results", type=Path, required=True)
     seal_parser.add_argument("--public-rows", type=Path, required=True)
@@ -2495,6 +3136,16 @@ def main() -> int:
             args.passphrase_env,
         )
         print(json.dumps(status, sort_keys=True))
+        return 0
+    if args.command == "authorize":
+        packet = mint_campaign_authorization()
+        print(json.dumps(packet, sort_keys=True))
+        return 0
+    if args.command == "prewarm-prefix":
+        result = prewarm_sealed_prefix(
+            args.authorization, data_root=args.data_root
+        )
+        print(json.dumps(result, sort_keys=True))
         return 0
     raise AssertionError("unreachable")
 

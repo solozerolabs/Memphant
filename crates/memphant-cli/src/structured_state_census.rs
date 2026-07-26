@@ -3,14 +3,15 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::ExitCode;
+use std::sync::{Arc, Mutex};
 
 use memphant_core::StructuredSourceKind;
 use memphant_core::service::structured_state_slices_for_resource;
 use memphant_runtime::{
     load_structured_state_prompt, load_structured_state_tokenizer, plan_structured_state_batches,
-    plan_structured_state_request_with_tokenizer,
+    plan_structured_state_request_with_tokenizer, structured_state_provider_from_env,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -22,12 +23,44 @@ struct CensusResource {
     uses: u64,
 }
 
+#[derive(Clone, Serialize)]
+struct CensusPlan {
+    extraction_key: String,
+    request_sha256: String,
+    per_attempt_reservation_nanos: u64,
+    requested_model: String,
+    maximum_attempts: usize,
+    source_kind: StructuredSourceKind,
+    source_body_sha256: String,
+    batch_index: usize,
+    evidence_slices_sha256: String,
+}
+
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct AuthorizedPlan {
+    extraction_key: String,
+    request_sha256: String,
+    per_attempt_reservation_nanos: u64,
+    requested_model: String,
+    maximum_attempts: usize,
+    source_kind: StructuredSourceKind,
+    source_body_sha256: String,
+    batch_index: usize,
+    evidence_slices_sha256: String,
+}
+
 fn one() -> u64 {
     1
 }
 
 pub fn run(args: &[String]) -> ExitCode {
-    match census(args) {
+    let result = if args.first().map(String::as_str) == Some("execute") {
+        execute(args)
+    } else {
+        census(args)
+    };
+    match result {
         Ok(value) => {
             println!(
                 "{}",
@@ -41,6 +74,162 @@ pub fn run(args: &[String]) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn execute(args: &[String]) -> Result<serde_json::Value, String> {
+    let flags = flags(&args[1..])?;
+    let input_path = required(&flags, "input-jsonl")?;
+    let plans_path = required(&flags, "allowed-plans-json")?;
+    let workers = positive_u64(required(&flags, "max-workers")?)? as usize;
+    if workers > 32 {
+        return Err("--max-workers must be between 1 and 32".to_string());
+    }
+    let allowed: Vec<AuthorizedPlan> = serde_json::from_reader(
+        File::open(plans_path).map_err(|error| format!("--allowed-plans-json: {error}"))?,
+    )
+    .map_err(|error| format!("--allowed-plans-json: {error}"))?;
+    let allowed = allowed
+        .into_iter()
+        .map(|plan| (plan.extraction_key.clone(), plan))
+        .collect::<BTreeMap<_, _>>();
+    if allowed.is_empty() {
+        return Err("allowed plan subset is empty".to_string());
+    }
+    let model = std::env::var("MEMPHANT_STRUCTURED_STATE_MODEL")
+        .map_err(|_| "MEMPHANT_STRUCTURED_STATE_MODEL is required".to_string())?;
+    let prompt = load_structured_state_prompt(Path::new(
+        &std::env::var("MEMPHANT_STRUCTURED_STATE_PROMPT_PATH")
+            .map_err(|_| "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH is required".to_string())?,
+    ))?;
+    let input_price = positive_u64(
+        &std::env::var("MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION")
+            .map_err(|_| "structured-state input price is required".to_string())?,
+    )?;
+    let output_price = positive_u64(
+        &std::env::var("MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION")
+            .map_err(|_| "structured-state output price is required".to_string())?,
+    )?;
+    let reasoning = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT").ok();
+    let tokenizer = match (
+        std::env::var("MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH").ok(),
+        std::env::var("MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH").ok(),
+    ) {
+        (Some(path), Some(config)) => Some(load_structured_state_tokenizer(
+            Path::new(&path),
+            Path::new(&config),
+        )?),
+        (None, None) => None,
+        _ => return Err("structured-state tokenizer paths must be supplied together".to_string()),
+    };
+    let mut selected = BTreeMap::new();
+    let input = File::open(input_path).map_err(|error| format!("--input-jsonl: {error}"))?;
+    for (index, line) in BufReader::new(input).lines().enumerate() {
+        let line = line.map_err(|error| format!("input line {}: {error}", index + 1))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let row: CensusResource = serde_json::from_str(&line)
+            .map_err(|error| format!("input line {}: {error}", index + 1))?;
+        let source_body_sha256 = sha256(row.source_body.as_bytes());
+        let requests = plan_structured_state_batches(
+            StructuredSourceKind::Resource,
+            &source_body_sha256,
+            structured_state_slices_for_resource(&row.source_body)
+                .map_err(|error| format!("input line {}: {error}", index + 1))?,
+            &model,
+            &prompt,
+            reasoning.as_deref(),
+            input_price,
+            output_price,
+            tokenizer.as_ref(),
+        )
+        .map_err(|error| format!("input line {}: {error}", index + 1))?;
+        for request in requests {
+            let plan = plan_structured_state_request_with_tokenizer(
+                &request,
+                &model,
+                &prompt,
+                reasoning.as_deref(),
+                input_price,
+                output_price,
+                tokenizer.as_ref(),
+            )
+            .map_err(|error| format!("input line {}: {error}", index + 1))?;
+            let Some(authority) = allowed.get(&plan.extraction_key) else {
+                continue;
+            };
+            let actual = AuthorizedPlan {
+                extraction_key: plan.extraction_key.clone(),
+                request_sha256: plan.request_sha256,
+                per_attempt_reservation_nanos: plan.per_attempt_reservation_nanos,
+                requested_model: model.clone(),
+                maximum_attempts: plan.maximum_attempts,
+                source_kind: request.source_kind,
+                source_body_sha256: request.source_body_sha256.clone(),
+                batch_index: request.batch_index,
+                evidence_slices_sha256: sha256(
+                    serde_json::to_vec(
+                        &serde_json::to_value(&request.evidence_slices)
+                            .expect("evidence slices serialize"),
+                    )
+                    .expect("evidence slices serialize")
+                    .as_slice(),
+                ),
+            };
+            if &actual != authority {
+                return Err("emitted construction plan differs from frozen authority".to_string());
+            }
+            selected.insert(plan.extraction_key, request);
+        }
+    }
+    if selected.len() != allowed.len() {
+        return Err(
+            "allowed construction subset is not exactly present in census input".to_string(),
+        );
+    }
+    let provider = structured_state_provider_from_env()?
+        .ok_or_else(|| "MEMPHANT_STRUCTURED_STATE=on is required".to_string())?;
+    let queue = Arc::new(Mutex::new(selected.into_values().collect::<Vec<_>>()));
+    let failures = Arc::new(Mutex::new(Vec::new()));
+    std::thread::scope(|scope| {
+        for _ in 0..workers.min(allowed.len()) {
+            let queue = Arc::clone(&queue);
+            let failures = Arc::clone(&failures);
+            let provider = Arc::clone(&provider);
+            scope.spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("structured-state execute runtime");
+                loop {
+                    let request = queue.lock().unwrap().pop();
+                    let Some(request) = request else { break };
+                    if let Err(error) = runtime.block_on(provider.extract(&request)) {
+                        failures.lock().unwrap().push(error.to_string());
+                    }
+                }
+            });
+        }
+    });
+    let failures = failures.lock().unwrap();
+    if !failures.is_empty() {
+        return Err(format!(
+            "structured-state execute failed {} plans: {}",
+            failures.len(),
+            failures[0]
+        ));
+    }
+    Ok(json!({
+        "schema_version": 1,
+        "executed_plan_count": allowed.len(),
+        "allowed_plans_sha256": sha256(
+            serde_json::to_vec(&allowed.values().collect::<Vec<_>>())
+                .expect("allowed plans serialize")
+                .as_slice()
+        ),
+        "maximum_workers": workers,
+        "hidden_retries": 0,
+    }))
 }
 
 fn census(args: &[String]) -> Result<serde_json::Value, String> {
@@ -74,6 +263,7 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
     let mut input_hasher = Sha256::new();
     let mut source_hashes = BTreeSet::new();
     let mut extraction_keys = BTreeSet::new();
+    let mut plan_inventory = BTreeMap::new();
     let mut resource_uses = 0_u64;
     let mut planned_requests = 0_u64;
     let mut maximum_request_bytes = 0_u64;
@@ -155,7 +345,28 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
             maximum_retry_reservation_nanos =
                 maximum_retry_reservation_nanos.max(plan.maximum_reservation_nanos);
             maximum_attempts = maximum_attempts.max(plan.maximum_attempts);
-            if extraction_keys.insert(plan.extraction_key) {
+            if extraction_keys.insert(plan.extraction_key.clone()) {
+                plan_inventory.insert(
+                    plan.extraction_key.clone(),
+                    CensusPlan {
+                        extraction_key: plan.extraction_key,
+                        request_sha256: plan.request_sha256,
+                        per_attempt_reservation_nanos: plan.per_attempt_reservation_nanos,
+                        requested_model: model.to_string(),
+                        maximum_attempts: plan.maximum_attempts,
+                        source_kind: request.source_kind,
+                        source_body_sha256: request.source_body_sha256.clone(),
+                        batch_index: request.batch_index,
+                        evidence_slices_sha256: sha256(
+                            serde_json::to_vec(
+                                &serde_json::to_value(&request.evidence_slices)
+                                    .expect("census evidence slices serialize"),
+                            )
+                            .expect("census evidence slices serialize")
+                            .as_slice(),
+                        ),
+                    },
+                );
                 first_attempt_liability_nanos = first_attempt_liability_nanos
                     .checked_add(plan.per_attempt_reservation_nanos)
                     .ok_or("first-attempt construction liability overflow")?;
@@ -168,6 +379,14 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
     if resource_uses == 0 {
         return Err("census input contains no resources".to_string());
     }
+    let plan_inventory = plan_inventory.into_values().collect::<Vec<_>>();
+    let plan_inventory_json =
+        serde_json::to_value(&plan_inventory).expect("census plan inventory serializes");
+    let plan_inventory_sha256 = sha256(
+        serde_json::to_vec(&plan_inventory_json)
+            .expect("census plan inventory serializes")
+            .as_slice(),
+    );
     Ok(json!({
         "schema_version": 1,
         "input_manifest_sha256": format!("{:x}", input_hasher.finalize()),
@@ -184,6 +403,8 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
         "first_attempt_liability_nanos": first_attempt_liability_nanos,
         "full_three_wave_liability_nanos": construction_liability_nanos,
         "construction_liability_nanos": construction_liability_nanos,
+        "plan_inventory_sha256": plan_inventory_sha256,
+        "plan_inventory": plan_inventory_json,
         "tokenizer_bound": tokenizer.is_some(),
     }))
 }

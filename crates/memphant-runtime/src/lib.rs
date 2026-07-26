@@ -160,7 +160,7 @@ mod structured_state_openrouter;
 pub use structured_state_openrouter::{
     StructuredStateRequestPlan, StructuredStateTokenizer, load_structured_state_prompt,
     load_structured_state_tokenizer, plan_structured_state_batches, plan_structured_state_request,
-    plan_structured_state_request_with_tokenizer,
+    plan_structured_state_request_with_tokenizer, structured_state_provider_from_env,
 };
 
 /// Single source of truth mapping an embedder selector id to a provider, shared
@@ -472,7 +472,7 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
             )
             .unwrap_or_else(|error| panic!("MEMPHANT_WORKER_COMPILE_CONCURRENCY: {error}")),
         );
-    match structured_state_openrouter::provider_from_env()
+    match structured_state_openrouter::structured_state_provider_from_env()
         .unwrap_or_else(|error| panic!("MEMPHANT_STRUCTURED_STATE=on: {error}"))
     {
         Some(provider) => service.with_structured_state_provider(provider),

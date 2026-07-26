@@ -45,6 +45,12 @@ const TOKENIZER_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH";
 const TOKENIZER_CONFIG_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH";
 const CAMPAIGN_ATTEMPT_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT";
 const AGGREGATE_RESERVATION_ENV: &str = "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS";
+const OBSERVATION_CACHE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE";
+const CACHE_HITS_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_HITS";
+const AUTHORIZATION_SHA256_ENV: &str = "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256";
+const CAMPAIGN_SHA256_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256";
+const CACHE_NAMESPACE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE";
+const CACHE_ONLY_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY";
 const QWEN_CHAT_TEMPLATE_OVERHEAD_TOKENS: u64 = 15;
 const QWEN_TOKENIZER_SHA256: &str =
     "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42";
@@ -361,11 +367,11 @@ fn reserve_nanos(tokens: u64, nanos_per_million: u64) -> Result<u64, StructuredS
         .ok_or_else(|| invalid("structured-state reservation overflow"))
 }
 
-pub(crate) fn provider_from_env() -> Result<Option<Arc<dyn StructuredStateProvider>>, String> {
+pub fn structured_state_provider_from_env()
+-> Result<Option<Arc<dyn StructuredStateProvider>>, String> {
     if std::env::var("MEMPHANT_STRUCTURED_STATE").as_deref() != Ok("on") {
         return Ok(None);
     }
-    let key = required_env("OPENROUTER_API_KEY")?;
     let model = std::env::var("MEMPHANT_STRUCTURED_STATE_MODEL")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -402,7 +408,7 @@ pub(crate) fn provider_from_env() -> Result<Option<Arc<dyn StructuredStateProvid
         prompt,
         input_price,
         output_price,
-        Arc::new(UreqTransport::new(key)),
+        Arc::new(UreqTransport::new()),
         ledger,
     );
     if let Some(tokenizer) = tokenizer {
@@ -420,6 +426,36 @@ pub(crate) fn provider_from_env() -> Result<Option<Arc<dyn StructuredStateProvid
     };
     provider = provider.with_campaign_attempt(campaign_attempt)?;
     provider.aggregate_reservation_nanos = aggregate_reservation_nanos;
+    let cache_values = [
+        std::env::var_os(OBSERVATION_CACHE_ENV),
+        std::env::var_os(CACHE_HITS_ENV),
+        std::env::var_os(AUTHORIZATION_SHA256_ENV),
+        std::env::var_os(CAMPAIGN_SHA256_ENV),
+        std::env::var_os(CACHE_NAMESPACE_ENV),
+    ];
+    if cache_values.iter().any(Option::is_some) {
+        provider = provider.with_campaign_cache(
+            PathBuf::from(required_env(OBSERVATION_CACHE_ENV)?),
+            PathBuf::from(required_env(CACHE_HITS_ENV)?),
+            required_env(AUTHORIZATION_SHA256_ENV)?,
+            required_env(CAMPAIGN_SHA256_ENV)?,
+            required_env(CACHE_NAMESPACE_ENV)?,
+        )?;
+    } else if model == LME_V2_QWEN_MODEL {
+        return Err(format!(
+            "{OBSERVATION_CACHE_ENV}, {CACHE_HITS_ENV}, {AUTHORIZATION_SHA256_ENV}, {CAMPAIGN_SHA256_ENV}, and {CACHE_NAMESPACE_ENV} are required for the Qwen campaign route"
+        ));
+    }
+    provider.cache_only = match std::env::var(CACHE_ONLY_ENV).as_deref() {
+        Ok("on") => true,
+        Ok("off") | Err(std::env::VarError::NotPresent) => false,
+        _ => return Err(format!("{CACHE_ONLY_ENV} must be on or off")),
+    };
+    if provider.cache_only && provider.campaign_cache.is_none() {
+        return Err(format!(
+            "{CACHE_ONLY_ENV}=on requires the campaign cache contract"
+        ));
+    }
     if let Some(effort) = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -469,6 +505,319 @@ pub fn load_structured_state_prompt(path: &Path) -> Result<String, String> {
 }
 
 #[derive(Clone)]
+struct CampaignCache {
+    root: PathBuf,
+    hit_root: PathBuf,
+    authorization_sha256: String,
+    campaign_sha256: String,
+    namespace: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheEntry {
+    core: CacheEntryCore,
+    cache_entry_sha256: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheEntryCore {
+    schema_version: u8,
+    authorization_sha256: String,
+    campaign_sha256: String,
+    cache_namespace: String,
+    extraction_key: String,
+    request_sha256: String,
+    source_kind: StructuredSourceKind,
+    source_body_sha256: String,
+    batch_index: usize,
+    evidence_slices_sha256: String,
+    requested_model: String,
+    served_model: String,
+    served_provider: String,
+    response_id: String,
+    source_attempt_id: String,
+    source_started_event_sha256: String,
+    source_result_event_sha256: String,
+    provider_result_sha256: String,
+    observation_count: usize,
+    observation_sha256: String,
+    observations: Vec<StructuredObservation>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheHitReceipt {
+    core: CacheHitReceiptCore,
+    cache_hit_sha256: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheHitReceiptCore {
+    schema_version: u8,
+    authorization_sha256: String,
+    campaign_sha256: String,
+    cache_namespace: String,
+    cache_entry_sha256: String,
+    extraction_key: String,
+    request_sha256: String,
+    source_kind: StructuredSourceKind,
+    source_body_sha256: String,
+    batch_index: usize,
+    evidence_slices_sha256: String,
+    evidence_slices: Vec<EvidenceSlice>,
+    requested_model: String,
+    served_model: String,
+    served_provider: String,
+    response_id: String,
+    source_attempt_id: String,
+    source_started_event_sha256: String,
+    source_result_event_sha256: String,
+    provider_result_sha256: String,
+    observation_count: usize,
+    observation_sha256: String,
+    observations: Vec<StructuredObservation>,
+    reservation_status: String,
+    settled_nanos: u64,
+}
+
+impl CampaignCache {
+    fn lock(&self, extraction_key: &str) -> Result<std::fs::File, StructuredStateProviderError> {
+        let lock_root = self.root.join(".locks");
+        fs::create_dir_all(&lock_root).map_err(cache_error)?;
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(lock_root.join(format!("{extraction_key}.lock")))
+            .map_err(cache_error)?;
+        file.lock_exclusive().map_err(cache_error)?;
+        Ok(file)
+    }
+
+    fn load(
+        &self,
+        request: &StructuredStateRequest,
+        plan: &StructuredStateRequestPlan,
+        requested_model: &str,
+    ) -> Result<Option<Vec<StructuredObservation>>, StructuredStateProviderError> {
+        let path = self.root.join(format!("{}.json", plan.extraction_key));
+        if !path.exists() {
+            return Ok(None);
+        }
+        let bytes = fs::read(&path).map_err(cache_error)?;
+        let entry: CacheEntry = serde_json::from_slice(&bytes).map_err(cache_error)?;
+        let core_sha256 = canonical_sha256(&entry.core);
+        let core = &entry.core;
+        if entry.cache_entry_sha256 != core_sha256
+            || core.schema_version != 1
+            || core.authorization_sha256 != self.authorization_sha256
+            || core.campaign_sha256 != self.campaign_sha256
+            || core.cache_namespace != self.namespace
+            || core.extraction_key != plan.extraction_key
+            || core.request_sha256 != plan.request_sha256
+            || core.source_kind != request.source_kind
+            || core.source_body_sha256 != request.source_body_sha256
+            || core.batch_index != request.batch_index
+            || core.evidence_slices_sha256 != canonical_sha256(&request.evidence_slices)
+            || core.requested_model != requested_model
+            || core.observation_count != core.observations.len()
+            || core.observation_sha256 != canonical_sha256(&core.observations)
+            || !is_sha256(&core.source_started_event_sha256)
+            || !is_sha256(&core.source_result_event_sha256)
+            || !is_sha256(&core.provider_result_sha256)
+            || core.served_model.trim().is_empty()
+            || core.served_provider.trim().is_empty()
+            || core.response_id.trim().is_empty()
+        {
+            return Err(invalid("structured-state campaign cache identity drift"));
+        }
+        validate_cached_observations(request, &core.observations)?;
+        let receipt_core = CacheHitReceiptCore {
+            schema_version: 1,
+            authorization_sha256: core.authorization_sha256.clone(),
+            campaign_sha256: core.campaign_sha256.clone(),
+            cache_namespace: core.cache_namespace.clone(),
+            cache_entry_sha256: entry.cache_entry_sha256.clone(),
+            extraction_key: core.extraction_key.clone(),
+            request_sha256: core.request_sha256.clone(),
+            source_kind: core.source_kind,
+            source_body_sha256: core.source_body_sha256.clone(),
+            batch_index: core.batch_index,
+            evidence_slices_sha256: core.evidence_slices_sha256.clone(),
+            evidence_slices: request.evidence_slices.clone(),
+            requested_model: core.requested_model.clone(),
+            served_model: core.served_model.clone(),
+            served_provider: core.served_provider.clone(),
+            response_id: core.response_id.clone(),
+            source_attempt_id: core.source_attempt_id.clone(),
+            source_started_event_sha256: core.source_started_event_sha256.clone(),
+            source_result_event_sha256: core.source_result_event_sha256.clone(),
+            provider_result_sha256: core.provider_result_sha256.clone(),
+            observation_count: core.observation_count,
+            observation_sha256: core.observation_sha256.clone(),
+            observations: core.observations.clone(),
+            reservation_status: "cache_hit".to_string(),
+            settled_nanos: 0,
+        };
+        let receipt = CacheHitReceipt {
+            cache_hit_sha256: canonical_sha256(&receipt_core),
+            core: receipt_core,
+        };
+        create_or_validate_json(
+            &self.hit_root.join(format!("{}.json", plan.extraction_key)),
+            &receipt,
+        )?;
+        Ok(Some(core.observations.clone()))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn store(
+        &self,
+        request: &StructuredStateRequest,
+        plan: &StructuredStateRequestPlan,
+        requested_model: &str,
+        started: &AttemptEvent,
+        completed: &AttemptEvent,
+        observations: &[StructuredObservation],
+    ) -> Result<(), StructuredStateProviderError> {
+        validate_cached_observations(request, observations)?;
+        let core = CacheEntryCore {
+            schema_version: 1,
+            authorization_sha256: self.authorization_sha256.clone(),
+            campaign_sha256: self.campaign_sha256.clone(),
+            cache_namespace: self.namespace.clone(),
+            extraction_key: plan.extraction_key.clone(),
+            request_sha256: plan.request_sha256.clone(),
+            source_kind: request.source_kind,
+            source_body_sha256: request.source_body_sha256.clone(),
+            batch_index: request.batch_index,
+            evidence_slices_sha256: canonical_sha256(&request.evidence_slices),
+            requested_model: requested_model.to_string(),
+            served_model: completed
+                .served_model
+                .clone()
+                .ok_or_else(|| invalid("settled cache source omitted served model"))?,
+            served_provider: completed
+                .served_provider
+                .clone()
+                .ok_or_else(|| invalid("settled cache source omitted served provider"))?,
+            response_id: completed
+                .response_id
+                .clone()
+                .ok_or_else(|| invalid("settled cache source omitted response id"))?,
+            source_attempt_id: completed.attempt_id.clone(),
+            source_started_event_sha256: attempt_event_sha256(started),
+            source_result_event_sha256: attempt_event_sha256(completed),
+            provider_result_sha256: completed
+                .result_sha256
+                .clone()
+                .ok_or_else(|| invalid("settled cache source omitted result hash"))?,
+            observation_count: observations.len(),
+            observation_sha256: canonical_sha256(&observations),
+            observations: observations.to_vec(),
+        };
+        let entry = CacheEntry {
+            cache_entry_sha256: canonical_sha256(&core),
+            core,
+        };
+        create_or_validate_json(
+            &self.root.join(format!("{}.json", plan.extraction_key)),
+            &entry,
+        )
+    }
+}
+
+fn validate_cached_observations(
+    request: &StructuredStateRequest,
+    observations: &[StructuredObservation],
+) -> Result<(), StructuredStateProviderError> {
+    let slices = request
+        .evidence_slices
+        .iter()
+        .map(|slice| (slice.id.as_str(), slice.body.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    for observation in observations {
+        validate_structured_observation(observation)?;
+        let Some(body) = slices.get(observation.evidence_slice_id.as_str()) else {
+            return Err(invalid(
+                "cached observation names an unknown evidence slice",
+            ));
+        };
+        if !body.contains(&observation.evidence_quote) {
+            return Err(invalid(
+                "cached observation quote is not grounded in its evidence slice",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn create_or_validate_json<T: Serialize>(
+    path: &Path,
+    value: &T,
+) -> Result<(), StructuredStateProviderError> {
+    let bytes = serde_json::to_vec(value).expect("campaign cache artifact serializes");
+    if path.exists() {
+        let prior = fs::read(path).map_err(cache_error)?;
+        if prior != bytes {
+            return Err(invalid("structured-state campaign cache artifact drift"));
+        }
+        return Ok(());
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| invalid("campaign cache artifact path has no parent"))?;
+    fs::create_dir_all(parent).map_err(cache_error)?;
+    let temporary = parent.join(format!(
+        ".{}.{}.tmp",
+        path.file_name().unwrap().to_string_lossy(),
+        uuid::Uuid::new_v4()
+    ));
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&temporary)
+        .map_err(cache_error)?;
+    file.write_all(&bytes).map_err(cache_error)?;
+    file.sync_all().map_err(cache_error)?;
+    fs::rename(&temporary, path).map_err(cache_error)?;
+    std::fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(cache_error)?;
+    Ok(())
+}
+
+fn attempt_event_sha256(event: &AttemptEvent) -> String {
+    canonical_sha256(event)
+}
+
+fn canonical_sha256<T: Serialize + ?Sized>(value: &T) -> String {
+    let value = serde_json::to_value(value).expect("canonical campaign value serializes");
+    sha256(
+        serde_json::to_vec(&value)
+            .expect("canonical campaign value serializes")
+            .as_slice(),
+    )
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn cache_error(error: impl std::fmt::Display) -> StructuredStateProviderError {
+    StructuredStateProviderError::Unavailable(format!(
+        "structured-state campaign cache failed: {error}"
+    ))
+}
+
+#[derive(Clone)]
 struct OpenRouterStructuredState {
     model: String,
     prompt: String,
@@ -482,6 +831,8 @@ struct OpenRouterStructuredState {
     tokenizer: Option<StructuredStateTokenizer>,
     campaign_attempt: usize,
     aggregate_reservation_nanos: Option<u64>,
+    campaign_cache: Option<CampaignCache>,
+    cache_only: bool,
 }
 
 impl OpenRouterStructuredState {
@@ -514,7 +865,33 @@ impl OpenRouterStructuredState {
             tokenizer: None,
             campaign_attempt: 1,
             aggregate_reservation_nanos: None,
+            campaign_cache: None,
+            cache_only: false,
         }
+    }
+
+    fn with_campaign_cache(
+        mut self,
+        root: PathBuf,
+        hit_root: PathBuf,
+        authorization_sha256: String,
+        campaign_sha256: String,
+        namespace: String,
+    ) -> Result<Self, String> {
+        if !is_sha256(&authorization_sha256)
+            || !is_sha256(&campaign_sha256)
+            || namespace.trim().is_empty()
+        {
+            return Err("structured-state campaign cache identity is malformed".to_string());
+        }
+        self.campaign_cache = Some(CampaignCache {
+            root,
+            hit_root,
+            authorization_sha256,
+            campaign_sha256,
+            namespace,
+        });
+        Ok(self)
     }
 
     fn with_campaign_attempt(mut self, campaign_attempt: usize) -> Result<Self, String> {
@@ -584,13 +961,29 @@ impl OpenRouterStructuredState {
         request: &StructuredStateRequest,
     ) -> Result<Vec<StructuredObservation>, StructuredStateProviderError> {
         let plan = self.plan(request)?;
+        let cache_lock = self
+            .campaign_cache
+            .as_ref()
+            .map(|cache| cache.lock(&plan.extraction_key))
+            .transpose()?;
+        if let Some(cache) = &self.campaign_cache
+            && let Some(observations) = cache.load(request, &plan, &self.model)?
+        {
+            drop(cache_lock);
+            return Ok(observations);
+        }
+        if self.cache_only {
+            return Err(StructuredStateProviderError::Unavailable(
+                "structured-state cache-only materialization rejected a cache miss".to_string(),
+            ));
+        }
         let attempt = MAX_ATTEMPTS;
         let attempt_id = uuid::Uuid::new_v4().to_string();
         let started = Instant::now();
-        self.record_attempt(
-            &AttemptEvent::started(&attempt_id, request, &plan, &self.model, attempt)
-                .for_campaign_attempt(self.campaign_attempt),
-        )?;
+        let started_event =
+            AttemptEvent::started(&attempt_id, request, &plan, &self.model, attempt)
+                .for_campaign_attempt(self.campaign_attempt);
+        self.record_attempt(&started_event)?;
         let response = match self.transport.post(&plan.serialized_request) {
             Ok(response) => response,
             Err(_) => {
@@ -669,19 +1062,29 @@ impl OpenRouterStructuredState {
                 return Err(error);
             }
         };
-        self.record_attempt(
-            &AttemptEvent::completed(
-                &attempt_id,
+        let completed_event = AttemptEvent::completed(
+            &attempt_id,
+            request,
+            &plan,
+            &self.model,
+            attempt,
+            &reconciled,
+            &observations,
+            started.elapsed(),
+        )
+        .for_campaign_attempt(self.campaign_attempt);
+        self.record_attempt(&completed_event)?;
+        if let Some(cache) = &self.campaign_cache {
+            cache.store(
                 request,
                 &plan,
                 &self.model,
-                attempt,
-                &reconciled,
+                &started_event,
+                &completed_event,
                 &observations,
-                started.elapsed(),
-            )
-            .for_campaign_attempt(self.campaign_attempt),
-        )?;
+            )?;
+        }
+        drop(cache_lock);
         Ok(observations)
     }
 
@@ -955,11 +1358,10 @@ trait Transport: Send + Sync {
 
 struct UreqTransport {
     agent: Agent,
-    key: String,
 }
 
 impl UreqTransport {
-    fn new(key: String) -> Self {
+    fn new() -> Self {
         let config = Agent::config_builder()
             .timeout_connect(Some(CONNECT_TIMEOUT))
             .timeout_global(Some(GLOBAL_TIMEOUT))
@@ -967,17 +1369,17 @@ impl UreqTransport {
             .build();
         Self {
             agent: config.into(),
-            key,
         }
     }
 }
 
 impl Transport for UreqTransport {
     fn post(&self, body: &[u8]) -> Result<HttpResponse, String> {
+        let key = required_env("OPENROUTER_API_KEY")?;
         let mut response = self
             .agent
             .post(URL)
-            .header("authorization", &format!("Bearer {}", self.key))
+            .header("authorization", &format!("Bearer {key}"))
             .header("content-type", "application/json")
             .header("http-referer", "https://github.com/memphant")
             .header("x-title", "memphant-structured-state")
@@ -1001,12 +1403,13 @@ impl Transport for UreqTransport {
     }
 
     fn generation(&self, response_id: &str) -> Result<Value, String> {
+        let key = required_env("OPENROUTER_API_KEY")?;
         for (index, delay_seconds) in [1_u64, 2, 4, 8, 16, 0].into_iter().enumerate() {
             let mut response = self
                 .agent
                 .get(GENERATION_URL)
                 .query("id", response_id)
-                .header("authorization", &format!("Bearer {}", self.key))
+                .header("authorization", &format!("Bearer {key}"))
                 .header("http-referer", "https://github.com/memphant")
                 .header("x-title", "memphant-structured-state")
                 .header("x-openrouter-metadata", "enabled")
@@ -1334,11 +1737,7 @@ impl AttemptEvent {
         event.error = error.map(str::to_owned);
         if let Some(observations) = observations {
             event.observation_count = Some(observations.len());
-            event.observation_sha256 = Some(sha256(
-                serde_json::to_vec(observations)
-                    .expect("structured observations serialize")
-                    .as_slice(),
-            ));
+            event.observation_sha256 = Some(canonical_sha256(observations));
         }
         event
     }
@@ -2108,7 +2507,7 @@ mod tests {
         }];
         assert_eq!(
             events[1]["observation_sha256"],
-            sha256(&serde_json::to_vec(&expected_observations).unwrap())
+            canonical_sha256(&expected_observations)
         );
     }
 
@@ -2150,5 +2549,98 @@ mod tests {
         assert_eq!(result["parse_status"], "generation_stats_lookup_failed");
         assert_eq!(result["reservation_status"], "unresolved");
         assert!(result.get("usage").is_none());
+    }
+
+    #[test]
+    fn campaign_cache_hit_is_source_neutral_zero_cost_and_authorization_bound() {
+        let temporary = tempfile::tempdir().unwrap();
+        let cache_root = temporary.path().join("cache");
+        let hit_root = temporary.path().join("hits");
+        let authorization = "a".repeat(64);
+        let campaign = "b".repeat(64);
+        let request = request("user: I live in Oslo.");
+        let content = json!({
+            "observations": [wire_observation(&request.evidence_slices[0].id)]
+        });
+        let paid_transport = FakeTransport::new(vec![Ok(response(content))]);
+        let (paid, paid_ledger) = provider_with_ledger(paid_transport.clone());
+        let paid = paid
+            .with_campaign_cache(
+                cache_root.clone(),
+                hit_root.clone(),
+                authorization.clone(),
+                campaign.clone(),
+                "longmemeval-v2-construction-v1".to_string(),
+            )
+            .unwrap();
+        let expected = paid.extract_sync(&request).unwrap();
+        assert_eq!(paid_transport.posted.lock().unwrap().len(), 1);
+        assert_eq!(read_events(&paid_ledger).len(), 2);
+
+        let hit_transport = FakeTransport::new(vec![]);
+        let (hit, hit_ledger) = provider_with_ledger(hit_transport.clone());
+        let hit = hit
+            .with_campaign_cache(
+                cache_root.clone(),
+                hit_root.clone(),
+                authorization,
+                campaign,
+                "longmemeval-v2-construction-v1".to_string(),
+            )
+            .unwrap();
+        assert_eq!(hit.extract_sync(&request).unwrap(), expected);
+        assert!(hit_transport.posted.lock().unwrap().is_empty());
+        assert!(
+            !hit_ledger.exists(),
+            "a cache hit must not create a paid attempt"
+        );
+        let plan = hit.plan(&request).unwrap();
+        let receipt: Value = serde_json::from_slice(
+            &fs::read(hit_root.join(format!("{}.json", plan.extraction_key))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(receipt["core"]["reservation_status"], "cache_hit");
+        assert_eq!(receipt["core"]["settled_nanos"], 0);
+        assert!(
+            receipt["core"]["source_started_event_sha256"]
+                .as_str()
+                .is_some_and(is_sha256)
+        );
+        assert!(
+            receipt["core"]["source_result_event_sha256"]
+                .as_str()
+                .is_some_and(is_sha256)
+        );
+
+        let drift_transport = FakeTransport::new(vec![]);
+        let (drift, drift_ledger) = provider_with_ledger(drift_transport.clone());
+        let drift = drift
+            .with_campaign_cache(
+                cache_root,
+                temporary.path().join("drift-hits"),
+                "c".repeat(64),
+                "b".repeat(64),
+                "longmemeval-v2-construction-v1".to_string(),
+            )
+            .unwrap();
+        assert!(drift.extract_sync(&request).is_err());
+        assert!(drift_transport.posted.lock().unwrap().is_empty());
+        assert!(!drift_ledger.exists());
+
+        let miss_transport = FakeTransport::new(vec![]);
+        let (mut miss, miss_ledger) = provider_with_ledger(miss_transport.clone());
+        miss = miss
+            .with_campaign_cache(
+                temporary.path().join("empty-cache"),
+                temporary.path().join("empty-hits"),
+                "a".repeat(64),
+                "b".repeat(64),
+                "longmemeval-v2-construction-v1".to_string(),
+            )
+            .unwrap();
+        miss.cache_only = true;
+        assert!(miss.extract_sync(&request).is_err());
+        assert!(miss_transport.posted.lock().unwrap().is_empty());
+        assert!(!miss_ledger.exists());
     }
 }
