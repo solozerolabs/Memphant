@@ -16,7 +16,7 @@ pub use structured_state::{
     active_structured_state, evidence_slices_for_episode, evidence_slices_for_resource,
     fold_structured_observations, ground_user_evidence_quote, project_structured_state,
     quantity_event_from_body, quantity_event_from_fields, structured_compiler_identity,
-    user_evidence_turns,
+    user_evidence_turns, validate_structured_observation,
 };
 
 use std::collections::{BTreeMap, HashMap, HashSet};

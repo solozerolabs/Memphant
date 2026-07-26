@@ -113,6 +113,60 @@ pub struct StructuredObservation {
     pub valid_to: Option<String>,
 }
 
+pub fn validate_structured_observation(
+    observation: &StructuredObservation,
+) -> Result<(), StructuredStateProviderError> {
+    const RESERVED_FIELDS: [&str; 18] = [
+        "batch_index",
+        "disposition",
+        "episode_id",
+        "evidence_quote",
+        "evidence_slice_id",
+        "fields",
+        "item_key",
+        "namespace",
+        "operation",
+        "resource_id",
+        "source_body_sha256",
+        "source_kind",
+        "source_span",
+        "target_unit_ids",
+        "tenant_id",
+        "unit_id",
+        "valid_from",
+        "valid_to",
+    ];
+    let namespace = canonical_key(&observation.namespace);
+    let item_key = canonical_key(&observation.item_key);
+    if namespace.is_empty() || item_key.is_empty() {
+        return Err(invalid_output(
+            "structured-state identity is not canonicalizable",
+        ));
+    }
+    if observation.evidence_slice_id.is_empty() || observation.evidence_quote.is_empty() {
+        return Err(invalid_output("structured observation evidence is empty"));
+    }
+    if observation
+        .fields
+        .keys()
+        .any(|key| canonical_key(key) != *key || RESERVED_FIELDS.contains(&key.as_str()))
+    {
+        return Err(invalid_output(
+            "structured observation field key is not canonical or is reserved",
+        ));
+    }
+    if observation.disposition == StructuredObservationDisposition::Event
+        && observation.fields.is_empty()
+    {
+        return Err(invalid_output("structured event fields are empty"));
+    }
+    validate_valid_interval(
+        observation.valid_from.as_deref(),
+        observation.valid_to.as_deref(),
+    )
+    .map_err(|error| invalid_output(error.to_string()))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StructuredStateRequest {
@@ -322,13 +376,11 @@ pub fn fold_structured_observations(
     let mut grounded = observations
         .iter()
         .map(|observation| {
+            validate_structured_observation(observation)?;
             let (slice, parent_start) = slices
                 .get(observation.evidence_slice_id.as_str())
                 .copied()
                 .ok_or_else(|| invalid_output("observation names an unknown evidence slice"))?;
-            if observation.evidence_quote.is_empty() {
-                return Err(invalid_output("observation evidence quote is empty"));
-            }
             let mut matches = slice.body.match_indices(&observation.evidence_quote);
             let (slice_start, matched) = matches.next().ok_or_else(|| {
                 invalid_output("observation evidence quote does not match its slice")
@@ -345,23 +397,8 @@ pub fn fold_structured_observations(
                     "observation evidence quote does not match its source",
                 ));
             }
-            validate_valid_interval(
-                observation.valid_from.as_deref(),
-                observation.valid_to.as_deref(),
-            )
-            .map_err(|error| invalid_output(error.to_string()))?;
             let namespace = canonical_key(&observation.namespace);
             let item_key = canonical_key(&observation.item_key);
-            if namespace.is_empty() || item_key.is_empty() {
-                return Err(invalid_output(
-                    "structured-state identity is not canonicalizable",
-                ));
-            }
-            if observation.disposition == StructuredObservationDisposition::Event
-                && observation.fields.is_empty()
-            {
-                return Err(invalid_output("structured event fields are empty"));
-            }
             Ok(GroundedObservation {
                 observation,
                 namespace,
@@ -419,6 +456,9 @@ pub fn fold_structured_observations(
         if observation.fields.get("type").and_then(Value::as_str) == Some(QUANTITY_EVENT_TYPE) {
             let event = quantity_event_from_fields(&observation.fields)
                 .ok_or_else(|| invalid_output("quantity fields violate the canonical contract"))?;
+            if !quantity_value_is_grounded(&event.value, &observation.evidence_quote) {
+                return Err(invalid_output("quantity value is not grounded"));
+            }
             let grounded_date = crate::parse_content_date(source_body)
                 .map(|date| date.to_string())
                 .filter(|date| event.occurred_at.starts_with(date));
@@ -456,6 +496,39 @@ fn intervals_overlap(observation: &StructuredObservation, active: &ActiveStructu
             .valid_to
             .as_deref()
             .is_none_or(|end| active.valid_from.as_deref().is_none_or(|start| start < end))
+}
+
+fn quantity_value_is_grounded(value: &str, evidence: &str) -> bool {
+    let bytes = evidence.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        let starts_number = bytes[index].is_ascii_digit()
+            || (bytes[index] == b'-' && bytes.get(index + 1).is_some_and(u8::is_ascii_digit));
+        if !starts_number {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        index += 1;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit)
+            || (bytes
+                .get(index)
+                .is_some_and(|byte| matches!(*byte, b'.' | b','))
+                && bytes.get(index + 1).is_some_and(u8::is_ascii_digit))
+        {
+            index += 1;
+        }
+        let bounded = bytes
+            .get(start.wrapping_sub(1))
+            .is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+            && bytes
+                .get(index)
+                .is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_');
+        if bounded && evidence[start..index].replace(',', "") == value {
+            return true;
+        }
+    }
+    false
 }
 
 fn invalid_output(message: impl Into<String>) -> StructuredStateProviderError {

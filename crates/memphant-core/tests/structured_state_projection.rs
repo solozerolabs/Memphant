@@ -271,6 +271,86 @@ fn ordered_fold_keeps_only_the_last_state_and_resolves_fresh_targets_once() {
 }
 
 #[test]
+fn quantity_fold_requires_the_exact_numeric_lexeme_with_only_comma_normalization() {
+    let body = "[date 2025-06-01]\nuser: I walked 7,640 steps.";
+    let request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Episode,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices: evidence_slices_for_episode(body).unwrap(),
+    };
+    let quantity_fields = |value: &str| {
+        BTreeMap::from([
+            ("dimensions".to_string(), json!({})),
+            ("measure".to_string(), json!("daily_steps")),
+            ("occurred_at".to_string(), json!("2025-06-01T08:00:00Z")),
+            ("type".to_string(), json!("quantity_event.v1")),
+            ("unit".to_string(), json!("steps")),
+            ("value".to_string(), json!(value)),
+        ])
+    };
+    let event = |value: &str| {
+        observation(
+            "activity",
+            "daily_steps",
+            quantity_fields(value),
+            StructuredObservationDisposition::Event,
+            &request.evidence_slices[0],
+            "I walked 7,640 steps.",
+        )
+    };
+
+    assert_eq!(
+        fold_structured_observations(body, &request, &[event("7640")], &[])
+            .unwrap()
+            .len(),
+        1
+    );
+    for absent in ["7641", "15280", "1e3"] {
+        assert!(
+            fold_structured_observations(body, &request, &[event(absent)], &[]).is_err(),
+            "ungrounded quantity {absent} must fail closed"
+        );
+    }
+}
+
+#[test]
+fn trusted_fold_rejects_reserved_and_noncanonical_observation_field_keys() {
+    let body = "deploy notes";
+    let request = StructuredStateRequest {
+        source_kind: StructuredSourceKind::Resource,
+        source_body_sha256: sha256(body),
+        batch_index: 0,
+        evidence_slices: evidence_slices_for_resource(body, &[]).unwrap(),
+    };
+    for key in [
+        "operation",
+        "target_unit_ids",
+        "source_span",
+        "namespace",
+        "item_key",
+        "valid_from",
+        "valid_to",
+        " ",
+        "CamelCase",
+        "two words",
+    ] {
+        let invalid = observation(
+            "workflow",
+            "deploy",
+            BTreeMap::from([(key.to_string(), json!("untrusted"))]),
+            StructuredObservationDisposition::State,
+            &request.evidence_slices[0],
+            body,
+        );
+        assert!(
+            fold_structured_observations(body, &request, &[invalid], &[]).is_err(),
+            "field key {key:?} must fail closed"
+        );
+    }
+}
+
+#[test]
 fn append_predicate_binds_source_kind_local_id_and_canonical_span() {
     let body = "deploy notes";
     let operation = StructuredStateOp {

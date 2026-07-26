@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use memphant_core::{
     StructuredObservation, StructuredObservationDisposition, StructuredStateProvider,
     StructuredStateProviderError, StructuredStateProviderIdentity, StructuredStateRequest,
+    validate_structured_observation,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -362,13 +363,13 @@ impl OpenRouterStructuredState {
             let reconciled = match reconcile_generation(self.transport.as_ref(), &response) {
                 Ok(reconciled) => reconciled,
                 Err(error) => {
-                    self.record_attempt(&AttemptEvent::failed(
+                    self.record_attempt(&AttemptEvent::generation_lookup_failed(
                         &attempt_id,
                         request,
                         &plan,
                         &self.model,
                         attempt,
-                        "generation_stats_lookup_failed",
+                        &response,
                         started.elapsed(),
                     ))?;
                     return Err(StructuredStateProviderError::Unavailable(error));
@@ -377,13 +378,16 @@ impl OpenRouterStructuredState {
             let observations = match decode_response(reconciled.body.clone(), request) {
                 Ok(observations) => observations,
                 Err(error) => {
-                    self.record_attempt(&AttemptEvent::failed(
+                    self.record_attempt(&AttemptEvent::reconciled(
                         &attempt_id,
                         request,
                         &plan,
                         &self.model,
                         attempt,
+                        &reconciled,
+                        None,
                         "response_decode_error",
+                        Some("response_decode_error"),
                         started.elapsed(),
                     ))?;
                     return Err(error);
@@ -396,7 +400,7 @@ impl OpenRouterStructuredState {
                 &self.model,
                 attempt,
                 &reconciled,
-                observations.len(),
+                &observations,
                 started.elapsed(),
             ))?;
             return Ok(observations);
@@ -627,6 +631,10 @@ fn decode_response(
                 valid_from: observation.valid_from,
                 valid_to: observation.valid_to,
             })
+            .and_then(|observation| {
+                validate_structured_observation(&observation)?;
+                Ok(observation)
+            })
         })
         .collect()
 }
@@ -840,6 +848,13 @@ struct AttemptEvent {
     observation_count: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parse_status: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    observation_sha256: Option<String>,
+    reservation_status: &'static str,
     elapsed_seconds: f64,
 }
 
@@ -874,6 +889,10 @@ impl AttemptEvent {
             usage: None,
             observation_count: None,
             error: None,
+            parse_status: None,
+            result_sha256: None,
+            observation_sha256: None,
+            reservation_status: "reserved",
             elapsed_seconds: elapsed.as_secs_f64(),
         }
     }
@@ -907,6 +926,12 @@ impl AttemptEvent {
     ) -> Self {
         let mut event = Self::base("result", attempt_id, request, plan, model, attempt, elapsed);
         event.error = Some(error.to_string());
+        event.parse_status = Some(match error {
+            "http_error" => "http_error",
+            "generation_stats_lookup_failed" => "generation_stats_lookup_failed",
+            _ => "provider_error",
+        });
+        event.reservation_status = "unresolved";
         event
     }
 
@@ -933,14 +958,49 @@ impl AttemptEvent {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn completed(
+    fn generation_lookup_failed(
         attempt_id: &str,
         request: &StructuredStateRequest,
         plan: &StructuredStateRequestPlan,
         model: &str,
         attempt: usize,
         response: &HttpResponse,
-        observation_count: usize,
+        elapsed: Duration,
+    ) -> Self {
+        let mut event = Self::failed(
+            attempt_id,
+            request,
+            plan,
+            model,
+            attempt,
+            "generation_stats_lookup_failed",
+            elapsed,
+        );
+        event.http_status = Some(response.status);
+        event.response_id = response
+            .body
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        event.result_sha256 = Some(sha256(
+            serde_json::to_vec(&response.body)
+                .expect("provider response serializes")
+                .as_slice(),
+        ));
+        event
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn reconciled(
+        attempt_id: &str,
+        request: &StructuredStateRequest,
+        plan: &StructuredStateRequestPlan,
+        model: &str,
+        attempt: usize,
+        response: &HttpResponse,
+        observations: Option<&[StructuredObservation]>,
+        parse_status: &'static str,
+        error: Option<&str>,
         elapsed: Duration,
     ) -> Self {
         let mut event = Self::base("result", attempt_id, request, plan, model, attempt, elapsed);
@@ -961,8 +1021,48 @@ impl AttemptEvent {
             .and_then(Value::as_str)
             .map(str::to_owned);
         event.usage = response.body.get("usage").cloned();
-        event.observation_count = Some(observation_count);
+        event.result_sha256 = Some(sha256(
+            serde_json::to_vec(&response.body)
+                .expect("reconciled provider response serializes")
+                .as_slice(),
+        ));
+        event.parse_status = Some(parse_status);
+        event.reservation_status = "settled";
+        event.error = error.map(str::to_owned);
+        if let Some(observations) = observations {
+            event.observation_count = Some(observations.len());
+            event.observation_sha256 = Some(sha256(
+                serde_json::to_vec(observations)
+                    .expect("structured observations serialize")
+                    .as_slice(),
+            ));
+        }
         event
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn completed(
+        attempt_id: &str,
+        request: &StructuredStateRequest,
+        plan: &StructuredStateRequestPlan,
+        model: &str,
+        attempt: usize,
+        response: &HttpResponse,
+        observations: &[StructuredObservation],
+        elapsed: Duration,
+    ) -> Self {
+        Self::reconciled(
+            attempt_id,
+            request,
+            plan,
+            model,
+            attempt,
+            response,
+            Some(observations),
+            "decoded",
+            None,
+            elapsed,
+        )
     }
 }
 
@@ -997,9 +1097,9 @@ mod tests {
     const INPUT_PRICE: u64 = 2_000_000_000;
     const OUTPUT_PRICE: u64 = 10_000_000_000;
 
-    #[derive(Default)]
     struct FakeTransport {
         responses: Mutex<VecDeque<Result<HttpResponse, String>>>,
+        generation_responses: Mutex<VecDeque<Result<Value, String>>>,
         posted: Mutex<Vec<Vec<u8>>>,
     }
 
@@ -1007,6 +1107,18 @@ mod tests {
         fn new(responses: Vec<Result<HttpResponse, String>>) -> Arc<Self> {
             Arc::new(Self {
                 responses: Mutex::new(responses.into()),
+                generation_responses: Mutex::new(VecDeque::new()),
+                posted: Mutex::new(Vec::new()),
+            })
+        }
+
+        fn with_generation_response(
+            responses: Vec<Result<HttpResponse, String>>,
+            generation: Result<Value, String>,
+        ) -> Arc<Self> {
+            Arc::new(Self {
+                responses: Mutex::new(responses.into()),
+                generation_responses: Mutex::new(VecDeque::from([generation])),
                 posted: Mutex::new(Vec::new()),
             })
         }
@@ -1019,6 +1131,9 @@ mod tests {
         }
 
         fn generation(&self, response_id: &str) -> Result<Value, String> {
+            if let Some(response) = self.generation_responses.lock().unwrap().pop_front() {
+                return response;
+            }
             Ok(json!({"data": {
                 "id": response_id,
                 "model": "served/model",
@@ -1068,6 +1183,50 @@ mod tests {
             }),
             retry_after: None,
         }
+    }
+
+    fn reconciled_body(content: Value) -> Value {
+        json!({
+            "id": "generation-1",
+            "model": "served/model",
+            "provider": "served-provider",
+            "choices": [{"message": {"content": content.to_string()}}],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+                "cost": 0.001
+            }
+        })
+    }
+
+    fn provider_with_ledger(transport: Arc<dyn Transport>) -> (OpenRouterStructuredState, PathBuf) {
+        let ledger = std::env::temp_dir().join(format!(
+            "memphant-structured-observation-{}.jsonl",
+            uuid::Uuid::new_v4()
+        ));
+        (
+            OpenRouterStructuredState::new(
+                DEFAULT_MODEL.to_string(),
+                "prompt".to_string(),
+                INPUT_PRICE,
+                OUTPUT_PRICE,
+                transport,
+                Duration::ZERO,
+                Some(ledger.clone()),
+            ),
+            ledger,
+        )
+    }
+
+    fn read_events(ledger: &Path) -> Vec<Value> {
+        let events = fs::read_to_string(ledger)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap())
+            .collect();
+        fs::remove_file(ledger).unwrap();
+        events
     }
 
     fn wire_observation(slice_id: &str) -> Value {
@@ -1135,6 +1294,22 @@ mod tests {
         assert!(
             decode_response(response(json!({"observations": [extra]})).body, &request).is_err()
         );
+
+        for key in [
+            "operation",
+            "target_unit_ids",
+            "source_span",
+            " ",
+            "CamelCase",
+        ] {
+            let mut nested = wire_observation(&request.evidence_slices[0].id);
+            nested["fields"] = json!([{"key": key, "value_json": "true"}]);
+            assert!(
+                decode_response(response(json!({"observations": [nested]})).body, &request)
+                    .is_err(),
+                "nested field key {key:?} must fail closed"
+            );
+        }
     }
 
     #[test]
@@ -1290,26 +1465,9 @@ mod tests {
         let transport = FakeTransport::new(vec![Ok(response(json!({
             "observations": [wire_observation(&request.evidence_slices[0].id)]
         })))]);
-        let ledger = std::env::temp_dir().join(format!(
-            "memphant-structured-observation-{}.jsonl",
-            uuid::Uuid::new_v4()
-        ));
-        let provider = OpenRouterStructuredState::new(
-            DEFAULT_MODEL.to_string(),
-            "prompt".to_string(),
-            INPUT_PRICE,
-            OUTPUT_PRICE,
-            transport,
-            Duration::ZERO,
-            Some(ledger.clone()),
-        );
+        let (provider, ledger) = provider_with_ledger(transport);
         provider.extract_sync(&request).unwrap();
-        let events = fs::read_to_string(&ledger)
-            .unwrap()
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).unwrap())
-            .collect::<Vec<_>>();
-        fs::remove_file(ledger).unwrap();
+        let events = read_events(&ledger);
         assert_eq!(events[0]["source_kind"], "episode");
         assert_eq!(events[0]["source_body_sha256"], request.source_body_sha256);
         assert!(events[0]["extraction_key"].as_str().unwrap().len() == 64);
@@ -1317,5 +1475,70 @@ mod tests {
         assert_eq!(events[0]["requested_model"], DEFAULT_MODEL);
         assert_eq!(events[1]["served_model"], "served/model");
         assert_eq!(events[1]["served_provider"], "served-provider");
+        assert_eq!(events[1]["response_id"], "generation-1");
+        assert_eq!(events[1]["parse_status"], "decoded");
+        assert_eq!(events[1]["reservation_status"], "settled");
+        assert_eq!(events[1]["usage"]["cost"], 0.001);
+        let content = json!({
+            "observations": [wire_observation(&request.evidence_slices[0].id)]
+        });
+        assert_eq!(
+            events[1]["result_sha256"],
+            sha256(&serde_json::to_vec(&reconciled_body(content)).unwrap())
+        );
+        let expected_observations = vec![StructuredObservation {
+            namespace: "profile".to_string(),
+            item_key: "city".to_string(),
+            fields: BTreeMap::from([("value".to_string(), json!("Oslo"))]),
+            disposition: StructuredObservationDisposition::State,
+            evidence_slice_id: request.evidence_slices[0].id.clone(),
+            evidence_quote: "I live in Oslo.".to_string(),
+            valid_from: None,
+            valid_to: None,
+        }];
+        assert_eq!(
+            events[1]["observation_sha256"],
+            sha256(&serde_json::to_vec(&expected_observations).unwrap())
+        );
+    }
+
+    #[test]
+    fn malformed_paid_response_keeps_reconciled_identity_usage_and_result_hash() {
+        let request = request("user: I live in Oslo.");
+        let malformed = json!({"observations": [{"operation": "replace"}]});
+        let transport = FakeTransport::new(vec![Ok(response(malformed.clone()))]);
+        let (provider, ledger) = provider_with_ledger(transport);
+        assert!(provider.extract_sync(&request).is_err());
+        let events = read_events(&ledger);
+        let result = &events[1];
+        assert_eq!(result["response_id"], "generation-1");
+        assert_eq!(result["served_model"], "served/model");
+        assert_eq!(result["served_provider"], "served-provider");
+        assert_eq!(result["usage"]["cost"], 0.001);
+        assert_eq!(result["parse_status"], "response_decode_error");
+        assert_eq!(result["reservation_status"], "settled");
+        assert_eq!(
+            result["result_sha256"],
+            sha256(&serde_json::to_vec(&reconciled_body(malformed)).unwrap())
+        );
+        assert!(result.get("observation_sha256").is_none());
+        assert!(result.get("choices").is_none());
+    }
+
+    #[test]
+    fn generation_lookup_failure_keeps_response_id_and_unresolved_reservation() {
+        let request = request("user: I live in Oslo.");
+        let transport = FakeTransport::with_generation_response(
+            vec![Ok(response(json!({"observations": []})))],
+            Err("generation unavailable".to_string()),
+        );
+        let (provider, ledger) = provider_with_ledger(transport);
+        assert!(provider.extract_sync(&request).is_err());
+        let events = read_events(&ledger);
+        let result = &events[1];
+        assert_eq!(result["response_id"], "generation-1");
+        assert_eq!(result["parse_status"], "generation_stats_lookup_failed");
+        assert_eq!(result["reservation_status"], "unresolved");
+        assert!(result.get("usage").is_none());
     }
 }
