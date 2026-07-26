@@ -973,6 +973,7 @@ pub async fn deep_snapshot_is_authorized_stable_and_read_only<H: StoreHarness>(h
         vec![
             "WORKFLOW.md",
             "manifest.jsonl",
+            "state/compiled_units.jsonl",
             snapshot[0].path.as_str(),
             snapshot[1].path.as_str(),
         ]

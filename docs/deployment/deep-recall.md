@@ -4,7 +4,7 @@ Deep is an explicit, opt-in recall mode for difficult queries. Fast remains the 
 
 ## Data egress and privacy
 
-Setting `MEMPHANT_DEEP=on` authorizes the serving process to send the query and the complete bodies of policy-authorized episode/resource sources to OpenRouter for processing by Azure. The workspace exists only in memory; the agent has no shell, web, arbitrary filesystem, write, or memory-mutation tool.
+Setting `MEMPHANT_DEEP=on` authorizes the serving process to send the query, the complete bodies of policy-authorized episode/resource sources, and their current compiled state to OpenRouter for processing by Azure. Compiled-state rows contain only the unit ID, kind, fact key, predicate, body, confidence, trust level, observation time, valid-time bounds, transaction start, and raw-source kind/ID; tenant, subject, scope, agent, actor, internal source reference, and scheduling metadata are omitted. The workspace exists only in memory; the agent has no shell, web, arbitrary filesystem, write, or memory-mutation tool.
 
 Every model request requires Azure routing, Zero Data Retention, denied provider data collection, and support for every requested parameter. ZDR limits retention; it does **not** guarantee geographic residency. Workloads with residency requirements need a separately verified regional route and must leave Deep off until that route is approved.
 

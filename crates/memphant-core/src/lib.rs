@@ -123,7 +123,17 @@ struct DeepManifestLine<'a> {
 struct DeepCompiledUnitLine<'a> {
     source_kind: DeepSnapshotSourceKind,
     source_id: Uuid,
-    unit: &'a StoredMemoryUnit,
+    unit_id: UnitId,
+    kind: MemoryKind,
+    fact_key: Option<&'a str>,
+    predicate: Option<&'a str>,
+    body: &'a str,
+    confidence: Option<f32>,
+    trust_level: TrustLevel,
+    observed_at: &'a str,
+    valid_from: Option<&'a str>,
+    valid_to: Option<&'a str>,
+    transaction_from: Option<&'a str>,
 }
 
 /// Materialize the deterministic, read-only file view consumed by Deep.
@@ -162,7 +172,17 @@ fn build_deep_workspace_owned(entries: &mut [DeepSnapshotEntry]) -> DeepWorkspac
                 &serde_json::to_string(&DeepCompiledUnitLine {
                     source_kind: entry.source_kind,
                     source_id: entry.source_id,
-                    unit,
+                    unit_id: unit.id,
+                    kind: unit.kind,
+                    fact_key: unit.fact_key.as_deref(),
+                    predicate: unit.predicate.as_deref(),
+                    body: &unit.body,
+                    confidence: unit.confidence,
+                    trust_level: unit.trust_level,
+                    observed_at: &unit.observed_at,
+                    valid_from: unit.valid_from.as_deref(),
+                    valid_to: unit.valid_to.as_deref(),
+                    transaction_from: unit.transaction_from.as_deref(),
                 })
                 .expect("Deep compiled units are always serializable"),
             );
@@ -14656,10 +14676,23 @@ mod deep_call_routing_tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["source_kind"], "episode");
         assert_eq!(rows[0]["source_id"], source_id.to_string());
-        assert_eq!(rows[0]["unit"]["id"], Uuid::from_u128(11).to_string());
-        assert_eq!(rows[0]["unit"]["state"], "active");
-        assert_eq!(rows[0]["unit"]["body"], "current alpha");
-        assert_eq!(rows[1]["unit"]["id"], Uuid::from_u128(12).to_string());
+        assert_eq!(rows[0]["unit_id"], Uuid::from_u128(11).to_string());
+        assert_eq!(rows[0]["body"], "current alpha");
+        assert_eq!(rows[1]["unit_id"], Uuid::from_u128(12).to_string());
+        for private_field in [
+            "tenant_id",
+            "data_subject_id",
+            "scope_id",
+            "agent_node_id",
+            "actor_id",
+            "source_ref",
+            "contextual_chunks",
+        ] {
+            assert!(
+                rows[0].get(private_field).is_none(),
+                "leaked {private_field}"
+            );
+        }
     }
 
     struct PanicProvider {
