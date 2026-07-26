@@ -53,7 +53,7 @@ from benchmarks.longmemeval_v2.construction_authority import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OPENING_NANOS = 5_141_664_250
+PRE_V3_OPENING_NANOS = 5_141_664_250
 CONTINGENCY_NANOS = 10_000_000_000
 HARD_CEILING_NANOS = 200_000_000_000
 QUESTION_COUNT = 451
@@ -62,7 +62,6 @@ CONSTRUCTION_CANARY_QUANTILES = 4
 CONSTRUCTION_CANARY_ALPHA = Decimal("0.05")
 CONSTRUCTION_CANARY_FAILURE_LIMIT = Decimal("0.15")
 CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES = 1
-FORMULA = "5141664250+C+2*R_sum+451*S+10000000000<=200000000000"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ORACLE_KEYS = {
     "answer",
@@ -84,9 +83,16 @@ V1_ABANDONMENT_PROOF = (
 V1_FAILED_SOURCE_INVENTORY = (
     ROOT / "benchmarks/manifests/longmemeval_v2.v1_failed_sources.json"
 )
-CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3"
+V3_CAMPAIGN_ARTIFACT_ROOT = (
+    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3"
+)
+V3_ABANDONMENT_PROOF = (
+    ROOT
+    / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-v3-abandonment.json"
+)
+CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4"
 CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
-CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
+CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v4.json"
 CANONICAL_CAMPAIGN_AUTHORIZATION = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 QWEN_ENDPOINTS_URL = "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints"
 QWEN_MODEL_URL = "https://openrouter.ai/api/v1/model/qwen/qwen3.5-9b"
@@ -116,6 +122,30 @@ def sha256_json(value: object) -> str:
 
 def sha256_rust_json(value: object) -> str:
     return hashlib.sha256(_rust_json(value)).hexdigest()
+
+
+def _v3_abandonment_liability() -> int:
+    try:
+        proof = json.loads(V3_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("v3 abandonment proof is unavailable") from error
+    core = {key: value for key, value in proof.items() if key != "proof_sha256"}
+    liability = proof.get("settlement", {}).get("total_new_liability_nanos")
+    if (
+        proof.get("proof_sha256") != sha256_json(core)
+        or proof.get("status") != "ABANDONED_NEVER_RESUME"
+        or proof.get("campaign_namespace") != "longmemeval-v2-pilot-v3"
+        or type(liability) is not int
+        or liability != 292_842_500
+    ):
+        raise RuntimeError("v3 abandonment proof identity or settlement drift")
+    return liability
+
+
+OPENING_NANOS = PRE_V3_OPENING_NANOS + _v3_abandonment_liability()
+FORMULA = (
+    f"{OPENING_NANOS}+C+2*R_sum+451*S+{CONTINGENCY_NANOS}<={HARD_CEILING_NANOS}"
+)
 
 
 def _campaign_artifact_paths(root: Path) -> dict[str, str]:
@@ -278,7 +308,8 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
     )
     normalized_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
-        "response_model": model_metadata.get("id"),
+        "model_id": model_metadata.get("id"),
+        "response_model": model_metadata.get("canonical_slug"),
         "canonical_slug": model_metadata.get("canonical_slug"),
         "provider": endpoint.get("provider_name"),
         "input_price_usd_per_token": endpoint.get("pricing", {}).get("prompt"),
@@ -297,7 +328,8 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
     }
     expected_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
-        "response_model": "qwen/qwen3.5-9b",
+        "model_id": "qwen/qwen3.5-9b",
+        "response_model": "qwen/qwen3.5-9b-20260310",
         "canonical_slug": "qwen/qwen3.5-9b-20260310",
         "provider": "DeepInfra",
         "input_price_usd_per_token": "0.0000001",
@@ -2500,8 +2532,8 @@ def execute_strict_reader_call(
             not isinstance(response, dict)
             or not isinstance(generation, dict)
             or response.get("id") != generation.get("id")
-            or response.get("model") != "qwen/qwen3.5-9b"
-            or generation.get("model") != "qwen/qwen3.5-9b"
+            or response.get("model") != "qwen/qwen3.5-9b-20260310"
+            or generation.get("model") != "qwen/qwen3.5-9b-20260310"
             or generation.get("provider_name") != "DeepInfra"
             or not isinstance(choices, list)
             or len(choices) != 1
@@ -3164,7 +3196,7 @@ class _DeepRecallProxy(ThreadingHTTPServer):
         for item in generations:
             assert isinstance(item, dict)
             if (
-                item.get("model") != "qwen/qwen3.5-9b"
+                item.get("model") != "qwen/qwen3.5-9b-20260310"
                 or item.get("provider_name") != "DeepInfra"
                 or type(item.get("tokens_prompt")) is not int
                 or type(item.get("tokens_completion")) is not int
@@ -3188,7 +3220,7 @@ class _DeepRecallProxy(ThreadingHTTPServer):
             )
         core = {
             "requested_model": "qwen/qwen3.5-9b-20260310",
-            "served_models": ["qwen/qwen3.5-9b"],
+            "served_models": ["qwen/qwen3.5-9b-20260310"],
             "served_providers": ["DeepInfra"],
             "allow_fallbacks": False,
             "attempt_count": len(normalized),
@@ -3475,7 +3507,7 @@ def settle_deep_recall(
         }
         if (
             receipt.get("requested_model") != "qwen/qwen3.5-9b-20260310"
-            or receipt.get("served_models") != ["qwen/qwen3.5-9b"]
+            or receipt.get("served_models") != ["qwen/qwen3.5-9b-20260310"]
             or receipt.get("served_providers") != ["DeepInfra"]
             or receipt.get("allow_fallbacks") is not False
             or type(receipt.get("attempt_count")) is not int
@@ -3508,7 +3540,7 @@ def settle_deep_recall(
         response = {
             "response_id": f"deep-recall:{receipt['receipt_sha256']}",
             "requested_model": "qwen/qwen3.5-9b-20260310",
-            "served_model": "qwen/qwen3.5-9b",
+            "served_model": "qwen/qwen3.5-9b-20260310",
             "provider": "DeepInfra",
             "attempt_count": receipt["attempt_count"],
             "receipt_sha256": receipt["receipt_sha256"],
@@ -3730,7 +3762,7 @@ def cache_only_construction_environment(
     if (
         construction.get("model") != "qwen/qwen3.5-9b-20260310"
         or provider.get("requested_model") != construction.get("model")
-        or provider.get("served_model") != "qwen/qwen3.5-9b"
+        or provider.get("served_model") != "qwen/qwen3.5-9b-20260310"
         or str(provider.get("served_provider", "")).casefold()
         != "deepinfra"
         or not all(
@@ -4784,7 +4816,7 @@ def execute_reader_arm(
             {
                 "OPENROUTER_API_KEY": "loopback-route-bound",
                 "MEMPHANT_DEEP_MODEL": "qwen/qwen3.5-9b-20260310",
-                "MEMPHANT_DEEP_RESPONSE_MODEL": "qwen/qwen3.5-9b",
+                "MEMPHANT_DEEP_RESPONSE_MODEL": "qwen/qwen3.5-9b-20260310",
                 "MEMPHANT_DEEP_PROMPT_PATH": str(ROOT / "config/deep-recall-v1.txt"),
                 "MEMPHANT_DEEP_PROVIDERS": "deepinfra",
                 "MEMPHANT_DEEP_INPUT_PRICE_MICROS_PER_MILLION": "100000",
@@ -6347,7 +6379,7 @@ def _full_census(
         or wave_policy.get("rust_subledger_campaign_attempt_env")
         != "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT"
         or wave_policy.get("not_charged_pre_generation_http_statuses")
-        != [429, 502, 503]
+        != [502, 503]
         or not isinstance(wave_policy.get("error_contract_source"), str)
         or not isinstance(wave_policy.get("billing_contract_source"), str)
     ):
@@ -6523,7 +6555,7 @@ def recost_census_values(
         "maximum_internal_attempts": 1,
         "maximum_campaign_waves": attempts,
         "requested_model": "qwen/qwen3.5-9b-20260310",
-        "response_model": "qwen/qwen3.5-9b",
+        "response_model": "qwen/qwen3.5-9b-20260310",
         "requested_provider": "deepinfra",
         "construction_identity_sha256": parent_construction_sha256,
         "construction_liability_nanos": c_term,
@@ -6784,7 +6816,7 @@ def evaluate_construction_canary(
         elif (
             latest.get("reservation_status") == "not_charged"
             and latest.get("parse_status") == "http_error"
-            and latest.get("http_status") in {429, 502, 503}
+            and latest.get("http_status") in {502, 503}
             and latest.get("campaign_attempt", 0)
             <= 1 + CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES
         ):
@@ -6854,7 +6886,7 @@ def bind_construction_canary_cache(
         if key not in {"gate_sha256", "canonical_cache"}
     }
     core["canonical_cache"] = {
-        "namespace": "longmemeval-v2-construction-v3",
+        "namespace": "longmemeval-v2-construction-v4",
         "entries": inventory,
         "entries_sha256": sha256_json(inventory),
     }
@@ -7195,6 +7227,12 @@ def _opening_reservations() -> list[dict[str, object]]:
             V1_ABANDONMENT_PROOF,
             V1_ABANDONMENT_PROOF,
         ),
+        (
+            "longmemeval-v2-v3-abandoned-liability",
+            _v3_abandonment_liability(),
+            V3_ABANDONMENT_PROOF,
+            V3_ABANDONMENT_PROOF,
+        ),
     ]
     reservations = []
     for reservation_id, amount, receipt, proof in evidence:
@@ -7288,13 +7326,13 @@ def _build_campaign_authorization(
         "provider_authority": refresh,
         "artifacts": paths,
         "execution": {
-            "construction_max_workers": 32,
+            "construction_max_workers": 4,
             "construction_hidden_retries": 0,
             "reader_max_workers": 8,
             "sealed_prefix_count": 12,
             "remaining_count": 439,
             "official_question_count": QUESTION_COUNT,
-            "cache_namespace": "longmemeval-v2-construction-v3",
+            "cache_namespace": "longmemeval-v2-construction-v4",
             "resume_key": "extraction_key",
             "construction_canary": construction_canary,
         },
@@ -8571,7 +8609,7 @@ def validate_and_settle_construction_wave(
             reservation_status = event.get("reservation_status")
             if reservation_status == "not_charged":
                 if (
-                    event.get("http_status") not in {429, 502, 503}
+                    event.get("http_status") not in {502, 503}
                     or event.get("parse_status") != "http_error"
                     or event.get("error") != "http_error"
                     or response_id is not None
@@ -8671,15 +8709,21 @@ def recost_census(
     construction = manifest.get("construction")
     if not isinstance(old_construction, dict) or not isinstance(construction, dict):
         raise RuntimeError("recost construction manifest is missing")
+    authority_only_fields = {
+        "code_sha256s",
+        "wave_policy",
+        "response_model",
+        "prompt_path",
+    }
     comparable_old = {
         key: value
         for key, value in old_construction.items()
-        if key != "code_sha256s"
+        if key not in authority_only_fields
     }
     comparable_current = {
         key: value
         for key, value in construction.items()
-        if key not in {"code_sha256s", "wave_policy", "response_model"}
+        if key not in authority_only_fields
     }
     if comparable_old != comparable_current:
         raise RuntimeError("recost cannot change construction request, batching, or pricing inputs")

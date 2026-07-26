@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts/run_lme_v2_state_aware.py"
 STATE_AWARE_MANIFEST = (
-    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v4.json"
 )
 
 
@@ -45,28 +45,129 @@ def test_v1_abandonment_proof_is_immutable_compact_and_fully_reserved() -> None:
         "large_input_committed": False,
         "inventory_hashes_only": True,
     }
-    assert runner.OPENING_NANOS == 5_141_664_250
+    assert runner.PRE_V3_OPENING_NANOS == 5_141_664_250
+    reservations = runner._opening_reservations()
+    assert reservations[-2]["reserved_nanos"] == 883_661_850
+
+
+def test_v3_abandonment_proof_is_compact_exact_and_conservatively_reserved() -> None:
+    runner = _load_runner()
+    proof = json.loads(runner.V3_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    core = {key: value for key, value in proof.items() if key != "proof_sha256"}
+    assert proof["proof_sha256"] == runner.sha256_json(core)
+    assert proof["status"] == "ABANDONED_NEVER_RESUME"
+    assert proof["campaign_namespace"] == "longmemeval-v2-pilot-v3"
+    assert proof["outcome"] == {
+        "accepted": False,
+        "broad_dispatch_started": False,
+        "campaign_attempts": [1],
+        "canary_plan_count": 64,
+        "construction_ledger_unique_plan_count": 64,
+        "gate_artifact_present": False,
+        "progress_artifact_present": False,
+    }
+    assert proof["settlement"] == {
+        "start_count": 64,
+        "result_count": 64,
+        "http_200_decoded_count": 38,
+        "decode_failure_count": 0,
+        "semantic_failure_count": 0,
+        "observation_count_histogram": {"0": 36, "1": 1, "3": 1},
+        "served_models": ["qwen/qwen3.5-9b-20260310"],
+        "served_providers": ["DeepInfra"],
+        "settled_nanos": 162_861_900,
+        "unresolved_http_429_count": 26,
+        "unresolved_reservation_nanos": 129_980_600,
+        "total_new_liability_nanos": 292_842_500,
+    }
+    assert proof["ledger"] == {
+        "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/CONSTRUCTION-ATTEMPTS.jsonl",
+        "bytes": 100_686,
+        "line_count": 128,
+        "sha256": "067b09314b714db90dc0574730ea7f8dbd210b05f0844cea396af155f52ae676",
+    }
+    assert proof["private_dispatch_inventory"] == {
+        "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/private-construction-dispatches",
+        "file_count": 102,
+        "generation_count": 38,
+        "response_count": 64,
+        "total_bytes": 132_908,
+        "inventory_sha256": "49d7424800756246efeb0e116717967f8ad356a43ce26e2b5dce55343e622ac2",
+    }
+    assert proof["privacy"] == {
+        "private_bodies_committed": False,
+        "large_input_committed": False,
+        "inventory_hashes_only": True,
+    }
+    assert runner.OPENING_NANOS == 5_434_506_750
     reservations = runner._opening_reservations()
     assert sum(item["reserved_nanos"] for item in reservations) == runner.OPENING_NANOS
-    assert reservations[-1]["reserved_nanos"] == 883_661_850
+    assert reservations[-1]["reservation_id"] == "longmemeval-v2-v3-abandoned-liability"
+    assert reservations[-1]["reserved_nanos"] == proof["settlement"]["total_new_liability_nanos"]
 
 
-def test_v3_campaign_namespace_cannot_resume_prior_artifacts() -> None:
+def test_v4_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     runner = _load_runner()
     v2_root = (
         ROOT
         / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v2"
     )
-    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v3"
+    v3_root = (
+        ROOT
+        / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3"
+    )
+    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v4"
     assert runner.CAMPAIGN_ARTIFACT_ROOT != runner.V1_CAMPAIGN_ARTIFACT_ROOT
     assert runner.CAMPAIGN_ARTIFACT_ROOT != v2_root
+    assert runner.CAMPAIGN_ARTIFACT_ROOT != v3_root
     assert (v2_root / "CAMPAIGN-CENSUS.json").is_file()
     assert not (v2_root / "CAMPAIGN-AUTHORIZATION.json").exists()
+    assert (v3_root / "CAMPAIGN-AUTHORIZATION.json").is_file()
+    assert not runner.CANONICAL_CAMPAIGN_CENSUS.exists()
+    assert not runner.CANONICAL_CAMPAIGN_AUTHORIZATION.exists()
+    with pytest.raises(RuntimeError, match="canonical authorization"):
+        runner.prewarm_sealed_prefix(v3_root / "CAMPAIGN-AUTHORIZATION.json")
     assert all(
         Path(path).is_relative_to(runner.CAMPAIGN_ARTIFACT_ROOT)
         for path in runner.campaign_artifact_paths().values()
     )
-    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v3.json")
+    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v4.json")
+
+
+def test_v4_keeps_the_v3_construction_request_body_contract() -> None:
+    v3 = json.loads(
+        (
+            ROOT
+            / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
+        ).read_text(encoding="utf-8")
+    )["construction"]
+    v4 = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))["construction"]
+    request_fields = {
+        "state_mode",
+        "model",
+        "provider",
+        "tokenizer_repository",
+        "tokenizer_revision",
+        "tokenizer_path",
+        "tokenizer_config_path",
+        "tokenizer_sha256",
+        "chat_template_sha256",
+        "chat_template_overhead_tokens",
+        "empty_system_user_generation_token_ids",
+        "allow_fallbacks",
+        "reasoning_mode",
+        "input_price_nanos_per_million",
+        "output_price_nanos_per_million",
+        "maximum_output_tokens",
+        "maximum_attempts",
+        "prompt_sha256",
+    }
+    assert {key: v4[key] for key in request_fields} == {
+        key: v3[key] for key in request_fields
+    }
+    assert (ROOT / v4["prompt_path"]).read_bytes() == (
+        ROOT / v3["prompt_path"]
+    ).read_bytes()
 
 
 def _load_runner():
@@ -129,7 +230,7 @@ def test_census_refuses_authorization_without_exact_bounds(tmp_path: Path) -> No
     census = json.loads(output.read_text(encoding="utf-8"))
     assert census["benchmark"]["memory_context_max_tokens"] == 200000
     assert census["admission"]["formula"] == (
-        "5141664250+C+2*R_sum+451*S+10000000000<=200000000000"
+        "5434506750+C+2*R_sum+451*S+10000000000<=200000000000"
     )
     assert census["admission"]["authorized"] is False
 
@@ -206,7 +307,9 @@ def test_admitted_profile_pins_qwen_deepinfra_native_2048_and_aggregate_cap() ->
     manifest = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))
     assert manifest["reader_judge"]["judge"]["maximum_output_tokens"] == 2048
     assert manifest["deep_recall"]["model"] == "qwen/qwen3.5-9b-20260310"
-    assert manifest["deep_recall"]["response_model"] == "qwen/qwen3.5-9b"
+    assert manifest["deep_recall"]["response_model"] == (
+        "qwen/qwen3.5-9b-20260310"
+    )
     assert manifest["deep_recall"]["provider"] == "deepinfra"
     assert manifest["deep_recall"]["allow_fallbacks"] is False
     assert manifest["construction"]["reasoning_mode"] == "disabled"
@@ -217,6 +320,11 @@ def test_admitted_profile_pins_qwen_deepinfra_native_2048_and_aggregate_cap() ->
     assert policy["rust_subledger_aggregate_cap_env"] == (
         "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS"
     )
+    assert policy["not_charged_pre_generation_http_statuses"] == [502, 503]
+    assert manifest["construction"]["response_model"] == (
+        "qwen/qwen3.5-9b-20260310"
+    )
+    assert manifest["construction"]["prompt_path"] == "config/structured-state-v4.txt"
 
 
 def test_reader_liability_inventory_stratifies_text_and_multimodal_billing() -> None:
@@ -726,7 +834,7 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
                     **plan,
                     "reservation_status": "settled",
                     "response_id": f"generation-{index}",
-                    "served_model": "qwen/qwen3.5-9b",
+                    "served_model": "qwen/qwen3.5-9b-20260310",
                     "served_provider": "DeepInfra",
                     "parse_status": "decoded",
                     "error": None,
@@ -876,7 +984,7 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
     manifest_path.write_text("{}", encoding="utf-8")
     qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
-        "response_model": "qwen/qwen3.5-9b",
+        "response_model": "qwen/qwen3.5-9b-20260310",
         "provider": "DeepInfra",
     }
     normalized = {
@@ -909,10 +1017,10 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
     }
     assert packet["authorization"]["authorization_scope_sha256"] == runner.sha256_json(scope)
     assert packet["inputs"]["plan_inventory_sha256"] == runner.sha256_json([plan])
-    assert packet["execution"]["construction_max_workers"] == 32
+    assert packet["execution"]["construction_max_workers"] == 4
     assert packet["execution"]["construction_hidden_retries"] == 0
     assert packet["execution"]["cache_namespace"] == (
-        "longmemeval-v2-construction-v3"
+        "longmemeval-v2-construction-v4"
     )
     assert packet["execution"]["construction_canary"] == runner.derive_construction_canary(
         [plan]
@@ -1009,6 +1117,18 @@ def test_construction_phase_selector_preserves_exact_crash_state(phase: str) -> 
     }
     with pytest.raises(RuntimeError, match="manual adjudication"):
         runner._failed_construction_plans([plan], [started, ambiguous], 1)
+
+    charged_rate_limit = {
+        **decoded,
+        "parse_status": "http_error",
+        "reservation_status": "unresolved",
+        "http_status": 429,
+        "error": "http_error",
+    }
+    with pytest.raises(RuntimeError, match="manual adjudication"):
+        runner._failed_construction_plans(
+            [plan], [started, charged_rate_limit], 1
+        )
     assert phase in {"prefix", "tail", "retry"}
 
 
@@ -1067,6 +1187,12 @@ def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
         "mandatory": False
     }
     assert refresh["normalized"]["qwen_deepinfra"]["canonical_slug"] == (
+        "qwen/qwen3.5-9b-20260310"
+    )
+    assert refresh["normalized"]["qwen_deepinfra"]["model_id"] == (
+        "qwen/qwen3.5-9b"
+    )
+    assert refresh["normalized"]["qwen_deepinfra"]["response_model"] == (
         "qwen/qwen3.5-9b-20260310"
     )
     assert set(refresh["sources"]) == set(seen)
@@ -1213,7 +1339,7 @@ def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_trans
     cache_bound = runner.bind_construction_canary_cache(
         accepted, canary, tmp_path
     )
-    assert cache_bound["canonical_cache"]["namespace"].endswith("-v3")
+    assert cache_bound["canonical_cache"]["namespace"].endswith("-v4")
     assert len(cache_bound["canonical_cache"]["entries"]) == 64
 
     semantic = list(decoded)
@@ -1234,6 +1360,17 @@ def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_trans
     transient_gate = runner.evaluate_construction_canary(canary, transient)
     assert transient_gate["semantic_failure_count"] == 0
     assert transient_gate["transient_pending_plans"] == [plans[0]]
+
+    charged_429 = list(decoded)
+    charged_429[0] = _canary_result(
+        plans[0],
+        parse_status="http_error",
+        reservation_status="unresolved",
+        http_status=429,
+    )
+    charged_429_gate = runner.evaluate_construction_canary(canary, charged_429)
+    assert charged_429_gate["semantic_failure_count"] == 1
+    assert charged_429_gate["transient_pending_count"] == 0
     retried = transient + [_canary_result(plans[0], campaign_attempt=2)]
     assert runner.evaluate_construction_canary(canary, retried)["accepted"] is True
 
@@ -1360,7 +1497,7 @@ def _proof(runner):
         },
         "provider": {
             "requested_model": "qwen/qwen3.5-9b-20260310",
-            "served_model": "qwen/qwen3.5-9b",
+            "served_model": "qwen/qwen3.5-9b-20260310",
             "requested_provider": "deepinfra",
             "served_provider": "DeepInfra",
             "input_price_nanos_per_million": 100_000_000,
@@ -1409,7 +1546,7 @@ def test_runner_creates_canonical_construction_binding_once(monkeypatch, tmp_pat
     construction = {
         "state_mode": "structured-resource-v1",
         "model": "qwen/qwen3.5-9b-20260310",
-        "response_model": "qwen/qwen3.5-9b",
+        "response_model": "qwen/qwen3.5-9b-20260310",
         "provider": "deepinfra",
         "prompt_sha256": "4" * 64,
         "code_sha256s": {
@@ -1906,7 +2043,7 @@ def test_cache_only_construction_environment_drops_provider_credentials(
         },
         "provider": {
             "requested_model": "qwen/qwen3.5-9b-20260310",
-            "served_model": "qwen/qwen3.5-9b",
+            "served_model": "qwen/qwen3.5-9b-20260310",
             "served_provider": "DeepInfra",
             "input_price_nanos_per_million": 100_000_000,
             "output_price_nanos_per_million": 150_000_000,
@@ -2501,7 +2638,7 @@ def test_strict_reader_proxy_uses_frozen_row_reservation_and_exact_generation(
         transport=lambda request: {
             "response": {
                 "id": "generation-reader-0",
-                "model": "qwen/qwen3.5-9b",
+                "model": "qwen/qwen3.5-9b-20260310",
                 "choices": [{"message": {"content": "PRIVATE ANSWER"}}],
                 "usage": {
                     "prompt_tokens": 10,
@@ -2512,7 +2649,7 @@ def test_strict_reader_proxy_uses_frozen_row_reservation_and_exact_generation(
             },
             "generation": {
                 "id": "generation-reader-0",
-                "model": "qwen/qwen3.5-9b",
+                "model": "qwen/qwen3.5-9b-20260310",
                 "provider_name": "DeepInfra",
                 "tokens_prompt": 10,
                 "tokens_completion": 2,
@@ -2660,7 +2797,7 @@ def test_local_reader_proxy_replays_identical_sdk_retry_without_paid_redispatch(
         upstream_calls.append(payload)
         response = {
             "id": "generation-reader-proxy",
-            "model": "qwen/qwen3.5-9b",
+            "model": "qwen/qwen3.5-9b-20260310",
             "choices": [{"message": {"content": "boxed answer"}}],
             "usage": {
                 "prompt_tokens": 100,
@@ -2860,7 +2997,7 @@ def test_reader_result_append_failure_preserves_reconcilable_started_state(
             transport=lambda _payload: {
                 "response": {
                     "id": "reader-crash",
-                    "model": "qwen/qwen3.5-9b",
+                    "model": "qwen/qwen3.5-9b-20260310",
                     "choices": [{"message": {"content": "PRIVATE"}}],
                     "usage": {
                         "prompt_tokens": 1,
@@ -2871,7 +3008,7 @@ def test_reader_result_append_failure_preserves_reconcilable_started_state(
                 },
                 "generation": {
                     "id": "reader-crash",
-                    "model": "qwen/qwen3.5-9b",
+                    "model": "qwen/qwen3.5-9b-20260310",
                     "provider_name": "DeepInfra",
                     "tokens_prompt": 1,
                     "tokens_completion": 1,
@@ -2940,7 +3077,7 @@ def test_deep_proxy_reserves_from_plan_and_requires_complete_server_receipt() ->
     )
     deep_core = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
-        "served_models": ["qwen/qwen3.5-9b"],
+        "served_models": ["qwen/qwen3.5-9b-20260310"],
         "served_providers": ["DeepInfra"],
         "allow_fallbacks": False,
         "attempt_count": 2,
@@ -3009,7 +3146,7 @@ def test_deep_attempt_journal_replays_durable_turn_and_reconciles_receipt(
         generation = {
             "data": {
                 "id": "gen-1",
-                "model": "qwen/qwen3.5-9b",
+                    "model": "qwen/qwen3.5-9b-20260310",
                 "provider_name": "DeepInfra",
                 "tokens_prompt": 10,
                 "tokens_completion": 2,
@@ -3289,7 +3426,7 @@ def _complete_row_attempts(plan):
             "served_model": (
                 "gpt-5.2-2025-12-11"
                 if component == "judge"
-                else "qwen/qwen3.5-9b"
+                else "qwen/qwen3.5-9b-20260310"
             ),
             "provider": "OpenAI" if component == "judge" else "DeepInfra",
         }

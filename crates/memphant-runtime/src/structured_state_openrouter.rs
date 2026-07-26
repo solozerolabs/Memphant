@@ -2398,7 +2398,6 @@ impl AttemptEvent {
 
 fn is_typed_not_charged_pre_generation(response: &HttpResponse) -> bool {
     let expected_type = match response.status {
-        429 => "rate_limit_exceeded",
         502 => "provider_unavailable",
         503 => "provider_overloaded",
         _ => return false,
@@ -2932,6 +2931,18 @@ mod tests {
             }),
         };
         assert!(!is_typed_not_charged_pre_generation(&ambiguous));
+
+        let charged_rate_limit = HttpResponse {
+            status: 429,
+            body: json!({
+                "error": {
+                    "code": 429,
+                    "message": "rate limited",
+                    "metadata": {"error_type": "rate_limit_exceeded"}
+                }
+            }),
+        };
+        assert!(!is_typed_not_charged_pre_generation(&charged_rate_limit));
     }
 
     #[test]

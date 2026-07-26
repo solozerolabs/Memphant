@@ -1,0 +1,58 @@
+{
+  "campaign_namespace": "longmemeval-v2-pilot-v3",
+  "ledger": {
+    "bytes": 100686,
+    "line_count": 128,
+    "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/CONSTRUCTION-ATTEMPTS.jsonl",
+    "sha256": "067b09314b714db90dc0574730ea7f8dbd210b05f0844cea396af155f52ae676"
+  },
+  "outcome": {
+    "accepted": false,
+    "broad_dispatch_started": false,
+    "campaign_attempts": [
+      1
+    ],
+    "canary_plan_count": 64,
+    "construction_ledger_unique_plan_count": 64,
+    "gate_artifact_present": false,
+    "progress_artifact_present": false
+  },
+  "privacy": {
+    "inventory_hashes_only": true,
+    "large_input_committed": false,
+    "private_bodies_committed": false
+  },
+  "private_dispatch_inventory": {
+    "file_count": 102,
+    "generation_count": 38,
+    "inventory_sha256": "49d7424800756246efeb0e116717967f8ad356a43ce26e2b5dce55343e622ac2",
+    "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/private-construction-dispatches",
+    "response_count": 64,
+    "total_bytes": 132908
+  },
+  "proof_sha256": "43ab99ecf3f487c92a2f4de3182bfb069819f650460c58a99170bf113650e5a9",
+  "schema_version": 1,
+  "settlement": {
+    "decode_failure_count": 0,
+    "http_200_decoded_count": 38,
+    "observation_count_histogram": {
+      "0": 36,
+      "1": 1,
+      "3": 1
+    },
+    "result_count": 64,
+    "semantic_failure_count": 0,
+    "served_models": [
+      "qwen/qwen3.5-9b-20260310"
+    ],
+    "served_providers": [
+      "DeepInfra"
+    ],
+    "settled_nanos": 162861900,
+    "start_count": 64,
+    "total_new_liability_nanos": 292842500,
+    "unresolved_http_429_count": 26,
+    "unresolved_reservation_nanos": 129980600
+  },
+  "status": "ABANDONED_NEVER_RESUME"
+}

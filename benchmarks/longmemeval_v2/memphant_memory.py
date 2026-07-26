@@ -77,12 +77,12 @@ FORBIDDEN_EVALUATION_KEYS = {
 CONSTRUCTION_BINDING_ENV = "MEMPHANT_LME_CONSTRUCTION_BINDING"
 ROOT = Path(__file__).resolve().parents[2]
 CAMPAIGN_ARTIFACT_ROOT = (
-    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3"
+    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4"
 )
 CANONICAL_AUTHORIZATION_PATH = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 CANONICAL_CENSUS_PATH = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
 CANONICAL_MANIFEST_PATH = (
-    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v4.json"
 )
 CANONICAL_WAVE_PATH = CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-WAVE.json"
 CANONICAL_BINDING_ROOT = CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-BINDINGS"

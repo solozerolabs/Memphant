@@ -618,10 +618,10 @@ def load_memphant_adapter(monkeypatch):
     return module, registry
 
 
-def test_memphant_adapter_uses_only_v3_campaign_authority(monkeypatch):
+def test_memphant_adapter_uses_only_v4_campaign_authority(monkeypatch):
     adapter, _registry = load_memphant_adapter(monkeypatch)
-    assert adapter.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v3"
-    assert adapter.CANONICAL_MANIFEST_PATH.name.endswith(".v3.json")
+    assert adapter.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v4"
+    assert adapter.CANONICAL_MANIFEST_PATH.name.endswith(".v4.json")
     assert adapter.CANONICAL_AUTHORIZATION_PATH.parent == (
         adapter.CAMPAIGN_ARTIFACT_ROOT
     )
