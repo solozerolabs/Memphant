@@ -28,6 +28,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from typing import Any
 import urllib.request
@@ -107,6 +108,8 @@ def _campaign_artifact_paths(root: Path) -> dict[str, str]:
         "construction_bindings": "CONSTRUCTION-BINDINGS",
         "scratch": "scratch",
         "case_banks": "case-banks",
+        "execution_plan": "EXECUTION-PLAN.json",
+        "reservation_plan": "ROW-RESERVATION-PLAN.json",
         "private_reader_outputs": "private-reader-outputs",
         "sealed_prefix": "PREFIX-12.sealed",
         "public_prefix_status": "PREFIX-12-STATUS.json",
@@ -494,7 +497,15 @@ def validate_public_prefix_status(status: object) -> dict[str, object]:
         raise RuntimeError("sealed operational prefix must contain 12 rows")
     if status.get("remaining_count") != 439:
         raise RuntimeError("sealed prefix requires the remaining 439-case commitment")
-    if not _valid_sha256(status.get("remaining_commitment_sha256")) or not _valid_sha256(status.get("sealed_blob_sha256")):
+    if not all(
+        _valid_sha256(status.get(key))
+        for key in (
+            "remaining_commitment_sha256",
+            "execution_plan_sha256",
+            "reservation_plan_sha256",
+            "sealed_blob_sha256",
+        )
+    ):
         raise RuntimeError("sealed prefix commitments are invalid")
     for sequence, row in enumerate(status["rows"], 1):
         if not isinstance(row, dict) or row != {
@@ -505,6 +516,74 @@ def validate_public_prefix_status(status: object) -> dict[str, object]:
         }:
             raise RuntimeError("sealed prefix exposes invalid public row state")
     return status
+
+
+def _derive_public_prefix_rows(
+    private: object,
+    *,
+    execution_plan_sha256: str,
+    reservation_plan_sha256: str,
+) -> list[dict[str, object]]:
+    if (
+        not isinstance(private, dict)
+        or private.get("schema_version") != 1
+        or private.get("execution_plan_sha256") != execution_plan_sha256
+        or private.get("reservation_plan_sha256") != reservation_plan_sha256
+        or not isinstance(private.get("cases"), list)
+        or len(private["cases"]) != 12
+    ):
+        raise RuntimeError("private prefix output authority is invalid")
+    question_ids: set[str] = set()
+    public_rows = []
+    for sequence, case in enumerate(private["cases"], 1):
+        rows = case.get("rows") if isinstance(case, dict) else None
+        question_id = case.get("question_id") if isinstance(case, dict) else None
+        if (
+            not isinstance(case, dict)
+            or case.get("sequence") != sequence
+            or not isinstance(question_id, str)
+            or not question_id
+            or question_id in question_ids
+            or not isinstance(rows, list)
+            or len(rows) != 2
+            or {row.get("arm") for row in rows if isinstance(row, dict)}
+            != {"fast", "deep"}
+        ):
+            raise RuntimeError("private prefix output case structure is invalid")
+        question_ids.add(question_id)
+        for row in rows:
+            arm = row.get("arm")
+            if (
+                set(row)
+                != {
+                    "arm",
+                    "row_key",
+                    "answer",
+                    "output_sha256",
+                    "receipt_sha256",
+                    "structurally_valid",
+                    "receipt_valid",
+                    "settled",
+                }
+                or row.get("row_key") != f"{question_id}:{arm}"
+                or not isinstance(row.get("answer"), str)
+                or not row["answer"]
+                or not _valid_sha256(row.get("output_sha256"))
+                or not _valid_sha256(row.get("receipt_sha256"))
+                or row.get("structurally_valid") is not True
+                or row.get("receipt_valid") is not True
+                or row.get("settled") is not True
+            ):
+                raise RuntimeError("private prefix output row structure is invalid")
+        public_rows.append(
+            {
+                "sequence": sequence,
+                "structurally_valid": True,
+                "receipt_valid": True,
+                "settled": True,
+            }
+        )
+    return public_rows
 
 
 def _atomic_write_json(path: Path, value: object) -> None:
@@ -522,46 +601,105 @@ def _atomic_write_json(path: Path, value: object) -> None:
 
 def seal_prefix(
     private_results: Path,
-    public_rows_path: Path,
     sealed_output: Path,
     public_status_path: Path,
     remaining_commitment_sha256: str,
     passphrase_env: str,
+    *,
+    execution_plan_sha256: str,
+    reservation_plan_sha256: str,
 ) -> dict[str, object]:
     if not private_results.is_file():
         raise RuntimeError("private prefix result file is missing")
     if not _valid_sha256(remaining_commitment_sha256):
         raise RuntimeError("remaining commitment sha256 is invalid")
+    if not all(
+        _valid_sha256(value)
+        for value in (execution_plan_sha256, reservation_plan_sha256)
+    ):
+        raise RuntimeError("sealed prefix execution authority is invalid")
     try:
-        rows = json.loads(public_rows_path.read_text(encoding="utf-8"))
+        private = json.loads(private_results.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError("public prefix rows are invalid") from error
-    if not isinstance(rows, list):
-        raise RuntimeError("public prefix rows must be a list")
+        raise RuntimeError("private prefix results are invalid") from error
+    # This directory is the canonical crash-recovery boundary for the sole
+    # paid plaintext.  Tighten it before touching the file so a failed seal
+    # never leaves evidence readable through a permissive inherited umask.
+    private_results.parent.chmod(0o700)
+    private_results.chmod(0o600)
+    rows = _derive_public_prefix_rows(
+        private,
+        execution_plan_sha256=execution_plan_sha256,
+        reservation_plan_sha256=reservation_plan_sha256,
+    )
     passphrase = os.environ.get(passphrase_env, "")
     if not passphrase:
         raise RuntimeError(f"sealed prefix passphrase is unset: {passphrase_env}")
     openssl = shutil.which("openssl")
     if openssl is None:
         raise RuntimeError("openssl is required to seal prefix results")
+    if public_status_path.exists() and not sealed_output.is_file():
+        raise RuntimeError("sealed prefix status exists without ciphertext")
     sealed_output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=sealed_output.parent, delete=False) as handle:
-        temporary = Path(handle.name)
-    temporary.chmod(0o600)
+    if not sealed_output.exists():
+        with tempfile.NamedTemporaryFile(dir=sealed_output.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+        temporary.chmod(0o600)
+        try:
+            completed = subprocess.run(
+                [
+                    openssl,
+                    "enc",
+                    "-aes-256-cbc",
+                    "-pbkdf2",
+                    "-iter",
+                    "600000",
+                    "-salt",
+                    "-in",
+                    str(private_results),
+                    "-out",
+                    str(temporary),
+                    "-pass",
+                    f"env:{passphrase_env}",
+                ],
+                capture_output=True,
+                check=False,
+                env={passphrase_env: passphrase},
+            )
+            if completed.returncode != 0:
+                raise RuntimeError("openssl failed to seal prefix results")
+            try:
+                os.link(temporary, sealed_output)
+            except FileExistsError as error:
+                raise RuntimeError(
+                    "immutable sealed prefix artifact already exists"
+                ) from error
+        finally:
+            temporary.unlink(missing_ok=True)
+    directory = os.open(sealed_output.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    with tempfile.NamedTemporaryFile(
+        dir=private_results.parent, delete=False
+    ) as handle:
+        verification = Path(handle.name)
+    verification.chmod(0o600)
     try:
         completed = subprocess.run(
             [
                 openssl,
                 "enc",
+                "-d",
                 "-aes-256-cbc",
                 "-pbkdf2",
                 "-iter",
                 "600000",
-                "-salt",
                 "-in",
-                str(private_results),
+                str(sealed_output),
                 "-out",
-                str(temporary),
+                str(verification),
                 "-pass",
                 f"env:{passphrase_env}",
             ],
@@ -569,21 +707,48 @@ def seal_prefix(
             check=False,
             env={passphrase_env: passphrase},
         )
-        if completed.returncode != 0:
-            raise RuntimeError("openssl failed to seal prefix results")
-        os.replace(temporary, sealed_output)
+        if (
+            completed.returncode != 0
+            or _sha256_file(verification) != _sha256_file(private_results)
+        ):
+            # The plaintext is still present and fsynced, so an unverifiable
+            # ciphertext (new or left by a crashed prior attempt) is not an
+            # authority. Remove it to make the next invocation a clean retry.
+            sealed_output.unlink(missing_ok=True)
+            sealed_directory = os.open(sealed_output.parent, os.O_RDONLY)
+            try:
+                os.fsync(sealed_directory)
+            finally:
+                os.close(sealed_directory)
+            raise RuntimeError("sealed prefix ciphertext verification failed")
     finally:
-        temporary.unlink(missing_ok=True)
+        verification.unlink(missing_ok=True)
     status = {
         "schema_version": 1,
         "prefix_count": 12,
         "remaining_count": 439,
         "remaining_commitment_sha256": remaining_commitment_sha256,
+        "execution_plan_sha256": execution_plan_sha256,
+        "reservation_plan_sha256": reservation_plan_sha256,
         "sealed_blob_sha256": _sha256_file(sealed_output),
         "rows": rows,
     }
     validate_public_prefix_status(status)
-    _atomic_write_json(public_status_path, status)
+    if public_status_path.exists():
+        try:
+            existing_status = json.loads(public_status_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise RuntimeError("sealed prefix status is unreadable") from error
+        if existing_status != status:
+            raise RuntimeError("immutable sealed prefix status drift")
+    else:
+        _atomically_create_json(public_status_path, status)
+    private_results.unlink()
+    private_directory = os.open(private_results.parent, os.O_RDONLY)
+    try:
+        os.fsync(private_directory)
+    finally:
+        os.close(private_directory)
     return status
 
 
@@ -955,6 +1120,899 @@ def build_execution_plan(
     if _contains_oracle_key(core):
         raise RuntimeError("execution plan contains oracle-bearing fields")
     return {**core, "execution_plan_sha256": sha256_json(core)}
+
+
+def build_row_reservation_plan(
+    execution_plan: dict[str, object], census: dict[str, object]
+) -> dict[str, object]:
+    """Decompose the frozen census into exact append-before-call row bounds."""
+    rows = execution_plan.get("rows")
+    execution_core = {
+        key: value
+        for key, value in execution_plan.items()
+        if key != "execution_plan_sha256"
+    }
+    if (
+        execution_plan.get("execution_plan_sha256") != sha256_json(execution_core)
+        or execution_plan.get("rows_sha256") != sha256_json(rows)
+    ):
+        raise RuntimeError("campaign execution plan identity drift")
+    derivation = census.get("liability_derivation")
+    terms = census.get("terms")
+    reader_inventory = (
+        derivation.get("reader_inventory") if isinstance(derivation, dict) else None
+    )
+    reader_rows = reader_inventory.get("rows") if isinstance(reader_inventory, dict) else None
+    if (
+        execution_plan.get("row_count") != QUESTION_COUNT * 2
+        or not isinstance(rows, list)
+        or len(rows) != QUESTION_COUNT * 2
+        or not isinstance(reader_inventory, dict)
+        or reader_inventory.get("row_count") != QUESTION_COUNT
+        or not isinstance(reader_rows, list)
+        or reader_inventory.get("inventory_sha256") != sha256_json(reader_rows)
+        or not isinstance(terms, dict)
+        or type(terms.get("R_sum")) is not int
+        or type(terms.get("S")) is not int
+        or terms["R_sum"] <= 0
+        or terms["S"] <= 0
+    ):
+        raise RuntimeError("campaign row reservation authority is incomplete")
+    by_question = {
+        row.get("question_id"): row for row in reader_rows if isinstance(row, dict)
+    }
+    if len(by_question) != QUESTION_COUNT:
+        raise RuntimeError("campaign reader reservation inventory is incomplete")
+    planned_rows = []
+    for expected_sequence, row in enumerate(rows, 1):
+        if (
+            not isinstance(row, dict)
+            or row.get("sequence") != expected_sequence
+            or row.get("arm") not in {"fast", "deep"}
+            or row.get("question_id") not in by_question
+            or not isinstance(row.get("row_key"), str)
+            or not row["row_key"]
+        ):
+            raise RuntimeError("campaign paired row order is malformed")
+        authority = by_question[row["question_id"]]
+        reader_nanos = authority.get("reader_liability_nanos")
+        judge_nanos = authority.get("judge_liability_nanos")
+        if (
+            type(reader_nanos) is not int
+            or reader_nanos <= 0
+            or type(judge_nanos) is not int
+            or judge_nanos <= 0
+            or authority.get("per_arm_liability_nanos")
+            != reader_nanos + judge_nanos
+        ):
+            raise RuntimeError("campaign row liability decomposition drift")
+        components = {"reader": reader_nanos, "judge": judge_nanos}
+        if row["arm"] == "deep":
+            components = {"deep_recall": terms["S"], **components}
+        planned_rows.append(
+            {
+                "sequence": expected_sequence,
+                "row_key": row["row_key"],
+                "question_id": row["question_id"],
+                "arm": row["arm"],
+                "components": components,
+                "maximum_liability_nanos": sum(components.values()),
+            }
+        )
+    expected_total = 2 * terms["R_sum"] + QUESTION_COUNT * terms["S"]
+    if sum(row["maximum_liability_nanos"] for row in planned_rows) != expected_total:
+        raise RuntimeError("campaign row liabilities do not reproduce census terms")
+    core = {
+        "schema_version": 1,
+        "execution_plan_sha256": execution_plan["execution_plan_sha256"],
+        "census_sha256": census["census_sha256"],
+        "row_count": len(planned_rows),
+        "rows": planned_rows,
+        "rows_sha256": sha256_json(planned_rows),
+        "total_liability_nanos": expected_total,
+    }
+    return {**core, "reservation_plan_sha256": sha256_json(core)}
+
+
+class RowExecutionStateMachine:
+    """Resolve every paid row component from one frozen reservation plan.
+
+    The provider-attempt journal remains the sole spend authority. This wrapper
+    reconstructs row state from that journal on every transition, so a restart
+    cannot duplicate a completed or unresolved provider request.
+    """
+
+    REQUEST_PREFIX = "lme-v2-row"
+
+    def __init__(
+        self,
+        reservation_plan: dict[str, object],
+        ledger: object,
+        *,
+        admitted_case_count: int,
+    ) -> None:
+        core = {
+            key: value
+            for key, value in reservation_plan.items()
+            if key != "reservation_plan_sha256"
+        }
+        rows = reservation_plan.get("rows")
+        if (
+            reservation_plan.get("reservation_plan_sha256") != sha256_json(core)
+            or reservation_plan.get("schema_version") != 1
+            or reservation_plan.get("row_count") != QUESTION_COUNT * 2
+            or not isinstance(rows, list)
+            or len(rows) != QUESTION_COUNT * 2
+            or reservation_plan.get("rows_sha256") != sha256_json(rows)
+            or admitted_case_count not in {12, QUESTION_COUNT}
+        ):
+            raise RuntimeError("campaign row reservation plan identity drift")
+        by_key: dict[str, dict[str, object]] = {}
+        total = 0
+        for sequence, row in enumerate(rows, 1):
+            components = row.get("components") if isinstance(row, dict) else None
+            expected_components = (
+                {"reader", "judge"}
+                if isinstance(row, dict) and row.get("arm") == "fast"
+                else {"deep_recall", "reader", "judge"}
+            )
+            row_key = row.get("row_key") if isinstance(row, dict) else None
+            if (
+                not isinstance(row, dict)
+                or row.get("sequence") != sequence
+                or row.get("arm") not in {"fast", "deep"}
+                or not isinstance(row.get("question_id"), str)
+                or not row["question_id"]
+                or not isinstance(row_key, str)
+                or not row_key
+                or row_key in by_key
+                or not isinstance(components, dict)
+                or set(components) != expected_components
+                or any(type(value) is not int or value <= 0 for value in components.values())
+                or row.get("maximum_liability_nanos") != sum(components.values())
+            ):
+                raise RuntimeError("campaign row reservation inventory is malformed")
+            by_key[row_key] = row
+            total += row["maximum_liability_nanos"]
+        if total != reservation_plan.get("total_liability_nanos"):
+            raise RuntimeError("campaign row reservation total drift")
+        self.reservation_plan = reservation_plan
+        self.ledger = ledger
+        self.admitted_case_count = admitted_case_count
+        self._rows = by_key
+
+    def _component(self, row_key: str, component: str) -> tuple[dict[str, object], int, str]:
+        row = self._rows.get(row_key)
+        components = row.get("components") if isinstance(row, dict) else None
+        if row is None or not isinstance(components, dict) or component not in components:
+            raise RuntimeError("row component is outside the frozen reservation plan")
+        case_index = (row["sequence"] - 1) // 2
+        if case_index >= self.admitted_case_count:
+            raise RuntimeError("row component is outside the admitted case prefix")
+        request_key = (
+            f"{self.REQUEST_PREFIX}:{row['sequence']}:{row_key}:{component}"
+        )
+        return row, components[component], request_key
+
+    def _attempt(self, request_key: str) -> dict[str, object] | None:
+        snapshot = self.ledger.snapshot()
+        attempts = snapshot.get("attempts") if isinstance(snapshot, dict) else None
+        if not isinstance(attempts, list):
+            raise RuntimeError("campaign provider ledger snapshot is malformed")
+        matches = [
+            attempt
+            for attempt in attempts
+            if isinstance(attempt, dict) and attempt.get("request_key") == request_key
+        ]
+        if len(matches) > 1:
+            raise RuntimeError("row component has duplicate provider attempts")
+        return matches[0] if matches else None
+
+    def component_status(self, row_key: str, component: str) -> str:
+        _, _, request_key = self._component(row_key, component)
+        attempt = self._attempt(request_key)
+        return "pending" if attempt is None else str(attempt.get("status"))
+
+    def _require_prerequisites(self, row: dict[str, object], component: str) -> None:
+        row_key = str(row["row_key"])
+        if component == "reader" and row["arm"] == "deep":
+            if self.component_status(row_key, "deep_recall") != "result":
+                raise RuntimeError("deep reader requires settled deep_recall")
+        if component == "judge":
+            if self.admitted_case_count != QUESTION_COUNT:
+                raise RuntimeError("native judge requires the committed full census")
+            incomplete = [
+                candidate["row_key"]
+                for candidate in self._rows.values()
+                if self.component_status(str(candidate["row_key"]), "reader") != "result"
+            ]
+            if incomplete:
+                raise RuntimeError("native judge requires all 902 settled reader rows")
+
+    def start(
+        self,
+        row_key: str,
+        component: str,
+        *,
+        requested_model: str,
+        request_sha256: str,
+    ) -> str:
+        row, liability_nanos, request_key = self._component(row_key, component)
+        expected_model = (
+            "gpt-5.2-2025-12-11"
+            if component == "judge"
+            else "qwen/qwen3.5-9b-20260310"
+        )
+        if requested_model != expected_model or not _valid_sha256(request_sha256):
+            raise RuntimeError("row component request identity drift")
+        attempt = self._attempt(request_key)
+        if attempt is not None:
+            suffix = (
+                "an unresolved attempt"
+                if attempt.get("status") == "started"
+                else "a terminal attempt"
+            )
+            raise RuntimeError(f"row component already has {suffix}")
+        self._require_prerequisites(row, component)
+        self.ledger.record(
+            "start",
+            request_key,
+            {
+                "max_liability_nanos": liability_nanos,
+                "retry_index": 0,
+                "requested_model": requested_model,
+                "request_sha256": request_sha256,
+            },
+        )
+        return request_key
+
+    def result(
+        self,
+        row_key: str,
+        component: str,
+        response: dict[str, object],
+    ) -> None:
+        _, liability_nanos, request_key = self._component(row_key, component)
+        attempt = self._attempt(request_key)
+        if attempt is None or attempt.get("status") != "started":
+            raise RuntimeError("row result has no exact durable reservation")
+        usage = response.get("usage") if isinstance(response, dict) else None
+        if (
+            not isinstance(response, dict)
+            or not isinstance(response.get("response_id"), str)
+            or not response["response_id"]
+            or not isinstance(usage, dict)
+            or type(usage.get("prompt_tokens")) is not int
+            or type(usage.get("completion_tokens")) is not int
+            or type(usage.get("total_tokens")) is not int
+            or usage["prompt_tokens"] <= 0
+            or usage["completion_tokens"] <= 0
+            or usage["total_tokens"]
+            != usage["prompt_tokens"] + usage["completion_tokens"]
+            or _cost_nanos_from_reported_usage(usage) > liability_nanos
+            or response.get("retry_index") != 0
+            or not _valid_sha256(response.get("request_sha256"))
+            or not _valid_sha256(response.get("result_sha256"))
+            or response.get("parse_status") != "provider_response_validated"
+            or response.get("request_sha256")
+            != attempt.get("start", {}).get("request_sha256")
+            or response.get("requested_model")
+            != attempt.get("start", {}).get("requested_model")
+        ):
+            raise RuntimeError("row result is unpriced or exceeds its reservation")
+        self.ledger.record("result", request_key, {"response": response})
+
+    def error(self, row_key: str, component: str, error_type: str, route: str) -> None:
+        _, _, request_key = self._component(row_key, component)
+        attempt = self._attempt(request_key)
+        if attempt is None or attempt.get("status") != "started":
+            raise RuntimeError("row error has no exact durable reservation")
+        self.ledger.record(
+            "error", request_key, {"error_type": error_type, "route": route}
+        )
+
+
+def build_remaining_commitment(
+    execution_plan: dict[str, object],
+    reservation_plan: dict[str, object],
+) -> dict[str, object]:
+    """Bind the exact 439-case tail before any sealed output can be inspected."""
+    execution_core = {
+        key: value
+        for key, value in execution_plan.items()
+        if key != "execution_plan_sha256"
+    }
+    reservation_core = {
+        key: value
+        for key, value in reservation_plan.items()
+        if key != "reservation_plan_sha256"
+    }
+    execution_rows = execution_plan.get("rows")
+    reservation_rows = reservation_plan.get("rows")
+    if (
+        execution_plan.get("execution_plan_sha256") != sha256_json(execution_core)
+        or execution_plan.get("rows_sha256") != sha256_json(execution_rows)
+        or reservation_plan.get("reservation_plan_sha256")
+        != sha256_json(reservation_core)
+        or reservation_plan.get("execution_plan_sha256")
+        != execution_plan.get("execution_plan_sha256")
+        or reservation_plan.get("rows_sha256") != sha256_json(reservation_rows)
+        or not isinstance(execution_rows, list)
+        or not isinstance(reservation_rows, list)
+        or len(execution_rows) != QUESTION_COUNT * 2
+        or len(reservation_rows) != QUESTION_COUNT * 2
+        or execution_plan.get("row_count") != QUESTION_COUNT * 2
+        or reservation_plan.get("row_count") != QUESTION_COUNT * 2
+    ):
+        raise RuntimeError("remaining commitment execution authority drift")
+    for execution_row, reservation_row in zip(execution_rows, reservation_rows):
+        if any(
+            execution_row.get(key) != reservation_row.get(key)
+            for key in ("sequence", "question_id", "arm", "row_key")
+        ):
+            raise RuntimeError("remaining commitment row authority drift")
+    remaining_rows = reservation_rows[24:]
+    remaining_keys = [row["row_key"] for row in remaining_rows]
+    core = {
+        "schema_version": 1,
+        "status": "IRREVOCABLY_COMMITTED_439",
+        "execution_plan_sha256": execution_plan["execution_plan_sha256"],
+        "reservation_plan_sha256": reservation_plan["reservation_plan_sha256"],
+        "prefix_count": 12,
+        "prefix_row_count": 24,
+        "remaining_count": 439,
+        "remaining_row_count": 878,
+        "remaining_rows_sha256": sha256_json(remaining_rows),
+        "remaining_row_keys_sha256": sha256_json(remaining_keys),
+    }
+    if _contains_oracle_key(core):
+        raise RuntimeError("remaining commitment contains oracle-bearing fields")
+    return {**core, "remaining_commitment_sha256": sha256_json(core)}
+
+
+def _validate_remaining_commitment(
+    commitment: dict[str, object], reservation_plan: dict[str, object]
+) -> None:
+    core = {
+        key: value
+        for key, value in commitment.items()
+        if key != "remaining_commitment_sha256"
+    }
+    rows = reservation_plan.get("rows")
+    remaining_rows = rows[24:] if isinstance(rows, list) else None
+    remaining_keys = (
+        [row.get("row_key") for row in remaining_rows]
+        if isinstance(remaining_rows, list)
+        else None
+    )
+    if (
+        _contains_oracle_key(commitment)
+        or commitment.get("remaining_commitment_sha256") != sha256_json(core)
+        or commitment.get("status") != "IRREVOCABLY_COMMITTED_439"
+        or commitment.get("reservation_plan_sha256")
+        != reservation_plan.get("reservation_plan_sha256")
+        or commitment.get("execution_plan_sha256")
+        != reservation_plan.get("execution_plan_sha256")
+        or commitment.get("prefix_count") != 12
+        or commitment.get("prefix_row_count") != 24
+        or commitment.get("remaining_count") != 439
+        or commitment.get("remaining_row_count") != 878
+        or commitment.get("remaining_rows_sha256") != sha256_json(remaining_rows)
+        or commitment.get("remaining_row_keys_sha256") != sha256_json(remaining_keys)
+    ):
+        raise RuntimeError("remaining commitment identity drift")
+
+
+def remaining_resume_actions(
+    commitment: dict[str, object],
+    reservation_plan: dict[str, object],
+    ledger: object,
+) -> list[dict[str, object]]:
+    """Return only the next safe deterministic action for each tail row."""
+    _validate_remaining_commitment(commitment, reservation_plan)
+    machine = RowExecutionStateMachine(
+        reservation_plan, ledger, admitted_case_count=QUESTION_COUNT
+    )
+    rows = reservation_plan["rows"]
+    for row in rows[:24]:
+        required = (
+            ("reader",)
+            if row["arm"] == "fast"
+            else ("deep_recall", "reader")
+        )
+        if any(
+            machine.component_status(row["row_key"], component) != "result"
+            for component in required
+        ):
+            raise RuntimeError("sealed prefix is not fully settled")
+    actions = []
+    for row in rows[24:]:
+        if row["arm"] == "deep":
+            deep_status = machine.component_status(row["row_key"], "deep_recall")
+            if deep_status in {"started", "error"}:
+                raise RuntimeError("remaining Deep row has unresolved terminal state")
+            component = "deep_recall" if deep_status == "pending" else "reader"
+        else:
+            component = "reader"
+        status = machine.component_status(row["row_key"], component)
+        if status in {"started", "error"}:
+            raise RuntimeError("remaining reader row has unresolved terminal state")
+        if status == "result":
+            continue
+        _, _, request_key = machine._component(row["row_key"], component)
+        actions.append(
+            {
+                "sequence": row["sequence"],
+                "row_key": row["row_key"],
+                "component": component,
+                "request_key": request_key,
+            }
+        )
+    return actions
+
+
+def validate_complete_row_settlement(
+    reservation_plan: dict[str, object], ledger_snapshot: dict[str, object]
+) -> dict[str, object]:
+    """Prove exact, priced completion for every recall/reader/judge component."""
+    plan_core = {
+        key: value
+        for key, value in reservation_plan.items()
+        if key != "reservation_plan_sha256"
+    }
+    rows = reservation_plan.get("rows")
+    attempts = ledger_snapshot.get("attempts")
+    if (
+        reservation_plan.get("reservation_plan_sha256") != sha256_json(plan_core)
+        or not isinstance(rows, list)
+        or len(rows) != QUESTION_COUNT * 2
+        or not isinstance(attempts, list)
+    ):
+        raise RuntimeError("complete row settlement authority drift")
+    row_attempts = [
+        attempt
+        for attempt in attempts
+        if isinstance(attempt, dict)
+        and isinstance(attempt.get("request_key"), str)
+        and attempt["request_key"].startswith(
+            RowExecutionStateMachine.REQUEST_PREFIX + ":"
+        )
+    ]
+    expected: dict[str, tuple[dict[str, object], str]] = {}
+    for row in rows:
+        components = ["reader", "judge"]
+        if row["arm"] == "deep":
+            components.insert(0, "deep_recall")
+        for component in components:
+            key = f"lme-v2-row:{row['sequence']}:{row['row_key']}:{component}"
+            expected[key] = (row, component)
+    if len(expected) != 2255 or len(row_attempts) != 2255:
+        raise RuntimeError("complete row settlement requires exactly 2255 attempts")
+    found: set[str] = set()
+    response_ids: set[str] = set()
+    settled_nanos = 0
+    latest_prejudge_index = -1
+    earliest_judge_index = len(attempts)
+    for attempt_index, attempt in enumerate(attempts):
+        request_key = attempt.get("request_key") if isinstance(attempt, dict) else None
+        authority = expected.get(request_key)
+        if authority is None:
+            continue
+        if request_key in found:
+            raise RuntimeError("complete row settlement duplicates one component")
+        found.add(request_key)
+        row, component = authority
+        start = attempt.get("start")
+        result = attempt.get("result")
+        response = result.get("response") if isinstance(result, dict) else None
+        usage = response.get("usage") if isinstance(response, dict) else None
+        requested_model = (
+            "gpt-5.2-2025-12-11"
+            if component == "judge"
+            else "qwen/qwen3.5-9b-20260310"
+        )
+        response_id = response.get("response_id") if isinstance(response, dict) else None
+        if (
+            attempt.get("status") != "result"
+            or not isinstance(start, dict)
+            or start.get("max_liability_nanos")
+            != row["components"][component]
+            or start.get("retry_index") != 0
+            or start.get("requested_model") != requested_model
+            or not _valid_sha256(start.get("request_sha256"))
+            or not isinstance(response, dict)
+            or response.get("requested_model") != requested_model
+            or response.get("request_sha256") != start.get("request_sha256")
+            or response.get("retry_index") != 0
+            or response.get("parse_status") != "provider_response_validated"
+            or not _valid_sha256(response.get("result_sha256"))
+            or not isinstance(response_id, str)
+            or not response_id
+            or response_id in response_ids
+            or not isinstance(usage, dict)
+            or type(usage.get("prompt_tokens")) is not int
+            or type(usage.get("completion_tokens")) is not int
+            or type(usage.get("total_tokens")) is not int
+            or usage["prompt_tokens"] <= 0
+            or usage["completion_tokens"] <= 0
+            or usage["total_tokens"]
+            != usage["prompt_tokens"] + usage["completion_tokens"]
+        ):
+            raise RuntimeError("complete row settlement contains invalid attempt proof")
+        cost = _cost_nanos_from_reported_usage(usage)
+        if cost > row["components"][component]:
+            raise RuntimeError("complete row settlement exceeds a frozen reservation")
+        settled_nanos += cost
+        response_ids.add(response_id)
+        if component == "judge":
+            earliest_judge_index = min(earliest_judge_index, attempt_index)
+        else:
+            latest_prejudge_index = max(latest_prejudge_index, attempt_index)
+    if found != set(expected):
+        raise RuntimeError("complete row settlement lacks exact component coverage")
+    if latest_prejudge_index >= earliest_judge_index:
+        raise RuntimeError("native judge started before all reader outputs settled")
+    core = {
+        "schema_version": 1,
+        "reservation_plan_sha256": reservation_plan["reservation_plan_sha256"],
+        "row_attempt_count": len(row_attempts),
+        "settled_nanos": settled_nanos,
+        "unresolved_nanos": 0,
+        "row_attempts_sha256": sha256_json(row_attempts),
+        "response_ids_sha256": sha256_json(sorted(response_ids)),
+        "all_readers_before_native_judge": True,
+        "exact_component_coverage": True,
+    }
+    return {**core, "row_settlement_sha256": sha256_json(core)}
+
+
+def build_native_official_package(
+    *,
+    pairs: list[dict[str, object]],
+    reservation_plan: dict[str, object],
+    ledger_snapshot: dict[str, object],
+    lafs_gain: str,
+    submission_score: str,
+    accepted_submission: bool,
+    published_leaderboard_scores: list[object],
+    upstream_identity: dict[str, object],
+) -> dict[str, object]:
+    if (
+        set(upstream_identity)
+        != {"code_commit", "dataset_revision", "native_harness_sha256"}
+        or not all(
+            isinstance(upstream_identity.get(key), str)
+            and bool(upstream_identity[key])
+            for key in ("code_commit", "dataset_revision")
+        )
+        or not _valid_sha256(upstream_identity.get("native_harness_sha256"))
+    ):
+        raise RuntimeError("native official harness identity is invalid")
+    row_settlement = validate_complete_row_settlement(
+        reservation_plan, ledger_snapshot
+    )
+    metric_input = {
+        "pairs": pairs,
+        "lafs_gain": lafs_gain,
+        "submission_score": submission_score,
+        "accepted_submission": accepted_submission,
+        "published_leaderboard_scores": published_leaderboard_scores,
+    }
+    metrics = validate_paired_results(metric_input)
+    core = {
+        "schema_version": 1,
+        "benchmark": "LongMemEval-V2/medium-native",
+        "upstream": upstream_identity,
+        "execution_plan_sha256": reservation_plan["execution_plan_sha256"],
+        "reservation_plan_sha256": reservation_plan["reservation_plan_sha256"],
+        "row_settlement": row_settlement,
+        "pairs": pairs,
+        "pairs_sha256": sha256_json(pairs),
+        "official_metrics": metrics,
+        "claims": {
+            "official_package_complete": True,
+            "internal_benchmark_success": metrics["internal_benchmark_success"],
+            "positive_lafs": metrics["positive_lafs"],
+            "external_sota": metrics["external_sota"],
+        },
+    }
+    return {**core, "native_package_sha256": sha256_json(core)}
+
+
+def close_completed_row_campaign(
+    *,
+    ledger: object,
+    reservation_plan: dict[str, object],
+    native_package: dict[str, object],
+    closure_path: Path,
+) -> dict[str, object]:
+    package_core = {
+        key: value
+        for key, value in native_package.items()
+        if key != "native_package_sha256"
+    }
+    if (
+        native_package.get("native_package_sha256") != sha256_json(package_core)
+        or native_package.get("reservation_plan_sha256")
+        != reservation_plan.get("reservation_plan_sha256")
+        or native_package.get("row_settlement")
+        != validate_complete_row_settlement(reservation_plan, ledger.snapshot())
+        or native_package.get("official_metrics", {}).get("fully_settled") is not True
+    ):
+        raise RuntimeError("campaign closure requires the exact native package")
+    snapshot = ledger.snapshot()
+    if (
+        snapshot.get("unresolved_max_liability_nanos", 0) != 0
+        or snapshot.get("total_liability_nanos", 0) > HARD_CEILING_NANOS
+    ):
+        raise RuntimeError("campaign closure requires full financial settlement")
+    closure = ledger.close_campaign(closure_path)
+    if (
+        not isinstance(closure, dict)
+        or closure.get("unresolved_max_liability_nanos") != 0
+        or closure.get("total_liability_nanos", 0) > HARD_CEILING_NANOS
+        or not _valid_sha256(closure.get("journal_sha256"))
+    ):
+        raise RuntimeError("campaign closure projection is invalid")
+    return closure
+
+
+def _cost_nanos_from_reported_usage(usage: object) -> int:
+    if not isinstance(usage, dict):
+        raise RuntimeError("provider response usage is missing")
+    try:
+        cost = Decimal(str(usage.get("cost")))
+    except InvalidOperation as error:
+        raise RuntimeError("provider response cost is invalid") from error
+    if not cost.is_finite() or cost <= 0:
+        raise RuntimeError("provider response cost is invalid")
+    return int(
+        (cost * Decimal(1_000_000_000)).to_integral_value(rounding=ROUND_CEILING)
+    )
+
+
+def _cost_string_from_nanos(cost_nanos: int) -> str:
+    return format(Decimal(cost_nanos) / Decimal(1_000_000_000), "f")
+
+
+def execute_strict_reader_call(
+    *,
+    payload: dict[str, object],
+    row_key: str,
+    row_state: RowExecutionStateMachine,
+    transport,
+) -> dict[str, object]:
+    """Execute one no-retry Qwen reader call through DeepInfra only."""
+    provider = payload.get("provider")
+    if (
+        payload.get("model") != "qwen/qwen3.5-9b-20260310"
+        or payload.get("max_tokens") != 20_000
+        or payload.get("temperature") != 0.6
+        or payload.get("top_p") != 0.95
+        or payload.get("top_k") != 20
+        or not isinstance(payload.get("messages"), list)
+        or not isinstance(provider, dict)
+        or provider.get("only") != ["DeepInfra"]
+        or provider.get("allow_fallbacks") is not False
+    ):
+        raise RuntimeError("strict Qwen DeepInfra reader request drift")
+    request_sha256 = sha256_json(payload)
+    row_state.start(
+        row_key,
+        "reader",
+        requested_model="qwen/qwen3.5-9b-20260310",
+        request_sha256=request_sha256,
+    )
+    started = time.monotonic()
+    try:
+        result = transport(payload)
+        response = result.get("response") if isinstance(result, dict) else None
+        generation = result.get("generation") if isinstance(result, dict) else None
+        usage = response.get("usage") if isinstance(response, dict) else None
+        choices = response.get("choices") if isinstance(response, dict) else None
+        if (
+            not isinstance(response, dict)
+            or not isinstance(generation, dict)
+            or response.get("id") != generation.get("id")
+            or response.get("model") != "qwen/qwen3.5-9b"
+            or generation.get("model") != "qwen/qwen3.5-9b"
+            or generation.get("provider_name") != "DeepInfra"
+            or not isinstance(choices, list)
+            or len(choices) != 1
+            or not isinstance(choices[0], dict)
+            or not isinstance(choices[0].get("message"), dict)
+            or not isinstance(choices[0]["message"].get("content"), str)
+            or not choices[0]["message"]["content"]
+            or not isinstance(usage, dict)
+            or type(usage.get("prompt_tokens")) is not int
+            or type(usage.get("completion_tokens")) is not int
+            or type(usage.get("total_tokens")) is not int
+            or usage["prompt_tokens"] <= 0
+            or usage["completion_tokens"] <= 0
+            or usage["total_tokens"]
+            != usage["prompt_tokens"] + usage["completion_tokens"]
+            or generation.get("tokens_prompt") != usage["prompt_tokens"]
+            or generation.get("tokens_completion") != usage["completion_tokens"]
+        ):
+            raise RuntimeError("strict Qwen DeepInfra reader route response drift")
+        response_cost = _cost_nanos_from_reported_usage(usage)
+        generation_cost = _cost_nanos_from_reported_usage(
+            {"cost": generation.get("total_cost")}
+        )
+        if generation_cost != response_cost:
+            raise RuntimeError("strict Qwen DeepInfra reader cost reconciliation drift")
+        receipt = {
+            "response_id": response["id"],
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_model": response["model"],
+            "provider": generation["provider_name"],
+            "usage": usage,
+            "elapsed_seconds": time.monotonic() - started,
+            "retry_index": 0,
+            "parse_status": "provider_response_validated",
+            "request_sha256": request_sha256,
+            "result_sha256": sha256_json(response),
+        }
+        row_state.result(row_key, "reader", receipt)
+        return response
+    except BaseException as error:
+        row_state.error(
+            row_key,
+            "reader",
+            type(error).__name__,
+            "qwen-deepinfra-reader",
+        )
+        raise
+
+
+def execute_native_judge_call(
+    *,
+    payload: dict[str, object],
+    row_key: str,
+    row_state: RowExecutionStateMachine,
+    transport,
+) -> dict[str, object]:
+    """Execute one native OpenAI GPT-5.2 medium judge call without retry."""
+    reasoning = payload.get("reasoning")
+    if (
+        payload.get("model") != "gpt-5.2-2025-12-11"
+        or payload.get("max_output_tokens") != 2048
+        or reasoning != {"effort": "medium"}
+        or "input" not in payload
+    ):
+        raise RuntimeError("native GPT-5.2 medium judge request drift")
+    request_sha256 = sha256_json(payload)
+    row_state.start(
+        row_key,
+        "judge",
+        requested_model="gpt-5.2-2025-12-11",
+        request_sha256=request_sha256,
+    )
+    started = time.monotonic()
+    try:
+        response = transport(payload)
+        usage = response.get("usage") if isinstance(response, dict) else None
+        if (
+            not isinstance(response, dict)
+            or response.get("model") != "gpt-5.2-2025-12-11"
+            or response.get("status") != "completed"
+            or not isinstance(response.get("id"), str)
+            or not response["id"]
+            or not isinstance(response.get("output"), list)
+            or not isinstance(usage, dict)
+            or type(usage.get("input_tokens")) is not int
+            or type(usage.get("output_tokens")) is not int
+            or type(usage.get("total_tokens")) is not int
+            or usage["input_tokens"] <= 0
+            or usage["output_tokens"] <= 0
+            or usage["total_tokens"]
+            != usage["input_tokens"] + usage["output_tokens"]
+        ):
+            raise RuntimeError("native GPT-5.2 medium judge response drift")
+        settled_nanos = (
+            _ceil_cost(usage["input_tokens"], 1_750_000_000)
+            + _ceil_cost(usage["output_tokens"], 14_000_000_000)
+        )
+        receipt = {
+            "response_id": response["id"],
+            "requested_model": "gpt-5.2-2025-12-11",
+            "served_model": response["model"],
+            "provider": "OpenAI",
+            "usage": {
+                "prompt_tokens": usage["input_tokens"],
+                "completion_tokens": usage["output_tokens"],
+                "total_tokens": usage["total_tokens"],
+                "cost": _cost_string_from_nanos(settled_nanos),
+            },
+            "elapsed_seconds": time.monotonic() - started,
+            "retry_index": 0,
+            "parse_status": "provider_response_validated",
+            "request_sha256": request_sha256,
+            "result_sha256": sha256_json(response),
+        }
+        row_state.result(row_key, "judge", receipt)
+        return response
+    except BaseException as error:
+        row_state.error(
+            row_key,
+            "judge",
+            type(error).__name__,
+            "openai-native-judge",
+        )
+        raise
+
+
+def reserve_deep_recall(
+    *, row_key: str, row_state: RowExecutionStateMachine, request_sha256: str
+) -> str:
+    return row_state.start(
+        row_key,
+        "deep_recall",
+        requested_model="qwen/qwen3.5-9b-20260310",
+        request_sha256=request_sha256,
+    )
+
+
+def settle_deep_recall(
+    *,
+    row_key: str,
+    row_state: RowExecutionStateMachine,
+    receipt: dict[str, object],
+) -> None:
+    """Settle the aggregate Deep liability from its server-owned receipt."""
+    try:
+        settled_nanos = receipt.get("settled_nanos")
+        receipt_core = {
+            key: value for key, value in receipt.items() if key != "receipt_sha256"
+        }
+        if (
+            receipt.get("requested_model") != "qwen/qwen3.5-9b-20260310"
+            or receipt.get("served_models") != ["qwen/qwen3.5-9b"]
+            or receipt.get("served_providers") != ["DeepInfra"]
+            or receipt.get("allow_fallbacks") is not False
+            or type(receipt.get("attempt_count")) is not int
+            or not 1 <= receipt["attempt_count"] <= 72
+            or type(receipt.get("prompt_tokens")) is not int
+            or receipt["prompt_tokens"] <= 0
+            or type(receipt.get("completion_tokens")) is not int
+            or receipt["completion_tokens"] <= 0
+            or receipt.get("total_tokens")
+            != receipt["prompt_tokens"] + receipt["completion_tokens"]
+            or type(settled_nanos) is not int
+            or settled_nanos <= 0
+            or not _valid_sha256(receipt.get("request_sha256"))
+            or not _valid_sha256(receipt.get("receipt_sha256"))
+            or receipt["receipt_sha256"] != sha256_json(receipt_core)
+        ):
+            raise RuntimeError("Deep recall route receipt drift")
+        response = {
+            "response_id": f"deep-recall:{receipt['receipt_sha256']}",
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_model": "qwen/qwen3.5-9b",
+            "provider": "DeepInfra",
+            "attempt_count": receipt["attempt_count"],
+            "receipt_sha256": receipt["receipt_sha256"],
+            "usage": {
+                "prompt_tokens": receipt["prompt_tokens"],
+                "completion_tokens": receipt["completion_tokens"],
+                "total_tokens": receipt["total_tokens"],
+                "cost": _cost_string_from_nanos(settled_nanos),
+            },
+            "elapsed_seconds": receipt.get("elapsed_seconds", 0),
+            "retry_index": 0,
+            "parse_status": "provider_response_validated",
+            "request_sha256": receipt["request_sha256"],
+            "result_sha256": receipt["receipt_sha256"],
+        }
+        row_state.result(row_key, "deep_recall", response)
+    except BaseException as error:
+        row_state.error(
+            row_key,
+            "deep_recall",
+            type(error).__name__,
+            "qwen-deepinfra-recall",
+        )
+        raise
 
 
 CASE_BANK_EXCLUDED_TABLES = (

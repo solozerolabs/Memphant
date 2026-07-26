@@ -1192,6 +1192,8 @@ def test_public_prefix_status_rejects_answers_scores_and_uncommitted_tail() -> N
         "prefix_count": 12,
         "remaining_count": 439,
         "remaining_commitment_sha256": "a" * 64,
+        "execution_plan_sha256": "c" * 64,
+        "reservation_plan_sha256": "d" * 64,
         "sealed_blob_sha256": "b" * 64,
         "rows": [
             {
@@ -1220,30 +1222,50 @@ def test_sealed_prefix_encrypts_private_answers_and_exposes_only_public_predicat
     if runner.shutil.which("openssl") is None:
         pytest.skip("openssl is unavailable")
     private = tmp_path / "private.json"
-    rows_path = tmp_path / "rows.json"
     sealed = tmp_path / "prefix.enc"
     status_path = tmp_path / "status.json"
-    private.write_text('{"answer":"ORCHID-17"}\n', encoding="utf-8")
-    rows = [
-        {
-            "sequence": index + 1,
-            "structurally_valid": True,
-            "receipt_valid": True,
-            "settled": True,
-        }
-        for index in range(12)
-    ]
-    rows_path.write_text(json.dumps(rows), encoding="utf-8")
+    private.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "execution_plan_sha256": "c" * 64,
+                "reservation_plan_sha256": "d" * 64,
+                "cases": [
+                    {
+                        "sequence": index + 1,
+                        "question_id": f"q-{index:03}",
+                        "rows": [
+                            {
+                                "arm": arm,
+                                "row_key": f"q-{index:03}:{arm}",
+                                "answer": "ORCHID-17",
+                                "output_sha256": "e" * 64,
+                                "receipt_sha256": "f" * 64,
+                                "structurally_valid": True,
+                                "receipt_valid": True,
+                                "settled": True,
+                            }
+                            for arm in ("fast", "deep")
+                        ],
+                    }
+                    for index in range(12)
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     previous = os.environ.get("TEST_PREFIX_SEAL")
     os.environ["TEST_PREFIX_SEAL"] = "fixture-passphrase"
     try:
         status = runner.seal_prefix(
             private,
-            rows_path,
             sealed,
             status_path,
             "a" * 64,
             "TEST_PREFIX_SEAL",
+            execution_plan_sha256="c" * 64,
+            reservation_plan_sha256="d" * 64,
         )
     finally:
         if previous is None:
@@ -1253,6 +1275,134 @@ def test_sealed_prefix_encrypts_private_answers_and_exposes_only_public_predicat
     assert b"ORCHID-17" not in sealed.read_bytes()
     assert status == json.loads(status_path.read_text(encoding="utf-8"))
     assert not runner._contains_oracle_key(status)
+    assert not private.exists(), "plaintext prefix output must be deleted after sealing"
+
+
+def test_sealed_prefix_keeps_sole_private_evidence_when_encryption_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = _load_runner()
+    private = tmp_path / "private.json"
+    private.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "execution_plan_sha256": "c" * 64,
+                "reservation_plan_sha256": "d" * 64,
+                "cases": [
+                    {
+                        "sequence": index + 1,
+                        "question_id": f"q-{index:03}",
+                        "rows": [
+                            {
+                                "arm": arm,
+                                "row_key": f"q-{index:03}:{arm}",
+                                "answer": "PAID-PRIVATE",
+                                "output_sha256": "e" * 64,
+                                "receipt_sha256": "f" * 64,
+                                "structurally_valid": True,
+                                "receipt_valid": True,
+                                "settled": True,
+                            }
+                            for arm in ("fast", "deep")
+                        ],
+                    }
+                    for index in range(12)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "/usr/bin/openssl")
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, b"", b"fail"),
+    )
+    monkeypatch.setenv("TEST_PREFIX_SEAL", "fixture-passphrase")
+
+    with pytest.raises(RuntimeError, match="failed to seal"):
+        runner.seal_prefix(
+            private,
+            tmp_path / "prefix.enc",
+            tmp_path / "status.json",
+            "a" * 64,
+            "TEST_PREFIX_SEAL",
+            execution_plan_sha256="c" * 64,
+            reservation_plan_sha256="d" * 64,
+        )
+    assert private.is_file()
+    assert "PAID-PRIVATE" in private.read_text(encoding="utf-8")
+    assert not (tmp_path / "prefix.enc").exists()
+
+
+def test_sealed_prefix_keeps_plaintext_and_removes_unverifiable_ciphertext(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = _load_runner()
+    private_root = tmp_path / "private"
+    private_root.mkdir(mode=0o755)
+    private = private_root / "private.json"
+    private.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "execution_plan_sha256": "c" * 64,
+                "reservation_plan_sha256": "d" * 64,
+                "cases": [
+                    {
+                        "sequence": index + 1,
+                        "question_id": f"q-{index:03}",
+                        "rows": [
+                            {
+                                "arm": arm,
+                                "row_key": f"q-{index:03}:{arm}",
+                                "answer": "SOLE-PAID-EVIDENCE",
+                                "output_sha256": "e" * 64,
+                                "receipt_sha256": "f" * 64,
+                                "structurally_valid": True,
+                                "receipt_valid": True,
+                                "settled": True,
+                            }
+                            for arm in ("fast", "deep")
+                        ],
+                    }
+                    for index in range(12)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_openssl(command, **_kwargs):
+        output = Path(command[command.index("-out") + 1])
+        if "-d" in command:
+            output.write_bytes(b"not the paid plaintext")
+        else:
+            output.write_bytes(b"ciphertext")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "/usr/bin/openssl")
+    monkeypatch.setattr(runner.subprocess, "run", fake_openssl)
+    monkeypatch.setenv("TEST_PREFIX_SEAL", "fixture-passphrase")
+    sealed = tmp_path / "prefix.enc"
+
+    with pytest.raises(RuntimeError, match="ciphertext verification failed"):
+        runner.seal_prefix(
+            private,
+            sealed,
+            tmp_path / "status.json",
+            "a" * 64,
+            "TEST_PREFIX_SEAL",
+            execution_plan_sha256="c" * 64,
+            reservation_plan_sha256="d" * 64,
+        )
+
+    assert private.is_file()
+    assert "SOLE-PAID-EVIDENCE" in private.read_text(encoding="utf-8")
+    assert private.stat().st_mode & 0o777 == 0o600
+    assert private_root.stat().st_mode & 0o777 == 0o700
+    assert not sealed.exists()
 
 
 def test_execution_plan_freezes_exact_paired_order_without_oracle_input(
@@ -1724,3 +1874,690 @@ def test_restore_case_bank_pair_creates_fresh_migrated_fast_and_deep_databases(
     assert clone["clone_sha256"] == runner.sha256_json(
         {key: value for key, value in clone.items() if key != "clone_sha256"}
     )
+
+
+def test_row_reservation_plan_exactly_decomposes_census_reader_judge_and_deep() -> None:
+    runner = _load_runner()
+    execution_rows = [
+        {
+            "sequence": sequence,
+            "question_id": f"q-{(sequence - 1) // 2:03}",
+            "arm": "fast" if sequence % 2 else "deep",
+            "row_key": f"row-{sequence}",
+        }
+        for sequence in range(1, 903)
+    ]
+    execution_core = {
+        "row_count": 902,
+        "rows": execution_rows,
+        "rows_sha256": runner.sha256_json(execution_rows),
+    }
+    execution = {
+        **execution_core,
+        "execution_plan_sha256": runner.sha256_json(execution_core),
+    }
+    reader_rows = [
+        {
+            "question_id": f"q-{index:03}",
+            "reader_liability_nanos": 1000 + index,
+            "judge_liability_nanos": 2000,
+            "per_arm_liability_nanos": 3000 + index,
+        }
+        for index in range(451)
+    ]
+    reader_sum = sum(row["per_arm_liability_nanos"] for row in reader_rows)
+    census = {
+        "census_sha256": "c" * 64,
+        "terms": {"R_sum": reader_sum, "S": 5000},
+        "liability_derivation": {
+            "reader_inventory": {
+                "rows": reader_rows,
+                "row_count": 451,
+                "reader_arm_liability_nanos": reader_sum,
+                "inventory_sha256": runner.sha256_json(reader_rows),
+            }
+        },
+    }
+
+    plan = runner.build_row_reservation_plan(execution, census)
+
+    assert plan["row_count"] == 902
+    assert plan["rows"][0]["components"] == {
+        "reader": 1000,
+        "judge": 2000,
+    }
+    assert plan["rows"][1]["components"] == {
+        "deep_recall": 5000,
+        "reader": 1000,
+        "judge": 2000,
+    }
+    assert plan["total_liability_nanos"] == 2 * reader_sum + 451 * 5000
+    assert plan["reservation_plan_sha256"] == runner.sha256_json(
+        {key: value for key, value in plan.items() if key != "reservation_plan_sha256"}
+    )
+
+
+def test_row_reservation_plan_rejects_mutated_execution_authority() -> None:
+    runner = _load_runner()
+    rows = [
+        {
+            "sequence": sequence,
+            "question_id": f"q-{(sequence - 1) // 2:03}",
+            "arm": "fast" if sequence % 2 else "deep",
+            "row_key": f"q-{(sequence - 1) // 2:03}:"
+            + ("fast" if sequence % 2 else "deep"),
+        }
+        for sequence in range(1, 903)
+    ]
+    execution_core = {
+        "schema_version": 1,
+        "benchmark": "LongMemEval-V2/medium",
+        "case_count": 451,
+        "row_count": 902,
+        "case_order_sha256": "a" * 64,
+        "prefix": {"count": 12, "ids_sha256": "b" * 64, "row_count": 24},
+        "remaining": {"count": 439, "ids_sha256": "c" * 64, "row_count": 878},
+        "rows": rows,
+        "rows_sha256": runner.sha256_json(rows),
+    }
+    execution = {
+        **execution_core,
+        "execution_plan_sha256": runner.sha256_json(execution_core),
+    }
+    reader_rows = [
+        {
+            "question_id": f"q-{index:03}",
+            "reader_liability_nanos": 100,
+            "judge_liability_nanos": 200,
+            "per_arm_liability_nanos": 300,
+        }
+        for index in range(451)
+    ]
+    census = {
+        "census_sha256": "d" * 64,
+        "terms": {"R_sum": 451 * 300, "S": 400},
+        "liability_derivation": {
+            "reader_inventory": {
+                "rows": reader_rows,
+                "row_count": 451,
+                "reader_arm_liability_nanos": 451 * 300,
+                "inventory_sha256": runner.sha256_json(reader_rows),
+            }
+        },
+    }
+    execution["rows"][0]["row_key"] = "tampered:fast"
+
+    with pytest.raises(RuntimeError, match="execution plan identity"):
+        runner.build_row_reservation_plan(execution, census)
+
+
+def _strict_row_plan(runner):
+    rows = []
+    for sequence in range(1, 903):
+        question = (sequence - 1) // 2
+        arm = "fast" if sequence % 2 else "deep"
+        components = {"reader": 1000, "judge": 4_000_000}
+        if arm == "deep":
+            components = {"deep_recall": 3000, **components}
+        rows.append(
+            {
+                "sequence": sequence,
+                "row_key": f"q-{question:03}:{arm}",
+                "question_id": f"q-{question:03}",
+                "arm": arm,
+                "components": components,
+                "maximum_liability_nanos": sum(components.values()),
+            }
+        )
+    core = {
+        "schema_version": 1,
+        "execution_plan_sha256": "e" * 64,
+        "census_sha256": "c" * 64,
+        "row_count": 902,
+        "rows": rows,
+        "rows_sha256": runner.sha256_json(rows),
+        "total_liability_nanos": sum(
+            row["maximum_liability_nanos"] for row in rows
+        ),
+    }
+    return {**core, "reservation_plan_sha256": runner.sha256_json(core)}
+
+
+def _load_provider_attempts():
+    spec = importlib.util.spec_from_file_location(
+        "state_memory_provider_attempts", ROOT / "scripts/provider_attempts.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _priced_component_response(response_id: str, cost: str) -> dict[str, object]:
+    return {
+        "response_id": response_id,
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "served_model": "fixture/served",
+        "provider": "Fixture",
+        "usage": {
+            "prompt_tokens": 1,
+            "completion_tokens": 1,
+            "total_tokens": 2,
+            "cost": cost,
+        },
+        "request_sha256": "1" * 64,
+        "result_sha256": "2" * 64,
+        "elapsed_seconds": 0.1,
+        "retry_index": 0,
+        "parse_status": "provider_response_validated",
+    }
+
+
+def test_row_state_machine_resolves_exact_liability_and_crash_resume(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    attempts = _load_provider_attempts()
+    ledger = attempts.ProviderAttemptLedger(
+        tmp_path / "campaign.jsonl",
+        "a" * 64,
+        "row-fixture",
+        20_000_000_000,
+        0,
+    )
+    plan = _strict_row_plan(runner)
+    machine = runner.RowExecutionStateMachine(plan, ledger, admitted_case_count=12)
+
+    with pytest.raises(RuntimeError, match="requires settled deep_recall"):
+        machine.start(
+            "q-000:deep",
+            "reader",
+            requested_model="qwen/qwen3.5-9b-20260310",
+            request_sha256="1" * 64,
+        )
+    request_key = machine.start(
+        "q-000:deep",
+        "deep_recall",
+        requested_model="qwen/qwen3.5-9b-20260310",
+        request_sha256="1" * 64,
+    )
+    assert ledger.snapshot()["attempts"][0]["start"]["max_liability_nanos"] == 3000
+    machine.result(
+        "q-000:deep",
+        "deep_recall",
+        _priced_component_response("deep-0", "0.0000025"),
+    )
+    machine.start(
+        "q-000:deep",
+        "reader",
+        requested_model="qwen/qwen3.5-9b-20260310",
+        request_sha256="1" * 64,
+    )
+    machine.result(
+        "q-000:deep",
+        "reader",
+        _priced_component_response("reader-0", "0.0000005"),
+    )
+    assert request_key.endswith(":q-000:deep:deep_recall")
+
+    resumed = runner.RowExecutionStateMachine(plan, ledger, admitted_case_count=12)
+    assert resumed.component_status("q-000:deep", "reader") == "result"
+    with pytest.raises(RuntimeError, match="already has a terminal attempt"):
+        resumed.start(
+            "q-000:deep",
+            "reader",
+            requested_model="qwen/qwen3.5-9b-20260310",
+            request_sha256="1" * 64,
+        )
+    with pytest.raises(RuntimeError, match="outside the admitted case prefix"):
+        resumed.start(
+            "q-012:fast",
+            "reader",
+            requested_model="qwen/qwen3.5-9b-20260310",
+            request_sha256="1" * 64,
+        )
+    ledger.close()
+
+
+def test_strict_reader_proxy_uses_frozen_row_reservation_and_exact_generation(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    attempts = _load_provider_attempts()
+    ledger = attempts.ProviderAttemptLedger(
+        tmp_path / "campaign.jsonl",
+        "a" * 64,
+        "reader-fixture",
+        20_000_000_000,
+        0,
+    )
+    machine = runner.RowExecutionStateMachine(
+        _strict_row_plan(runner), ledger, admitted_case_count=12
+    )
+    payload = {
+        "model": "qwen/qwen3.5-9b-20260310",
+        "messages": [{"role": "user", "content": "private prompt"}],
+        "max_tokens": 20_000,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "provider": {"only": ["DeepInfra"], "allow_fallbacks": False},
+    }
+
+    response = runner.execute_strict_reader_call(
+        payload=payload,
+        row_key="q-000:fast",
+        row_state=machine,
+        transport=lambda request: {
+            "response": {
+                "id": "generation-reader-0",
+                "model": "qwen/qwen3.5-9b",
+                "choices": [{"message": {"content": "PRIVATE ANSWER"}}],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 2,
+                    "total_tokens": 12,
+                    "cost": 0.0000005,
+                },
+            },
+            "generation": {
+                "id": "generation-reader-0",
+                "model": "qwen/qwen3.5-9b",
+                "provider_name": "DeepInfra",
+                "tokens_prompt": 10,
+                "tokens_completion": 2,
+                "total_cost": 0.0000005,
+            },
+        },
+    )
+
+    assert response["choices"][0]["message"]["content"] == "PRIVATE ANSWER"
+    snapshot = ledger.snapshot()
+    assert snapshot["unresolved_max_liability_nanos"] == 0
+    assert snapshot["attempts"][0]["start"]["max_liability_nanos"] == 1000
+    receipt = snapshot["attempts"][0]["result"]["response"]
+    assert receipt["response_id"] == "generation-reader-0"
+    assert "choices" not in receipt
+    assert "PRIVATE ANSWER" not in json.dumps(receipt)
+    ledger.close()
+
+
+class _InMemoryAttemptLedger:
+    def __init__(self, attempts=None):
+        self.attempts = list(attempts or [])
+
+    def snapshot(self):
+        return {"attempts": self.attempts}
+
+    def record(self, event, request_key, payload):
+        if event == "start":
+            self.attempts.append(
+                {
+                    "attempt_id": len(self.attempts) + 1,
+                    "request_key": request_key,
+                    "retry_index": payload.get("retry_index", 0),
+                    "start": payload,
+                    "status": "started",
+                    "result": None,
+                    "error": None,
+                }
+            )
+            return
+        attempt = next(
+            row
+            for row in reversed(self.attempts)
+            if row["request_key"] == request_key and row["status"] == "started"
+        )
+        attempt["status"] = event
+        attempt[event] = payload
+
+
+def _completed_reader_attempts(plan):
+    attempts = []
+    for row in plan["rows"]:
+        request_key = (
+            f"lme-v2-row:{row['sequence']}:{row['row_key']}:reader"
+        )
+        attempts.append(
+            {
+                "attempt_id": len(attempts) + 1,
+                "request_key": request_key,
+                "retry_index": 0,
+                "start": {
+                    "max_liability_nanos": row["components"]["reader"],
+                    "retry_index": 0,
+                    "requested_model": "qwen/qwen3.5-9b-20260310",
+                    "request_sha256": "1" * 64,
+                },
+                "status": "result",
+                "result": {"response": _priced_component_response("reader", "0.0000005")},
+                "error": None,
+            }
+        )
+    return attempts
+
+
+def test_native_judge_proxy_waits_for_all_readers_and_writes_priced_receipt() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    ledger = _InMemoryAttemptLedger(_completed_reader_attempts(plan))
+    machine = runner.RowExecutionStateMachine(
+        plan, ledger, admitted_case_count=451
+    )
+    payload = {
+        "model": "gpt-5.2-2025-12-11",
+        "input": "private answer and reference",
+        "reasoning": {"effort": "medium"},
+        "max_output_tokens": 2048,
+    }
+
+    response = runner.execute_native_judge_call(
+        payload=payload,
+        row_key="q-000:fast",
+        row_state=machine,
+        transport=lambda request: {
+            "id": "response-judge-0",
+            "model": "gpt-5.2-2025-12-11",
+            "status": "completed",
+            "output": [{"private": "score"}],
+            "usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "total_tokens": 1100,
+            },
+        },
+    )
+
+    assert response["output"] == [{"private": "score"}]
+    receipt = ledger.attempts[-1]["result"]["response"]
+    assert receipt["usage"] == {
+        "prompt_tokens": 1000,
+        "completion_tokens": 100,
+        "total_tokens": 1100,
+        "cost": "0.00315",
+    }
+    assert "output" not in receipt
+
+
+def test_deep_proxy_reserves_from_plan_and_requires_complete_server_receipt() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    ledger = _InMemoryAttemptLedger()
+    machine = runner.RowExecutionStateMachine(plan, ledger, admitted_case_count=12)
+    runner.reserve_deep_recall(
+        row_key="q-000:deep",
+        row_state=machine,
+        request_sha256="1" * 64,
+    )
+    deep_core = {
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "served_models": ["qwen/qwen3.5-9b"],
+        "served_providers": ["DeepInfra"],
+        "allow_fallbacks": False,
+        "attempt_count": 2,
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "total_tokens": 12,
+        "settled_nanos": 2500,
+        "request_sha256": "1" * 64,
+    }
+    runner.settle_deep_recall(
+        row_key="q-000:deep",
+        row_state=machine,
+        receipt={**deep_core, "receipt_sha256": runner.sha256_json(deep_core)},
+    )
+    assert ledger.attempts[0]["start"]["max_liability_nanos"] == 3000
+    response = ledger.attempts[0]["result"]["response"]
+    assert response["usage"] == {
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "total_tokens": 12,
+        "cost": "0.0000025",
+    }
+
+
+def _execution_for_row_plan(runner, plan):
+    rows = [
+        {
+            "sequence": row["sequence"],
+            "question_id": row["question_id"],
+            "arm": row["arm"],
+            "row_key": row["row_key"],
+        }
+        for row in plan["rows"]
+    ]
+    core = {
+        "schema_version": 1,
+        "benchmark": "LongMemEval-V2/medium",
+        "case_count": 451,
+        "row_count": 902,
+        "case_order_sha256": "a" * 64,
+        "prefix": {"count": 12, "ids_sha256": "b" * 64, "row_count": 24},
+        "remaining": {"count": 439, "ids_sha256": "c" * 64, "row_count": 878},
+        "rows": rows,
+        "rows_sha256": runner.sha256_json(rows),
+    }
+    return {**core, "execution_plan_sha256": runner.sha256_json(core)}
+
+
+def _bind_row_plan_to_execution(runner, plan, execution):
+    core = {
+        key: value
+        for key, value in plan.items()
+        if key != "reservation_plan_sha256"
+    }
+    core["execution_plan_sha256"] = execution["execution_plan_sha256"]
+    return {**core, "reservation_plan_sha256": runner.sha256_json(core)}
+
+
+def _completed_prefix_attempts(plan):
+    attempts = []
+    for row in plan["rows"][:24]:
+        components = ["reader"] if row["arm"] == "fast" else ["deep_recall", "reader"]
+        for component in components:
+            attempts.append(
+                {
+                    "attempt_id": len(attempts) + 1,
+                    "request_key": (
+                        f"lme-v2-row:{row['sequence']}:{row['row_key']}:{component}"
+                    ),
+                    "retry_index": 0,
+                    "start": {
+                        "max_liability_nanos": row["components"][component],
+                        "retry_index": 0,
+                        "requested_model": "qwen/qwen3.5-9b-20260310",
+                        "request_sha256": "1" * 64,
+                    },
+                    "status": "result",
+                    "result": {
+                        "response": _priced_component_response(
+                            f"prefix-{len(attempts)}", "0.0000005"
+                        )
+                    },
+                    "error": None,
+                }
+            )
+    return attempts
+
+
+def test_remaining_commitment_is_exact_and_resume_is_deterministic() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    execution = _execution_for_row_plan(runner, plan)
+    plan = _bind_row_plan_to_execution(runner, plan, execution)
+    commitment = runner.build_remaining_commitment(execution, plan)
+    assert commitment["remaining_count"] == 439
+    assert commitment["remaining_row_count"] == 878
+    assert not runner._contains_oracle_key(commitment)
+
+    ledger = _InMemoryAttemptLedger(_completed_prefix_attempts(plan))
+    actions = runner.remaining_resume_actions(commitment, plan, ledger)
+    assert actions[:2] == [
+        {
+            "sequence": 25,
+            "row_key": "q-012:fast",
+            "component": "reader",
+            "request_key": "lme-v2-row:25:q-012:fast:reader",
+        },
+        {
+            "sequence": 26,
+            "row_key": "q-012:deep",
+            "component": "deep_recall",
+            "request_key": "lme-v2-row:26:q-012:deep:deep_recall",
+        },
+    ]
+    assert len(actions) == 878
+
+    tampered = json.loads(json.dumps(commitment))
+    tampered["remaining_rows_sha256"] = "f" * 64
+    with pytest.raises(RuntimeError, match="remaining commitment identity"):
+        runner.remaining_resume_actions(tampered, plan, ledger)
+
+
+def test_remaining_commitment_rejects_shortened_rehashed_inventory() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    execution = _execution_for_row_plan(runner, plan)
+    execution_core = {
+        key: value
+        for key, value in execution.items()
+        if key != "execution_plan_sha256"
+    }
+    execution_core["rows"] = execution_core["rows"][:-2]
+    execution_core["row_count"] = 900
+    execution_core["rows_sha256"] = runner.sha256_json(execution_core["rows"])
+    shortened_execution = {
+        **execution_core,
+        "execution_plan_sha256": runner.sha256_json(execution_core),
+    }
+    plan_core = {
+        key: value for key, value in plan.items() if key != "reservation_plan_sha256"
+    }
+    plan_core["rows"] = plan_core["rows"][:-2]
+    plan_core["row_count"] = 900
+    plan_core["rows_sha256"] = runner.sha256_json(plan_core["rows"])
+    plan_core["execution_plan_sha256"] = shortened_execution["execution_plan_sha256"]
+    plan_core["total_liability_nanos"] = sum(
+        row["maximum_liability_nanos"] for row in plan_core["rows"]
+    )
+    shortened_plan = {
+        **plan_core,
+        "reservation_plan_sha256": runner.sha256_json(plan_core),
+    }
+
+    with pytest.raises(RuntimeError, match="execution authority"):
+        runner.build_remaining_commitment(shortened_execution, shortened_plan)
+
+
+def _complete_row_attempts(plan):
+    attempts = []
+
+    def append(row, component, response_id):
+        requested_model = (
+            "gpt-5.2-2025-12-11"
+            if component == "judge"
+            else "qwen/qwen3.5-9b-20260310"
+        )
+        response = {
+            **_priced_component_response(response_id, "0.0000005"),
+            "requested_model": requested_model,
+            "served_model": (
+                "gpt-5.2-2025-12-11"
+                if component == "judge"
+                else "qwen/qwen3.5-9b"
+            ),
+            "provider": "OpenAI" if component == "judge" else "DeepInfra",
+        }
+        attempts.append(
+            {
+                "attempt_id": len(attempts) + 1,
+                "request_key": (
+                    f"lme-v2-row:{row['sequence']}:{row['row_key']}:{component}"
+                ),
+                "retry_index": 0,
+                "start": {
+                    "max_liability_nanos": row["components"][component],
+                    "retry_index": 0,
+                    "requested_model": requested_model,
+                    "request_sha256": "1" * 64,
+                },
+                "status": "result",
+                "result": {"response": response},
+                "error": None,
+            }
+        )
+
+    for row in plan["rows"]:
+        if row["arm"] == "deep":
+            append(row, "deep_recall", f"deep-{row['sequence']}")
+        append(row, "reader", f"reader-{row['sequence']}")
+    for row in plan["rows"]:
+        append(row, "judge", f"judge-{row['sequence']}")
+    return attempts
+
+
+def _official_pairs():
+    return [
+        {
+            "question_id": f"q-{index:03}",
+            "ability": "state",
+            "fast_correct": index >= 30,
+            "deep_correct": True,
+            "native_judge_valid": True,
+            "settled": True,
+            "receipt_sha256": f"{index + 1:064x}",
+        }
+        for index in range(451)
+    ]
+
+
+def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    attempts = _complete_row_attempts(plan)
+    ledger = _InMemoryAttemptLedger(attempts)
+    ledger.closed = False
+
+    def close_campaign(path):
+        ledger.closed = True
+        return {
+            "authorization_sha256": "a" * 64,
+            "settled_nanos": len(attempts) * 500,
+            "unresolved_max_liability_nanos": 0,
+            "total_liability_nanos": len(attempts) * 500,
+            "journal_sha256": "b" * 64,
+        }
+
+    ledger.close_campaign = close_campaign
+    package = runner.build_native_official_package(
+        pairs=_official_pairs(),
+        reservation_plan=plan,
+        ledger_snapshot=ledger.snapshot(),
+        lafs_gain="0.01",
+        submission_score="0.5",
+        accepted_submission=False,
+        published_leaderboard_scores=[],
+        upstream_identity={
+            "code_commit": "a" * 40,
+            "dataset_revision": "b" * 40,
+            "native_harness_sha256": "c" * 64,
+        },
+    )
+    assert package["row_settlement"]["row_attempt_count"] == 2255
+    assert package["official_metrics"]["pairs"] == 451
+    assert package["official_metrics"]["internal_benchmark_success"] is True
+    assert package["official_metrics"]["external_sota"] is False
+
+    closure = runner.close_completed_row_campaign(
+        ledger=ledger,
+        reservation_plan=plan,
+        native_package=package,
+        closure_path=Path("closure.json"),
+    )
+    assert ledger.closed is True
+    assert closure["unresolved_max_liability_nanos"] == 0
+
+    broken = json.loads(json.dumps(ledger.snapshot()))
+    broken["attempts"].pop()
+    with pytest.raises(RuntimeError, match="exactly 2255"):
+        runner.validate_complete_row_settlement(plan, broken)
