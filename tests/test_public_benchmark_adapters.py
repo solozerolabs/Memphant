@@ -254,6 +254,26 @@ def test_memphant_recall_uses_a_separate_benchmark_deadline(monkeypatch):
     assert adapter.RECALL_REQUEST_TIMEOUT_SECONDS == 600
 
 
+def test_memphant_worker_preserves_explicit_structured_state(monkeypatch, tmp_path):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    monkeypatch.setenv("MEMPHANT_STRUCTURED_STATE", "on")
+    monkeypatch.setenv("MEMPHANT_LME_PROOF_DIR", str(tmp_path))
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs["env"]))
+        return types.SimpleNamespace(
+            returncode=0, stdout="drain completed=1\n", stderr=""
+        )
+
+    monkeypatch.setattr(adapter.subprocess, "run", fake_run)
+
+    assert adapter._drain_worker("worker", "postgres://fixture", 1)[
+        "completed_sources"
+    ] == 1
+    assert calls[0][1]["MEMPHANT_STRUCTURED_STATE"] == "on"
+
+
 def test_memphant_memory_uses_isolated_rest_scope_and_emits_trace_proof(
     monkeypatch, tmp_path
 ):
