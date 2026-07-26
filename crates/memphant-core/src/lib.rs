@@ -328,6 +328,51 @@ pub trait EmbeddingProvider: Send + Sync {
     fn id(&self) -> &str;
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum EmbeddingTaskKind {
+    Document,
+    Query,
+}
+
+/// Runs the synchronous provider seam outside Tokio's cooperative core-worker
+/// pool. Inputs and the provider are owned so no borrowed state can escape
+/// into the blocking task.
+pub(crate) async fn run_embedding_task(
+    embedder: Arc<dyn EmbeddingProvider>,
+    texts: Vec<String>,
+    kind: EmbeddingTaskKind,
+) -> Result<Vec<Vec<f32>>, EmbedError> {
+    tokio::task::spawn_blocking(move || match kind {
+        EmbeddingTaskKind::Document => embedder.embed(&texts),
+        EmbeddingTaskKind::Query => embedder.embed_query(&texts),
+    })
+    .await
+    .map_err(|error| EmbedError::Unavailable(format!("embedding task failed: {error}")))?
+}
+
+enum EmbeddingExecution<'a> {
+    Borrowed(&'a dyn EmbeddingProvider),
+    Owned(Arc<dyn EmbeddingProvider>),
+}
+
+impl EmbeddingExecution<'_> {
+    fn provider(&self) -> &dyn EmbeddingProvider {
+        match self {
+            Self::Borrowed(embedder) => *embedder,
+            Self::Owned(embedder) => embedder.as_ref(),
+        }
+    }
+
+    async fn embed_documents(self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, EmbedError> {
+        match self {
+            Self::Borrowed(embedder) => embedder.embed(&texts),
+            Self::Owned(embedder) => {
+                run_embedding_task(embedder, texts, EmbeddingTaskKind::Document).await
+            }
+        }
+    }
+}
+
 /// No-embedding provider: produces no vectors and disables the vector channel.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoopEmbedding;
@@ -10952,7 +10997,15 @@ pub async fn reflect_recorded<S>(
 where
     S: MemoryStore,
 {
-    reflect_recorded_inner(store, input, embedder, clock, None, None).await
+    reflect_recorded_inner(
+        store,
+        input,
+        EmbeddingExecution::Borrowed(embedder),
+        clock,
+        None,
+        None,
+    )
+    .await
 }
 
 pub async fn reflect_recorded_claimed<S>(
@@ -10966,13 +11019,43 @@ pub async fn reflect_recorded_claimed<S>(
 where
     S: MemoryStore,
 {
-    reflect_recorded_inner(store, input, embedder, clock, Some(context), Some(claim)).await
+    reflect_recorded_inner(
+        store,
+        input,
+        EmbeddingExecution::Borrowed(embedder),
+        clock,
+        Some(context),
+        Some(claim),
+    )
+    .await
+}
+
+pub(crate) async fn reflect_recorded_claimed_owned<S>(
+    store: &S,
+    input: ReflectInput,
+    embedder: Arc<dyn EmbeddingProvider>,
+    clock: &dyn Clock,
+    context: &ResolvedMemoryContext,
+    claim: &ReflectJobRow,
+) -> Result<(ReflectTrace, Vec<UnitId>), CoreError>
+where
+    S: MemoryStore,
+{
+    reflect_recorded_inner(
+        store,
+        input,
+        EmbeddingExecution::Owned(embedder),
+        clock,
+        Some(context),
+        Some(claim),
+    )
+    .await
 }
 
 async fn reflect_recorded_inner<S>(
     store: &S,
     input: ReflectInput,
-    embedder: &dyn EmbeddingProvider,
+    embedder: EmbeddingExecution<'_>,
     clock: &dyn Clock,
     resolved_context: Option<&ResolvedMemoryContext>,
     claim: Option<&ReflectJobRow>,
@@ -10980,7 +11063,8 @@ async fn reflect_recorded_inner<S>(
 where
     S: MemoryStore,
 {
-    let prepared = prepare_compiled_write(store, input, embedder, clock, resolved_context).await?;
+    let prepared =
+        prepare_compiled_write_inner(store, input, embedder, clock, resolved_context).await?;
     match prepared {
         PreparedCompiledWrite::Existing(trace) => Ok((trace, Vec::new())),
         PreparedCompiledWrite::Write {
@@ -11009,10 +11093,30 @@ pub(crate) enum PreparedCompiledWrite {
     },
 }
 
-pub(crate) async fn prepare_compiled_write<S>(
+pub(crate) async fn prepare_compiled_write_owned<S>(
     store: &S,
     input: ReflectInput,
-    embedder: &dyn EmbeddingProvider,
+    embedder: Arc<dyn EmbeddingProvider>,
+    clock: &dyn Clock,
+    resolved_context: Option<&ResolvedMemoryContext>,
+) -> Result<PreparedCompiledWrite, CoreError>
+where
+    S: MemoryStore,
+{
+    prepare_compiled_write_inner(
+        store,
+        input,
+        EmbeddingExecution::Owned(embedder),
+        clock,
+        resolved_context,
+    )
+    .await
+}
+
+async fn prepare_compiled_write_inner<S>(
+    store: &S,
+    input: ReflectInput,
+    embedder: EmbeddingExecution<'_>,
     clock: &dyn Clock,
     resolved_context: Option<&ResolvedMemoryContext>,
 ) -> Result<PreparedCompiledWrite, CoreError>
@@ -11060,16 +11164,51 @@ where
         return Ok(PreparedCompiledWrite::Existing(existing));
     }
     let working = store.fetch_scope_open_units(context).await?;
-    prepare_compiled_write_from_snapshot(input, embedder, clock, context, working).await
+    prepare_compiled_write_from_snapshot_inner(input, embedder, clock, context, working).await
 }
 
 /// Runs compiler admission from one caller-owned complete open-scope snapshot.
 /// This function performs no store reads, allowing file sync to prepare every
 /// direct-retain write before its short serializable execution transaction and
 /// then reject the plan if the in-transaction snapshot digest has drifted.
+#[cfg(test)]
 pub(crate) async fn prepare_compiled_write_from_snapshot(
     input: ReflectInput,
     embedder: &dyn EmbeddingProvider,
+    clock: &dyn Clock,
+    context: &ResolvedMemoryContext,
+    working: Vec<StoredMemoryUnit>,
+) -> Result<PreparedCompiledWrite, CoreError> {
+    prepare_compiled_write_from_snapshot_inner(
+        input,
+        EmbeddingExecution::Borrowed(embedder),
+        clock,
+        context,
+        working,
+    )
+    .await
+}
+
+pub(crate) async fn prepare_compiled_write_from_snapshot_owned(
+    input: ReflectInput,
+    embedder: Arc<dyn EmbeddingProvider>,
+    clock: &dyn Clock,
+    context: &ResolvedMemoryContext,
+    working: Vec<StoredMemoryUnit>,
+) -> Result<PreparedCompiledWrite, CoreError> {
+    prepare_compiled_write_from_snapshot_inner(
+        input,
+        EmbeddingExecution::Owned(embedder),
+        clock,
+        context,
+        working,
+    )
+    .await
+}
+
+async fn prepare_compiled_write_from_snapshot_inner(
+    input: ReflectInput,
+    embedder: EmbeddingExecution<'_>,
     clock: &dyn Clock,
     context: &ResolvedMemoryContext,
     mut working: Vec<StoredMemoryUnit>,
@@ -11519,30 +11658,32 @@ pub(crate) async fn prepare_compiled_write_from_snapshot(
     // here returns before any marker is written, so a retry recomputes cleanly
     // instead of short-circuiting on a marker whose embeddings never landed.
     // Noop providers (dimensions() == 0) skip entirely.
-    let (embedding_profile, embeddings) = if embedder.dimensions() > 0 && !new_units.is_empty() {
-        let profile = embedding_profile_for(embedder);
-        let bodies: Vec<String> = new_units.iter().map(|unit| unit.body.clone()).collect();
-        let vectors = embedder
-            .embed(&bodies)
-            .map_err(|error| StoreError::Backend(format!("embedding failed: {error}")))?;
-        let rows: Vec<EmbeddingRow> = new_units
-            .iter()
-            .zip(vectors)
-            .filter(|(_, vec)| !vec.is_empty())
-            .map(|(unit, vec)| EmbeddingRow {
-                memory_unit_id: unit.id,
-                embedding_profile_id: profile.id,
-                vec,
-            })
-            .collect();
-        if rows.is_empty() {
-            (None, Vec::new())
+    let (embedding_profile, embeddings) =
+        if embedder.provider().dimensions() > 0 && !new_units.is_empty() {
+            let profile = embedding_profile_for(embedder.provider());
+            let bodies: Vec<String> = new_units.iter().map(|unit| unit.body.clone()).collect();
+            let vectors = embedder
+                .embed_documents(bodies)
+                .await
+                .map_err(|error| StoreError::Backend(format!("embedding failed: {error}")))?;
+            let rows: Vec<EmbeddingRow> = new_units
+                .iter()
+                .zip(vectors)
+                .filter(|(_, vec)| !vec.is_empty())
+                .map(|(unit, vec)| EmbeddingRow {
+                    memory_unit_id: unit.id,
+                    embedding_profile_id: profile.id,
+                    vec,
+                })
+                .collect();
+            if rows.is_empty() {
+                (None, Vec::new())
+            } else {
+                (Some(profile), rows)
+            }
         } else {
-            (Some(profile), rows)
-        }
-    } else {
-        (None, Vec::new())
-    };
+            (None, Vec::new())
+        };
 
     Ok(PreparedCompiledWrite::Write {
         context: context.clone(),

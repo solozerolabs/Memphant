@@ -1,6 +1,7 @@
 use std::sync::Arc;
-use std::sync::Barrier;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex};
+use std::time::Duration;
 
 use memphant_core::service::{MemoryService, ServiceError};
 use memphant_core::{
@@ -63,14 +64,28 @@ impl EmbeddingProvider for FailOnceEmbedding {
 }
 
 struct BarrierEmbedding {
-    barrier: Barrier,
+    rendezvous: (Mutex<usize>, Condvar),
     calls: AtomicUsize,
 }
 
 impl EmbeddingProvider for BarrierEmbedding {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.barrier.wait();
+        let (arrivals, ready) = &self.rendezvous;
+        let mut arrivals = arrivals.lock().unwrap();
+        *arrivals += 1;
+        if *arrivals == 2 {
+            ready.notify_all();
+        } else {
+            let (observed, timeout) = ready
+                .wait_timeout_while(arrivals, Duration::from_secs(2), |arrivals| *arrivals < 2)
+                .unwrap();
+            if timeout.timed_out() && *observed < 2 {
+                return Err(EmbedError::Unavailable(
+                    "second concurrent embedding never reached the rendezvous".to_string(),
+                ));
+            }
+        }
         Ok(vec![vec![1.0]; texts.len()])
     }
 
@@ -524,7 +539,7 @@ async fn concurrent_direct_retain_returns_one_winner_response() {
     let store = InMemoryStore::default();
     let context = context(&store, TenantId::new()).await;
     let embedder = Arc::new(BarrierEmbedding {
-        barrier: Barrier::new(2),
+        rendezvous: (Mutex::new(0), Condvar::new()),
         calls: AtomicUsize::new(0),
     });
     let service = Arc::new(MemoryService::new(

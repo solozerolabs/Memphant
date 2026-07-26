@@ -30,18 +30,18 @@ use crate::deep_recall::DeepRecallProvider;
 use crate::{
     ClaimMutationOutcome, Clock, CompiledWrite, CoreError, CorrectionUnitIds, CorrectionWrite,
     CrossRerankCandidateSelection, CrossRerankGranularity, CrossReranker,
-    DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, FileSyncTransitionSnapshot, ForgetWrite,
-    JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome, MutationLedgerStore,
+    DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, EmbeddingTaskKind, FileSyncTransitionSnapshot,
+    ForgetWrite, JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome, MutationLedgerStore,
     MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite, ReflectJobRow, ScopePage,
     StoreError, StructuredExtractionPacket, StructuredSourceKind, StructuredStateProvider,
     StructuredStateRequest, VectorQuery, apply_correction_transition, apply_unit_forget_transition,
     canonical_mutation_request_hash, correction_rectangles_with_ids, derive_episode_dedup_key,
     embedding_profile_for, evidence_slices_for_episode, fold_structured_observations,
-    normalize_component, parse_content_date, prepare_compiled_write,
-    prepare_compiled_write_from_snapshot, project_structured_state, recall_scope_admitted,
-    recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed,
-    structured_compiler_identity, structured_extraction_receipt_sha256, tokenize,
-    validate_structured_observations_for_request, validate_valid_interval,
+    normalize_component, parse_content_date, prepare_compiled_write_from_snapshot_owned,
+    prepare_compiled_write_owned, project_structured_state, recall_scope_admitted,
+    recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed_owned,
+    run_embedding_task, structured_compiler_identity, structured_extraction_receipt_sha256,
+    tokenize, validate_structured_observations_for_request, validate_valid_interval,
 };
 
 pub const DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY: usize = 4;
@@ -3784,7 +3784,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     MutationClaimOutcome::Execute => self.store.rollback(probe).await?,
                 }
                 let job_id = memphant_types::JobId::new();
-                let prepared = prepare_compiled_write(
+                let prepared = prepare_compiled_write_owned(
                     self.store.as_ref(),
                     ReflectInput {
                         tenant_id: context.tenant_id,
@@ -3818,7 +3818,7 @@ impl<S: MemoryStore> MemoryService<S> {
                             valid_to: unit.valid_to.clone(),
                         }],
                     },
-                    self.embedder.as_ref(),
+                    Arc::clone(&self.embedder),
                     self.clock.as_ref(),
                     Some(context),
                 )
@@ -4011,16 +4011,20 @@ impl<S: MemoryStore> MemoryService<S> {
         // Real embedding provider → embed the query and run the vector
         // channel; the Noop provider keeps the channel honestly disabled.
         let query_vec = if self.embedder.dimensions() > 0 {
-            self.embedder
-                .embed_query(std::slice::from_ref(&query))
-                .map_err(|error| {
-                    ServiceError::Core(CoreError::Store(StoreError::Backend(format!(
-                        "query embedding failed: {error}"
-                    ))))
-                })?
-                .into_iter()
-                .next()
-                .filter(|vec| !vec.is_empty())
+            run_embedding_task(
+                Arc::clone(&self.embedder),
+                vec![query.clone()],
+                EmbeddingTaskKind::Query,
+            )
+            .await
+            .map_err(|error| {
+                ServiceError::Core(CoreError::Store(StoreError::Backend(format!(
+                    "query embedding failed: {error}"
+                ))))
+            })?
+            .into_iter()
+            .next()
+            .filter(|vec| !vec.is_empty())
         } else {
             None
         };
@@ -4200,17 +4204,19 @@ impl<S: MemoryStore> MemoryService<S> {
             }
             MutationClaimOutcome::Execute => {
                 let embedding = if self.embedder.dimensions() > 0 {
-                    self.embedder
-                        .embed(std::slice::from_ref(&request.correction.value))
-                        .map_err(|error| {
-                            CoreError::Store(StoreError::Backend(format!(
-                                "embedding failed: {error}"
-                            )))
-                        })?
-                        .into_iter()
-                        .next()
-                        .filter(|vector| !vector.is_empty())
-                        .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
+                    run_embedding_task(
+                        Arc::clone(&self.embedder),
+                        vec![request.correction.value.clone()],
+                        EmbeddingTaskKind::Document,
+                    )
+                    .await
+                    .map_err(|error| {
+                        CoreError::Store(StoreError::Backend(format!("embedding failed: {error}")))
+                    })?
+                    .into_iter()
+                    .next()
+                    .filter(|vector| !vector.is_empty())
+                    .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
                 } else {
                     None
                 };
@@ -4530,17 +4536,21 @@ impl<S: MemoryStore> MemoryService<S> {
             match operation {
                 FileSyncOperation::Correct { base, body } => {
                     let embedding = if self.embedder.dimensions() > 0 {
-                        self.embedder
-                            .embed(std::slice::from_ref(body))
-                            .map_err(|error| {
-                                CoreError::Store(StoreError::Backend(format!(
-                                    "embedding failed: {error}"
-                                )))
-                            })?
-                            .into_iter()
-                            .next()
-                            .filter(|vector| !vector.is_empty())
-                            .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
+                        run_embedding_task(
+                            Arc::clone(&self.embedder),
+                            vec![body.clone()],
+                            EmbeddingTaskKind::Document,
+                        )
+                        .await
+                        .map_err(|error| {
+                            CoreError::Store(StoreError::Backend(format!(
+                                "embedding failed: {error}"
+                            )))
+                        })?
+                        .into_iter()
+                        .next()
+                        .filter(|vector| !vector.is_empty())
+                        .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
                     } else {
                         None
                     };
@@ -4606,7 +4616,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     valid_from,
                     valid_to,
                 } => {
-                    let compiled = prepare_compiled_write_from_snapshot(
+                    let compiled = prepare_compiled_write_from_snapshot_owned(
                         ReflectInput {
                             tenant_id: context.tenant_id,
                             data_subject_id: context.data_subject_id,
@@ -4639,7 +4649,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                 valid_to: valid_to.clone(),
                             }],
                         },
-                        self.embedder.as_ref(),
+                        Arc::clone(&self.embedder),
                         self.clock.as_ref(),
                         context,
                         working.open_units(context),
@@ -5410,7 +5420,7 @@ impl<S: MemoryStore> MemoryService<S> {
             },
         };
 
-        reflect_recorded_claimed(
+        reflect_recorded_claimed_owned(
             self.store.as_ref(),
             ReflectInput {
                 tenant_id: job.job.tenant_id,
@@ -5428,7 +5438,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 compiler_version,
                 candidates,
             },
-            self.embedder.as_ref(),
+            Arc::clone(&self.embedder),
             self.clock.as_ref(),
             context,
             job,
