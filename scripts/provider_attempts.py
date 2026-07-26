@@ -266,6 +266,8 @@ def _replay_journal(
                 "attempt_id": attempt_id,
                 "request_key": request_key,
                 "retry_index": payload.get("retry_index", 0),
+                "start_sequence": event["sequence"],
+                "result_sequence": None,
                 "start": payload,
                 "status": "started",
                 "result": None,
@@ -278,6 +280,7 @@ def _replay_journal(
             if row is None or row["request_key"] != request_key or row["status"] != "started":
                 raise ValueError("provider-attempt journal forked terminal transition")
             row["status"] = kind
+            row["result_sequence"] = event["sequence"]
             row[kind] = payload
         else:
             raise ValueError("provider-attempt journal event kind is malformed")

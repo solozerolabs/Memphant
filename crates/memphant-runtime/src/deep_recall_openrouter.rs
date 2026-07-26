@@ -380,6 +380,20 @@ impl OpenRouterDeepRecall {
     }
 
     fn request_body(&self, messages: &[Value]) -> Value {
+        let mut provider = json!({
+            "only": self.config.providers,
+            "allow_fallbacks": false,
+            "require_parameters": true,
+            "data_collection": "deny",
+            "zdr": true,
+            "max_price": {
+                "prompt": dollars_per_million(self.config.input_price_micros_per_million),
+                "completion": dollars_per_million(self.config.output_price_micros_per_million),
+            }
+        });
+        if self.config.model == LME_V2_QWEN_MODEL {
+            provider["quantizations"] = json!(["bf16"]);
+        }
         json!({
             "model": self.config.model,
             "messages": messages,
@@ -387,17 +401,7 @@ impl OpenRouterDeepRecall {
             "stream": true,
             "tool_choice": "required",
             "tools": tool_definitions(),
-            "provider": {
-                "only": self.config.providers,
-                "allow_fallbacks": false,
-                "require_parameters": true,
-                "data_collection": "deny",
-                "zdr": true,
-                "max_price": {
-                    "prompt": dollars_per_million(self.config.input_price_micros_per_million),
-                    "completion": dollars_per_million(self.config.output_price_micros_per_million),
-                }
-            }
+            "provider": provider
         })
     }
 
@@ -2159,6 +2163,7 @@ mod tests {
         assert_eq!(body["model"], "qwen/qwen3.5-9b-20260310");
         assert_eq!(body["provider"]["only"], json!(["deepinfra"]));
         assert_eq!(body["provider"]["allow_fallbacks"], false);
+        assert_eq!(body["provider"]["quantizations"], json!(["bf16"]));
 
         let mut state = LoopState::new(
             DeepRecallProviderRequest {

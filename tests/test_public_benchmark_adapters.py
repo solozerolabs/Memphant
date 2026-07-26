@@ -32,6 +32,64 @@ def load_adapter():
     return module
 
 
+def load_harness_bootstrap():
+    spec = importlib.util.spec_from_file_location(
+        "longmemeval_v2_harness_bootstrap", MEMPHANT_BOOTSTRAP
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_deferred_scoring_proof_is_private_and_never_metric_eligible(
+    tmp_path: Path,
+) -> None:
+    bootstrap = load_harness_bootstrap()
+    output = tmp_path / "private-row"
+    output.mkdir(mode=0o755)
+    official = tmp_path / "official/evaluation"
+    official.mkdir(parents=True)
+    (official / "harness.py").write_text("# pinned harness\n")
+    (official / "qa_eval_metrics.py").write_text("# pinned scorer\n")
+    (output / "prompt_rows.jsonl").write_text('{"question_id":"q-1"}\n')
+    (output / "per_question.jsonl").write_text(
+        '{"question_id":"q-1","score_bool":false,"answer_gold":"secret"}\n'
+    )
+    proof_path = output / "DEFERRED-SCORING.json"
+
+    proof = bootstrap.write_deferred_scoring_proof(
+        proof_path,
+        ["--output-dir", str(output)],
+        official_dir=official.parent,
+        adapter_path=MEMPHANT_ADAPTER,
+        private_root=tmp_path,
+    )
+
+    assert proof["status"] == "READER_COMPLETE_SCORING_DEFERRED"
+    assert proof["official_metrics_eligible"] is False
+    assert "secret" not in json.dumps(proof)
+    assert output.stat().st_mode & 0o777 == 0o700
+    assert proof_path.stat().st_mode & 0o777 == 0o600
+    assert not (output / "per_question.jsonl").exists()
+    assert not (output / "aggregated_metrics.json").exists()
+    reader_output = output / "READER-OUTPUT.private.json"
+    assert reader_output.stat().st_mode & 0o777 == 0o600
+    assert "score_bool" not in reader_output.read_text()
+    assert bootstrap.deferred_score_prediction(
+        {"is_unknown": True}, {}
+    ) == (False, "memphant_deferred_native_scoring", True)
+
+
+def test_deferred_scoring_rejects_duplicate_authoritative_output_dir() -> None:
+    bootstrap = load_harness_bootstrap()
+    with pytest.raises(RuntimeError, match="exactly one --output-dir"):
+        bootstrap._argument_value(
+            ["--output-dir", "/private/first", "--output-dir", "/private/last"],
+            "--output-dir",
+        )
+
+
 def _sha256_json(value):
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()

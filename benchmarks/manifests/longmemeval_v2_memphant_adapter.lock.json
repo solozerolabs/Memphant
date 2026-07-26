@@ -7,7 +7,7 @@
   "files": {
     "benchmarks/longmemeval_v2/memphant_memory.py": "6059218b80d7498daf9b7e98f49fe6f62993adcda9ddf16ba576e40de864410b",
     "benchmarks/longmemeval_v2/construction_authority.py": "ece448a1e27c9caa5ba367b38bc96b3c5986948c60dbea95aa1f06bf1680b7f0",
-    "benchmarks/longmemeval_v2/harness_bootstrap.py": "97b17ebc7091ffd624859ff62b509ab4c7e96586448c7904f208c31ddd8ac8e6",
+    "benchmarks/longmemeval_v2/harness_bootstrap.py": "0f2cf1d04a50541a3e64ec5211e1afdcbd107f6f65392df6ee4752f8d6a1840f",
     "benchmarks/longmemeval_v2/memphant.memory.json": "a2fbdbf36101d9e863006121ef84860e496f9d7d11967de96322e58479b0fe29",
     "benchmarks/longmemeval_v2/memphant.fast.memory.json": "ead5ac67d24df597587b53d5f105598d627adcb380a708197be6e40a512c9e5f",
     "scripts/materialize_longmemeval_v2_runtime.py": "1af300126f98860db36bccc96d112f8b218d4249c15be354b172cf7faa869344",

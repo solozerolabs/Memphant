@@ -14,10 +14,15 @@ from __future__ import annotations
 
 import argparse
 import ast
+import base64
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, localcontext
 from fractions import Fraction
 import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import importlib.util
 import json
 from math import comb
 import os
@@ -27,12 +32,17 @@ import shutil
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
+import threading
 from datetime import datetime, timezone
 from typing import Any
 import urllib.request
+import urllib.error
 from urllib.parse import urlsplit, urlunsplit
+
+import fcntl
 
 from benchmarks.longmemeval_v2.construction_authority import (
     derive_construction_receipts as _derive_canonical_construction_receipts,
@@ -100,9 +110,12 @@ def _campaign_artifact_paths(root: Path) -> dict[str, str]:
         "construction_subledger": "CONSTRUCTION-ATTEMPTS.jsonl",
         "construction_wave": "CONSTRUCTION-WAVE.json",
         "construction_progress": "CONSTRUCTION-PROGRESS.json",
+        "remaining_construction_progress": "REMAINING-CONSTRUCTION-PROGRESS.json",
         "construction_input": "CONSTRUCTION-RESOURCES.jsonl",
         "prefix_plans": "PREFIX-12-CONSTRUCTION-PLANS.json",
+        "remaining_construction_plans": "REMAINING-439-CONSTRUCTION-PLANS.json",
         "construction_settlement": "CONSTRUCTION-SETTLEMENT.json",
+        "construction_retries": "CONSTRUCTION-RETRIES",
         "observation_cache": "observation-cache",
         "cache_hits": "cache-hits",
         "construction_bindings": "CONSTRUCTION-BINDINGS",
@@ -111,6 +124,7 @@ def _campaign_artifact_paths(root: Path) -> dict[str, str]:
         "execution_plan": "EXECUTION-PLAN.json",
         "reservation_plan": "ROW-RESERVATION-PLAN.json",
         "private_reader_outputs": "private-reader-outputs",
+        "private_prefix": "private-reader-outputs/PREFIX-12-PRIVATE.json",
         "sealed_prefix": "PREFIX-12.sealed",
         "public_prefix_status": "PREFIX-12-STATUS.json",
         "remaining_commitment": "REMAINING-439-COMMITMENT.json",
@@ -125,6 +139,83 @@ def _campaign_artifact_paths(root: Path) -> dict[str, str]:
 def campaign_artifact_paths() -> dict[str, str]:
     """The sole canonical path set; paid entrypoints must not accept overrides."""
     return _campaign_artifact_paths(CAMPAIGN_ARTIFACT_ROOT)
+
+
+def acquire_official_runtime_code(data_root: Path) -> tuple[Path, dict[str, object]]:
+    """Acquire only pinned upstream code; never invoke its dataset downloader."""
+    lock_path = ROOT / "benchmarks/manifests/longmemeval_v2.lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    commit = lock.get("code", {}).get("commit")
+    files = lock.get("code", {}).get("files")
+    if (
+        not isinstance(commit, str)
+        or re.fullmatch(r"[0-9a-f]{40}", commit) is None
+        or not isinstance(files, dict)
+        or "memory_modules/memory.py" not in files
+    ):
+        raise RuntimeError("official runtime code lock is incomplete")
+    runtime_root = data_root.resolve() / "runtime-code" / commit
+    official_dir = runtime_root / "official"
+    archive = runtime_root / "official.tar.gz"
+    proof_path = runtime_root / "RUNTIME-CODE.json"
+
+    def verify_checkpoint() -> dict[str, object]:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import run_longmemeval_v2 as adapter
+
+        adapter.verify_code(official_dir, files)
+        proof = json.loads(proof_path.read_text(encoding="utf-8"))
+        core = {key: value for key, value in proof.items() if key != "proof_sha256"}
+        if (
+            proof.get("proof_sha256") != sha256_json(core)
+            or proof.get("commit") != commit
+            or proof.get("release_lock_sha256") != _sha256_file(lock_path)
+            or proof.get("archive", {}).get("bytes") != archive.stat().st_size
+            or proof.get("archive", {}).get("sha256") != _sha256_file(archive)
+            or proof.get("files") != files
+            or proof.get("files_sha256") != sha256_json(files)
+        ):
+            raise RuntimeError("official runtime code checkpoint drift")
+        return proof
+
+    if runtime_root.exists():
+        if not (official_dir.is_dir() and archive.is_file() and proof_path.is_file()):
+            raise RuntimeError("official runtime code checkpoint is incomplete")
+        return official_dir, verify_checkpoint()
+    runtime_root.parent.mkdir(parents=True, exist_ok=True)
+    staging = runtime_root.parent / (".staging-" + commit)
+    staging.mkdir(mode=0o700)
+    try:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import run_longmemeval_v2 as adapter
+
+        staged_archive = staging / "official.tar.gz"
+        adapter._download(adapter.release_urls(lock)["code_archive"], staged_archive)
+        extracted = staging / "extracted"
+        extracted.mkdir()
+        extracted_root = adapter._extract_archive(staged_archive, extracted)
+        adapter.verify_code(extracted_root, files)
+        extracted_root.replace(staging / "official")
+        shutil.rmtree(extracted)
+        core = {
+            "schema_version": 1,
+            "commit": commit,
+            "release_lock_sha256": _sha256_file(lock_path),
+            "archive": {
+                "bytes": staged_archive.stat().st_size,
+                "sha256": _sha256_file(staged_archive),
+            },
+            "files": files,
+            "files_sha256": sha256_json(files),
+        }
+        _create_json(staging / "RUNTIME-CODE.json", {
+            **core, "proof_sha256": sha256_json(core)
+        })
+        os.replace(staging, runtime_root)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return official_dir, verify_checkpoint()
 
 
 def _fetch_public_bytes(url: str) -> bytes:
@@ -553,18 +644,14 @@ def _derive_public_prefix_rows(
         question_ids.add(question_id)
         for row in rows:
             arm = row.get("arm")
+            required_fields = {
+                "arm", "row_key", "answer", "output_sha256",
+                "receipt_sha256", "structurally_valid", "receipt_valid",
+                "settled", "official_row", "provider_record",
+            }
             if (
                 set(row)
-                != {
-                    "arm",
-                    "row_key",
-                    "answer",
-                    "output_sha256",
-                    "receipt_sha256",
-                    "structurally_valid",
-                    "receipt_valid",
-                    "settled",
-                }
+                not in (required_fields, required_fields | {"deep_provider_record"})
                 or row.get("row_key") != f"{question_id}:{arm}"
                 or not isinstance(row.get("answer"), str)
                 or not row["answer"]
@@ -573,6 +660,13 @@ def _derive_public_prefix_rows(
                 or row.get("structurally_valid") is not True
                 or row.get("receipt_valid") is not True
                 or row.get("settled") is not True
+                or not isinstance(row.get("official_row"), dict)
+                or row["official_row"].get("question_id") != question_id
+                or not isinstance(row.get("provider_record"), dict)
+                or (
+                    arm == "deep"
+                    and not isinstance(row.get("deep_provider_record"), dict)
+                )
             ):
                 raise RuntimeError("private prefix output row structure is invalid")
         public_rows.append(
@@ -608,6 +702,7 @@ def seal_prefix(
     *,
     execution_plan_sha256: str,
     reservation_plan_sha256: str,
+    plaintext_paths: list[Path] | None = None,
 ) -> dict[str, object]:
     if not private_results.is_file():
         raise RuntimeError("private prefix result file is missing")
@@ -743,6 +838,26 @@ def seal_prefix(
             raise RuntimeError("immutable sealed prefix status drift")
     else:
         _atomically_create_json(public_status_path, status)
+    # Public status is the durable proof that the ciphertext was verified.
+    # Only after it is fsynced may any paid plaintext copy be removed.
+    private_root = private_results.parent.resolve()
+    for plaintext_path in plaintext_paths or []:
+        unresolved = plaintext_path.absolute()
+        if (
+            unresolved == private_results.absolute()
+            or not unresolved.is_relative_to(private_root)
+            or unresolved.is_symlink()
+        ):
+            raise RuntimeError("sealed prefix plaintext cleanup path is unsafe")
+        if unresolved.is_dir():
+            shutil.rmtree(unresolved)
+        else:
+            unresolved.unlink(missing_ok=True)
+    cleanup_directory = os.open(private_root, os.O_RDONLY)
+    try:
+        os.fsync(cleanup_directory)
+    finally:
+        os.close(cleanup_directory)
     private_results.unlink()
     private_directory = os.open(private_results.parent, os.O_RDONLY)
     try:
@@ -1177,16 +1292,21 @@ def build_row_reservation_plan(
         authority = by_question[row["question_id"]]
         reader_nanos = authority.get("reader_liability_nanos")
         judge_nanos = authority.get("judge_liability_nanos")
+        native_judge_required = authority.get("native_judge_required")
         if (
             type(reader_nanos) is not int
             or reader_nanos <= 0
             or type(judge_nanos) is not int
-            or judge_nanos <= 0
+            or judge_nanos < 0
+            or type(native_judge_required) is not bool
+            or (judge_nanos > 0) != native_judge_required
             or authority.get("per_arm_liability_nanos")
             != reader_nanos + judge_nanos
         ):
             raise RuntimeError("campaign row liability decomposition drift")
-        components = {"reader": reader_nanos, "judge": judge_nanos}
+        components = {"reader": reader_nanos}
+        if native_judge_required:
+            components["judge"] = judge_nanos
         if row["arm"] == "deep":
             components = {"deep_recall": terms["S"], **components}
         planned_rows.append(
@@ -1195,6 +1315,7 @@ def build_row_reservation_plan(
                 "row_key": row["row_key"],
                 "question_id": row["question_id"],
                 "arm": row["arm"],
+                "native_judge_required": native_judge_required,
                 "components": components,
                 "maximum_liability_nanos": sum(components.values()),
             }
@@ -1251,16 +1372,20 @@ class RowExecutionStateMachine:
         total = 0
         for sequence, row in enumerate(rows, 1):
             components = row.get("components") if isinstance(row, dict) else None
-            expected_components = (
-                {"reader", "judge"}
-                if isinstance(row, dict) and row.get("arm") == "fast"
-                else {"deep_recall", "reader", "judge"}
+            native_judge_required = (
+                row.get("native_judge_required") if isinstance(row, dict) else None
             )
+            expected_components = {"reader"}
+            if native_judge_required is True:
+                expected_components.add("judge")
+            if isinstance(row, dict) and row.get("arm") == "deep":
+                expected_components.add("deep_recall")
             row_key = row.get("row_key") if isinstance(row, dict) else None
             if (
                 not isinstance(row, dict)
                 or row.get("sequence") != sequence
                 or row.get("arm") not in {"fast", "deep"}
+                or type(native_judge_required) is not bool
                 or not isinstance(row.get("question_id"), str)
                 or not row["question_id"]
                 or not isinstance(row_key, str)
@@ -1580,20 +1705,25 @@ def validate_complete_row_settlement(
     ]
     expected: dict[str, tuple[dict[str, object], str]] = {}
     for row in rows:
-        components = ["reader", "judge"]
+        components = ["reader"]
+        if "judge" in row["components"]:
+            components.append("judge")
         if row["arm"] == "deep":
             components.insert(0, "deep_recall")
         for component in components:
             key = f"lme-v2-row:{row['sequence']}:{row['row_key']}:{component}"
             expected[key] = (row, component)
-    if len(expected) != 2255 or len(row_attempts) != 2255:
-        raise RuntimeError("complete row settlement requires exactly 2255 attempts")
+    expected_attempt_count = QUESTION_COUNT * 3 + 156 * 2
+    if len(expected) != expected_attempt_count or len(row_attempts) != expected_attempt_count:
+        raise RuntimeError(
+            f"complete row settlement requires exactly {expected_attempt_count} attempts"
+        )
     found: set[str] = set()
     response_ids: set[str] = set()
     settled_nanos = 0
-    latest_prejudge_index = -1
-    earliest_judge_index = len(attempts)
-    for attempt_index, attempt in enumerate(attempts):
+    latest_prejudge_result_sequence = -1
+    earliest_judge_start_sequence = sys.maxsize
+    for attempt in attempts:
         request_key = attempt.get("request_key") if isinstance(attempt, dict) else None
         authority = expected.get(request_key)
         if authority is None:
@@ -1612,8 +1742,13 @@ def validate_complete_row_settlement(
             else "qwen/qwen3.5-9b-20260310"
         )
         response_id = response.get("response_id") if isinstance(response, dict) else None
+        start_sequence = attempt.get("start_sequence")
+        result_sequence = attempt.get("result_sequence")
         if (
             attempt.get("status") != "result"
+            or type(start_sequence) is not int
+            or type(result_sequence) is not int
+            or not 0 < start_sequence < result_sequence
             or not isinstance(start, dict)
             or start.get("max_liability_nanos")
             != row["components"][component]
@@ -1645,12 +1780,16 @@ def validate_complete_row_settlement(
         settled_nanos += cost
         response_ids.add(response_id)
         if component == "judge":
-            earliest_judge_index = min(earliest_judge_index, attempt_index)
+            earliest_judge_start_sequence = min(
+                earliest_judge_start_sequence, start_sequence
+            )
         else:
-            latest_prejudge_index = max(latest_prejudge_index, attempt_index)
+            latest_prejudge_result_sequence = max(
+                latest_prejudge_result_sequence, result_sequence
+            )
     if found != set(expected):
         raise RuntimeError("complete row settlement lacks exact component coverage")
-    if latest_prejudge_index >= earliest_judge_index:
+    if latest_prejudge_result_sequence >= earliest_judge_start_sequence:
         raise RuntimeError("native judge started before all reader outputs settled")
     core = {
         "schema_version": 1,
@@ -1671,10 +1810,7 @@ def build_native_official_package(
     pairs: list[dict[str, object]],
     reservation_plan: dict[str, object],
     ledger_snapshot: dict[str, object],
-    lafs_gain: str,
-    submission_score: str,
-    accepted_submission: bool,
-    published_leaderboard_scores: list[object],
+    official_metrics_artifact: dict[str, object],
     upstream_identity: dict[str, object],
 ) -> dict[str, object]:
     if (
@@ -1691,12 +1827,48 @@ def build_native_official_package(
     row_settlement = validate_complete_row_settlement(
         reservation_plan, ledger_snapshot
     )
+    metrics_core = {
+        key: value
+        for key, value in official_metrics_artifact.items()
+        if key != "official_metrics_sha256"
+    }
+    lafs = official_metrics_artifact.get("lafs")
+    lafs_core = (
+        {key: value for key, value in lafs.items() if key != "lafs_proof_sha256"}
+        if isinstance(lafs, dict)
+        else None
+    )
+    arms = official_metrics_artifact.get("arms")
+    release_lock = json.loads(
+        (ROOT / "benchmarks/manifests/longmemeval_v2.lock.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if (
+        official_metrics_artifact.get("official_metrics_sha256")
+        != sha256_json(metrics_core)
+        or not _valid_sha256(
+            official_metrics_artifact.get("runtime_code_proof_sha256")
+        )
+        or not isinstance(lafs, dict)
+        or lafs.get("lafs_proof_sha256") != sha256_json(lafs_core)
+        or not _valid_sha256(lafs.get("compute_lafs_sha256"))
+        or lafs.get("compute_lafs_sha256")
+        != release_lock["code"]["files"]["leaderboard/compute_lafs.py"]
+        or official_metrics_artifact.get("runtime_code_commit")
+        != upstream_identity.get("code_commit")
+        or upstream_identity.get("code_commit") != release_lock["code"]["commit"]
+        or not isinstance(lafs.get("summary"), dict)
+        or not isinstance(arms, dict)
+        or set(arms) != {"fast", "deep"}
+    ):
+        raise RuntimeError("native package official metrics proof is invalid")
     metric_input = {
         "pairs": pairs,
-        "lafs_gain": lafs_gain,
-        "submission_score": submission_score,
-        "accepted_submission": accepted_submission,
-        "published_leaderboard_scores": published_leaderboard_scores,
+        "lafs_gain": lafs["summary"].get("lafs_gain"),
+        "submission_score": arms["deep"]["overall"].get("overall_full_set"),
+        "accepted_submission": False,
+        "published_leaderboard_scores": [],
     }
     metrics = validate_paired_results(metric_input)
     core = {
@@ -1709,6 +1881,9 @@ def build_native_official_package(
         "pairs": pairs,
         "pairs_sha256": sha256_json(pairs),
         "official_metrics": metrics,
+        "official_metrics_artifact_sha256": official_metrics_artifact[
+            "official_metrics_sha256"
+        ],
         "claims": {
             "official_package_complete": True,
             "internal_benchmark_success": metrics["internal_benchmark_success"],
@@ -1724,6 +1899,7 @@ def close_completed_row_campaign(
     ledger: object,
     reservation_plan: dict[str, object],
     native_package: dict[str, object],
+    official_metrics_artifact: dict[str, object],
     closure_path: Path,
 ) -> dict[str, object]:
     package_core = {
@@ -1738,6 +1914,27 @@ def close_completed_row_campaign(
         or native_package.get("row_settlement")
         != validate_complete_row_settlement(reservation_plan, ledger.snapshot())
         or native_package.get("official_metrics", {}).get("fully_settled") is not True
+        or official_metrics_artifact.get("official_metrics_sha256")
+        != native_package.get("official_metrics_artifact_sha256")
+        or official_metrics_artifact.get("official_metrics_sha256")
+        != sha256_json(
+            {
+                key: value
+                for key, value in official_metrics_artifact.items()
+                if key != "official_metrics_sha256"
+            }
+        )
+        or native_package.get("official_metrics", {}).get("positive_lafs")
+        != (
+            Decimal(
+                str(
+                    official_metrics_artifact.get("lafs", {})
+                    .get("summary", {})
+                    .get("lafs_gain")
+                )
+            )
+            > 0
+        )
     ):
         raise RuntimeError("campaign closure requires the exact native package")
     snapshot = ledger.snapshot()
@@ -1781,6 +1978,7 @@ def execute_strict_reader_call(
     row_key: str,
     row_state: RowExecutionStateMachine,
     transport,
+    persist_private,
 ) -> dict[str, object]:
     """Execute one no-retry Qwen reader call through DeepInfra only."""
     provider = payload.get("provider")
@@ -1791,12 +1989,20 @@ def execute_strict_reader_call(
         or payload.get("top_p") != 0.95
         or payload.get("top_k") != 20
         or not isinstance(payload.get("messages"), list)
-        or not isinstance(provider, dict)
-        or provider.get("only") != ["DeepInfra"]
-        or provider.get("allow_fallbacks") is not False
+        or provider
+        != {
+            "only": ["deepinfra"],
+            "allow_fallbacks": False,
+            "require_parameters": True,
+            "data_collection": "deny",
+            "zdr": True,
+            "quantizations": ["bf16"],
+            "max_price": {"prompt": 0.1, "completion": 0.15},
+        }
     ):
         raise RuntimeError("strict Qwen DeepInfra reader request drift")
     request_sha256 = sha256_json(payload)
+    private_persisted = False
     row_state.start(
         row_key,
         "reader",
@@ -1841,6 +2047,7 @@ def execute_strict_reader_call(
         )
         if generation_cost != response_cost:
             raise RuntimeError("strict Qwen DeepInfra reader cost reconciliation drift")
+        raw_provider_record = {"response": response, "generation": generation}
         receipt = {
             "response_id": response["id"],
             "requested_model": "qwen/qwen3.5-9b-20260310",
@@ -1851,17 +2058,20 @@ def execute_strict_reader_call(
             "retry_index": 0,
             "parse_status": "provider_response_validated",
             "request_sha256": request_sha256,
-            "result_sha256": sha256_json(response),
+            "result_sha256": sha256_json(raw_provider_record),
         }
+        persist_private(raw_provider_record, receipt)
+        private_persisted = True
         row_state.result(row_key, "reader", receipt)
         return response
     except BaseException as error:
-        row_state.error(
-            row_key,
-            "reader",
-            type(error).__name__,
-            "qwen-deepinfra-reader",
-        )
+        if not private_persisted:
+            row_state.error(
+                row_key,
+                "reader",
+                type(error).__name__,
+                "qwen-deepinfra-reader",
+            )
         raise
 
 
@@ -1871,17 +2081,19 @@ def execute_native_judge_call(
     row_key: str,
     row_state: RowExecutionStateMachine,
     transport,
+    persist_private,
 ) -> dict[str, object]:
     """Execute one native OpenAI GPT-5.2 medium judge call without retry."""
-    reasoning = payload.get("reasoning")
     if (
         payload.get("model") != "gpt-5.2-2025-12-11"
-        or payload.get("max_output_tokens") != 2048
-        or reasoning != {"effort": "medium"}
-        or "input" not in payload
+        or payload.get("max_completion_tokens") != 2048
+        or payload.get("reasoning_effort") != "medium"
+        or not isinstance(payload.get("messages"), list)
+        or not payload["messages"]
     ):
         raise RuntimeError("native GPT-5.2 medium judge request drift")
     request_sha256 = sha256_json(payload)
+    private_persisted = False
     row_state.start(
         row_key,
         "judge",
@@ -1895,23 +2107,29 @@ def execute_native_judge_call(
         if (
             not isinstance(response, dict)
             or response.get("model") != "gpt-5.2-2025-12-11"
-            or response.get("status") != "completed"
             or not isinstance(response.get("id"), str)
             or not response["id"]
-            or not isinstance(response.get("output"), list)
+            or not isinstance(response.get("choices"), list)
+            or len(response["choices"]) != 1
+            or not isinstance(response["choices"][0], dict)
+            or not isinstance(response["choices"][0].get("message"), dict)
+            or not isinstance(
+                response["choices"][0]["message"].get("content"), str
+            )
+            or not response["choices"][0]["message"]["content"]
             or not isinstance(usage, dict)
-            or type(usage.get("input_tokens")) is not int
-            or type(usage.get("output_tokens")) is not int
+            or type(usage.get("prompt_tokens")) is not int
+            or type(usage.get("completion_tokens")) is not int
             or type(usage.get("total_tokens")) is not int
-            or usage["input_tokens"] <= 0
-            or usage["output_tokens"] <= 0
+            or usage["prompt_tokens"] <= 0
+            or usage["completion_tokens"] <= 0
             or usage["total_tokens"]
-            != usage["input_tokens"] + usage["output_tokens"]
+            != usage["prompt_tokens"] + usage["completion_tokens"]
         ):
             raise RuntimeError("native GPT-5.2 medium judge response drift")
         settled_nanos = (
-            _ceil_cost(usage["input_tokens"], 1_750_000_000)
-            + _ceil_cost(usage["output_tokens"], 14_000_000_000)
+            _ceil_cost(usage["prompt_tokens"], 1_750_000_000)
+            + _ceil_cost(usage["completion_tokens"], 14_000_000_000)
         )
         receipt = {
             "response_id": response["id"],
@@ -1919,8 +2137,8 @@ def execute_native_judge_call(
             "served_model": response["model"],
             "provider": "OpenAI",
             "usage": {
-                "prompt_tokens": usage["input_tokens"],
-                "completion_tokens": usage["output_tokens"],
+                "prompt_tokens": usage["prompt_tokens"],
+                "completion_tokens": usage["completion_tokens"],
                 "total_tokens": usage["total_tokens"],
                 "cost": _cost_string_from_nanos(settled_nanos),
             },
@@ -1930,16 +2148,822 @@ def execute_native_judge_call(
             "request_sha256": request_sha256,
             "result_sha256": sha256_json(response),
         }
+        persist_private(response, receipt)
+        private_persisted = True
         row_state.result(row_key, "judge", receipt)
         return response
     except BaseException as error:
-        row_state.error(
-            row_key,
-            "judge",
-            type(error).__name__,
-            "openai-native-judge",
-        )
+        if not private_persisted:
+            row_state.error(
+                row_key,
+                "judge",
+                type(error).__name__,
+                "openai-native-judge",
+            )
         raise
+
+
+class _MeteredChatProxy(ThreadingHTTPServer):
+    """One logical paid request with byte-stable local retry replay."""
+
+    daemon_threads = True
+
+    def __init__(self, dispatch) -> None:
+        self._dispatch = dispatch
+        self._lock = threading.Lock()
+        self._request_sha256: str | None = None
+        self._response: dict[str, object] | None = None
+        self.dispatch_count = 0
+        super().__init__(("127.0.0.1", 0), _MeteredChatHandler)
+
+    def dispatch(self, payload: dict[str, object]) -> dict[str, object]:
+        request_sha256 = sha256_json(payload)
+        with self._lock:
+            if self._request_sha256 is not None:
+                if request_sha256 != self._request_sha256:
+                    raise RuntimeError("local SDK retry request identity drift")
+                if self._response is None:
+                    raise RuntimeError("local SDK retry raced an unresolved request")
+                return self._response
+            self._request_sha256 = request_sha256
+            self.dispatch_count += 1
+            response = self._dispatch(payload)
+            if not isinstance(response, dict):
+                raise RuntimeError("metered proxy dispatch returned invalid JSON")
+            self._response = response
+            return response
+
+
+class _MeteredChatHandler(BaseHTTPRequestHandler):
+    server: _MeteredChatProxy
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler contract
+        if self.path.rstrip("/") not in {"/v1/chat/completions", "/chat/completions"}:
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("content-length", ""))
+            if length <= 0 or length > 64 * 1024 * 1024:
+                raise RuntimeError("metered proxy request size is invalid")
+            payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                raise RuntimeError("metered proxy request is not an object")
+            response = self.server.dispatch(payload)
+            body = canonical_json(response)
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except BaseException as error:
+            body = canonical_json(
+                {"error": {"type": type(error).__name__, "message": "metered proxy rejected request"}}
+            )
+            self.send_response(502)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+
+def _start_metered_proxy(dispatch) -> tuple[_MeteredChatProxy, str]:
+    server = _MeteredChatProxy(dispatch)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    return server, f"http://{host}:{port}/v1"
+
+
+def start_reader_proxy(
+    *,
+    row_key: str,
+    row_state: RowExecutionStateMachine,
+    transport,
+    persist_private,
+    before_start=lambda: None,
+) -> tuple[_MeteredChatProxy, str]:
+    """Expose the official OpenAI-compatible reader wire to one metered call."""
+
+    def dispatch(official_payload: dict[str, object]) -> dict[str, object]:
+        extra = official_payload.get("extra_body")
+        top_k = official_payload.get("top_k")
+        if isinstance(extra, dict):
+            top_k = extra.get("top_k", top_k)
+        allowed = {
+            "model", "messages", "max_tokens", "temperature", "top_p",
+            "top_k", "extra_body",
+        }
+        if (
+            set(official_payload) - allowed
+            or official_payload.get("model") != "Qwen/Qwen3.5-9B"
+            or official_payload.get("max_tokens") != 20_000
+            or official_payload.get("temperature") != 0.6
+            or official_payload.get("top_p") != 0.95
+            or top_k != 20
+            or not isinstance(official_payload.get("messages"), list)
+            or not official_payload["messages"]
+            or (
+                extra is not None
+                and (not isinstance(extra, dict) or set(extra) != {"top_k"})
+            )
+        ):
+            raise RuntimeError("official Qwen reader wire request drift")
+        before_start()
+        payload = {
+            "model": "qwen/qwen3.5-9b-20260310",
+            "messages": official_payload.get("messages"),
+            "max_tokens": official_payload.get("max_tokens"),
+            "temperature": official_payload.get("temperature"),
+            "top_p": official_payload.get("top_p"),
+            "top_k": top_k,
+            "provider": {
+                "only": ["deepinfra"],
+                "allow_fallbacks": False,
+                "require_parameters": True,
+                "data_collection": "deny",
+                "zdr": True,
+                "quantizations": ["bf16"],
+                "max_price": {"prompt": 0.1, "completion": 0.15},
+            },
+        }
+        return execute_strict_reader_call(
+            payload=payload,
+            row_key=row_key,
+            row_state=row_state,
+            transport=transport,
+            persist_private=persist_private,
+        )
+
+    return _start_metered_proxy(dispatch)
+
+
+def start_judge_proxy(
+    *,
+    row_key: str,
+    row_state: RowExecutionStateMachine,
+    transport,
+    persist_private,
+) -> tuple[_MeteredChatProxy, str]:
+    """Expose the pinned synchronous Chat Completions judge wire."""
+
+    def dispatch(payload: dict[str, object]) -> dict[str, object]:
+        return execute_native_judge_call(
+            payload=payload,
+            row_key=row_key,
+            row_state=row_state,
+            transport=transport,
+            persist_private=persist_private,
+        )
+
+    return _start_metered_proxy(dispatch)
+
+
+def _provider_json_request(
+    url: str,
+    *,
+    api_key: str,
+    payload: dict[str, object] | None = None,
+    timeout: float = 43_200.0,
+) -> dict[str, object]:
+    if not api_key:
+        raise RuntimeError("provider credential is missing")
+    request = urllib.request.Request(
+        url,
+        data=None if payload is None else canonical_json(payload),
+        method="GET" if payload is None else "POST",
+        headers={
+            "authorization": f"Bearer {api_key}",
+            "content-type": "application/json",
+        },
+    )
+    try:
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), _NoRedirectHandler()
+        )
+        with opener.open(request, timeout=timeout) as response:
+            body = json.loads(response.read())
+    except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as error:
+        raise RuntimeError("provider request failed") from error
+    if not isinstance(body, dict):
+        raise RuntimeError("provider response is not a JSON object")
+    return body
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class _DeepRecallProxy(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        journal_path: Path,
+        private_root: Path,
+        row_key: str,
+        authority: dict[str, object],
+        transport=None,
+    ) -> None:
+        if not api_key:
+            raise RuntimeError("Deep proxy requires OPENROUTER_API_KEY")
+        if (
+            set(authority) != PRIVATE_OUTPUT_AUTHORITY_FIELDS
+            or not all(_valid_sha256(authority.get(key)) for key in authority)
+            or not row_key
+        ):
+            raise RuntimeError("Deep attempt journal authority is invalid")
+        self.api_key = api_key
+        self.row_key = row_key
+        self.authority = authority
+        self.transport = transport or _provider_raw_request
+        self.started = time.monotonic()
+        self.journal_path = journal_path.absolute()
+        self.private_root = private_root.absolute()
+        self.private_root.mkdir(parents=True, exist_ok=True)
+        self.private_root.chmod(0o700)
+        if (
+            self.private_root.is_symlink()
+            or not self.journal_path.is_relative_to(self.private_root)
+        ):
+            raise RuntimeError("Deep attempt journal escapes private authority")
+        cursor = self.private_root
+        for part in self.journal_path.parent.relative_to(self.private_root).parts:
+            cursor /= part
+            if cursor.exists() and cursor.is_symlink():
+                raise RuntimeError("Deep attempt journal parent is a symlink")
+        self.journal_path.parent.mkdir(parents=True, exist_ok=True)
+        self.journal_path.parent.chmod(0o700)
+        self._events = self._load_journal()
+        self._dispatch_results = [
+            event for event in self._events if event.get("event") == "dispatch_result"
+        ]
+        self.dispatch_count = len(
+            [event for event in self._events if event.get("event") == "dispatch_intent"]
+        )
+        self.generation_ids = [
+            str(event["generation_id"])
+            for event in self._dispatch_results
+            if isinstance(event.get("generation_id"), str)
+            and event["generation_id"]
+        ]
+        self.generations: dict[str, dict[str, object]] = {}
+        for event in self._events:
+            if event.get("event") == "generation_record":
+                record = event.get("generation")
+                generation_id = event.get("generation_id")
+                if isinstance(record, dict) and isinstance(generation_id, str):
+                    self.generations[generation_id] = record
+        self._replay_cursor = 0
+        self._terminal_rejection = any(
+            event.get("event") == "terminal_rejection" for event in self._events
+        ) or self.dispatch_count != len(self._dispatch_results)
+        self._lock = threading.Lock()
+        super().__init__(("127.0.0.1", 0), _DeepRecallHandler)
+
+    def _load_journal(self) -> list[dict[str, object]]:
+        if not self.journal_path.exists():
+            self._append_event(
+                "journal_open",
+                {"row_key": self.row_key, "authority": self.authority},
+                existing=[],
+            )
+        if self.journal_path.is_symlink() or not self.journal_path.is_file():
+            raise RuntimeError("Deep attempt journal path is invalid")
+        events: list[dict[str, object]] = []
+        previous_sha256 = "0" * 64
+        try:
+            lines = self.journal_path.read_text(encoding="utf-8").splitlines()
+        except OSError as error:
+            raise RuntimeError("Deep attempt journal is unreadable") from error
+        for sequence, line in enumerate(lines, 1):
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise RuntimeError("Deep attempt journal is corrupt") from error
+            core = {key: value for key, value in event.items() if key != "event_sha256"}
+            if (
+                not isinstance(event, dict)
+                or event.get("sequence") != sequence
+                or event.get("previous_sha256") != previous_sha256
+                or event.get("event_sha256") != sha256_json(core)
+            ):
+                raise RuntimeError("Deep attempt journal hash chain is invalid")
+            events.append(event)
+            previous_sha256 = event["event_sha256"]
+        if (
+            not events
+            or events[0].get("event") != "journal_open"
+            or events[0].get("row_key") != self.row_key
+            or events[0].get("authority") != self.authority
+        ):
+            raise RuntimeError("Deep attempt journal authority drift")
+        intents: dict[int, dict[str, object]] = {}
+        results: dict[int, dict[str, object]] = {}
+        for event in events[1:]:
+            turn = event.get("turn")
+            if event.get("event") == "dispatch_intent":
+                if (
+                    type(turn) is not int
+                    or turn != len(intents) + 1
+                    or turn in intents
+                    or not _valid_sha256(event.get("request_sha256"))
+                ):
+                    raise RuntimeError("Deep dispatch intent journal is invalid")
+                intents[turn] = event
+            elif event.get("event") == "dispatch_result":
+                encoded = event.get("response_body_base64")
+                try:
+                    decoded = base64.b64decode(str(encoded), validate=True)
+                except (ValueError, TypeError) as error:
+                    raise RuntimeError("Deep dispatch response journal is invalid") from error
+                headers = event.get("response_headers")
+                generation_id = event.get("generation_id")
+                if (
+                    type(turn) is not int
+                    or turn in results
+                    or turn not in intents
+                    or event.get("request_sha256")
+                    != intents[turn].get("request_sha256")
+                    or type(event.get("status")) is not int
+                    or not isinstance(headers, dict)
+                    or hashlib.sha256(decoded).hexdigest()
+                    != event.get("response_sha256")
+                    or headers.get("x-generation-id") != generation_id
+                ):
+                    raise RuntimeError("Deep dispatch response journal is invalid")
+                results[turn] = event
+        return events
+
+    def _append_event(
+        self,
+        event: str,
+        payload: dict[str, object],
+        *,
+        existing: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        events = self._events if existing is None else existing
+        previous_sha256 = events[-1]["event_sha256"] if events else "0" * 64
+        core = {
+            "schema_version": 1,
+            "sequence": len(events) + 1,
+            "previous_sha256": previous_sha256,
+            "event": event,
+            **payload,
+        }
+        record = {**core, "event_sha256": sha256_json(core)}
+        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+        descriptor = os.open(self.journal_path, flags, 0o600)
+        try:
+            os.write(descriptor, canonical_json(record) + b"\n")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        self.journal_path.chmod(0o600)
+        directory = os.open(self.journal_path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        events.append(record)
+        return record
+
+    def _reject_terminally(self, reason: str) -> None:
+        if not self._terminal_rejection:
+            self._append_event("terminal_rejection", {"reason": reason})
+        self._terminal_rejection = True
+
+    def dispatch(
+        self, payload: dict[str, object]
+    ) -> tuple[int, dict[str, str], bytes]:
+        self.validate_payload(payload)
+        request_sha256 = sha256_json(payload)
+        with self._lock:
+            if self._terminal_rejection:
+                raise RuntimeError("Deep attempt journal is terminally rejected")
+            if self._replay_cursor < len(self._dispatch_results):
+                prior = self._dispatch_results[self._replay_cursor]
+                if prior.get("request_sha256") != request_sha256:
+                    self._reject_terminally("replayed Deep request drift")
+                    raise RuntimeError("Deep replay request drift")
+                self._replay_cursor += 1
+                return (
+                    int(prior["status"]),
+                    dict(prior["response_headers"]),
+                    base64.b64decode(str(prior["response_body_base64"]), validate=True),
+                )
+            turn = self.dispatch_count + 1
+            self._append_event(
+                "dispatch_intent",
+                {"turn": turn, "request_sha256": request_sha256},
+            )
+            self.dispatch_count += 1
+        try:
+            status, headers, body = self.transport(
+                "https://openrouter.ai/api/v1/chat/completions",
+                api_key=self.api_key,
+                body=canonical_json(payload),
+            )
+        except BaseException:
+            with self._lock:
+                self._reject_terminally("ambiguous provider dispatch")
+            raise
+        generation_id = next(
+            (
+                value
+                for key, value in headers.items()
+                if key.casefold() == "x-generation-id"
+            ),
+            None,
+        )
+        normalized_headers = {
+            "content-type": headers.get("Content-Type", headers.get("content-type", "text/event-stream")),
+            **({"x-generation-id": generation_id} if generation_id else {}),
+        }
+        result = {
+            "turn": turn,
+            "request_sha256": request_sha256,
+            "status": status,
+            "generation_id": generation_id,
+            "response_sha256": hashlib.sha256(body).hexdigest(),
+            "response_headers": normalized_headers,
+            "response_body_base64": base64.b64encode(body).decode("ascii"),
+        }
+        with self._lock:
+            event = self._append_event("dispatch_result", result)
+            self._dispatch_results.append(event)
+            self._replay_cursor += 1
+            if isinstance(generation_id, str) and generation_id:
+                if generation_id in self.generation_ids:
+                    self._reject_terminally("duplicate provider generation id")
+                    raise RuntimeError("Deep generation id was replayed")
+                self.generation_ids.append(generation_id)
+            else:
+                self._reject_terminally("dispatch lacks generation id")
+        return status, normalized_headers, body
+
+    def reconcile_generation(self, generation_id: str) -> dict[str, object] | None:
+        if generation_id in self.generations:
+            return self.generations[generation_id]
+        status, _, body = self.transport(
+            "https://openrouter.ai/api/v1/generation?id=" + generation_id,
+            api_key=self.api_key,
+            body=None,
+        )
+        if status != 200:
+            return None
+        try:
+            envelope = json.loads(body)
+        except json.JSONDecodeError:
+            return None
+        candidate = envelope.get("data") if isinstance(envelope, dict) else None
+        if not isinstance(candidate, dict) or candidate.get("total_cost") is None:
+            return None
+        with self._lock:
+            if generation_id not in self.generations:
+                self._append_event(
+                    "generation_record",
+                    {
+                        "generation_id": generation_id,
+                        "generation_sha256": sha256_json(candidate),
+                        "generation": candidate,
+                    },
+                )
+                self.generations[generation_id] = candidate
+        return candidate
+
+    def validate_payload(self, payload: dict[str, object]) -> None:
+        provider = payload.get("provider")
+        if (
+            payload.get("model") != "qwen/qwen3.5-9b-20260310"
+            or payload.get("max_completion_tokens") != 4096
+            or payload.get("stream") is not True
+            or payload.get("tool_choice") != "required"
+            or not isinstance(payload.get("messages"), list)
+            or not payload["messages"]
+            or not isinstance(payload.get("tools"), list)
+            or not payload["tools"]
+            or provider
+            != {
+                "only": ["deepinfra"],
+                "allow_fallbacks": False,
+                "require_parameters": True,
+                "data_collection": "deny",
+                "zdr": True,
+                "quantizations": ["bf16"],
+                "max_price": {"prompt": 0.1, "completion": 0.15},
+            }
+        ):
+            raise RuntimeError("Deep Qwen request route drift")
+
+    def receipt(self, request_sha256: str) -> dict[str, object]:
+        for generation_id in list(self.generation_ids):
+            self.reconcile_generation(generation_id)
+        with self._lock:
+            generations = [self.generations.get(key) for key in self.generation_ids]
+        if (
+            not generations
+            or any(not isinstance(item, dict) for item in generations)
+            or self.dispatch_count != len(set(self.generation_ids))
+            or self.dispatch_count != len(generations)
+            or self._replay_cursor != len(self._dispatch_results)
+            or len({item.get("id") for item in generations}) != len(generations)
+        ):
+            with self._lock:
+                self._reject_terminally("dispatch/generation settlement mismatch")
+            raise RuntimeError("Deep dispatch/generation settlement mismatch")
+        normalized = []
+        prompt_tokens = 0
+        completion_tokens = 0
+        settled_nanos = 0
+        for item in generations:
+            assert isinstance(item, dict)
+            if (
+                item.get("model") != "qwen/qwen3.5-9b"
+                or item.get("provider_name") != "DeepInfra"
+                or type(item.get("tokens_prompt")) is not int
+                or type(item.get("tokens_completion")) is not int
+                or item["tokens_prompt"] <= 0
+                or item["tokens_completion"] <= 0
+            ):
+                raise RuntimeError("Deep generation route receipt drift")
+            cost = _cost_nanos_from_reported_usage({"cost": item.get("total_cost")})
+            prompt_tokens += item["tokens_prompt"]
+            completion_tokens += item["tokens_completion"]
+            settled_nanos += cost
+            normalized.append(
+                {
+                    "id": item["id"],
+                    "model": item["model"],
+                    "provider_name": item["provider_name"],
+                    "tokens_prompt": item["tokens_prompt"],
+                    "tokens_completion": item["tokens_completion"],
+                    "total_cost": str(item["total_cost"]),
+                }
+            )
+        core = {
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_models": ["qwen/qwen3.5-9b"],
+            "served_providers": ["DeepInfra"],
+            "allow_fallbacks": False,
+            "attempt_count": len(normalized),
+            "dispatch_count": self.dispatch_count,
+            "generation_ids": list(self.generation_ids),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "settled_nanos": settled_nanos,
+            "request_sha256": request_sha256,
+            "elapsed_seconds": time.monotonic() - self.started,
+            "generation_receipts": normalized,
+            "generation_receipts_sha256": sha256_json(normalized),
+            "deep_attempt_journal_sha256": _sha256_file(self.journal_path),
+        }
+        return {**core, "receipt_sha256": sha256_json(core)}
+
+
+def _provider_raw_request(
+    url: str, *, api_key: str, body: bytes | None
+) -> tuple[int, dict[str, str], bytes]:
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="GET" if body is None else "POST",
+        headers={
+            "authorization": f"Bearer {api_key}",
+            "content-type": "application/json",
+        },
+    )
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), _NoRedirectHandler()
+    )
+    try:
+        response = opener.open(request, timeout=43_200)
+    except urllib.error.HTTPError as error:
+        return error.code, dict(error.headers.items()), error.read()
+    with response:
+        return response.status, dict(response.headers.items()), response.read()
+
+
+class _DeepRecallHandler(BaseHTTPRequestHandler):
+    server: _DeepRecallProxy
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path.rstrip("/") != "/chat/completions":
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("content-length", ""))
+            raw = self.rfile.read(length)
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                raise RuntimeError("Deep proxy body is invalid")
+            self.server.validate_payload(payload)
+            status, headers, body = self.server.dispatch(payload)
+            generation_id = headers.get("x-generation-id")
+            self.send_response(status)
+            self.send_header("content-type", headers.get("Content-Type", "text/event-stream"))
+            self.send_header("content-length", str(len(body)))
+            if generation_id:
+                self.send_header("x-generation-id", generation_id)
+            self.end_headers()
+            self.wfile.write(body)
+        except BaseException:
+            self.send_error(502)
+
+    def do_GET(self) -> None:  # noqa: N802
+        parsed = urlsplit(self.path)
+        if parsed.path.rstrip("/") != "/generation" or not parsed.query.startswith("id="):
+            self.send_error(404)
+            return
+        generation_id = parsed.query.removeprefix("id=")
+        if generation_id not in self.server.generation_ids:
+            self.send_error(409)
+            return
+        candidate = self.server.reconcile_generation(generation_id)
+        status = 200 if candidate is not None else 409
+        body = canonical_json({"data": candidate}) if candidate is not None else b"{}"
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+
+def start_deep_recall_proxy(
+    api_key: str,
+    *,
+    journal_path: Path,
+    private_root: Path,
+    row_key: str,
+    authority: dict[str, object],
+) -> tuple[_DeepRecallProxy, str]:
+    server = _DeepRecallProxy(
+        api_key,
+        journal_path=journal_path,
+        private_root=private_root,
+        row_key=row_key,
+        authority=authority,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    return server, f"http://{host}:{port}"
+
+
+def openrouter_reader_transport(
+    api_key: str, payload: dict[str, object]
+) -> dict[str, object]:
+    response = _provider_json_request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        api_key=api_key,
+        payload=payload,
+    )
+    generation_id = response.get("id")
+    if not isinstance(generation_id, str) or not generation_id:
+        raise RuntimeError("OpenRouter reader response omitted generation id")
+    deadline = time.monotonic() + 600
+    generation: dict[str, object] | None = None
+    while time.monotonic() < deadline:
+        envelope = _provider_json_request(
+            "https://openrouter.ai/api/v1/generation?id=" + generation_id,
+            api_key=api_key,
+            timeout=30,
+        )
+        candidate = envelope.get("data")
+        if isinstance(candidate, dict) and candidate.get("total_cost") is not None:
+            generation = candidate
+            break
+        time.sleep(2)
+    if generation is None:
+        raise RuntimeError("OpenRouter reader generation settlement timed out")
+    return {"response": response, "generation": generation}
+
+
+def openai_judge_transport(
+    api_key: str, payload: dict[str, object]
+) -> dict[str, object]:
+    return _provider_json_request(
+        "https://api.openai.com/v1/chat/completions",
+        api_key=api_key,
+        payload=payload,
+    )
+
+
+PRIVATE_OUTPUT_AUTHORITY_FIELDS = {
+    "authorization_sha256",
+    "execution_plan_sha256",
+    "reservation_plan_sha256",
+    "case_bank_sha256",
+    "clone_sha256",
+    "binary_set_sha256",
+    "official_harness_sha256",
+    "official_scorer_sha256",
+}
+
+
+def persist_private_provider_output(
+    path: Path,
+    *,
+    private_root: Path,
+    row_key: str,
+    component: str,
+    response: dict[str, object],
+    receipt: dict[str, object],
+    authority: dict[str, object],
+) -> dict[str, object]:
+    """Create the durable middle state before a provider result is settled."""
+    original_path = path.absolute()
+    private_root = private_root.absolute()
+    private_root.mkdir(parents=True, exist_ok=True)
+    if private_root.is_symlink():
+        raise RuntimeError("canonical private root is a symlink")
+    private_root.chmod(0o700)
+    if not original_path.is_relative_to(private_root):
+        raise RuntimeError("private provider output escapes canonical root")
+    relative_parent = original_path.parent.relative_to(private_root)
+    cursor = private_root
+    for part in relative_parent.parts:
+        cursor = cursor / part
+        if cursor.exists() and cursor.is_symlink():
+            raise RuntimeError("private provider output parent is a symlink")
+    if original_path.is_symlink():
+        raise RuntimeError("private provider output path is a symlink")
+    path = original_path
+    parent = path.parent
+    if (
+        set(authority) != PRIVATE_OUTPUT_AUTHORITY_FIELDS
+        or not all(_valid_sha256(authority.get(key)) for key in authority)
+        or component not in {"deep_recall", "reader", "judge"}
+        or not isinstance(row_key, str)
+        or not row_key
+        or not isinstance(response, dict)
+        or not isinstance(receipt, dict)
+        or receipt.get("result_sha256") != sha256_json(response)
+    ):
+        raise RuntimeError("private provider output authority is invalid")
+    parent.mkdir(parents=True, exist_ok=True)
+    parent.chmod(0o700)
+    core = {
+        "schema_version": 1,
+        "status": "PRIVATE_OUTPUT_FSYNCED",
+        "row_key": row_key,
+        "component": component,
+        "authority": authority,
+        "response": response,
+        "receipt": receipt,
+    }
+    record = {**core, "private_output_sha256": sha256_json(core)}
+    _atomically_create_json(path, record)
+    path.chmod(0o600)
+    directory = os.open(parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    return record
+
+
+def reconcile_private_provider_output(
+    path: Path,
+    *,
+    row_state: RowExecutionStateMachine,
+    row_key: str,
+    component: str,
+    authority: dict[str, object],
+) -> dict[str, object]:
+    """Settle a crash-left durable response without another provider call."""
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("private provider output is unavailable") from error
+    core = {
+        key: value for key, value in record.items() if key != "private_output_sha256"
+    }
+    response = record.get("response")
+    receipt = record.get("receipt")
+    if (
+        record.get("private_output_sha256") != sha256_json(core)
+        or record.get("status") != "PRIVATE_OUTPUT_FSYNCED"
+        or record.get("row_key") != row_key
+        or record.get("component") != component
+        or record.get("authority") != authority
+        or not isinstance(response, dict)
+        or not isinstance(receipt, dict)
+        or receipt.get("result_sha256") != sha256_json(response)
+        or row_state.component_status(row_key, component) != "started"
+    ):
+        raise RuntimeError("private provider output cannot reconcile campaign state")
+    row_state.result(row_key, component, receipt)
+    return record
 
 
 def reserve_deep_recall(
@@ -1958,10 +2982,14 @@ def settle_deep_recall(
     row_key: str,
     row_state: RowExecutionStateMachine,
     receipt: dict[str, object],
+    persist_private,
 ) -> None:
     """Settle the aggregate Deep liability from its server-owned receipt."""
+    private_persisted = False
     try:
         settled_nanos = receipt.get("settled_nanos")
+        generation_ids = receipt.get("generation_ids")
+        generation_receipts = receipt.get("generation_receipts")
         receipt_core = {
             key: value for key, value in receipt.items() if key != "receipt_sha256"
         }
@@ -1972,6 +3000,18 @@ def settle_deep_recall(
             or receipt.get("allow_fallbacks") is not False
             or type(receipt.get("attempt_count")) is not int
             or not 1 <= receipt["attempt_count"] <= 72
+            or receipt.get("dispatch_count") != receipt["attempt_count"]
+            or not isinstance(generation_ids, list)
+            or len(generation_ids) != len(set(generation_ids))
+            or len(generation_ids) != receipt["attempt_count"]
+            or not all(isinstance(value, str) and value for value in generation_ids)
+            or not isinstance(generation_receipts, list)
+            or len(generation_receipts) != receipt["attempt_count"]
+            or [record.get("id") for record in generation_receipts if isinstance(record, dict)]
+            != generation_ids
+            or receipt.get("generation_receipts_sha256")
+            != sha256_json(generation_receipts)
+            or not _valid_sha256(receipt.get("deep_attempt_journal_sha256"))
             or type(receipt.get("prompt_tokens")) is not int
             or receipt["prompt_tokens"] <= 0
             or type(receipt.get("completion_tokens")) is not int
@@ -2002,16 +3042,19 @@ def settle_deep_recall(
             "retry_index": 0,
             "parse_status": "provider_response_validated",
             "request_sha256": receipt["request_sha256"],
-            "result_sha256": receipt["receipt_sha256"],
+            "result_sha256": sha256_json(receipt),
         }
+        persist_private(receipt, response)
+        private_persisted = True
         row_state.result(row_key, "deep_recall", response)
     except BaseException as error:
-        row_state.error(
-            row_key,
-            "deep_recall",
-            type(error).__name__,
-            "qwen-deepinfra-recall",
-        )
+        if not private_persisted:
+            row_state.error(
+                row_key,
+                "deep_recall",
+                type(error).__name__,
+                "qwen-deepinfra-recall",
+            )
         raise
 
 
@@ -2107,12 +3150,16 @@ def case_bank_dump_command(
 
 
 def postgres_tool_identity(
-    database_url: str, tool: str, *, run_command=subprocess.run
+    database_url: str,
+    tool: str,
+    *,
+    run_command=subprocess.run,
+    allow_base: bool = False,
 ) -> dict[str, object]:
     """Resolve a client whose major version exactly matches scratch Postgres."""
     if tool not in {"pg_dump", "pg_restore"}:
         raise RuntimeError("unsupported Postgres case-bank tool")
-    _parsed_scratch_postgres_url(database_url, require_base=False)
+    _parsed_scratch_postgres_url(database_url, require_base=allow_base)
     server = _run_campaign_command(
         ["psql", database_url, "-Atqc", "SHOW server_version_num"],
         run_command=run_command,
@@ -2405,6 +3452,8 @@ def write_case_bank_manifest(
         or any(
             not isinstance(identity, dict)
             or identity.get("tool") != name
+            or identity.get("executable") != name
+            or "path" in identity
             or identity.get("identity_sha256")
             != sha256_json(
                 {
@@ -2565,6 +3614,297 @@ def assert_case_source_quiescent(
     return proof
 
 
+@contextmanager
+def _campaign_environment(values: dict[str, str]):
+    previous = {key: os.environ.get(key) for key in values}
+    os.environ.update(values)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _free_loopback_port() -> int:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as handle:
+        handle.bind(("127.0.0.1", 0))
+        return int(handle.getsockname()[1])
+
+
+def _wait_server_health(base_url: str, process: subprocess.Popen) -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError("MemPhant server exited before health readiness")
+        try:
+            with urllib.request.urlopen(base_url + "/health", timeout=1) as response:
+                if response.status == 200:
+                    return
+        except OSError:
+            time.sleep(0.1)
+    raise RuntimeError("MemPhant server health readiness timed out")
+
+
+def _terminate_process(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def _campaign_binaries() -> dict[str, Path]:
+    binaries = {
+        name: ROOT / "target/release" / f"memphant-{name}"
+        for name in ("server", "worker", "cli")
+    }
+    if any(not path.is_file() for path in binaries.values()):
+        raise RuntimeError("authorized release binaries are unavailable")
+    return binaries
+
+
+def _selected_trajectories(
+    data_root: Path, trajectory_ids: list[str]
+) -> dict[str, dict[str, object]]:
+    wanted = set(trajectory_ids)
+    selected: dict[str, dict[str, object]] = {}
+    with (data_root / "trajectories.jsonl").open(encoding="utf-8") as source:
+        for line in source:
+            row = json.loads(line)
+            if isinstance(row, dict) and row.get("id") in wanted:
+                selected[str(row["id"])] = row
+    if set(selected) != wanted:
+        raise RuntimeError("case-bank trajectory selection is incomplete")
+    return selected
+
+
+def _case_construction_plans(
+    census: dict[str, object],
+    trajectories: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    adapter = _load_adapter()
+    source_hashes = {
+        hashlib.sha256(row["source_body"].encode()).hexdigest()
+        for trajectory in trajectories.values()
+        for row in adapter.census_resource_rows(trajectory, uses=1)
+    }
+    plans = census.get("construction", {}).get("plan_inventory", [])
+    selected = [
+        plan
+        for plan in plans
+        if isinstance(plan, dict)
+        and plan.get("source_body_sha256") in source_hashes
+    ]
+    if (
+        not selected
+        or {plan.get("source_body_sha256") for plan in selected} != source_hashes
+    ):
+        raise RuntimeError("case-bank construction plan coverage is incomplete")
+    return selected
+
+
+def ensure_case_bank(
+    *,
+    authorization_path: Path,
+    census: dict[str, object],
+    data_root: Path,
+    base_database_url: str,
+    question_id: str,
+    bank_root: Path,
+) -> tuple[dict[str, object], Path, Path]:
+    """Build one immutable cache-only case bank or validate its checkpoint."""
+    contract = scratch_case_database_contract(base_database_url, question_id)
+    case_key = contract["case_key"]
+    bank_dir = bank_root.resolve() / case_key
+    manifest_path = bank_dir / "manifest.json"
+    archive_path = bank_dir / "bank.dump"
+    proof_path = bank_dir / "CONSTRUCTION-PROOF.v2.json"
+    if manifest_path.is_file() and archive_path.is_file() and proof_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        proof = json.loads(proof_path.read_text(encoding="utf-8"))
+        manifest_core = {
+            key: value for key, value in manifest.items() if key != "case_bank_sha256"
+        }
+        validate_construction_proof_v2(proof)
+        if (
+            manifest.get("case_bank_sha256") != sha256_json(manifest_core)
+            or manifest.get("contract") != contract
+            or manifest.get("archive", {}).get("bytes") != archive_path.stat().st_size
+            or manifest.get("archive", {}).get("sha256") != _sha256_file(archive_path)
+            or manifest.get("construction", {}).get("proof_sha256")
+            != proof.get("construction_proof_sha256")
+            or manifest.get("logical_inventory_sha256")
+            != sha256_json(manifest.get("logical_inventory"))
+            or manifest.get("postgres_toolchain", {}).get("toolchain_sha256")
+            != sha256_json(
+                {
+                    key: value
+                    for key, value in manifest.get("postgres_toolchain", {}).items()
+                    if key != "toolchain_sha256"
+                }
+            )
+        ):
+            raise RuntimeError("immutable case bank checkpoint drift")
+        return manifest, archive_path, proof_path
+    if bank_dir.exists():
+        raise RuntimeError("incomplete case bank requires explicit adjudication")
+
+    haystack = json.loads(
+        (data_root / "haystacks/lme_v2_medium.json").read_text(encoding="utf-8")
+    )
+    trajectory_ids = haystack.get(question_id)
+    if not isinstance(trajectory_ids, list) or not trajectory_ids:
+        raise RuntimeError("case-bank haystack is missing")
+    trajectories = _selected_trajectories(data_root, trajectory_ids)
+    plans = _case_construction_plans(census, trajectories)
+    binding_path = create_construction_binding(authorization_path, plans)
+    binding = json.loads(binding_path.read_text(encoding="utf-8"))
+    source_name = contract["databases"]["source"]
+    source_url = _database_url_for_name(base_database_url, source_name)
+    staging = bank_root.resolve() / (".staging-" + case_key)
+    staging.mkdir(parents=True, exist_ok=False)
+    staging.chmod(0o700)
+    binaries = _campaign_binaries()
+    server: subprocess.Popen | None = None
+    try:
+        _run_campaign_command(
+            ["dropdb", f"--maintenance-db={base_database_url}", "--if-exists", "--force", source_name]
+        )
+        _run_campaign_command(
+            ["createdb", f"--maintenance-db={base_database_url}", source_name]
+        )
+        _run_campaign_command(
+            [sys.executable, str(ROOT / "scripts/apply_memphant_migrations.py"), "--database-url", source_url]
+        )
+        environment = cache_only_construction_environment(
+            binding_path=binding_path,
+            binding=binding,
+            manifest=json.loads(CANONICAL_CAMPAIGN_MANIFEST.read_text(encoding="utf-8")),
+            data_root=data_root,
+            database_url=source_url,
+        )
+        port = _free_loopback_port()
+        server_url = f"http://127.0.0.1:{port}"
+        environment.update(
+            {
+                "MEMPHANT_BIND": f"127.0.0.1:{port}",
+                "MEMPHANT_RESOURCE_CHUNKS": "on",
+                "MEMPHANT_DEEP": "off",
+            }
+        )
+        stdout = (staging / "server.stdout").open("wb")
+        stderr = (staging / "server.stderr").open("wb")
+        server = subprocess.Popen(
+            [str(binaries["server"])], env=environment, stdout=stdout, stderr=stderr
+        )
+        stdout.close()
+        stderr.close()
+        _wait_server_health(server_url, server)
+        proof_dir = staging / "proof"
+        proof_dir.mkdir(mode=0o700)
+        adapter_environment = {
+            **environment,
+            "MEMPHANT_SCRATCH_ACTIVE": "1",
+            "MEMPHANT_LME_SERVER_URL": server_url,
+            "MEMPHANT_TEST_DATABASE_URL": source_url,
+            "MEMPHANT_CLI_BIN": str(binaries["cli"]),
+            "MEMPHANT_LME_SERVER_BIN": str(binaries["server"]),
+            "MEMPHANT_LME_WORKER_BIN": str(binaries["worker"]),
+            "MEMPHANT_LME_PROOF_DIR": str(proof_dir),
+            "MEMPHANT_LME_RUN_ID": f"state-aware-bank-{question_id}",
+            "MEMPHANT_LME_CONSTRUCTION_BINDING": str(binding_path),
+        }
+        adapter = _load_adapter()
+        config = json.loads(
+            (ROOT / "benchmarks/longmemeval_v2/memphant.fast.memory.json").read_text()
+        )
+        with _campaign_environment(adapter_environment):
+            memory = adapter.MemphantMemory(config["memory_params"])
+            for trajectory_id in trajectory_ids:
+                memory.insert(trajectories[trajectory_id])
+            construction_proof = memory.prepare()
+        _atomic_write_json(staging / "CONSTRUCTION-PROOF.v2.json", construction_proof)
+        _terminate_process(server)
+        server = None
+        (staging / "server.stdout").unlink(missing_ok=True)
+        (staging / "server.stderr").unlink(missing_ok=True)
+        _run_campaign_command(
+            ["psql", source_url, "-v", "ON_ERROR_STOP=1", "-c", "DELETE FROM memphant.api_key"]
+        )
+        assert_case_source_quiescent(source_url)
+        pg_dump_identity = postgres_tool_identity(source_url, "pg_dump")
+        pg_restore_identity = postgres_tool_identity(source_url, "pg_restore")
+        archive = staging / "bank.dump"
+        _run_campaign_command(
+            case_bank_dump_command(source_url, archive, pg_dump=pg_dump_identity["path"])
+        )
+        logical_inventory = database_logical_inventory(source_url)
+        def public_tool_identity(identity: dict[str, object]) -> dict[str, object]:
+            core = {
+                "tool": identity["tool"],
+                "executable": identity["tool"],
+                "bytes": identity["bytes"],
+                "sha256": identity["sha256"],
+                "version": identity["version"],
+                "server_version_num": identity["server_version_num"],
+            }
+            return {**core, "identity_sha256": sha256_json(core)}
+
+        toolchain_core = {
+            "identities": {
+                "pg_dump": public_tool_identity(pg_dump_identity),
+                "pg_restore": public_tool_identity(pg_restore_identity),
+            }
+        }
+        toolchain = {
+            **toolchain_core,
+            "toolchain_sha256": sha256_json(toolchain_core),
+        }
+        trajectory_content = [trajectories[key] for key in trajectory_ids]
+        materialization = {
+            "trajectory_count": len(trajectory_ids),
+            "trajectory_ids_sha256": sha256_json(trajectory_ids),
+            "trajectory_content_sha256": sha256_json(trajectory_content),
+        }
+        binding_authority = {
+            "authorization_path": authorization_path,
+            "census_path": CANONICAL_CAMPAIGN_CENSUS,
+            "manifest_path": CANONICAL_CAMPAIGN_MANIFEST,
+            "wave_path": Path(campaign_artifact_paths()["construction_wave"]),
+            "binding_root": Path(campaign_artifact_paths()["construction_bindings"]),
+        }
+        manifest = write_case_bank_manifest(
+            archive=archive,
+            output=staging / "manifest.json",
+            contract=contract,
+            binding_path=binding_path,
+            binding_authority=binding_authority,
+            construction_proof_path=staging / "CONSTRUCTION-PROOF.v2.json",
+            materialization=materialization,
+            logical_inventory=logical_inventory,
+            postgres_toolchain=toolchain,
+        )
+        os.replace(staging, bank_dir)
+        return manifest, bank_dir / "bank.dump", bank_dir / "CONSTRUCTION-PROOF.v2.json"
+    finally:
+        if server is not None:
+            _terminate_process(server)
+        _run_campaign_command(
+            ["dropdb", f"--maintenance-db={base_database_url}", "--if-exists", "--force", source_name],
+            run_command=lambda command, **kwargs: subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True, check=False
+            ),
+        )
+
+
 def restore_case_bank_pair(
     *,
     base_database_url: str,
@@ -2609,7 +3949,7 @@ def restore_case_bank_pair(
     if (
         not isinstance(restore_identity, dict)
         or not resolved_restore.is_file()
-        or str(resolved_restore) != restore_identity.get("path")
+        or restore_identity.get("executable") != "pg_restore"
         or resolved_restore.stat().st_size != restore_identity.get("bytes")
         or _sha256_file(resolved_restore) != restore_identity.get("sha256")
     ):
@@ -2690,9 +4030,972 @@ def restore_case_bank_pair(
     return {**core, "clone_sha256": sha256_json(core)}
 
 
-def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, object]:
+def _binary_set_sha256(binaries: dict[str, Path]) -> str:
+    return sha256_json(
+        {
+            name: {"bytes": path.stat().st_size, "sha256": _sha256_file(path)}
+            for name, path in sorted(binaries.items())
+        }
+    )
+
+
+def _private_output_authority(
+    *,
+    authorization_sha256: str,
+    execution_plan: dict[str, object],
+    reservation_plan: dict[str, object],
+    case_manifest: dict[str, object],
+    clone: dict[str, object],
+    binaries: dict[str, Path],
+    data_root: Path,
+    official_dir: Path | None = None,
+) -> dict[str, object]:
+    pinned_official_dir = official_dir or data_root / "upstream"
+    return {
+        "authorization_sha256": authorization_sha256,
+        "execution_plan_sha256": execution_plan["execution_plan_sha256"],
+        "reservation_plan_sha256": reservation_plan["reservation_plan_sha256"],
+        "case_bank_sha256": case_manifest["case_bank_sha256"],
+        "clone_sha256": clone["clone_sha256"],
+        "binary_set_sha256": _binary_set_sha256(binaries),
+        "official_harness_sha256": _sha256_file(
+            pinned_official_dir / "evaluation/harness.py"
+        ),
+        "official_scorer_sha256": _sha256_file(
+            pinned_official_dir / "evaluation/qa_eval_metrics.py"
+        ),
+    }
+
+
+def _one_question_inputs(
+    data_root: Path, official_dir: Path, question_id: str, output: Path
+) -> tuple[Path, Path, str]:
+    question: dict[str, object] | None = None
+    with (data_root / "questions.jsonl").open(encoding="utf-8") as source:
+        for line in source:
+            candidate = json.loads(line)
+            if isinstance(candidate, dict) and candidate.get("id") == question_id:
+                if question is not None:
+                    raise RuntimeError("official question id is duplicated")
+                question = candidate
+    if question is None:
+        raise RuntimeError("official one-question input is incomplete")
+    output.mkdir(parents=True, exist_ok=True)
+    output.chmod(0o700)
+    questions_path = output / "questions.private.json"
+    haystack_path = output / "haystack.private.json"
+    public_data_path = official_dir / "data/public_data.py"
+    spec = importlib.util.spec_from_file_location(
+        "memphant_pinned_lme_public_data", public_data_path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("pinned official public-data materializer is unavailable")
+    public_data = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(public_data)
+    domain = question.get("domain")
+    if domain not in {"web", "enterprise"}:
+        raise RuntimeError("official question domain is invalid")
+    selected = public_data.materialize_runtime_questions(
+        data_root=data_root,
+        domain=domain,
+        question_ids=[question_id],
+        limit=None,
+        output_path=questions_path,
+    )
+    public_data.materialize_runtime_haystack(
+        data_root=data_root,
+        tier="medium",
+        selected_questions=selected,
+        output_path=haystack_path,
+    )
+    if len(selected) != 1 or selected[0].get("id") != question_id:
+        raise RuntimeError("official one-question materialization drift")
+    raw_image = question.get("image")
+    runtime_question = selected[0].get("question")
+    if raw_image is not None:
+        image = runtime_question.get("image") if isinstance(runtime_question, dict) else None
+        image_path = Path(image) if isinstance(image, str) else None
+        checksums = {
+            relative: digest
+            for digest, relative in (
+                line.split(maxsplit=1)
+                for line in (data_root / "checksums.sha256").read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                if line.strip()
+            )
+        }
+        if (
+            image_path is None
+            or not image_path.is_absolute()
+            or not image_path.is_file()
+            or checksums.get(raw_image) != _sha256_file(image_path)
+        ):
+            raise RuntimeError("official question image materialization drift")
+    elif not isinstance(runtime_question, str):
+        raise RuntimeError("text-only official question materialization drift")
+    questions_path.chmod(0o600)
+    haystack_path.chmod(0o600)
+    return questions_path, haystack_path, str(domain)
+
+
+def execute_reader_arm(
+    *,
+    row: dict[str, object],
+    clone_database_url: str,
+    construction_proof_path: Path,
+    row_state: RowExecutionStateMachine,
+    private_root: Path,
+    authority: dict[str, object],
+    data_root: Path,
+    official_dir: Path | None = None,
+    binaries: dict[str, Path],
+    openrouter_key: str,
+) -> dict[str, object]:
+    """Run the pinned official prompt/reader passes for one restored clone."""
+    pinned_official_dir = official_dir or data_root / "upstream"
+    sequence = row["sequence"]
+    row_key = str(row["row_key"])
+    question_id = str(row["question_id"])
+    arm = str(row["arm"])
+    row_dir = private_root.resolve() / f"{sequence:04d}"
+    if row_dir.exists():
+        reader_checkpoint = row_dir / "official/READER-OUTPUT.private.json"
+        provider_checkpoint = row_dir / "reader-provider.private.json"
+        relevant_components = ["reader"] if arm == "fast" else ["deep_recall", "reader"]
+        statuses = {
+            component: row_state.component_status(row_key, component)
+            for component in relevant_components
+        }
+        if all(status == "pending" for status in statuses.values()) and not any(
+            (row_dir / name).exists()
+            for name in (
+                "reader-provider.private.json",
+                "deep-provider.private.json",
+                "deep-attempts.private.jsonl",
+            )
+        ):
+            # Directory creation precedes the first durable paid reservation.
+            # A crash in that interval is safe to rebuild deterministically.
+            shutil.rmtree(row_dir)
+        else:
+            deep_checkpoint = row_dir / "deep-provider.private.json"
+            if (
+                arm == "deep"
+                and deep_checkpoint.is_file()
+                and statuses["deep_recall"] == "started"
+            ):
+                reconcile_private_provider_output(
+                    deep_checkpoint,
+                    row_state=row_state,
+                    row_key=row_key,
+                    component="deep_recall",
+                    authority=authority,
+                )
+                statuses["deep_recall"] = "result"
+            if provider_checkpoint.is_file() and statuses["reader"] == "started":
+                reconcile_private_provider_output(
+                    provider_checkpoint,
+                    row_state=row_state,
+                    row_key=row_key,
+                    component="reader",
+                    authority=authority,
+                )
+                statuses["reader"] = "result"
+            if reader_checkpoint.is_file() and statuses["reader"] == "result":
+                return json.loads(reader_checkpoint.read_text(encoding="utf-8"))
+            raise RuntimeError("incomplete private row checkpoint requires adjudication")
+    row_dir.mkdir(parents=True, mode=0o700)
+    inputs = row_dir / "inputs"
+    questions_path, haystack_path, domain = _one_question_inputs(
+        data_root, pinned_official_dir, question_id, inputs
+    )
+    proof_dir = row_dir / "memory-proofs"
+    proof_dir.mkdir(mode=0o700)
+    official_output = row_dir / "official"
+    official_output.mkdir(mode=0o700)
+    reader_provider_path = row_dir / "reader-provider.private.json"
+    deep_provider_path = row_dir / "deep-provider.private.json"
+    deep_journal_path = row_dir / "deep-attempts.private.jsonl"
+    deep_proxy: _DeepRecallProxy | None = None
+    deep_finalized = arm == "fast"
+    deep_request_sha256 = sha256_json(
+        {
+            "row_key": row_key,
+            "component": "deep_recall",
+            "case_bank_sha256": authority["case_bank_sha256"],
+            "clone_sha256": authority["clone_sha256"],
+            "runtime_code_sha256": _sha256_file(
+                ROOT / "crates/memphant-runtime/src/deep_recall_openrouter.rs"
+            ),
+        }
+    )
+    if arm == "deep":
+        reserve_deep_recall(
+            row_key=row_key,
+            row_state=row_state,
+            request_sha256=deep_request_sha256,
+        )
+        deep_proxy, deep_base_url = start_deep_recall_proxy(
+            openrouter_key,
+            journal_path=deep_journal_path,
+            private_root=private_root,
+            row_key=row_key,
+            authority=authority,
+        )
+    else:
+        deep_base_url = ""
+
+    def finalize_deep() -> None:
+        nonlocal deep_finalized
+        if deep_finalized:
+            return
+        assert deep_proxy is not None
+        receipt = deep_proxy.receipt(deep_request_sha256)
+        settle_deep_recall(
+            row_key=row_key,
+            row_state=row_state,
+            receipt=receipt,
+            persist_private=lambda raw, ledger_receipt: persist_private_provider_output(
+                deep_provider_path,
+                private_root=private_root,
+                row_key=row_key,
+                component="deep_recall",
+                response=raw,
+                receipt=ledger_receipt,
+                authority=authority,
+            ),
+        )
+        deep_finalized = True
+
+    reader_proxy, reader_base_url = start_reader_proxy(
+        row_key=row_key,
+        row_state=row_state,
+        transport=lambda payload: openrouter_reader_transport(openrouter_key, payload),
+        before_start=finalize_deep,
+        persist_private=lambda raw, receipt: persist_private_provider_output(
+                reader_provider_path,
+                private_root=private_root,
+                row_key=row_key,
+                component="reader",
+                response=raw,
+                receipt=receipt,
+                authority=authority,
+            ),
+    )
+    port = _free_loopback_port()
+    server_url = f"http://127.0.0.1:{port}"
+    server_environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "MEMPHANT_APP_DATABASE_URL": clone_database_url,
+        "MEMPHANT_AUTHN_DATABASE_URL": clone_database_url,
+        "MEMPHANT_BIND": f"127.0.0.1:{port}",
+        "MEMPHANT_RESOURCE_CHUNKS": "on",
+        "MEMPHANT_STRUCTURED_STATE": "off",
+        "MEMPHANT_DEEP": "on" if arm == "deep" else "off",
+    }
+    if arm == "deep":
+        server_environment.update(
+            {
+                "OPENROUTER_API_KEY": "loopback-route-bound",
+                "MEMPHANT_DEEP_MODEL": "qwen/qwen3.5-9b-20260310",
+                "MEMPHANT_DEEP_RESPONSE_MODEL": "qwen/qwen3.5-9b",
+                "MEMPHANT_DEEP_PROMPT_PATH": str(ROOT / "config/deep-recall-v1.txt"),
+                "MEMPHANT_DEEP_PROVIDERS": "deepinfra",
+                "MEMPHANT_DEEP_INPUT_PRICE_MICROS_PER_MILLION": "100000",
+                "MEMPHANT_DEEP_OUTPUT_PRICE_MICROS_PER_MILLION": "150000",
+                "MEMPHANT_DEEP_OPENROUTER_BASE_URL": deep_base_url,
+            }
+        )
+    stdout = stderr = None
+    try:
+        stdout = (row_dir / "server.stdout").open("wb")
+        stderr = (row_dir / "server.stderr").open("wb")
+        server = subprocess.Popen(
+            [str(binaries["server"])],
+            env=server_environment,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    except BaseException:
+        if stdout is not None:
+            stdout.close()
+        if stderr is not None:
+            stderr.close()
+        reader_proxy.shutdown()
+        reader_proxy.server_close()
+        if deep_proxy is not None:
+            deep_proxy.shutdown()
+            deep_proxy.server_close()
+        raise
+    stdout.close()
+    stderr.close()
+    try:
+        _wait_server_health(server_url, server)
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import run_longmemeval_v2 as official_adapter
+
+        memory_config = (
+            ROOT
+            / "benchmarks/longmemeval_v2"
+            / ("memphant.memory.json" if arm == "deep" else "memphant.fast.memory.json")
+        )
+        command = official_adapter.memphant_harness_command(
+            official_dir=pinned_official_dir,
+            domain=domain,
+            questions_path=questions_path,
+            haystack_path=haystack_path,
+            trajectories_path=data_root / "trajectories.jsonl",
+            memory_config_path=memory_config,
+            output_dir=official_output,
+            reader_model="Qwen/Qwen3.5-9B",
+            reader_base_url=reader_base_url,
+            evaluator_model="gpt-5.2-2025-12-11",
+            evaluator_base_url="http://127.0.0.1:1/v1",
+        )
+        deferred_proof = official_output / "DEFERRED-SCORING.json"
+        command += [
+            "--memphant-defer-scoring-proof", str(deferred_proof),
+            "--api-key-env", "LME_READER_PROXY_KEY",
+            "--evaluator-api-key-env", "LME_NO_JUDGE_KEY",
+            "--prompt-build-max-workers", "1",
+            "--reader-max-concurrent-requests", "1",
+        ]
+        child_environment = {
+            **server_environment,
+            "MEMPHANT_SCRATCH_ACTIVE": "1",
+            "MEMPHANT_TEST_DATABASE_URL": clone_database_url,
+            "MEMPHANT_LME_SERVER_URL": server_url,
+            "MEMPHANT_CLI_BIN": str(binaries["cli"]),
+            "MEMPHANT_LME_SERVER_BIN": str(binaries["server"]),
+            "MEMPHANT_LME_WORKER_BIN": str(binaries["worker"]),
+            "MEMPHANT_LME_PROOF_DIR": str(proof_dir),
+            "MEMPHANT_LME_RUN_ID": row_key,
+            "MEMPHANT_LME_PREBUILT_PROOF": str(construction_proof_path),
+            "MEMPHANT_LME_PRIVATE_ROOT": str(private_root.resolve()),
+            "LME_READER_PROXY_KEY": "loopback-route-bound",
+            "LME_NO_JUDGE_KEY": "unused",
+        }
+        completed = subprocess.run(
+            command,
+            cwd=pinned_official_dir,
+            env=child_environment,
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError("official deferred-reader harness failed")
+        finalize_deep()
+        proof = json.loads(deferred_proof.read_text(encoding="utf-8"))
+        if (
+            proof.get("status") != "READER_COMPLETE_SCORING_DEFERRED"
+            or proof.get("question_id") != question_id
+            or row_state.component_status(row_key, "reader") != "result"
+        ):
+            raise RuntimeError("official deferred-reader checkpoint is invalid")
+        return json.loads(
+            (official_output / "READER-OUTPUT.private.json").read_text(encoding="utf-8")
+        )
+    finally:
+        _terminate_process(server)
+        reader_proxy.shutdown()
+        reader_proxy.server_close()
+        if deep_proxy is not None:
+            deep_proxy.shutdown()
+            deep_proxy.server_close()
+
+
+def seal_completed_reader_prefix(
+    *,
+    paths: dict[str, Path],
+    execution_plan: dict[str, object],
+    reservation_plan: dict[str, object],
+    commitment: dict[str, object],
+    passphrase_env: str = "MEMPHANT_LME_PREFIX_SEAL_PASSPHRASE",
+) -> dict[str, object]:
+    private_root = paths["private_reader_outputs"].resolve()
+    prefix_row_dirs = [private_root / f"{sequence:04d}" for sequence in range(1, 25)]
+    if paths["public_prefix_status"].is_file() and not paths["private_prefix"].is_file():
+        # A crash after public-status fsync is safe to finish without rebuilding
+        # from row dirs: decrypting validates the already-published ciphertext.
+        with open_sealed_reader_prefix(
+            paths=paths,
+            execution_plan=execution_plan,
+            reservation_plan=reservation_plan,
+            passphrase_env=passphrase_env,
+        ):
+            pass
+        for row_dir in prefix_row_dirs:
+            if row_dir.is_dir() and not row_dir.is_symlink():
+                shutil.rmtree(row_dir)
+        return json.loads(paths["public_prefix_status"].read_text(encoding="utf-8"))
+    if paths["private_prefix"].is_file():
+        return seal_prefix(
+            paths["private_prefix"],
+            paths["sealed_prefix"],
+            paths["public_prefix_status"],
+            commitment["remaining_commitment_sha256"],
+            passphrase_env,
+            execution_plan_sha256=execution_plan["execution_plan_sha256"],
+            reservation_plan_sha256=reservation_plan["reservation_plan_sha256"],
+            plaintext_paths=[path for path in prefix_row_dirs if path.exists()],
+        )
+    cases = []
+    cleanup: list[Path] = []
+    for case_index in range(12):
+        paired = reservation_plan["rows"][case_index * 2 : case_index * 2 + 2]
+        case_rows = []
+        question_id = paired[0]["question_id"]
+        for row in paired:
+            row_dir = private_root / f"{row['sequence']:04d}"
+            official_path = row_dir / "official/READER-OUTPUT.private.json"
+            provider_path = row_dir / "reader-provider.private.json"
+            if not official_path.is_file() or not provider_path.is_file():
+                raise RuntimeError("sealed prefix reader checkpoint is incomplete")
+            official = json.loads(official_path.read_text(encoding="utf-8"))
+            provider = json.loads(provider_path.read_text(encoding="utf-8"))
+            response = provider.get("response", {}).get("response", {})
+            choices = response.get("choices") if isinstance(response, dict) else None
+            answer = (
+                choices[0].get("message", {}).get("content")
+                if isinstance(choices, list) and len(choices) == 1
+                else None
+            )
+            if (
+                official.get("question_id") != question_id
+                or not isinstance(answer, str)
+                or not answer
+                or provider.get("status") != "PRIVATE_OUTPUT_FSYNCED"
+            ):
+                raise RuntimeError("sealed prefix private row identity drift")
+            case_rows.append(
+                {
+                    "arm": row["arm"],
+                    "row_key": row["row_key"],
+                    "answer": answer,
+                    "output_sha256": provider["private_output_sha256"],
+                    "receipt_sha256": provider["receipt"]["result_sha256"],
+                    "structurally_valid": True,
+                    "receipt_valid": True,
+                    "settled": True,
+                    "official_row": official,
+                    "provider_record": provider,
+                    **(
+                        {
+                            "deep_provider_record": json.loads(
+                                (row_dir / "deep-provider.private.json").read_text(
+                                    encoding="utf-8"
+                                )
+                            )
+                        }
+                        if row["arm"] == "deep"
+                        else {}
+                    ),
+                }
+            )
+            cleanup.append(row_dir)
+        cases.append(
+            {
+                "sequence": case_index + 1,
+                "question_id": question_id,
+                "rows": case_rows,
+            }
+        )
+    private = {
+        "schema_version": 1,
+        "execution_plan_sha256": execution_plan["execution_plan_sha256"],
+        "reservation_plan_sha256": reservation_plan["reservation_plan_sha256"],
+        "cases": cases,
+    }
+    _create_or_validate_json(paths["private_prefix"], private)
+    paths["private_prefix"].chmod(0o600)
+    return seal_prefix(
+        paths["private_prefix"],
+        paths["sealed_prefix"],
+        paths["public_prefix_status"],
+        commitment["remaining_commitment_sha256"],
+        passphrase_env,
+        execution_plan_sha256=execution_plan["execution_plan_sha256"],
+        reservation_plan_sha256=reservation_plan["reservation_plan_sha256"],
+        plaintext_paths=cleanup,
+    )
+
+
+@contextmanager
+def open_sealed_reader_prefix(
+    *,
+    paths: dict[str, Path],
+    execution_plan: dict[str, object],
+    reservation_plan: dict[str, object],
+    passphrase_env: str = "MEMPHANT_LME_PREFIX_SEAL_PASSPHRASE",
+):
+    """Decrypt the validated prefix into one 0600 temporary and erase it."""
+    status = json.loads(paths["public_prefix_status"].read_text(encoding="utf-8"))
+    validate_public_prefix_status(status)
+    if (
+        status["execution_plan_sha256"] != execution_plan["execution_plan_sha256"]
+        or status["reservation_plan_sha256"]
+        != reservation_plan["reservation_plan_sha256"]
+        or status["sealed_blob_sha256"] != _sha256_file(paths["sealed_prefix"])
+    ):
+        raise RuntimeError("sealed reader prefix differs from execution authority")
+    passphrase = os.environ.get(passphrase_env, "")
+    openssl = shutil.which("openssl")
+    if not passphrase or openssl is None:
+        raise RuntimeError("sealed reader prefix cannot be opened")
+    private_root = paths["private_reader_outputs"].resolve()
+    private_root.mkdir(parents=True, exist_ok=True)
+    private_root.chmod(0o700)
+    with tempfile.NamedTemporaryFile(
+        dir=private_root, prefix=".prefix-open-", delete=False
+    ) as handle:
+        plaintext = Path(handle.name)
+    plaintext.chmod(0o600)
+    try:
+        completed = subprocess.run(
+            [
+                openssl, "enc", "-d", "-aes-256-cbc", "-pbkdf2",
+                "-iter", "600000", "-in", str(paths["sealed_prefix"]),
+                "-out", str(plaintext), "-pass", f"env:{passphrase_env}",
+            ],
+            env={passphrase_env: passphrase},
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError("sealed reader prefix decryption failed")
+        private = json.loads(plaintext.read_text(encoding="utf-8"))
+        _derive_public_prefix_rows(
+            private,
+            execution_plan_sha256=execution_plan["execution_plan_sha256"],
+            reservation_plan_sha256=reservation_plan["reservation_plan_sha256"],
+        )
+        yield private
+    finally:
+        plaintext.unlink(missing_ok=True)
+        directory = os.open(private_root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+
+def _drop_case_clones(base_database_url: str, clone: dict[str, object]) -> None:
+    databases = clone.get("databases") if isinstance(clone, dict) else None
+    if not isinstance(databases, dict) or set(databases) != {"fast", "deep"}:
+        raise RuntimeError("case clone cleanup authority is invalid")
+    for arm in ("fast", "deep"):
+        database_name = databases[arm]
+        _database_url_for_name(base_database_url, database_name)
+        _run_campaign_command(
+            [
+                "dropdb", f"--maintenance-db={base_database_url}",
+                "--if-exists", "--force", database_name,
+            ]
+        )
+
+
+def execute_reader_case(
+    *,
+    question_id: str,
+    rows: list[dict[str, object]],
+    authorization_path: Path,
+    census: dict[str, object],
+    data_root: Path,
+    official_dir: Path,
+    base_database_url: str,
+    bank_root: Path,
+    row_state: RowExecutionStateMachine,
+    private_root: Path,
+    binaries: dict[str, Path],
+    openrouter_key: str,
+    ensure_bank=ensure_case_bank,
+    restore_pair=restore_case_bank_pair,
+    execute_arm=execute_reader_arm,
+    drop_pair=_drop_case_clones,
+) -> list[dict[str, object]]:
+    """Build/restore one bank and settle its Fast and Deep readers."""
+    if (
+        len(rows) != 2
+        or {row.get("arm") for row in rows} != {"fast", "deep"}
+        or any(row.get("question_id") != question_id for row in rows)
+    ):
+        raise RuntimeError("reader case pair differs from execution plan")
+    manifest, archive, construction_proof = ensure_bank(
+        authorization_path=authorization_path,
+        census=census,
+        data_root=data_root,
+        base_database_url=base_database_url,
+        question_id=question_id,
+        bank_root=bank_root,
+    )
+    clone = restore_pair(
+        base_database_url=base_database_url,
+        question_id=question_id,
+        archive=archive,
+        manifest=manifest,
+    )
+    authority = _private_output_authority(
+        authorization_sha256=json.loads(
+            authorization_path.read_text(encoding="utf-8")
+        )["authorization"]["authorization_scope_sha256"],
+        execution_plan={
+            "execution_plan_sha256": row_state.reservation_plan[
+                "execution_plan_sha256"
+            ]
+        },
+        reservation_plan=row_state.reservation_plan,
+        case_manifest=manifest,
+        clone=clone,
+        binaries=binaries,
+        data_root=data_root,
+        official_dir=official_dir,
+    )
+    outputs = []
+    try:
+        for row in sorted(rows, key=lambda item: int(item["sequence"])):
+            database_name = clone["databases"][row["arm"]]
+            output = execute_arm(
+                row=row,
+                clone_database_url=_database_url_for_name(
+                    base_database_url, database_name
+                ),
+                construction_proof_path=construction_proof,
+                row_state=row_state,
+                private_root=private_root,
+                authority=authority,
+                data_root=data_root,
+                official_dir=official_dir,
+                binaries=binaries,
+                openrouter_key=openrouter_key,
+            )
+            outputs.append(output)
+        return outputs
+    finally:
+        drop_pair(base_database_url, clone)
+
+
+def execute_reader_wave(
+    *,
+    rows: list[dict[str, object]],
+    case_count: int,
+    execute_case,
+    max_workers: int = 1,
+) -> list[dict[str, object]]:
+    """Execute exact adjacent Fast/Deep pairs in frozen question order."""
+    if len(rows) != case_count * 2:
+        raise RuntimeError("reader wave row count differs from admitted cases")
+    if type(max_workers) is not int or not 1 <= max_workers <= 8:
+        raise RuntimeError("reader wave worker count is outside frozen authority")
+    pairs: list[tuple[str, list[dict[str, object]]]] = []
+    first_sequence = rows[0].get("sequence") if rows else None
+    if type(first_sequence) is not int:
+        raise RuntimeError("reader wave sequence drift")
+    for index in range(case_count):
+        pair = rows[index * 2 : index * 2 + 2]
+        if pair[0].get("sequence") != first_sequence + index * 2:
+            raise RuntimeError("reader wave sequence drift")
+        question_id = pair[0].get("question_id")
+        if (
+            not isinstance(question_id, str)
+            or pair[1].get("question_id") != question_id
+        ):
+            raise RuntimeError("reader wave pair identity drift")
+        pairs.append((question_id, pair))
+    if max_workers == 1:
+        return [
+            output
+            for question_id, pair in pairs
+            for output in execute_case(question_id, pair)
+        ]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(execute_case, question_id, pair)
+            for question_id, pair in pairs
+        ]
+        try:
+            # Consume in frozen pair order even though independent cases run in
+            # parallel; this keeps downstream private aggregation deterministic.
+            return [output for future in futures for output in future.result()]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            raise
+
+
+def _load_official_harness(official_dir: Path, authority: dict[str, object]):
+    harness_path = official_dir / "evaluation/harness.py"
+    scorer_path = official_dir / "evaluation/qa_eval_metrics.py"
+    if (
+        _sha256_file(harness_path) != authority["official_harness_sha256"]
+        or _sha256_file(scorer_path) != authority["official_scorer_sha256"]
+    ):
+        raise RuntimeError("official scoring code differs from reader authority")
+    sys.path.insert(0, str(official_dir))
+    name = "memphant_pinned_lme_v2_harness"
+    spec = importlib.util.spec_from_file_location(name, harness_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("official scoring harness cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _reader_records_from_private(
+    *,
+    reservation_plan: dict[str, object],
+    prefix: dict[str, object],
+    private_root: Path,
+) -> dict[str, dict[str, object]]:
+    records: dict[str, dict[str, object]] = {}
+    for case in prefix["cases"]:
+        for row in case["rows"]:
+            records[row["row_key"]] = row
+    for row in reservation_plan["rows"][24:]:
+        row_dir = private_root / f"{row['sequence']:04d}"
+        official = json.loads(
+            (row_dir / "official/READER-OUTPUT.private.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        provider = json.loads(
+            (row_dir / "reader-provider.private.json").read_text(encoding="utf-8")
+        )
+        record = {
+            "arm": row["arm"],
+            "row_key": row["row_key"],
+            "official_row": official,
+            "provider_record": provider,
+        }
+        if row["arm"] == "deep":
+            record["deep_provider_record"] = json.loads(
+                (row_dir / "deep-provider.private.json").read_text(encoding="utf-8")
+            )
+        records[row["row_key"]] = record
+    if set(records) != {row["row_key"] for row in reservation_plan["rows"]}:
+        raise RuntimeError("private reader record inventory is incomplete")
+    return records
+
+
+def score_official_reader_row(
+    *,
+    planned_row: dict[str, object],
+    private_row: dict[str, object],
+    row_state: RowExecutionStateMachine,
+    authority: dict[str, object],
+    judge_root: Path,
+    openai_key: str,
+    score_prediction,
+    judge_transport=openai_judge_transport,
+) -> dict[str, object]:
+    """Run the pinned deterministic scorer or one native paid judge."""
+    row_key = str(planned_row["row_key"])
+    official_row = private_row.get("official_row")
+    if not isinstance(official_row, dict):
+        raise RuntimeError("official private reader row is unavailable")
+    row_dir = judge_root.resolve() / f"{int(planned_row['sequence']):04d}"
+    row_dir.mkdir(parents=True, exist_ok=True)
+    row_dir.chmod(0o700)
+    checkpoint = row_dir / "SCORE.private.json"
+    if checkpoint.is_file():
+        score = json.loads(checkpoint.read_text(encoding="utf-8"))
+        if (
+            score.get("row_key") != row_key
+            or score.get("official_row_sha256") != sha256_json(official_row)
+        ):
+            raise RuntimeError("official score checkpoint drift")
+        return score
+    eval_config: dict[str, object] = {}
+    proxy: _MeteredChatProxy | None = None
+    provider_path = row_dir / "judge-provider.private.json"
+    if planned_row["native_judge_required"]:
+        status = row_state.component_status(row_key, "judge")
+        if provider_path.is_file() and status == "started":
+            reconcile_private_provider_output(
+                provider_path,
+                row_state=row_state,
+                row_key=row_key,
+                component="judge",
+                authority=authority,
+            )
+            status = "result"
+        if status == "result":
+            if not provider_path.is_file():
+                raise RuntimeError("settled judge lacks private provider checkpoint")
+            persisted = json.loads(provider_path.read_text(encoding="utf-8"))
+            cached_response = persisted["response"]
+            expected_request_sha256 = persisted["receipt"]["request_sha256"]
+
+            def replay(payload):
+                if sha256_json(payload) != expected_request_sha256:
+                    raise RuntimeError("resumed official judge request drift")
+                return cached_response
+
+            proxy, evaluator_base_url = _start_metered_proxy(replay)
+        elif status == "pending":
+            proxy, evaluator_base_url = start_judge_proxy(
+                row_key=row_key,
+                row_state=row_state,
+                transport=lambda payload: judge_transport(openai_key, payload),
+                persist_private=lambda raw, receipt: persist_private_provider_output(
+                    provider_path,
+                    private_root=judge_root,
+                    row_key=row_key,
+                    component="judge",
+                    response=raw,
+                    receipt=receipt,
+                    authority=authority,
+                ),
+            )
+        else:
+            raise RuntimeError("native judge has unresolved terminal state")
+        eval_config = {
+            "evaluator_model": "gpt-5.2-2025-12-11",
+            "evaluator_base_url": evaluator_base_url,
+            "evaluator_api_key": "loopback-route-bound",
+            "evaluator_reasoning_effort": "medium",
+            "evaluator_max_completion_tokens": 2048,
+            "evaluator_timeout_seconds": 43_200.0,
+        }
+    try:
+        score_bool, eval_name, is_unknown = score_prediction(
+            official_row, eval_config
+        )
+    finally:
+        if proxy is not None:
+            proxy.shutdown()
+            proxy.server_close()
+    core = {
+        "schema_version": 1,
+        "row_key": row_key,
+        "official_row_sha256": sha256_json(official_row),
+        "score_bool": bool(score_bool),
+        "score": int(bool(score_bool)),
+        "eval_name": eval_name,
+        "is_unknown": bool(is_unknown),
+        "native_judge_required": planned_row["native_judge_required"],
+        "native_judge_settled": (
+            not planned_row["native_judge_required"]
+            or row_state.component_status(row_key, "judge") == "result"
+        ),
+    }
+    score = {**core, "score_sha256": sha256_json(core)}
+    _atomically_create_json(checkpoint, score)
+    checkpoint.chmod(0o600)
+    return score
+
+
+def score_all_official_rows(
+    *,
+    reservation_plan: dict[str, object],
+    private_rows: dict[str, dict[str, object]],
+    row_state: RowExecutionStateMachine,
+    authority_for_row,
+    judge_root: Path,
+    openai_key: str,
+    data_root: Path,
+    official_dir: Path,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Score exactly 902 rows only after the reader barrier is complete."""
+    if any(
+        row_state.component_status(row["row_key"], "reader") != "result"
+        for row in reservation_plan["rows"]
+    ):
+        raise RuntimeError("official scoring requires all 902 reader results")
+    first_authority = authority_for_row(reservation_plan["rows"][0])
+    del data_root
+    harness = _load_official_harness(official_dir, first_authority)
+    scored = []
+    for row in reservation_plan["rows"]:
+        score = score_official_reader_row(
+            planned_row=row,
+            private_row=private_rows[row["row_key"]],
+            row_state=row_state,
+            authority=authority_for_row(row),
+            judge_root=judge_root,
+            openai_key=openai_key,
+            score_prediction=harness.score_prediction,
+        )
+        official = dict(private_rows[row["row_key"]]["official_row"])
+        official.update(
+            {
+                "score": score["score"],
+                "score_bool": score["score_bool"],
+                "is_unknown": score["is_unknown"],
+            }
+        )
+        scored.append({"planned": row, "score": score, "official": official})
+    metrics = {}
+    for arm in ("fast", "deep"):
+        records = [
+            item["official"] for item in scored if item["planned"]["arm"] == arm
+        ]
+        durations = [float(row["memory_query_duration_seconds"]) for row in records]
+        if len(durations) != QUESTION_COUNT or any(
+            not value >= 0 or not Decimal(str(value)).is_finite()
+            for value in durations
+        ):
+            raise RuntimeError("official memory-query latency inventory is invalid")
+        ordered = sorted(durations)
+        aggregate = harness.aggregate_metrics(records)
+        official_memory_query = {
+            "avg_seconds": sum(durations) / len(durations),
+            "p50_seconds": ordered[len(ordered) // 2],
+            "p95_seconds": ordered[
+                min(len(ordered) - 1, int(0.95 * len(ordered)))
+            ],
+            "max_seconds": ordered[-1],
+            "total_seconds": sum(durations),
+        }
+        if aggregate.get("memory_query") not in (None, official_memory_query):
+            raise RuntimeError("official memory-query aggregate drift")
+        aggregate["memory_query"] = official_memory_query
+        metrics[arm] = aggregate
+    return scored, metrics
+
+
+def official_lafs_summary(
+    official_dir: Path, arm_metrics: dict[str, object]
+) -> dict[str, object]:
+    path = official_dir / "leaderboard/compute_lafs.py"
+    spec = importlib.util.spec_from_file_location("memphant_pinned_lme_lafs", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("pinned official LAFS implementation is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    points = []
+    for arm in ("fast", "deep"):
+        metrics = arm_metrics.get(arm)
+        try:
+            accuracy = float(metrics["overall"]["overall_full_set"]) * 100
+            latency = float(metrics["memory_query"]["avg_seconds"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError("official LAFS operating point is incomplete") from error
+        if latency <= 0:
+            raise RuntimeError("official LAFS latency must be positive")
+        points.append(
+            module.Point(
+                name=f"MemPhant state-aware {arm}",
+                acc=accuracy,
+                latency=latency,
+            )
+        )
+    summary = module.lafs_summary_for_submission("medium", points)
+    core = {
+        "schema_version": 1,
+        "compute_lafs_sha256": _sha256_file(path),
+        "summary": summary,
+    }
+    return {**core, "lafs_proof_sha256": sha256_json(core)}
+
+
+def _materialize_reader_shapes(
+    data_root: Path, output: Path, *, official_dir: Path | None = None
+) -> dict[str, object]:
+    pinned_official_dir = official_dir or data_root / "upstream"
     prompts = _literal_assignment(
-        data_root / "upstream/evaluation/harness.py", "DOMAIN_SYSTEM_PROMPTS"
+        pinned_official_dir / "evaluation/harness.py", "DOMAIN_SYSTEM_PROMPTS"
     )
     if (
         not isinstance(prompts, dict)
@@ -2724,6 +5027,7 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
     rows = 0
     image_rows = 0
     image_inventory: list[dict[str, object]] = []
+    native_judge_bindings: list[dict[str, str]] = []
     with (data_root / "questions.jsonl").open(encoding="utf-8") as source, output.open(
         "w", encoding="utf-8"
     ) as target:
@@ -2735,6 +5039,7 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
             domain = raw.get("domain")
             question = raw.get("question")
             image = raw.get("image")
+            evaluation = raw.get("eval_function")
             if (
                 not isinstance(question_id, str)
                 or not question_id
@@ -2745,6 +5050,16 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
                 or (image is not None and (not isinstance(image, str) or not image.strip()))
             ):
                 raise RuntimeError(f"question line {line_number} has an invalid reader shape")
+            if not isinstance(evaluation, str) or not evaluation:
+                raise RuntimeError("official question evaluation identity is missing")
+            evaluation_name = evaluation.split("|", 1)[0]
+            if evaluation_name in {
+                "llm_abstention_checker",
+                "llm_gotchas_checker",
+            }:
+                native_judge_bindings.append(
+                    {"question_id": question_id, "evaluation": evaluation_name}
+                )
             question_ids.add(question_id)
             question_image = None
             if image is not None:
@@ -2793,6 +5108,10 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
         raise RuntimeError("official questions file must contain exactly 451 reader shapes")
     if image_rows != 29:
         raise RuntimeError("official questions file must bind exactly 29 screenshots")
+    native_judge_bindings.sort(key=lambda row: row["question_id"])
+    native_judge_ids = [row["question_id"] for row in native_judge_bindings]
+    if len(native_judge_ids) != 156 or len(set(native_judge_ids)) != 156:
+        raise RuntimeError("official native-judge subset drift")
     return {
         "fixture_sha256": _sha256_file(output),
         "rows": rows,
@@ -2802,6 +5121,10 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
         "image_inventory": image_inventory,
         "question_source_sha256": _sha256_file(data_root / "questions.jsonl"),
         "question_ids_sha256": sha256_json(sorted(question_ids)),
+        "native_judge_rows": len(native_judge_ids),
+        "native_judge_question_ids": native_judge_ids,
+        "native_judge_question_ids_sha256": sha256_json(native_judge_ids),
+        "native_judge_contract_sha256": sha256_json(native_judge_bindings),
     }
 
 
@@ -2925,9 +5248,12 @@ def _official_request_shape_bounds(
     reader_proof: dict[str, object],
     reader_fixture: dict[str, object],
     reader_config: dict[str, object],
+    *,
+    official_dir: Path | None = None,
 ) -> dict[str, object]:
-    harness_path = data_root / "upstream/evaluation/harness.py"
-    qa_path = data_root / "upstream/evaluation/qa_eval_metrics.py"
+    pinned_official_dir = official_dir or data_root / "upstream"
+    harness_path = pinned_official_dir / "evaluation/harness.py"
+    qa_path = pinned_official_dir / "evaluation/qa_eval_metrics.py"
     prompts = _literal_assignment(harness_path, "DOMAIN_SYSTEM_PROMPTS")
     if not isinstance(prompts, dict) or not prompts or not all(isinstance(value, str) for value in prompts.values()):
         raise RuntimeError("pinned official reader system prompts are invalid")
@@ -2990,6 +5316,16 @@ def _official_request_shape_bounds(
             "question_source_sha256"
         ],
         "reader_shape_question_ids_sha256": reader_fixture["question_ids_sha256"],
+        "native_judge_rows": reader_fixture["native_judge_rows"],
+        "native_judge_question_ids": reader_fixture[
+            "native_judge_question_ids"
+        ],
+        "native_judge_question_ids_sha256": reader_fixture[
+            "native_judge_question_ids_sha256"
+        ],
+        "native_judge_contract_sha256": reader_fixture[
+            "native_judge_contract_sha256"
+        ],
         "reader_shape_rows": reader_fixture["rows"],
         "reader_shape_image_rows": reader_fixture["image_rows"],
         "reader_shape_image_manifest_sha256": reader_fixture[
@@ -3062,6 +5398,8 @@ def _reader_liability_inventory(
     processor_rows: list[dict[str, object]],
     reader: dict[str, object],
     judge: dict[str, object],
+    *,
+    native_judge_question_ids: set[str],
 ) -> dict[str, object]:
     required_strings = (
         "model",
@@ -3087,6 +5425,22 @@ def _reader_liability_inventory(
         raise RuntimeError("provider prompt ceiling drift")
     if not isinstance(processor_rows, list) or not processor_rows:
         raise RuntimeError("reader row token inventory is missing")
+    processor_question_ids = {
+        row.get("question_id") for row in processor_rows if isinstance(row, dict)
+    }
+    if (
+        not isinstance(native_judge_question_ids, set)
+        or not all(
+            isinstance(question_id, str) and question_id
+            for question_id in native_judge_question_ids
+        )
+        or not native_judge_question_ids.issubset(processor_question_ids)
+        or (
+            len(processor_rows) == QUESTION_COUNT
+            and len(native_judge_question_ids) != 156
+        )
+    ):
+        raise RuntimeError("native judge question subset is invalid")
     judge_nanos = _judge_liability(judge)
     rows: list[dict[str, object]] = []
     seen: set[str] = set()
@@ -3116,6 +5470,8 @@ def _reader_liability_inventory(
                 reader.get("output_price_nanos_per_million"),
             )
         )
+        native_judge_required = question_id in native_judge_question_ids
+        row_judge_nanos = judge_nanos if native_judge_required else 0
         rows.append(
             {
                 "question_id": question_id,
@@ -3128,8 +5484,9 @@ def _reader_liability_inventory(
                 ),
                 "input_reservation_units": input_units,
                 "reader_liability_nanos": reader_nanos,
-                "judge_liability_nanos": judge_nanos,
-                "per_arm_liability_nanos": reader_nanos + judge_nanos,
+                "native_judge_required": native_judge_required,
+                "judge_liability_nanos": row_judge_nanos,
+                "per_arm_liability_nanos": reader_nanos + row_judge_nanos,
             }
         )
     image_rows = sum(int(row["has_image"]) for row in rows)
@@ -3141,6 +5498,10 @@ def _reader_liability_inventory(
         "row_count": len(rows),
         "text_rows": len(rows) - image_rows,
         "image_rows": image_rows,
+        "native_judge_rows": len(native_judge_question_ids),
+        "native_judge_question_ids_sha256": sha256_json(
+            sorted(native_judge_question_ids)
+        ),
         "reader_arm_liability_nanos": sum(
             row["per_arm_liability_nanos"] for row in rows
         ),
@@ -3348,19 +5709,29 @@ def _recompute_reader_authority(
     judge = reader_judge.get("judge")
     if not isinstance(reader, dict) or not isinstance(judge, dict):
         raise RuntimeError("reader and judge identities are required")
+    official_dir, _ = acquire_official_runtime_code(data_root)
     with tempfile.TemporaryDirectory(prefix="memphant-reader-authority-") as temporary:
         temporary_root = Path(temporary)
         fixture_path = temporary_root / "reader-shapes.jsonl"
         proof_path = temporary_root / "reader-processor-proof.json"
-        fixture = _materialize_reader_shapes(data_root, fixture_path)
+        fixture = _materialize_reader_shapes(
+            data_root, fixture_path, official_dir=official_dir
+        )
         proof = _run_reader_processor_census(
             reader, data_root, fixture_path, proof_path
         )
         request_shapes = _official_request_shape_bounds(
-            data_root, proof, fixture, reader
+            data_root, proof, fixture, reader, official_dir=official_dir
         )
     processor_rows = request_shapes.pop("reader_processor_rows")
-    inventory = _reader_liability_inventory(processor_rows, reader, judge)
+    inventory = _reader_liability_inventory(
+        processor_rows,
+        reader,
+        judge,
+        native_judge_question_ids=set(
+            request_shapes["native_judge_question_ids"]
+        ),
+    )
     if inventory["row_count"] != QUESTION_COUNT:
         raise RuntimeError("reader liability inventory must contain all 451 rows")
     return request_shapes, inventory
@@ -3374,6 +5745,7 @@ def _full_census(
     binary_provenance: dict[str, object],
 ) -> dict[str, object]:
     _acquire_manifest_data(manifest, data_root)
+    official_dir, runtime_code = acquire_official_runtime_code(data_root)
     construction = manifest["construction"]
     prompt = ROOT / construction["prompt_path"]
     code_paths = [ROOT / path for path in construction["code_paths"]]
@@ -3401,7 +5773,9 @@ def _full_census(
         reader_jsonl = temporary_root / "reader-shapes.jsonl"
         reader_proof_json = temporary_root / "reader-processor-proof.json"
         enumeration = _materialize_cli_input(data_root, input_jsonl)
-        reader_fixture = _materialize_reader_shapes(data_root, reader_jsonl)
+        reader_fixture = _materialize_reader_shapes(
+            data_root, reader_jsonl, official_dir=official_dir
+        )
         reader_proof = _run_reader_processor_census(
             reader, data_root, reader_jsonl, reader_proof_json
         )
@@ -3439,12 +5813,23 @@ def _full_census(
     ):
         raise RuntimeError("production census plan inventory drift")
     request_shapes = _official_request_shape_bounds(
-        data_root, reader_proof, reader_fixture, reader
+        data_root,
+        reader_proof,
+        reader_fixture,
+        reader,
+        official_dir=official_dir,
     )
     processor_rows = request_shapes.pop("reader_processor_rows")
     if judge.get("maximum_fixed_serialized_bytes") != request_shapes["judge_maximum_fixed_serialized_bytes"]:
         raise RuntimeError("judge request maximum drift")
-    reader_inventory = _reader_liability_inventory(processor_rows, reader, judge)
+    reader_inventory = _reader_liability_inventory(
+        processor_rows,
+        reader,
+        judge,
+        native_judge_question_ids=set(
+            request_shapes["native_judge_question_ids"]
+        ),
+    )
     if reader_inventory["row_count"] != QUESTION_COUNT:
         raise RuntimeError("reader liability inventory must contain all 451 rows")
     r_sum = reader_inventory["reader_arm_liability_nanos"]
@@ -3522,6 +5907,7 @@ def _full_census(
             "code_commit": manifest["upstream"]["code_commit"],
             "dataset_revision": manifest["upstream"]["dataset_revision"],
         },
+        "upstream_runtime_code": runtime_code,
         "enumeration": enumeration,
         "construction": planned,
         "terms": {"C": c_term, "R_sum": r_sum, "S": s_term},
@@ -3809,6 +6195,10 @@ def validate_campaign_authorization(
         not isinstance(reader, dict)
         or not isinstance(judge, dict)
         or not isinstance(request_shapes, dict)
+        or not isinstance(request_shapes.get("native_judge_question_ids"), list)
+        or request_shapes.get("native_judge_rows") != 156
+        or request_shapes.get("native_judge_question_ids_sha256")
+        != sha256_json(request_shapes.get("native_judge_question_ids"))
         or not isinstance(reader_inventory, dict)
         or not isinstance(reader_inventory.get("rows"), list)
     ):
@@ -3825,7 +6215,12 @@ def validate_campaign_authorization(
         if isinstance(row, dict)
     ]
     derived_reader_inventory = _reader_liability_inventory(
-        processor_rows, reader, judge
+        processor_rows,
+        reader,
+        judge,
+        native_judge_question_ids=set(
+            request_shapes["native_judge_question_ids"]
+        ),
     )
     if derived_reader_inventory != reader_inventory:
         raise RuntimeError("campaign reader liability inventory drift")
@@ -4268,7 +6663,11 @@ def create_construction_binding(
         binding_root=Path(artifacts["construction_bindings"]),
         plans=plans,
     )
-    _atomically_create_json(binding_path, binding)
+    if binding_path.exists():
+        if json.loads(binding_path.read_text(encoding="utf-8")) != binding:
+            raise RuntimeError("immutable construction binding drift")
+    else:
+        _atomically_create_json(binding_path, binding)
     _load_canonical_construction_binding(
         binding_path,
         authorization_path=authorization_path,
@@ -4382,13 +6781,11 @@ def prewarm_sealed_prefix(
     ):
         raise RuntimeError("sealed prefix plan subset is empty or foreign")
     _create_or_validate_json(paths["prefix_plans"], prefix_plans)
-    remaining = {
-        "schema_version": 1,
-        "prefix_ids_sha256": sha256_json(prefix_ids),
-        "remaining_count": len(remaining_ids),
-        "remaining_ids_sha256": sha256_json(remaining_ids),
-        "full_plan_inventory_sha256": census["construction"]["plan_inventory_sha256"],
-    }
+    execution_plan = build_execution_plan(census, resolved_data_root)
+    reservation_plan = build_row_reservation_plan(execution_plan, census)
+    remaining = build_remaining_commitment(execution_plan, reservation_plan)
+    _create_or_validate_json(paths["execution_plan"], execution_plan)
+    _create_or_validate_json(paths["reservation_plan"], reservation_plan)
     _create_or_validate_json(paths["remaining_commitment"], remaining)
     sys.path.insert(0, str(ROOT / "scripts"))
     from provider_attempts import open_campaign_ledger
@@ -4455,7 +6852,7 @@ def prewarm_sealed_prefix(
             **progress,
             "authorization_sha256": authorization_sha256,
             "campaign_census_sha256": census["census_sha256"],
-            "prefix_ids_sha256": remaining["prefix_ids_sha256"],
+            "prefix_ids_sha256": execution_plan["prefix"]["ids_sha256"],
         })
 
     wave = authorize_or_resume_construction_wave(
@@ -4469,6 +6866,322 @@ def prewarm_sealed_prefix(
         "remaining_count": len(remaining_ids),
         "progress_path": str(paths["construction_progress"]),
     }
+
+
+def prewarm_remaining_construction(
+    authorization_path: Path,
+    *,
+    data_root: Path,
+) -> dict[str, object]:
+    """Populate the exact committed 439 tail inside the original reservation."""
+    if authorization_path.resolve() != CANONICAL_CAMPAIGN_AUTHORIZATION.resolve():
+        raise RuntimeError("remaining prewarm requires canonical authorization")
+    packet = json.loads(authorization_path.read_text(encoding="utf-8"))
+    paths = {key: Path(value) for key, value in packet.get("artifacts", {}).items()}
+    if packet.get("artifacts") != campaign_artifact_paths():
+        raise RuntimeError("remaining prewarm artifact authority drift")
+    status = json.loads(paths["public_prefix_status"].read_text(encoding="utf-8"))
+    validate_public_prefix_status(status)
+    execution_plan = json.loads(paths["execution_plan"].read_text(encoding="utf-8"))
+    reservation_plan = json.loads(paths["reservation_plan"].read_text(encoding="utf-8"))
+    commitment = json.loads(paths["remaining_commitment"].read_text(encoding="utf-8"))
+    _validate_remaining_commitment(commitment, reservation_plan)
+    if (
+        status["remaining_commitment_sha256"]
+        != commitment["remaining_commitment_sha256"]
+        or status["execution_plan_sha256"]
+        != execution_plan["execution_plan_sha256"]
+    ):
+        raise RuntimeError("remaining prewarm differs from sealed prefix authority")
+    census = validate_campaign_authorization(
+        CANONICAL_CAMPAIGN_CENSUS, CANONICAL_CAMPAIGN_MANIFEST
+    )
+    prefix_ids, remaining_ids, prefix_hashes = _prefix_source_hashes(data_root, 12)
+    del prefix_ids, remaining_ids
+    plans = census["construction"]["plan_inventory"]
+    remaining_plans = [
+        plan for plan in plans if plan.get("source_body_sha256") not in prefix_hashes
+    ]
+    if not remaining_plans or len(remaining_plans) >= len(plans):
+        raise RuntimeError("remaining construction subset is invalid")
+    progress_path = paths["remaining_construction_progress"]
+    if progress_path.is_file():
+        progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        if (
+            progress.get("status") != "REMAINING_CONSTRUCTION_COMPLETE"
+            or progress.get("plans_sha256") != sha256_json(remaining_plans)
+        ):
+            raise RuntimeError("remaining construction checkpoint drift")
+        return progress
+    manifest = json.loads(CANONICAL_CAMPAIGN_MANIFEST.read_text(encoding="utf-8"))
+    construction = manifest["construction"]
+    binary_sha256 = census["construction"]["census_binary_provenance"]["binary_sha256"]
+    binary = ROOT / "target/state-memory-census-bin" / binary_sha256 / (
+        "memphant-cli.exe" if sys.platform == "win32" else "memphant-cli"
+    )
+    if not binary.is_file() or _sha256_file(binary) != binary_sha256:
+        raise RuntimeError("authorized construction binary is unavailable")
+    remaining_plans_path = paths["remaining_construction_plans"]
+    _create_or_validate_json(remaining_plans_path, remaining_plans)
+    source_ledger = _ledger_prefix_identity(paths["construction_subledger"])
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "MEMPHANT_STRUCTURED_STATE": "on",
+            "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
+            "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
+            "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
+            "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(construction["output_price_nanos_per_million"]),
+            "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH": str(data_root / construction["tokenizer_path"]),
+            "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH": str(data_root / construction["tokenizer_config_path"]),
+            "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER": str(paths["construction_subledger"]),
+            "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE": str(paths["observation_cache"]),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_HITS": str(paths["cache_hits"]),
+            "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256": packet["authorization"]["authorization_scope_sha256"],
+            "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256": census["census_sha256"],
+            "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE": packet["execution"]["cache_namespace"],
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER": source_ledger["path"],
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES": str(source_ledger["prefix_bytes"]),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256": source_ledger["prefix_sha256"],
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL": construction["response_model"],
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER": "DeepInfra",
+            "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS": str(census["construction"]["construction_liability_nanos"]),
+            "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT": "1",
+            "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "off",
+        }
+    )
+    completed = subprocess.run(
+        [
+            str(binary), "structured-state", "execute",
+            "--input-jsonl", str(paths["construction_input"]),
+            "--allowed-plans-json", str(remaining_plans_path),
+            "--max-workers", str(packet["execution"]["construction_max_workers"]),
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("remaining construction prewarm failed")
+    core = {
+        "schema_version": 1,
+        "status": "REMAINING_CONSTRUCTION_COMPLETE",
+        "plans_sha256": sha256_json(remaining_plans),
+        "plan_count": len(remaining_plans),
+        "remaining_commitment_sha256": commitment["remaining_commitment_sha256"],
+        "processor_result_sha256": sha256_json(json.loads(completed.stdout)),
+    }
+    progress = {**core, "progress_sha256": sha256_json(core)}
+    _atomically_create_json(progress_path, progress)
+    return progress
+
+
+def _construction_subledger_events(path: Path) -> list[dict[str, object]]:
+    try:
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("construction subledger is unavailable") from error
+
+
+def _failed_construction_plans(
+    plans: list[dict[str, object]],
+    events: list[dict[str, object]],
+    campaign_attempt: int,
+) -> list[dict[str, object]]:
+    by_key = {
+        (plan["extraction_key"], plan["request_sha256"]): plan for plan in plans
+    }
+    results: dict[tuple[object, object], dict[str, object]] = {}
+    starts: set[tuple[object, object]] = set()
+    for event in events:
+        if event.get("campaign_attempt") != campaign_attempt:
+            continue
+        key = (event.get("extraction_key"), event.get("request_sha256"))
+        if key not in by_key:
+            raise RuntimeError("construction retry subledger contains a foreign key")
+        if event.get("event") == "started":
+            if key in starts:
+                raise RuntimeError("construction retry duplicated a planned start")
+            starts.add(key)
+        elif event.get("event") == "result":
+            if key in results:
+                raise RuntimeError("construction retry duplicated a planned result")
+            results[key] = event
+    if starts != set(by_key) or set(results) != set(by_key):
+        raise RuntimeError("construction wave is incomplete and must resume in place")
+    return [
+        plan
+        for plan in plans
+        if results[(plan["extraction_key"], plan["request_sha256"])].get(
+            "parse_status"
+        )
+        != "decoded"
+    ]
+
+
+def execute_construction_retry_shard(
+    authorization_path: Path,
+    *,
+    data_root: Path,
+    eligible_plans: list[dict[str, object]],
+    phase: str,
+) -> list[dict[str, object]]:
+    """Retry only exact failed construction keys within the frozen retry pool."""
+    packet = json.loads(authorization_path.read_text(encoding="utf-8"))
+    if packet.get("artifacts") != campaign_artifact_paths():
+        raise RuntimeError("construction retry artifact authority drift")
+    paths = {key: Path(value) for key, value in packet["artifacts"].items()}
+    wave = json.loads(paths["construction_wave"].read_text(encoding="utf-8"))
+    census = validate_campaign_authorization(
+        CANONICAL_CAMPAIGN_CENSUS, CANONICAL_CAMPAIGN_MANIFEST
+    )
+    manifest = json.loads(CANONICAL_CAMPAIGN_MANIFEST.read_text(encoding="utf-8"))
+    construction = manifest["construction"]
+    binary_sha256 = census["construction"]["census_binary_provenance"]["binary_sha256"]
+    binary = ROOT / "target/state-memory-census-bin" / binary_sha256 / (
+        "memphant-cli.exe" if sys.platform == "win32" else "memphant-cli"
+    )
+    if not binary.is_file() or _sha256_file(binary) != binary_sha256:
+        raise RuntimeError("authorized construction binary is unavailable")
+    if phase not in {"prefix", "tail"}:
+        raise RuntimeError("construction retry phase is invalid")
+    wave_keys = {
+        (plan["extraction_key"], plan["request_sha256"]) for plan in wave["plans"]
+    }
+    if not eligible_plans or any(
+        (plan["extraction_key"], plan["request_sha256"]) not in wave_keys
+        for plan in eligible_plans
+    ):
+        raise RuntimeError("construction retry shard contains foreign plans")
+    retries: list[dict[str, object]] = []
+    candidate_plans = eligible_plans
+    for campaign_attempt in (2, 3):
+        events = _construction_subledger_events(paths["construction_subledger"])
+        failed = _failed_construction_plans(
+            candidate_plans, events, campaign_attempt - 1
+        )
+        if not failed:
+            return retries
+        retry = plan_construction_retry_wave(wave, failed, retries)
+        retry_root = paths["construction_retries"]
+        retry_root.mkdir(parents=True, exist_ok=True)
+        retry_path = retry_root / f"{phase}-ATTEMPT-{campaign_attempt}.json"
+        plans_path = retry_root / f"{phase}-ATTEMPT-{campaign_attempt}-PLANS.json"
+        progress_path = retry_root / f"{phase}-ATTEMPT-{campaign_attempt}-PROGRESS.json"
+        shard_core = {
+            "schema_version": 1,
+            "phase": phase,
+            "campaign_attempt": campaign_attempt,
+            "campaign_wave_sha256": wave["wave_sha256"],
+            "reservation_nanos": retry["reservation_nanos"],
+            "plans": failed,
+            "plans_sha256": sha256_json(failed),
+        }
+        shard = {**shard_core, "shard_sha256": sha256_json(shard_core)}
+        _create_or_validate_json(retry_path, shard)
+        _create_or_validate_json(plans_path, failed)
+        other_shards = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in retry_root.glob("*-ATTEMPT-[23].json")
+            if path != retry_path
+        ]
+        if sum(item["reservation_nanos"] for item in other_shards) + retry["reservation_nanos"] > wave["retry_pool_nanos"]:
+            raise RuntimeError("construction retry shards exceed prepaid pool")
+        if progress_path.is_file():
+            progress = json.loads(progress_path.read_text(encoding="utf-8"))
+            if progress.get("shard_sha256") != shard["shard_sha256"]:
+                raise RuntimeError("construction retry progress drift")
+        else:
+            source_ledger = _ledger_prefix_identity(paths["construction_subledger"])
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "MEMPHANT_STRUCTURED_STATE": "on",
+                    "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
+                    "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
+                    "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
+                    "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(construction["output_price_nanos_per_million"]),
+                    "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH": str(data_root / construction["tokenizer_path"]),
+                    "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH": str(data_root / construction["tokenizer_config_path"]),
+                    "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER": str(paths["construction_subledger"]),
+                    "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE": str(paths["observation_cache"]),
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_HITS": str(paths["cache_hits"]),
+                    "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256": packet["authorization"]["authorization_scope_sha256"],
+                    "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256": census["census_sha256"],
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE": packet["execution"]["cache_namespace"],
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER": source_ledger["path"],
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES": str(source_ledger["prefix_bytes"]),
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256": source_ledger["prefix_sha256"],
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL": construction["response_model"],
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER": "DeepInfra",
+                    "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS": str(wave["aggregate_reservation_nanos"]),
+                    "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT": str(campaign_attempt),
+                    "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "off",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    str(binary), "structured-state", "execute",
+                    "--input-jsonl", str(paths["construction_input"]),
+                    "--allowed-plans-json", str(plans_path),
+                    "--max-workers", str(packet["execution"]["construction_max_workers"]),
+                ],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if completed.returncode != 0:
+                raise RuntimeError("construction retry execution failed")
+            _atomically_create_json(
+                progress_path,
+                {
+                    "schema_version": 1,
+                    "shard_sha256": shard["shard_sha256"],
+                    "processor_result_sha256": sha256_json(json.loads(completed.stdout)),
+                },
+            )
+        retries.append(retry)
+        candidate_plans = failed
+    events = _construction_subledger_events(paths["construction_subledger"])
+    if _failed_construction_plans(candidate_plans, events, 3):
+        raise RuntimeError("construction retry pool exhausted with failed keys")
+    return retries
+
+
+def construction_retry_wave_unions(
+    paths: dict[str, Path], wave: dict[str, object]
+) -> list[dict[str, object]]:
+    retry_root = paths["construction_retries"]
+    prior: list[dict[str, object]] = []
+    ordered = {
+        (plan["extraction_key"], plan["request_sha256"]): index
+        for index, plan in enumerate(wave["plans"])
+    }
+    for campaign_attempt in (2, 3):
+        shards = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in retry_root.glob(f"*-ATTEMPT-{campaign_attempt}.json")
+        ] if retry_root.is_dir() else []
+        if not shards:
+            break
+        plans = [plan for shard in shards for plan in shard["plans"]]
+        keys = [(plan["extraction_key"], plan["request_sha256"]) for plan in plans]
+        if len(keys) != len(set(keys)):
+            raise RuntimeError("construction retry shards overlap")
+        plans.sort(key=lambda plan: ordered[(plan["extraction_key"], plan["request_sha256"])])
+        union = plan_construction_retry_wave(wave, plans, prior)
+        if union["campaign_attempt"] != campaign_attempt:
+            raise RuntimeError("construction retry union attempt drift")
+        prior.append(union)
+    return prior
 
 
 def authorize_construction_wave(
@@ -5107,6 +7820,409 @@ def census(
     return {**core, "census_sha256": sha256_json(core)}
 
 
+@contextmanager
+def _campaign_run_lease(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+b")
+    try:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError("state-memory campaign coordinator is already active") from error
+        yield
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
+def _settle_completed_construction(
+    *,
+    ledger: object,
+    paths: dict[str, Path],
+    authorization_sha256: str,
+    cache_namespace: str,
+    retry_waves: list[dict[str, object]],
+) -> dict[str, object]:
+    wave = json.loads(paths["construction_wave"].read_text(encoding="utf-8"))
+    request_key = f"state-aware-construction-wave:{wave['wave_sha256']}"
+    attempts = [
+        attempt
+        for attempt in ledger.snapshot().get("attempts", [])
+        if attempt.get("request_key") == request_key
+    ]
+    if len(attempts) != 1:
+        raise RuntimeError("construction aggregate reservation is missing")
+    settlement_path = paths["construction_settlement"]
+    if attempts[0].get("status") == "result":
+        if not settlement_path.is_file():
+            raise RuntimeError("settled construction lacks immutable proof")
+        settlement = json.loads(settlement_path.read_text(encoding="utf-8"))
+        core = {
+            key: value
+            for key, value in settlement.items()
+            if key != "wave_settlement_sha256"
+        }
+        if settlement.get("wave_settlement_sha256") != sha256_json(core):
+            raise RuntimeError("construction settlement proof drift")
+        return settlement
+    if attempts[0].get("status") != "started":
+        raise RuntimeError("construction aggregate reservation is terminal")
+    events = _construction_subledger_events(paths["construction_subledger"])
+    settlement = validate_and_settle_construction_wave(
+        ledger,
+        {**wave, "ledger_request_key": request_key},
+        events,
+        retry_waves=retry_waves,
+        authorization_sha256=authorization_sha256,
+        cache_namespace=cache_namespace,
+    )
+    _atomically_create_json(settlement_path, settlement)
+    return settlement
+
+
+def run_authorized_campaign(
+    authorization_path: Path,
+    *,
+    sealed_prefix: int,
+    data_root: Path,
+    base_database_url: str,
+) -> dict[str, object]:
+    """Crash-resumable full native LongMemEval-V2 state-memory campaign."""
+    if (
+        authorization_path.resolve() != CANONICAL_CAMPAIGN_AUTHORIZATION.resolve()
+        or sealed_prefix != 12
+    ):
+        raise RuntimeError("campaign run requires canonical authority and prefix 12")
+    _parsed_scratch_postgres_url(base_database_url, require_base=True)
+    lease_path = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-RUN.lock"
+    with _campaign_run_lease(lease_path):
+        packet = json.loads(authorization_path.read_text(encoding="utf-8"))
+        paths = {
+            key: Path(value) for key, value in packet["artifacts"].items()
+        }
+        census_authority = validate_campaign_authorization(
+            CANONICAL_CAMPAIGN_CENSUS, CANONICAL_CAMPAIGN_MANIFEST
+        )
+        official_dir, runtime_code = acquire_official_runtime_code(data_root)
+        binaries = _campaign_binaries()
+        openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+        openai_key = os.environ.get("OPENAI_API_KEY", "")
+        seal_passphrase = os.environ.get(
+            "MEMPHANT_LME_PREFIX_SEAL_PASSPHRASE", ""
+        )
+        if not openrouter_key or not openai_key or not seal_passphrase:
+            raise RuntimeError("campaign provider credentials or seal passphrase are missing")
+        if shutil.which("openssl") is None:
+            raise RuntimeError("campaign prefix sealing requires openssl")
+        _run_campaign_command(["psql", base_database_url, "-Atqc", "SELECT 1"])
+        postgres_tool_identity(base_database_url, "pg_dump", allow_base=True)
+        postgres_tool_identity(base_database_url, "pg_restore", allow_base=True)
+        for private_path in (
+            paths["private_reader_outputs"], paths["judge_outputs"],
+            paths["scratch"], paths["case_banks"],
+        ):
+            private_path.mkdir(parents=True, exist_ok=True)
+            private_path.chmod(0o700)
+            with tempfile.NamedTemporaryFile(dir=private_path, delete=True):
+                pass
+        # All credential, runtime, database, toolchain, binary and filesystem
+        # checks above are no-cost. The construction launch is the first paid
+        # operation in this entrypoint.
+        completed_paths = (
+            paths["closure"], paths["native_package"], paths["official_metrics"],
+            paths["reservation_plan"], paths["journal"],
+        )
+        if all(path.is_file() for path in completed_paths):
+            sys.path.insert(0, str(ROOT / "scripts"))
+            from provider_attempts import open_campaign_ledger
+
+            completed_ledger = open_campaign_ledger(
+                authorization_path,
+                screen_id="longmemeval-v2-state-aware",
+                expected_journal_path=paths["journal"],
+            )
+            try:
+                completed_plan = json.loads(
+                    paths["reservation_plan"].read_text(encoding="utf-8")
+                )
+                completed_package = json.loads(
+                    paths["native_package"].read_text(encoding="utf-8")
+                )
+                completed_metrics = json.loads(
+                    paths["official_metrics"].read_text(encoding="utf-8")
+                )
+                completed_closure = json.loads(
+                    paths["closure"].read_text(encoding="utf-8")
+                )
+                package_core = {
+                    key: value
+                    for key, value in completed_package.items()
+                    if key != "native_package_sha256"
+                }
+                snapshot = completed_ledger.snapshot()
+                if (
+                    completed_package.get("native_package_sha256")
+                    != sha256_json(package_core)
+                    or completed_package.get("official_metrics_artifact_sha256")
+                    != completed_metrics.get("official_metrics_sha256")
+                    or completed_package.get("row_settlement")
+                    != validate_complete_row_settlement(completed_plan, snapshot)
+                    or completed_closure.get("journal_sha256")
+                    != snapshot.get("journal_sha256")
+                    or completed_closure.get("unresolved_max_liability_nanos") != 0
+                ):
+                    raise RuntimeError("completed campaign checkpoint drift")
+                return {
+                    "schema_version": 1,
+                    "status": "COMPLETE",
+                    "native_package_sha256": completed_package[
+                        "native_package_sha256"
+                    ],
+                    "closure_journal_sha256": completed_closure["journal_sha256"],
+                    "external_sota": completed_package["claims"]["external_sota"],
+                }
+            finally:
+                completed_ledger.close()
+        prewarm_sealed_prefix(authorization_path, data_root=data_root)
+        prefix_retry_shards = execute_construction_retry_shard(
+            authorization_path,
+            data_root=data_root,
+            eligible_plans=json.loads(paths["prefix_plans"].read_text(encoding="utf-8")),
+            phase="prefix",
+        )
+        del prefix_retry_shards
+        execution_plan = json.loads(paths["execution_plan"].read_text(encoding="utf-8"))
+        reservation_plan = json.loads(
+            paths["reservation_plan"].read_text(encoding="utf-8")
+        )
+        commitment = json.loads(
+            paths["remaining_commitment"].read_text(encoding="utf-8")
+        )
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from provider_attempts import open_campaign_ledger
+
+        ledger = open_campaign_ledger(
+            authorization_path,
+            screen_id="longmemeval-v2-state-aware",
+            expected_journal_path=paths["journal"],
+        )
+        private_root = paths["private_reader_outputs"].resolve()
+
+        def run_case(machine, question_id, pair):
+            return execute_reader_case(
+                question_id=question_id,
+                rows=pair,
+                authorization_path=authorization_path,
+                census=census_authority,
+                data_root=data_root,
+                official_dir=official_dir,
+                base_database_url=base_database_url,
+                bank_root=paths["case_banks"],
+                row_state=machine,
+                private_root=private_root,
+                binaries=binaries,
+                openrouter_key=openrouter_key,
+            )
+
+        try:
+            prefix_machine = RowExecutionStateMachine(
+                reservation_plan, ledger, admitted_case_count=12
+            )
+            if not paths["public_prefix_status"].is_file():
+                execute_reader_wave(
+                    rows=reservation_plan["rows"][:24],
+                    case_count=12,
+                    execute_case=lambda question_id, pair: run_case(
+                        prefix_machine, question_id, pair
+                    ),
+                    max_workers=packet["execution"]["reader_max_workers"],
+                )
+            seal_completed_reader_prefix(
+                paths=paths,
+                execution_plan=execution_plan,
+                reservation_plan=reservation_plan,
+                commitment=commitment,
+            )
+            prewarm_remaining_construction(
+                authorization_path, data_root=data_root
+            )
+            execute_construction_retry_shard(
+                authorization_path,
+                data_root=data_root,
+                eligible_plans=json.loads(
+                    paths["remaining_construction_plans"].read_text(encoding="utf-8")
+                ),
+                phase="tail",
+            )
+            retry_waves = construction_retry_wave_unions(
+                paths,
+                json.loads(paths["construction_wave"].read_text(encoding="utf-8")),
+            )
+            _settle_completed_construction(
+                ledger=ledger,
+                paths=paths,
+                authorization_sha256=packet["authorization"][
+                    "authorization_scope_sha256"
+                ],
+                cache_namespace=packet["execution"]["cache_namespace"],
+                retry_waves=retry_waves,
+            )
+            full_machine = RowExecutionStateMachine(
+                reservation_plan, ledger, admitted_case_count=QUESTION_COUNT
+            )
+            execute_reader_wave(
+                rows=reservation_plan["rows"][24:],
+                case_count=439,
+                execute_case=lambda question_id, pair: run_case(
+                    full_machine, question_id, pair
+                ),
+                max_workers=packet["execution"]["reader_max_workers"],
+            )
+            with open_sealed_reader_prefix(
+                paths=paths,
+                execution_plan=execution_plan,
+                reservation_plan=reservation_plan,
+            ) as prefix_private:
+                private_rows = _reader_records_from_private(
+                    reservation_plan=reservation_plan,
+                    prefix=prefix_private,
+                    private_root=private_root,
+                )
+
+                def authority_for_row(row):
+                    authority = private_rows[row["row_key"]].get(
+                        "provider_record", {}
+                    ).get("authority")
+                    if not isinstance(authority, dict):
+                        raise RuntimeError("private row authority is unavailable")
+                    return authority
+
+                scored, arm_metrics = score_all_official_rows(
+                    reservation_plan=reservation_plan,
+                    private_rows=private_rows,
+                    row_state=full_machine,
+                    authority_for_row=authority_for_row,
+                    judge_root=paths["judge_outputs"],
+                    openai_key=openai_key,
+                    data_root=data_root,
+                    official_dir=official_dir,
+                )
+                lafs = official_lafs_summary(official_dir, arm_metrics)
+                metrics_core = {
+                    "schema_version": 1,
+                    "runtime_code_proof_sha256": runtime_code["proof_sha256"],
+                    "runtime_code_commit": runtime_code["commit"],
+                    "arms": arm_metrics,
+                    "lafs": lafs,
+                }
+                metrics = {
+                    **metrics_core,
+                    "official_metrics_sha256": sha256_json(metrics_core),
+                }
+                _create_or_validate_json(paths["official_metrics"], metrics)
+                by_question: dict[str, dict[str, object]] = {}
+                for item in scored:
+                    by_question.setdefault(
+                        item["planned"]["question_id"], {}
+                    )[item["planned"]["arm"]] = item
+                pairs = []
+                case_order = [
+                    row["question_id"] for row in reservation_plan["rows"][::2]
+                ]
+                if sha256_json(case_order) != execution_plan["case_order_sha256"]:
+                    raise RuntimeError("scored case order differs from execution plan")
+                for question_id in case_order:
+                    pair = by_question.get(question_id, {})
+                    if set(pair) != {"fast", "deep"}:
+                        raise RuntimeError("scored row pairing is incomplete")
+                    official = pair["fast"]["official"]
+                    category = official.get("category")
+                    is_abstention = official.get("is_abstention_problem")
+                    allowed_categories = {
+                        "static", "dynamic", "procedure", "static-abs",
+                        "dynamic-abs", "procedure-abs", "gotchas",
+                    }
+                    if (
+                        category not in allowed_categories
+                        or type(is_abstention) is not bool
+                        or is_abstention != str(category).endswith("-abs")
+                    ):
+                        raise RuntimeError("official premise-awareness category drift")
+                    receipts = [
+                        private_rows[pair[arm]["planned"]["row_key"]]
+                        for arm in ("fast", "deep")
+                    ]
+                    pairs.append(
+                        {
+                            "question_id": question_id,
+                            "ability": (
+                                "premise_awareness" if is_abstention else category
+                            ),
+                            "fast_correct": pair["fast"]["score"]["score_bool"],
+                            "deep_correct": pair["deep"]["score"]["score_bool"],
+                            "native_judge_valid": all(
+                                item["score"]["native_judge_settled"]
+                                for item in pair.values()
+                            ),
+                            "settled": True,
+                            "receipt_sha256": sha256_json(receipts),
+                        }
+                    )
+            package = build_native_official_package(
+                pairs=pairs,
+                reservation_plan=reservation_plan,
+                ledger_snapshot=ledger.snapshot(),
+                official_metrics_artifact=metrics,
+                upstream_identity={
+                    "code_commit": runtime_code["commit"],
+                    "dataset_revision": json.loads(
+                        (ROOT / "benchmarks/manifests/longmemeval_v2.lock.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )["dataset"]["revision"],
+                    "native_harness_sha256": _sha256_file(
+                        official_dir / "evaluation/harness.py"
+                    ),
+                },
+            )
+            package_core = {
+                key: value
+                for key, value in package.items()
+                if key != "native_package_sha256"
+            }
+            score_checkpoint_hashes = [
+                item["score"]["score_sha256"] for item in scored
+            ]
+            package_core["run_proof"] = {
+                "runtime_code_proof_sha256": runtime_code["proof_sha256"],
+                "official_metrics_sha256": metrics["official_metrics_sha256"],
+                "score_checkpoint_count": len(score_checkpoint_hashes),
+                "score_checkpoints_sha256": sha256_json(score_checkpoint_hashes),
+                "accepted_frozen_submission_proof": False,
+            }
+            package = {
+                **package_core,
+                "native_package_sha256": sha256_json(package_core),
+            }
+            _create_or_validate_json(paths["native_package"], package)
+            closure = close_completed_row_campaign(
+                ledger=ledger,
+                reservation_plan=reservation_plan,
+                native_package=package,
+                official_metrics_artifact=metrics,
+                closure_path=paths["closure"],
+            )
+            return {
+                "schema_version": 1,
+                "status": "COMPLETE",
+                "native_package_sha256": package["native_package_sha256"],
+                "closure_journal_sha256": closure["journal_sha256"],
+                "external_sota": package["claims"]["external_sota"],
+            }
+        finally:
+            ledger.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -5121,19 +8237,11 @@ def main() -> int:
     recost_parser.add_argument("--manifest", type=Path, required=True)
     recost_parser.add_argument("--output", type=Path, required=True)
     subparsers.add_parser("authorize")
-    prewarm_parser = subparsers.add_parser("prewarm-prefix")
-    prewarm_parser.add_argument("--authorization", type=Path, required=True)
-    prewarm_parser.add_argument("--sealed-prefix", type=int, choices=[12], required=True)
-    prewarm_parser.add_argument("--data-root", type=Path)
-    seal_parser = subparsers.add_parser("seal-prefix")
-    seal_parser.add_argument("--private-results", type=Path, required=True)
-    seal_parser.add_argument("--public-rows", type=Path, required=True)
-    seal_parser.add_argument("--sealed-output", type=Path, required=True)
-    seal_parser.add_argument("--public-status", type=Path, required=True)
-    seal_parser.add_argument("--remaining-commitment-sha256", required=True)
-    seal_parser.add_argument(
-        "--passphrase-env", default="MEMPHANT_LME_PREFIX_SEAL_PASSPHRASE"
-    )
+    run_parser = subparsers.add_parser("run")
+    run_parser.add_argument("--authorization", type=Path, required=True)
+    run_parser.add_argument("--sealed-prefix", type=int, choices=[12], required=True)
+    run_parser.add_argument("--data-root", type=Path)
+    run_parser.add_argument("--base-database-url")
     args = parser.parse_args()
     if args.command == "census":
         result = census(args.manifest, data_root=args.data_root, cli_bin=args.cli_bin)
@@ -5149,24 +8257,27 @@ def main() -> int:
         _atomic_write_json(args.output, result)
         print(json.dumps(result, sort_keys=True))
         return 0
-    if args.command == "seal-prefix":
-        status = seal_prefix(
-            args.private_results,
-            args.public_rows,
-            args.sealed_output,
-            args.public_status,
-            args.remaining_commitment_sha256,
-            args.passphrase_env,
-        )
-        print(json.dumps(status, sort_keys=True))
-        return 0
     if args.command == "authorize":
         packet = mint_campaign_authorization()
         print(json.dumps(packet, sort_keys=True))
         return 0
-    if args.command == "prewarm-prefix":
-        result = prewarm_sealed_prefix(
-            args.authorization, data_root=args.data_root
+    if args.command == "run":
+        data_root = args.data_root or Path(
+            os.environ.get(
+                "MEMPHANT_LME_V2_DATA_ROOT",
+                Path.home() / ".cache/memphant/longmemeval-v2",
+            )
+        )
+        base_database_url = args.base_database_url or os.environ.get(
+            "MEMPHANT_LME_SCRATCH_DATABASE_URL", ""
+        )
+        if not base_database_url:
+            raise RuntimeError("run requires MEMPHANT_LME_SCRATCH_DATABASE_URL")
+        result = run_authorized_campaign(
+            args.authorization,
+            sealed_prefix=args.sealed_prefix,
+            data_root=data_root,
+            base_database_url=base_database_url,
         )
         print(json.dumps(result, sort_keys=True))
         return 0

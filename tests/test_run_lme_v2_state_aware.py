@@ -36,7 +36,7 @@ def _postgres_toolchain_fixture(runner):
         path = Path(shutil.which(name) or sys.executable).resolve()
         core = {
             "tool": name,
-            "path": str(path),
+            "executable": name,
             "bytes": path.stat().st_size,
             "sha256": runner._sha256_file(path),
             "version": f"{name} (PostgreSQL) 17.0",
@@ -193,25 +193,38 @@ def test_reader_liability_inventory_stratifies_text_and_multimodal_billing() -> 
         {"question_id": "text", "has_image": False, "local_processor_input_tokens": 527},
     ]
 
-    inventory = runner._reader_liability_inventory(processor_rows, reader, judge)
+    inventory = runner._reader_liability_inventory(
+        processor_rows, reader, judge, native_judge_question_ids={"image"}
+    )
     by_id = {row["question_id"]: row for row in inventory["rows"]}
     assert by_id["image"]["input_reservation_units"] == 262_144
     assert by_id["text"]["input_reservation_units"] == 200_527
     assert by_id["image"]["per_arm_liability_nanos"] == 160_662_150
-    assert by_id["text"]["per_arm_liability_nanos"] == 154_500_450
-    assert inventory["reader_arm_liability_nanos"] == 315_162_600
+    assert by_id["text"]["per_arm_liability_nanos"] == 23_052_700
+    assert by_id["image"]["native_judge_required"] is True
+    assert by_id["text"]["native_judge_required"] is False
+    assert inventory["native_judge_rows"] == 1
+    assert inventory["reader_arm_liability_nanos"] == 183_714_850
     assert inventory["image_rows"] == 1
     assert inventory["text_rows"] == 1
     changed_local_diagnostic = [dict(row) for row in processor_rows]
     changed_local_diagnostic[0]["local_processor_input_tokens"] = 99_999
     changed = runner._reader_liability_inventory(
-        changed_local_diagnostic, reader, judge
+        changed_local_diagnostic,
+        reader,
+        judge,
+        native_judge_question_ids={"image"},
     )
     assert changed["rows"][0]["input_reservation_units"] == 262_144
 
     reader["multimodal_provider_prompt_ceiling_tokens"] = 262_143
     with pytest.raises(RuntimeError, match="provider prompt ceiling drift"):
-        runner._reader_liability_inventory(processor_rows, reader, judge)
+        runner._reader_liability_inventory(
+            processor_rows,
+            reader,
+            judge,
+            native_judge_question_ids={"image"},
+        )
 
 
 def test_reader_processor_proof_binds_images_processor_and_oracle_free_fixture() -> None:
@@ -310,7 +323,15 @@ def _write_reader_source(root: Path, *, image_dimensions: tuple[int, int] = (2, 
                 "question": f"Question {index}?",
                 "image": relative,
                 "answer": f"SECRET-{index}",
-                "eval_function": "oracle",
+                "eval_function": (
+                    "llm_abstention_checker"
+                    if index < 128
+                    else (
+                        "llm_gotchas_checker"
+                        if index < 156
+                        else "norm_phrase_set_match"
+                    )
+                ),
             }
         )
     (root / "questions.jsonl").write_text(
@@ -458,6 +479,7 @@ def _synthetic_reader_inventory(runner, per_arm_nanos: int = 10):
             ),
             "input_reservation_units": 262_144 if index < 29 else 200_001,
             "reader_liability_nanos": per_arm_nanos,
+            "native_judge_required": False,
             "judge_liability_nanos": 0,
             "per_arm_liability_nanos": per_arm_nanos,
         }
@@ -551,7 +573,7 @@ def test_forged_self_hashed_over_cap_census_fails_before_reservation_or_launch(
     ledger = _WaveLedger()
     launched = []
 
-    with pytest.raises(RuntimeError, match="admission equation drift"):
+    with pytest.raises(RuntimeError, match="reader liability inventory drift"):
         runner.authorize_construction_wave(
             ledger,
             census_path,
@@ -1152,8 +1174,7 @@ def test_runner_creates_canonical_construction_binding_once(monkeypatch, tmp_pat
     assert Path(binding["cache"]["observation_cache_path"]) == Path(
         paths["observation_cache"]
     ).resolve()
-    with pytest.raises(RuntimeError, match="immutable campaign artifact already exists"):
-        runner.create_construction_binding(authorization_path, [plan])
+    assert runner.create_construction_binding(authorization_path, [plan]) == binding_path
 
 
 @pytest.mark.parametrize(
@@ -1226,7 +1247,7 @@ def test_sealed_prefix_encrypts_private_answers_and_exposes_only_public_predicat
     status_path = tmp_path / "status.json"
     private.write_text(
         json.dumps(
-            {
+                                {
                 "schema_version": 1,
                 "execution_plan_sha256": "c" * 64,
                 "reservation_plan_sha256": "d" * 64,
@@ -1243,8 +1264,11 @@ def test_sealed_prefix_encrypts_private_answers_and_exposes_only_public_predicat
                                 "receipt_sha256": "f" * 64,
                                 "structurally_valid": True,
                                 "receipt_valid": True,
-                                "settled": True,
-                            }
+                                    "settled": True,
+                                    "official_row": {"question_id": f"q-{index:03}"},
+                                    "provider_record": {},
+                                    **({"deep_provider_record": {}} if arm == "deep" else {}),
+                                }
                             for arm in ("fast", "deep")
                         ],
                     }
@@ -1285,7 +1309,7 @@ def test_sealed_prefix_keeps_sole_private_evidence_when_encryption_fails(
     private = tmp_path / "private.json"
     private.write_text(
         json.dumps(
-            {
+                                {
                 "schema_version": 1,
                 "execution_plan_sha256": "c" * 64,
                 "reservation_plan_sha256": "d" * 64,
@@ -1302,8 +1326,11 @@ def test_sealed_prefix_keeps_sole_private_evidence_when_encryption_fails(
                                 "receipt_sha256": "f" * 64,
                                 "structurally_valid": True,
                                 "receipt_valid": True,
-                                "settled": True,
-                            }
+                                    "settled": True,
+                                    "official_row": {"question_id": f"q-{index:03}"},
+                                    "provider_record": {},
+                                    **({"deep_provider_record": {}} if arm == "deep" else {}),
+                                }
                             for arm in ("fast", "deep")
                         ],
                     }
@@ -1363,6 +1390,9 @@ def test_sealed_prefix_keeps_plaintext_and_removes_unverifiable_ciphertext(
                                 "structurally_valid": True,
                                 "receipt_valid": True,
                                 "settled": True,
+                                "official_row": {"question_id": f"q-{index:03}"},
+                                "provider_record": {},
+                                **({"deep_provider_record": {}} if arm == "deep" else {}),
                             }
                             for arm in ("fast", "deep")
                         ],
@@ -1900,8 +1930,9 @@ def test_row_reservation_plan_exactly_decomposes_census_reader_judge_and_deep() 
         {
             "question_id": f"q-{index:03}",
             "reader_liability_nanos": 1000 + index,
-            "judge_liability_nanos": 2000,
-            "per_arm_liability_nanos": 3000 + index,
+            "native_judge_required": index < 156,
+            "judge_liability_nanos": 2000 if index < 156 else 0,
+            "per_arm_liability_nanos": (3000 + index if index < 156 else 1000 + index),
         }
         for index in range(451)
     ]
@@ -1926,6 +1957,7 @@ def test_row_reservation_plan_exactly_decomposes_census_reader_judge_and_deep() 
         "reader": 1000,
         "judge": 2000,
     }
+    assert plan["rows"][400]["components"] == {"reader": 1200}
     assert plan["rows"][1]["components"] == {
         "deep_recall": 5000,
         "reader": 1000,
@@ -1968,6 +2000,7 @@ def test_row_reservation_plan_rejects_mutated_execution_authority() -> None:
         {
             "question_id": f"q-{index:03}",
             "reader_liability_nanos": 100,
+            "native_judge_required": True,
             "judge_liability_nanos": 200,
             "per_arm_liability_nanos": 300,
         }
@@ -1996,7 +2029,9 @@ def _strict_row_plan(runner):
     for sequence in range(1, 903):
         question = (sequence - 1) // 2
         arm = "fast" if sequence % 2 else "deep"
-        components = {"reader": 1000, "judge": 4_000_000}
+        components = {"reader": 1000}
+        if question < 156:
+            components["judge"] = 4_000_000
         if arm == "deep":
             components = {"deep_recall": 3000, **components}
         rows.append(
@@ -2005,6 +2040,7 @@ def _strict_row_plan(runner):
                 "row_key": f"q-{question:03}:{arm}",
                 "question_id": f"q-{question:03}",
                 "arm": arm,
+                "native_judge_required": question < 156,
                 "components": components,
                 "maximum_liability_nanos": sum(components.values()),
             }
@@ -2141,8 +2177,17 @@ def test_strict_reader_proxy_uses_frozen_row_reservation_and_exact_generation(
         "temperature": 0.6,
         "top_p": 0.95,
         "top_k": 20,
-        "provider": {"only": ["DeepInfra"], "allow_fallbacks": False},
+        "provider": {
+            "only": ["deepinfra"],
+            "allow_fallbacks": False,
+            "require_parameters": True,
+            "data_collection": "deny",
+            "zdr": True,
+            "quantizations": ["bf16"],
+            "max_price": {"prompt": 0.1, "completion": 0.15},
+        },
     }
+    persisted = []
 
     response = runner.execute_strict_reader_call(
         payload=payload,
@@ -2169,6 +2214,7 @@ def test_strict_reader_proxy_uses_frozen_row_reservation_and_exact_generation(
                 "total_cost": 0.0000005,
             },
         },
+        persist_private=lambda raw, receipt: persisted.append((raw, receipt)),
     )
 
     assert response["choices"][0]["message"]["content"] == "PRIVATE ANSWER"
@@ -2176,6 +2222,8 @@ def test_strict_reader_proxy_uses_frozen_row_reservation_and_exact_generation(
     assert snapshot["unresolved_max_liability_nanos"] == 0
     assert snapshot["attempts"][0]["start"]["max_liability_nanos"] == 1000
     receipt = snapshot["attempts"][0]["result"]["response"]
+    assert persisted[0][0]["response"]["id"] == "generation-reader-0"
+    assert persisted[0][0]["generation"]["provider_name"] == "DeepInfra"
     assert receipt["response_id"] == "generation-reader-0"
     assert "choices" not in receipt
     assert "PRIVATE ANSWER" not in json.dumps(receipt)
@@ -2190,12 +2238,26 @@ class _InMemoryAttemptLedger:
         return {"attempts": self.attempts}
 
     def record(self, event, request_key, payload):
+        latest_sequence = max(
+            (
+                value
+                for attempt in self.attempts
+                for value in (
+                    attempt.get("start_sequence"),
+                    attempt.get("result_sequence"),
+                )
+                if type(value) is int
+            ),
+            default=0,
+        )
         if event == "start":
             self.attempts.append(
                 {
                     "attempt_id": len(self.attempts) + 1,
                     "request_key": request_key,
                     "retry_index": payload.get("retry_index", 0),
+                    "start_sequence": latest_sequence + 1,
+                    "result_sequence": None,
                     "start": payload,
                     "status": "started",
                     "result": None,
@@ -2209,6 +2271,7 @@ class _InMemoryAttemptLedger:
             if row["request_key"] == request_key and row["status"] == "started"
         )
         attempt["status"] = event
+        attempt["result_sequence"] = latest_sequence + 1
         attempt[event] = payload
 
 
@@ -2246,9 +2309,9 @@ def test_native_judge_proxy_waits_for_all_readers_and_writes_priced_receipt() ->
     )
     payload = {
         "model": "gpt-5.2-2025-12-11",
-        "input": "private answer and reference",
-        "reasoning": {"effort": "medium"},
-        "max_output_tokens": 2048,
+        "messages": [{"role": "user", "content": "private answer and reference"}],
+        "reasoning_effort": "medium",
+        "max_completion_tokens": 2048,
     }
 
     response = runner.execute_native_judge_call(
@@ -2258,17 +2321,19 @@ def test_native_judge_proxy_waits_for_all_readers_and_writes_priced_receipt() ->
         transport=lambda request: {
             "id": "response-judge-0",
             "model": "gpt-5.2-2025-12-11",
-            "status": "completed",
-            "output": [{"private": "score"}],
+            "choices": [
+                {"message": {"role": "assistant", "content": '{"label":1}'}}
+            ],
             "usage": {
-                "input_tokens": 1000,
-                "output_tokens": 100,
+                "prompt_tokens": 1000,
+                "completion_tokens": 100,
                 "total_tokens": 1100,
             },
         },
+        persist_private=lambda raw, receipt: None,
     )
 
-    assert response["output"] == [{"private": "score"}]
+    assert response["choices"][0]["message"]["content"] == '{"label":1}'
     receipt = ledger.attempts[-1]["result"]["response"]
     assert receipt["usage"] == {
         "prompt_tokens": 1000,
@@ -2276,7 +2341,286 @@ def test_native_judge_proxy_waits_for_all_readers_and_writes_priced_receipt() ->
         "total_tokens": 1100,
         "cost": "0.00315",
     }
-    assert "output" not in receipt
+    assert "choices" not in receipt
+
+
+def test_local_reader_proxy_replays_identical_sdk_retry_without_paid_redispatch() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    ledger = _InMemoryAttemptLedger([])
+    machine = runner.RowExecutionStateMachine(plan, ledger, admitted_case_count=12)
+    upstream_calls = []
+
+    def transport(payload):
+        upstream_calls.append(payload)
+        response = {
+            "id": "generation-reader-proxy",
+            "model": "qwen/qwen3.5-9b",
+            "choices": [{"message": {"content": "boxed answer"}}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 10,
+                "total_tokens": 110,
+                "cost": "0.0000005",
+            },
+        }
+        return {
+            "response": response,
+            "generation": {
+                "id": response["id"],
+                "model": response["model"],
+                "provider_name": "DeepInfra",
+                "tokens_prompt": 100,
+                "tokens_completion": 10,
+                "total_cost": "0.0000005",
+            },
+        }
+
+    proxy, base_url = runner.start_reader_proxy(
+        row_key="q-000:fast",
+        row_state=machine,
+        transport=transport,
+        persist_private=lambda raw, receipt: None,
+    )
+    payload = {
+        "model": "Qwen/Qwen3.5-9B",
+        "messages": [{"role": "user", "content": "private prompt"}],
+        "max_tokens": 20_000,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "extra_body": {"top_k": 20},
+    }
+    try:
+        responses = []
+        for _ in range(2):
+            request = runner.urllib.request.Request(
+                base_url + "/chat/completions",
+                data=runner.canonical_json(payload),
+                headers={"content-type": "application/json"},
+            )
+            with runner.urllib.request.urlopen(request) as response:
+                responses.append(json.loads(response.read()))
+    finally:
+        proxy.shutdown()
+        proxy.server_close()
+
+    assert responses[0] == responses[1]
+    assert len(upstream_calls) == 1
+    assert proxy.dispatch_count == 1
+    assert len(ledger.attempts) == 1
+
+
+def test_local_reader_proxy_rejects_official_wire_drift_before_reservation() -> None:
+    runner = _load_runner()
+    ledger = _InMemoryAttemptLedger([])
+    machine = runner.RowExecutionStateMachine(
+        _strict_row_plan(runner), ledger, admitted_case_count=12
+    )
+    proxy, _ = runner.start_reader_proxy(
+        row_key="q-000:fast",
+        row_state=machine,
+        transport=lambda payload: pytest.fail("provider transport must not run"),
+        persist_private=lambda raw, receipt: pytest.fail("must not persist"),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="official Qwen reader wire"):
+            proxy.dispatch(
+                {
+                    "model": "floating-model",
+                    "messages": [{"role": "user", "content": "private"}],
+                    "max_tokens": 20_000,
+                    "temperature": 0.6,
+                    "top_p": 0.95,
+                    "top_k": 20,
+                }
+            )
+    finally:
+        proxy.shutdown()
+        proxy.server_close()
+    assert ledger.attempts == []
+
+
+def test_private_output_middle_state_reconciles_without_provider_replay(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    ledger = _InMemoryAttemptLedger([])
+    machine = runner.RowExecutionStateMachine(plan, ledger, admitted_case_count=12)
+    machine.start(
+        "q-000:fast",
+        "reader",
+        requested_model="qwen/qwen3.5-9b-20260310",
+        request_sha256="1" * 64,
+    )
+    response = {"id": "raw-private", "answer": "SECRET"}
+    receipt = {
+        **_priced_component_response("raw-private", "0.0000005"),
+        "request_sha256": "1" * 64,
+        "result_sha256": runner.sha256_json(response),
+    }
+    authority = {
+        key: f"{index + 1:064x}"
+        for index, key in enumerate(sorted(runner.PRIVATE_OUTPUT_AUTHORITY_FIELDS))
+    }
+    path = tmp_path / "private" / "reader.json"
+    runner.persist_private_provider_output(
+        path,
+        private_root=tmp_path / "private",
+        row_key="q-000:fast",
+        component="reader",
+        response=response,
+        receipt=receipt,
+        authority=authority,
+    )
+
+    runner.reconcile_private_provider_output(
+        path,
+        row_state=machine,
+        row_key="q-000:fast",
+        component="reader",
+        authority=authority,
+    )
+
+    assert ledger.attempts[0]["status"] == "result"
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert path.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_row_state_rejects_rehashed_extra_paid_component() -> None:
+    runner = _load_runner()
+    plan = json.loads(json.dumps(_strict_row_plan(runner)))
+    plan["rows"][0]["components"]["shadow_judge"] = 1
+    plan["rows"][0]["maximum_liability_nanos"] += 1
+    plan["rows_sha256"] = runner.sha256_json(plan["rows"])
+    core = {
+        key: value for key, value in plan.items() if key != "reservation_plan_sha256"
+    }
+    plan["reservation_plan_sha256"] = runner.sha256_json(core)
+
+    with pytest.raises(RuntimeError, match="reservation inventory is malformed"):
+        runner.RowExecutionStateMachine(
+            plan, _InMemoryAttemptLedger([]), admitted_case_count=12
+        )
+
+
+def test_reader_result_append_failure_preserves_reconcilable_started_state(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+
+    class FailingResultLedger(_InMemoryAttemptLedger):
+        def __init__(self):
+            super().__init__([])
+            self.fail_result = True
+
+        def record(self, event, request_key, payload):
+            if event == "result" and self.fail_result:
+                self.fail_result = False
+                raise RuntimeError("fsync failure")
+            super().record(event, request_key, payload)
+
+    ledger = FailingResultLedger()
+    machine = runner.RowExecutionStateMachine(
+        _strict_row_plan(runner), ledger, admitted_case_count=12
+    )
+    private_root = tmp_path / "private"
+    path = private_root / "q-000-fast" / "reader.json"
+    authority = {
+        key: f"{index + 1:064x}"
+        for index, key in enumerate(sorted(runner.PRIVATE_OUTPUT_AUTHORITY_FIELDS))
+    }
+
+    with pytest.raises(RuntimeError, match="fsync failure"):
+        runner.execute_strict_reader_call(
+            payload={
+                "model": "qwen/qwen3.5-9b-20260310",
+                "messages": [{"role": "user", "content": "private"}],
+                "max_tokens": 20_000,
+                "temperature": 0.6,
+                "top_p": 0.95,
+                "top_k": 20,
+                "provider": {
+                    "only": ["deepinfra"],
+                    "allow_fallbacks": False,
+                    "require_parameters": True,
+                    "data_collection": "deny",
+                    "zdr": True,
+                    "quantizations": ["bf16"],
+                    "max_price": {"prompt": 0.1, "completion": 0.15},
+                },
+            },
+            row_key="q-000:fast",
+            row_state=machine,
+            transport=lambda _payload: {
+                "response": {
+                    "id": "reader-crash",
+                    "model": "qwen/qwen3.5-9b",
+                    "choices": [{"message": {"content": "PRIVATE"}}],
+                    "usage": {
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                        "cost": "0.0000005",
+                    },
+                },
+                "generation": {
+                    "id": "reader-crash",
+                    "model": "qwen/qwen3.5-9b",
+                    "provider_name": "DeepInfra",
+                    "tokens_prompt": 1,
+                    "tokens_completion": 1,
+                    "total_cost": "0.0000005",
+                },
+            },
+            persist_private=lambda raw, receipt: runner.persist_private_provider_output(
+                path,
+                private_root=private_root,
+                row_key="q-000:fast",
+                component="reader",
+                response=raw,
+                receipt=receipt,
+                authority=authority,
+            ),
+        )
+
+    assert machine.component_status("q-000:fast", "reader") == "started"
+    runner.reconcile_private_provider_output(
+        path,
+        row_state=machine,
+        row_key="q-000:fast",
+        component="reader",
+        authority=authority,
+    )
+    assert machine.component_status("q-000:fast", "reader") == "result"
+
+
+def test_private_output_rejects_symlinked_parent(tmp_path: Path) -> None:
+    runner = _load_runner()
+    private_root = tmp_path / "private"
+    outside = tmp_path / "outside"
+    private_root.mkdir()
+    outside.mkdir()
+    (private_root / "row").symlink_to(outside, target_is_directory=True)
+    response = {"id": "raw"}
+    receipt = {
+        **_priced_component_response("raw", "0.0000005"),
+        "result_sha256": runner.sha256_json(response),
+    }
+    authority = {
+        key: f"{index + 1:064x}"
+        for index, key in enumerate(sorted(runner.PRIVATE_OUTPUT_AUTHORITY_FIELDS))
+    }
+    with pytest.raises(RuntimeError, match="parent is a symlink"):
+        runner.persist_private_provider_output(
+            private_root / "row/output.json",
+            private_root=private_root,
+            row_key="q-000:fast",
+            component="reader",
+            response=response,
+            receipt=receipt,
+            authority=authority,
+        )
 
 
 def test_deep_proxy_reserves_from_plan_and_requires_complete_server_receipt() -> None:
@@ -2295,6 +2639,13 @@ def test_deep_proxy_reserves_from_plan_and_requires_complete_server_receipt() ->
         "served_providers": ["DeepInfra"],
         "allow_fallbacks": False,
         "attempt_count": 2,
+        "dispatch_count": 2,
+        "generation_ids": ["deep-1", "deep-2"],
+        "generation_receipts": [{"id": "deep-1"}, {"id": "deep-2"}],
+        "generation_receipts_sha256": runner.sha256_json(
+            [{"id": "deep-1"}, {"id": "deep-2"}]
+        ),
+        "deep_attempt_journal_sha256": "2" * 64,
         "prompt_tokens": 10,
         "completion_tokens": 2,
         "total_tokens": 12,
@@ -2305,6 +2656,7 @@ def test_deep_proxy_reserves_from_plan_and_requires_complete_server_receipt() ->
         row_key="q-000:deep",
         row_state=machine,
         receipt={**deep_core, "receipt_sha256": runner.sha256_json(deep_core)},
+        persist_private=lambda raw, receipt: None,
     )
     assert ledger.attempts[0]["start"]["max_liability_nanos"] == 3000
     response = ledger.attempts[0]["result"]["response"]
@@ -2314,6 +2666,174 @@ def test_deep_proxy_reserves_from_plan_and_requires_complete_server_receipt() ->
         "total_tokens": 12,
         "cost": "0.0000025",
     }
+
+
+def test_deep_attempt_journal_replays_durable_turn_and_reconciles_receipt(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    private_root = tmp_path / "private"
+    journal = private_root / "row/deep-attempts.private.jsonl"
+    authority = {
+        key: f"{index + 1:064x}"
+        for index, key in enumerate(sorted(runner.PRIVATE_OUTPUT_AUTHORITY_FIELDS))
+    }
+    payload = {
+        "model": "qwen/qwen3.5-9b-20260310",
+        "messages": [{"role": "user", "content": "private turn"}],
+        "tools": [{"type": "function", "function": {"name": "recall"}}],
+        "tool_choice": "required",
+        "max_completion_tokens": 4096,
+        "stream": True,
+        "provider": {
+            "only": ["deepinfra"],
+            "allow_fallbacks": False,
+            "require_parameters": True,
+            "data_collection": "deny",
+            "zdr": True,
+            "quantizations": ["bf16"],
+            "max_price": {"prompt": 0.1, "completion": 0.15},
+        },
+    }
+    upstream = []
+
+    def transport(url, *, api_key, body):
+        upstream.append((url, body))
+        if body is not None:
+            return 200, {"X-Generation-Id": "gen-1"}, b"data: [DONE]\n\n"
+        generation = {
+            "data": {
+                "id": "gen-1",
+                "model": "qwen/qwen3.5-9b",
+                "provider_name": "DeepInfra",
+                "tokens_prompt": 10,
+                "tokens_completion": 2,
+                "total_cost": "0.0000025",
+            }
+        }
+        return 200, {}, runner.canonical_json(generation)
+
+    first = runner._DeepRecallProxy(
+        "key",
+        journal_path=journal,
+        private_root=private_root,
+        row_key="q-000:deep",
+        authority=authority,
+        transport=transport,
+    )
+    try:
+        assert first.dispatch(payload)[0] == 200
+    finally:
+        first.server_close()
+
+    resumed = runner._DeepRecallProxy(
+        "key",
+        journal_path=journal,
+        private_root=private_root,
+        row_key="q-000:deep",
+        authority=authority,
+        transport=transport,
+    )
+    try:
+        assert resumed.dispatch(payload)[0] == 200
+        receipt = resumed.receipt("1" * 64)
+    finally:
+        resumed.server_close()
+
+    assert len([call for call in upstream if call[1] is not None]) == 1
+    assert len([call for call in upstream if call[1] is None]) == 1
+    assert receipt["attempt_count"] == 1
+    assert receipt["deep_attempt_journal_sha256"] == runner._sha256_file(journal)
+    assert journal.stat().st_mode & 0o777 == 0o600
+
+
+def test_deep_receipt_rejects_dispatch_without_unique_priced_generation(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    private_root = tmp_path / "private"
+    authority = {
+        key: f"{index + 1:064x}"
+        for index, key in enumerate(sorted(runner.PRIVATE_OUTPUT_AUTHORITY_FIELDS))
+    }
+    proxy = runner._DeepRecallProxy(
+        "key",
+        journal_path=private_root / "row/deep-attempts.private.jsonl",
+        private_root=private_root,
+        row_key="q-000:deep",
+        authority=authority,
+        transport=lambda url, **kwargs: (429, {}, b'{"error":"limited"}'),
+    )
+    payload = {
+        "model": "qwen/qwen3.5-9b-20260310",
+        "messages": [{"role": "user", "content": "private turn"}],
+        "tools": [{"type": "function", "function": {"name": "recall"}}],
+        "tool_choice": "required",
+        "max_completion_tokens": 4096,
+        "stream": True,
+        "provider": {
+            "only": ["deepinfra"],
+            "allow_fallbacks": False,
+            "require_parameters": True,
+            "data_collection": "deny",
+            "zdr": True,
+            "quantizations": ["bf16"],
+            "max_price": {"prompt": 0.1, "completion": 0.15},
+        },
+    }
+    try:
+        assert proxy.dispatch(payload)[0] == 429
+        with pytest.raises(RuntimeError, match="dispatch/generation settlement mismatch"):
+            proxy.receipt("1" * 64)
+        with pytest.raises(RuntimeError, match="terminally rejected"):
+            proxy.dispatch(payload)
+    finally:
+        proxy.server_close()
+
+
+def test_official_runtime_code_rejects_incomplete_canonical_checkpoint(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    lock = json.loads(
+        (ROOT / "benchmarks/manifests/longmemeval_v2.lock.json").read_text()
+    )
+    runtime = tmp_path / "runtime-code" / lock["code"]["commit"]
+    runtime.mkdir(parents=True)
+    with pytest.raises(RuntimeError, match="checkpoint is incomplete"):
+        runner.acquire_official_runtime_code(tmp_path)
+
+
+def test_official_runtime_code_acquisition_is_code_only_and_hash_bound(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import run_longmemeval_v2 as adapter
+
+    downloads = []
+
+    def fake_download(url, destination):
+        downloads.append(url)
+        destination.write_bytes(b"pinned archive fixture")
+
+    def fake_extract(_archive, destination):
+        root = destination / "LongMemEval-V2-fixture"
+        (root / "memory_modules").mkdir(parents=True)
+        (root / "memory_modules/memory.py").write_text("MEMORY_REGISTRY = {}\n")
+        return root
+
+    monkeypatch.setattr(adapter, "_download", fake_download)
+    monkeypatch.setattr(adapter, "_extract_archive", fake_extract)
+    monkeypatch.setattr(adapter, "verify_code", lambda path, files: None)
+    official, proof = runner.acquire_official_runtime_code(tmp_path)
+
+    assert (official / "memory_modules/memory.py").is_file()
+    assert proof["commit"] in downloads[0]
+    assert proof["archive"]["sha256"] == runner._sha256_file(
+        official.parent / "official.tar.gz"
+    )
+    assert not (tmp_path / "data").exists()
 
 
 def _execution_for_row_plan(runner, plan):
@@ -2492,7 +3012,11 @@ def _complete_row_attempts(plan):
             append(row, "deep_recall", f"deep-{row['sequence']}")
         append(row, "reader", f"reader-{row['sequence']}")
     for row in plan["rows"]:
-        append(row, "judge", f"judge-{row['sequence']}")
+        if "judge" in row["components"]:
+            append(row, "judge", f"judge-{row['sequence']}")
+    for index, attempt in enumerate(attempts):
+        attempt["start_sequence"] = index * 2 + 1
+        attempt["result_sequence"] = index * 2 + 2
     return attempts
 
 
@@ -2529,21 +3053,43 @@ def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
         }
 
     ledger.close_campaign = close_campaign
+    release_lock = json.loads(
+        (ROOT / "benchmarks/manifests/longmemeval_v2.lock.json").read_text()
+    )
+    lafs_core = {
+        "schema_version": 1,
+        "compute_lafs_sha256": release_lock["code"]["files"][
+            "leaderboard/compute_lafs.py"
+        ],
+        "summary": {"lafs_gain": 0.01},
+    }
+    lafs = {**lafs_core, "lafs_proof_sha256": runner.sha256_json(lafs_core)}
+    metrics_core = {
+        "schema_version": 1,
+        "runtime_code_proof_sha256": "e" * 64,
+        "runtime_code_commit": release_lock["code"]["commit"],
+        "arms": {
+            "fast": {"overall": {"overall_full_set": 0.5}},
+            "deep": {"overall": {"overall_full_set": 0.5}},
+        },
+        "lafs": lafs,
+    }
+    official_metrics = {
+        **metrics_core,
+        "official_metrics_sha256": runner.sha256_json(metrics_core),
+    }
     package = runner.build_native_official_package(
         pairs=_official_pairs(),
         reservation_plan=plan,
         ledger_snapshot=ledger.snapshot(),
-        lafs_gain="0.01",
-        submission_score="0.5",
-        accepted_submission=False,
-        published_leaderboard_scores=[],
+        official_metrics_artifact=official_metrics,
         upstream_identity={
-            "code_commit": "a" * 40,
+            "code_commit": release_lock["code"]["commit"],
             "dataset_revision": "b" * 40,
             "native_harness_sha256": "c" * 64,
         },
     )
-    assert package["row_settlement"]["row_attempt_count"] == 2255
+    assert package["row_settlement"]["row_attempt_count"] == 1665
     assert package["official_metrics"]["pairs"] == 451
     assert package["official_metrics"]["internal_benchmark_success"] is True
     assert package["official_metrics"]["external_sota"] is False
@@ -2552,6 +3098,7 @@ def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
         ledger=ledger,
         reservation_plan=plan,
         native_package=package,
+        official_metrics_artifact=official_metrics,
         closure_path=Path("closure.json"),
     )
     assert ledger.closed is True
@@ -2559,5 +3106,24 @@ def test_all_451_row_settlement_builds_native_package_and_closes() -> None:
 
     broken = json.loads(json.dumps(ledger.snapshot()))
     broken["attempts"].pop()
-    with pytest.raises(RuntimeError, match="exactly 2255"):
+    with pytest.raises(RuntimeError, match="exactly 1665"):
         runner.validate_complete_row_settlement(plan, broken)
+
+
+def test_row_settlement_rejects_judge_started_before_reader_result() -> None:
+    runner = _load_runner()
+    plan = _strict_row_plan(runner)
+    attempts = _complete_row_attempts(plan)
+    first_judge_start = min(
+        attempt["start_sequence"]
+        for attempt in attempts
+        if attempt["request_key"].endswith(":judge")
+    )
+    first_reader = next(
+        attempt
+        for attempt in attempts
+        if attempt["request_key"].endswith(":reader")
+    )
+    first_reader["result_sequence"] = first_judge_start + 1
+    with pytest.raises(RuntimeError, match="before all reader outputs settled"):
+        runner.validate_complete_row_settlement(plan, {"attempts": attempts})
