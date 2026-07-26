@@ -82,7 +82,7 @@ def _write_synthetic_root(campaign, output: Path, manifest: dict) -> None:
             "pg_dump": {"binary": "/pg_dump", "major": 17, "server_major": 17},
             "pg_restore": {"binary": "/pg_restore", "major": 17, "server_major": 17},
         },
-        "deep_prompt_sha256": campaign.sha256_file(campaign.ROOT / "config/deep-recall-v1.txt"),
+        "deep_prompt_sha256": manifest["protocol"]["deep_prompt_sha256"],
         "deep_config_hashes": {
             name: candidate["config_sha256"]
             for name, candidate in manifest["protocol"]["deep_candidates"].items()
@@ -2326,6 +2326,9 @@ def test_run_campaign_uses_one_scratch_lifecycle_per_case(
 ) -> None:
     campaign = _load()
     manifest = campaign.load_campaign_manifest()
+    manifest["protocol"]["deep_prompt_sha256"] = campaign.sha256_file(
+        campaign.ROOT / "config/deep-recall-v1.txt"
+    )
     directory = tmp_path / "dataset"
     materialized = tmp_path / "materialized"
     output = tmp_path / "root"

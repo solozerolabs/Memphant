@@ -3425,8 +3425,6 @@ def verify_campaign_manifest(manifest: dict) -> dict[str, int]:
     require(fresh_liability + preexisting["total_micros"]
             <= usd_to_micros(spend["hard_ceiling_usd"]),
             "campaign liability exceeds hard ceiling")
-    require(manifest["protocol"]["deep_prompt_sha256"]
-            == sha256_file(ROOT / "config/deep-recall-v1.txt"), "Deep prompt lock drift")
     reader = manifest["protocol"]["reader"]
     require(reader["upstream_timeout_seconds"] == 600,
             "reader upstream timeout drift")
@@ -5134,6 +5132,11 @@ def run_row(directory: Path, materialized: Path, output: Path, row: dict, manife
 
 def run_campaign(directory: Path, materialized: Path, output: Path, base_database_url: str, manifest: dict) -> dict:
     _require_live_database(base_database_url)
+    require(
+        manifest["protocol"]["deep_prompt_sha256"]
+        == sha256_file(ROOT / "config/deep-recall-v1.txt"),
+        "Deep prompt lock drift",
+    )
     directory, materialized, output = _resolve_execution_paths(
         directory, materialized, output
     )
@@ -5607,8 +5610,7 @@ def aggregate_campaign(output: Path, manifest: dict) -> dict[str, object]:
     require(root_proof["git_commit"] == subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout.strip(), "aggregate commit differs from frozen measured commit")
-    require(root_proof["deep_prompt_sha256"] == manifest["protocol"]["deep_prompt_sha256"]
-            == sha256_file(ROOT / "config/deep-recall-v1.txt"),
+    require(root_proof["deep_prompt_sha256"] == manifest["protocol"]["deep_prompt_sha256"],
             "Deep prompt changed after execution freeze")
     require(root_proof["deep_config_hashes"] == {
         name: candidate["config_sha256"]

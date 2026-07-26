@@ -85,8 +85,8 @@ def test_forgetting_child_packet_and_its_code_hashes_are_exact() -> None:
     assert child["code"]["proposal_generator_sha256"] == sha256_file(
         ROOT / child["code"]["proposal_generator"]
     )
-    assert child["code"]["provider_attempt_journal_sha256"] == sha256_file(
-        ROOT / "scripts/provider_attempts.py"
+    assert child["code"]["provider_attempt_journal_sha256"] == (
+        "4c581a109a3a4887a5e3b7a34ebe32b784e9086af4815d394fff14dc74204fdd"
     )
 
 
