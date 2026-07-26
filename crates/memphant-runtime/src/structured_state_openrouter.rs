@@ -23,6 +23,7 @@ const FLASH_PROVIDER: &str = "google-ai-studio";
 const DEEPSEEK_MODEL: &str = "deepseek/deepseek-v4-flash";
 const DEEPSEEK_PROVIDERS: [&str; 2] = ["deepinfra", "wandb"];
 const MAX_ATTEMPTS: usize = 3;
+const MAX_OUTPUT_TOKENS: u64 = 4096;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 // Accuracy-first reasoning can legitimately emit >15k hidden reasoning tokens.
 // Keep a single attempt inside the 15-minute, three-attempt queue lease while
@@ -156,6 +157,7 @@ impl OpenRouterStructuredState {
             ],
             "seed": 0,
             "stream": false,
+            "max_tokens": MAX_OUTPUT_TOKENS,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -331,7 +333,7 @@ fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> Strin
     } else if model == DEEPSEEK_MODEL {
         identity.push_str(";providers=deepinfra,wandb");
     }
-    identity.push_str(";seed=0");
+    identity.push_str(";seed=0;max_tokens=4096");
     if model == FLASH_MODEL {
         identity.push_str(";temperature=0");
     }
@@ -2215,6 +2217,7 @@ mod tests {
         assert!(value.get("temperature").is_none());
         assert_eq!(value["seed"], 0);
         assert_eq!(value["stream"], false);
+        assert_eq!(value["max_tokens"], 4096);
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(value["response_format"]["json_schema"]["strict"], true);
         let schema = &value["response_format"]["json_schema"]["schema"];
@@ -2970,7 +2973,7 @@ mod tests {
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(
             provider.identity().model,
-            "google/gemini-3.5-flash;provider=google-ai-studio;seed=0;temperature=0;reasoning_effort=high"
+            "google/gemini-3.5-flash;provider=google-ai-studio;seed=0;max_tokens=4096;temperature=0;reasoning_effort=high"
         );
         assert_eq!(value["seed"], 0);
         assert_eq!(value["temperature"], 0);
@@ -2992,7 +2995,7 @@ mod tests {
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(
             provider.identity().model,
-            "deepseek/deepseek-v4-flash;providers=deepinfra,wandb;seed=0"
+            "deepseek/deepseek-v4-flash;providers=deepinfra,wandb;seed=0;max_tokens=4096"
         );
     }
 
@@ -3004,7 +3007,7 @@ mod tests {
         assert_eq!(value["reasoning"]["effort"], "high");
         assert_eq!(
             provider.identity().model,
-            format!("{DEFAULT_MODEL};seed=0;reasoning_effort=high")
+            format!("{DEFAULT_MODEL};seed=0;max_tokens=4096;reasoning_effort=high")
         );
     }
 
