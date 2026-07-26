@@ -1014,10 +1014,8 @@ def test_construction_phase_selector_preserves_exact_crash_state(phase: str) -> 
 
 def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
     runner = _load_runner()
-    qwen = {
+    endpoints = {
         "data": {
-            "id": "qwen/qwen3.5-9b",
-            "reasoning": {"mandatory": False},
             "endpoints": [
                 {
                     "provider_name": "DeepInfra",
@@ -1028,6 +1026,13 @@ def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
                     "status": 0,
                 }
             ],
+        }
+    }
+    model = {
+        "data": {
+            "id": "qwen/qwen3.5-9b",
+            "canonical_slug": "qwen/qwen3.5-9b-20260310",
+            "reasoning": {"mandatory": False},
         }
     }
     html = " ".join(
@@ -1044,33 +1049,46 @@ def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
 
     def fetch(url):
         seen.append(url)
-        return json.dumps(qwen).encode() if "openrouter" in url else html
+        if url == runner.QWEN_ENDPOINTS_URL:
+            return json.dumps(endpoints).encode()
+        if url == runner.QWEN_MODEL_URL:
+            return json.dumps(model).encode()
+        return html
 
     refresh = runner.refresh_campaign_provider_authority(fetch)
-    assert seen == [runner.QWEN_ENDPOINTS_URL, runner.OPENAI_GPT52_URL]
+    assert seen == [
+        runner.QWEN_ENDPOINTS_URL,
+        runner.QWEN_MODEL_URL,
+        runner.OPENAI_GPT52_URL,
+    ]
     assert refresh["normalized"]["openai_native_judge"]["reasoning_effort"] == "medium"
     assert refresh["normalized"]["qwen_deepinfra"]["reasoning_disable_permitted"] is True
     assert refresh["normalized"]["qwen_deepinfra"]["reasoning_metadata"] == {
         "mandatory": False
     }
+    assert refresh["normalized"]["qwen_deepinfra"]["canonical_slug"] == (
+        "qwen/qwen3.5-9b-20260310"
+    )
+    assert set(refresh["sources"]) == set(seen)
 
 
 @pytest.mark.parametrize(
-    ("supported_parameters", "reasoning"),
+    ("supported_parameters", "reasoning_present", "reasoning"),
     [
-        (["seed", "response_format", "structured_outputs", "max_tokens"], {"supported_efforts": ["none"], "mandatory": False}),
-        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["none", "low"], "mandatory": True}),
-        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {}),
+        (["seed", "response_format", "structured_outputs", "max_tokens"], True, {"mandatory": False}),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], False, None),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], True, None),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], True, {"mandatory": True}),
     ],
 )
 def test_provider_refresh_rejects_route_without_explicit_reasoning_disable_authority(
-    supported_parameters: list[str], reasoning: dict[str, object]
+    supported_parameters: list[str],
+    reasoning_present: bool,
+    reasoning: dict[str, object] | None,
 ) -> None:
     runner = _load_runner()
-    qwen = {
+    endpoints = {
         "data": {
-            "id": "qwen/qwen3.5-9b",
-            "reasoning": reasoning,
             "endpoints": [{
                 "provider_name": "DeepInfra",
                 "pricing": {"prompt": "0.0000001", "completion": "0.00000015"},
@@ -1081,6 +1099,13 @@ def test_provider_refresh_rejects_route_without_explicit_reasoning_disable_autho
             }],
         }
     }
+    model_data = {
+        "id": "qwen/qwen3.5-9b",
+        "canonical_slug": "qwen/qwen3.5-9b-20260310",
+    }
+    if reasoning_present:
+        model_data["reasoning"] = reasoning
+    model = {"data": model_data}
     html = " ".join([
         "gpt-5.2-2025-12-11", "400,000<!-- --> context window",
         "128,000<!-- --> max output tokens", "$1.75", "$14.00",
@@ -1088,7 +1113,13 @@ def test_provider_refresh_rejects_route_without_explicit_reasoning_disable_autho
     ]).encode()
     with pytest.raises(RuntimeError, match="route or price authority drift"):
         runner.refresh_campaign_provider_authority(
-            lambda url: json.dumps(qwen).encode() if "openrouter" in url else html
+            lambda url: (
+                json.dumps(endpoints).encode()
+                if url == runner.QWEN_ENDPOINTS_URL
+                else json.dumps(model).encode()
+                if url == runner.QWEN_MODEL_URL
+                else html
+            )
         )
 
 

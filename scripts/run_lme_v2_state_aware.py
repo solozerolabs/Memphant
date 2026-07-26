@@ -89,6 +89,7 @@ CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
 CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
 CANONICAL_CAMPAIGN_AUTHORIZATION = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 QWEN_ENDPOINTS_URL = "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints"
+QWEN_MODEL_URL = "https://openrouter.ai/api/v1/model/qwen/qwen3.5-9b"
 OPENAI_GPT52_URL = "https://developers.openai.com/api/docs/models/gpt-5.2"
 
 # These builders mirror the two pinned official qa_eval_metrics.py prompt
@@ -246,10 +247,15 @@ def _fetch_public_bytes(url: str) -> bytes:
 
 def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, object]:
     """Refresh public route/price authority without reading provider credentials."""
-    qwen_bytes = fetch(QWEN_ENDPOINTS_URL)
+    qwen_endpoints_bytes = fetch(QWEN_ENDPOINTS_URL)
+    qwen_model_bytes = fetch(QWEN_MODEL_URL)
     openai_bytes = fetch(OPENAI_GPT52_URL)
-    qwen = json.loads(qwen_bytes)
-    endpoints = qwen.get("data", {}).get("endpoints", [])
+    qwen_endpoints = json.loads(qwen_endpoints_bytes)
+    qwen_model = json.loads(qwen_model_bytes)
+    endpoints = qwen_endpoints.get("data", {}).get("endpoints", [])
+    model_metadata = qwen_model.get("data")
+    if not isinstance(model_metadata, dict):
+        raise RuntimeError("Qwen model authority is missing or malformed")
     deepinfra = [
         endpoint
         for endpoint in endpoints
@@ -265,14 +271,15 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
         "max_tokens",
         "reasoning",
     }
-    reasoning = qwen.get("data", {}).get("reasoning")
+    reasoning = model_metadata.get("reasoning")
     reasoning_disable_permitted = (
         isinstance(reasoning, dict)
         and reasoning.get("mandatory") is False
     )
     normalized_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
-        "response_model": qwen.get("data", {}).get("id"),
+        "response_model": model_metadata.get("id"),
+        "canonical_slug": model_metadata.get("canonical_slug"),
         "provider": endpoint.get("provider_name"),
         "input_price_usd_per_token": endpoint.get("pricing", {}).get("prompt"),
         "output_price_usd_per_token": endpoint.get("pricing", {}).get("completion"),
@@ -291,6 +298,7 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
     expected_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
         "response_model": "qwen/qwen3.5-9b",
+        "canonical_slug": "qwen/qwen3.5-9b-20260310",
         "provider": "DeepInfra",
         "input_price_usd_per_token": "0.0000001",
         "output_price_usd_per_token": "0.00000015",
@@ -331,7 +339,8 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
         "normalized": normalized,
         "normalized_sha256": sha256_json(normalized),
         "sources": {
-            QWEN_ENDPOINTS_URL: hashlib.sha256(qwen_bytes).hexdigest(),
+            QWEN_ENDPOINTS_URL: hashlib.sha256(qwen_endpoints_bytes).hexdigest(),
+            QWEN_MODEL_URL: hashlib.sha256(qwen_model_bytes).hexdigest(),
             OPENAI_GPT52_URL: hashlib.sha256(openai_bytes).hexdigest(),
         },
     }
