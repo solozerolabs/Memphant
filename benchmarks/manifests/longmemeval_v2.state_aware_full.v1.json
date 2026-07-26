@@ -170,7 +170,7 @@
       "scripts/run_lme_v2_state_aware.py"
     ],
     "code_sha256s": {
-    "crates/memphant-runtime/src/structured_state_openrouter.rs": "a2373bc7a1e8440108de18d6a218e7d7b5bcf47bc1b0089f616aed9e0bfa9cc4",
+    "crates/memphant-runtime/src/structured_state_openrouter.rs": "584cc654a0708daa554fd03dfccffaf7144fca7e144f96636dfd918e11a089e5",
       "crates/memphant-core/src/service.rs": "1452bfd8de38f72510fa5a31fd49bc0e1391089d6d8e98cba195f2ecb9e71fb3",
       "crates/memphant-core/src/structured_state.rs": "7b12b07517514ec837fbf7c3eaf56e0679d63cc60ecf226908a0e154b82d58c6",
     "benchmarks/longmemeval_v2/memphant_memory.py": "6059218b80d7498daf9b7e98f49fe6f62993adcda9ddf16ba576e40de864410b",
@@ -178,14 +178,14 @@
       "benchmarks/longmemeval_v2/qwen_reader_census.py": "251ef6a46713d6d72dabd0444325a232639842163decf98798bbe0a9aa38ca76",
       "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt": "979a7b3725fcc45809e6e707565b8f0d5ee2e749593ce52ae50a706653d160b0",
     "crates/memphant-cli/src/structured_state_census.rs": "369207478ca4a1cd5291e57352f8e6eddace5a9f34ddfa2f4badb6fa72aa1176",
-    "scripts/run_lme_v2_state_aware.py": "95e8668a26caa9447b9246061e40f8567d1179754e13a95b573be54c0f5802d7"
+    "scripts/run_lme_v2_state_aware.py": "c3584dcc6549fb81a663abc4df86c51bddb3a662076ae36b27e91b9d998348b0"
     },
     "census_binary_build": {
       "package": "memphant-cli",
       "profile": "release",
       "cargo_locked": true,
     "cargo_lock_sha256": "8a3b85c525213aa4acb1acdb7f1a41ac5c896b101730e3b471c576bd443a21e9",
-    "source_set_sha256": "2ea0af8b117074397e595df14cb871fd24f3d9805eaee520a71393fc2cc8121d",
+    "source_set_sha256": "81d31ad645d19307bf45572180af9e89a1749b8390fb6f0e3256b21353cb28ea",
       "rustc_vv_sha256": "a9951fd2e18599557d1a289d74c50874d336477e219b1472508a63518090fa08",
       "cargo_version_sha256": "4b38cfb28fee9bbb95897bc3793f5fce5f3ed35c732f29ad7d80f96ba96eac5b",
       "source_paths": [
@@ -202,6 +202,7 @@
         "crates/memphant-runtime/src/lib.rs",
         "crates/memphant-runtime/src/structured_state_openrouter.rs",
         "benchmarks/longmemeval_v2/memphant_memory.py",
+        "benchmarks/longmemeval_v2/construction_authority.py",
         "benchmarks/longmemeval_v2/qwen_reader_census.py",
         "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt",
         "scripts/run_lme_v2_state_aware.py"

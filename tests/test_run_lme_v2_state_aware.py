@@ -109,6 +109,18 @@ def test_qwen_tokenizer_identity_and_chat_template_overhead_fixture_are_pinned()
     )
 
 
+def test_canonical_census_source_inventory_covers_declared_campaign_code() -> None:
+    runner = _load_runner()
+    construction = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))[
+        "construction"
+    ]
+    build = construction["census_binary_build"]
+
+    assert set(construction["code_sha256s"]) <= set(build["source_paths"])
+    identity = runner._current_build_provenance_inputs(construction, build)
+    assert identity["source_set_sha256"] == build["source_set_sha256"]
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -573,7 +585,7 @@ def test_forged_self_hashed_over_cap_census_fails_before_reservation_or_launch(
     ledger = _WaveLedger()
     launched = []
 
-    with pytest.raises(RuntimeError, match="reader liability inventory drift"):
+    with pytest.raises(RuntimeError, match="admission equation drift"):
         runner.authorize_construction_wave(
             ledger,
             census_path,
