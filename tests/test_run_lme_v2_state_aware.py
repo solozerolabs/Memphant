@@ -975,6 +975,9 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
             "construction_canary": runner.derive_construction_canary([plan]),
         }
     )
+    assert census["construction"]["construction_canary"]["gate"][
+        "maximum_transient_retries_per_plan"
+    ] == 0
     census["census_sha256"] = runner.sha256_json(
         {key: value for key, value in census.items() if key != "census_sha256"}
     )
@@ -1025,6 +1028,9 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
     assert packet["execution"]["construction_canary"] == runner.derive_construction_canary(
         [plan]
     )
+    assert packet["execution"]["construction_canary"]["gate"][
+        "maximum_transient_retries_per_plan"
+    ] == 0
     output = tmp_path / "CAMPAIGN-AUTHORIZATION.json"
     runner._create_json(output, packet)
     with pytest.raises(RuntimeError, match="already exists"):
@@ -1285,7 +1291,7 @@ def _canary_result(
     campaign_attempt: int = 1,
     parse_status: str = "decoded",
     reservation_status: str = "settled",
-    http_status: int | None = None,
+    http_status: int | None = 200,
 ) -> dict[str, object]:
     return {
         "event": "result",
@@ -1314,12 +1320,11 @@ def test_construction_canary_is_deterministic_stratified_and_prefers_v1_failures
     assert canary["preferred_v1_failed_source_count"] > 0
     assert canary["gate"]["maximum_statistical_failures"] == 4
     assert canary["gate"]["maximum_semantic_failures"] == 0
-    assert canary["liability"]["maximum_transient_retry_reservation_nanos"] == sum(
-        plan["per_attempt_reservation_nanos"] for plan in canary["plans"]
-    )
+    assert canary["gate"]["maximum_transient_retries_per_plan"] == 0
+    assert canary["liability"]["maximum_transient_retry_reservation_nanos"] == 0
 
 
-def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_transient(
+def test_construction_canary_exact_gate_rejects_every_non_success_without_retry(
     tmp_path: Path,
 ) -> None:
     runner = _load_runner()
@@ -1350,6 +1355,12 @@ def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_trans
     assert semantic_gate["semantic_failure_count"] == 1
     assert semantic_gate["accepted"] is False
 
+    missing_status = list(decoded)
+    missing_status[0] = _canary_result(plans[0], http_status=None)
+    missing_status_gate = runner.evaluate_construction_canary(canary, missing_status)
+    assert missing_status_gate["semantic_failure_count"] == 1
+    assert missing_status_gate["accepted"] is False
+
     transient = list(decoded)
     transient[0] = _canary_result(
         plans[0],
@@ -1358,8 +1369,9 @@ def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_trans
         http_status=503,
     )
     transient_gate = runner.evaluate_construction_canary(canary, transient)
-    assert transient_gate["semantic_failure_count"] == 0
-    assert transient_gate["transient_pending_plans"] == [plans[0]]
+    assert transient_gate["semantic_failure_count"] == 1
+    assert transient_gate["accepted"] is False
+    assert "transient_pending_plans" not in transient_gate
 
     charged_429 = list(decoded)
     charged_429[0] = _canary_result(
@@ -1370,13 +1382,13 @@ def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_trans
     )
     charged_429_gate = runner.evaluate_construction_canary(canary, charged_429)
     assert charged_429_gate["semantic_failure_count"] == 1
-    assert charged_429_gate["transient_pending_count"] == 0
     retried = transient + [_canary_result(plans[0], campaign_attempt=2)]
-    assert runner.evaluate_construction_canary(canary, retried)["accepted"] is True
+    retried_gate = runner.evaluate_construction_canary(canary, retried)
+    assert retried_gate["semantic_failure_count"] == 1
+    assert retried_gate["accepted"] is False
 
     incomplete_gate = runner.evaluate_construction_canary(canary, decoded[1:])
     assert incomplete_gate["incomplete_failure_count"] == 1
-    assert incomplete_gate["transient_pending_count"] == 0
     assert incomplete_gate["accepted"] is False
 
 

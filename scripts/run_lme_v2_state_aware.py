@@ -61,7 +61,7 @@ CONSTRUCTION_CANARY_PLAN_COUNT = 64
 CONSTRUCTION_CANARY_QUANTILES = 4
 CONSTRUCTION_CANARY_ALPHA = Decimal("0.05")
 CONSTRUCTION_CANARY_FAILURE_LIMIT = Decimal("0.15")
-CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES = 1
+CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES = 0
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ORACLE_KEYS = {
     "answer",
@@ -6750,7 +6750,9 @@ def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, obje
         ),
         "preferred_v1_failed_source_inventory_file_sha256": preferred_inventory_sha256,
         "gate": {
-            "failure_definition": "any non-transient schema-or-semantic decode failure",
+            "failure_definition": (
+                "any incomplete, non-200, schema, semantic, or duplicate result"
+            ),
             "maximum_semantic_failures": 0,
             "maximum_statistical_failures": _maximum_failures_below_exact_upper_bound(
                 target,
@@ -6765,9 +6767,8 @@ def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, obje
         },
         "liability": {
             "first_attempt_reservation_nanos": selected_reservation,
-            "maximum_transient_retry_reservation_nanos": selected_reservation,
+            "maximum_transient_retry_reservation_nanos": 0,
             "first_attempt_is_subset_of_construction_first_wave": True,
-            "transient_retry_is_subset_of_construction_retry_pool": True,
         },
     }
     return {**core, "canary_sha256": sha256_json(core)}
@@ -6796,7 +6797,6 @@ def evaluate_construction_canary(
             results.setdefault(pair, []).append(event)
     semantic_failures = []
     incomplete_failures = []
-    transient_pending = []
     decoded = []
     for plan in normalized:
         pair = (plan["extraction_key"], plan["request_sha256"])
@@ -6808,19 +6808,14 @@ def evaluate_construction_canary(
             continue
         latest = attempts[-1]
         if (
-            latest.get("reservation_status") == "settled"
+            len(attempts) == 1
+            and latest.get("campaign_attempt") == 1
+            and latest.get("reservation_status") == "settled"
             and latest.get("parse_status") == "decoded"
+            and latest.get("http_status") == 200
             and latest.get("error") is None
         ):
             decoded.append(plan)
-        elif (
-            latest.get("reservation_status") == "not_charged"
-            and latest.get("parse_status") == "http_error"
-            and latest.get("http_status") in {502, 503}
-            and latest.get("campaign_attempt", 0)
-            <= 1 + CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES
-        ):
-            transient_pending.append(plan)
         else:
             semantic_failures.append(plan)
     failure_upper = _clopper_pearson_upper(
@@ -6832,7 +6827,6 @@ def evaluate_construction_canary(
         len(normalized) == canary.get("plan_count")
         and not semantic_failures
         and not incomplete_failures
-        and not transient_pending
         and len(decoded) == len(normalized)
         and failure_upper < CONSTRUCTION_CANARY_FAILURE_LIMIT
     )
@@ -6846,9 +6840,6 @@ def evaluate_construction_canary(
         "incomplete_failure_count": len(incomplete_failures),
         "incomplete_failure_plan_sha256": sha256_json(incomplete_failures),
         "observed_failure_count": len(semantic_failures) + len(incomplete_failures),
-        "transient_pending_count": len(transient_pending),
-        "transient_pending_plans": transient_pending,
-        "transient_pending_plans_sha256": sha256_json(transient_pending),
         "one_sided_clopper_pearson_upper": format(failure_upper, "f"),
         "decode_failure_rate_upper_limit": str(
             CONSTRUCTION_CANARY_FAILURE_LIMIT
@@ -7826,21 +7817,6 @@ def prewarm_sealed_prefix(
                 construction_canary,
                 _construction_subledger_events(paths["construction_subledger"]),
             )
-            if (
-                not gate["semantic_failure_count"]
-                and not gate["incomplete_failure_count"]
-                and gate["transient_pending_count"]
-            ):
-                execute_construction_retry_shard(
-                    authorization_path,
-                    data_root=resolved_data_root,
-                    eligible_plans=gate["transient_pending_plans"],
-                    phase="canary",
-                )
-                gate = evaluate_construction_canary(
-                    construction_canary,
-                    _construction_subledger_events(paths["construction_subledger"]),
-                )
             gate = bind_construction_canary_cache(
                 gate, construction_canary, paths["observation_cache"]
             )
