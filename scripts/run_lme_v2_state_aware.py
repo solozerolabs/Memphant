@@ -84,9 +84,9 @@ V1_ABANDONMENT_PROOF = (
 V1_FAILED_SOURCE_INVENTORY = (
     ROOT / "benchmarks/manifests/longmemeval_v2.v1_failed_sources.json"
 )
-CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v2"
+CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3"
 CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
-CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v2.json"
+CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
 CANONICAL_CAMPAIGN_AUTHORIZATION = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 QWEN_ENDPOINTS_URL = "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints"
 OPENAI_GPT52_URL = "https://developers.openai.com/api/docs/models/gpt-5.2"
@@ -266,20 +266,9 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
         "reasoning",
     }
     reasoning = qwen.get("data", {}).get("reasoning")
-    supported_efforts = (
-        reasoning.get("supported_efforts") if isinstance(reasoning, dict) else None
-    )
-    reasoning_none_permitted = (
+    reasoning_disable_permitted = (
         isinstance(reasoning, dict)
-        and "supported_efforts" in reasoning
         and reasoning.get("mandatory") is False
-        and (
-            supported_efforts is None
-            or (
-                isinstance(supported_efforts, list)
-                and "none" in supported_efforts
-            )
-        )
     )
     normalized_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
@@ -292,15 +281,10 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
         "required_parameters_supported": required_parameters.issubset(
             set(endpoint.get("supported_parameters", []))
         ),
-        "reasoning_supported_efforts": (
-            sorted(supported_efforts)
-            if isinstance(supported_efforts, list)
-            else supported_efforts
-        ),
         "reasoning_mandatory": (
             reasoning.get("mandatory") if isinstance(reasoning, dict) else None
         ),
-        "reasoning_none_permitted": reasoning_none_permitted,
+        "reasoning_disable_permitted": reasoning_disable_permitted,
         "reasoning_metadata": reasoning,
         "status": endpoint.get("status"),
     }
@@ -318,7 +302,7 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
     if (
         {key: normalized_qwen.get(key) for key in expected_qwen} != expected_qwen
         or normalized_qwen["required_parameters_supported"] is not True
-        or normalized_qwen["reasoning_none_permitted"] is not True
+        or normalized_qwen["reasoning_disable_permitted"] is not True
     ):
         raise RuntimeError("Qwen DeepInfra route or price authority drift")
     openai = openai_bytes.decode("utf-8")
@@ -6299,8 +6283,8 @@ def _full_census(
             "--tokenizer-config-file",
             str(data_root / construction["tokenizer_config_path"]),
         ]
-        if construction.get("reasoning_effort"):
-            command += ["--reasoning-effort", construction["reasoning_effort"]]
+        if construction.get("reasoning_mode"):
+            command += ["--reasoning-mode", construction["reasoning_mode"]]
         completed = subprocess.run(command, capture_output=True, text=True, check=False, env={})
         _verify_selected_census_binary(expected_binary_sha256, execution_cli)
         if completed.returncode != 0:
@@ -6861,7 +6845,7 @@ def bind_construction_canary_cache(
         if key not in {"gate_sha256", "canonical_cache"}
     }
     core["canonical_cache"] = {
-        "namespace": "longmemeval-v2-construction-v2",
+        "namespace": "longmemeval-v2-construction-v3",
         "entries": inventory,
         "entries_sha256": sha256_json(inventory),
     }
@@ -7301,7 +7285,7 @@ def _build_campaign_authorization(
             "sealed_prefix_count": 12,
             "remaining_count": 439,
             "official_question_count": QUESTION_COUNT,
-            "cache_namespace": "longmemeval-v2-construction-v2",
+            "cache_namespace": "longmemeval-v2-construction-v3",
             "resume_key": "extraction_key",
             "construction_canary": construction_canary,
         },
@@ -7723,8 +7707,8 @@ def prewarm_sealed_prefix(
             {
                 "MEMPHANT_STRUCTURED_STATE": "on",
                 "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
-                "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT": construction[
-                    "reasoning_effort"
+                "MEMPHANT_STRUCTURED_STATE_REASONING_MODE": construction[
+                    "reasoning_mode"
                 ],
                 "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
                 "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
@@ -7901,8 +7885,8 @@ def prewarm_remaining_construction(
         {
             "MEMPHANT_STRUCTURED_STATE": "on",
             "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
-            "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT": construction[
-                "reasoning_effort"
+            "MEMPHANT_STRUCTURED_STATE_REASONING_MODE": construction[
+                "reasoning_mode"
             ],
             "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
             "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
@@ -8092,8 +8076,8 @@ def execute_construction_retry_shard(
                 {
                     "MEMPHANT_STRUCTURED_STATE": "on",
                     "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
-                    "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT": construction[
-                        "reasoning_effort"
+                    "MEMPHANT_STRUCTURED_STATE_REASONING_MODE": construction[
+                        "reasoning_mode"
                     ],
                     "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
                     "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),

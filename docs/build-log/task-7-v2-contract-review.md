@@ -1,6 +1,6 @@
 # Task 7 v2 contract review
 
-Status: implementation verified locally; no census, provider, authorization, or paid campaign was run.
+Status: superseded. The committed v2 census was rejected before authorization after live public metadata showed effort selection was unavailable. Canonical v3 uses the API-native `reasoning.enabled=false` contract; the v2 census remains immutable rejection evidence.
 
 - The strict wire schema no longer relies on an unconstrained `{}` value schema. Direct values are scalar or scalar arrays; scalar-valued objects use `object_fields`. Nested compounds and duplicate object keys fail closed.
 - Decoding requires one choice with explicit `finish_reason: "stop"`; missing, truncated, filtered, tool-call, and unknown endings fail closed.

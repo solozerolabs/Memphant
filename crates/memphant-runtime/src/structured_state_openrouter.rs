@@ -117,11 +117,27 @@ pub struct StructuredStateRequestPlan {
     pub maximum_attempts: usize,
 }
 
+fn reasoning_payload(mode: &str) -> Result<Value, StructuredStateProviderError> {
+    match mode {
+        "disabled" => Ok(json!({"enabled": false})),
+        "enabled" => Ok(json!({"enabled": true})),
+        value if value.starts_with("effort:") => {
+            let effort = &value["effort:".len()..];
+            if matches!(effort, "none" | "minimal" | "low" | "medium" | "high") {
+                Ok(json!({"effort": effort}))
+            } else {
+                Err(invalid("structured-state reasoning mode is invalid"))
+            }
+        }
+        _ => Err(invalid("structured-state reasoning mode is invalid")),
+    }
+}
+
 pub fn plan_structured_state_request(
     request: &StructuredStateRequest,
     model: &str,
     prompt: &str,
-    reasoning_effort: Option<&str>,
+    reasoning_mode: Option<&str>,
     input_price_nanos_per_million: u64,
     output_price_nanos_per_million: u64,
 ) -> Result<StructuredStateRequestPlan, StructuredStateProviderError> {
@@ -129,7 +145,7 @@ pub fn plan_structured_state_request(
         request,
         model,
         prompt,
-        reasoning_effort,
+        reasoning_mode,
         input_price_nanos_per_million,
         output_price_nanos_per_million,
         None,
@@ -140,7 +156,7 @@ pub fn plan_structured_state_request_with_tokenizer(
     request: &StructuredStateRequest,
     model: &str,
     prompt: &str,
-    reasoning_effort: Option<&str>,
+    reasoning_mode: Option<&str>,
     input_price_nanos_per_million: u64,
     output_price_nanos_per_million: u64,
     tokenizer: Option<&StructuredStateTokenizer>,
@@ -153,10 +169,10 @@ pub fn plan_structured_state_request_with_tokenizer(
     if input_price_nanos_per_million == 0 || output_price_nanos_per_million == 0 {
         return Err(invalid("structured-state price ceilings must be positive"));
     }
-    let reasoning_effort = if model == LME_V2_QWEN_MODEL {
-        Some(reasoning_effort.unwrap_or("none"))
+    let reasoning_mode = if model == LME_V2_QWEN_MODEL {
+        Some(reasoning_mode.unwrap_or("disabled"))
     } else {
-        reasoning_effort
+        reasoning_mode
     };
     let schema = response_schema();
     let provider_policy = provider_preferences(
@@ -188,8 +204,8 @@ pub fn plan_structured_state_request_with_tokenizer(
     if model == FLASH_MODEL {
         body["temperature"] = json!(0);
     }
-    if let Some(effort) = reasoning_effort {
-        body["reasoning"] = json!({"effort": effort});
+    if let Some(mode) = reasoning_mode {
+        body["reasoning"] = reasoning_payload(mode)?;
     }
     let serialized_request = serde_json::to_vec(&body)
         .map_err(|error| invalid(format!("structured-state request: {error}")))?;
@@ -224,7 +240,7 @@ pub fn plan_structured_state_request_with_tokenizer(
             "max_output_tokens": MAX_OUTPUT_TOKENS,
             "max_request_bytes": MAX_REQUEST_BYTES,
             "maximum_attempts": MAX_CAMPAIGN_ATTEMPTS,
-            "reasoning_effort": reasoning_effort,
+            "reasoning_mode": reasoning_mode,
             "tokenizer": tokenizer.map(|tokenizer| json!({
                 "tokenizer_sha256": tokenizer.tokenizer_sha256,
                 "chat_template_sha256": tokenizer.chat_template_sha256,
@@ -280,7 +296,7 @@ pub fn plan_structured_state_batches(
     evidence_slices: Vec<EvidenceSlice>,
     model: &str,
     prompt: &str,
-    reasoning_effort: Option<&str>,
+    reasoning_mode: Option<&str>,
     input_price_nanos_per_million: u64,
     output_price_nanos_per_million: u64,
     tokenizer: Option<&StructuredStateTokenizer>,
@@ -294,7 +310,7 @@ pub fn plan_structured_state_batches(
                 request,
                 model,
                 prompt,
-                reasoning_effort,
+                reasoning_mode,
                 input_price_nanos_per_million,
                 output_price_nanos_per_million,
                 None,
@@ -305,7 +321,7 @@ pub fn plan_structured_state_batches(
                 request,
                 model,
                 prompt,
-                reasoning_effort,
+                reasoning_mode,
                 input_price_nanos_per_million,
                 output_price_nanos_per_million,
                 tokenizer,
@@ -493,20 +509,12 @@ pub fn structured_state_provider_from_env()
             "{CACHE_ONLY_ENV}=on requires the campaign cache contract"
         ));
     }
-    if let Some(effort) = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT")
+    if let Some(mode) = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_MODE")
         .ok()
         .filter(|value| !value.trim().is_empty())
     {
-        if !matches!(
-            effort.as_str(),
-            "none" | "minimal" | "low" | "medium" | "high"
-        ) {
-            return Err(
-                "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT must be none, minimal, low, medium, or high"
-                    .to_string(),
-            );
-        }
-        provider = provider.with_reasoning_effort(effort);
+        reasoning_payload(&mode).map_err(|error| error.to_string())?;
+        provider = provider.with_reasoning_mode(mode);
     }
     Ok(Some(Arc::new(provider)))
 }
@@ -981,7 +989,7 @@ struct OpenRouterStructuredState {
     ledger: Option<PathBuf>,
     dispatch_root: Option<PathBuf>,
     ledger_lock: Arc<Mutex<()>>,
-    reasoning_effort: Option<String>,
+    reasoning_mode: Option<String>,
     tokenizer: Option<StructuredStateTokenizer>,
     campaign_attempt: usize,
     aggregate_reservation_nanos: Option<u64>,
@@ -1016,7 +1024,7 @@ impl OpenRouterStructuredState {
             ledger,
             dispatch_root: None,
             ledger_lock: Arc::new(Mutex::new(())),
-            reasoning_effort: None,
+            reasoning_mode: None,
             tokenizer: None,
             campaign_attempt: 1,
             aggregate_reservation_nanos: None,
@@ -1066,8 +1074,8 @@ impl OpenRouterStructuredState {
         self
     }
 
-    fn with_reasoning_effort(mut self, effort: String) -> Self {
-        self.identity.model = compiler_model_identity(&self.model, Some(&effort));
+    fn with_reasoning_mode(mut self, mode: String) -> Self {
+        self.identity.model = compiler_model_identity(&self.model, Some(&mode));
         if let Some(tokenizer) = &self.tokenizer {
             self.identity.model.push_str(";tokenizer_sha256=");
             self.identity.model.push_str(&tokenizer.tokenizer_sha256);
@@ -1082,7 +1090,7 @@ impl OpenRouterStructuredState {
                 .model
                 .push_str(&tokenizer.chat_template_overhead_tokens.to_string());
         }
-        self.reasoning_effort = Some(effort);
+        self.reasoning_mode = Some(mode);
         self
     }
 
@@ -1094,7 +1102,7 @@ impl OpenRouterStructuredState {
             request,
             &self.model,
             &self.prompt,
-            self.reasoning_effort.as_deref(),
+            self.reasoning_mode.as_deref(),
             self.input_price_nanos_per_million,
             self.output_price_nanos_per_million,
             self.tokenizer.as_ref(),
@@ -1458,7 +1466,7 @@ impl StructuredStateProvider for OpenRouterStructuredState {
             evidence_slices,
             &self.model,
             &self.prompt,
-            self.reasoning_effort.as_deref(),
+            self.reasoning_mode.as_deref(),
             self.input_price_nanos_per_million,
             self.output_price_nanos_per_million,
             self.tokenizer.as_ref(),
@@ -1520,11 +1528,11 @@ fn provider_preferences(model: &str, input_price: u64, output_price: u64) -> Val
     preferences
 }
 
-fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> String {
-    let reasoning_effort = if model == LME_V2_QWEN_MODEL {
-        Some(reasoning_effort.unwrap_or("none"))
+fn compiler_model_identity(model: &str, reasoning_mode: Option<&str>) -> String {
+    let reasoning_mode = if model == LME_V2_QWEN_MODEL {
+        Some(reasoning_mode.unwrap_or("disabled"))
     } else {
-        reasoning_effort
+        reasoning_mode
     };
     let mut identity = model.to_string();
     if model == FLASH_MODEL {
@@ -1538,9 +1546,9 @@ fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> Strin
     if model == FLASH_MODEL {
         identity.push_str(";temperature=0");
     }
-    if let Some(effort) = reasoning_effort {
-        identity.push_str(";reasoning_effort=");
-        identity.push_str(effort);
+    if let Some(mode) = reasoning_mode {
+        identity.push_str(";reasoning_mode=");
+        identity.push_str(mode);
     }
     identity
 }
@@ -2578,7 +2586,7 @@ mod tests {
 
     fn prompt_fixture() -> String {
         fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/structured-state-v2.txt"),
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/structured-state-v3.txt"),
         )
         .unwrap()
     }
@@ -3087,7 +3095,28 @@ mod tests {
         let body: Value = serde_json::from_slice(&plan.serialized_request).unwrap();
         assert_eq!(body["provider"]["only"], json!(["deepinfra"]));
         assert_eq!(body["provider"]["allow_fallbacks"], false);
-        assert_eq!(body["reasoning"], json!({"effort": "none"}));
+        assert_eq!(body["reasoning"], json!({"enabled": false}));
+        let enabled = plan_structured_state_request(
+            &request,
+            "qwen/qwen3.5-9b-20260310",
+            "prompt",
+            Some("enabled"),
+            100_000_000,
+            150_000_000,
+        )
+        .unwrap();
+        assert_ne!(plan.extraction_key, enabled.extraction_key);
+        assert!(
+            plan_structured_state_request(
+                &request,
+                "qwen/qwen3.5-9b-20260310",
+                "prompt",
+                Some("none"),
+                100_000_000,
+                150_000_000,
+            )
+            .is_err()
+        );
         let field_schema = &body["response_format"]["json_schema"]["schema"]["properties"]["observations"]
             ["items"]["properties"]["fields"]["items"];
         assert_eq!(field_schema["anyOf"].as_array().unwrap().len(), 2);

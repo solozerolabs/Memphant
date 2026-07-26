@@ -109,7 +109,7 @@ fn execute(args: &[String]) -> Result<serde_json::Value, String> {
         &std::env::var("MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION")
             .map_err(|_| "structured-state output price is required".to_string())?,
     )?;
-    let reasoning = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT").ok();
+    let reasoning_mode = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_MODE").ok();
     let tokenizer = match (
         std::env::var("MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH").ok(),
         std::env::var("MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH").ok(),
@@ -138,7 +138,7 @@ fn execute(args: &[String]) -> Result<serde_json::Value, String> {
                 .map_err(|error| format!("input line {}: {error}", index + 1))?,
             &model,
             &prompt,
-            reasoning.as_deref(),
+            reasoning_mode.as_deref(),
             input_price,
             output_price,
             tokenizer.as_ref(),
@@ -149,7 +149,7 @@ fn execute(args: &[String]) -> Result<serde_json::Value, String> {
                 &request,
                 &model,
                 &prompt,
-                reasoning.as_deref(),
+                reasoning_mode.as_deref(),
                 input_price,
                 output_price,
                 tokenizer.as_ref(),
@@ -234,7 +234,7 @@ fn execute(args: &[String]) -> Result<serde_json::Value, String> {
 
 fn census(args: &[String]) -> Result<serde_json::Value, String> {
     if args.first().map(String::as_str) != Some("census") {
-        return Err("usage: memphant structured-state census --input-jsonl <PATH> --model <ID> --prompt-file <PATH> --input-price-nanos-per-million <N> --output-price-nanos-per-million <N> [--reasoning-effort <LEVEL>] [--tokenizer-file <PATH> --tokenizer-config-file <PATH>]".to_string());
+        return Err("usage: memphant structured-state census --input-jsonl <PATH> --model <ID> --prompt-file <PATH> --input-price-nanos-per-million <N> --output-price-nanos-per-million <N> [--reasoning-mode <MODE>] [--tokenizer-file <PATH> --tokenizer-config-file <PATH>]".to_string());
     }
     let flags = flags(&args[1..])?;
     let input_path = required(&flags, "input-jsonl")?;
@@ -242,7 +242,7 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
     let prompt_path = required(&flags, "prompt-file")?;
     let input_price = positive_u64(required(&flags, "input-price-nanos-per-million")?)?;
     let output_price = positive_u64(required(&flags, "output-price-nanos-per-million")?)?;
-    let reasoning_effort = flags.get("reasoning-effort").map(String::as_str);
+    let reasoning_mode = flags.get("reasoning-mode").map(String::as_str);
     let prompt = load_structured_state_prompt(Path::new(prompt_path))?;
     let tokenizer = match (
         flags.get("tokenizer-file"),
@@ -302,7 +302,7 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
                 .map_err(|error| format!("input line {}: {error}", index + 1))?,
             model,
             &prompt,
-            reasoning_effort,
+            reasoning_mode,
             input_price,
             output_price,
             tokenizer.as_ref(),
@@ -316,7 +316,7 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
                 &request,
                 model,
                 &prompt,
-                reasoning_effort,
+                reasoning_mode,
                 input_price,
                 output_price,
                 tokenizer.as_ref(),

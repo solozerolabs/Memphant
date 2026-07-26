@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts/run_lme_v2_state_aware.py"
 STATE_AWARE_MANIFEST = (
-    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v2.json"
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
 )
 
 
@@ -51,11 +51,22 @@ def test_v1_abandonment_proof_is_immutable_compact_and_fully_reserved() -> None:
     assert reservations[-1]["reserved_nanos"] == 883_661_850
 
 
-def test_v2_campaign_namespace_cannot_resume_v1_artifacts() -> None:
+def test_v3_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     runner = _load_runner()
-    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v2"
+    v2_root = (
+        ROOT
+        / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v2"
+    )
+    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v3"
     assert runner.CAMPAIGN_ARTIFACT_ROOT != runner.V1_CAMPAIGN_ARTIFACT_ROOT
-    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v2.json")
+    assert runner.CAMPAIGN_ARTIFACT_ROOT != v2_root
+    assert (v2_root / "CAMPAIGN-CENSUS.json").is_file()
+    assert not (v2_root / "CAMPAIGN-AUTHORIZATION.json").exists()
+    assert all(
+        Path(path).is_relative_to(runner.CAMPAIGN_ARTIFACT_ROOT)
+        for path in runner.campaign_artifact_paths().values()
+    )
+    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v3.json")
 
 
 def _load_runner():
@@ -198,6 +209,8 @@ def test_admitted_profile_pins_qwen_deepinfra_native_2048_and_aggregate_cap() ->
     assert manifest["deep_recall"]["response_model"] == "qwen/qwen3.5-9b"
     assert manifest["deep_recall"]["provider"] == "deepinfra"
     assert manifest["deep_recall"]["allow_fallbacks"] is False
+    assert manifest["construction"]["reasoning_mode"] == "disabled"
+    assert "reasoning_effort" not in manifest["construction"]
     policy = manifest["construction"]["wave_policy"]
     assert policy["maximum_internal_attempts"] == 1
     assert policy["retry_pool_nanos"] == 10_000_000_000
@@ -898,6 +911,9 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
     assert packet["inputs"]["plan_inventory_sha256"] == runner.sha256_json([plan])
     assert packet["execution"]["construction_max_workers"] == 32
     assert packet["execution"]["construction_hidden_retries"] == 0
+    assert packet["execution"]["cache_namespace"] == (
+        "longmemeval-v2-construction-v3"
+    )
     assert packet["execution"]["construction_canary"] == runner.derive_construction_canary(
         [plan]
     )
@@ -996,21 +1012,12 @@ def test_construction_phase_selector_preserves_exact_crash_state(phase: str) -> 
     assert phase in {"prefix", "tail", "retry"}
 
 
-@pytest.mark.parametrize(
-    "supported_efforts",
-    [["high", "medium", "low", "minimal", "none"], None],
-)
-def test_provider_refresh_uses_only_public_exact_route_authority(
-    supported_efforts: list[str] | None,
-) -> None:
+def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
     runner = _load_runner()
     qwen = {
         "data": {
             "id": "qwen/qwen3.5-9b",
-            "reasoning": {
-                "supported_efforts": supported_efforts,
-                "mandatory": False,
-            },
+            "reasoning": {"mandatory": False},
             "endpoints": [
                 {
                     "provider_name": "DeepInfra",
@@ -1042,19 +1049,21 @@ def test_provider_refresh_uses_only_public_exact_route_authority(
     refresh = runner.refresh_campaign_provider_authority(fetch)
     assert seen == [runner.QWEN_ENDPOINTS_URL, runner.OPENAI_GPT52_URL]
     assert refresh["normalized"]["openai_native_judge"]["reasoning_effort"] == "medium"
-    assert refresh["normalized"]["qwen_deepinfra"]["reasoning_none_permitted"] is True
+    assert refresh["normalized"]["qwen_deepinfra"]["reasoning_disable_permitted"] is True
+    assert refresh["normalized"]["qwen_deepinfra"]["reasoning_metadata"] == {
+        "mandatory": False
+    }
 
 
 @pytest.mark.parametrize(
     ("supported_parameters", "reasoning"),
     [
         (["seed", "response_format", "structured_outputs", "max_tokens"], {"supported_efforts": ["none"], "mandatory": False}),
-        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["low", "medium"], "mandatory": False}),
         (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["none", "low"], "mandatory": True}),
-        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"mandatory": False}),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {}),
     ],
 )
-def test_provider_refresh_rejects_route_without_explicit_reasoning_off_authority(
+def test_provider_refresh_rejects_route_without_explicit_reasoning_disable_authority(
     supported_parameters: list[str], reasoning: dict[str, object]
 ) -> None:
     runner = _load_runner()
@@ -1173,6 +1182,7 @@ def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_trans
     cache_bound = runner.bind_construction_canary_cache(
         accepted, canary, tmp_path
     )
+    assert cache_bound["canonical_cache"]["namespace"].endswith("-v3")
     assert len(cache_bound["canonical_cache"]["entries"]) == 64
 
     semantic = list(decoded)

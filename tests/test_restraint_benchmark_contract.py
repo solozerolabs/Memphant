@@ -1965,7 +1965,7 @@ def test_memphant_adapter_retains_reflects_recalls_and_archives_trace_proof(
 
 
 def test_structured_prompt_types_preference_epistemic_role() -> None:
-    prompt = (ROOT / "config/structured-state-v2.txt").read_text(encoding="utf-8")
+    prompt = (ROOT / "config/structured-state-v3.txt").read_text(encoding="utf-8")
     assert "Never return an operation, target_unit_ids, tenant identity" in prompt
     assert 'Return exactly {"observations": []} when nothing qualifies.' in prompt
     assert "Explicit first-person likes, dislikes, and preferences" in prompt
