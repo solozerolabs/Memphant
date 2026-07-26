@@ -22,23 +22,6 @@ struct CensusResource {
     uses: u64,
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ReaderShape {
-    question_id: String,
-    system_prompt: String,
-    question_text: String,
-    has_image: bool,
-}
-
-struct ReaderShapeProof {
-    fixture_sha256: String,
-    rows: u64,
-    tokenizer_sha256: String,
-    chat_template_sha256: String,
-    maximum_nonmemory_chat_tokens: u64,
-}
-
 fn one() -> u64 {
     1
 }
@@ -62,7 +45,7 @@ pub fn run(args: &[String]) -> ExitCode {
 
 fn census(args: &[String]) -> Result<serde_json::Value, String> {
     if args.first().map(String::as_str) != Some("census") {
-        return Err("usage: memphant structured-state census --input-jsonl <PATH> --model <ID> --prompt-file <PATH> --input-price-nanos-per-million <N> --output-price-nanos-per-million <N> [--reasoning-effort <LEVEL>] [--tokenizer-file <PATH> --tokenizer-config-file <PATH>] [--reader-input-jsonl <PATH>]".to_string());
+        return Err("usage: memphant structured-state census --input-jsonl <PATH> --model <ID> --prompt-file <PATH> --input-price-nanos-per-million <N> --output-price-nanos-per-million <N> [--reasoning-effort <LEVEL>] [--tokenizer-file <PATH> --tokenizer-config-file <PATH>]".to_string());
     }
     let flags = flags(&args[1..])?;
     let input_path = required(&flags, "input-jsonl")?;
@@ -86,15 +69,6 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
                 "tokenizer file and tokenizer config file must be supplied together".to_string(),
             );
         }
-    };
-    let reader_shape_proof = match flags.get("reader-input-jsonl") {
-        Some(path) => Some(census_reader_shapes(
-            Path::new(path),
-            tokenizer
-                .as_ref()
-                .ok_or("reader shape census requires the pinned Qwen tokenizer")?,
-        )?),
-        None => None,
     };
     let input = File::open(input_path).map_err(|error| format!("--input-jsonl: {error}"))?;
     let mut input_hasher = Sha256::new();
@@ -194,7 +168,7 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
     if resource_uses == 0 {
         return Err("census input contains no resources".to_string());
     }
-    let mut output = json!({
+    Ok(json!({
         "schema_version": 1,
         "input_manifest_sha256": format!("{:x}", input_hasher.finalize()),
         "resource_uses": resource_uses,
@@ -211,79 +185,7 @@ fn census(args: &[String]) -> Result<serde_json::Value, String> {
         "full_three_wave_liability_nanos": construction_liability_nanos,
         "construction_liability_nanos": construction_liability_nanos,
         "tokenizer_bound": tokenizer.is_some(),
-    });
-    if let Some(proof) = reader_shape_proof {
-        let object = output
-            .as_object_mut()
-            .expect("static census output is an object");
-        object.insert(
-            "reader_shape_fixture_sha256".to_string(),
-            json!(proof.fixture_sha256),
-        );
-        object.insert("reader_shape_rows".to_string(), json!(proof.rows));
-        object.insert(
-            "reader_tokenizer_sha256".to_string(),
-            json!(proof.tokenizer_sha256),
-        );
-        object.insert(
-            "reader_chat_template_sha256".to_string(),
-            json!(proof.chat_template_sha256),
-        );
-        object.insert(
-            "reader_maximum_nonmemory_chat_tokens".to_string(),
-            json!(proof.maximum_nonmemory_chat_tokens),
-        );
-    }
-    Ok(output)
-}
-
-fn census_reader_shapes(
-    path: &Path,
-    tokenizer: &memphant_runtime::StructuredStateTokenizer,
-) -> Result<ReaderShapeProof, String> {
-    let input = File::open(path).map_err(|error| format!("--reader-input-jsonl: {error}"))?;
-    let mut input_hasher = Sha256::new();
-    let mut question_ids = BTreeSet::new();
-    let mut rows = 0_u64;
-    let mut maximum_nonmemory_chat_tokens = 0_u64;
-    for (index, line) in BufReader::new(input).lines().enumerate() {
-        let line = line.map_err(|error| format!("reader input line {}: {error}", index + 1))?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        input_hasher.update(line.as_bytes());
-        input_hasher.update(b"\n");
-        let row: ReaderShape = serde_json::from_str(&line)
-            .map_err(|error| format!("reader input line {}: {error}", index + 1))?;
-        if row.question_id.trim().is_empty()
-            || row.system_prompt.trim().is_empty()
-            || row.question_text.trim().is_empty()
-            || !question_ids.insert(row.question_id)
-        {
-            return Err(format!(
-                "reader input line {} has blank content or duplicate question id",
-                index + 1
-            ));
-        }
-        rows = rows.checked_add(1).ok_or("reader shape count overflow")?;
-        maximum_nonmemory_chat_tokens =
-            maximum_nonmemory_chat_tokens.max(tokenizer.count_qwen_reader_chat_tokens(
-                &row.system_prompt,
-                &row.question_text,
-                row.has_image,
-            )?);
-    }
-    if rows == 0 {
-        return Err("reader shape input contains no questions".to_string());
-    }
-    let (tokenizer_sha256, chat_template_sha256) = tokenizer.reader_identity();
-    Ok(ReaderShapeProof {
-        fixture_sha256: format!("{:x}", input_hasher.finalize()),
-        rows,
-        tokenizer_sha256: tokenizer_sha256.to_string(),
-        chat_template_sha256: chat_template_sha256.to_string(),
-        maximum_nonmemory_chat_tokens,
-    })
+    }))
 }
 
 fn flags(args: &[String]) -> Result<BTreeMap<String, String>, String> {

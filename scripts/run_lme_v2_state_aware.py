@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,7 @@ OPENING_NANOS = 4_258_002_400
 CONTINGENCY_NANOS = 10_000_000_000
 HARD_CEILING_NANOS = 200_000_000_000
 QUESTION_COUNT = 451
-FORMULA = "4258002400+C+451*(2*R+S)+10000000000<=200000000000"
+FORMULA = "4258002400+C+2*R_sum+451*S+10000000000<=200000000000"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ORACLE_KEYS = {
     "answer",
@@ -632,8 +633,17 @@ def _build_census_binary(
     return stable, provenance
 
 
-def _acquire_file(url: str, destination: Path, expected_bytes: int, expected_sha256: str) -> None:
-    if destination.is_file() and destination.stat().st_size == expected_bytes and _sha256_file(destination) == expected_sha256:
+def _acquire_file(
+    url: str,
+    destination: Path,
+    expected_bytes: int | None,
+    expected_sha256: str,
+) -> None:
+    if (
+        destination.is_file()
+        and (expected_bytes is None or destination.stat().st_size == expected_bytes)
+        and _sha256_file(destination) == expected_sha256
+    ):
         return
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as handle:
@@ -645,7 +655,10 @@ def _acquire_file(url: str, destination: Path, expected_bytes: int, expected_sha
         except BaseException:
             temporary.unlink(missing_ok=True)
             raise
-    if temporary.stat().st_size != expected_bytes or _sha256_file(temporary) != expected_sha256:
+    if (
+        (expected_bytes is not None and temporary.stat().st_size != expected_bytes)
+        or _sha256_file(temporary) != expected_sha256
+    ):
         temporary.unlink(missing_ok=True)
         raise RuntimeError(f"downloaded artifact drift: {destination.name}")
     os.replace(temporary, destination)
@@ -737,8 +750,29 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
     ):
         raise RuntimeError("pinned official reader system prompts are invalid")
     question_ids: set[str] = set()
+    checksum_path = data_root / "checksums.sha256"
+    if not checksum_path.is_file():
+        raise RuntimeError("official question screenshot checksum manifest is missing")
+    checksums: dict[str, str] = {}
+    for line_number, line in enumerate(
+        checksum_path.read_text(encoding="utf-8").splitlines(), 1
+    ):
+        if not line.strip():
+            continue
+        parts = line.split(maxsplit=1)
+        if (
+            len(parts) != 2
+            or SHA256.fullmatch(parts[0]) is None
+            or not parts[1].strip()
+            or parts[1].strip() in checksums
+        ):
+            raise RuntimeError(
+                f"official checksum manifest line {line_number} is malformed"
+            )
+        checksums[parts[1].strip()] = parts[0]
     rows = 0
     image_rows = 0
+    image_inventory: list[dict[str, object]] = []
     with (data_root / "questions.jsonl").open(encoding="utf-8") as source, output.open(
         "w", encoding="utf-8"
     ) as target:
@@ -761,7 +795,36 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
             ):
                 raise RuntimeError(f"question line {line_number} has an invalid reader shape")
             question_ids.add(question_id)
-            has_image = image is not None
+            question_image = None
+            if image is not None:
+                relative = Path(image)
+                if (
+                    relative.is_absolute()
+                    or relative.parts[:1] != ("question_screenshots",)
+                    or ".." in relative.parts
+                ):
+                    raise RuntimeError("official question screenshot path is invalid")
+                image_path = (data_root / relative).resolve()
+                if not image_path.is_relative_to(data_root.resolve()):
+                    raise RuntimeError("official question screenshot escapes data root")
+                if not image_path.is_file():
+                    raise RuntimeError("question screenshot is missing")
+                expected_sha256 = checksums.get(image)
+                if expected_sha256 is None or _sha256_file(image_path) != expected_sha256:
+                    raise RuntimeError("question screenshot checksum drift")
+                width, height = _png_dimensions(image_path)
+                question_image = {
+                    "path": image,
+                    "sha256": expected_sha256,
+                    "bytes": image_path.stat().st_size,
+                    "width": width,
+                    "height": height,
+                    "mime_type": "image/png",
+                }
+                image_inventory.append(
+                    {"question_id": question_id, "question_image": question_image}
+                )
+            has_image = question_image is not None
             image_rows += int(has_image)
             target.write(
                 canonical_json(
@@ -769,7 +832,7 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
                         "question_id": question_id,
                         "system_prompt": prompts[domain],
                         "question_text": question,
-                        "has_image": has_image,
+                        "question_image": question_image,
                     }
                 ).decode("utf-8")
                 + "\n"
@@ -777,30 +840,83 @@ def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, objec
             rows += 1
     if rows != QUESTION_COUNT:
         raise RuntimeError("official questions file must contain exactly 451 reader shapes")
+    if image_rows != 29:
+        raise RuntimeError("official questions file must bind exactly 29 screenshots")
     return {
         "fixture_sha256": _sha256_file(output),
         "rows": rows,
         "image_rows": image_rows,
+        "image_manifest_sha256": _sha256_file(checksum_path),
+        "image_inventory_sha256": sha256_json(image_inventory),
+        "image_inventory": image_inventory,
         "question_source_sha256": _sha256_file(data_root / "questions.jsonl"),
         "question_ids_sha256": sha256_json(sorted(question_ids)),
     }
 
 
-def _validated_reader_token_bound(
+def _png_dimensions(path: Path) -> tuple[int, int]:
+    with path.open("rb") as handle:
+        header = handle.read(24)
+    if (
+        len(header) != 24
+        or header[:8] != b"\x89PNG\r\n\x1a\n"
+        or header[12:16] != b"IHDR"
+    ):
+        raise RuntimeError("question screenshot is not a PNG with an IHDR")
+    width, height = struct.unpack(">II", header[16:24])
+    if width <= 0 or height <= 0:
+        raise RuntimeError("question screenshot dimensions are invalid")
+    return width, height
+
+
+def _validated_reader_processor_proof(
     proof: dict[str, object], expected: dict[str, object]
-) -> int:
+) -> list[dict[str, object]]:
     bindings = {
         "reader_shape_fixture_sha256": "fixture_sha256",
         "reader_shape_rows": "rows",
+        "reader_shape_image_inventory_sha256": "image_inventory_sha256",
+        "reader_shape_image_manifest_sha256": "image_manifest_sha256",
         "reader_tokenizer_sha256": "tokenizer_sha256",
         "reader_chat_template_sha256": "chat_template_sha256",
+        "reader_preprocessor_config_sha256": "preprocessor_config_sha256",
+        "reader_processor_source_sha256": "processor_source_sha256",
+        "reader_image_processor_source_sha256": "image_processor_source_sha256",
+        "reader_processor_toolchain_sha256": "processor_toolchain_sha256",
     }
     if any(proof.get(actual) != expected.get(bound) for actual, bound in bindings.items()):
-        raise RuntimeError("reader tokenization proof drift")
-    maximum = proof.get("reader_maximum_nonmemory_chat_tokens")
-    if type(maximum) is not int or maximum <= 0:
-        raise RuntimeError("reader tokenization proof drift")
-    return maximum
+        raise RuntimeError("reader processor proof drift")
+    core = {key: value for key, value in proof.items() if key != "proof_sha256"}
+    if proof.get("proof_sha256") is not None and proof.get("proof_sha256") != sha256_json(core):
+        raise RuntimeError("reader processor proof drift")
+    rows = proof.get("rows")
+    if not isinstance(rows, list) or len(rows) != QUESTION_COUNT:
+        raise RuntimeError("reader processor proof drift")
+    ids: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise RuntimeError("reader processor proof drift")
+        question_id = row.get("question_id")
+        if (
+            not isinstance(question_id, str)
+            or not question_id
+            or question_id in ids
+            or type(row.get("has_image")) is not bool
+            or type(row.get("local_processor_input_tokens")) is not int
+            or row["local_processor_input_tokens"] <= 0
+        ):
+            raise RuntimeError("reader processor proof drift")
+        ids.add(question_id)
+    if (
+        sum(int(row["has_image"]) for row in rows) != 29
+        or proof.get("reader_row_token_inventory_sha256") != sha256_json(rows)
+        or proof.get("reader_local_processor_maximum_input_tokens")
+        != max(row["local_processor_input_tokens"] for row in rows)
+        or proof.get("paid_models_run") not in (None, False)
+        or proof.get("spend_nanos") not in (None, 0)
+    ):
+        raise RuntimeError("reader processor proof drift")
+    return rows
 
 
 def _ceil_cost(tokens: int, price_nanos_per_million: int) -> int:
@@ -889,13 +1005,27 @@ def _official_request_shape_bounds(
         ]
         reader_empty_shapes.append(len(canonical_json(messages)))
     judge_fixed = max(len(canonical_json(_judge_messages(kind))) for kind in ("abstention", "gotchas"))
-    maximum_reader_tokens = _validated_reader_token_bound(
+    processor_rows = _validated_reader_processor_proof(
         reader_proof,
         {
             "fixture_sha256": reader_fixture["fixture_sha256"],
             "rows": QUESTION_COUNT,
+            "image_inventory_sha256": reader_fixture["image_inventory_sha256"],
+            "image_manifest_sha256": reader_fixture["image_manifest_sha256"],
             "tokenizer_sha256": reader_config.get("tokenizer_sha256"),
             "chat_template_sha256": reader_config.get("chat_template_sha256"),
+            "preprocessor_config_sha256": reader_config.get(
+                "preprocessor_config_sha256"
+            ),
+            "processor_source_sha256": reader_config.get(
+                "processor_source_sha256"
+            ),
+            "image_processor_source_sha256": reader_config.get(
+                "image_processor_source_sha256"
+            ),
+            "processor_toolchain_sha256": reader_config.get(
+                "processor_toolchain_sha256"
+            ),
         },
     )
     return {
@@ -911,9 +1041,34 @@ def _official_request_shape_bounds(
         "reader_shape_question_ids_sha256": reader_fixture["question_ids_sha256"],
         "reader_shape_rows": reader_fixture["rows"],
         "reader_shape_image_rows": reader_fixture["image_rows"],
+        "reader_shape_image_manifest_sha256": reader_fixture[
+            "image_manifest_sha256"
+        ],
+        "reader_shape_image_inventory_sha256": reader_fixture[
+            "image_inventory_sha256"
+        ],
+        "reader_shape_image_inventory": reader_fixture["image_inventory"],
         "reader_tokenizer_sha256": reader_config.get("tokenizer_sha256"),
         "reader_chat_template_sha256": reader_config.get("chat_template_sha256"),
-        "reader_maximum_nonmemory_chat_tokens": maximum_reader_tokens,
+        "reader_preprocessor_config_sha256": reader_config.get(
+            "preprocessor_config_sha256"
+        ),
+        "reader_processor_source_sha256": reader_config.get(
+            "processor_source_sha256"
+        ),
+        "reader_image_processor_source_sha256": reader_config.get(
+            "image_processor_source_sha256"
+        ),
+        "reader_processor_toolchain_sha256": reader_config.get(
+            "processor_toolchain_sha256"
+        ),
+        "reader_local_processor_maximum_input_tokens": reader_proof[
+            "reader_local_processor_maximum_input_tokens"
+        ],
+        "reader_row_token_inventory_sha256": reader_proof[
+            "reader_row_token_inventory_sha256"
+        ],
+        "reader_processor_rows": processor_rows,
         # Exact canonical official judge messages across the 156 rows whose
         # eval functions invoke the native LLM judge, with response fields empty.
         "judge_maximum_fixed_serialized_bytes": 2_412,
@@ -921,37 +1076,125 @@ def _official_request_shape_bounds(
     }
 
 
-def _reader_judge_liability(config: dict[str, object]) -> int:
-    reader = config.get("reader")
-    judge = config.get("judge")
-    if not isinstance(reader, dict) or not isinstance(judge, dict):
-        raise RuntimeError("reader and judge identities are required")
-    total = 0
-    for name, value in (("reader", reader), ("judge", judge)):
-        required_strings = ("model", "provider", "pricing_source", "pricing_sha256")
-        if not all(isinstance(value.get(key), str) and value[key] for key in required_strings):
-            raise RuntimeError(f"{name} identity or pricing source is missing")
-        attempts = value.get("maximum_attempts")
-        if type(attempts) is not int or attempts <= 0:
-            raise RuntimeError(f"{name} maximum attempts is missing")
-        if name == "reader":
-            context = value.get("memory_context_max_tokens")
-            fixed = value.get("maximum_nonmemory_chat_tokens")
-            if type(context) is not int or context != 200_000 or type(fixed) is not int or fixed <= 0:
-                raise RuntimeError("reader official request-shape primitives are missing")
-            derived_input = context + fixed
-        else:
-            fixed = value.get("maximum_fixed_serialized_bytes")
-            insertions = value.get("reader_response_insertions")
-            response = value.get("reader_maximum_output_tokens")
-            if not all(type(part) is int and part > 0 for part in (fixed, insertions, response)):
-                raise RuntimeError("judge official request-shape primitives are missing")
-            derived_input = fixed + insertions * response
-        if value.get("maximum_input_reservation_units") != derived_input:
-            raise RuntimeError(f"{name} request maximum drift")
-        one_attempt = _ceil_cost(derived_input, value.get("input_price_nanos_per_million")) + _ceil_cost(value.get("maximum_output_tokens"), value.get("output_price_nanos_per_million"))
-        total += one_attempt * attempts
-    return total
+def _judge_liability(judge: dict[str, object]) -> int:
+    required_strings = ("model", "provider", "pricing_source", "pricing_sha256")
+    if not all(
+        isinstance(judge.get(key), str) and judge[key] for key in required_strings
+    ):
+        raise RuntimeError("judge identity or pricing source is missing")
+    attempts = judge.get("maximum_attempts")
+    fixed = judge.get("maximum_fixed_serialized_bytes")
+    insertions = judge.get("reader_response_insertions")
+    response = judge.get("reader_maximum_output_tokens")
+    if (
+        type(attempts) is not int
+        or attempts <= 0
+        or not all(
+            type(part) is int and part > 0
+            for part in (fixed, insertions, response)
+        )
+    ):
+        raise RuntimeError("judge official request-shape primitives are missing")
+    derived_input = fixed + insertions * response
+    if judge.get("maximum_input_reservation_units") != derived_input:
+        raise RuntimeError("judge request maximum drift")
+    return attempts * (
+        _ceil_cost(derived_input, judge.get("input_price_nanos_per_million"))
+        + _ceil_cost(
+            judge.get("maximum_output_tokens"),
+            judge.get("output_price_nanos_per_million"),
+        )
+    )
+
+
+def _reader_liability_inventory(
+    processor_rows: list[dict[str, object]],
+    reader: dict[str, object],
+    judge: dict[str, object],
+) -> dict[str, object]:
+    required_strings = (
+        "model",
+        "provider",
+        "pricing_source",
+        "pricing_sha256",
+        "provider_prompt_ceiling_source",
+        "provider_prompt_ceiling_source_sha256",
+    )
+    if not all(
+        isinstance(reader.get(key), str) and reader[key] for key in required_strings
+    ):
+        raise RuntimeError("reader identity, pricing, or prompt ceiling source is missing")
+    attempts = reader.get("maximum_attempts")
+    memory_context = reader.get("memory_context_max_tokens")
+    prompt_ceiling = reader.get("multimodal_provider_prompt_ceiling_tokens")
+    if (
+        type(attempts) is not int
+        or attempts != 1
+        or memory_context != 200_000
+        or prompt_ceiling != 262_144
+    ):
+        raise RuntimeError("provider prompt ceiling drift")
+    if not isinstance(processor_rows, list) or not processor_rows:
+        raise RuntimeError("reader row token inventory is missing")
+    judge_nanos = _judge_liability(judge)
+    rows: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for source in processor_rows:
+        if not isinstance(source, dict):
+            raise RuntimeError("reader row token inventory is malformed")
+        question_id = source.get("question_id")
+        has_image = source.get("has_image")
+        local_tokens = source.get("local_processor_input_tokens")
+        if (
+            not isinstance(question_id, str)
+            or not question_id
+            or question_id in seen
+            or type(has_image) is not bool
+            or type(local_tokens) is not int
+            or local_tokens <= 0
+        ):
+            raise RuntimeError("reader row token inventory is malformed")
+        seen.add(question_id)
+        input_units = prompt_ceiling if has_image else memory_context + local_tokens
+        if input_units > prompt_ceiling:
+            raise RuntimeError("reader row exceeds the provider prompt ceiling")
+        reader_nanos = attempts * (
+            _ceil_cost(input_units, reader.get("input_price_nanos_per_million"))
+            + _ceil_cost(
+                reader.get("maximum_output_tokens"),
+                reader.get("output_price_nanos_per_million"),
+            )
+        )
+        rows.append(
+            {
+                "question_id": question_id,
+                "has_image": has_image,
+                "local_processor_input_tokens": local_tokens,
+                "billing_authority": (
+                    "provider_prompt_ceiling"
+                    if has_image
+                    else "pinned_local_text_processor"
+                ),
+                "input_reservation_units": input_units,
+                "reader_liability_nanos": reader_nanos,
+                "judge_liability_nanos": judge_nanos,
+                "per_arm_liability_nanos": reader_nanos + judge_nanos,
+            }
+        )
+    image_rows = sum(int(row["has_image"]) for row in rows)
+    if len(rows) == QUESTION_COUNT and image_rows != 29:
+        raise RuntimeError("reader liability inventory must bind all 29 image rows")
+    return {
+        "schema_version": 1,
+        "rows": rows,
+        "row_count": len(rows),
+        "text_rows": len(rows) - image_rows,
+        "image_rows": image_rows,
+        "reader_arm_liability_nanos": sum(
+            row["per_arm_liability_nanos"] for row in rows
+        ),
+        "inventory_sha256": sha256_json(rows),
+    }
 
 
 def _deep_liability(config: dict[str, object]) -> dict[str, int]:
@@ -1029,6 +1272,149 @@ def _validate_deep_runtime_identity(config: dict[str, object]) -> None:
         raise RuntimeError("Deep Qwen route identity drift")
 
 
+def _run_reader_processor_census(
+    reader: dict[str, object],
+    data_root: Path,
+    fixture: Path,
+    output: Path,
+) -> dict[str, object]:
+    runtime = reader.get("processor_runtime")
+    if not isinstance(runtime, dict):
+        raise RuntimeError("reader processor runtime identity is missing")
+    script = ROOT / str(runtime.get("script_path", ""))
+    requirements = ROOT / str(runtime.get("requirements_path", ""))
+    uv = shutil.which("uv")
+    if (
+        uv is None
+        or not script.is_file()
+        or _sha256_file(script) != runtime.get("script_sha256")
+        or not requirements.is_file()
+        or _sha256_file(requirements) != runtime.get("requirements_sha256")
+    ):
+        raise RuntimeError("reader processor runtime identity drift")
+    uv_version = subprocess.run(
+        [uv, "--version"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    if hashlib.sha256(uv_version.encode("utf-8")).hexdigest() != runtime.get(
+        "uv_version_sha256"
+    ):
+        raise RuntimeError("reader processor uv identity drift")
+    python_requirement = runtime.get("python")
+    if not isinstance(python_requirement, str) or not python_requirement:
+        raise RuntimeError("reader processor Python identity is missing")
+    environment = {
+        key: os.environ[key]
+        for key in ("HOME", "PATH", "TMPDIR", "UV_CACHE_DIR")
+        if key in os.environ
+    }
+    environment.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
+    command = [
+        uv,
+        "run",
+        "--quiet",
+        "--no-project",
+        "--python",
+        python_requirement,
+        "--with-requirements",
+        str(requirements),
+        "python",
+        str(script),
+        "--fixture-jsonl",
+        str(fixture),
+        "--data-root",
+        str(data_root),
+        "--model-dir",
+        str(data_root / "qwen"),
+        "--checksums",
+        str(data_root / "checksums.sha256"),
+        "--output",
+        str(output),
+    ]
+    completed = subprocess.run(
+        command, capture_output=True, text=True, check=False, env=environment
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"reader processor census failed: {completed.stderr.strip()}"
+        )
+    proof = json.loads(output.read_text(encoding="utf-8"))
+    if not isinstance(proof, dict):
+        raise RuntimeError("reader processor census output is malformed")
+    return proof
+
+
+def _acquire_manifest_data(manifest: dict[str, object], data_root: Path) -> None:
+    data = manifest.get("data")
+    if not isinstance(data, dict) or not isinstance(data.get("files"), dict):
+        raise RuntimeError("campaign data manifest is missing")
+    for relative, record in data["files"].items():
+        if not isinstance(relative, str) or not isinstance(record, dict):
+            raise RuntimeError("campaign data manifest is malformed")
+        _acquire_file(
+            record["url"],
+            data_root / relative,
+            record["bytes"],
+            record["sha256"],
+        )
+    screenshot_set = data.get("question_screenshots")
+    if not isinstance(screenshot_set, dict):
+        raise RuntimeError("question screenshot acquisition manifest is missing")
+    base_url = screenshot_set.get("base_url")
+    screenshot_files = screenshot_set.get("files")
+    if (
+        not isinstance(base_url, str)
+        or not base_url.endswith("/")
+        or not isinstance(screenshot_files, dict)
+        or len(screenshot_files) != 29
+        or any(
+            not isinstance(relative, str)
+            or not relative.startswith("question_screenshots/")
+            or not _valid_sha256(expected)
+            for relative, expected in screenshot_files.items()
+        )
+    ):
+        raise RuntimeError("question screenshot acquisition manifest is malformed")
+    checksum_entries: dict[str, str] = {}
+    for line in (data_root / "checksums.sha256").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            digest, relative = line.split(maxsplit=1)
+            if relative.startswith("question_screenshots/"):
+                checksum_entries[relative] = digest
+    if checksum_entries != screenshot_files:
+        raise RuntimeError("question screenshot acquisition checksum drift")
+    for relative, expected in screenshot_files.items():
+        _acquire_file(base_url + relative, data_root / relative, None, expected)
+
+
+def _recompute_reader_authority(
+    manifest: dict[str, object], data_root: Path
+) -> tuple[dict[str, object], dict[str, object]]:
+    _acquire_manifest_data(manifest, data_root)
+    reader_judge = manifest.get("reader_judge")
+    if not isinstance(reader_judge, dict):
+        raise RuntimeError("reader and judge identities are required")
+    reader = reader_judge.get("reader")
+    judge = reader_judge.get("judge")
+    if not isinstance(reader, dict) or not isinstance(judge, dict):
+        raise RuntimeError("reader and judge identities are required")
+    with tempfile.TemporaryDirectory(prefix="memphant-reader-authority-") as temporary:
+        temporary_root = Path(temporary)
+        fixture_path = temporary_root / "reader-shapes.jsonl"
+        proof_path = temporary_root / "reader-processor-proof.json"
+        fixture = _materialize_reader_shapes(data_root, fixture_path)
+        proof = _run_reader_processor_census(
+            reader, data_root, fixture_path, proof_path
+        )
+        request_shapes = _official_request_shape_bounds(
+            data_root, proof, fixture, reader
+        )
+    processor_rows = request_shapes.pop("reader_processor_rows")
+    inventory = _reader_liability_inventory(processor_rows, reader, judge)
+    if inventory["row_count"] != QUESTION_COUNT:
+        raise RuntimeError("reader liability inventory must contain all 451 rows")
+    return request_shapes, inventory
+
+
 def _full_census(
     manifest: dict[str, object],
     manifest_path: Path,
@@ -1036,14 +1422,7 @@ def _full_census(
     cli_bin: Path,
     binary_provenance: dict[str, object],
 ) -> dict[str, object]:
-    data = manifest["data"]
-    for relative, record in data["files"].items():
-        _acquire_file(
-            record["url"],
-            data_root / relative,
-            record["bytes"],
-            record["sha256"],
-        )
+    _acquire_manifest_data(manifest, data_root)
     construction = manifest["construction"]
     prompt = ROOT / construction["prompt_path"]
     code_paths = [ROOT / path for path in construction["code_paths"]]
@@ -1069,8 +1448,12 @@ def _full_census(
         _verify_selected_census_binary(expected_binary_sha256, execution_cli)
         input_jsonl = temporary_root / "resources.jsonl"
         reader_jsonl = temporary_root / "reader-shapes.jsonl"
+        reader_proof_json = temporary_root / "reader-processor-proof.json"
         enumeration = _materialize_cli_input(data_root, input_jsonl)
         reader_fixture = _materialize_reader_shapes(data_root, reader_jsonl)
+        reader_proof = _run_reader_processor_census(
+            reader, data_root, reader_jsonl, reader_proof_json
+        )
         command = [
             str(execution_cli),
             "structured-state",
@@ -1089,8 +1472,6 @@ def _full_census(
             str(data_root / construction["tokenizer_path"]),
             "--tokenizer-config-file",
             str(data_root / construction["tokenizer_config_path"]),
-            "--reader-input-jsonl",
-            str(reader_jsonl),
         ]
         if construction.get("reasoning_effort"):
             command += ["--reasoning-effort", construction["reasoning_effort"]]
@@ -1100,13 +1481,15 @@ def _full_census(
             raise RuntimeError(f"production census planner failed: {completed.stderr.strip()}")
         planned = json.loads(completed.stdout)
     request_shapes = _official_request_shape_bounds(
-        data_root, planned, reader_fixture, reader
+        data_root, reader_proof, reader_fixture, reader
     )
-    if reader.get("maximum_nonmemory_chat_tokens") != request_shapes["reader_maximum_nonmemory_chat_tokens"]:
-        raise RuntimeError("reader request maximum drift")
+    processor_rows = request_shapes.pop("reader_processor_rows")
     if judge.get("maximum_fixed_serialized_bytes") != request_shapes["judge_maximum_fixed_serialized_bytes"]:
         raise RuntimeError("judge request maximum drift")
-    r_term = _reader_judge_liability(manifest["reader_judge"])
+    reader_inventory = _reader_liability_inventory(processor_rows, reader, judge)
+    if reader_inventory["row_count"] != QUESTION_COUNT:
+        raise RuntimeError("reader liability inventory must contain all 451 rows")
+    r_sum = reader_inventory["reader_arm_liability_nanos"]
     deep_derivation = _deep_liability(manifest["deep_recall"])
     s_term = deep_derivation["maximum_liability_nanos"]
     wave_policy = construction.get("wave_policy")
@@ -1143,14 +1526,21 @@ def _full_census(
     fixed_without_retries = (
         OPENING_NANOS
         + first_attempt
-        + QUESTION_COUNT * (2 * r_term + s_term)
+        + 2 * r_sum
+        + QUESTION_COUNT * s_term
         + CONTINGENCY_NANOS
     )
     maximum_retry_pool = HARD_CEILING_NANOS - fixed_without_retries
     if retry_pool > maximum_retry_pool:
         raise RuntimeError("construction retry pool exceeds campaign headroom")
     c_term = first_attempt + retry_pool
-    total = OPENING_NANOS + c_term + QUESTION_COUNT * (2 * r_term + s_term) + CONTINGENCY_NANOS
+    total = (
+        OPENING_NANOS
+        + c_term
+        + 2 * r_sum
+        + QUESTION_COUNT * s_term
+        + CONTINGENCY_NANOS
+    )
     planned = {
         **planned,
         "construction_liability_nanos": c_term,
@@ -1176,9 +1566,10 @@ def _full_census(
         },
         "enumeration": enumeration,
         "construction": planned,
-        "terms": {"C": c_term, "R": r_term, "S": s_term},
+        "terms": {"C": c_term, "R_sum": r_sum, "S": s_term},
         "liability_derivation": {
             "request_shapes": request_shapes,
+            "reader_inventory": reader_inventory,
             "deep": deep_derivation,
         },
         "admission": {
@@ -1210,7 +1601,7 @@ def _validate_census_hash(census: dict[str, object], *, label: str) -> None:
 def recost_census_values(
     parent: dict[str, object],
     *,
-    r_term: int,
+    reader_inventory: dict[str, object],
     s_term: int,
     retry_pool_nanos: int,
     manifest_path: str,
@@ -1240,7 +1631,17 @@ def recost_census_values(
     if full_retry_liability % attempts:
         raise RuntimeError("parent construction liability is not exactly factorizable by attempts")
     first_attempt = full_retry_liability // attempts
-    if not all(type(value) is int and value > 0 for value in (r_term, s_term)):
+    if (
+        not isinstance(reader_inventory, dict)
+        or reader_inventory.get("row_count") != QUESTION_COUNT
+        or not isinstance(reader_inventory.get("rows"), list)
+        or reader_inventory.get("inventory_sha256")
+        != sha256_json(reader_inventory.get("rows"))
+        or type(reader_inventory.get("reader_arm_liability_nanos")) is not int
+        or reader_inventory["reader_arm_liability_nanos"] <= 0
+        or type(s_term) is not int
+        or s_term <= 0
+    ):
         raise RuntimeError("recost reader/judge and Deep terms must be positive")
     if type(retry_pool_nanos) is not int or retry_pool_nanos < 0:
         raise RuntimeError("construction retry pool must be a non-negative integer")
@@ -1250,10 +1651,12 @@ def recost_census_values(
     ):
         raise RuntimeError("recost manifest and runtime hashes must be exact SHA-256 values")
 
+    r_sum = reader_inventory["reader_arm_liability_nanos"]
     fixed_without_retries = (
         OPENING_NANOS
         + first_attempt
-        + QUESTION_COUNT * (2 * r_term + s_term)
+        + 2 * r_sum
+        + QUESTION_COUNT * s_term
         + CONTINGENCY_NANOS
     )
     maximum_retry_pool = HARD_CEILING_NANOS - fixed_without_retries
@@ -1282,8 +1685,9 @@ def recost_census_values(
         "benchmark": benchmark,
         "enumeration": enumeration,
         "construction": construction_proof,
-        "terms": {"C": c_term, "R": r_term, "S": s_term},
+        "terms": {"C": c_term, "R_sum": r_sum, "S": s_term},
         "liability_derivation": {
+            "reader_inventory": reader_inventory,
             "construction": {
                 "method": "exact-parent-three-wave-factor-plus-bounded-retry-pool",
                 "parent_full_retry_liability_nanos": full_retry_liability,
@@ -1418,21 +1822,55 @@ def validate_campaign_authorization(
     if type(first_attempt) is not int or first_attempt <= 0 or type(retry_pool) is not int or retry_pool < 0:
         raise RuntimeError("campaign admission equation drift")
     c_term = first_attempt + retry_pool
-    r_term = _reader_judge_liability(manifest.get("reader_judge", {}))
+    reader_judge = manifest.get("reader_judge")
+    derivation = census.get("liability_derivation")
+    if not isinstance(reader_judge, dict) or not isinstance(derivation, dict):
+        raise RuntimeError("campaign admission equation drift")
+    reader = reader_judge.get("reader")
+    judge = reader_judge.get("judge")
+    request_shapes = derivation.get("request_shapes")
+    reader_inventory = derivation.get("reader_inventory")
+    if (
+        not isinstance(reader, dict)
+        or not isinstance(judge, dict)
+        or not isinstance(request_shapes, dict)
+        or not isinstance(reader_inventory, dict)
+        or not isinstance(reader_inventory.get("rows"), list)
+    ):
+        raise RuntimeError("campaign reader liability inventory drift")
+    processor_rows = [
+        {
+            "question_id": row.get("question_id"),
+            "has_image": row.get("has_image"),
+            "local_processor_input_tokens": row.get(
+                "local_processor_input_tokens"
+            ),
+        }
+        for row in reader_inventory["rows"]
+        if isinstance(row, dict)
+    ]
+    derived_reader_inventory = _reader_liability_inventory(
+        processor_rows, reader, judge
+    )
+    if derived_reader_inventory != reader_inventory:
+        raise RuntimeError("campaign reader liability inventory drift")
+    r_sum = reader_inventory["reader_arm_liability_nanos"]
     s_term = _deep_liability(manifest.get("deep_recall", {}))[
         "maximum_liability_nanos"
     ]
     fixed_without_retries = (
         OPENING_NANOS
         + first_attempt
-        + QUESTION_COUNT * (2 * r_term + s_term)
+        + 2 * r_sum
+        + QUESTION_COUNT * s_term
         + CONTINGENCY_NANOS
     )
     maximum_retry_pool = HARD_CEILING_NANOS - fixed_without_retries
     total = (
         OPENING_NANOS
         + c_term
-        + QUESTION_COUNT * (2 * r_term + s_term)
+        + 2 * r_sum
+        + QUESTION_COUNT * s_term
         + CONTINGENCY_NANOS
     )
     expected_admission = {
@@ -1447,7 +1885,7 @@ def validate_campaign_authorization(
         "authorized": total <= HARD_CEILING_NANOS,
     }
     if (
-        terms != {"C": c_term, "R": r_term, "S": s_term}
+        terms != {"C": c_term, "R_sum": r_sum, "S": s_term}
         or admission != expected_admission
         or total > HARD_CEILING_NANOS
         or retry_pool > maximum_retry_pool
@@ -1457,22 +1895,20 @@ def validate_campaign_authorization(
         != sha256_json(manifest_construction)
     ):
         raise RuntimeError("campaign admission equation drift")
-    reader = manifest.get("reader_judge", {}).get("reader", {})
-    request_shapes = census.get("liability_derivation", {}).get("request_shapes", {})
-    question_record = manifest.get("data", {}).get("files", {}).get("questions.jsonl", {})
+    data_root = Path(
+        os.environ.get(
+            "MEMPHANT_LME_V2_DATA_ROOT",
+            Path.home() / ".cache/memphant/longmemeval-v2",
+        )
+    )
+    current_request_shapes, current_reader_inventory = _recompute_reader_authority(
+        manifest, data_root
+    )
     if (
-        not isinstance(reader, dict)
-        or not isinstance(request_shapes, dict)
-        or request_shapes.get("reader_maximum_nonmemory_chat_tokens")
-        != reader.get("maximum_nonmemory_chat_tokens")
-        or request_shapes.get("reader_tokenizer_sha256") != reader.get("tokenizer_sha256")
-        or request_shapes.get("reader_chat_template_sha256")
-        != reader.get("chat_template_sha256")
-        or request_shapes.get("reader_shape_question_source_sha256")
-        != question_record.get("sha256")
-        or request_shapes.get("reader_shape_rows") != QUESTION_COUNT
+        request_shapes != current_request_shapes
+        or reader_inventory != current_reader_inventory
     ):
-        raise RuntimeError("campaign reader tokenization proof drift")
+        raise RuntimeError("campaign reader processor or liability inventory drift")
     _validate_current_manifest_identities(manifest)
     actual_binary, actual_provenance = _build_census_binary(manifest)
     del actual_binary
@@ -1521,6 +1957,17 @@ def _authorize_validated_construction_wave(
         raise RuntimeError("construction wave requires an admitted campaign census")
     if not isinstance(construction, dict) or construction.get("maximum_internal_attempts") != 1:
         raise RuntimeError("construction wave requires the single-attempt runtime contract")
+    reader_inventory = census.get("liability_derivation", {}).get(
+        "reader_inventory", {}
+    )
+    if (
+        not isinstance(reader_inventory, dict)
+        or not _valid_sha256(reader_inventory.get("inventory_sha256"))
+        or reader_inventory.get("inventory_sha256")
+        != sha256_json(reader_inventory.get("rows"))
+        or reader_inventory.get("row_count") != QUESTION_COUNT
+    ):
+        raise RuntimeError("construction wave requires the exact reader inventory")
     if wave_kind != "first_attempt":
         raise RuntimeError("the sole campaign-ledger start must be the first construction wave")
     normalized, reservation, plans_sha256 = _plan_inventory(plans)
@@ -1557,6 +2004,12 @@ def _authorize_validated_construction_wave(
     wave_core = {
         "schema_version": 1,
         "campaign_census_sha256": census["census_sha256"],
+        "reader_liability_inventory_sha256": reader_inventory[
+            "inventory_sha256"
+        ],
+        "reader_arm_liability_nanos": reader_inventory[
+            "reader_arm_liability_nanos"
+        ],
         "construction_identity_sha256": construction["construction_identity_sha256"],
         "wave_kind": wave_kind,
         "plan_count": len(normalized),
@@ -1585,6 +2038,12 @@ def _authorize_validated_construction_wave(
             "retry_index": 0,
             "context": {
                 "campaign_census_sha256": census["census_sha256"],
+                "reader_liability_inventory_sha256": reader_inventory[
+                    "inventory_sha256"
+                ],
+                "reader_arm_liability_nanos": reader_inventory[
+                    "reader_arm_liability_nanos"
+                ],
                 "wave_kind": wave_kind,
                 "ordered_plans_sha256": plans_sha256,
                 "plan_count": len(normalized),
@@ -1883,7 +2342,15 @@ def recost_census(
     ):
         raise RuntimeError("construction aggregate-wave policy is incomplete or unbound")
     retry_pool = policy.get("retry_pool_nanos")
-    r_term = _reader_judge_liability(manifest["reader_judge"])
+    data_root = Path(
+        os.environ.get(
+            "MEMPHANT_LME_V2_DATA_ROOT",
+            Path.home() / ".cache/memphant/longmemeval-v2",
+        )
+    )
+    request_shapes, reader_inventory = _recompute_reader_authority(
+        manifest, data_root
+    )
     _validate_deep_runtime_identity(manifest["deep_recall"])
     deep_derivation = _deep_liability(manifest["deep_recall"])
     runtime_hashes = {
@@ -1893,7 +2360,7 @@ def recost_census(
     }
     result = recost_census_values(
         parent,
-        r_term=r_term,
+        reader_inventory=reader_inventory,
         s_term=deep_derivation["maximum_liability_nanos"],
         retry_pool_nanos=retry_pool,
         manifest_path=str(manifest_path),
@@ -1901,11 +2368,7 @@ def recost_census(
         runtime_hashes=runtime_hashes,
     )
     result.pop("census_sha256")
-    result["liability_derivation"]["request_shapes"] = {
-        "reader_maximum_nonmemory_chat_tokens": manifest["reader_judge"]["reader"]["maximum_nonmemory_chat_tokens"],
-        "judge_maximum_fixed_serialized_bytes": manifest["reader_judge"]["judge"]["maximum_fixed_serialized_bytes"],
-        "judge_maximum_output_tokens": manifest["reader_judge"]["judge"]["maximum_output_tokens"],
-    }
+    result["liability_derivation"]["request_shapes"] = request_shapes
     result["liability_derivation"]["deep"] = deep_derivation
     result["derivation"]["parent_census_path"] = str(parent_census_path)
     result["derivation"]["parent_census_file_sha256"] = _sha256_file(parent_census_path)
@@ -1939,7 +2402,7 @@ def census(
         )
     required = {
         "C": construction.get("maximum_liability_nanos"),
-        "R": reader_judge.get("maximum_liability_nanos"),
+        "R_sum": reader_judge.get("maximum_arm_liability_sum_nanos"),
         "S": deep_recall.get("maximum_liability_nanos"),
     }
     missing = sorted(name for name, value in required.items() if type(value) is not int or value <= 0)
@@ -1954,7 +2417,13 @@ def census(
                 identities.append(f"{section_name}.{field}")
     total = None
     if not missing and not identities:
-        total = OPENING_NANOS + required["C"] + QUESTION_COUNT * (2 * required["R"] + required["S"]) + CONTINGENCY_NANOS
+        total = (
+            OPENING_NANOS
+            + required["C"]
+            + 2 * required["R_sum"]
+            + QUESTION_COUNT * required["S"]
+            + CONTINGENCY_NANOS
+        )
     authorized = total is not None and total <= HARD_CEILING_NANOS
     core = {
         "schema_version": 1,

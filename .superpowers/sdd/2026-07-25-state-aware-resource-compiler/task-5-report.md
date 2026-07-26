@@ -18,9 +18,13 @@ query-blind and no-model. Historical P1-T6 files remained byte-identical.
   set, cargo/rustc, and the resulting executable, then runs a private
   content-addressed copy whose hash is checked before and after execution.
 - The reader nonmemory bound is mechanically tokenized across all 451 official
-  oracle-free message shapes with the pinned Qwen tokenizer/chat template. The
-  derived maximum is 527 tokens; the question source, projected fixture,
-  tokenizer, template, row count, image count, and question IDs are hash-bound.
+  oracle-free messages with the pinned Qwen processor/chat template. The exact
+  official screenshot bytes, upstream checksums, PNG dimensions, processor
+  sources, toolchain, question source, projected fixture, and all 451 row
+  results are hash-bound. The local processor result is diagnostic; liability
+  uses the provider-reported native-token billing authority: exact local text
+  tokens for 422 text-only rows and the full 262,144-token provider prompt
+  ceiling for each of the 29 image rows.
 - Bound the Qwen construction and Deep routes to DeepInfra only with no
   fallbacks. Runtime receipts reject a different served provider/model.
 - Froze the native judge's upstream-exposed 2,048-token default explicitly.
@@ -32,7 +36,7 @@ query-blind and no-model. Historical P1-T6 files remained byte-identical.
   second campaign reservation.
 - Before that reservation, the public launch API reloads the census and
   manifest, validates current runtime/build identities, and independently
-  recomputes `C`, `R`, `S`, retry headroom, and the exact $200 equation. A
+  recomputes `C`, `R_sum`, `S`, retry headroom, and the exact $200 equation. A
   forged but self-consistent JSON checksum has no launch authority.
 - The Rust subledger independently enforces the same aggregate cap before each
   HTTP call: under a cross-process file lock it validates all prior rows, sums
@@ -61,15 +65,23 @@ query-blind and no-model. Historical P1-T6 files remained byte-identical.
   pool. The independent `$10` campaign contingency remains untouched.
 - The final exact terms and total are recorded in
   `docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-CENSUS.json`.
+- That exact canonical path is the sole current authorization packet. The
+  explicitly named `CAMPAIGN-CENSUS.baseline-one-slice.json` and
+  `CAMPAIGN-CENSUS.qwen-construction-luna-deep.json` files are retained rejected
+  feasibility snapshots; neither is a current packet nor accepted by the
+  prelaunch validator.
 - The final packet self-hash is
-  `66deb70b49f75099f100511617d581524d823841c47aefded10537506ba4cec6`;
+  `a1437881dd8c8ed2fc33a26d213231a0dd0790532000c759ae6486617313e0a2`;
   its file hash is
-  `25346b0afc89d9a2e9d3cdaa76ad8bfa3325fb6b4c399722d03719dfd72d7ce1`,
+  `64fd28bf20a7b33d7d7d35977ab4a3ad26cbf61c60047658565c46726cac8c3d`,
   and it binds manifest hash
-  `195881dbf17e6192eb47b64a76c65b7784ad390bf182df606041e2cd4544026e`.
+  `ae0c238f1793b33bd63e73645e4a751926969c0186ae7b5ee477639220a68970`.
 - The freshly locked release-built census executable hash is
-  `a0ff3eace7c44538090cceba20e6c24828042d17dbce1156be413ec3c5135031`.
-- The admitted total is `$199.5356167`, leaving `$0.4643833` below the
+  `5ea144fd8a4fa65585097d592638cdf5041ed20831f5553bd12ec2f01c3d5973`.
+- Exact terms are `C = 65,220,602,500`, `R_sum = 56,966,572,500`, and
+  `S = 14,310,400` nano-USD under
+  `4258002400+C+2*R_sum+451*S+10000000000<=200000000000`.
+- The admitted total is `$199.8657403`, leaving `$0.1342597` below the
   `$200` hard ceiling after preserving the independent `$10` contingency.
 - `paid_models_run = false` and `spend_nanos = 0` in every census artifact.
 
@@ -105,7 +117,7 @@ statistics, construction-proof tampering, and oracle-safe prefix sealing.
 
 Additional GREEN evidence:
 
-- Python repository gate: `891 passed, 12 skipped`.
+- Python repository gate: `893 passed, 12 skipped`.
 - `cargo clippy --all-targets --all-features -- -D warnings`.
 - `cargo test --all-targets --all-features`, `cargo fmt --check`,
   `cargo test --doc`, and `git diff --check`.

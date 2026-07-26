@@ -59,42 +59,6 @@ pub struct StructuredStateTokenizer {
     chat_template_overhead_tokens: u64,
 }
 
-impl StructuredStateTokenizer {
-    pub fn reader_identity(&self) -> (&str, &str) {
-        (&self.tokenizer_sha256, &self.chat_template_sha256)
-    }
-
-    pub fn count_qwen_reader_chat_tokens(
-        &self,
-        system_prompt: &str,
-        question_text: &str,
-        has_image: bool,
-    ) -> Result<u64, String> {
-        self.tokenizer
-            .encode(
-                render_qwen_reader_chat(system_prompt, question_text, has_image),
-                false,
-            )
-            .map(|encoding| encoding.len() as u64)
-            .map_err(|_| "Qwen reader message tokenization failed".to_string())
-    }
-}
-
-fn render_qwen_reader_chat(system_prompt: &str, question_text: &str, has_image: bool) -> String {
-    let mut user = format!(
-        "### Memory context:\n(empty)\n\n### Question to answer:\n{}",
-        question_text.trim()
-    );
-    if has_image {
-        user.push_str("<|vision_start|><|image_pad|><|vision_end|>");
-    }
-    format!(
-        "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n",
-        system_prompt.trim(),
-        user.trim(),
-    )
-}
-
 pub fn load_structured_state_tokenizer(
     tokenizer_path: &Path,
     tokenizer_config_path: &Path,
@@ -1531,26 +1495,6 @@ mod tests {
 
     const INPUT_PRICE: u64 = 2_000_000_000;
     const OUTPUT_PRICE: u64 = 10_000_000_000;
-
-    #[test]
-    fn qwen_reader_renderer_matches_the_official_empty_memory_message_shape() {
-        assert_eq!(
-            render_qwen_reader_chat("  system prompt  ", "question text", false),
-            concat!(
-                "<|im_start|>system\n",
-                "system prompt",
-                "<|im_end|>\n",
-                "<|im_start|>user\n",
-                "### Memory context:\n(empty)\n\n### Question to answer:\nquestion text",
-                "<|im_end|>\n",
-                "<|im_start|>assistant\n<think>\n",
-            )
-        );
-        assert!(
-            render_qwen_reader_chat("system", "question", true)
-                .contains("<|vision_start|><|image_pad|><|vision_end|>")
-        );
-    }
 
     struct FakeTransport {
         responses: Mutex<VecDeque<Result<HttpResponse, String>>>,

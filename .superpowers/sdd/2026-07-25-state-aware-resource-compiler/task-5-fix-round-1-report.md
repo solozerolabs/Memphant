@@ -1,5 +1,11 @@
 # Task 5 Fix Round 1: Admission Authority Closure
 
+> Superseded cost evidence: round 2 replaced the text-only 527-token reader
+> proxy with exact multimodal row inventory and provider-ceiling liability. See
+> `task-5-fix-round-2-report.md` and the canonical `CAMPAIGN-CENSUS.json` for the
+> current authorization. The implementation and test evidence below records the
+> round-1 state and is not an active cost packet.
+
 ## Status
 
 All three P1 review findings are implemented test-first. No paid/model calls,
@@ -23,14 +29,11 @@ evidence remains byte-identical, and the progress ledger was not modified.
    the copy hash both immediately before and after execution. Pre-launch
    validation repeats the fresh build and requires identical provenance.
 
-3. **Mechanical reader bound.** The census projects all 451 official questions
-   into an oracle-free reader-shape JSONL containing only question ID, system
-   prompt, question text, and image presence. The same Rust CLI tokenizes the
-   exact official Qwen chat rendering with the pinned tokenizer and chat
-   template. The derived maximum is 527 tokens, not the previous unexplained
-   524 literal; 29 shapes contain an image marker. Tokenizer, template,
-   question-source, fixture, row-count, and question-ID hashes are recorded and
-   revalidated.
+3. **Mechanical reader bound (superseded in round 2).** This round projected
+   image presence but did not process the exact image bytes. Round 2 now binds
+   all 29 official screenshots and reserves the provider prompt ceiling for
+   those rows; the 527-token maximum remains valid only for the 422 text-only
+   local processor diagnostics.
 
 ## TDD evidence
 
@@ -52,12 +55,11 @@ GREEN regressions prove:
 - oracle answer/evaluator fields never enter the reader fixture;
 - the exact system/user/image/generation-prompt rendering remains pinned.
 
-## Cost and claim boundary
+## Cost and claim boundary (historical, superseded)
 
-The reader bound increases by 3 tokens, so `R` increases by 300 nano-USD. The
-full 451-question two-arm total increases by 270,600 nano-USD and remains below
-the frozen $200 ceiling. The hash-current census is the sole exact source for
-the final total, headroom, hashes, and executable provenance.
+The round-1 cost paragraph below is retained only as review history. It is not
+current authority. Round 2's hash-current canonical census is the sole exact
+source for the final total, headroom, hashes, and executable provenance.
 
 The final census records `C = 65,220,602,500`, `R = 125,945,700`, and
 `S = 14,310,400` nano-USD. Including the prepaid retry pool, the admitted total

@@ -2,13 +2,13 @@
   "admission": {
     "authorized": true,
     "contingency_nanos": 10000000000,
-    "formula": "4258002400+C+451*(2*R+S)+10000000000<=200000000000",
+    "formula": "4258002400+C+2*R_sum+451*S+10000000000<=200000000000",
     "hard_ceiling_nanos": 200000000000,
-    "maximum_retry_pool_nanos": 10464383300,
+    "maximum_retry_pool_nanos": 10134259700,
     "missing_bounds": [],
     "missing_identities": [],
     "opening_liability_nanos": 4258002400,
-    "total_nanos": 199535616700
+    "total_nanos": 199865740300
   },
   "benchmark": {
     "code_commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
@@ -18,19 +18,19 @@
     "questions": 451,
     "tier": "medium"
   },
-  "census_sha256": "66deb70b49f75099f100511617d581524d823841c47aefded10537506ba4cec6",
+  "census_sha256": "a1437881dd8c8ed2fc33a26d213231a0dd0790532000c759ae6486617313e0a2",
   "construction": {
     "census_binary_provenance": {
-      "binary_sha256": "a0ff3eace7c44538090cceba20e6c24828042d17dbce1156be413ec3c5135031",
+      "binary_sha256": "5ea144fd8a4fa65585097d592638cdf5041ed20831f5553bd12ec2f01c3d5973",
       "build_profile": "release",
       "cargo_lock_sha256": "ddce916121e07089eb68717e3f4860efc8394d7f904a9abc9a8d759f1b876aa6",
       "cargo_locked": true,
       "cargo_version_sha256": "4b38cfb28fee9bbb95897bc3793f5fce5f3ed35c732f29ad7d80f96ba96eac5b",
       "package": "memphant-cli",
       "rustc_vv_sha256": "a9951fd2e18599557d1a289d74c50874d336477e219b1472508a63518090fa08",
-      "source_set_sha256": "257e28a36a9fffea3ddf4edf7c06078b864ed0f76b2f3dc0732f4338193d1fa3"
+      "source_set_sha256": "030e521c64b4b468ce0d1e078001bda25e8f11405ce87f1b3ec12e078e6f6377"
     },
-    "construction_identity_sha256": "0b1370e6dd507cf7927eb9881ef26e55fa61671d3d94f0f7bd6e86493a54bb9a",
+    "construction_identity_sha256": "348b131615823b6f849250923013bc7f6c701060f5348c64af8fdabcfb95be20",
     "construction_liability_nanos": 65220602500,
     "first_attempt_liability_nanos": 55220602500,
     "full_three_wave_liability_nanos": 165661807500,
@@ -40,16 +40,11 @@
     "maximum_internal_attempts": 1,
     "maximum_per_attempt_reservation_nanos": 6132300,
     "maximum_request_bytes": 131071,
-    "maximum_retry_pool_nanos": 10464383300,
+    "maximum_retry_pool_nanos": 10134259700,
     "maximum_retry_reservation_nanos": 18396900,
     "parent_full_census_required_for_recost": false,
     "planned_requests": 1910860,
     "processed_plans": 11578,
-    "reader_chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
-    "reader_maximum_nonmemory_chat_tokens": 527,
-    "reader_shape_fixture_sha256": "f30b9d1d04ceb8294119ccff280abeb66e27c23faab64b38269ad9dcb9a5c5ce",
-    "reader_shape_rows": 451,
-    "reader_tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
     "requested_model": "qwen/qwen3.5-9b-20260310",
     "requested_provider": "deepinfra",
     "resource_uses": 298393,
@@ -80,15 +75,4863 @@
       "maximum_output_reservation_units": 94208,
       "token_mix_liability_nanos": 14310400
     },
+    "reader_inventory": {
+      "image_rows": 29,
+      "inventory_sha256": "27daa558bf86e956dc2865649e59560619300687a97009e7f874e868ff69f022",
+      "reader_arm_liability_nanos": 56966572500,
+      "row_count": 451,
+      "rows": [
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "01307e07",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "025db8ef",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200164,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 164,
+          "per_arm_liability_nanos": 125909400,
+          "question_id": "057a2d4d",
+          "reader_liability_nanos": 23016400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200169,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 169,
+          "per_arm_liability_nanos": 125909900,
+          "question_id": "059974dd",
+          "reader_liability_nanos": 23016900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200266,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 266,
+          "per_arm_liability_nanos": 125919600,
+          "question_id": "07ffeedf",
+          "reader_liability_nanos": 23026600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200165,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 165,
+          "per_arm_liability_nanos": 125909500,
+          "question_id": "080b0218",
+          "reader_liability_nanos": 23016500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200246,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 246,
+          "per_arm_liability_nanos": 125917600,
+          "question_id": "0b50ca0d",
+          "reader_liability_nanos": 23024600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "0cf979c4",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200161,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 161,
+          "per_arm_liability_nanos": 125909100,
+          "question_id": "0d07143c",
+          "reader_liability_nanos": 23016100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200156,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 156,
+          "per_arm_liability_nanos": 125908600,
+          "question_id": "0f8c85a6",
+          "reader_liability_nanos": 23015600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200157,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 157,
+          "per_arm_liability_nanos": 125908700,
+          "question_id": "0f970f01",
+          "reader_liability_nanos": 23015700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200527,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 527,
+          "per_arm_liability_nanos": 125945700,
+          "question_id": "100ff132",
+          "reader_liability_nanos": 23052700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200174,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 174,
+          "per_arm_liability_nanos": 125910400,
+          "question_id": "106c321b",
+          "reader_liability_nanos": 23017400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "109b334c",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200174,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 174,
+          "per_arm_liability_nanos": 125910400,
+          "question_id": "11cc7ac2",
+          "reader_liability_nanos": 23017400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200171,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 171,
+          "per_arm_liability_nanos": 125910100,
+          "question_id": "12286151",
+          "reader_liability_nanos": 23017100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200170,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 170,
+          "per_arm_liability_nanos": 125910000,
+          "question_id": "123b74fb",
+          "reader_liability_nanos": 23017000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "12f8cfd2",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "14a823df",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200161,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 161,
+          "per_arm_liability_nanos": 125909100,
+          "question_id": "17a03f9b",
+          "reader_liability_nanos": 23016100
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1076,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "18b91103",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200176,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 176,
+          "per_arm_liability_nanos": 125910600,
+          "question_id": "191184f3",
+          "reader_liability_nanos": 23017600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "19367bc7",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200158,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 158,
+          "per_arm_liability_nanos": 125908800,
+          "question_id": "19935d2d",
+          "reader_liability_nanos": 23015800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "1bfd2eac",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200299,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 299,
+          "per_arm_liability_nanos": 125922900,
+          "question_id": "1cf04706",
+          "reader_liability_nanos": 23029900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200170,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 170,
+          "per_arm_liability_nanos": 125910000,
+          "question_id": "229675cd",
+          "reader_liability_nanos": 23017000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200221,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 221,
+          "per_arm_liability_nanos": 125915100,
+          "question_id": "233f9f09",
+          "reader_liability_nanos": 23022100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "237d2cc5",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200161,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 161,
+          "per_arm_liability_nanos": 125909100,
+          "question_id": "23c3e290",
+          "reader_liability_nanos": 23016100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200153,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 153,
+          "per_arm_liability_nanos": 125908300,
+          "question_id": "247bf724",
+          "reader_liability_nanos": 23015300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "25b00876",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "2721ca7f",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1085,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "285db8ec",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200157,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 157,
+          "per_arm_liability_nanos": 125908700,
+          "question_id": "2975030d",
+          "reader_liability_nanos": 23015700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "2ad054b5",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200165,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 165,
+          "per_arm_liability_nanos": 125909500,
+          "question_id": "2b96f402",
+          "reader_liability_nanos": 23016500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "2d4e08b9",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200164,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 164,
+          "per_arm_liability_nanos": 125909400,
+          "question_id": "2e90de97",
+          "reader_liability_nanos": 23016400
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1084,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "2f6a21cd",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200158,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 158,
+          "per_arm_liability_nanos": 125908800,
+          "question_id": "2fab8b79",
+          "reader_liability_nanos": 23015800
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1079,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "302bf60e",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200163,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 163,
+          "per_arm_liability_nanos": 125909300,
+          "question_id": "32909aa1",
+          "reader_liability_nanos": 23016300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200178,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 178,
+          "per_arm_liability_nanos": 125910800,
+          "question_id": "329742b1",
+          "reader_liability_nanos": 23017800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "32d04f31",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200161,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 161,
+          "per_arm_liability_nanos": 125909100,
+          "question_id": "32e719c2",
+          "reader_liability_nanos": 23016100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200171,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 171,
+          "per_arm_liability_nanos": 125910100,
+          "question_id": "38726e61",
+          "reader_liability_nanos": 23017100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "3a131a42",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200220,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 220,
+          "per_arm_liability_nanos": 125915000,
+          "question_id": "3a2e9368",
+          "reader_liability_nanos": 23022000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200165,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 165,
+          "per_arm_liability_nanos": 125909500,
+          "question_id": "3a7a7880",
+          "reader_liability_nanos": 23016500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "3a836b31",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200166,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 166,
+          "per_arm_liability_nanos": 125909600,
+          "question_id": "3b375e30",
+          "reader_liability_nanos": 23016600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200167,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 167,
+          "per_arm_liability_nanos": 125909700,
+          "question_id": "3daef058",
+          "reader_liability_nanos": 23016700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "3fd81278",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "41a18e5c",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200159,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 159,
+          "per_arm_liability_nanos": 125908900,
+          "question_id": "42a55762",
+          "reader_liability_nanos": 23015900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "43d9c5d0",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "45d1e7f1",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200163,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 163,
+          "per_arm_liability_nanos": 125909300,
+          "question_id": "4755f316",
+          "reader_liability_nanos": 23016300
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1080,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "48a52262",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1077,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "4964afed",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200167,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 167,
+          "per_arm_liability_nanos": 125909700,
+          "question_id": "4c6d1eb7",
+          "reader_liability_nanos": 23016700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "4df5e6b4",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200215,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 215,
+          "per_arm_liability_nanos": 125914500,
+          "question_id": "4dffe641",
+          "reader_liability_nanos": 23021500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200207,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 207,
+          "per_arm_liability_nanos": 125913700,
+          "question_id": "4ed01379",
+          "reader_liability_nanos": 23020700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200194,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 194,
+          "per_arm_liability_nanos": 125912400,
+          "question_id": "50711c52",
+          "reader_liability_nanos": 23019400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "507a0fe8",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200163,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 163,
+          "per_arm_liability_nanos": 125909300,
+          "question_id": "50bfa714",
+          "reader_liability_nanos": 23016300
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1084,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "50d92f55",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200305,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 305,
+          "per_arm_liability_nanos": 125923500,
+          "question_id": "52dd33bb",
+          "reader_liability_nanos": 23030500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200174,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 174,
+          "per_arm_liability_nanos": 125910400,
+          "question_id": "571b841c",
+          "reader_liability_nanos": 23017400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200176,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 176,
+          "per_arm_liability_nanos": 125910600,
+          "question_id": "579557d8",
+          "reader_liability_nanos": 23017600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200170,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 170,
+          "per_arm_liability_nanos": 125910000,
+          "question_id": "57cd3560",
+          "reader_liability_nanos": 23017000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200176,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 176,
+          "per_arm_liability_nanos": 125910600,
+          "question_id": "5849c18b",
+          "reader_liability_nanos": 23017600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200237,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 237,
+          "per_arm_liability_nanos": 125916700,
+          "question_id": "58c34839",
+          "reader_liability_nanos": 23023700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200161,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 161,
+          "per_arm_liability_nanos": 125909100,
+          "question_id": "5aaf0f61",
+          "reader_liability_nanos": 23016100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200159,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 159,
+          "per_arm_liability_nanos": 125908900,
+          "question_id": "5b249b5c",
+          "reader_liability_nanos": 23015900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200174,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 174,
+          "per_arm_liability_nanos": 125910400,
+          "question_id": "5ca112bf",
+          "reader_liability_nanos": 23017400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200226,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 226,
+          "per_arm_liability_nanos": 125915600,
+          "question_id": "5edd2533",
+          "reader_liability_nanos": 23022600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200167,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 167,
+          "per_arm_liability_nanos": 125909700,
+          "question_id": "5f100f22",
+          "reader_liability_nanos": 23016700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200200,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 200,
+          "per_arm_liability_nanos": 125913000,
+          "question_id": "616c238d",
+          "reader_liability_nanos": 23020000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "634973c3",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "658fa827",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200166,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 166,
+          "per_arm_liability_nanos": 125909600,
+          "question_id": "668f7b74",
+          "reader_liability_nanos": 23016600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "679111c6",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "68107cba",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200160,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 160,
+          "per_arm_liability_nanos": 125909000,
+          "question_id": "6a7808c5",
+          "reader_liability_nanos": 23016000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200152,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 152,
+          "per_arm_liability_nanos": 125908200,
+          "question_id": "6c285a23",
+          "reader_liability_nanos": 23015200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "6cb8ce37",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "6e0759a2",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200165,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 165,
+          "per_arm_liability_nanos": 125909500,
+          "question_id": "6fdda2fc",
+          "reader_liability_nanos": 23016500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200154,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 154,
+          "per_arm_liability_nanos": 125908400,
+          "question_id": "71026f57",
+          "reader_liability_nanos": 23015400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200205,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 205,
+          "per_arm_liability_nanos": 125913500,
+          "question_id": "71e61e15",
+          "reader_liability_nanos": 23020500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200160,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 160,
+          "per_arm_liability_nanos": 125909000,
+          "question_id": "7351cbcc",
+          "reader_liability_nanos": 23016000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200155,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 155,
+          "per_arm_liability_nanos": 125908500,
+          "question_id": "73b6738b",
+          "reader_liability_nanos": 23015500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200308,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 308,
+          "per_arm_liability_nanos": 125923800,
+          "question_id": "73cbefdc",
+          "reader_liability_nanos": 23030800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200299,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 299,
+          "per_arm_liability_nanos": 125922900,
+          "question_id": "756a7434",
+          "reader_liability_nanos": 23029900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200335,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 335,
+          "per_arm_liability_nanos": 125926500,
+          "question_id": "75816b26",
+          "reader_liability_nanos": 23033500
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1093,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "7586cf7c",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200162,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 162,
+          "per_arm_liability_nanos": 125909200,
+          "question_id": "767e4106",
+          "reader_liability_nanos": 23016200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200248,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 248,
+          "per_arm_liability_nanos": 125917800,
+          "question_id": "78686f4e",
+          "reader_liability_nanos": 23024800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "7a07e9a0",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200169,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 169,
+          "per_arm_liability_nanos": 125909900,
+          "question_id": "7df9e2ff",
+          "reader_liability_nanos": 23016900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200216,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 216,
+          "per_arm_liability_nanos": 125914600,
+          "question_id": "7e32e4a2",
+          "reader_liability_nanos": 23021600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200257,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 257,
+          "per_arm_liability_nanos": 125918700,
+          "question_id": "7ea13f14",
+          "reader_liability_nanos": 23025700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200156,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 156,
+          "per_arm_liability_nanos": 125908600,
+          "question_id": "823d133a",
+          "reader_liability_nanos": 23015600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "82cdfcc3",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200167,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 167,
+          "per_arm_liability_nanos": 125909700,
+          "question_id": "83c35034",
+          "reader_liability_nanos": 23016700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200162,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 162,
+          "per_arm_liability_nanos": 125909200,
+          "question_id": "85251f36",
+          "reader_liability_nanos": 23016200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200195,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 195,
+          "per_arm_liability_nanos": 125912500,
+          "question_id": "85fc5722",
+          "reader_liability_nanos": 23019500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200180,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 180,
+          "per_arm_liability_nanos": 125911000,
+          "question_id": "876c720a",
+          "reader_liability_nanos": 23018000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200171,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 171,
+          "per_arm_liability_nanos": 125910100,
+          "question_id": "87711b62",
+          "reader_liability_nanos": 23017100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "882965b7",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "89439d62",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200158,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 158,
+          "per_arm_liability_nanos": 125908800,
+          "question_id": "8b09f378",
+          "reader_liability_nanos": 23015800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200170,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 170,
+          "per_arm_liability_nanos": 125910000,
+          "question_id": "8b2a9dd3",
+          "reader_liability_nanos": 23017000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200164,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 164,
+          "per_arm_liability_nanos": 125909400,
+          "question_id": "8bc6d989",
+          "reader_liability_nanos": 23016400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200160,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 160,
+          "per_arm_liability_nanos": 125909000,
+          "question_id": "8d0400e5",
+          "reader_liability_nanos": 23016000
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1082,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "8e21c6e5",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200167,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 167,
+          "per_arm_liability_nanos": 125909700,
+          "question_id": "8e320e42",
+          "reader_liability_nanos": 23016700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "8f752563",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200176,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 176,
+          "per_arm_liability_nanos": 125910600,
+          "question_id": "901b7d17",
+          "reader_liability_nanos": 23017600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200156,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 156,
+          "per_arm_liability_nanos": 125908600,
+          "question_id": "90df8253",
+          "reader_liability_nanos": 23015600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "927c65a2",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "93d0613b",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200218,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 218,
+          "per_arm_liability_nanos": 125914800,
+          "question_id": "95ae824f",
+          "reader_liability_nanos": 23021800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200178,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 178,
+          "per_arm_liability_nanos": 125910800,
+          "question_id": "9680f077",
+          "reader_liability_nanos": 23017800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200226,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 226,
+          "per_arm_liability_nanos": 125915600,
+          "question_id": "984022b1",
+          "reader_liability_nanos": 23022600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "99bc5d0d",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "9b34f55b",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200160,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 160,
+          "per_arm_liability_nanos": 125909000,
+          "question_id": "9c074855",
+          "reader_liability_nanos": 23016000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200198,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 198,
+          "per_arm_liability_nanos": 125912800,
+          "question_id": "9c24f41e",
+          "reader_liability_nanos": 23019800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200166,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 166,
+          "per_arm_liability_nanos": 125909600,
+          "question_id": "9c32bca6",
+          "reader_liability_nanos": 23016600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200430,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 430,
+          "per_arm_liability_nanos": 125936000,
+          "question_id": "9e05978c",
+          "reader_liability_nanos": 23043000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200167,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 167,
+          "per_arm_liability_nanos": 125909700,
+          "question_id": "9ff0ffff",
+          "reader_liability_nanos": 23016700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "a3a7b079",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "a444cec8",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200159,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 159,
+          "per_arm_liability_nanos": 125908900,
+          "question_id": "a45edf3e",
+          "reader_liability_nanos": 23015900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200174,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 174,
+          "per_arm_liability_nanos": 125910400,
+          "question_id": "a482c0d9",
+          "reader_liability_nanos": 23017400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "a58c5548",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "a667402d",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200162,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 162,
+          "per_arm_liability_nanos": 125909200,
+          "question_id": "a7edfb7a",
+          "reader_liability_nanos": 23016200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200162,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 162,
+          "per_arm_liability_nanos": 125909200,
+          "question_id": "a8959d04-abs",
+          "reader_liability_nanos": 23016200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200195,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 195,
+          "per_arm_liability_nanos": 125912500,
+          "question_id": "aa4a4b7b",
+          "reader_liability_nanos": 23019500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "aa64a8bd",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200259,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 259,
+          "per_arm_liability_nanos": 125918900,
+          "question_id": "aca57021",
+          "reader_liability_nanos": 23025900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200170,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 170,
+          "per_arm_liability_nanos": 125910000,
+          "question_id": "ad903be2",
+          "reader_liability_nanos": 23017000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "adddeaa5",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "aedd338d",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200156,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 156,
+          "per_arm_liability_nanos": 125908600,
+          "question_id": "aef57896",
+          "reader_liability_nanos": 23015600
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1084,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "af2ebaed",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200165,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 165,
+          "per_arm_liability_nanos": 125909500,
+          "question_id": "b15314c0",
+          "reader_liability_nanos": 23016500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200171,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 171,
+          "per_arm_liability_nanos": 125910100,
+          "question_id": "b54161f8",
+          "reader_liability_nanos": 23017100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "b7cc4da2",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200171,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 171,
+          "per_arm_liability_nanos": 125910100,
+          "question_id": "b82d0dd6",
+          "reader_liability_nanos": 23017100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200207,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 207,
+          "per_arm_liability_nanos": 125913700,
+          "question_id": "b8cabd09",
+          "reader_liability_nanos": 23020700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "bdb825a3",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200169,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 169,
+          "per_arm_liability_nanos": 125909900,
+          "question_id": "bdfef1b9",
+          "reader_liability_nanos": 23016900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "bf4f8b37",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200162,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 162,
+          "per_arm_liability_nanos": 125909200,
+          "question_id": "bf98bb38",
+          "reader_liability_nanos": 23016200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200351,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 351,
+          "per_arm_liability_nanos": 125928100,
+          "question_id": "bfb3bcc4",
+          "reader_liability_nanos": 23035100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200202,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 202,
+          "per_arm_liability_nanos": 125913200,
+          "question_id": "c0593d69",
+          "reader_liability_nanos": 23020200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "c0696888",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "c1c000eb",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1071,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "c35bfeed",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200178,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 178,
+          "per_arm_liability_nanos": 125910800,
+          "question_id": "c3dbec17",
+          "reader_liability_nanos": 23017800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200176,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 176,
+          "per_arm_liability_nanos": 125910600,
+          "question_id": "c4c0e117",
+          "reader_liability_nanos": 23017600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200275,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 275,
+          "per_arm_liability_nanos": 125920500,
+          "question_id": "c60f4681",
+          "reader_liability_nanos": 23027500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "c80ca967",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "c9568c9b",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200174,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 174,
+          "per_arm_liability_nanos": 125910400,
+          "question_id": "c9c6a06a",
+          "reader_liability_nanos": 23017400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "ca8e070b",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "cbcd74ae",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200229,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 229,
+          "per_arm_liability_nanos": 125915900,
+          "question_id": "ccf29914",
+          "reader_liability_nanos": 23022900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200242,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 242,
+          "per_arm_liability_nanos": 125917200,
+          "question_id": "cdd0e687",
+          "reader_liability_nanos": 23024200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "ce1cdb2d",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1091,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "ce9aa351",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200157,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 157,
+          "per_arm_liability_nanos": 125908700,
+          "question_id": "cf62efad",
+          "reader_liability_nanos": 23015700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "d0d61088",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200158,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 158,
+          "per_arm_liability_nanos": 125908800,
+          "question_id": "d0e556eb",
+          "reader_liability_nanos": 23015800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200172,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 172,
+          "per_arm_liability_nanos": 125910200,
+          "question_id": "d1f82e80",
+          "reader_liability_nanos": 23017200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200170,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 170,
+          "per_arm_liability_nanos": 125910000,
+          "question_id": "d3d7ec75",
+          "reader_liability_nanos": 23017000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200497,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 497,
+          "per_arm_liability_nanos": 125942700,
+          "question_id": "d63e8a7f",
+          "reader_liability_nanos": 23049700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "d72fb64d",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200163,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 163,
+          "per_arm_liability_nanos": 125909300,
+          "question_id": "d83c4bf7",
+          "reader_liability_nanos": 23016300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "dbe1a814",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "dc41b134",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200190,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 190,
+          "per_arm_liability_nanos": 125912000,
+          "question_id": "dd53ab77",
+          "reader_liability_nanos": 23019000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "de0abc47",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200257,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 257,
+          "per_arm_liability_nanos": 125918700,
+          "question_id": "e033e796",
+          "reader_liability_nanos": 23025700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200218,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 218,
+          "per_arm_liability_nanos": 125914800,
+          "question_id": "e334d5c6",
+          "reader_liability_nanos": 23021800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200211,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 211,
+          "per_arm_liability_nanos": 125914100,
+          "question_id": "e7292dab",
+          "reader_liability_nanos": 23021100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200180,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 180,
+          "per_arm_liability_nanos": 125911000,
+          "question_id": "e823a94a",
+          "reader_liability_nanos": 23018000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200153,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 153,
+          "per_arm_liability_nanos": 125908300,
+          "question_id": "e9fde9fe",
+          "reader_liability_nanos": 23015300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200305,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 305,
+          "per_arm_liability_nanos": 125923500,
+          "question_id": "eb3cfd03",
+          "reader_liability_nanos": 23030500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "eb8cf28b",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200166,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 166,
+          "per_arm_liability_nanos": 125909600,
+          "question_id": "ebad58ed",
+          "reader_liability_nanos": 23016600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200367,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 367,
+          "per_arm_liability_nanos": 125929700,
+          "question_id": "ecdb7d5e",
+          "reader_liability_nanos": 23036700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200166,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 166,
+          "per_arm_liability_nanos": 125909600,
+          "question_id": "ee5252a3",
+          "reader_liability_nanos": 23016600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200169,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 169,
+          "per_arm_liability_nanos": 125909900,
+          "question_id": "f02bec54",
+          "reader_liability_nanos": 23016900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "f0882f6e",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200169,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 169,
+          "per_arm_liability_nanos": 125909900,
+          "question_id": "f1d8a168",
+          "reader_liability_nanos": 23016900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "f1f9de44",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "f3496ca5",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "f35bac4a",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200162,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 162,
+          "per_arm_liability_nanos": 125909200,
+          "question_id": "f4b2b1fb",
+          "reader_liability_nanos": 23016200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200228,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 228,
+          "per_arm_liability_nanos": 125915800,
+          "question_id": "f9c65fe6",
+          "reader_liability_nanos": 23022800
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1102,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "fa504f5e",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1085,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "fb56a896",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200178,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 178,
+          "per_arm_liability_nanos": 125910800,
+          "question_id": "fe41b553",
+          "reader_liability_nanos": 23017800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200176,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 176,
+          "per_arm_liability_nanos": 125910600,
+          "question_id": "ff311d07",
+          "reader_liability_nanos": 23017600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "00aa905a",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "01f6e679",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200309,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 309,
+          "per_arm_liability_nanos": 125923900,
+          "question_id": "0382ed92",
+          "reader_liability_nanos": 23030900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "0401f0c8",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1061,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "0574c69a",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "05cce9b3",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200217,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 217,
+          "per_arm_liability_nanos": 125914700,
+          "question_id": "06a5a25f",
+          "reader_liability_nanos": 23021700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200248,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 248,
+          "per_arm_liability_nanos": 125917800,
+          "question_id": "06e965cf",
+          "reader_liability_nanos": 23024800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "0738c1ac",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1060,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "07a0145f",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200323,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 323,
+          "per_arm_liability_nanos": 125925300,
+          "question_id": "07ab3723",
+          "reader_liability_nanos": 23032300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200240,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 240,
+          "per_arm_liability_nanos": 125917000,
+          "question_id": "07b49858",
+          "reader_liability_nanos": 23024000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200265,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 265,
+          "per_arm_liability_nanos": 125919500,
+          "question_id": "07d86be1",
+          "reader_liability_nanos": 23026500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200246,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 246,
+          "per_arm_liability_nanos": 125917600,
+          "question_id": "07fff330",
+          "reader_liability_nanos": 23024600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200190,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 190,
+          "per_arm_liability_nanos": 125912000,
+          "question_id": "0a13e290",
+          "reader_liability_nanos": 23019000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "0a4a47e6",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200191,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 191,
+          "per_arm_liability_nanos": 125912100,
+          "question_id": "0ace674b",
+          "reader_liability_nanos": 23019100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "0af83ccc",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "0c0fdcd7",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200183,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 183,
+          "per_arm_liability_nanos": 125911300,
+          "question_id": "0c6b0c60",
+          "reader_liability_nanos": 23018300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200251,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 251,
+          "per_arm_liability_nanos": 125918100,
+          "question_id": "0cd6dc43",
+          "reader_liability_nanos": 23025100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200255,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 255,
+          "per_arm_liability_nanos": 125918500,
+          "question_id": "0fe2c676",
+          "reader_liability_nanos": 23025500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "10003186",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "10466872",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200193,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 193,
+          "per_arm_liability_nanos": 125912300,
+          "question_id": "11dac74b",
+          "reader_liability_nanos": 23019300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "15e5efa6",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "17d63ad8",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "18f9d965",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "196a68fb",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200323,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 323,
+          "per_arm_liability_nanos": 125925300,
+          "question_id": "19c641bd",
+          "reader_liability_nanos": 23032300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200217,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 217,
+          "per_arm_liability_nanos": 125914700,
+          "question_id": "1a89c3ac",
+          "reader_liability_nanos": 23021700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200235,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 235,
+          "per_arm_liability_nanos": 125916500,
+          "question_id": "1b43f7df",
+          "reader_liability_nanos": 23023500
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1062,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "1d864942",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200257,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 257,
+          "per_arm_liability_nanos": 125918700,
+          "question_id": "1defc293",
+          "reader_liability_nanos": 23025700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200242,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 242,
+          "per_arm_liability_nanos": 125917200,
+          "question_id": "1e011eb5",
+          "reader_liability_nanos": 23024200
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1060,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "1e77eb4b",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200290,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 290,
+          "per_arm_liability_nanos": 125922000,
+          "question_id": "1fec75e5",
+          "reader_liability_nanos": 23029000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "21df0107",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200180,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 180,
+          "per_arm_liability_nanos": 125911000,
+          "question_id": "21f3228c",
+          "reader_liability_nanos": 23018000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200199,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 199,
+          "per_arm_liability_nanos": 125912900,
+          "question_id": "238c3621",
+          "reader_liability_nanos": 23019900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200227,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 227,
+          "per_arm_liability_nanos": 125915700,
+          "question_id": "23aecb38",
+          "reader_liability_nanos": 23022700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200173,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 173,
+          "per_arm_liability_nanos": 125910300,
+          "question_id": "2408b115",
+          "reader_liability_nanos": 23017300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "25853d7f",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200195,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 195,
+          "per_arm_liability_nanos": 125912500,
+          "question_id": "25dc1d7d",
+          "reader_liability_nanos": 23019500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200178,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 178,
+          "per_arm_liability_nanos": 125910800,
+          "question_id": "26a038ce",
+          "reader_liability_nanos": 23017800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200217,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 217,
+          "per_arm_liability_nanos": 125914700,
+          "question_id": "289aea4a",
+          "reader_liability_nanos": 23021700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "2b1a8fc6",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "2c45ecbb",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200258,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 258,
+          "per_arm_liability_nanos": 125918800,
+          "question_id": "2ca2d443",
+          "reader_liability_nanos": 23025800
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1119,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "2cc1b9ca",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200231,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 231,
+          "per_arm_liability_nanos": 125916100,
+          "question_id": "2e67d04f",
+          "reader_liability_nanos": 23023100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200203,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 203,
+          "per_arm_liability_nanos": 125913300,
+          "question_id": "2ee130d2",
+          "reader_liability_nanos": 23020300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200251,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 251,
+          "per_arm_liability_nanos": 125918100,
+          "question_id": "30fab98c",
+          "reader_liability_nanos": 23025100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200309,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 309,
+          "per_arm_liability_nanos": 125923900,
+          "question_id": "31f146ba",
+          "reader_liability_nanos": 23030900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200205,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 205,
+          "per_arm_liability_nanos": 125913500,
+          "question_id": "3269a3c5",
+          "reader_liability_nanos": 23020500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200197,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 197,
+          "per_arm_liability_nanos": 125912700,
+          "question_id": "358c13ce",
+          "reader_liability_nanos": 23019700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200195,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 195,
+          "per_arm_liability_nanos": 125912500,
+          "question_id": "36fe48ef",
+          "reader_liability_nanos": 23019500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200251,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 251,
+          "per_arm_liability_nanos": 125918100,
+          "question_id": "3b8210a1",
+          "reader_liability_nanos": 23025100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200306,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 306,
+          "per_arm_liability_nanos": 125923600,
+          "question_id": "3c0c1b19",
+          "reader_liability_nanos": 23030600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "3f366e15",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200304,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 304,
+          "per_arm_liability_nanos": 125923400,
+          "question_id": "401566e6",
+          "reader_liability_nanos": 23030400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200249,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 249,
+          "per_arm_liability_nanos": 125917900,
+          "question_id": "40758d8b",
+          "reader_liability_nanos": 23024900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200195,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 195,
+          "per_arm_liability_nanos": 125912500,
+          "question_id": "4121647c",
+          "reader_liability_nanos": 23019500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "41bb40df",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "4252cc1c",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200226,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 226,
+          "per_arm_liability_nanos": 125915600,
+          "question_id": "4266cb67",
+          "reader_liability_nanos": 23022600
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1073,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "42d13006",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200230,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 230,
+          "per_arm_liability_nanos": 125916000,
+          "question_id": "4329b535",
+          "reader_liability_nanos": 23023000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200190,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 190,
+          "per_arm_liability_nanos": 125912000,
+          "question_id": "436c58d5",
+          "reader_liability_nanos": 23019000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "44c05e59",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "48ab5c3d",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200225,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 225,
+          "per_arm_liability_nanos": 125915500,
+          "question_id": "499488a6",
+          "reader_liability_nanos": 23022500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200311,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 311,
+          "per_arm_liability_nanos": 125924100,
+          "question_id": "4a4aad22",
+          "reader_liability_nanos": 23031100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200208,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 208,
+          "per_arm_liability_nanos": 125913800,
+          "question_id": "4b0c5275",
+          "reader_liability_nanos": 23020800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "4ca9f7d7",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200322,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 322,
+          "per_arm_liability_nanos": 125925200,
+          "question_id": "4cb090a9",
+          "reader_liability_nanos": 23032200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200207,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 207,
+          "per_arm_liability_nanos": 125913700,
+          "question_id": "4d7dda89",
+          "reader_liability_nanos": 23020700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200315,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 315,
+          "per_arm_liability_nanos": 125924500,
+          "question_id": "4f92aa38",
+          "reader_liability_nanos": 23031500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200200,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 200,
+          "per_arm_liability_nanos": 125913000,
+          "question_id": "51764e11",
+          "reader_liability_nanos": 23020000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "521b124f",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "5387d23d",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200177,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 177,
+          "per_arm_liability_nanos": 125910700,
+          "question_id": "549c0657",
+          "reader_liability_nanos": 23017700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "577ab4ee",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "57817b87",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200410,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 410,
+          "per_arm_liability_nanos": 125934000,
+          "question_id": "597645be",
+          "reader_liability_nanos": 23041000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200193,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 193,
+          "per_arm_liability_nanos": 125912300,
+          "question_id": "597ca614",
+          "reader_liability_nanos": 23019300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200465,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 465,
+          "per_arm_liability_nanos": 125939500,
+          "question_id": "5a85ca0f",
+          "reader_liability_nanos": 23046500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "5c826b28",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200245,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 245,
+          "per_arm_liability_nanos": 125917500,
+          "question_id": "5cb7289b",
+          "reader_liability_nanos": 23024500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "5d6b993a",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200205,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 205,
+          "per_arm_liability_nanos": 125913500,
+          "question_id": "5d6ecdeb",
+          "reader_liability_nanos": 23020500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "5db4899c",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200225,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 225,
+          "per_arm_liability_nanos": 125915500,
+          "question_id": "609acb91",
+          "reader_liability_nanos": 23022500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200195,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 195,
+          "per_arm_liability_nanos": 125912500,
+          "question_id": "60c7ca22",
+          "reader_liability_nanos": 23019500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200204,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 204,
+          "per_arm_liability_nanos": 125913400,
+          "question_id": "60f2b293",
+          "reader_liability_nanos": 23020400
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1052,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "626e401e",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "631667c9",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "63a1b94b",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200194,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 194,
+          "per_arm_liability_nanos": 125912400,
+          "question_id": "6517165d",
+          "reader_liability_nanos": 23019400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200241,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 241,
+          "per_arm_liability_nanos": 125917100,
+          "question_id": "65fbcbdf",
+          "reader_liability_nanos": 23024100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200202,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 202,
+          "per_arm_liability_nanos": 125913200,
+          "question_id": "6652c337",
+          "reader_liability_nanos": 23020200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "66ed4c72",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200253,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 253,
+          "per_arm_liability_nanos": 125918300,
+          "question_id": "674a6972",
+          "reader_liability_nanos": 23025300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "691cd1da",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200215,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 215,
+          "per_arm_liability_nanos": 125914500,
+          "question_id": "6a23675f",
+          "reader_liability_nanos": 23021500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "6a2e74de",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200219,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 219,
+          "per_arm_liability_nanos": 125914900,
+          "question_id": "6a5bbcdb",
+          "reader_liability_nanos": 23021900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200202,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 202,
+          "per_arm_liability_nanos": 125913200,
+          "question_id": "6a73e32b",
+          "reader_liability_nanos": 23020200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200272,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 272,
+          "per_arm_liability_nanos": 125920200,
+          "question_id": "6a7f0d24",
+          "reader_liability_nanos": 23027200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200202,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 202,
+          "per_arm_liability_nanos": 125913200,
+          "question_id": "6cb662d7",
+          "reader_liability_nanos": 23020200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "6d975a08",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200207,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 207,
+          "per_arm_liability_nanos": 125913700,
+          "question_id": "6f9cb5fc",
+          "reader_liability_nanos": 23020700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "6fc8c511",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "6feb33d4",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200180,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 180,
+          "per_arm_liability_nanos": 125911000,
+          "question_id": "70e79657",
+          "reader_liability_nanos": 23018000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200227,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 227,
+          "per_arm_liability_nanos": 125915700,
+          "question_id": "7195f494",
+          "reader_liability_nanos": 23022700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200248,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 248,
+          "per_arm_liability_nanos": 125917800,
+          "question_id": "73297783",
+          "reader_liability_nanos": 23024800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "733699a5",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200197,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 197,
+          "per_arm_liability_nanos": 125912700,
+          "question_id": "7376c10d",
+          "reader_liability_nanos": 23019700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200268,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 268,
+          "per_arm_liability_nanos": 125919800,
+          "question_id": "744dbdad",
+          "reader_liability_nanos": 23026800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200209,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 209,
+          "per_arm_liability_nanos": 125913900,
+          "question_id": "762d34b8",
+          "reader_liability_nanos": 23020900
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1084,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "77258cda",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200180,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 180,
+          "per_arm_liability_nanos": 125911000,
+          "question_id": "77db204d",
+          "reader_liability_nanos": 23018000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "7bfbd5f1",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "7c8efee5",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200183,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 183,
+          "per_arm_liability_nanos": 125911300,
+          "question_id": "7ebb0b95",
+          "reader_liability_nanos": 23018300
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1059,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "81180ae9",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200211,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 211,
+          "per_arm_liability_nanos": 125914100,
+          "question_id": "820d56e2",
+          "reader_liability_nanos": 23021100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200191,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 191,
+          "per_arm_liability_nanos": 125912100,
+          "question_id": "83a77f9d",
+          "reader_liability_nanos": 23019100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "84238c8f",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "866a0f2e",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200168,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 168,
+          "per_arm_liability_nanos": 125909800,
+          "question_id": "86f00073",
+          "reader_liability_nanos": 23016800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "86fa86eb",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200267,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 267,
+          "per_arm_liability_nanos": 125919700,
+          "question_id": "8955b988",
+          "reader_liability_nanos": 23026700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200209,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 209,
+          "per_arm_liability_nanos": 125913900,
+          "question_id": "8957a127",
+          "reader_liability_nanos": 23020900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "896017e0",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "89a20f48",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200221,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 221,
+          "per_arm_liability_nanos": 125915100,
+          "question_id": "8a8f6aac",
+          "reader_liability_nanos": 23022100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "8c55d6bc",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "8cb3280c",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "8da5c407",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200191,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 191,
+          "per_arm_liability_nanos": 125912100,
+          "question_id": "8f70bc0e",
+          "reader_liability_nanos": 23019100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200230,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 230,
+          "per_arm_liability_nanos": 125916000,
+          "question_id": "90dc7e66",
+          "reader_liability_nanos": 23023000
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1073,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "910135bb",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1188,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "914ab1d4",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200307,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 307,
+          "per_arm_liability_nanos": 125923700,
+          "question_id": "91d0775e",
+          "reader_liability_nanos": 23030700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "922a0c56",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200237,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 237,
+          "per_arm_liability_nanos": 125916700,
+          "question_id": "92642fe7",
+          "reader_liability_nanos": 23023700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200209,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 209,
+          "per_arm_liability_nanos": 125913900,
+          "question_id": "96497069",
+          "reader_liability_nanos": 23020900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200208,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 208,
+          "per_arm_liability_nanos": 125913800,
+          "question_id": "97d5309a",
+          "reader_liability_nanos": 23020800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "97e1d977",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200181,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 181,
+          "per_arm_liability_nanos": 125911100,
+          "question_id": "98b62f3d",
+          "reader_liability_nanos": 23018100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "98e6d369",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "99ae54d1",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200266,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 266,
+          "per_arm_liability_nanos": 125919600,
+          "question_id": "99b6e22f",
+          "reader_liability_nanos": 23026600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200305,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 305,
+          "per_arm_liability_nanos": 125923500,
+          "question_id": "99fa7c96",
+          "reader_liability_nanos": 23030500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200411,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 411,
+          "per_arm_liability_nanos": 125934100,
+          "question_id": "9cae869c",
+          "reader_liability_nanos": 23041100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200310,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 310,
+          "per_arm_liability_nanos": 125924000,
+          "question_id": "9ed5a14d",
+          "reader_liability_nanos": 23031000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200217,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 217,
+          "per_arm_liability_nanos": 125914700,
+          "question_id": "a12b7094",
+          "reader_liability_nanos": 23021700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200240,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 240,
+          "per_arm_liability_nanos": 125917000,
+          "question_id": "a2673690",
+          "reader_liability_nanos": 23024000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "a2a71197",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200216,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 216,
+          "per_arm_liability_nanos": 125914600,
+          "question_id": "a363341d",
+          "reader_liability_nanos": 23021600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200218,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 218,
+          "per_arm_liability_nanos": 125914800,
+          "question_id": "a42071db",
+          "reader_liability_nanos": 23021800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200215,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 215,
+          "per_arm_liability_nanos": 125914500,
+          "question_id": "a59d50f7",
+          "reader_liability_nanos": 23021500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "a62de1f1",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "a7da9ab3",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200192,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 192,
+          "per_arm_liability_nanos": 125912200,
+          "question_id": "a92dff92",
+          "reader_liability_nanos": 23019200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "aa8d21f5",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200190,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 190,
+          "per_arm_liability_nanos": 125912000,
+          "question_id": "abadf765",
+          "reader_liability_nanos": 23019000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "b05cf470",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200197,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 197,
+          "per_arm_liability_nanos": 125912700,
+          "question_id": "b2595523",
+          "reader_liability_nanos": 23019700
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1077,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "b339209c",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200248,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 248,
+          "per_arm_liability_nanos": 125917800,
+          "question_id": "b4dcf650",
+          "reader_liability_nanos": 23024800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200213,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 213,
+          "per_arm_liability_nanos": 125914300,
+          "question_id": "b5a25676",
+          "reader_liability_nanos": 23021300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200277,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 277,
+          "per_arm_liability_nanos": 125920700,
+          "question_id": "b828a6b2",
+          "reader_liability_nanos": 23027700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "b8d56b89",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "ba047686",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "bb7ebd5c",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200202,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 202,
+          "per_arm_liability_nanos": 125913200,
+          "question_id": "bdf0e84b",
+          "reader_liability_nanos": 23020200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200230,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 230,
+          "per_arm_liability_nanos": 125916000,
+          "question_id": "be541aa6",
+          "reader_liability_nanos": 23023000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200209,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 209,
+          "per_arm_liability_nanos": 125913900,
+          "question_id": "c216174c",
+          "reader_liability_nanos": 23020900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200211,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 211,
+          "per_arm_liability_nanos": 125914100,
+          "question_id": "c36b0d68",
+          "reader_liability_nanos": 23021100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200238,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 238,
+          "per_arm_liability_nanos": 125916800,
+          "question_id": "c39f6edf",
+          "reader_liability_nanos": 23023800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200268,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 268,
+          "per_arm_liability_nanos": 125919800,
+          "question_id": "c56e69ca",
+          "reader_liability_nanos": 23026800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "c5dfa558",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "c6124506",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200247,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 247,
+          "per_arm_liability_nanos": 125917700,
+          "question_id": "c738b934",
+          "reader_liability_nanos": 23024700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200285,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 285,
+          "per_arm_liability_nanos": 125921500,
+          "question_id": "c7e367e2",
+          "reader_liability_nanos": 23028500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200209,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 209,
+          "per_arm_liability_nanos": 125913900,
+          "question_id": "c843c4ec",
+          "reader_liability_nanos": 23020900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "cdb47c5d",
+          "reader_liability_nanos": 23021200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200179,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 179,
+          "per_arm_liability_nanos": 125910900,
+          "question_id": "cdc46516",
+          "reader_liability_nanos": 23017900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200185,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 185,
+          "per_arm_liability_nanos": 125911500,
+          "question_id": "d16a18fe",
+          "reader_liability_nanos": 23018500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200204,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 204,
+          "per_arm_liability_nanos": 125913400,
+          "question_id": "d1d8cf9f",
+          "reader_liability_nanos": 23020400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200178,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 178,
+          "per_arm_liability_nanos": 125910800,
+          "question_id": "d3300354",
+          "reader_liability_nanos": 23017800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "d47ca5c8",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "d5b9fda4",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200187,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 187,
+          "per_arm_liability_nanos": 125911700,
+          "question_id": "d6da3938",
+          "reader_liability_nanos": 23018700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200204,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 204,
+          "per_arm_liability_nanos": 125913400,
+          "question_id": "d7c94023",
+          "reader_liability_nanos": 23020400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200210,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 210,
+          "per_arm_liability_nanos": 125914000,
+          "question_id": "d886b018",
+          "reader_liability_nanos": 23021000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200291,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 291,
+          "per_arm_liability_nanos": 125922100,
+          "question_id": "dae9f7e9",
+          "reader_liability_nanos": 23029100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200286,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 286,
+          "per_arm_liability_nanos": 125921600,
+          "question_id": "dea446d0",
+          "reader_liability_nanos": 23028600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200224,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 224,
+          "per_arm_liability_nanos": 125915400,
+          "question_id": "deb008ed",
+          "reader_liability_nanos": 23022400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "e3a1d7f3",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "e4d36b58",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200175,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 175,
+          "per_arm_liability_nanos": 125910500,
+          "question_id": "e532c01e",
+          "reader_liability_nanos": 23017500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200216,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 216,
+          "per_arm_liability_nanos": 125914600,
+          "question_id": "e71f7c92",
+          "reader_liability_nanos": 23021600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200193,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 193,
+          "per_arm_liability_nanos": 125912300,
+          "question_id": "e77d1287",
+          "reader_liability_nanos": 23019300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "e83245c5",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200199,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 199,
+          "per_arm_liability_nanos": 125912900,
+          "question_id": "e9bb843a",
+          "reader_liability_nanos": 23019900
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1095,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "ea361b20",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200191,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 191,
+          "per_arm_liability_nanos": 125912100,
+          "question_id": "eab07e81",
+          "reader_liability_nanos": 23019100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200196,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 196,
+          "per_arm_liability_nanos": 125912600,
+          "question_id": "eaba5c44",
+          "reader_liability_nanos": 23019600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200206,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 206,
+          "per_arm_liability_nanos": 125913600,
+          "question_id": "ecca89b2",
+          "reader_liability_nanos": 23020600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200285,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 285,
+          "per_arm_liability_nanos": 125921500,
+          "question_id": "ecd9dda3",
+          "reader_liability_nanos": 23028500
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "edb69441",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200266,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 266,
+          "per_arm_liability_nanos": 125919600,
+          "question_id": "edc22f24",
+          "reader_liability_nanos": 23026600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200182,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 182,
+          "per_arm_liability_nanos": 125911200,
+          "question_id": "edea0219",
+          "reader_liability_nanos": 23018200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200222,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 222,
+          "per_arm_liability_nanos": 125915200,
+          "question_id": "ee68431d",
+          "reader_liability_nanos": 23022200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200184,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 184,
+          "per_arm_liability_nanos": 125911400,
+          "question_id": "ee75b921",
+          "reader_liability_nanos": 23018400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200186,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 186,
+          "per_arm_liability_nanos": 125911600,
+          "question_id": "eec85674",
+          "reader_liability_nanos": 23018600
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "eef545a0",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200190,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 190,
+          "per_arm_liability_nanos": 125912000,
+          "question_id": "eff00409",
+          "reader_liability_nanos": 23019000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200213,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 213,
+          "per_arm_liability_nanos": 125914300,
+          "question_id": "f078f429",
+          "reader_liability_nanos": 23021300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200304,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 304,
+          "per_arm_liability_nanos": 125923400,
+          "question_id": "f13eb38d",
+          "reader_liability_nanos": 23030400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200302,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 302,
+          "per_arm_liability_nanos": 125923200,
+          "question_id": "f23807ed",
+          "reader_liability_nanos": 23030200
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1138,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "f2b221fd",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "f43926d9",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "f61a096f",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200202,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 202,
+          "per_arm_liability_nanos": 125913200,
+          "question_id": "f90f2255",
+          "reader_liability_nanos": 23020200
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200201,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 201,
+          "per_arm_liability_nanos": 125913100,
+          "question_id": "f928c075",
+          "reader_liability_nanos": 23020100
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200193,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 193,
+          "per_arm_liability_nanos": 125912300,
+          "question_id": "f93031d2",
+          "reader_liability_nanos": 23019300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200188,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 188,
+          "per_arm_liability_nanos": 125911800,
+          "question_id": "f9f9cd61",
+          "reader_liability_nanos": 23018800
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200194,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 194,
+          "per_arm_liability_nanos": 125912400,
+          "question_id": "fc0dbc35",
+          "reader_liability_nanos": 23019400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200217,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 217,
+          "per_arm_liability_nanos": 125914700,
+          "question_id": "fc7d35d5",
+          "reader_liability_nanos": 23021700
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200189,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 189,
+          "per_arm_liability_nanos": 125911900,
+          "question_id": "fd006924",
+          "reader_liability_nanos": 23018900
+        },
+        {
+          "billing_authority": "provider_prompt_ceiling",
+          "has_image": true,
+          "input_reservation_units": 262144,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 1065,
+          "per_arm_liability_nanos": 132107400,
+          "question_id": "fdeddf71",
+          "reader_liability_nanos": 29214400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200253,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 253,
+          "per_arm_liability_nanos": 125918300,
+          "question_id": "fe18a443",
+          "reader_liability_nanos": 23025300
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200204,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 204,
+          "per_arm_liability_nanos": 125913400,
+          "question_id": "fec652a9",
+          "reader_liability_nanos": 23020400
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200200,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 200,
+          "per_arm_liability_nanos": 125913000,
+          "question_id": "ff8f3a22",
+          "reader_liability_nanos": 23020000
+        },
+        {
+          "billing_authority": "pinned_local_text_processor",
+          "has_image": false,
+          "input_reservation_units": 200212,
+          "judge_liability_nanos": 102893000,
+          "local_processor_input_tokens": 212,
+          "per_arm_liability_nanos": 125914200,
+          "question_id": "ffa4e57e",
+          "reader_liability_nanos": 23021200
+        }
+      ],
+      "schema_version": 1,
+      "text_rows": 422
+    },
     "request_shapes": {
       "judge_maximum_fixed_serialized_bytes": 2412,
       "llm_judged_rows": 156,
       "maximum_question_record_bytes": 2174,
       "question_rows": 451,
       "reader_chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
-      "reader_maximum_nonmemory_chat_tokens": 527,
+      "reader_image_processor_source_sha256": "f19497685281402691f0049a0ab5be8085f92fb5c37adfcc680e4ccd17863a77",
+      "reader_local_processor_maximum_input_tokens": 1188,
       "reader_maximum_nonmemory_serialized_bytes": 2886,
-      "reader_shape_fixture_sha256": "f30b9d1d04ceb8294119ccff280abeb66e27c23faab64b38269ad9dcb9a5c5ce",
+      "reader_preprocessor_config_sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+      "reader_processor_source_sha256": "add767ca5e9511e1db0a69091d51b1d0b2078c874d59ee3a58c4748b5d9014a4",
+      "reader_processor_toolchain_sha256": "c954a627ff1823aa343f71b9f9da68bafd4c56faa313ff82f6fdeec8ba0ca104",
+      "reader_row_token_inventory_sha256": "6acb3cc71e3358abacabc481608eb4d0620430d1fe108790e79cc6d2952260b5",
+      "reader_shape_fixture_sha256": "470521a96336a4c5ee49d57ee488180c45f2700c91e1f53d3cdc8a20508b539f",
+      "reader_shape_image_inventory": [
+        {
+          "question_id": "18b91103",
+          "question_image": {
+            "bytes": 73662,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/18b91103.png",
+            "sha256": "bbea42dba9cd03527a8a8ddba81f26040a1022866ec93de8f774c55010b6413a",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "285db8ec",
+          "question_image": {
+            "bytes": 83774,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/285db8ec.png",
+            "sha256": "cc26abf45342265e012caf3f27040d137f5c459766dfeda29a8745688a79474c",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "2f6a21cd",
+          "question_image": {
+            "bytes": 156140,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/2f6a21cd.png",
+            "sha256": "a77eaead88f1224bbb6f5c0ad6cd85b65ed9d608def25b1d2e93caf43cc80a25",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "302bf60e",
+          "question_image": {
+            "bytes": 91455,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/302bf60e.png",
+            "sha256": "3676a0004d85cfd55ceebf250af4ad1d178af440373779fd18b4aa86f6601e1e",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "48a52262",
+          "question_image": {
+            "bytes": 173084,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/48a52262.png",
+            "sha256": "192b92f176772ceb627dbff6fb99621b12f560e5ed470ad06d8d524dddb1cb25",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "4964afed",
+          "question_image": {
+            "bytes": 65402,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/4964afed.png",
+            "sha256": "4c34dd2abc22e9afa87d6bbcf4340ffbce7eea4ec710713056c145b08021ca39",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "50d92f55",
+          "question_image": {
+            "bytes": 63379,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/50d92f55.png",
+            "sha256": "d66cad5875db8b052206fa0c75808d97a7c1aa25bc67e04b84481fa180a3de81",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "7586cf7c",
+          "question_image": {
+            "bytes": 47480,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/7586cf7c.png",
+            "sha256": "aff0665a68d29a2414d4a12ab21e1905de9a55087f2384f08fc9cf5bae587d47",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "8e21c6e5",
+          "question_image": {
+            "bytes": 153072,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/8e21c6e5.png",
+            "sha256": "abaec4759d3b7d463419012bdec1c91daed23268fb9cd0fa77435380b7c69a86",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "af2ebaed",
+          "question_image": {
+            "bytes": 83672,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/af2ebaed.png",
+            "sha256": "43b4ef22be21d6869aa3681637ada80f0d8d0ffd6e635d0e58957c099e5f28e9",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "c35bfeed",
+          "question_image": {
+            "bytes": 69594,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/c35bfeed.png",
+            "sha256": "1485db143d25d413d903db47c1df0d8262594ee7f6914b77bd55257108ffe6eb",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "ce9aa351",
+          "question_image": {
+            "bytes": 85773,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/ce9aa351.png",
+            "sha256": "5c5dfb81edb824964b386e53edd33edcc96dc85aa75e9857e52b63aece1dbd65",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "fa504f5e",
+          "question_image": {
+            "bytes": 158287,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/fa504f5e.png",
+            "sha256": "551d6faa51fd82d3ba1529a6cc3944742b9f3318dded3275ba3431eb7c1ab0d8",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "fb56a896",
+          "question_image": {
+            "bytes": 98990,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/fb56a896.png",
+            "sha256": "5934817de4e512d38c0421f10c3e68c4d84cad3284e4a733dcbce365971d070c",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "0574c69a",
+          "question_image": {
+            "bytes": 95229,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/0574c69a.png",
+            "sha256": "62f19636923def38517feb066afb327338012215eeecde2f63b358aaede11c45",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "07a0145f",
+          "question_image": {
+            "bytes": 109349,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/07a0145f.png",
+            "sha256": "029d6dff731620358a2b786804fa7d632b5e9294deeb01c7205898c972556d63",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "1d864942",
+          "question_image": {
+            "bytes": 60185,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/1d864942.png",
+            "sha256": "cf1f053f4f0702daefef59a861ac1e771910c8354e059d825ac566103c63f1b4",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "1e77eb4b",
+          "question_image": {
+            "bytes": 75409,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/1e77eb4b.png",
+            "sha256": "196b973d7cac067e76cf19f8ddff1cd7602739d4940e974d9154704f5d63eb3d",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "2cc1b9ca",
+          "question_image": {
+            "bytes": 87001,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/2cc1b9ca.png",
+            "sha256": "e967d2efa9e9a0b2eca3129da4a9e5293138279165728c6d6935b5a5e3596b6c",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "42d13006",
+          "question_image": {
+            "bytes": 441065,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/42d13006.png",
+            "sha256": "e005d86ecc6b595e593b5a88fb89172812d1d5c2d4de932f806ce0b5e3b5d569",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "626e401e",
+          "question_image": {
+            "bytes": 140570,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/626e401e.png",
+            "sha256": "fda1f973a575430256888c2177a933eb049f65a4645746699996b1ec9d511d3f",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "77258cda",
+          "question_image": {
+            "bytes": 52022,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/77258cda.png",
+            "sha256": "a48baf68f1fac917314904b1f7e129d09ea192ca03c659eebe0d75e2774e84c3",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "81180ae9",
+          "question_image": {
+            "bytes": 73239,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/81180ae9.png",
+            "sha256": "eb088d8d7afebb9208a0c0cf9868f183a3d9b16b0c6674a9164b31315edd8a70",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "910135bb",
+          "question_image": {
+            "bytes": 80814,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/910135bb.png",
+            "sha256": "fb89c26e0fb7ba7f389ffcd79e541a9b940da14a575bfdeecca919f9635a4a0a",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "914ab1d4",
+          "question_image": {
+            "bytes": 31032,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/914ab1d4.png",
+            "sha256": "210883019e0ccb5f3c6cb7de6ef82588c097a05a2f1580afc1f6c21a5b530e75",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "b339209c",
+          "question_image": {
+            "bytes": 47369,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/b339209c.png",
+            "sha256": "9767f63510c5175cabcf89a6af498284e318fb990c5c8c24ec7d97572420998e",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "ea361b20",
+          "question_image": {
+            "bytes": 78087,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/ea361b20.png",
+            "sha256": "2eb74d20dcd6fe0b253a9c405eef2a079f35b74ca3e68f8626dbae64f0153553",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "f2b221fd",
+          "question_image": {
+            "bytes": 283374,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/f2b221fd.png",
+            "sha256": "be85e8d2b5352961620ce63d20a96ab71d495b9a9da73c04a60e6bca644810f4",
+            "width": 1280
+          }
+        },
+        {
+          "question_id": "fdeddf71",
+          "question_image": {
+            "bytes": 53999,
+            "height": 720,
+            "mime_type": "image/png",
+            "path": "question_screenshots/fdeddf71.png",
+            "sha256": "e3b4fb256bea33cad6049509a436d93ef4e16eecb58deebfbc275f53b243b154",
+            "width": 1280
+          }
+        }
+      ],
+      "reader_shape_image_inventory_sha256": "02179d546fa700ca6c097e1ac84f5331c45b735429dd7efcf4621002c81d3fb0",
+      "reader_shape_image_manifest_sha256": "b17a18daa52873f915808502217c3c5fab39d20638544f986401155c9e8d67a6",
       "reader_shape_image_rows": 29,
       "reader_shape_question_ids_sha256": "28de62f7ce1ce26c59fcec26958a52e00ba084a4aaa83bdb07007c740e50a96d",
       "reader_shape_question_source_sha256": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7",
@@ -97,13 +4940,13 @@
     }
   },
   "manifest_path": "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json",
-  "manifest_sha256": "195881dbf17e6192eb47b64a76c65b7784ad390bf182df606041e2cd4544026e",
+  "manifest_sha256": "ae0c238f1793b33bd63e73645e4a751926969c0186ae7b5ee477639220a68970",
   "paid_models_run": false,
   "schema_version": 1,
   "spend_nanos": 0,
   "terms": {
     "C": 65220602500,
-    "R": 125945700,
+    "R_sum": 56966572500,
     "S": 14310400
   }
 }

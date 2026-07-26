@@ -4,9 +4,12 @@ import json
 import importlib.util
 import os
 from fractions import Fraction
+import hashlib
 from pathlib import Path
+import struct
 import subprocess
 import sys
+import zlib
 
 import pytest
 
@@ -61,7 +64,7 @@ def test_census_refuses_authorization_without_exact_bounds(tmp_path: Path) -> No
     census = json.loads(output.read_text(encoding="utf-8"))
     assert census["benchmark"]["memory_context_max_tokens"] == 200000
     assert census["admission"]["formula"] == (
-        "4258002400+C+451*(2*R+S)+10000000000<=200000000000"
+        "4258002400+C+2*R_sum+451*S+10000000000<=200000000000"
     )
     assert census["admission"]["authorized"] is False
 
@@ -103,109 +106,228 @@ def test_admitted_profile_pins_qwen_deepinfra_native_2048_and_aggregate_cap() ->
     )
 
 
-def test_reader_judge_liability_is_recomputed_from_request_shape_primitives() -> None:
+def test_reader_liability_inventory_stratifies_text_and_multimodal_billing() -> None:
     runner = _load_runner()
-    config = {
-        "reader": {
-            "model": "reader",
-            "provider": "fixed-provider",
-            "pricing_source": "https://example.invalid/reader",
-            "pricing_sha256": "a" * 64,
-            "memory_context_max_tokens": 200_000,
-            "maximum_nonmemory_chat_tokens": 1_234,
-            "maximum_input_reservation_units": 201_234,
-            "maximum_output_tokens": 20_000,
-            "maximum_attempts": 1,
-            "input_price_nanos_per_million": 100_000_000,
-            "output_price_nanos_per_million": 150_000_000,
-        },
-        "judge": {
-            "model": "judge",
-            "provider": "fixed-provider",
-            "pricing_source": "https://example.invalid/judge",
-            "pricing_sha256": "b" * 64,
-            "maximum_fixed_serialized_bytes": 2_345,
-            "reader_response_insertions": 2,
-            "reader_maximum_output_tokens": 20_000,
-            "maximum_input_reservation_units": 42_345,
-            "maximum_output_tokens": 4_096,
-            "maximum_attempts": 1,
-            "input_price_nanos_per_million": 1_750_000_000,
-            "output_price_nanos_per_million": 14_000_000_000,
-        },
+    reader = {
+        "model": "reader",
+        "provider": "fixed-provider",
+        "pricing_source": "https://example.invalid/reader",
+        "pricing_sha256": "a" * 64,
+        "memory_context_max_tokens": 200_000,
+        "multimodal_provider_prompt_ceiling_tokens": 262_144,
+        "provider_prompt_ceiling_source": "https://example.invalid/reader",
+        "provider_prompt_ceiling_source_sha256": "c" * 64,
+        "maximum_output_tokens": 20_000,
+        "maximum_attempts": 1,
+        "input_price_nanos_per_million": 100_000_000,
+        "output_price_nanos_per_million": 150_000_000,
     }
+    judge = {
+        "model": "judge",
+        "provider": "fixed-provider",
+        "pricing_source": "https://example.invalid/judge",
+        "pricing_sha256": "b" * 64,
+        "maximum_fixed_serialized_bytes": 2_345,
+        "reader_response_insertions": 2,
+        "reader_maximum_output_tokens": 20_000,
+        "maximum_input_reservation_units": 42_345,
+        "maximum_output_tokens": 4_096,
+        "maximum_attempts": 1,
+        "input_price_nanos_per_million": 1_750_000_000,
+        "output_price_nanos_per_million": 14_000_000_000,
+    }
+    processor_rows = [
+        {"question_id": "image", "has_image": True, "local_processor_input_tokens": 1_188},
+        {"question_id": "text", "has_image": False, "local_processor_input_tokens": 527},
+    ]
 
-    assert runner._reader_judge_liability(config) == 154_571_150
-    config["judge"]["maximum_input_reservation_units"] += 1
-    with pytest.raises(RuntimeError, match="judge request maximum drift"):
-        runner._reader_judge_liability(config)
+    inventory = runner._reader_liability_inventory(processor_rows, reader, judge)
+    by_id = {row["question_id"]: row for row in inventory["rows"]}
+    assert by_id["image"]["input_reservation_units"] == 262_144
+    assert by_id["text"]["input_reservation_units"] == 200_527
+    assert by_id["image"]["per_arm_liability_nanos"] == 160_662_150
+    assert by_id["text"]["per_arm_liability_nanos"] == 154_500_450
+    assert inventory["reader_arm_liability_nanos"] == 315_162_600
+    assert inventory["image_rows"] == 1
+    assert inventory["text_rows"] == 1
+    changed_local_diagnostic = [dict(row) for row in processor_rows]
+    changed_local_diagnostic[0]["local_processor_input_tokens"] = 99_999
+    changed = runner._reader_liability_inventory(
+        changed_local_diagnostic, reader, judge
+    )
+    assert changed["rows"][0]["input_reservation_units"] == 262_144
+
+    reader["multimodal_provider_prompt_ceiling_tokens"] = 262_143
+    with pytest.raises(RuntimeError, match="provider prompt ceiling drift"):
+        runner._reader_liability_inventory(processor_rows, reader, judge)
 
 
-def test_reader_shape_proof_binds_tokenizer_template_and_oracle_free_fixture() -> None:
+def test_reader_processor_proof_binds_images_processor_and_oracle_free_fixture() -> None:
     runner = _load_runner()
     proof = {
         "reader_shape_fixture_sha256": "a" * 64,
         "reader_shape_rows": 451,
+        "reader_shape_image_inventory_sha256": "d" * 64,
+        "reader_shape_image_manifest_sha256": "e" * 64,
         "reader_tokenizer_sha256": "b" * 64,
         "reader_chat_template_sha256": "c" * 64,
-        "reader_maximum_nonmemory_chat_tokens": 617,
+        "reader_preprocessor_config_sha256": "f" * 64,
+        "reader_processor_source_sha256": "1" * 64,
+        "reader_image_processor_source_sha256": "2" * 64,
+        "reader_processor_toolchain_sha256": "3" * 64,
+        "reader_local_processor_maximum_input_tokens": 1_188,
+        "reader_row_token_inventory_sha256": "",
+        "rows": [
+            {
+                "question_id": f"q-{index:03}",
+                "has_image": index < 29,
+                "local_processor_input_tokens": 1_188 if index < 29 else 527,
+            }
+            for index in range(451)
+        ],
     }
+    proof["reader_row_token_inventory_sha256"] = runner.sha256_json(proof["rows"])
     expected = {
         "fixture_sha256": "a" * 64,
         "rows": 451,
+        "image_inventory_sha256": "d" * 64,
+        "image_manifest_sha256": "e" * 64,
         "tokenizer_sha256": "b" * 64,
         "chat_template_sha256": "c" * 64,
+        "preprocessor_config_sha256": "f" * 64,
+        "processor_source_sha256": "1" * 64,
+        "image_processor_source_sha256": "2" * 64,
+        "processor_toolchain_sha256": "3" * 64,
     }
 
-    assert runner._validated_reader_token_bound(proof, expected) == 617
+    assert runner._validated_reader_processor_proof(proof, expected) == proof["rows"]
     for field in (
         "reader_shape_fixture_sha256",
+        "reader_shape_image_inventory_sha256",
+        "reader_shape_image_manifest_sha256",
         "reader_tokenizer_sha256",
         "reader_chat_template_sha256",
+        "reader_preprocessor_config_sha256",
+        "reader_processor_source_sha256",
+        "reader_image_processor_source_sha256",
+        "reader_processor_toolchain_sha256",
     ):
         tampered = dict(proof)
-        tampered[field] = "d" * 64
-        with pytest.raises(RuntimeError, match="reader tokenization proof drift"):
-            runner._validated_reader_token_bound(tampered, expected)
+        tampered[field] = "9" * 64
+        with pytest.raises(RuntimeError, match="reader processor proof drift"):
+            runner._validated_reader_processor_proof(tampered, expected)
+
+
+def _png(width: int, height: int) -> bytes:
+    signature = b"\x89PNG\r\n\x1a\n"
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFF_FFFF)
+        )
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    scanlines = b"".join(b"\x00" + b"\x00\x00\x00" * width for _ in range(height))
+    return signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b"")
+
+
+def _write_reader_source(root: Path, *, image_dimensions: tuple[int, int] = (2, 1)) -> None:
+    upstream = root / "upstream/evaluation"
+    upstream.mkdir(parents=True, exist_ok=True)
+    (upstream / "harness.py").write_text(
+        "DOMAIN_SYSTEM_PROMPTS = {'web': 'system prompt'}\n", encoding="utf-8"
+    )
+    screenshot_root = root / "question_screenshots"
+    screenshot_root.mkdir(exist_ok=True)
+    rows = []
+    checksums = []
+    for index in range(451):
+        relative = None
+        if index < 29:
+            relative = f"question_screenshots/question-{index:03}.png"
+            payload = _png(*image_dimensions)
+            (root / relative).write_bytes(payload)
+            checksums.append(f"{hashlib.sha256(payload).hexdigest()}  {relative}\n")
+        rows.append(
+            {
+                "id": f"question-{index:03}",
+                "domain": "web",
+                "question": f"Question {index}?",
+                "image": relative,
+                "answer": f"SECRET-{index}",
+                "eval_function": "oracle",
+            }
+        )
+    (root / "questions.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    (root / "checksums.sha256").write_text("".join(checksums), encoding="utf-8")
 
 
 def test_reader_shape_fixture_excludes_oracles_and_hashes_every_question(
     tmp_path: Path,
 ) -> None:
     runner = _load_runner()
-    upstream = tmp_path / "upstream/evaluation"
-    upstream.mkdir(parents=True)
-    (upstream / "harness.py").write_text(
-        "DOMAIN_SYSTEM_PROMPTS = {'web': 'system prompt'}\n", encoding="utf-8"
-    )
+    _write_reader_source(tmp_path)
     questions = tmp_path / "questions.jsonl"
-    rows = [
-        {
-            "id": f"question-{index:03}",
-            "domain": "web",
-            "question": f"Question {index}?",
-            "image": None,
-            "answer": f"SECRET-{index}",
-            "eval_function": "oracle",
-        }
-        for index in range(451)
-    ]
-    questions.write_text(
-        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
-    )
     fixture = tmp_path / "reader-shapes.jsonl"
 
     first = runner._materialize_reader_shapes(tmp_path, fixture)
     fixture_text = fixture.read_text(encoding="utf-8")
     assert first["rows"] == 451
+    assert first["image_rows"] == 29
+    assert first["image_manifest_sha256"] == runner._sha256_file(
+        tmp_path / "checksums.sha256"
+    )
+    first_row = json.loads(fixture_text.splitlines()[0])
+    assert first_row["question_image"] == {
+        "bytes": len(_png(2, 1)),
+        "height": 1,
+        "mime_type": "image/png",
+        "path": "question_screenshots/question-000.png",
+        "sha256": hashlib.sha256(_png(2, 1)).hexdigest(),
+        "width": 2,
+    }
     assert "SECRET" not in fixture_text
     assert "eval_function" not in fixture_text
+    rows = [json.loads(line) for line in questions.read_text(encoding="utf-8").splitlines()]
     rows[0]["question"] = "A changed question?"
     questions.write_text(
         "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
     )
     second = runner._materialize_reader_shapes(tmp_path, fixture)
     assert second["fixture_sha256"] != first["fixture_sha256"]
+
+
+def test_reader_shape_fixture_rejects_missing_or_tampered_screenshot(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    _write_reader_source(tmp_path)
+    fixture = tmp_path / "reader-shapes.jsonl"
+    image = tmp_path / "question_screenshots/question-000.png"
+    image.unlink()
+    with pytest.raises(RuntimeError, match="question screenshot is missing"):
+        runner._materialize_reader_shapes(tmp_path, fixture)
+    image.write_bytes(_png(3, 1))
+    with pytest.raises(RuntimeError, match="question screenshot checksum drift"):
+        runner._materialize_reader_shapes(tmp_path, fixture)
+
+
+def test_reader_shape_dimension_change_invalidates_bound_inventory(tmp_path: Path) -> None:
+    runner = _load_runner()
+    _write_reader_source(tmp_path, image_dimensions=(2, 1))
+    fixture = tmp_path / "reader-shapes.jsonl"
+    first = runner._materialize_reader_shapes(tmp_path, fixture)
+    _write_reader_source(tmp_path, image_dimensions=(3, 1))
+    second = runner._materialize_reader_shapes(tmp_path, fixture)
+    assert second["image_inventory_sha256"] != first["image_inventory_sha256"]
+    assert json.loads(fixture.read_text(encoding="utf-8").splitlines()[0])[
+        "question_image"
+    ]["width"] == 3
 
 
 def test_deep_liability_is_derived_from_full_runtime_limits_and_hard_stop() -> None:
@@ -271,12 +393,41 @@ def _synthetic_parent_census(runner):
     return {**core, "census_sha256": runner.sha256_json(core)}
 
 
+def _synthetic_reader_inventory(runner, per_arm_nanos: int = 10):
+    rows = [
+        {
+            "question_id": f"q-{index:03}",
+            "has_image": index < 29,
+            "local_processor_input_tokens": 1,
+            "billing_authority": (
+                "provider_prompt_ceiling"
+                if index < 29
+                else "pinned_local_text_processor"
+            ),
+            "input_reservation_units": 262_144 if index < 29 else 200_001,
+            "reader_liability_nanos": per_arm_nanos,
+            "judge_liability_nanos": 0,
+            "per_arm_liability_nanos": per_arm_nanos,
+        }
+        for index in range(451)
+    ]
+    return {
+        "schema_version": 1,
+        "rows": rows,
+        "row_count": 451,
+        "text_rows": 422,
+        "image_rows": 29,
+        "reader_arm_liability_nanos": 451 * per_arm_nanos,
+        "inventory_sha256": runner.sha256_json(rows),
+    }
+
+
 def test_recost_decomposes_first_attempts_and_preserves_retry_and_reserve_pools() -> None:
     runner = _load_runner()
     parent = _synthetic_parent_census(runner)
     result = runner.recost_census_values(
         parent,
-        r_term=125_945_400,
+        reader_inventory=_synthetic_reader_inventory(runner, 125_945_400),
         s_term=14_310_400,
         retry_pool_nanos=10_000_000_000,
         manifest_path="current.json",
@@ -296,7 +447,7 @@ def test_recost_decomposes_first_attempts_and_preserves_retry_and_reserve_pools(
     with pytest.raises(RuntimeError, match="parent census sha256 mismatch"):
         runner.recost_census_values(
             parent,
-            r_term=1,
+            reader_inventory=_synthetic_reader_inventory(runner, 1),
             s_term=1,
             retry_pool_nanos=1,
             manifest_path="current.json",
@@ -393,7 +544,7 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
     runner = _load_runner()
     census = runner.recost_census_values(
         _synthetic_parent_census(runner),
-        r_term=1,
+        reader_inventory=_synthetic_reader_inventory(runner, 1),
         s_term=1,
         retry_pool_nanos=100,
         manifest_path="current.json",
