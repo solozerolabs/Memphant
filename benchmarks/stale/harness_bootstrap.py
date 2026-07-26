@@ -22,6 +22,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--official-repo", type=Path, required=True)
     parser.add_argument("--attempt-ledger", type=Path, required=True)
+    parser.add_argument("--max-output-tokens", type=int, required=True)
     known, remaining = parser.parse_known_args()
     entrypoint = (
         known.official_repo.resolve()
@@ -40,6 +41,7 @@ def main() -> None:
         known.attempt_ledger.resolve(),
         context={"benchmark": "STALE", "arm": "judge"},
         generation_lookup=lookup,
+        max_output_tokens=known.max_output_tokens,
     )
     sys.argv = [str(entrypoint), *remaining]
     runpy.run_path(str(entrypoint), run_name="__main__")

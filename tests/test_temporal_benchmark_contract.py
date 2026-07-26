@@ -175,6 +175,42 @@ def test_attempt_journal_rejects_a_second_process_before_provider_work(
         child.wait(timeout=5)
 
 
+def test_shared_meter_hard_caps_native_scorer_output(tmp_path: Path) -> None:
+    attempts = load_attempts()
+    captured = []
+
+    class Completions:
+        def create(self, **kwargs):
+            captured.append(kwargs)
+            payload = {
+                "id": "judge-1",
+                "model": "judge",
+                "provider": "OpenAI",
+                "choices": [{"message": {"content": "{}"}}],
+                "usage": {
+                    "prompt_tokens": 2,
+                    "completion_tokens": 1,
+                    "total_tokens": 3,
+                    "cost": 0.01,
+                },
+            }
+            return types.SimpleNamespace(
+                **payload, model_dump=lambda **_kwargs: payload
+            )
+
+    class OpenAI:
+        def __init__(self, **_kwargs):
+            self.chat = types.SimpleNamespace(completions=Completions())
+
+    sdk = types.SimpleNamespace(OpenAI=OpenAI)
+    attempts.install_openai_meter(
+        sdk, tmp_path / "judge.jsonl", max_output_tokens=4096
+    )
+    sdk.OpenAI().chat.completions.create(model="judge", messages=[])
+
+    assert captured[0]["max_tokens"] == 4096
+
+
 def load_script():
     spec = importlib.util.spec_from_file_location("run_stale", SCRIPT)
     assert spec and spec.loader
@@ -1006,6 +1042,7 @@ def test_stale_reader_proof_fails_before_native_judge_launch(
         judge_model=None,
         judge_provider=None,
         concurrency=1,
+        judge_max_output_tokens=4096,
         verify_only=False,
         smoke=True,
     )

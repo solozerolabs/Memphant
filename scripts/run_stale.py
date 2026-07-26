@@ -352,6 +352,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--judge-model")
     parser.add_argument("--judge-provider")
     parser.add_argument("--concurrency", type=int, default=20)
+    parser.add_argument("--judge-max-output-tokens", type=int, default=4096)
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument(
         "--smoke",
@@ -407,6 +408,8 @@ def main() -> None:
         str(args.official_repo.resolve()),
         "--attempt-ledger",
         str(judge_ledger_path.resolve()),
+        "--max-output-tokens",
+        str(args.judge_max_output_tokens),
         "--answers-path",
         str(args.answers.resolve()),
         "--dataset-path",

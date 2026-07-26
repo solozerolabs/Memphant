@@ -488,6 +488,7 @@ def install_openai_meter(
     context: dict[str, Any] | None = None,
     ledger_context: dict[str, Any] | None = None,
     generation_lookup=None,
+    max_output_tokens: int | None = None,
 ) -> ProviderAttemptLedger:
     """Wrap available sync/async OpenAI clients with the same durable meter."""
     context = dict(context or {})
@@ -498,6 +499,18 @@ def install_openai_meter(
     ledger_context = dict(context if ledger_context is None else ledger_context)
     fingerprint = _sha256_json({"schema_version": 2, "context": ledger_context})
     ledger = ProviderAttemptLedger(Path(ledger_path), fingerprint)
+
+    def cap_output(kwargs: dict[str, Any]) -> None:
+        if max_output_tokens is None:
+            return
+        if max_output_tokens < 1:
+            raise ValueError("max_output_tokens must be positive")
+        for key in ("max_tokens", "max_completion_tokens"):
+            if key in kwargs:
+                if not isinstance(kwargs[key], int) or kwargs[key] > max_output_tokens:
+                    raise ValueError(f"{key} exceeds the benchmark output ceiling")
+                return
+        kwargs["max_tokens"] = max_output_tokens
 
     def install(name: str, *, is_async: bool) -> None:
         original = getattr(openai_module, name, None)
@@ -518,12 +531,14 @@ def install_openai_meter(
 
             if is_async:
                 async def create(*create_args, **create_kwargs):
+                    cap_output(create_kwargs)
                     return await _meter_async(
                         original_create, create_args, create_kwargs, ledger,
                         context, generation_lookup,
                     )
             else:
                 def create(*create_args, **create_kwargs):
+                    cap_output(create_kwargs)
                     return _meter_sync(
                         original_create, create_args, create_kwargs, ledger,
                         context, generation_lookup,
