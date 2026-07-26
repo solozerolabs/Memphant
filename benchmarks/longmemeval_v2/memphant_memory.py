@@ -658,6 +658,7 @@ def _drain_worker(
             "MEMPHANT_WORKER_DATABASE_URL": database_url,
             "MEMPHANT_WORKER_DRAIN": "1",
             "MEMPHANT_RESOURCE_CHUNKS": "on",
+            "MEMPHANT_STRUCTURED_STATE": "off",
         }
     )
     completed = subprocess.run(
