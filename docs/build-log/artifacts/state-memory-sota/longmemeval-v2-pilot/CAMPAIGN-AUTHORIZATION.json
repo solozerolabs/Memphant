@@ -1,0 +1,113 @@
+{
+  "artifacts": {
+    "cache_hits": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/cache-hits",
+    "case_banks": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/case-banks",
+    "closure": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-CLOSURE.json",
+    "construction_bindings": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-BINDINGS",
+    "construction_dispatches": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/private-construction-dispatches",
+    "construction_input": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-RESOURCES.jsonl",
+    "construction_progress": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-PROGRESS.json",
+    "construction_retries": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-RETRIES",
+    "construction_settlement": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-SETTLEMENT.json",
+    "construction_subledger": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-ATTEMPTS.jsonl",
+    "construction_wave": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-WAVE.json",
+    "execution_plan": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/EXECUTION-PLAN.json",
+    "journal": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-ATTEMPTS.jsonl",
+    "judge_outputs": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/private-judge-outputs",
+    "native_package": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/NATIVE-OFFICIAL-PACKAGE.json",
+    "observation_cache": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/observation-cache",
+    "official_derivation": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/NATIVE-OFFICIAL-DERIVATION.json",
+    "official_metrics": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/OFFICIAL-METRICS.json",
+    "prefix_plans": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/PREFIX-12-CONSTRUCTION-PLANS.json",
+    "private_prefix": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/private-reader-outputs/PREFIX-12-PRIVATE.json",
+    "private_reader_outputs": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/private-reader-outputs",
+    "public_prefix_status": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/PREFIX-12-STATUS.json",
+    "remaining_commitment": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/REMAINING-439-COMMITMENT.json",
+    "remaining_construction_plans": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/REMAINING-439-CONSTRUCTION-PLANS.json",
+    "remaining_construction_progress": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/REMAINING-CONSTRUCTION-PROGRESS.json",
+    "reservation_plan": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/ROW-RESERVATION-PLAN.json",
+    "scratch": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/scratch",
+    "sealed_prefix": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/PREFIX-12.sealed"
+  },
+  "authorization": {
+    "authorization_scope_sha256": "de673e3e5689b52b5c004d477a56f5c9419f74f0d620acf0fe03af7e6bc896e8"
+  },
+  "campaign": {
+    "aggregate_construction_reservation_nanos": 65220602500,
+    "hard_ceiling_nanos": 200000000000,
+    "journal_path": "CAMPAIGN-ATTEMPTS.jsonl",
+    "opening_liability_nanos": 4258002400,
+    "opening_reservations": [
+      {
+        "proof_sha256": "cd4dbb46dc707faccef37124cf74bc438f332a2535f6ce6ade759be16d0b4ca7",
+        "receipt_sha256": "7aeb0e32cde8ed7b51811fe658e7d2881aacbd5aad391ddd59bc915198310858",
+        "reservation_id": "stale-settled-cost",
+        "reserved_nanos": 424530400
+      },
+      {
+        "proof_sha256": "eeb80f421c6d6e58e039f0a1056661d2d693b2599d17e4cefb2365d926d19f2a",
+        "receipt_sha256": "ec39b5107b13fe3c5069825f8218a75baa7954df66a5f47b4bade0198764b621",
+        "reservation_id": "stale-deep-unreconciled-liability",
+        "reserved_nanos": 3600000000
+      },
+      {
+        "proof_sha256": "eeb80f421c6d6e58e039f0a1056661d2d693b2599d17e4cefb2365d926d19f2a",
+        "receipt_sha256": "e6f4c12011c364eeee4efbd056a4c7a436c5e3cf1c90bf2f7b6a5aecef1f0cee",
+        "reservation_id": "structured-http400-unpriced-liability",
+        "reserved_nanos": 233472000
+      }
+    ],
+    "unallocated_reserve_nanos": 10000000000
+  },
+  "execution": {
+    "cache_namespace": "longmemeval-v2-construction-v1",
+    "construction_hidden_retries": 0,
+    "construction_max_workers": 32,
+    "official_question_count": 451,
+    "reader_max_workers": 8,
+    "remaining_count": 439,
+    "resume_key": "extraction_key",
+    "sealed_prefix_count": 12
+  },
+  "inputs": {
+    "census_file_sha256": "ed6e60380337344ed7ad0c7341110ff60614fa857baeb86e0eec7d4ec71cf755",
+    "census_path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-CENSUS.json",
+    "census_sha256": "e8d530e8f088ca2f20107425936e10ee2335088485c057879004298f13d98872",
+    "manifest_path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json",
+    "manifest_sha256": "1fd0baf73391595377b7e40010580e7d2549c1da2b4320386d24b9a814f3bb8e",
+    "plan_count": 11578,
+    "plan_inventory_sha256": "00cd9a4f79e6bf1de533f5a7a3dc237f2939e48719970680054ae8a8b09223d8"
+  },
+  "provider_authority": {
+    "normalized": {
+      "openai_native_judge": {
+        "context_length": 400000,
+        "input_price_usd_per_million": "1.75",
+        "max_output_tokens": 128000,
+        "output_price_usd_per_million": "14.00",
+        "provider": "OpenAI",
+        "reasoning_effort": "medium",
+        "requested_model": "gpt-5.2-2025-12-11"
+      },
+      "qwen_deepinfra": {
+        "context_length": 262144,
+        "input_price_usd_per_token": "0.0000001",
+        "max_completion_tokens": 81920,
+        "output_price_usd_per_token": "0.00000015",
+        "provider": "DeepInfra",
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "required_parameters_supported": true,
+        "response_model": "qwen/qwen3.5-9b",
+        "status": 0
+      }
+    },
+    "normalized_sha256": "236fde330e51153855ab432616cfdcbf0e6a5c0431d02287a83cc633bec1fa11",
+    "retrieved_at": "2026-07-26T19:01:48.189456+00:00",
+    "sources": {
+      "https://developers.openai.com/api/docs/models/gpt-5.2": "c14259d1298cf54cbbc0d09a5ed5cb3d4b2311f8e3beeaa78c708e6965143ced",
+      "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints": "2d997f43dc9a3ecdb02dc4f299a61b309e622bacd6960de884331b5bcbee44fd"
+    }
+  },
+  "schema_version": 1,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
+}
