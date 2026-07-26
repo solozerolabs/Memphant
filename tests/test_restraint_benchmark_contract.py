@@ -1972,7 +1972,8 @@ def test_structured_prompt_types_preference_epistemic_role() -> None:
     assert "other people's state" in prompt
     assert "Do not encode create, replace, delete, append, or upsert" in prompt
     assert "evidence_quote to an exact, nonempty, unique substring" in prompt
-    assert "JSON string, number, boolean, object, array, or null directly" in prompt
+    assert "JSON string, number, boolean, null, or array" in prompt
+    assert "object_fields" in prompt
     assert "value_json" not in prompt
 
 

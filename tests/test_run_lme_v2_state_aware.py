@@ -851,6 +851,7 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
             "plan_inventory": [plan],
             "plan_inventory_sha256": runner.sha256_json([plan]),
             "processed_plans": 1,
+            "construction_canary": runner.derive_construction_canary([plan]),
         }
     )
     census["census_sha256"] = runner.sha256_json(
@@ -897,6 +898,9 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
     assert packet["inputs"]["plan_inventory_sha256"] == runner.sha256_json([plan])
     assert packet["execution"]["construction_max_workers"] == 32
     assert packet["execution"]["construction_hidden_retries"] == 0
+    assert packet["execution"]["construction_canary"] == runner.derive_construction_canary(
+        [plan]
+    )
     output = tmp_path / "CAMPAIGN-AUTHORIZATION.json"
     runner._create_json(output, packet)
     with pytest.raises(RuntimeError, match="already exists"):
@@ -997,13 +1001,17 @@ def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
     qwen = {
         "data": {
             "id": "qwen/qwen3.5-9b",
+            "reasoning": {
+                "supported_efforts": ["high", "medium", "low", "minimal", "none"],
+                "mandatory": False,
+            },
             "endpoints": [
                 {
                     "provider_name": "DeepInfra",
                     "pricing": {"prompt": "0.0000001", "completion": "0.00000015"},
                     "context_length": 262144,
                     "max_completion_tokens": 81920,
-                    "supported_parameters": ["seed", "response_format", "structured_outputs", "max_tokens"],
+                    "supported_parameters": ["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"],
                     "status": 0,
                 }
             ],
@@ -1028,6 +1036,176 @@ def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
     refresh = runner.refresh_campaign_provider_authority(fetch)
     assert seen == [runner.QWEN_ENDPOINTS_URL, runner.OPENAI_GPT52_URL]
     assert refresh["normalized"]["openai_native_judge"]["reasoning_effort"] == "medium"
+    assert refresh["normalized"]["qwen_deepinfra"]["reasoning_none_permitted"] is True
+
+
+@pytest.mark.parametrize(
+    ("supported_parameters", "reasoning"),
+    [
+        (["seed", "response_format", "structured_outputs", "max_tokens"], {"supported_efforts": ["none"], "mandatory": False}),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["low", "medium"], "mandatory": False}),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["none", "low"], "mandatory": True}),
+    ],
+)
+def test_provider_refresh_rejects_route_without_explicit_reasoning_off_authority(
+    supported_parameters: list[str], reasoning: dict[str, object]
+) -> None:
+    runner = _load_runner()
+    qwen = {
+        "data": {
+            "id": "qwen/qwen3.5-9b",
+            "reasoning": reasoning,
+            "endpoints": [{
+                "provider_name": "DeepInfra",
+                "pricing": {"prompt": "0.0000001", "completion": "0.00000015"},
+                "context_length": 262144,
+                "max_completion_tokens": 81920,
+                "supported_parameters": supported_parameters,
+                "status": 0,
+            }],
+        }
+    }
+    html = " ".join([
+        "gpt-5.2-2025-12-11", "400,000<!-- --> context window",
+        "128,000<!-- --> max output tokens", "$1.75", "$14.00",
+        "Reasoning.effort supports: none (default), low, medium, high and xhigh.",
+    ]).encode()
+    with pytest.raises(RuntimeError, match="route or price authority drift"):
+        runner.refresh_campaign_provider_authority(
+            lambda url: json.dumps(qwen).encode() if "openrouter" in url else html
+        )
+
+
+def _canary_plans(runner, count: int = 128) -> list[dict[str, object]]:
+    preferred, _inventory_sha256 = runner._v1_failed_source_body_sha256s()
+    preferred_hashes = sorted(preferred)
+    plans = []
+    for index in range(count):
+        source_body_sha256 = (
+            preferred_hashes[index]
+            if index < min(32, len(preferred_hashes))
+            else hashlib.sha256(f"source-{index}".encode()).hexdigest()
+        )
+        plans.append(
+            {
+                "extraction_key": hashlib.sha256(f"key-{index}".encode()).hexdigest(),
+                "request_sha256": hashlib.sha256(
+                    f"request-{index}".encode()
+                ).hexdigest(),
+                "per_attempt_reservation_nanos": 100 + index,
+                "requested_model": "qwen/qwen3.5-9b-20260310",
+                "maximum_attempts": 3,
+                "source_kind": "episode" if index % 2 else "resource",
+                "source_body_sha256": source_body_sha256,
+                "batch_index": index,
+                "evidence_slices_sha256": hashlib.sha256(
+                    f"evidence-{index}".encode()
+                ).hexdigest(),
+            }
+        )
+    return plans
+
+
+def _canary_result(
+    plan: dict[str, object],
+    *,
+    campaign_attempt: int = 1,
+    parse_status: str = "decoded",
+    reservation_status: str = "settled",
+    http_status: int | None = None,
+) -> dict[str, object]:
+    return {
+        "event": "result",
+        "campaign_attempt": campaign_attempt,
+        "extraction_key": plan["extraction_key"],
+        "request_sha256": plan["request_sha256"],
+        "parse_status": parse_status,
+        "reservation_status": reservation_status,
+        "http_status": http_status,
+        "error": None if parse_status == "decoded" else parse_status,
+    }
+
+
+def test_construction_canary_is_deterministic_stratified_and_prefers_v1_failures() -> None:
+    runner = _load_runner()
+    plans = _canary_plans(runner)
+    canary = runner.derive_construction_canary(plans)
+
+    assert canary == runner.derive_construction_canary(list(reversed(plans)))
+    assert canary["plan_count"] == 64
+    assert set(canary["stratum_counts"]) == {
+        f"{kind}:q{quantile}"
+        for kind in ("episode", "resource")
+        for quantile in range(1, 5)
+    }
+    assert canary["preferred_v1_failed_source_count"] > 0
+    assert canary["gate"]["maximum_statistical_failures"] == 4
+    assert canary["gate"]["maximum_semantic_failures"] == 0
+    assert canary["liability"]["maximum_transient_retry_reservation_nanos"] == sum(
+        plan["per_attempt_reservation_nanos"] for plan in canary["plans"]
+    )
+
+
+def test_construction_canary_exact_gate_rejects_semantics_and_retries_only_transient(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    canary = runner.derive_construction_canary(_canary_plans(runner))
+    plans = canary["plans"]
+    decoded = [_canary_result(plan) for plan in plans]
+
+    accepted = runner.evaluate_construction_canary(canary, decoded)
+    assert accepted["accepted"] is True
+    assert accepted["one_sided_clopper_pearson_upper"].startswith(
+        "0.045729702"
+    )
+    for plan in plans:
+        (tmp_path / f"{plan['extraction_key']}.json").write_text(
+            "{}", encoding="utf-8"
+        )
+    cache_bound = runner.bind_construction_canary_cache(
+        accepted, canary, tmp_path
+    )
+    assert len(cache_bound["canonical_cache"]["entries"]) == 64
+
+    semantic = list(decoded)
+    semantic[0] = _canary_result(
+        plans[0], parse_status="schema_error", reservation_status="settled"
+    )
+    semantic_gate = runner.evaluate_construction_canary(canary, semantic)
+    assert semantic_gate["semantic_failure_count"] == 1
+    assert semantic_gate["accepted"] is False
+
+    transient = list(decoded)
+    transient[0] = _canary_result(
+        plans[0],
+        parse_status="http_error",
+        reservation_status="not_charged",
+        http_status=503,
+    )
+    transient_gate = runner.evaluate_construction_canary(canary, transient)
+    assert transient_gate["semantic_failure_count"] == 0
+    assert transient_gate["transient_pending_plans"] == [plans[0]]
+    retried = transient + [_canary_result(plans[0], campaign_attempt=2)]
+    assert runner.evaluate_construction_canary(canary, retried)["accepted"] is True
+
+    incomplete_gate = runner.evaluate_construction_canary(canary, decoded[1:])
+    assert incomplete_gate["incomplete_failure_count"] == 1
+    assert incomplete_gate["transient_pending_count"] == 0
+    assert incomplete_gate["accepted"] is False
+
+
+def test_construction_canary_clopper_pearson_threshold_is_exact() -> None:
+    runner = _load_runner()
+    assert runner._maximum_failures_below_exact_upper_bound(
+        64, runner.Decimal("0.05"), runner.Decimal("0.15")
+    ) == 4
+    assert runner._clopper_pearson_upper(
+        4, 64, runner.Decimal("0.05")
+    ) < runner.Decimal("0.15")
+    assert runner._clopper_pearson_upper(
+        5, 64, runner.Decimal("0.05")
+    ) > runner.Decimal("0.15")
 
 
 def test_exact_mcnemar_uses_the_frozen_one_sided_integer_tail() -> None:

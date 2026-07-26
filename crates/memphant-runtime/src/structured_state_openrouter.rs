@@ -1546,6 +1546,32 @@ fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> Strin
 }
 
 fn response_schema() -> Value {
+    let scalar_value = json!({
+        "anyOf": [
+            {"type": "string"},
+            {"type": "number"},
+            {"type": "boolean"},
+            {"type": "null"}
+        ]
+    });
+    let scalar_field = json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "value"],
+        "properties": {
+            "key": {"type": "string", "minLength": 1},
+            "value": scalar_value
+        }
+    });
+    let direct_value = json!({
+        "anyOf": [
+            {"type": "string"},
+            {"type": "number"},
+            {"type": "boolean"},
+            {"type": "null"},
+            {"type": "array", "items": scalar_value}
+        ]
+    });
     let nullable_timestamp = json!({
         "anyOf": [
             {"type": "string", "format": "date-time"},
@@ -1572,13 +1598,29 @@ fn response_schema() -> Value {
                         "fields": {
                             "type": "array",
                             "items": {
-                                "type": "object",
-                                "additionalProperties": false,
-                                "required": ["key", "value"],
-                                "properties": {
-                                    "key": {"type": "string", "minLength": 1},
-                                    "value": {}
-                                }
+                                "anyOf": [
+                                    {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": ["key", "value"],
+                                        "properties": {
+                                            "key": {"type": "string", "minLength": 1},
+                                            "value": direct_value
+                                        }
+                                    },
+                                    {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": ["key", "object_fields"],
+                                        "properties": {
+                                            "key": {"type": "string", "minLength": 1},
+                                            "object_fields": {
+                                                "type": "array",
+                                                "items": scalar_field
+                                            }
+                                        }
+                                    }
+                                ]
                             }
                         },
                         "disposition": {"type": "string", "enum": ["state", "event"]},
@@ -1602,8 +1644,7 @@ struct ChatResponse {
 #[derive(Deserialize)]
 struct Choice {
     message: Message,
-    #[serde(default)]
-    finish_reason: Option<String>,
+    finish_reason: String,
 }
 
 #[derive(Deserialize)]
@@ -1631,8 +1672,29 @@ struct WireObservation {
 }
 
 #[derive(Deserialize)]
+#[serde(untagged)]
+enum WireField {
+    Direct(WireDirectField),
+    Object(WireObjectField),
+}
+
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct WireField {
+struct WireDirectField {
+    key: String,
+    value: Value,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireObjectField {
+    key: String,
+    object_fields: Vec<WireScalarField>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireScalarField {
     key: String,
     value: Value,
 }
@@ -1647,10 +1709,11 @@ fn decode_response(
             "structured response has invalid model or choice count",
         ));
     }
-    if response.choices[0].finish_reason.as_deref() == Some("length") {
-        return Err(invalid(
-            "structured response exhausted its output token budget",
-        ));
+    if response.choices[0].finish_reason != "stop" {
+        return Err(invalid(format!(
+            "structured response did not finish successfully: {}",
+            response.choices[0].finish_reason
+        )));
     }
     let content = response.choices[0]
         .message
@@ -1671,12 +1734,13 @@ fn decode_response(
             }
             let mut fields = BTreeMap::new();
             for field in observation.fields {
-                if field.key.is_empty() || fields.contains_key(&field.key) {
+                let (key, value) = decode_wire_value(field)?;
+                if key.is_empty() || fields.contains_key(&key) {
                     return Err(invalid(
                         "observation field keys must be nonempty and unique",
                     ));
                 }
-                fields.insert(field.key, field.value);
+                fields.insert(key, value);
             }
             Ok(StructuredObservation {
                 namespace: observation.namespace,
@@ -1694,6 +1758,60 @@ fn decode_response(
             })
         })
         .collect()
+}
+
+fn decode_wire_value(field: WireField) -> Result<(String, Value), StructuredStateProviderError> {
+    match field {
+        WireField::Direct(WireDirectField {
+            key,
+            value: Value::String(value),
+        }) => Ok((key, Value::String(value))),
+        WireField::Direct(WireDirectField {
+            key,
+            value: Value::Number(value),
+        }) => Ok((key, Value::Number(value))),
+        WireField::Direct(WireDirectField {
+            key,
+            value: Value::Bool(value),
+        }) => Ok((key, Value::Bool(value))),
+        WireField::Direct(WireDirectField {
+            key,
+            value: Value::Null,
+        }) => Ok((key, Value::Null)),
+        WireField::Direct(WireDirectField {
+            key,
+            value: Value::Array(values),
+        }) if values.iter().all(|value| {
+            matches!(
+                value,
+                Value::String(_) | Value::Number(_) | Value::Bool(_) | Value::Null
+            )
+        }) =>
+        {
+            Ok((key, Value::Array(values)))
+        }
+        WireField::Object(WireObjectField { key, object_fields }) => {
+            let mut object = serde_json::Map::new();
+            for field in object_fields {
+                if field.key.is_empty()
+                    || object.contains_key(&field.key)
+                    || !matches!(
+                        field.value,
+                        Value::String(_) | Value::Number(_) | Value::Bool(_) | Value::Null
+                    )
+                {
+                    return Err(invalid(
+                        "compound observation values require unique scalar object fields",
+                    ));
+                }
+                object.insert(field.key, field.value);
+            }
+            Ok((key, Value::Object(object)))
+        }
+        _ => Err(invalid(
+            "observation value must match one strict scalar, scalar-array, or object-field form",
+        )),
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -2491,7 +2609,7 @@ mod tests {
             body: json!({
                 "id": "generation-1",
                 "model": DEFAULT_MODEL,
-                "choices": [{"message": {"content": content.to_string()}}]
+                "choices": [{"finish_reason": "stop", "message": {"content": content.to_string()}}]
             }),
         }
     }
@@ -2501,7 +2619,7 @@ mod tests {
             "id": "generation-1",
             "model": "served/model",
             "provider": "served-provider",
-            "choices": [{"message": {"content": content.to_string()}}],
+            "choices": [{"finish_reason": "stop", "message": {"content": content.to_string()}}],
             "usage": {
                 "prompt_tokens": 10,
                 "completion_tokens": 5,
@@ -2622,7 +2740,7 @@ mod tests {
             {"key": "string", "value": "Oslo"},
             {"key": "number", "value": 42.5},
             {"key": "boolean", "value": true},
-            {"key": "object", "value": {"nested": "value"}},
+            {"key": "object", "object_fields": [{"key": "nested", "value": "value"}]},
             {"key": "array", "value": [1, "two"]},
             {"key": "null", "value": null}
         ]);
@@ -2647,6 +2765,20 @@ mod tests {
             )
             .is_err()
         );
+        for invalid_fields in [
+            json!([{"key": "nested_object", "value": {"nested": true}}]),
+            json!([{"key": "nested_array", "value": [[1, 2]]}]),
+            json!([{"key": "duplicate", "object_fields": [
+                {"key": "same", "value": 1}, {"key": "same", "value": 2}
+            ]}]),
+        ] {
+            let mut invalid = wire_observation(&request.evidence_slices[0].id);
+            invalid["fields"] = invalid_fields;
+            assert!(
+                decode_response(response(json!({"observations": [invalid]})).body, &request)
+                    .is_err()
+            );
+        }
 
         let mut unknown = known.clone();
         unknown["evidence_slice_id"] = json!("slice-unknown");
@@ -2677,17 +2809,24 @@ mod tests {
     }
 
     #[test]
-    fn decode_rejects_observed_length_finish_before_content_decode() {
+    fn decode_accepts_only_explicit_stop_finish_reason() {
         let request = request("user: I live in Oslo.");
-        let body = json!({
+        for finish_reason in ["length", "content_filter", "tool_calls", "unknown"] {
+            let body = json!({
+                "model": DEFAULT_MODEL,
+                "choices": [{
+                    "finish_reason": finish_reason,
+                    "message": {"content": "{\"observations\": []}"}
+                }]
+            });
+            let error = decode_response(body, &request).unwrap_err().to_string();
+            assert!(error.contains("did not finish successfully"));
+        }
+        let missing = json!({
             "model": DEFAULT_MODEL,
-            "choices": [{
-                "finish_reason": "length",
-                "message": {"content": null}
-            }]
+            "choices": [{"message": {"content": "{\"observations\": []}"}}]
         });
-        let error = decode_response(body, &request).unwrap_err().to_string();
-        assert!(error.contains("output token budget"));
+        assert!(decode_response(missing, &request).is_err());
     }
 
     #[test]
@@ -2951,8 +3090,16 @@ mod tests {
         assert_eq!(body["reasoning"], json!({"effort": "none"}));
         let field_schema = &body["response_format"]["json_schema"]["schema"]["properties"]["observations"]
             ["items"]["properties"]["fields"]["items"];
-        assert_eq!(field_schema["required"], json!(["key", "value"]));
-        assert!(field_schema["properties"].get("value_json").is_none());
+        assert_eq!(field_schema["anyOf"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            field_schema["anyOf"][0]["required"],
+            json!(["key", "value"])
+        );
+        assert_eq!(
+            field_schema["anyOf"][1]["required"],
+            json!(["key", "object_fields"])
+        );
+        assert!(field_schema.to_string().find("value_json").is_none());
     }
 
     #[test]
@@ -3462,7 +3609,7 @@ mod tests {
             body: json!({
                 "id": response_id,
                 "model": LME_V2_QWEN_MODEL,
-                "choices": [{"message": {"content": content.to_string()}}]
+                "choices": [{"finish_reason": "stop", "message": {"content": content.to_string()}}]
             }),
         };
         let transport = FakeTransport::with_generation_response(

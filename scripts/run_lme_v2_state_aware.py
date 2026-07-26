@@ -57,6 +57,11 @@ OPENING_NANOS = 5_141_664_250
 CONTINGENCY_NANOS = 10_000_000_000
 HARD_CEILING_NANOS = 200_000_000_000
 QUESTION_COUNT = 451
+CONSTRUCTION_CANARY_PLAN_COUNT = 64
+CONSTRUCTION_CANARY_QUANTILES = 4
+CONSTRUCTION_CANARY_ALPHA = Decimal("0.05")
+CONSTRUCTION_CANARY_FAILURE_LIMIT = Decimal("0.15")
+CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES = 1
 FORMULA = "5141664250+C+2*R_sum+451*S+10000000000<=200000000000"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ORACLE_KEYS = {
@@ -75,6 +80,9 @@ V1_CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/l
 V1_ABANDONMENT_PROOF = (
     ROOT
     / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-v1-abandonment.json"
+)
+V1_FAILED_SOURCE_INVENTORY = (
+    ROOT / "benchmarks/manifests/longmemeval_v2.v1_failed_sources.json"
 )
 CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v2"
 CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
@@ -122,6 +130,9 @@ def _campaign_artifact_paths(root: Path) -> dict[str, str]:
         "remaining_construction_plans": "REMAINING-439-CONSTRUCTION-PLANS.json",
         "construction_settlement": "CONSTRUCTION-SETTLEMENT.json",
         "construction_retries": "CONSTRUCTION-RETRIES",
+        "construction_canary_plans": "CONSTRUCTION-CANARY-PLANS.json",
+        "construction_canary_progress": "CONSTRUCTION-CANARY-PROGRESS.json",
+        "construction_canary_gate": "CONSTRUCTION-CANARY-GATE.json",
         "observation_cache": "observation-cache",
         "cache_hits": "cache-hits",
         "construction_bindings": "CONSTRUCTION-BINDINGS",
@@ -247,7 +258,28 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
     if len(deepinfra) != 1:
         raise RuntimeError("Qwen DeepInfra route authority is missing or ambiguous")
     endpoint = deepinfra[0]
-    required_parameters = {"seed", "response_format", "structured_outputs", "max_tokens"}
+    required_parameters = {
+        "seed",
+        "response_format",
+        "structured_outputs",
+        "max_tokens",
+        "reasoning",
+    }
+    reasoning = qwen.get("data", {}).get("reasoning")
+    supported_efforts = (
+        reasoning.get("supported_efforts") if isinstance(reasoning, dict) else None
+    )
+    reasoning_none_permitted = (
+        isinstance(reasoning, dict)
+        and reasoning.get("mandatory") is False
+        and (
+            supported_efforts is None
+            or (
+                isinstance(supported_efforts, list)
+                and "none" in supported_efforts
+            )
+        )
+    )
     normalized_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
         "response_model": qwen.get("data", {}).get("id"),
@@ -259,9 +291,19 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
         "required_parameters_supported": required_parameters.issubset(
             set(endpoint.get("supported_parameters", []))
         ),
+        "reasoning_supported_efforts": (
+            sorted(supported_efforts)
+            if isinstance(supported_efforts, list)
+            else supported_efforts
+        ),
+        "reasoning_mandatory": (
+            reasoning.get("mandatory") if isinstance(reasoning, dict) else None
+        ),
+        "reasoning_none_permitted": reasoning_none_permitted,
+        "reasoning_metadata": reasoning,
         "status": endpoint.get("status"),
     }
-    if normalized_qwen != {
+    expected_qwen = {
         "requested_model": "qwen/qwen3.5-9b-20260310",
         "response_model": "qwen/qwen3.5-9b",
         "provider": "DeepInfra",
@@ -271,7 +313,12 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
         "max_completion_tokens": 81920,
         "required_parameters_supported": True,
         "status": 0,
-    }:
+    }
+    if (
+        {key: normalized_qwen.get(key) for key in expected_qwen} != expected_qwen
+        or normalized_qwen["required_parameters_supported"] is not True
+        or normalized_qwen["reasoning_none_permitted"] is not True
+    ):
         raise RuntimeError("Qwen DeepInfra route or price authority drift")
     openai = openai_bytes.decode("utf-8")
     required_openai_fragments = (
@@ -303,6 +350,18 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
             OPENAI_GPT52_URL: hashlib.sha256(openai_bytes).hexdigest(),
         },
     }
+
+
+def _validate_runtime_provider_authority(packet: dict[str, object]) -> None:
+    authority = packet.get("provider_authority")
+    if not isinstance(authority, dict):
+        raise RuntimeError("campaign provider authority is missing")
+    current = refresh_campaign_provider_authority()
+    if (
+        current.get("normalized_sha256") != authority.get("normalized_sha256")
+        or current.get("normalized") != authority.get("normalized")
+    ):
+        raise RuntimeError("provider route, price, or reasoning authority changed")
 
 
 def exact_mcnemar(wins: int, losses: int) -> Fraction:
@@ -366,6 +425,17 @@ def _clopper_pearson_upper(successes: int, total: int, tail: Decimal) -> Decimal
         else:
             hi = mid
     return hi
+
+
+def _maximum_failures_below_exact_upper_bound(
+    total: int, alpha: Decimal, limit: Decimal
+) -> int:
+    accepted = [
+        failures
+        for failures in range(total + 1)
+        if _clopper_pearson_upper(failures, total, alpha) < limit
+    ]
+    return max(accepted, default=-1)
 
 
 def paired_risk_difference_lower_bound(
@@ -6242,6 +6312,9 @@ def _full_census(
         or planned.get("plan_inventory_sha256") != sha256_json(plan_inventory)
     ):
         raise RuntimeError("production census plan inventory drift")
+    construction_canary = derive_construction_canary(plan_inventory)
+    if construction_canary["plan_count"] != CONSTRUCTION_CANARY_PLAN_COUNT:
+        raise RuntimeError("production construction canary requires exactly 64 plans")
     request_shapes = _official_request_shape_bounds(
         data_root,
         reader_proof,
@@ -6306,6 +6379,13 @@ def _full_census(
     maximum_retry_pool = HARD_CEILING_NANOS - fixed_without_retries
     if retry_pool > maximum_retry_pool:
         raise RuntimeError("construction retry pool exceeds campaign headroom")
+    if (
+        construction_canary["liability"][
+            "maximum_transient_retry_reservation_nanos"
+        ]
+        > retry_pool
+    ):
+        raise RuntimeError("construction canary retry reserve exceeds retry pool")
     c_term = first_attempt + retry_pool
     total = (
         OPENING_NANOS
@@ -6326,6 +6406,7 @@ def _full_census(
         "construction_identity_sha256": sha256_json(construction),
         "census_binary_provenance": binary_provenance,
         "parent_full_census_required_for_recost": False,
+        "construction_canary": construction_canary,
     }
     core = {
         "schema_version": 1,
@@ -6454,6 +6535,17 @@ def recost_census_values(
         "construction_liability_nanos": c_term,
         "parent_construction_sha256": parent_construction_sha256,
     }
+    plan_inventory = construction_proof.get("plan_inventory")
+    if isinstance(plan_inventory, list) and plan_inventory:
+        construction_canary = derive_construction_canary(plan_inventory)
+        if (
+            construction_canary["liability"][
+                "maximum_transient_retry_reservation_nanos"
+            ]
+            > retry_pool_nanos
+        ):
+            raise RuntimeError("construction canary retry reserve exceeds retry pool")
+        construction_proof["construction_canary"] = construction_canary
     core = {
         "schema_version": 2,
         "benchmark": benchmark,
@@ -6550,6 +6642,229 @@ def _plan_inventory(plans: list[dict[str, object]]) -> tuple[list[dict[str, obje
         raise RuntimeError("construction wave plan inventory is empty")
     normalized.sort(key=lambda plan: plan["extraction_key"])
     return normalized, total, sha256_json(normalized)
+
+
+def _v1_failed_source_body_sha256s() -> tuple[set[str], str]:
+    value = json.loads(V1_FAILED_SOURCE_INVENTORY.read_text(encoding="utf-8"))
+    hashes = value.get("source_body_sha256s") if isinstance(value, dict) else None
+    abandonment = json.loads(V1_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    if (
+        not isinstance(hashes, list)
+        or hashes != sorted(set(hashes))
+        or not all(_valid_sha256(item) for item in hashes)
+        or value.get("unique_source_body_count") != len(hashes)
+        or value.get("source_body_inventory_sha256") != sha256_json(hashes)
+        or value.get("contains_source_bodies") is not False
+        or value.get("source_construction_ledger_sha256")
+        != abandonment.get("ledger", {}).get("sha256")
+    ):
+        raise RuntimeError("v1 failed-source canary inventory drift")
+    return set(hashes), _sha256_file(V1_FAILED_SOURCE_INVENTORY)
+
+
+def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, object]:
+    """Choose a stable, reservation-stratified preflight subset."""
+    normalized, _reservation, inventory_sha256 = _plan_inventory(plans)
+    preferred, preferred_inventory_sha256 = _v1_failed_source_body_sha256s()
+    target = min(CONSTRUCTION_CANARY_PLAN_COUNT, len(normalized))
+    groups: dict[str, list[dict[str, object]]] = {}
+    source_kinds = sorted(
+        {str(plan.get("source_kind") or "unspecified") for plan in normalized}
+    )
+    for source_kind in source_kinds:
+        members = [
+            plan
+            for plan in normalized
+            if str(plan.get("source_kind") or "unspecified") == source_kind
+        ]
+        members.sort(
+            key=lambda plan: (
+                plan["per_attempt_reservation_nanos"],
+                plan["extraction_key"],
+            )
+        )
+        for index, plan in enumerate(members):
+            quantile = min(
+                CONSTRUCTION_CANARY_QUANTILES - 1,
+                index * CONSTRUCTION_CANARY_QUANTILES // len(members),
+            )
+            groups.setdefault(f"{source_kind}:q{quantile + 1}", []).append(plan)
+    for candidates in groups.values():
+        candidates.sort(
+            key=lambda plan: (
+                plan.get("source_body_sha256") not in preferred,
+                plan["extraction_key"],
+            )
+        )
+    selected_with_stratum: list[tuple[str, dict[str, object]]] = []
+    while len(selected_with_stratum) < target:
+        advanced = False
+        for label in sorted(groups):
+            if groups[label] and len(selected_with_stratum) < target:
+                selected_with_stratum.append((label, groups[label].pop(0)))
+                advanced = True
+        if not advanced:
+            raise RuntimeError("construction canary stratification is incomplete")
+    group_counts = Counter(label for label, _plan in selected_with_stratum)
+    selected = [plan for _label, plan in selected_with_stratum]
+    selected.sort(key=lambda plan: plan["extraction_key"])
+    selected_reservation = sum(
+        plan["per_attempt_reservation_nanos"] for plan in selected
+    )
+    core = {
+        "schema_version": 1,
+        "plan_count": target,
+        "selection_method": "source-kind-x-within-kind-reservation-quartile-round-robin-v1",
+        "full_plan_inventory_sha256": inventory_sha256,
+        "plans": selected,
+        "plans_sha256": sha256_json(selected),
+        "stratum_counts": dict(sorted(group_counts.items())),
+        "preferred_v1_failed_source_count": sum(
+            plan.get("source_body_sha256") in preferred for plan in selected
+        ),
+        "preferred_v1_failed_source_inventory_file_sha256": preferred_inventory_sha256,
+        "gate": {
+            "failure_definition": "any non-transient schema-or-semantic decode failure",
+            "maximum_semantic_failures": 0,
+            "maximum_statistical_failures": _maximum_failures_below_exact_upper_bound(
+                target,
+                CONSTRUCTION_CANARY_ALPHA,
+                CONSTRUCTION_CANARY_FAILURE_LIMIT,
+            ),
+            "one_sided_alpha": str(CONSTRUCTION_CANARY_ALPHA),
+            "decode_failure_rate_upper_limit": str(
+                CONSTRUCTION_CANARY_FAILURE_LIMIT
+            ),
+            "maximum_transient_retries_per_plan": CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES,
+        },
+        "liability": {
+            "first_attempt_reservation_nanos": selected_reservation,
+            "maximum_transient_retry_reservation_nanos": selected_reservation,
+            "first_attempt_is_subset_of_construction_first_wave": True,
+            "transient_retry_is_subset_of_construction_retry_pool": True,
+        },
+    }
+    return {**core, "canary_sha256": sha256_json(core)}
+
+
+def evaluate_construction_canary(
+    canary: dict[str, object], events: list[dict[str, object]]
+) -> dict[str, object]:
+    """Apply the preregistered fail-closed canary gate to exact ledger rows."""
+    core = {key: value for key, value in canary.items() if key != "canary_sha256"}
+    if canary.get("canary_sha256") != sha256_json(core):
+        raise RuntimeError("construction canary identity drift")
+    plans = canary.get("plans")
+    normalized, _reservation, plans_sha256 = _plan_inventory(plans)
+    if plans_sha256 != canary.get("plans_sha256"):
+        raise RuntimeError("construction canary plan inventory drift")
+    results: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for event in events:
+        if event.get("event") != "result":
+            continue
+        pair = (event.get("extraction_key"), event.get("request_sha256"))
+        if pair in {
+            (plan["extraction_key"], plan["request_sha256"])
+            for plan in normalized
+        }:
+            results.setdefault(pair, []).append(event)
+    semantic_failures = []
+    incomplete_failures = []
+    transient_pending = []
+    decoded = []
+    for plan in normalized:
+        pair = (plan["extraction_key"], plan["request_sha256"])
+        attempts = sorted(
+            results.get(pair, []), key=lambda event: event.get("campaign_attempt", 0)
+        )
+        if not attempts:
+            incomplete_failures.append(plan)
+            continue
+        latest = attempts[-1]
+        if (
+            latest.get("reservation_status") == "settled"
+            and latest.get("parse_status") == "decoded"
+            and latest.get("error") is None
+        ):
+            decoded.append(plan)
+        elif (
+            latest.get("reservation_status") == "not_charged"
+            and latest.get("parse_status") == "http_error"
+            and latest.get("http_status") in {429, 502, 503}
+            and latest.get("campaign_attempt", 0)
+            <= 1 + CONSTRUCTION_CANARY_MAX_TRANSIENT_RETRIES
+        ):
+            transient_pending.append(plan)
+        else:
+            semantic_failures.append(plan)
+    failure_upper = _clopper_pearson_upper(
+        len(semantic_failures) + len(incomplete_failures),
+        len(normalized),
+        CONSTRUCTION_CANARY_ALPHA,
+    )
+    accepted = (
+        len(normalized) == canary.get("plan_count")
+        and not semantic_failures
+        and not incomplete_failures
+        and not transient_pending
+        and len(decoded) == len(normalized)
+        and failure_upper < CONSTRUCTION_CANARY_FAILURE_LIMIT
+    )
+    gate_core = {
+        "schema_version": 1,
+        "canary_sha256": canary["canary_sha256"],
+        "plan_count": len(normalized),
+        "decoded_count": len(decoded),
+        "semantic_failure_count": len(semantic_failures),
+        "semantic_failure_plan_sha256": sha256_json(semantic_failures),
+        "incomplete_failure_count": len(incomplete_failures),
+        "incomplete_failure_plan_sha256": sha256_json(incomplete_failures),
+        "observed_failure_count": len(semantic_failures) + len(incomplete_failures),
+        "transient_pending_count": len(transient_pending),
+        "transient_pending_plans": transient_pending,
+        "transient_pending_plans_sha256": sha256_json(transient_pending),
+        "one_sided_clopper_pearson_upper": format(failure_upper, "f"),
+        "decode_failure_rate_upper_limit": str(
+            CONSTRUCTION_CANARY_FAILURE_LIMIT
+        ),
+        "accepted": accepted,
+    }
+    return {**gate_core, "gate_sha256": sha256_json(gate_core)}
+
+
+def bind_construction_canary_cache(
+    gate: dict[str, object],
+    canary: dict[str, object],
+    cache_root: Path,
+) -> dict[str, object]:
+    """Bind every accepted canary success to its immutable canonical cache row."""
+    if gate.get("accepted") is not True:
+        return gate
+    plans = canary.get("plans")
+    normalized, _reservation, _plans_sha256 = _plan_inventory(plans)
+    inventory = []
+    for plan in normalized:
+        path = cache_root / f"{plan['extraction_key']}.json"
+        if not path.is_file():
+            raise RuntimeError("accepted construction canary is missing canonical cache")
+        inventory.append(
+            {
+                "extraction_key": plan["extraction_key"],
+                "bytes": path.stat().st_size,
+                "sha256": _sha256_file(path),
+            }
+        )
+    core = {
+        key: value
+        for key, value in gate.items()
+        if key not in {"gate_sha256", "canonical_cache"}
+    }
+    core["canonical_cache"] = {
+        "namespace": "longmemeval-v2-construction-v2",
+        "entries": inventory,
+        "entries_sha256": sha256_json(inventory),
+    }
+    return {**core, "gate_sha256": sha256_json(core)}
 
 
 def _validate_current_manifest_identities(manifest: dict[str, object]) -> None:
@@ -6684,6 +6999,10 @@ def validate_campaign_authorization(
         "missing_identities": [],
         "authorized": total <= HARD_CEILING_NANOS,
     }
+    plans = construction.get("plan_inventory")
+    expected_canary = (
+        derive_construction_canary(plans) if isinstance(plans, list) else None
+    )
     if (
         terms != {"C": c_term, "R_sum": r_sum, "S": s_term}
         or admission != expected_admission
@@ -6693,6 +7012,13 @@ def validate_campaign_authorization(
         or construction.get("maximum_retry_pool_nanos") != maximum_retry_pool
         or construction.get("construction_identity_sha256")
         != sha256_json(manifest_construction)
+        or construction.get("construction_canary") != expected_canary
+        or not isinstance(expected_canary, dict)
+        or expected_canary["plan_count"] != CONSTRUCTION_CANARY_PLAN_COUNT
+        or expected_canary["liability"][
+            "maximum_transient_retry_reservation_nanos"
+        ]
+        > retry_pool
     ):
         raise RuntimeError("campaign admission equation drift")
     data_root = Path(
@@ -6922,6 +7248,15 @@ def _build_campaign_authorization(
         or first_reservation != construction.get("first_attempt_liability_nanos")
     ):
         raise RuntimeError("campaign authorization plan inventory drift")
+    construction_canary = derive_construction_canary(normalized)
+    if (
+        construction.get("construction_canary") != construction_canary
+        or construction_canary["liability"][
+            "maximum_transient_retry_reservation_nanos"
+        ]
+        > construction.get("retry_pool_nanos", -1)
+    ):
+        raise RuntimeError("campaign authorization construction canary drift")
     normalized_refresh = refresh.get("normalized")
     if (
         not isinstance(normalized_refresh, dict)
@@ -6967,6 +7302,7 @@ def _build_campaign_authorization(
             "official_question_count": QUESTION_COUNT,
             "cache_namespace": "longmemeval-v2-construction-v2",
             "resume_key": "extraction_key",
+            "construction_canary": construction_canary,
         },
     }
     return {
@@ -7300,9 +7636,7 @@ def prewarm_sealed_prefix(
         or packet.get("execution", {}).get("construction_hidden_retries") != 0
     ):
         raise RuntimeError("prefix prewarm authorization is not active and canonical")
-    current_refresh = refresh_campaign_provider_authority()
-    if current_refresh["normalized_sha256"] != packet["provider_authority"]["normalized_sha256"]:
-        raise RuntimeError("provider route or price authority changed after authorization")
+    _validate_runtime_provider_authority(packet)
     census = validate_campaign_authorization(
         CANONICAL_CAMPAIGN_CENSUS, CANONICAL_CAMPAIGN_MANIFEST
     )
@@ -7339,14 +7673,25 @@ def prewarm_sealed_prefix(
         resolved_data_root, 12
     )
     plans = census["construction"]["plan_inventory"]
-    prefix_plans = [
+    construction_canary = census["construction"]["construction_canary"]
+    if packet["execution"].get("construction_canary") != construction_canary:
+        raise RuntimeError("prefix prewarm canary authority drift")
+    canary_plans = construction_canary["plans"]
+    canary_keys = {
+        (plan["extraction_key"], plan["request_sha256"]) for plan in canary_plans
+    }
+    prefix_candidates = [
         plan for plan in plans if plan.get("source_body_sha256") in prefix_source_hashes
     ]
-    if not prefix_plans or any(
-        plan.get("source_body_sha256") not in prefix_source_hashes for plan in prefix_plans
-    ):
+    if not prefix_candidates:
         raise RuntimeError("sealed prefix plan subset is empty or foreign")
+    prefix_plans = [
+        plan
+        for plan in prefix_candidates
+        if (plan["extraction_key"], plan["request_sha256"]) not in canary_keys
+    ]
     _create_or_validate_json(paths["prefix_plans"], prefix_plans)
+    _create_or_validate_json(paths["construction_canary_plans"], canary_plans)
     execution_plan = build_execution_plan(census, resolved_data_root)
     reservation_plan = build_row_reservation_plan(execution_plan, census)
     remaining = build_remaining_commitment(execution_plan, reservation_plan)
@@ -7402,28 +7747,76 @@ def prewarm_sealed_prefix(
                 "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "off",
             }
         )
-        completed = subprocess.run(
-            [
-                str(binary), "structured-state", "execute",
-                "--input-jsonl", str(paths["construction_input"]),
-                "--allowed-plans-json", str(paths["prefix_plans"]),
-                "--max-workers", str(packet["execution"]["construction_max_workers"]),
-            ],
-            cwd=ROOT,
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if completed.returncode != 0:
-            raise RuntimeError("sealed prefix construction prewarm failed: " + completed.stderr.strip())
-        progress = json.loads(completed.stdout)
-        _atomic_write_json(paths["construction_progress"], {
-            **progress,
-            "authorization_sha256": authorization_sha256,
-            "campaign_census_sha256": census["census_sha256"],
-            "prefix_ids_sha256": execution_plan["prefix"]["ids_sha256"],
-        })
+
+        def execute_subset(plans_path: Path, progress_path: Path) -> None:
+            if progress_path.is_file():
+                return
+            completed = subprocess.run(
+                [
+                    str(binary), "structured-state", "execute",
+                    "--input-jsonl", str(paths["construction_input"]),
+                    "--allowed-plans-json", str(plans_path),
+                    "--max-workers", str(packet["execution"]["construction_max_workers"]),
+                ],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    "construction prewarm failed: " + completed.stderr.strip()
+                )
+            _atomically_create_json(
+                progress_path,
+                {
+                    "processor_result": json.loads(completed.stdout),
+                    "authorization_sha256": authorization_sha256,
+                    "campaign_census_sha256": census["census_sha256"],
+                },
+            )
+
+        gate_path = paths["construction_canary_gate"]
+        if gate_path.is_file():
+            gate = json.loads(gate_path.read_text(encoding="utf-8"))
+            rebound = bind_construction_canary_cache(
+                gate, construction_canary, paths["observation_cache"]
+            )
+            if gate.get("accepted") is not True or rebound != gate:
+                raise RuntimeError("construction canary is rejected or has drifted")
+        else:
+            execute_subset(
+                paths["construction_canary_plans"],
+                paths["construction_canary_progress"],
+            )
+            gate = evaluate_construction_canary(
+                construction_canary,
+                _construction_subledger_events(paths["construction_subledger"]),
+            )
+            if (
+                not gate["semantic_failure_count"]
+                and not gate["incomplete_failure_count"]
+                and gate["transient_pending_count"]
+            ):
+                execute_construction_retry_shard(
+                    authorization_path,
+                    data_root=resolved_data_root,
+                    eligible_plans=gate["transient_pending_plans"],
+                    phase="canary",
+                )
+                gate = evaluate_construction_canary(
+                    construction_canary,
+                    _construction_subledger_events(paths["construction_subledger"]),
+                )
+            gate = bind_construction_canary_cache(
+                gate, construction_canary, paths["observation_cache"]
+            )
+            _atomically_create_json(gate_path, gate)
+            if gate["accepted"] is not True:
+                raise RuntimeError("construction canary rejected the campaign")
+        if prefix_plans:
+            execute_subset(paths["prefix_plans"], paths["construction_progress"])
 
     wave = authorize_or_resume_construction_wave(
         ledger, census, plans, paths["construction_wave"], launch=launch
@@ -7450,6 +7843,7 @@ def prewarm_remaining_construction(
     paths = {key: Path(value) for key, value in packet.get("artifacts", {}).items()}
     if packet.get("artifacts") != campaign_artifact_paths():
         raise RuntimeError("remaining prewarm artifact authority drift")
+    _validate_runtime_provider_authority(packet)
     status = json.loads(paths["public_prefix_status"].read_text(encoding="utf-8"))
     validate_public_prefix_status(status)
     execution_plan = json.loads(paths["execution_plan"].read_text(encoding="utf-8"))
@@ -7469,8 +7863,15 @@ def prewarm_remaining_construction(
     prefix_ids, remaining_ids, prefix_hashes = _prefix_source_hashes(data_root, 12)
     del prefix_ids, remaining_ids
     plans = census["construction"]["plan_inventory"]
+    canary_keys = {
+        (plan["extraction_key"], plan["request_sha256"])
+        for plan in census["construction"]["construction_canary"]["plans"]
+    }
     remaining_plans = [
-        plan for plan in plans if plan.get("source_body_sha256") not in prefix_hashes
+        plan
+        for plan in plans
+        if plan.get("source_body_sha256") not in prefix_hashes
+        and (plan["extraction_key"], plan["request_sha256"]) not in canary_keys
     ]
     if not remaining_plans or len(remaining_plans) >= len(plans):
         raise RuntimeError("remaining construction subset is invalid")
@@ -7578,7 +7979,7 @@ def _failed_construction_plans(
             continue
         key = (event.get("extraction_key"), event.get("request_sha256"))
         if key not in by_key:
-            raise RuntimeError("construction retry subledger contains a foreign key")
+            continue
         if event.get("event") == "started":
             if key in starts:
                 raise RuntimeError("construction retry duplicated a planned start")
@@ -7620,6 +8021,7 @@ def execute_construction_retry_shard(
     packet = json.loads(authorization_path.read_text(encoding="utf-8"))
     if packet.get("artifacts") != campaign_artifact_paths():
         raise RuntimeError("construction retry artifact authority drift")
+    _validate_runtime_provider_authority(packet)
     paths = {key: Path(value) for key, value in packet["artifacts"].items()}
     wave = json.loads(paths["construction_wave"].read_text(encoding="utf-8"))
     census = validate_campaign_authorization(
@@ -7633,7 +8035,7 @@ def execute_construction_retry_shard(
     )
     if not binary.is_file() or _sha256_file(binary) != binary_sha256:
         raise RuntimeError("authorized construction binary is unavailable")
-    if phase not in {"prefix", "tail"}:
+    if phase not in {"canary", "prefix", "tail"}:
         raise RuntimeError("construction retry phase is invalid")
     wave_keys = {
         (plan["extraction_key"], plan["request_sha256"]) for plan in wave["plans"]
@@ -7645,7 +8047,8 @@ def execute_construction_retry_shard(
         raise RuntimeError("construction retry shard contains foreign plans")
     retries: list[dict[str, object]] = []
     candidate_plans = eligible_plans
-    for campaign_attempt in (2, 3):
+    campaign_attempts = (2,) if phase == "canary" else (2, 3)
+    for campaign_attempt in campaign_attempts:
         events = _construction_subledger_events(paths["construction_subledger"])
         failed = _failed_construction_plans(
             candidate_plans, events, campaign_attempt - 1
@@ -7739,7 +8142,9 @@ def execute_construction_retry_shard(
         retries.append(retry)
         candidate_plans = failed
     events = _construction_subledger_events(paths["construction_subledger"])
-    if _failed_construction_plans(candidate_plans, events, 3):
+    if phase != "canary" and _failed_construction_plans(
+        candidate_plans, events, campaign_attempts[-1]
+    ):
         raise RuntimeError("construction retry pool exhausted with failed keys")
     return retries
 
@@ -8603,11 +9008,18 @@ def run_authorized_campaign(
             finally:
                 completed_ledger.close()
         prewarm_sealed_prefix(authorization_path, data_root=data_root)
-        prefix_retry_shards = execute_construction_retry_shard(
-            authorization_path,
-            data_root=data_root,
-            eligible_plans=json.loads(paths["prefix_plans"].read_text(encoding="utf-8")),
-            phase="prefix",
+        prefix_retry_plans = json.loads(
+            paths["prefix_plans"].read_text(encoding="utf-8")
+        )
+        prefix_retry_shards = (
+            execute_construction_retry_shard(
+                authorization_path,
+                data_root=data_root,
+                eligible_plans=prefix_retry_plans,
+                phase="prefix",
+            )
+            if prefix_retry_plans
+            else []
         )
         del prefix_retry_shards
         execution_plan = json.loads(paths["execution_plan"].read_text(encoding="utf-8"))
