@@ -1924,6 +1924,27 @@ def derive_native_official_artifact(
             attempts_by_key=attempts_by_key, pinned=pinned,
             reservation_plan=reservation_plan,
         )
+        reader_response = reader_record.get("response", {}).get("response", {})
+        reader_choices = (
+            reader_response.get("choices")
+            if isinstance(reader_response, dict)
+            else None
+        )
+        reader_answer = (
+            reader_choices[0].get("message", {}).get("content")
+            if isinstance(reader_choices, list)
+            and len(reader_choices) == 1
+            and isinstance(reader_choices[0], dict)
+            else None
+        )
+        if (
+            not isinstance(reader_answer, str)
+            or not reader_answer
+            or official.get("response_raw") != reader_answer
+        ):
+            raise RuntimeError(
+                "official reader output differs from its durable provider response"
+            )
         deep_record = None
         if row["arm"] == "deep":
             deep_record = _checked_private_provider_record(
@@ -1948,6 +1969,15 @@ def derive_native_official_artifact(
         ):
             raise RuntimeError("official score checkpoint differs from its private row")
         judge_record = None
+        evaluator_identity = {
+            "kind": "pinned_deterministic",
+            "eval_name": official.get("eval_name"),
+            "eval_function_sha256": sha256_json(official.get("eval_function")),
+            "official_harness_sha256": pinned["official_harness_sha256"],
+            "official_scorer_sha256": pinned["official_scorer_sha256"],
+        }
+        eval_config = {}
+        replay_proxy = None
         if row["native_judge_required"]:
             judge_record = _checked_private_provider_record(
                 json.loads(
@@ -1957,6 +1987,80 @@ def derive_native_official_artifact(
                 ),
                 row=row, component="judge", attempts_by_key=attempts_by_key,
                 pinned=pinned, reservation_plan=reservation_plan,
+            )
+            judge_receipt = judge_record["receipt"]
+            judge_response = judge_record["response"]
+            expected_request_sha256 = judge_receipt.get("request_sha256")
+
+            def replay_judge(payload):
+                if sha256_json(payload) != expected_request_sha256:
+                    raise RuntimeError(
+                        "official derivation judge replay request identity drift"
+                    )
+                return judge_response
+
+            replay_proxy, evaluator_base_url = _start_metered_proxy(replay_judge)
+            eval_config = _native_judge_eval_config(evaluator_base_url)
+            evaluator_contract = {
+                key: eval_config[key]
+                for key in (
+                    "evaluator_model",
+                    "evaluator_reasoning_effort",
+                    "evaluator_max_completion_tokens",
+                    "evaluator_timeout_seconds",
+                )
+            }
+            evaluator_identity = {
+                "kind": "pinned_native_judge_replay",
+                "eval_name": official.get("eval_name"),
+                "eval_function_sha256": sha256_json(official.get("eval_function")),
+                "official_harness_sha256": pinned["official_harness_sha256"],
+                "official_scorer_sha256": pinned["official_scorer_sha256"],
+                "requested_model": judge_receipt.get("requested_model"),
+                "served_model": judge_receipt.get("served_model"),
+                "provider": judge_receipt.get("provider"),
+                "response_id": judge_receipt.get("response_id"),
+                "request_sha256": expected_request_sha256,
+                "result_sha256": judge_receipt.get("result_sha256"),
+                "evaluator_contract": evaluator_contract,
+                "evaluator_contract_sha256": sha256_json(evaluator_contract),
+            }
+        try:
+            recomputed_bool, recomputed_eval_name, recomputed_unknown = (
+                harness.score_prediction(official, eval_config)
+            )
+        finally:
+            if replay_proxy is not None:
+                replay_proxy.shutdown()
+                replay_proxy.server_close()
+        if (
+            type(recomputed_bool) is not bool
+            or type(recomputed_unknown) is not bool
+            or not isinstance(recomputed_eval_name, str)
+            or not recomputed_eval_name
+            or recomputed_eval_name != official.get("eval_name")
+        ):
+            raise RuntimeError("pinned official scorer returned an invalid score tuple")
+        recomputed = {
+            "score_bool": recomputed_bool,
+            "score": int(recomputed_bool),
+            "eval_name": recomputed_eval_name,
+            "is_unknown": recomputed_unknown,
+        }
+        if (
+            replay_proxy is not None
+            and (
+                replay_proxy.dispatch_count != 1
+                or replay_proxy._request_sha256
+                != evaluator_identity["request_sha256"]
+                or sha256_json(replay_proxy._response)
+                != evaluator_identity["result_sha256"]
+            )
+        ):
+            raise RuntimeError("official derivation judge replay did not settle exactly once")
+        if any(score.get(key) != value for key, value in recomputed.items()):
+            raise RuntimeError(
+                "official score checkpoint differs from pinned scorer recomputation"
             )
         category = official.get("category")
         is_abstention = official.get("is_abstention_problem")
@@ -1968,10 +2072,21 @@ def derive_native_official_artifact(
             raise RuntimeError("official premise-awareness category drift")
         scored_official = dict(official)
         scored_official.update(
-            score=score["score"], score_bool=score["score_bool"],
-            is_unknown=score["is_unknown"],
+            score=recomputed["score"], score_bool=recomputed["score_bool"],
+            is_unknown=recomputed["is_unknown"],
         )
-        scored.append({"planned": row, "score": score, "official": scored_official})
+        authoritative_score = {
+            **score,
+            **recomputed,
+            "recomputed_score_sha256": sha256_json(recomputed),
+        }
+        scored.append(
+            {
+                "planned": row,
+                "score": authoritative_score,
+                "official": scored_official,
+            }
+        )
         sources.append(
             {
                 "sequence": row["sequence"],
@@ -1982,6 +2097,10 @@ def derive_native_official_artifact(
                     deep_record["private_output_sha256"] if deep_record else None
                 ),
                 "score_sha256": score["score_sha256"],
+                "recomputed_score": recomputed,
+                "recomputed_score_sha256": sha256_json(recomputed),
+                "evaluator_identity": evaluator_identity,
+                "evaluator_identity_sha256": sha256_json(evaluator_identity),
                 "judge_private_sha256": (
                     judge_record["private_output_sha256"] if judge_record else None
                 ),
@@ -5074,6 +5193,17 @@ def _reader_records_from_private(
     return records
 
 
+def _native_judge_eval_config(evaluator_base_url: str) -> dict[str, object]:
+    return {
+        "evaluator_model": "gpt-5.2-2025-12-11",
+        "evaluator_base_url": evaluator_base_url,
+        "evaluator_api_key": "loopback-route-bound",
+        "evaluator_reasoning_effort": "medium",
+        "evaluator_max_completion_tokens": 2048,
+        "evaluator_timeout_seconds": 43_200.0,
+    }
+
+
 def score_official_reader_row(
     *,
     planned_row: dict[str, object],
@@ -5146,14 +5276,7 @@ def score_official_reader_row(
             )
         else:
             raise RuntimeError("native judge has unresolved terminal state")
-        eval_config = {
-            "evaluator_model": "gpt-5.2-2025-12-11",
-            "evaluator_base_url": evaluator_base_url,
-            "evaluator_api_key": "loopback-route-bound",
-            "evaluator_reasoning_effort": "medium",
-            "evaluator_max_completion_tokens": 2048,
-            "evaluator_timeout_seconds": 43_200.0,
-        }
+        eval_config = _native_judge_eval_config(evaluator_base_url)
     try:
         score_bool, eval_name, is_unknown = score_prediction(
             official_row, eval_config

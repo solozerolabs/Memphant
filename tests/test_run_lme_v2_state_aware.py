@@ -3082,7 +3082,7 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
                 "question_id": "q-000",
                 "row_key": f"q-000:{arm}",
                 "arm": arm,
-                "native_judge_required": False,
+                "native_judge_required": arm == "fast",
             }
             for index, arm in enumerate(("fast", "deep"))
         ],
@@ -3106,7 +3106,31 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
 
     monkeypatch.setattr(runner, "_sha256_file", fake_file_hash)
     monkeypatch.setattr(runner, "validate_complete_row_settlement", lambda *_: {"ok": True})
-    monkeypatch.setattr(runner, "_load_official_harness", lambda *_: object())
+    judge_payload = {
+        "model": "gpt-5.2-2025-12-11",
+        "messages": [{"role": "user", "content": "grade:q-000:fast"}],
+    }
+
+    class FakeHarness:
+        @staticmethod
+        def score_prediction(row, eval_config):
+            if eval_config:
+                request = runner.urllib.request.Request(
+                    eval_config["evaluator_base_url"] + "/chat/completions",
+                    data=runner.canonical_json(judge_payload),
+                    headers={"content-type": "application/json"},
+                    method="POST",
+                )
+                with runner.urllib.request.urlopen(request) as response:
+                    replayed = json.loads(response.read())
+                score_bool = (
+                    replayed["choices"][0]["message"]["content"] == "true"
+                )
+            else:
+                score_bool = row["response_raw"] == "correct"
+            return score_bool, row["eval_name"], row["is_unknown"]
+
+    monkeypatch.setattr(runner, "_load_official_harness", lambda *_: FakeHarness())
     arms = {
         "fast": {
             "overall": {"overall_full_set": 0.5},
@@ -3142,7 +3166,13 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
     )
     judge_root = tmp_path / "judges"
     for row in plan["rows"]:
-        response = {"response": {"id": f"reader-{row['sequence']}"}}
+        answer = "correct" if row["arm"] == "deep" else "wrong"
+        response = {
+            "response": {
+                "id": f"reader-{row['sequence']}",
+                "choices": [{"message": {"content": answer}}],
+            }
+        }
         receipt = {
             "response_id": f"reader-{row['sequence']}",
             "result_sha256": runner.sha256_json(response),
@@ -3165,6 +3195,11 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
             "category": "static",
             "is_abstention_problem": False,
             "memory_query_duration_seconds": 1.0,
+            "eval_name": "fixture",
+            "eval_function": "fixture_eval",
+            "response_raw": answer,
+            "response_parsed_boxed": answer,
+            "is_unknown": False,
         }
         private_rows[row["row_key"]] = {
             "row_key": row["row_key"],
@@ -3201,11 +3236,48 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
             "score": int(row["arm"] == "deep"),
             "eval_name": "fixture",
             "is_unknown": False,
-            "native_judge_required": False,
+            "native_judge_required": row["native_judge_required"],
             "native_judge_settled": True,
         }
         score_dir = judge_root / f"{row['sequence']:04d}"
         score_dir.mkdir(parents=True)
+        if row["native_judge_required"]:
+            judge_response = {
+                "id": "judge-1",
+                "model": "gpt-5.2-2025-12-11",
+                "choices": [{"message": {"content": "false"}}],
+            }
+            judge_receipt = {
+                "response_id": "judge-1",
+                "requested_model": "gpt-5.2-2025-12-11",
+                "served_model": "gpt-5.2-2025-12-11",
+                "provider": "OpenAI",
+                "request_sha256": runner.sha256_json(judge_payload),
+                "result_sha256": runner.sha256_json(judge_response),
+            }
+            judge_core = {
+                "schema_version": 1,
+                "status": "PRIVATE_OUTPUT_FSYNCED",
+                "row_key": row["row_key"],
+                "component": "judge",
+                "authority": authority,
+                "response": judge_response,
+                "receipt": judge_receipt,
+            }
+            (score_dir / "judge-provider.private.json").write_text(
+                json.dumps(
+                    {
+                        **judge_core,
+                        "private_output_sha256": runner.sha256_json(judge_core),
+                    }
+                )
+            )
+            attempts.append(
+                {
+                    "request_key": f"lme-v2-row:{row['sequence']}:{row['row_key']}:judge",
+                    "result": {"response": judge_receipt},
+                }
+            )
         (score_dir / "SCORE.private.json").write_text(
             json.dumps({**score_core, "score_sha256": runner.sha256_json(score_core)})
         )
@@ -3225,10 +3297,24 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
         **runtime_core,
         "proof_sha256": runner.sha256_json(runtime_core),
     }
-    runner.derive_native_official_artifact(
+    derivation = runner.derive_native_official_artifact(
         reservation_plan=plan, ledger_snapshot=snapshot, private_rows=private_rows,
         judge_root=judge_root, official_dir=tmp_path, runtime_code=runtime,
         output_path=output,
+    )
+    assert derivation["sources"][0]["recomputed_score"] == {
+        "score_bool": False,
+        "score": 0,
+        "eval_name": "fixture",
+        "is_unknown": False,
+    }
+    assert (
+        derivation["sources"][0]["evaluator_identity"]["kind"]
+        == "pinned_native_judge_replay"
+    )
+    assert (
+        derivation["sources"][1]["evaluator_identity"]["kind"]
+        == "pinned_deterministic"
     )
 
     score_path = judge_root / "0001/SCORE.private.json"
@@ -3238,12 +3324,18 @@ def test_official_derivation_rejects_score_provider_and_pinned_code_tampering(
     score_core = {key: value for key, value in score.items() if key != "score_sha256"}
     score["score_sha256"] = runner.sha256_json(score_core)
     score_path.write_text(json.dumps(score))
-    with pytest.raises(RuntimeError, match="immutable campaign artifact drift"):
-        runner.derive_native_official_artifact(
-            reservation_plan=plan, ledger_snapshot=snapshot,
-            private_rows=private_rows, judge_root=judge_root,
-            official_dir=tmp_path, runtime_code=runtime, output_path=output,
+    output.unlink()
+    with pytest.raises(RuntimeError, match="pinned scorer recomputation"):
+        runner.build_native_official_package(
+            reservation_plan=plan,
+            ledger_snapshot=snapshot,
+            private_rows=private_rows,
+            judge_root=judge_root,
+            official_dir=tmp_path,
+            runtime_code=runtime,
+            derivation_path=output,
         )
+    assert not output.exists()
 
     provider = private_rows["q-000:fast"]["provider_record"]
     provider["response"]["response"]["id"] = "tampered"
