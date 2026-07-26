@@ -378,8 +378,8 @@ def test_stale_record_plan_is_chronological_and_never_exposes_gold() -> None:
     plan = generator.build_record_plan(record)
 
     assert [session["timestamp"] for session in plan["sessions"]] == [
-        "2025-01-01 00:00",
-        "2025-02-01 00:00",
+        "2025-01-01T00:00:00Z",
+        "2025-02-01T00:00:00Z",
     ]
     assert plan["queries"] == {
         "dim1": "state?",

@@ -9,6 +9,7 @@ ground-truth fields are never included in an ingest or reader payload.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -212,6 +213,17 @@ def build_record_plan(record: dict) -> dict:
     for source_index, (timestamp, turns) in enumerate(zip(timestamps, sessions)):
         if not isinstance(timestamp, str) or not timestamp.strip():
             raise ValueError(f"STALE record {uid} has invalid timestamp")
+        try:
+            parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise ValueError(f"STALE record {uid} has invalid timestamp") from error
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        timestamp = (
+            parsed.astimezone(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
         if not isinstance(turns, list) or not turns:
             raise ValueError(f"STALE record {uid} has empty session")
         ordered.append((timestamp, source_index, turns))
