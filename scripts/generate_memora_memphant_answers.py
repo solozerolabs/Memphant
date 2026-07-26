@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal
 import hashlib
 import json
 import os
@@ -1750,7 +1751,19 @@ def render_reader_evidence(evidence: list[dict]) -> str:
 class OpenRouterReader:
     def __init__(self, cache_dir: Path, max_calls: int) -> None:
         self.model = MODEL
-        self.cli = run_reader.ReaderCli("openrouter", MODEL, MODEL, cache_dir, max_calls, REASONING_EFFORT)
+        self.cli = run_reader.ReaderCli(
+            "openrouter",
+            MODEL,
+            MODEL,
+            cache_dir,
+            max_calls,
+            REASONING_EFFORT,
+            max_spend_usd=Decimal("195"),
+            max_price_per_million={
+                "prompt": Decimal("1"),
+                "completion": Decimal("6"),
+            },
+        )
         self.last_metadata = None
 
     @property
@@ -1761,7 +1774,7 @@ class OpenRouterReader:
         self.cli.set_provider_attempt_limit(self.cli.provider_attempts + remaining)
 
     def set_attempt_ledger(self, ledger: ProviderAttemptLedger) -> None:
-        self.cli.set_provider_attempt_hook(ledger.record)
+        self.cli.set_provider_attempt_ledger(ledger)
 
     def answer(self, query: dict, evidence: list[dict]) -> tuple[str, dict]:
         rendered = render_reader_evidence(evidence)
@@ -2068,7 +2081,13 @@ def main() -> None:
         runtime_proof, selection, args.out, attempt_ledger_path, args.cache_dir
     )
     ledger_existed = attempt_ledger_path.exists()
-    attempt_ledger = ProviderAttemptLedger(attempt_ledger_path, fingerprint)
+    attempt_ledger = ProviderAttemptLedger(
+        attempt_ledger_path,
+        sha256_file(args.generation_lock),
+        "memora-reader",
+        200_000_000_000,
+        4_258_002_400,
+    )
     validate_reader_cache_contract(
         args.cache_dir, attempt_ledger, ledger_existed=ledger_existed
     )

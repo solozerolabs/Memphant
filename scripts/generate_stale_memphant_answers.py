@@ -9,6 +9,7 @@ ground-truth fields are never included in an ingest or reader payload.
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -1040,8 +1041,19 @@ def main() -> int:
         args.cache_dir,
         args.max_calls,
         REASONING_EFFORT,
+        max_spend_usd=Decimal("195"),
+        max_price_per_million={
+            "prompt": Decimal("1"),
+            "completion": Decimal("6"),
+        },
     )
-    attempt_ledger = ProviderAttemptLedger(attempt_ledger_path, fingerprint)
+    attempt_ledger = ProviderAttemptLedger(
+        attempt_ledger_path,
+        sha256_file(GENERATION_MANIFEST),
+        "stale-answer-reader",
+        200_000_000_000,
+        4_258_002_400,
+    )
     if completed:
         embedded = json.loads(proof_path.read_text(encoding="utf-8")).get(
             "provider_attempt_ledger"
@@ -1053,7 +1065,7 @@ def main() -> int:
             or embedded.get("provider_attempts") != sidecar.get("provider_attempts")
         ):
             raise ValueError("resume provider-attempt sidecar mismatch")
-    reader.set_provider_attempt_hook(attempt_ledger.record)
+    reader.set_provider_attempt_ledger(attempt_ledger)
     server_log = proof_path.parent / "stale-memphant-server.log"
     server = gate.Server(
         str(args.server_bin),

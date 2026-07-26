@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
+from decimal import Decimal
 from pathlib import Path
 import subprocess
 import sys
@@ -29,7 +30,16 @@ def load_attempts():
     return module
 
 
-def paid_response(response_id: str = "gen-1") -> dict:
+def open_test_ledger(attempts, path: Path, scope: str = "fixture", screen: str = "test"):
+    authorization = (
+        scope
+        if len(scope) == 64 and all(character in "0123456789abcdef" for character in scope)
+        else hashlib.sha256(scope.encode()).hexdigest()
+    )
+    return attempts.ProviderAttemptLedger(path, authorization, screen, 1_000_000_000_000, 0)
+
+
+def paid_response(response_id: str = "gen-1", *, cost: object = 0.01) -> dict:
     return {
         "response_id": response_id,
         "requested_model": "openai/gpt-5.6-luna-pro",
@@ -39,7 +49,7 @@ def paid_response(response_id: str = "gen-1") -> dict:
             "prompt_tokens": 10,
             "completion_tokens": 5,
             "total_tokens": 15,
-            "cost": 0.01,
+            "cost": cost,
         },
         "elapsed_seconds": 0.2,
         "retry_index": 0,
@@ -47,6 +57,83 @@ def paid_response(response_id: str = "gen-1") -> dict:
         "request_sha256": "1" * 64,
         "result_sha256": "2" * 64,
     }
+
+
+def test_campaign_ledger_enforces_cumulative_liability_across_screens(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+    path = tmp_path / "campaign.jsonl"
+    auth = "a" * 64
+    start = {
+        "retry_index": 0,
+        "requested_model": "openai/gpt-5.6-luna-pro",
+        "request_sha256": "1" * 64,
+    }
+    first = attempts.ProviderAttemptLedger(
+        path, auth, "screen-a", 200_000, 10_000
+    )
+    first.record("start", "a", {**start, "max_liability_nanos": 100_000})
+    first.record(
+        "result", "a", {"response": paid_response(cost="0.00005")}
+    )
+    first.close()
+
+    second = attempts.ProviderAttemptLedger(
+        path, auth, "screen-b", 200_000, 10_000
+    )
+    with pytest.raises(RuntimeError, match="campaign hard ceiling"):
+        second.record(
+            "start", "b", {**start, "max_liability_nanos": 150_001}
+        )
+
+
+def test_campaign_ledger_retains_unresolved_reservations_and_rounds_cost_up(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+    ledger = attempts.ProviderAttemptLedger(
+        tmp_path / "campaign.jsonl", "a" * 64, "screen-a", 1_000, 10
+    )
+    start = {
+        "retry_index": 0,
+        "requested_model": "model",
+        "request_sha256": "1" * 64,
+        "max_liability_nanos": 100,
+    }
+    ledger.record("start", "interrupted", start)
+    ledger.record("start", "error", start)
+    ledger.record("error", "error", {"type": "OSError"})
+    ledger.record("start", "priced", start)
+    ledger.record(
+        "result", "priced", {"response": paid_response(cost="0.0000000011")}
+    )
+    ledger.record("start", "unpriced", start)
+    ledger.record(
+        "result", "unpriced", {"response": paid_response(cost=None)}
+    )
+
+    snapshot = ledger.snapshot()
+    assert snapshot["settled_nanos"] == 2
+    assert snapshot["unresolved_max_liability_nanos"] == 300
+    assert snapshot["total_liability_nanos"] == 312
+
+
+def test_campaign_ledger_assert_open_allows_exact_ceiling(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+    ledger = attempts.ProviderAttemptLedger(
+        tmp_path / "campaign.jsonl", "a" * 64, "cache-screen", 110, 10
+    )
+    ledger.record("start", "cached", {
+        "retry_index": 0,
+        "requested_model": "model",
+        "request_sha256": "1" * 64,
+        "max_liability_nanos": 100,
+    })
+
+    ledger.assert_open()
 
 
 def deep_disposition() -> dict:
@@ -62,11 +149,12 @@ def test_shared_attempt_ledger_rejects_interruption_duplicate_ids_and_hash_drift
     tmp_path: Path,
 ) -> None:
     attempts = load_attempts()
-    ledger = attempts.ProviderAttemptLedger(tmp_path / "attempts.json", "fingerprint")
+    ledger = open_test_ledger(attempts, tmp_path / "attempts.json", "fingerprint")
     start = {
         "retry_index": 0,
         "requested_model": "openai/gpt-5.6-luna-pro",
         "request_sha256": "1" * 64,
+        "max_liability_nanos": 100_000_000,
     }
     ledger.record("start", "request-a", start)
     with pytest.raises(RuntimeError, match="interrupted"):
@@ -78,7 +166,7 @@ def test_shared_attempt_ledger_rejects_interruption_duplicate_ids_and_hash_drift
     with pytest.raises(RuntimeError, match="duplicate response ID"):
         attempts.validate_provider_attempt_ledger(ledger.snapshot())
 
-    malformed = attempts.ProviderAttemptLedger(tmp_path / "malformed.json", "malformed")
+    malformed = open_test_ledger(attempts, tmp_path / "malformed.json", "malformed")
     malformed.record("start", "request-c", start)
     bad_response = paid_response("bad-metadata")
     bad_response["provider"] = ""
@@ -94,7 +182,7 @@ def test_shared_attempt_ledger_rejects_interruption_duplicate_ids_and_hash_drift
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     ledger.close()
     with pytest.raises(ValueError, match="event hash mismatch"):
-        attempts.ProviderAttemptLedger(tmp_path / "attempts.json", "fingerprint")
+        open_test_ledger(attempts, tmp_path / "attempts.json", "fingerprint")
 
 
 def test_attempt_journal_appends_without_rewriting_and_rejects_truncation_or_forks(
@@ -102,11 +190,12 @@ def test_attempt_journal_appends_without_rewriting_and_rejects_truncation_or_for
 ) -> None:
     attempts = load_attempts()
     path = tmp_path / "attempts.jsonl"
-    ledger = attempts.ProviderAttemptLedger(path, "fingerprint")
+    ledger = open_test_ledger(attempts, path, "fingerprint")
     start = {
         "retry_index": 0,
         "requested_model": "openai/gpt-5.6-luna-pro",
         "request_sha256": "1" * 64,
+        "max_liability_nanos": 100_000_000,
     }
     ledger.record("start", "request-a", start)
     prefix = path.read_bytes()
@@ -118,18 +207,19 @@ def test_attempt_journal_appends_without_rewriting_and_rejects_truncation_or_for
     truncated = tmp_path / "truncated.jsonl"
     truncated.write_bytes(complete[:-1])
     with pytest.raises(ValueError, match="truncated"):
-        attempts.ProviderAttemptLedger(truncated, "fingerprint")
+        open_test_ledger(attempts, truncated, "fingerprint")
 
     malformed = tmp_path / "malformed.jsonl"
     malformed.write_bytes(complete + b"not-json\n")
     with pytest.raises(ValueError, match="malformed"):
-        attempts.ProviderAttemptLedger(malformed, "fingerprint")
+        open_test_ledger(attempts, malformed, "fingerprint")
 
     forked = tmp_path / "forked.jsonl"
     forked.write_bytes(complete)
     prior = json.loads(complete.splitlines()[-1])
     terminal = {
         "event": "error",
+        "screen_id": "test",
         "attempt_id": 1,
         "request_key": "request-a",
         "payload": {"type": "late-error"},
@@ -142,7 +232,7 @@ def test_attempt_journal_appends_without_rewriting_and_rejects_truncation_or_for
     with forked.open("ab") as handle:
         handle.write(attempts._event_bytes(terminal) + b"\n")
     with pytest.raises(ValueError, match="forked terminal transition"):
-        attempts.ProviderAttemptLedger(forked, "fingerprint")
+        open_test_ledger(attempts, forked, "fingerprint")
 
 
 def test_attempt_journal_rejects_a_second_process_before_provider_work(
@@ -157,7 +247,7 @@ def test_attempt_journal_rejects_a_second_process_before_provider_work(
             (
                 "import sys,time; sys.path.insert(0, sys.argv[1]); "
                 "from provider_attempts import ProviderAttemptLedger; "
-                "ledger=ProviderAttemptLedger(__import__('pathlib').Path(sys.argv[2]), 'fingerprint'); "
+                "ledger=ProviderAttemptLedger(__import__('pathlib').Path(sys.argv[2]), '" + hashlib.sha256(b"fingerprint").hexdigest() + "', 'child', 1000000000000, 0); "
                 "print('locked', flush=True); time.sleep(30)"
             ),
             str(ROOT / "scripts"),
@@ -169,7 +259,7 @@ def test_attempt_journal_rejects_a_second_process_before_provider_work(
     try:
         assert child.stdout is not None and child.stdout.readline().strip() == "locked"
         with pytest.raises(RuntimeError, match="already active"):
-            attempts.ProviderAttemptLedger(path, "fingerprint")
+            open_test_ledger(attempts, path, "fingerprint", "parent")
     finally:
         child.terminate()
         child.wait(timeout=5)
@@ -203,12 +293,50 @@ def test_shared_meter_hard_caps_native_scorer_output(tmp_path: Path) -> None:
             self.chat = types.SimpleNamespace(completions=Completions())
 
     sdk = types.SimpleNamespace(OpenAI=OpenAI)
+    ledger = open_test_ledger(attempts, tmp_path / "judge.jsonl", "judge")
     attempts.install_openai_meter(
-        sdk, tmp_path / "judge.jsonl", max_output_tokens=4096
+        sdk, ledger, max_liability_nanos=100_000_000, max_output_tokens=4096
     )
     sdk.OpenAI().chat.completions.create(model="judge", messages=[])
 
     assert captured[0]["max_tokens"] == 4096
+
+
+def test_shared_meter_context_cannot_override_reserved_liability(tmp_path: Path) -> None:
+    attempts = load_attempts()
+
+    class Completions:
+        def create(self, **_kwargs):
+            payload = {
+                "id": "judge-1",
+                "model": "judge",
+                "provider": "OpenAI",
+                "usage": {
+                    "prompt_tokens": 2,
+                    "completion_tokens": 1,
+                    "total_tokens": 3,
+                    "cost": 0.01,
+                },
+            }
+            return types.SimpleNamespace(
+                **payload, model_dump=lambda **_kwargs: payload
+            )
+
+    class OpenAI:
+        def __init__(self, **_kwargs):
+            self.chat = types.SimpleNamespace(completions=Completions())
+
+    ledger = open_test_ledger(attempts, tmp_path / "judge.jsonl", "judge")
+    sdk = types.SimpleNamespace(OpenAI=OpenAI)
+    attempts.install_openai_meter(
+        sdk,
+        ledger,
+        max_liability_nanos=100_000_000,
+        context={"max_liability_nanos": 1},
+    )
+    sdk.OpenAI().chat.completions.create(model="judge", messages=[])
+
+    assert ledger.attempts[0]["start"]["max_liability_nanos"] == 100_000_000
 
 
 def load_script():
@@ -870,8 +998,8 @@ def test_stale_dimension_caps_transport_to_one_paid_attempt(
 
     monkeypatch.setattr(generator.run_reader.urllib.request, "urlopen", fail)
     cache_dir = tmp_path / "cache"
-    ledger = generator.ProviderAttemptLedger(
-        tmp_path / "attempts.json", "stale-dimension"
+    ledger = open_test_ledger(
+        generator, tmp_path / "attempts.json", "stale-dimension"
     )
     reader = generator.run_reader.ReaderCli(
         "openrouter",
@@ -880,8 +1008,13 @@ def test_stale_dimension_caps_transport_to_one_paid_attempt(
         cache_dir,
         3,
         generator.REASONING_EFFORT,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={
+            "prompt": Decimal("1"),
+            "completion": Decimal("6"),
+        },
     )
-    reader.set_provider_attempt_hook(ledger.record)
+    reader.set_provider_attempt_ledger(ledger)
 
     with pytest.raises(Exception):
         generator.run_reader_dimension(
@@ -936,7 +1069,7 @@ def test_stale_smoke_binds_dimension_archives_to_global_ledger_and_answer_hash(
         served_model: str = "openai/gpt-5.6-luna-pro-20260709",
         context: dict | None = None,
     ):
-        value = attempts.ProviderAttemptLedger(tmp_path / f"{name}.json", name)
+        value = open_test_ledger(attempts, tmp_path / f"{name}.json", name)
         responses = []
         for response_id in response_ids:
             response = paid_response(response_id)
@@ -950,6 +1083,7 @@ def test_stale_smoke_binds_dimension_archives_to_global_ledger_and_answer_hash(
                     "retry_index": 0,
                     "requested_model": response["requested_model"],
                     "request_sha256": response["request_sha256"],
+                    "max_liability_nanos": 100_000_000,
                 },
             )
             value.record("result", response_id, {"response": response})

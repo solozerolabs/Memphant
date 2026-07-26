@@ -562,7 +562,13 @@ def main() -> int:
             args.attempt_ledger.parent.mkdir(parents=True, exist_ok=True)
             if args.attempt_ledger.exists():
                 raise ValueError("reader screen attempt ledger already exists")
-            ledger = generator.ProviderAttemptLedger(args.attempt_ledger, fingerprint)
+            ledger = generator.ProviderAttemptLedger(
+                args.attempt_ledger,
+                generator.sha256_file(generator.GENERATION_LOCK),
+                "memora-reasoning-screen",
+                200_000_000_000,
+                4_258_002_400,
+            )
             generator.validate_reader_cache_contract(
                 args.cache_dir, ledger, ledger_existed=False
             )

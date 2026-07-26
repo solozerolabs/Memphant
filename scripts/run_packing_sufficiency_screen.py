@@ -284,8 +284,13 @@ def main() -> int:
     official_rows = json.loads(dataset_path.read_text())
     dataset = {row["question_id"]: row for row in official_rows}
 
-    fingerprint = sha256_json(manifest["execution"])
-    ledger = ProviderAttemptLedger(attempt_path, fingerprint)
+    ledger = ProviderAttemptLedger(
+        attempt_path,
+        sha256_file(Path(args.authorization_manifest)),
+        "packing-sufficiency",
+        200_000_000_000,
+        4_258_002_400,
+    )
     try:
         cli = ReaderCli(
             "openrouter",
@@ -306,7 +311,7 @@ def main() -> int:
             reported_spend_usd=reported, unsettled_liability_usd=unsettled
         )
         cli.provider_attempts = len(ledger.attempts)
-        cli.set_provider_attempt_hook(ledger.record)
+        cli.set_provider_attempt_ledger(ledger)
         cli.set_provider_attempt_limit(args.max_provider_attempts)
 
         completed = {}

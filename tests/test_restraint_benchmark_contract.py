@@ -1651,6 +1651,13 @@ def load_provider_attempts():
     return module
 
 
+def open_test_ledger(attempts, path: Path, scope: str = "fixture", screen: str = "test"):
+    authorization = hashlib.sha256(scope.encode()).hexdigest()
+    return attempts.ProviderAttemptLedger(
+        path, authorization, screen, 1_000_000_000_000, 0
+    )
+
+
 def sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -2237,11 +2244,14 @@ def test_async_meter_reconciles_generation_stats_off_event_loop_and_times_errors
         }
 
     sdk = types.SimpleNamespace(AsyncOpenAI=AsyncOpenAI)
-    ledger = tmp_path / "async-stats.json"
-    module_under_test.install_openai_meter(sdk, ledger, generation_lookup=lookup)
+    ledger_path = tmp_path / "async-stats.json"
+    ledger = open_test_ledger(module_under_test, ledger_path, "async-stats")
+    module_under_test.install_openai_meter(
+        sdk, ledger, max_liability_nanos=100_000_000, generation_lookup=lookup
+    )
     asyncio.run(sdk.AsyncOpenAI().chat.completions.create(model="requested", messages=[]))
     assert lookup_threads and lookup_threads[0] != event_loop_thread
-    assert module_under_test.load_provider_attempt_ledger_snapshot(ledger)["attempts"][0]["result"][
+    assert module_under_test.load_provider_attempt_ledger_snapshot(ledger_path)["attempts"][0]["result"][
         "response"
     ]["served_model"] == "served-pinned"
 
@@ -2254,13 +2264,66 @@ def test_async_meter_reconciles_generation_stats_off_event_loop_and_times_errors
             self.chat = types.SimpleNamespace(completions=BrokenCompletions())
 
     failed_sdk = types.SimpleNamespace(OpenAI=OpenAI)
-    failed_ledger = tmp_path / "failed.json"
-    module_under_test.install_openai_meter(failed_sdk, failed_ledger)
+    failed_ledger_path = tmp_path / "failed.json"
+    failed_ledger = open_test_ledger(module_under_test, failed_ledger_path, "failed")
+    module_under_test.install_openai_meter(
+        failed_sdk, failed_ledger, max_liability_nanos=100_000_000
+    )
     with pytest.raises(OSError, match="offline"):
         failed_sdk.OpenAI().chat.completions.create(model="requested", messages=[])
-    error = module_under_test.load_provider_attempt_ledger_snapshot(failed_ledger)["attempts"][0]["error"]
+    error = module_under_test.load_provider_attempt_ledger_snapshot(failed_ledger_path)["attempts"][0]["error"]
     assert error["type"] == "OSError"
     assert error["elapsed_seconds"] >= 0
+
+
+def test_campaign_reconciliation_and_journal_closure_are_authoritative(
+    tmp_path: Path, monkeypatch
+) -> None:
+    attempts = load_provider_attempts()
+    path = tmp_path / "campaign.jsonl"
+    ledger = attempts.ProviderAttemptLedger(
+        path, "a" * 64, "reconcile-screen", 1_000, 500
+    )
+    ledger.record_reconciliation(
+        "historical-deep-1",
+        reserved_nanos=300,
+        settled_nanos=25,
+        receipt_sha256="b" * 64,
+        proof_sha256="c" * 64,
+    )
+    snapshot = ledger.snapshot()
+    assert snapshot["opening_liability_nanos"] == 200
+    assert snapshot["settled_nanos"] == 25
+    assert snapshot["total_liability_nanos"] == 225
+
+    monkeypatch.setattr(attempts.os, "replace", lambda *_args: (_ for _ in ()).throw(OSError("projection failed")))
+    with pytest.raises(OSError, match="projection failed"):
+        ledger.close_campaign(tmp_path / "closure.json")
+    ledger.close()
+
+    closed = attempts.ProviderAttemptLedger(
+        path, "a" * 64, "resume-screen", 1_000, 500
+    )
+    with pytest.raises(RuntimeError, match="closed"):
+        closed.assert_open()
+
+
+def test_openai_meter_requires_reservation_before_sdk_construction(
+    tmp_path: Path,
+) -> None:
+    attempts = load_provider_attempts()
+    constructed = []
+
+    class OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            constructed.append(True)
+
+    ledger = attempts.ProviderAttemptLedger(
+        tmp_path / "campaign.jsonl", "a" * 64, "judge", 1_000, 0
+    )
+    with pytest.raises(TypeError, match="max_liability_nanos"):
+        attempts.install_openai_meter(types.SimpleNamespace(OpenAI=OpenAI), ledger)
+    assert constructed == []
 
 
 def test_sync_meter_preserves_paid_response_when_generation_lookup_fails(
@@ -2297,14 +2360,18 @@ def test_sync_meter_preserves_paid_response_when_generation_lookup_fails(
         raise OSError("stats unavailable")
 
     sdk = types.SimpleNamespace(OpenAI=OpenAI)
-    ledger = tmp_path / "sync-stats-failure.json"
+    ledger_path = tmp_path / "sync-stats-failure.json"
+    ledger = open_test_ledger(module_under_test, ledger_path, "sync-failure")
     module_under_test.install_openai_meter(
-        sdk, ledger, generation_lookup=fail_lookup
+        sdk,
+        ledger,
+        max_liability_nanos=100_000_000,
+        generation_lookup=fail_lookup,
     )
     with pytest.raises(RuntimeError, match="generation statistics"):
         sdk.OpenAI().chat.completions.create(model="requested", messages=[])
 
-    attempt = module_under_test.load_provider_attempt_ledger_snapshot(ledger)["attempts"][0]
+    attempt = module_under_test.load_provider_attempt_ledger_snapshot(ledger_path)["attempts"][0]
     assert calls == ["completion"]
     assert attempt["status"] == "error"
     assert attempt["result"] is None
@@ -2354,16 +2421,20 @@ def test_async_meter_preserves_paid_response_when_generation_lookup_fails(
         raise OSError("stats unavailable")
 
     sdk = types.SimpleNamespace(AsyncOpenAI=AsyncOpenAI)
-    ledger = tmp_path / "async-stats-failure.json"
+    ledger_path = tmp_path / "async-stats-failure.json"
+    ledger = open_test_ledger(module_under_test, ledger_path, "async-failure")
     module_under_test.install_openai_meter(
-        sdk, ledger, generation_lookup=fail_lookup
+        sdk,
+        ledger,
+        max_liability_nanos=100_000_000,
+        generation_lookup=fail_lookup,
     )
     with pytest.raises(RuntimeError, match="generation statistics"):
         asyncio.run(
             sdk.AsyncOpenAI().chat.completions.create(model="requested", messages=[])
         )
 
-    attempt = module_under_test.load_provider_attempt_ledger_snapshot(ledger)["attempts"][0]
+    attempt = module_under_test.load_provider_attempt_ledger_snapshot(ledger_path)["attempts"][0]
     assert calls == ["completion"]
     assert attempt["status"] == "error"
     assert attempt["result"] is None
@@ -2692,8 +2763,9 @@ def test_memsyco_cli_exposes_complete_lifecycle_and_preserves_five_metrics(
             encoding="utf-8",
         )
         proof_path.write_text(json.dumps(proof_payload), encoding="utf-8")
-        attempt_ledger = load_provider_attempts().ProviderAttemptLedger(
-            task_dir / "attempts.json", f"fixture:{task}"
+        attempts = load_provider_attempts()
+        attempt_ledger = open_test_ledger(
+            attempts, task_dir / "attempts.json", f"fixture:{task}"
         )
         for role, model in (("answer", "answer-model"), ("judge", "judge-model")):
             response = {
@@ -2719,6 +2791,7 @@ def test_memsyco_cli_exposes_complete_lifecycle_and_preserves_five_metrics(
                     "request_sha256": "1" * 64,
                     "arm": "memphant",
                     "task": task,
+                    "max_liability_nanos": 100_000_000,
                 },
             )
             attempt_ledger.record("result", role, {"response": response})

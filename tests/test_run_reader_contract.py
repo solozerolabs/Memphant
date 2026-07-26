@@ -33,6 +33,16 @@ def _load_provider_attempts():
     return module
 
 
+def _open_test_ledger(attempts, path: Path, screen: str = "reader-test"):
+    return attempts.ProviderAttemptLedger(
+        path,
+        hashlib.sha256(b"reader-fixture").hexdigest(),
+        screen,
+        1_000_000_000_000,
+        0,
+    )
+
+
 def _load_fetch_longmemeval():
     spec = importlib.util.spec_from_file_location(
         "fetch_longmemeval", ROOT / "scripts" / "fetch_longmemeval.py"
@@ -305,9 +315,22 @@ def test_unknown_engine_is_rejected(tmp_path) -> None:
 
 def test_openrouter_requires_api_key(tmp_path, monkeypatch) -> None:
     reader = _load_run_reader()
+    attempts = _load_provider_attempts()
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cli = reader.ReaderCli(
+        "openrouter",
+        "m",
+        "m",
+        tmp_path / "cache",
+        1,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("1"), "completion": Decimal("1")},
+    )
+    cli.set_provider_attempt_ledger(
+        _open_test_ledger(attempts, tmp_path / "attempts.json")
+    )
     try:
-        reader.ReaderCli("openrouter", "m", "m", tmp_path, 0)
+        cli.call("reader", "sys", "prompt")
         raise AssertionError("expected RuntimeError")
     except RuntimeError as error:
         assert "OPENROUTER_API_KEY" in str(error)
@@ -1372,8 +1395,17 @@ def test_openrouter_call_captures_and_caches_served_model_provider_usage_and_cos
         return _FakeHttpResponse(generation)
     monkeypatch.setattr(reader.urllib.request, "urlopen", open_response)
     cli = reader.ReaderCli(
-        "openrouter", "openai/gpt-5.6-luna-pro", "judge", tmp_path, 1
+        "openrouter",
+        "openai/gpt-5.6-luna-pro",
+        "judge",
+        tmp_path,
+        1,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("1"), "completion": Decimal("6")},
     )
+    attempts = _load_provider_attempts()
+    ledger = _open_test_ledger(attempts, tmp_path / "attempts.json")
+    cli.set_provider_attempt_ledger(ledger)
     assert cli.call("reader", "sys", "prompt").startswith("{")
     assert cli.last_call_metadata == {
         "response_id": "gen-reader-1",
@@ -1394,8 +1426,15 @@ def test_openrouter_call_captures_and_caches_served_model_provider_usage_and_cos
     assert requests[0].get_header("X-openrouter-metadata") == "enabled"
 
     cached = reader.ReaderCli(
-        "openrouter", "openai/gpt-5.6-luna-pro", "judge", tmp_path, 0
+        "openrouter",
+        "openai/gpt-5.6-luna-pro",
+        "judge",
+        tmp_path,
+        0,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("1"), "completion": Decimal("6")},
     )
+    cached.set_provider_attempt_ledger(ledger)
     assert cached.call("reader", "sys", "prompt").startswith("{")
     assert cached.last_call_metadata == cli.last_call_metadata
     assert cached.provider_attempts == 0
@@ -1433,11 +1472,17 @@ def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
     monkeypatch.setattr(reader.urllib.request, "urlopen", open_response)
     cache_dir = tmp_path / "cache"
     ledger_path = tmp_path / "attempts.json"
-    ledger = attempts.ProviderAttemptLedger(ledger_path, "reader-fingerprint")
+    ledger = _open_test_ledger(attempts, ledger_path)
     cli = reader.ReaderCli(
-        "openrouter", "openai/gpt-5.6-luna-pro", "judge", cache_dir, 1
+        "openrouter",
+        "openai/gpt-5.6-luna-pro",
+        "judge",
+        cache_dir,
+        1,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("1"), "completion": Decimal("6")},
     )
-    cli.set_provider_attempt_hook(ledger.record)
+    cli.set_provider_attempt_ledger(ledger)
 
     try:
         cli.call("reader", "sys", "prompt")
@@ -1609,6 +1654,10 @@ def test_openrouter_spend_control_sets_provider_price_caps_and_settles_cost(
         },
         max_output_tokens=1024,
     )
+    attempts = _load_provider_attempts()
+    cli.set_provider_attempt_ledger(
+        _open_test_ledger(attempts, tmp_path / "attempts.json")
+    )
     assert cli.call("reader", "sys", "prompt").startswith("{")
     sent = json.loads(requests[0].data)
     assert sent["provider"]["max_price"] == {"prompt": 2.5, "completion": 10.0}
@@ -1672,12 +1721,12 @@ def test_restore_spend_from_attempts_keeps_errors_as_liability() -> None:
         [
             {
                 "status": "result",
-                "start": {"max_liability_usd": "0.05"},
+                "start": {"max_liability_nanos": 50_000_000},
                 "result": {"response": {"usage": {"cost": 0.012}}},
             },
             {
                 "status": "error",
-                "start": {"max_liability_usd": "0.07"},
+                "start": {"max_liability_nanos": 70_000_000},
                 "error": {"error": "timeout"},
             },
         ]
@@ -1688,7 +1737,6 @@ def test_restore_spend_from_attempts_keeps_errors_as_liability() -> None:
 
 def test_reader_cache_write_is_atomic_on_replace_failure(tmp_path, monkeypatch) -> None:
     reader = _load_run_reader()
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
 
     def reply(cli, _kind, _system, _prompt):
         cli.last_call_metadata = {
@@ -1697,8 +1745,8 @@ def test_reader_cache_write_is_atomic_on_replace_failure(tmp_path, monkeypatch) 
         }
         return '{"notes":"","answer":"ok","abstain":false}'
 
-    monkeypatch.setattr(reader.ReaderCli, "_call_openrouter", reply)
-    cli = reader.ReaderCli("openrouter", "reader", "judge", tmp_path, 1)
+    monkeypatch.setattr(reader.ReaderCli, "_call_codex", reply)
+    cli = reader.ReaderCli("codex", "reader", "judge", tmp_path, 1)
     cache_path = cli._cache_path("reader", "sys", "prompt")
     monkeypatch.setattr(reader.os, "replace", lambda _source, _target: (_ for _ in ()).throw(OSError("crash")))
     try:

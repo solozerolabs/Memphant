@@ -54,7 +54,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -500,8 +500,8 @@ def restore_spend_from_attempts(attempts: list[dict]) -> tuple[Decimal, Decimal]
         if not isinstance(start, dict):
             raise ValueError("provider-attempt ledger is missing start metadata")
         try:
-            liability = Decimal(str(start["max_liability_usd"]))
-        except (KeyError, InvalidOperation) as error:
+            liability = Decimal(start["max_liability_nanos"]) / Decimal(1_000_000_000)
+        except (KeyError, InvalidOperation, TypeError) as error:
             raise ValueError("provider-attempt ledger is missing spend liability") from error
         result = attempt.get("result")
         response = result.get("response") if isinstance(result, dict) else None
@@ -698,7 +698,7 @@ class ReaderCli:
         self.provider_attempts = 0
         self.provider_attempt_log: list[dict] = []
         self.provider_attempt_limit: int | None = None
-        self.provider_attempt_hook = None
+        self.provider_attempt_ledger: ProviderAttemptLedger | None = None
         if (max_spend_usd is None) != (max_price_per_million is None):
             raise ValueError(
                 "OpenRouter spend control requires both a total ceiling and "
@@ -715,20 +715,7 @@ class ReaderCli:
         self.unsettled_liability_usd = Decimal("0")
         self._active_cache_key: str | None = None
         self.last_call_metadata: dict | None = None
-        self._openrouter_api_key = None
         self._openrouter_generation_lookup = None
-        if engine == "openrouter":
-            api_key = os.environ.get("OPENROUTER_API_KEY")
-            if not api_key:
-                raise RuntimeError(
-                    "--engine openrouter requires OPENROUTER_API_KEY in the "
-                    "environment; run via: doppler run --project syndai "
-                    "--config dev -- python3 scripts/run_reader.py --engine "
-                    "openrouter ..."
-                )
-            self._openrouter_api_key = api_key
-            self._openrouter_generation_lookup = openrouter_generation_lookup(api_key)
-        cache_dir.mkdir(parents=True, exist_ok=True)
 
     def model_for(self, kind: str) -> str:
         return (
@@ -756,6 +743,10 @@ class ReaderCli:
             "response": self.response_contract_for(kind),
             "provenance_schema": 2,
         }
+        if self.provider_attempt_ledger is not None:
+            contract_identity["authorization_sha256"] = (
+                self.provider_attempt_ledger.authorization_sha256
+            )
         if self.engine == "openrouter":
             contract_identity["provider"] = openrouter_provider_preferences(
                 self.model_for(kind), self.max_price_per_million
@@ -776,10 +767,19 @@ class ReaderCli:
         return self.cache_dir / f"{key}.json"
 
     def call(self, kind: str, system_prompt: str, prompt: str) -> str:
+        if self.engine == "openrouter":
+            if self.provider_attempt_ledger is None:
+                raise RuntimeError(
+                    "openrouter call requires an authorized campaign ledger"
+                )
+            self.provider_attempt_ledger.assert_open()
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         cache_path = self._cache_path(kind, system_prompt, prompt)
         if cache_path.exists():
-            self.cached_calls += 1
             cached = json.loads(cache_path.read_text())
+            if self.engine == "openrouter":
+                self._validate_cached_attempt(cache_path.name, cached)
+            self.cached_calls += 1
             self.last_call_metadata = cached.get("metadata")
             return cached["reply"]
         if self.fresh_calls >= self.max_calls:
@@ -797,15 +797,15 @@ class ReaderCli:
                 reply = self._call_openrouter(kind, system_prompt, prompt)
         finally:
             self._active_cache_key = None
-        atomic_write_json(
-            cache_path,
-            {
+        cache_entry = {
                 "kind": kind,
                 "prompt": prompt,
                 "reply": reply,
                 "metadata": self.last_call_metadata,
-            },
-        )
+            }
+        if self.engine == "openrouter":
+            cache_entry.update(self._cache_attempt_provenance(cache_path.name))
+        atomic_write_json(cache_path, cache_entry)
         return reply
 
     def set_provider_attempt_limit(self, limit: int | None) -> None:
@@ -813,8 +813,51 @@ class ReaderCli:
             raise ValueError("provider attempt limit is below attempts already used")
         self.provider_attempt_limit = limit
 
-    def set_provider_attempt_hook(self, hook) -> None:
-        self.provider_attempt_hook = hook
+    def set_provider_attempt_ledger(self, ledger: ProviderAttemptLedger) -> None:
+        ledger.assert_open()
+        self.provider_attempt_ledger = ledger
+
+    @staticmethod
+    def _attempt_value_sha256(value: dict) -> str:
+        return hashlib.sha256(
+            json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    def _cache_attempt_provenance(self, request_key: str) -> dict:
+        assert self.provider_attempt_ledger is not None
+        for attempt in reversed(self.provider_attempt_ledger.attempts):
+            if attempt["request_key"] == request_key and attempt["status"] == "result":
+                return {
+                    "authorization_sha256": self.provider_attempt_ledger.authorization_sha256,
+                    "attempt_id": attempt["attempt_id"],
+                    "attempt_start_sha256": self._attempt_value_sha256(attempt["start"]),
+                    "attempt_result_sha256": self._attempt_value_sha256(attempt["result"]),
+                }
+        raise RuntimeError("provider response has no durable result attempt")
+
+    def _validate_cached_attempt(self, request_key: str, cached: dict) -> None:
+        assert self.provider_attempt_ledger is not None
+        if (
+            cached.get("authorization_sha256")
+            != self.provider_attempt_ledger.authorization_sha256
+        ):
+            raise RuntimeError("cached provider response authorization mismatch")
+        attempt_id = cached.get("attempt_id")
+        for attempt in self.provider_attempt_ledger.attempts:
+            if (
+                attempt["attempt_id"] == attempt_id
+                and attempt["request_key"] == request_key
+                and attempt["status"] == "result"
+            ):
+                if (
+                    cached.get("attempt_start_sha256")
+                    == self._attempt_value_sha256(attempt["start"])
+                    and cached.get("attempt_result_sha256")
+                    == self._attempt_value_sha256(attempt["result"])
+                ):
+                    return
+                break
+        raise RuntimeError("cached provider response attempt provenance mismatch")
 
     def restore_spend_state(
         self, *, reported_spend_usd: Decimal, unsettled_liability_usd: Decimal
@@ -871,8 +914,8 @@ class ReaderCli:
         self.reported_spend_usd += settled
 
     def _provider_attempt_event(self, event: str, payload: dict | None = None) -> None:
-        if self.provider_attempt_hook is not None:
-            self.provider_attempt_hook(
+        if self.provider_attempt_ledger is not None:
+            self.provider_attempt_ledger.record(
                 event,
                 self._active_cache_key or "direct-openrouter-call",
                 payload,
@@ -968,18 +1011,6 @@ class ReaderCli:
         if self.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.reasoning_effort}
         body = json.dumps(payload).encode()
-        request = urllib.request.Request(
-            OPENROUTER_URL,
-            data=body,
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {self._openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/memphant",
-                "X-OpenRouter-Metadata": "enabled",
-                "X-Title": "memphant-bench-reader",
-            },
-        )
         last_error: Exception | None = None
         for attempt, delay in enumerate((0, *OPENROUTER_RETRY_DELAYS)):
             if (
@@ -993,18 +1024,45 @@ class ReaderCli:
             if delay:
                 time.sleep(delay)
             liability = self._reserve_attempt(body)
+            max_liability_nanos = int(
+                (liability * Decimal(1_000_000_000)).to_integral_value(
+                    rounding=ROUND_CEILING
+                )
+            )
             self._provider_attempt_event(
                 "start",
                 {
                     "retry_index": attempt,
                     "requested_model": model,
                     "request_sha256": hashlib.sha256(body).hexdigest(),
-                    "max_liability_usd": str(liability),
+                    "max_liability_nanos": max_liability_nanos,
                 },
             )
             self.provider_attempts += 1
             attempt_started = time.monotonic()
             try:
+                api_key = os.environ.get("OPENROUTER_API_KEY")
+                if not api_key:
+                    raise RuntimeError(
+                        "--engine openrouter requires OPENROUTER_API_KEY in the "
+                        "environment; run via Doppler"
+                    )
+                if self._openrouter_generation_lookup is None:
+                    self._openrouter_generation_lookup = openrouter_generation_lookup(
+                        api_key
+                    )
+                request = urllib.request.Request(
+                    OPENROUTER_URL,
+                    data=body,
+                    method="POST",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/memphant",
+                        "X-OpenRouter-Metadata": "enabled",
+                        "X-Title": "memphant-bench-reader",
+                    },
+                )
                 with urllib.request.urlopen(
                     request, timeout=OPENROUTER_TIMEOUT
                 ) as response:
@@ -1752,32 +1810,12 @@ def main() -> int:
             parser.error(str(error))
     attempt_ledger = None
     if args.attempt_ledger:
-        attempt_fingerprint = sha256_text(
-            json.dumps(
-                {
-                    "schema": 1,
-                    "source_evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),
-                    "engine": args.engine,
-                    "reader_model_id": args.model,
-                    "judge_model_id": judge_model,
-                    "judge_profile": args.judge_profile,
-                    "prompt_version": args.prompt_version,
-                    "reasoning_effort": args.reasoning_effort,
-                    "max_calls": args.max_calls,
-                    "max_provider_attempts": args.max_provider_attempts,
-                    "max_output_tokens": args.max_output_tokens,
-                    "max_spend_usd": str(args.max_spend_usd),
-                    "max_price_per_million": {
-                        key: str(value)
-                        for key, value in (max_price_per_million or {}).items()
-                    },
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-        )
         attempt_ledger = ProviderAttemptLedger(
-            Path(args.attempt_ledger), attempt_fingerprint
+            Path(args.attempt_ledger),
+            _file_sha256(Path(args.authorization_manifest)),
+            f"reader-{args.authorization_arm}",
+            200_000_000_000,
+            4_258_002_400,
         )
     cli = ReaderCli(
         args.engine,
@@ -1796,7 +1834,7 @@ def main() -> int:
             reported_spend_usd=reported, unsettled_liability_usd=unsettled
         )
         cli.provider_attempts = len(attempt_ledger.attempts)
-        cli.set_provider_attempt_hook(attempt_ledger.record)
+        cli.set_provider_attempt_ledger(attempt_ledger)
     if args.max_provider_attempts is not None:
         cli.set_provider_attempt_limit(args.max_provider_attempts)
     reader_system_prompt = READER_SYSTEM_PROMPTS.get(args.prompt_version)

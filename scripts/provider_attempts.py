@@ -8,11 +8,13 @@ import fcntl
 import hashlib
 import json
 import os
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from pathlib import Path
 from typing import Any
 
@@ -55,8 +57,55 @@ def _append_event(path: Path, event: dict[str, Any]) -> None:
         os.fsync(handle.fileno())
 
 
+def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, delete=False
+        ) as handle:
+            json.dump(value, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+            temporary = Path(handle.name)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _valid_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _cost_nanos(response: Any) -> int | None:
+    usage = response.get("usage") if isinstance(response, dict) else None
+    value = usage.get("cost") if isinstance(usage, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float, str, Decimal)):
+        return None
+    try:
+        decimal = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    if not decimal.is_finite() or decimal <= 0:
+        return None
+    return int(
+        (decimal * Decimal(1_000_000_000)).to_integral_value(
+            rounding=ROUND_CEILING
+        )
+    )
+
+
 def _replay_journal(
-    path: Path, expected_fingerprint: str | None = None
+    path: Path,
+    expected_authorization_sha256: str | None = None,
+    expected_hard_ceiling_nanos: int | None = None,
+    expected_opening_liability_nanos: int | None = None,
 ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     raw = path.read_bytes()
     if not raw or not raw.endswith(b"\n"):
@@ -82,25 +131,82 @@ def _replay_journal(
     header = events[0]
     if (
         header.get("event") != "header"
-        or header.get("schema") != 1
-        or not isinstance(header.get("generation_fingerprint"), str)
+        or header.get("schema") != 2
+        or not _valid_sha256(header.get("authorization_sha256"))
+        or type(header.get("hard_ceiling_nanos")) is not int
+        or header["hard_ceiling_nanos"] <= 0
+        or type(header.get("opening_liability_nanos")) is not int
+        or not 0 <= header["opening_liability_nanos"] <= header["hard_ceiling_nanos"]
     ):
         raise ValueError("provider-attempt journal header is malformed")
-    fingerprint = header["generation_fingerprint"]
-    if expected_fingerprint is not None and fingerprint != expected_fingerprint:
-        raise ValueError("provider-attempt ledger fingerprint mismatch")
+    authorization_sha256 = header["authorization_sha256"]
+    if (
+        expected_authorization_sha256 is not None
+        and authorization_sha256 != expected_authorization_sha256
+    ):
+        raise ValueError("provider-attempt ledger authorization mismatch")
+    if (
+        expected_hard_ceiling_nanos is not None
+        and header["hard_ceiling_nanos"] != expected_hard_ceiling_nanos
+    ):
+        raise ValueError("provider-attempt ledger hard ceiling mismatch")
+    if (
+        expected_opening_liability_nanos is not None
+        and header["opening_liability_nanos"] != expected_opening_liability_nanos
+    ):
+        raise ValueError("provider-attempt ledger opening liability mismatch")
 
     attempts: list[dict[str, Any]] = []
     by_id: dict[int, dict[str, Any]] = {}
+    reconciled_ids: set[str] = set()
+    remaining_opening = header["opening_liability_nanos"]
+    closed = False
     for event in events[1:]:
         kind = event.get("event")
+        if closed:
+            raise ValueError("provider-attempt journal has an event after closed")
+        if not isinstance(event.get("screen_id"), str) or not event["screen_id"]:
+            raise ValueError("provider-attempt journal event screen is malformed")
+        if kind == "reconcile":
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                raise ValueError("provider-attempt reconciliation is malformed")
+            reservation_id = payload.get("reservation_id")
+            reserved_nanos = payload.get("reserved_nanos")
+            settled_nanos = payload.get("settled_nanos")
+            if (
+                not isinstance(reservation_id, str)
+                or not reservation_id
+                or reservation_id in reconciled_ids
+                or type(reserved_nanos) is not int
+                or type(settled_nanos) is not int
+                or not 0 <= settled_nanos <= reserved_nanos <= remaining_opening
+                or reserved_nanos <= 0
+                or not _valid_sha256(payload.get("receipt_sha256"))
+                or not _valid_sha256(payload.get("proof_sha256"))
+            ):
+                raise ValueError("provider-attempt reconciliation is malformed")
+            reconciled_ids.add(reservation_id)
+            remaining_opening -= reserved_nanos
+            continue
+        if kind == "closed":
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                raise ValueError("provider-attempt closure is malformed")
+            closed = True
+            continue
         attempt_id = event.get("attempt_id")
         request_key = event.get("request_key")
         payload = event.get("payload")
         if type(attempt_id) is not int or not isinstance(request_key, str) or not isinstance(payload, dict):
             raise ValueError("provider-attempt journal event is malformed")
         if kind == "start":
-            if attempt_id != len(attempts) + 1 or attempt_id in by_id:
+            if (
+                attempt_id != len(attempts) + 1
+                or attempt_id in by_id
+                or type(payload.get("max_liability_nanos")) is not int
+                or payload["max_liability_nanos"] <= 0
+            ):
                 raise ValueError("provider-attempt journal forked start transition")
             row = {
                 "attempt_id": attempt_id,
@@ -121,7 +227,79 @@ def _replay_journal(
             row[kind] = payload
         else:
             raise ValueError("provider-attempt journal event kind is malformed")
-    return fingerprint, events, attempts
+    if closed:
+        state = _journal_state(events, attempts)
+        closure = next(
+            event for event in reversed(events) if event.get("event") == "closed"
+        )
+        if closure["payload"] != {
+            "authorization_sha256": authorization_sha256,
+            "settled_nanos": state["settled_nanos"],
+            "unresolved_max_liability_nanos": state[
+                "unresolved_max_liability_nanos"
+            ],
+            "total_liability_nanos": state["total_liability_nanos"],
+        }:
+            raise ValueError("provider-attempt closure is malformed")
+    return authorization_sha256, events, attempts
+
+
+def _journal_state(
+    events: list[dict[str, Any]], attempts: list[dict[str, Any]]
+) -> dict[str, Any]:
+    header = events[0]
+    reconciliations = [
+        event for event in events[1:] if event.get("event") == "reconcile"
+    ]
+    opening = header["opening_liability_nanos"] - sum(
+        event["payload"]["reserved_nanos"] for event in reconciliations
+    )
+    settled = sum(event["payload"]["settled_nanos"] for event in reconciliations)
+    unresolved = 0
+    for attempt in attempts:
+        response = (
+            attempt["result"].get("response")
+            if attempt.get("status") == "result" and isinstance(attempt.get("result"), dict)
+            else None
+        )
+        cost_nanos = _cost_nanos(response)
+        if cost_nanos is None:
+            unresolved += attempt["start"]["max_liability_nanos"]
+        else:
+            settled += cost_nanos
+    return {
+        "authorization_sha256": header["authorization_sha256"],
+        "hard_ceiling_nanos": header["hard_ceiling_nanos"],
+        "opening_liability_nanos": opening,
+        "settled_nanos": settled,
+        "unresolved_max_liability_nanos": unresolved,
+        "total_liability_nanos": opening + settled + unresolved,
+        "closed": any(event.get("event") == "closed" for event in events),
+        "journal_sha256": hashlib.sha256(b"\n".join(_event_bytes(event) for event in events) + b"\n").hexdigest(),
+        "last_event_sha256": hashlib.sha256(_event_bytes(events[-1])).hexdigest(),
+    }
+
+
+def _validate_reconciliation_candidate(
+    events: list[dict[str, Any]], event: dict[str, Any]
+) -> None:
+    payload = event["payload"]
+    prior = [item["payload"] for item in events if item.get("event") == "reconcile"]
+    remaining = events[0]["opening_liability_nanos"] - sum(
+        item["reserved_nanos"] for item in prior
+    )
+    if (
+        not isinstance(payload.get("reservation_id"), str)
+        or not payload["reservation_id"]
+        or payload["reservation_id"] in {item["reservation_id"] for item in prior}
+        or type(payload.get("reserved_nanos")) is not int
+        or type(payload.get("settled_nanos")) is not int
+        or not 0 <= payload["settled_nanos"] <= payload["reserved_nanos"] <= remaining
+        or payload["reserved_nanos"] <= 0
+        or not _valid_sha256(payload.get("receipt_sha256"))
+        or not _valid_sha256(payload.get("proof_sha256"))
+    ):
+        raise ValueError("provider-attempt reconciliation is malformed")
 
 
 def fresh_paid_usage(response: Any) -> bool:
@@ -133,7 +311,6 @@ def fresh_paid_usage(response: Any) -> bool:
     prompt = usage.get("prompt_tokens")
     completion = usage.get("completion_tokens")
     total = usage.get("total_tokens")
-    cost = usage.get("cost")
     return (
         type(prompt) is int
         and prompt > 0
@@ -141,22 +318,42 @@ def fresh_paid_usage(response: Any) -> bool:
         and completion > 0
         and type(total) is int
         and total == prompt + completion
-        and not isinstance(cost, bool)
-        and isinstance(cost, (int, float))
-        and cost > 0
+        and _cost_nanos(response) is not None
     )
 
 
 class ProviderAttemptLedger:
-    """Append-before-call, fsynced JSONL state machine.
+    """Campaign-wide append-before-call, fsynced JSONL state machine.
 
     started -> result
             -> error
     """
 
-    def __init__(self, path: Path, generation_fingerprint: str) -> None:
+    def __init__(
+        self,
+        path: Path,
+        authorization_sha256: str,
+        screen_id: str,
+        hard_ceiling_nanos: int,
+        opening_liability_nanos: int,
+    ) -> None:
+        path = Path(path).resolve()
+        if not _valid_sha256(authorization_sha256):
+            raise ValueError("provider-attempt authorization must be a SHA-256")
+        if not isinstance(screen_id, str) or not screen_id:
+            raise ValueError("provider-attempt screen ID is required")
+        if type(hard_ceiling_nanos) is not int or hard_ceiling_nanos <= 0:
+            raise ValueError("provider-attempt hard ceiling must be positive")
+        if (
+            type(opening_liability_nanos) is not int
+            or not 0 <= opening_liability_nanos <= hard_ceiling_nanos
+        ):
+            raise ValueError("provider-attempt opening liability is invalid")
         self.path = path
-        self.generation_fingerprint = generation_fingerprint
+        self.authorization_sha256 = authorization_sha256
+        self.screen_id = screen_id
+        self.hard_ceiling_nanos = hard_ceiling_nanos
+        self.initial_opening_liability_nanos = opening_liability_nanos
         self._lock_path = path.with_name(path.name + ".lock")
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock_handle = self._lock_path.open("a+b")
@@ -170,17 +367,17 @@ class ProviderAttemptLedger:
         with _LEDGER_LOCK:
             try:
                 if path.exists():
-                    _, self._events, self.attempts = _replay_journal(
-                        path, generation_fingerprint
-                    )
+                    _, self._events, self.attempts = self._replay()
                 else:
                     self._events: list[dict[str, Any]] = []
                     self.attempts: list[dict[str, Any]] = []
                     self._append(
                         {
-                            "schema": 1,
+                            "schema": 2,
                             "event": "header",
-                            "generation_fingerprint": generation_fingerprint,
+                            "authorization_sha256": authorization_sha256,
+                            "hard_ceiling_nanos": hard_ceiling_nanos,
+                            "opening_liability_nanos": opening_liability_nanos,
                         }
                     )
             except BaseException:
@@ -210,17 +407,48 @@ class ProviderAttemptLedger:
         _append_event(self.path, event)
         self._events.append(event)
 
+    def _replay(
+        self,
+    ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+        return _replay_journal(
+            self.path,
+            self.authorization_sha256,
+            self.hard_ceiling_nanos,
+            self.initial_opening_liability_nanos,
+        )
+
+    def assert_open(self) -> None:
+        with _LEDGER_LOCK:
+            _, self._events, self.attempts = self._replay()
+            state = _journal_state(self._events, self.attempts)
+            if state["closed"]:
+                raise RuntimeError("provider-attempt campaign is closed")
+            if state["total_liability_nanos"] > self.hard_ceiling_nanos:
+                raise RuntimeError("provider-attempt campaign hard ceiling exceeded")
+
     def record(self, event: str, request_key: str, payload: dict | None) -> None:
         with _LEDGER_LOCK:
-            _, self._events, self.attempts = _replay_journal(
-                self.path, self.generation_fingerprint
-            )
+            _, self._events, self.attempts = self._replay()
+            state = _journal_state(self._events, self.attempts)
+            if state["closed"]:
+                raise RuntimeError("provider-attempt campaign is closed")
             payload = payload or {}
             if event == "start":
+                reservation = payload.get("max_liability_nanos")
+                if type(reservation) is not int or reservation <= 0:
+                    raise ValueError(
+                        "provider-attempt start requires positive max_liability_nanos"
+                    )
+                if (
+                    state["total_liability_nanos"] + reservation
+                    > self.hard_ceiling_nanos
+                ):
+                    raise RuntimeError("provider-attempt campaign hard ceiling exceeded")
                 attempt_id = len(self.attempts) + 1
                 self._append(
                     {
                         "event": "start",
+                        "screen_id": self.screen_id,
                         "attempt_id": attempt_id,
                         "request_key": request_key,
                         "payload": payload,
@@ -241,6 +469,7 @@ class ProviderAttemptLedger:
                 self._append(
                     {
                         "event": event,
+                        "screen_id": self.screen_id,
                         "attempt_id": attempt_id,
                         "request_key": request_key,
                         "payload": payload,
@@ -248,15 +477,70 @@ class ProviderAttemptLedger:
                 )
             else:
                 raise ValueError(f"unknown provider-attempt event: {event}")
-            _, self._events, self.attempts = _replay_journal(
-                self.path, self.generation_fingerprint
+            _, self._events, self.attempts = self._replay()
+
+    def record_reconciliation(
+        self,
+        reservation_id: str,
+        *,
+        reserved_nanos: int,
+        settled_nanos: int,
+        receipt_sha256: str,
+        proof_sha256: str,
+    ) -> None:
+        with _LEDGER_LOCK:
+            _, self._events, self.attempts = self._replay()
+            state = _journal_state(self._events, self.attempts)
+            if state["closed"]:
+                raise RuntimeError("provider-attempt campaign is closed")
+            body = {
+                "event": "reconcile",
+                "screen_id": self.screen_id,
+                "payload": {
+                    "reservation_id": reservation_id,
+                    "reserved_nanos": reserved_nanos,
+                    "settled_nanos": settled_nanos,
+                    "receipt_sha256": receipt_sha256,
+                    "proof_sha256": proof_sha256,
+                },
+            }
+            _validate_reconciliation_candidate(self._events, body)
+            self._append(body)
+            _, self._events, self.attempts = self._replay()
+
+    def close_campaign(self, projection_path: Path) -> dict[str, Any]:
+        with _LEDGER_LOCK:
+            _, self._events, self.attempts = self._replay()
+            state = _journal_state(self._events, self.attempts)
+            if state["closed"]:
+                raise RuntimeError("provider-attempt campaign is closed")
+            projection_path = Path(projection_path).resolve()
+            if projection_path == self.path:
+                raise ValueError("campaign closure projection must not overwrite journal")
+            closure = {
+                "authorization_sha256": self.authorization_sha256,
+                "settled_nanos": state["settled_nanos"],
+                "unresolved_max_liability_nanos": state[
+                    "unresolved_max_liability_nanos"
+                ],
+                "total_liability_nanos": state["total_liability_nanos"],
+            }
+            self._append(
+                {
+                    "event": "closed",
+                    "screen_id": self.screen_id,
+                    "payload": closure,
+                }
             )
+            _, self._events, self.attempts = self._replay()
+            closed_state = _journal_state(self._events, self.attempts)
+            projection = {**closure, "journal_sha256": closed_state["journal_sha256"]}
+            _atomic_write_json(projection_path, projection)
+            return projection
 
     def snapshot(self) -> dict[str, Any]:
         with _LEDGER_LOCK:
-            _, self._events, self.attempts = _replay_journal(
-                self.path, self.generation_fingerprint
-            )
+            _, self._events, self.attempts = self._replay()
             responses = [
                 row["result"]["response"]
                 for row in self.attempts
@@ -266,6 +550,7 @@ class ProviderAttemptLedger:
             ]
             priced = [response for response in responses if fresh_paid_usage(response)]
             return {
+                **_journal_state(self._events, self.attempts),
                 "provider_attempts": len(self.attempts),
                 "priced_provider_attempts": len(priced),
                 "unpriced_provider_attempts": len(self.attempts) - len(priced),
@@ -340,7 +625,7 @@ def validate_provider_attempt_ledger(snapshot: dict[str, Any]) -> None:
 def load_provider_attempt_ledger_snapshot(path: Path) -> dict[str, Any]:
     """Load a persisted ledger into the same validated summary used at runtime."""
     try:
-        _, _events, attempts = _replay_journal(Path(path))
+        _, events, attempts = _replay_journal(Path(path))
     except ValueError as error:
         raise RuntimeError(f"malformed provider-attempt ledger: {path}") from error
     actual_hash = _sha256_json(attempts)
@@ -353,6 +638,7 @@ def load_provider_attempt_ledger_snapshot(path: Path) -> dict[str, Any]:
     ]
     priced = [response for response in responses if fresh_paid_usage(response)]
     return {
+        **_journal_state(events, attempts),
         "provider_attempts": len(attempts),
         "priced_provider_attempts": len(priced),
         "unpriced_provider_attempts": len(attempts) - len(priced),
@@ -483,22 +769,20 @@ def _error_payload(error: BaseException, elapsed_seconds: float) -> dict[str, An
 
 def install_openai_meter(
     openai_module: Any,
-    ledger_path: Path,
+    ledger: ProviderAttemptLedger,
     *,
+    max_liability_nanos: int,
     context: dict[str, Any] | None = None,
-    ledger_context: dict[str, Any] | None = None,
     generation_lookup=None,
     max_output_tokens: int | None = None,
 ) -> ProviderAttemptLedger:
     """Wrap available sync/async OpenAI clients with the same durable meter."""
+    if not isinstance(ledger, ProviderAttemptLedger):
+        raise TypeError("ledger must be an open ProviderAttemptLedger")
+    if type(max_liability_nanos) is not int or max_liability_nanos <= 0:
+        raise ValueError("max_liability_nanos must be positive")
+    ledger.assert_open()
     context = dict(context or {})
-    # An evaluation campaign may invoke the official harness in separate
-    # processes for several arm/domain cells while sharing one cumulative
-    # attempt ceiling. Attempt ``context`` remains recorded on every row;
-    # ``ledger_context`` gives those cells one explicitly scoped journal.
-    ledger_context = dict(context if ledger_context is None else ledger_context)
-    fingerprint = _sha256_json({"schema_version": 2, "context": ledger_context})
-    ledger = ProviderAttemptLedger(Path(ledger_path), fingerprint)
 
     def cap_output(kwargs: dict[str, Any]) -> None:
         if max_output_tokens is None:
@@ -525,26 +809,41 @@ def install_openai_meter(
             # cache without changing the scorer's prompt or model parameters.
             default_headers["X-OpenRouter-Cache"] = "false"
             kwargs["default_headers"] = default_headers
-            client = original(*args, **kwargs)
-            completions = client.chat.completions
-            original_create = completions.create
+            client = None
+
+            def original_create(*create_args, **create_kwargs):
+                nonlocal client
+                with _LEDGER_LOCK:
+                    if client is None:
+                        client = original(*args, **kwargs)
+                return client.chat.completions.create(*create_args, **create_kwargs)
 
             if is_async:
                 async def create(*create_args, **create_kwargs):
                     cap_output(create_kwargs)
                     return await _meter_async(
                         original_create, create_args, create_kwargs, ledger,
-                        context, generation_lookup,
+                        context, generation_lookup, max_liability_nanos,
                     )
             else:
                 def create(*create_args, **create_kwargs):
                     cap_output(create_kwargs)
                     return _meter_sync(
                         original_create, create_args, create_kwargs, ledger,
-                        context, generation_lookup,
+                        context, generation_lookup, max_liability_nanos,
                     )
-            completions.create = create
-            return client
+
+            class Completions:
+                pass
+
+            class Chat:
+                completions = Completions()
+
+            class MeteredClient:
+                chat = Chat()
+
+            MeteredClient.chat.completions.create = create
+            return MeteredClient()
 
         setattr(openai_module, name, constructor)
 
@@ -594,21 +893,26 @@ def openrouter_generation_lookup(api_key: str):
     return lookup
 
 
-def _attempt_input(kwargs: dict[str, Any], context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _attempt_input(
+    kwargs: dict[str, Any], context: dict[str, Any], max_liability_nanos: int
+) -> tuple[str, dict[str, Any]]:
     requested_model = kwargs.get("model")
     if not isinstance(requested_model, str) or not requested_model:
         raise RuntimeError("completion request omitted model")
     request_sha256 = _sha256_json(kwargs)
     return request_sha256, {
+        **context,
         "retry_index": 0,
         "requested_model": requested_model,
         "request_sha256": request_sha256,
-        **context,
+        "max_liability_nanos": max_liability_nanos,
     }
 
 
-def _meter_sync(create, args, kwargs, ledger, context, generation_lookup):
-    request_key, start = _attempt_input(kwargs, context)
+def _meter_sync(
+    create, args, kwargs, ledger, context, generation_lookup, max_liability_nanos
+):
+    request_key, start = _attempt_input(kwargs, context, max_liability_nanos)
     with _LEDGER_LOCK:
         ledger.record("start", request_key, start)
     started = time.monotonic()
@@ -632,8 +936,10 @@ def _meter_sync(create, args, kwargs, ledger, context, generation_lookup):
     return response
 
 
-async def _meter_async(create, args, kwargs, ledger, context, generation_lookup):
-    request_key, start = _attempt_input(kwargs, context)
+async def _meter_async(
+    create, args, kwargs, ledger, context, generation_lookup, max_liability_nanos
+):
+    request_key, start = _attempt_input(kwargs, context, max_liability_nanos)
     with _LEDGER_LOCK:
         ledger.record("start", request_key, start)
     started = time.monotonic()

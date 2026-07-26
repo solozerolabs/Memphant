@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import types
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from provider_attempts import (  # noqa: E402
+    ProviderAttemptLedger,
     install_openai_meter,
     openrouter_generation_lookup,
 )
@@ -21,13 +23,24 @@ from provider_attempts import (  # noqa: E402
 def install_usage_meter(openai_module, ledger_path: Path) -> None:
     """Install the benchmark-neutral durable meter on all SDK client variants."""
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    context = {
+        "arm": os.environ.get("MEMPHANT_MEMSYCO_ARM", ""),
+        "task": os.environ.get("MEMPHANT_MEMSYCO_TASK", ""),
+    }
+    ledger = ProviderAttemptLedger(
+        ledger_path,
+        hashlib.sha256(
+            (ROOT / "benchmarks/manifests/memsyco.lock.json").read_bytes()
+        ).hexdigest(),
+        f"memsyco-{context['arm']}-{context['task']}",
+        200_000_000_000,
+        4_258_002_400,
+    )
     install_openai_meter(
         openai_module,
-        ledger_path,
-        context={
-            "arm": os.environ.get("MEMPHANT_MEMSYCO_ARM", ""),
-            "task": os.environ.get("MEMPHANT_MEMSYCO_TASK", ""),
-        },
+        ledger,
+        max_liability_nanos=10_000_000_000,
+        context=context,
         generation_lookup=openrouter_generation_lookup(api_key) if api_key else None,
     )
 

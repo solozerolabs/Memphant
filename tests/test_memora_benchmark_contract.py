@@ -26,6 +26,12 @@ def load(path: Path, name: str):
     return module
 
 
+def open_test_ledger(module, path: Path, screen: str = "test"):
+    return module.ProviderAttemptLedger(
+        path, hashlib.sha256(b"fp").hexdigest(), screen, 1_000_000_000_000, 0
+    )
+
+
 def file_sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -543,7 +549,7 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
     }
     evidence = [{"rank": 1, "body": "Use Rust now."}]
 
-    first_ledger = generator.ProviderAttemptLedger(ledger_path, "fp")
+    first_ledger = open_test_ledger(generator, ledger_path, "first")
     first = generator.OpenRouterReader(cache_dir, 4)
     first.set_attempt_ledger(first_ledger)
     first.answer(query, evidence)
@@ -553,7 +559,7 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
     # Simulate process death after ReaderCli atomically cached the paid response,
     # but before execute_groups could checkpoint the answer/proof row.
     first_ledger.close()
-    resumed_ledger = generator.ProviderAttemptLedger(ledger_path, "fp")
+    resumed_ledger = open_test_ledger(generator, ledger_path, "resumed")
     resumed = generator.OpenRouterReader(cache_dir, 4)
     resumed.set_attempt_ledger(resumed_ledger)
     answer, facts = resumed.answer(query, evidence)
@@ -563,8 +569,8 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
     assert resumed_ledger.snapshot()["provider_attempts"] == 1
     assert resumed_ledger.snapshot()["reported_cost_usd"] == 0.02
 
-    null_ledger = generator.ProviderAttemptLedger(tmp_path / "null-cost.json", "fp")
-    null_ledger.record("start", "other-cache-key", None)
+    null_ledger = open_test_ledger(generator, tmp_path / "null-cost.json")
+    null_ledger.record("start", "other-cache-key", {"max_liability_nanos": 100_000_000})
     null_payload = dict(payload, usage=dict(payload["usage"], cost=None))
     metadata = {
         "model": null_payload["model"], "provider": "OpenAI",
@@ -576,8 +582,8 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
     with pytest.raises(RuntimeError, match="interrupted or unpriced"):
         generator.validate_provider_attempt_ledger(null_ledger.snapshot())
 
-    zero_ledger = generator.ProviderAttemptLedger(tmp_path / "zero-usage.json", "fp")
-    zero_ledger.record("start", "zero-cache-key", None)
+    zero_ledger = open_test_ledger(generator, tmp_path / "zero-usage.json")
+    zero_ledger.record("start", "zero-cache-key", {"max_liability_nanos": 100_000_000})
     zero_payload = {
         "model": generator.MODEL,
         "provider": "Google",
@@ -589,8 +595,8 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
     with pytest.raises(RuntimeError, match="interrupted or unpriced"):
         generator.validate_provider_attempt_ledger(zero_ledger.snapshot())
 
-    interrupted = generator.ProviderAttemptLedger(tmp_path / "interrupted.json", "fp")
-    interrupted.record("start", "never-finished", None)
+    interrupted = open_test_ledger(generator, tmp_path / "interrupted.json")
+    interrupted.record("start", "never-finished", {"max_liability_nanos": 100_000_000})
     with pytest.raises(RuntimeError, match="interrupted or unpriced"):
         generator.validate_provider_attempt_ledger(interrupted.snapshot())
 
@@ -674,11 +680,12 @@ def test_reader_evidence_canonicalizes_runtime_episode_ids() -> None:
 def test_checkpoint_rejects_deleted_or_divergent_attempt_ledger(tmp_path: Path) -> None:
     generator = load(GENERATOR, "generate_memora_ledger_prefix")
     ledger_path = tmp_path / "attempts.json"
-    ledger = generator.ProviderAttemptLedger(ledger_path, "fp")
+    ledger = open_test_ledger(generator, ledger_path)
     ledger.record("start", "cache-a", {
         "retry_index": 0,
         "requested_model": "openai/gpt-5.6-luna-pro",
         "request_sha256": "1" * 64,
+        "max_liability_nanos": 100_000_000,
     })
     ledger.record("result", "cache-a", {"response": {
         "response_id": "cache-a-response",
@@ -704,7 +711,7 @@ def test_checkpoint_rejects_deleted_or_divergent_attempt_ledger(tmp_path: Path) 
 
     ledger.close()
     ledger_path.unlink()
-    deleted = generator.ProviderAttemptLedger(ledger_path, "fp")
+    deleted = open_test_ledger(generator, ledger_path)
     with pytest.raises(ValueError, match="truncated"):
         generator.execute_groups(
             [], object(), object(), answers, proof_path, checkpoint,
@@ -713,8 +720,8 @@ def test_checkpoint_rejects_deleted_or_divergent_attempt_ledger(tmp_path: Path) 
         )
 
     divergent_path = tmp_path / "divergent.json"
-    divergent = generator.ProviderAttemptLedger(divergent_path, "fp")
-    divergent.record("start", "cache-b", None)
+    divergent = open_test_ledger(generator, divergent_path)
+    divergent.record("start", "cache-b", {"max_liability_nanos": 100_000_000})
     divergent.record("result", "cache-b", {"error": "offline"})
     with pytest.raises(ValueError, match="diverged"):
         generator.execute_groups(
@@ -752,16 +759,17 @@ def test_fresh_ledger_rejects_populated_cache_but_priced_resume_allows_it(
     cache = tmp_path / "cache"
     cache.mkdir()
     (cache / "response.json").write_text("{}")
-    fresh = generator.ProviderAttemptLedger(tmp_path / "fresh.json", "fp")
+    fresh = open_test_ledger(generator, tmp_path / "fresh.json")
     with pytest.raises(ValueError, match="empty reader cache"):
         generator.validate_reader_cache_contract(cache, fresh, ledger_existed=False)
 
     path = tmp_path / "resume.json"
-    resumed = generator.ProviderAttemptLedger(path, "fp")
+    resumed = open_test_ledger(generator, path)
     resumed.record("start", "cache-key", {
         "retry_index": 0,
         "requested_model": "openai/gpt-5.6-luna-pro",
         "request_sha256": "1" * 64,
+        "max_liability_nanos": 100_000_000,
     })
     resumed.record("result", "cache-key", {"response": {
         "response_id": "cache-response", "requested_model": "openai/gpt-5.6-luna-pro",

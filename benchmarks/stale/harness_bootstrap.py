@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import runpy
@@ -13,6 +14,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from provider_attempts import (  # noqa: E402
+    ProviderAttemptLedger,
     install_openai_meter,
     openrouter_generation_lookup,
 )
@@ -36,9 +38,19 @@ def main() -> None:
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     lookup = openrouter_generation_lookup(api_key) if api_key else None
+    ledger = ProviderAttemptLedger(
+        known.attempt_ledger.resolve(),
+        hashlib.sha256(
+            (ROOT / "benchmarks/manifests/stale.lock.json").read_bytes()
+        ).hexdigest(),
+        "stale-native-judge",
+        200_000_000_000,
+        4_258_002_400,
+    )
     install_openai_meter(
         openai,
-        known.attempt_ledger.resolve(),
+        ledger,
+        max_liability_nanos=10_000_000_000,
         context={"benchmark": "STALE", "arm": "judge"},
         generation_lookup=lookup,
         max_output_tokens=known.max_output_tokens,

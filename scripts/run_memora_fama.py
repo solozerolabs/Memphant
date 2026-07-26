@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from provider_attempts import (  # noqa: E402
+    ProviderAttemptLedger,
     install_openai_meter,
     openrouter_generation_lookup,
     validate_provider_attempt_ledger,
@@ -427,9 +428,17 @@ def main() -> None:
     if not api_key:
         raise RuntimeError("Memora scoring requires OPENROUTER_API_KEY")
     import openai
-    judge_ledger = install_openai_meter(
-        openai,
+    judge_ledger = ProviderAttemptLedger(
         judge_ledger_path,
+        hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
+        "memora-native-judge",
+        200_000_000_000,
+        4_258_002_400,
+    )
+    install_openai_meter(
+        openai,
+        judge_ledger,
+        max_liability_nanos=10_000_000_000,
         context={
             "benchmark": manifest["benchmark"],
             "official_revision": manifest["code"]["revision"],
