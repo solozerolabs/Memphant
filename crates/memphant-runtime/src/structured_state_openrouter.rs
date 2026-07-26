@@ -117,7 +117,10 @@ pub struct StructuredStateRequestPlan {
     pub maximum_attempts: usize,
 }
 
-fn reasoning_payload(mode: &str) -> Result<Value, StructuredStateProviderError> {
+fn reasoning_payload(model: &str, mode: &str) -> Result<Value, StructuredStateProviderError> {
+    if model == LME_V2_QWEN_MODEL && mode != "disabled" {
+        return Err(invalid("Qwen construction reasoning mode must be disabled"));
+    }
     match mode {
         "disabled" => Ok(json!({"enabled": false})),
         "enabled" => Ok(json!({"enabled": true})),
@@ -205,7 +208,7 @@ pub fn plan_structured_state_request_with_tokenizer(
         body["temperature"] = json!(0);
     }
     if let Some(mode) = reasoning_mode {
-        body["reasoning"] = reasoning_payload(mode)?;
+        body["reasoning"] = reasoning_payload(model, mode)?;
     }
     let serialized_request = serde_json::to_vec(&body)
         .map_err(|error| invalid(format!("structured-state request: {error}")))?;
@@ -513,7 +516,7 @@ pub fn structured_state_provider_from_env()
         .ok()
         .filter(|value| !value.trim().is_empty())
     {
-        reasoning_payload(&mode).map_err(|error| error.to_string())?;
+        reasoning_payload(&provider.model, &mode).map_err(|error| error.to_string())?;
         provider = provider.with_reasoning_mode(mode);
     }
     Ok(Some(Arc::new(provider)))
@@ -3096,27 +3099,19 @@ mod tests {
         assert_eq!(body["provider"]["only"], json!(["deepinfra"]));
         assert_eq!(body["provider"]["allow_fallbacks"], false);
         assert_eq!(body["reasoning"], json!({"enabled": false}));
-        let enabled = plan_structured_state_request(
-            &request,
-            "qwen/qwen3.5-9b-20260310",
-            "prompt",
-            Some("enabled"),
-            100_000_000,
-            150_000_000,
-        )
-        .unwrap();
-        assert_ne!(plan.extraction_key, enabled.extraction_key);
-        assert!(
-            plan_structured_state_request(
-                &request,
-                "qwen/qwen3.5-9b-20260310",
-                "prompt",
-                Some("none"),
-                100_000_000,
-                150_000_000,
-            )
-            .is_err()
-        );
+        for forbidden in ["enabled", "effort:none", "none"] {
+            assert!(
+                plan_structured_state_request(
+                    &request,
+                    "qwen/qwen3.5-9b-20260310",
+                    "prompt",
+                    Some(forbidden),
+                    100_000_000,
+                    150_000_000,
+                )
+                .is_err()
+            );
+        }
         let field_schema = &body["response_format"]["json_schema"]["schema"]["properties"]["observations"]
             ["items"]["properties"]["fields"]["items"];
         assert_eq!(field_schema["anyOf"].as_array().unwrap().len(), 2);

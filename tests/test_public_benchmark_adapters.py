@@ -618,6 +618,16 @@ def load_memphant_adapter(monkeypatch):
     return module, registry
 
 
+def test_memphant_adapter_uses_only_v3_campaign_authority(monkeypatch):
+    adapter, _registry = load_memphant_adapter(monkeypatch)
+    assert adapter.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v3"
+    assert adapter.CANONICAL_MANIFEST_PATH.name.endswith(".v3.json")
+    assert adapter.CANONICAL_AUTHORIZATION_PATH.parent == (
+        adapter.CAMPAIGN_ARTIFACT_ROOT
+    )
+    assert adapter.CANONICAL_CENSUS_PATH.parent == adapter.CAMPAIGN_ARTIFACT_ROOT
+
+
 def test_worker_drain_archives_stdout_and_stderr_before_count_validation(
     monkeypatch, tmp_path
 ):
