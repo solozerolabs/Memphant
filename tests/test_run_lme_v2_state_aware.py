@@ -141,6 +141,73 @@ def test_reader_judge_liability_is_recomputed_from_request_shape_primitives() ->
         runner._reader_judge_liability(config)
 
 
+def test_reader_shape_proof_binds_tokenizer_template_and_oracle_free_fixture() -> None:
+    runner = _load_runner()
+    proof = {
+        "reader_shape_fixture_sha256": "a" * 64,
+        "reader_shape_rows": 451,
+        "reader_tokenizer_sha256": "b" * 64,
+        "reader_chat_template_sha256": "c" * 64,
+        "reader_maximum_nonmemory_chat_tokens": 617,
+    }
+    expected = {
+        "fixture_sha256": "a" * 64,
+        "rows": 451,
+        "tokenizer_sha256": "b" * 64,
+        "chat_template_sha256": "c" * 64,
+    }
+
+    assert runner._validated_reader_token_bound(proof, expected) == 617
+    for field in (
+        "reader_shape_fixture_sha256",
+        "reader_tokenizer_sha256",
+        "reader_chat_template_sha256",
+    ):
+        tampered = dict(proof)
+        tampered[field] = "d" * 64
+        with pytest.raises(RuntimeError, match="reader tokenization proof drift"):
+            runner._validated_reader_token_bound(tampered, expected)
+
+
+def test_reader_shape_fixture_excludes_oracles_and_hashes_every_question(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    upstream = tmp_path / "upstream/evaluation"
+    upstream.mkdir(parents=True)
+    (upstream / "harness.py").write_text(
+        "DOMAIN_SYSTEM_PROMPTS = {'web': 'system prompt'}\n", encoding="utf-8"
+    )
+    questions = tmp_path / "questions.jsonl"
+    rows = [
+        {
+            "id": f"question-{index:03}",
+            "domain": "web",
+            "question": f"Question {index}?",
+            "image": None,
+            "answer": f"SECRET-{index}",
+            "eval_function": "oracle",
+        }
+        for index in range(451)
+    ]
+    questions.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    fixture = tmp_path / "reader-shapes.jsonl"
+
+    first = runner._materialize_reader_shapes(tmp_path, fixture)
+    fixture_text = fixture.read_text(encoding="utf-8")
+    assert first["rows"] == 451
+    assert "SECRET" not in fixture_text
+    assert "eval_function" not in fixture_text
+    rows[0]["question"] = "A changed question?"
+    questions.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    second = runner._materialize_reader_shapes(tmp_path, fixture)
+    assert second["fixture_sha256"] != first["fixture_sha256"]
+
+
 def test_deep_liability_is_derived_from_full_runtime_limits_and_hard_stop() -> None:
     runner = _load_runner()
     config = {
@@ -249,6 +316,79 @@ class _WaveLedger:
         return {"attempts": []}
 
 
+def test_forged_self_hashed_over_cap_census_fails_before_reservation_or_launch(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    source_census = ROOT / (
+        "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/"
+        "CAMPAIGN-CENSUS.json"
+    )
+    census = json.loads(source_census.read_text(encoding="utf-8"))
+    census["terms"]["C"] = runner.HARD_CEILING_NANOS
+    census["construction"]["construction_liability_nanos"] = (
+        runner.HARD_CEILING_NANOS
+    )
+    census["construction"]["retry_pool_nanos"] = (
+        runner.HARD_CEILING_NANOS
+        - census["construction"]["first_attempt_liability_nanos"]
+    )
+    census["admission"]["authorized"] = True
+    census["admission"]["total_nanos"] = 1
+    manifest = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))
+    census["manifest_sha256"] = runner._sha256_file(STATE_AWARE_MANIFEST)
+    census["construction"]["construction_identity_sha256"] = runner.sha256_json(
+        manifest["construction"]
+    )
+    census["census_sha256"] = runner.sha256_json(
+        {key: value for key, value in census.items() if key != "census_sha256"}
+    )
+    census_path = tmp_path / "forged-census.json"
+    census_path.write_text(json.dumps(census), encoding="utf-8")
+    ledger = _WaveLedger()
+    launched = []
+
+    with pytest.raises(RuntimeError, match="admission equation drift"):
+        runner.authorize_construction_wave(
+            ledger,
+            census_path,
+            STATE_AWARE_MANIFEST,
+            [],
+            wave_kind="first_attempt",
+            launch=lambda: launched.append(True),
+        )
+
+    assert ledger.events == []
+    assert launched == []
+
+
+def test_stale_census_binary_provenance_is_rejected(tmp_path: Path) -> None:
+    runner = _load_runner()
+    expected = {
+        "binary_sha256": "a" * 64,
+        "cargo_lock_sha256": "b" * 64,
+        "source_set_sha256": "c" * 64,
+        "rustc_vv_sha256": "d" * 64,
+        "cargo_version_sha256": "e" * 64,
+        "build_profile": "release",
+        "cargo_locked": True,
+        "package": "memphant-cli",
+    }
+    stale = {**expected, "binary_sha256": "f" * 64}
+
+    with pytest.raises(RuntimeError, match="census binary provenance drift"):
+        runner._validate_census_binary_provenance(expected, stale)
+
+    fresh_binary = tmp_path / "fresh-cli"
+    stale_binary = tmp_path / "stale-cli"
+    fresh_binary.write_bytes(b"fresh locked build")
+    stale_binary.write_bytes(b"older planner")
+    fresh_sha256 = runner._sha256_file(fresh_binary)
+    assert runner._verify_selected_census_binary(fresh_sha256, fresh_binary) is None
+    with pytest.raises(RuntimeError, match="differs from the fresh locked build"):
+        runner._verify_selected_census_binary(fresh_sha256, stale_binary)
+
+
 def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_coverage() -> None:
     runner = _load_runner()
     census = runner.recost_census_values(
@@ -266,7 +406,7 @@ def test_construction_wave_reserves_before_launch_and_requires_exact_subledger_c
     ]
     ledger = _WaveLedger()
     launched = []
-    wave = runner.authorize_construction_wave(
+    wave = runner._authorize_validated_construction_wave(
         ledger, census, plans, wave_kind="first_attempt", launch=lambda: launched.append(True)
     )
     assert ledger.events[0][0] == "start"

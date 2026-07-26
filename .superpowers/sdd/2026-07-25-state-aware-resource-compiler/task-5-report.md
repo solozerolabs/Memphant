@@ -13,6 +13,14 @@ query-blind and no-model. Historical P1-T6 files remained byte-identical.
 - Added a production-identity no-model census over all canonical resource uses.
   Exact Qwen tokenization and greedy 128-KiB request batching reduce the unique
   construction plans from the one-slice baseline to 11,578.
+- The census builds `memphant-cli` in a fresh isolated target with
+  `cargo build --locked --release`, fingerprints Cargo.lock, the bound source
+  set, cargo/rustc, and the resulting executable, then runs a private
+  content-addressed copy whose hash is checked before and after execution.
+- The reader nonmemory bound is mechanically tokenized across all 451 official
+  oracle-free message shapes with the pinned Qwen tokenizer/chat template. The
+  derived maximum is 527 tokens; the question source, projected fixture,
+  tokenizer, template, row count, image count, and question IDs are hash-bound.
 - Bound the Qwen construction and Deep routes to DeepInfra only with no
   fallbacks. Runtime receipts reject a different served provider/model.
 - Froze the native judge's upstream-exposed 2,048-token default explicitly.
@@ -22,6 +30,10 @@ query-blind and no-model. Historical P1-T6 files remained byte-identical.
   exact first attempts plus the bounded retry pool before a credential-bearing
   launcher runs. Retry subsets consume the prepaid pool and never append a
   second campaign reservation.
+- Before that reservation, the public launch API reloads the census and
+  manifest, validates current runtime/build identities, and independently
+  recomputes `C`, `R`, `S`, retry headroom, and the exact $200 equation. A
+  forged but self-consistent JSON checksum has no launch authority.
 - The Rust subledger independently enforces the same aggregate cap before each
   HTTP call: under a cross-process file lock it validates all prior rows, sums
   every started per-attempt reservation without refunds, and rejects malformed,
@@ -50,12 +62,14 @@ query-blind and no-model. Historical P1-T6 files remained byte-identical.
 - The final exact terms and total are recorded in
   `docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-CENSUS.json`.
 - The final packet self-hash is
-  `3924ea807c0fabd25514c25de86693f49216749e7b406fbe70d878daa33a38a7`;
+  `66deb70b49f75099f100511617d581524d823841c47aefded10537506ba4cec6`;
   its file hash is
-  `0f01e1eaf8bf3eeef543a46d9e97f6a956d48f915265542a6d7af2c8195b104e`,
+  `25346b0afc89d9a2e9d3cdaa76ad8bfa3325fb6b4c399722d03719dfd72d7ce1`,
   and it binds manifest hash
-  `b9e80ec3e91aa13f0c077a7f3b98975696b7501feef3409d3dfa1e684c732fce`.
-- The admitted total is `$199.5353461`, leaving `$0.4646539` below the
+  `195881dbf17e6192eb47b64a76c65b7784ad390bf182df606041e2cd4544026e`.
+- The freshly locked release-built census executable hash is
+  `a0ff3eace7c44538090cceba20e6c24828042d17dbce1156be413ec3c5135031`.
+- The admitted total is `$199.5356167`, leaving `$0.4643833` below the
   `$200` hard ceiling after preserving the independent `$10` contingency.
 - `paid_models_run = false` and `spend_nanos = 0` in every census artifact.
 
@@ -68,6 +82,11 @@ RED failures were observed for:
 - structured extraction retried a 503 internally.
 - recost and aggregate-wave functions did not exist.
 - aggregate settlement lacked exact subledger coverage and route/cost bounds.
+- the old launch API accepted a caller-owned census dictionary without
+  independently recomputing admission;
+- the census could execute an existing stale release binary;
+- the reader maximum was an unexplained 524-token literal rather than a
+  tokenizer-derived official-message bound.
 
 Focused GREEN:
 
@@ -86,7 +105,7 @@ statistics, construction-proof tampering, and oracle-safe prefix sealing.
 
 Additional GREEN evidence:
 
-- Python repository gate: `887 passed, 12 skipped`.
+- Python repository gate: `891 passed, 12 skipped`.
 - `cargo clippy --all-targets --all-features -- -D warnings`.
 - `cargo test --all-targets --all-features`, `cargo fmt --check`,
   `cargo test --doc`, and `git diff --check`.

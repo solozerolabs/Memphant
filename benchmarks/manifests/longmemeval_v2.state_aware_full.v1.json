@@ -108,21 +108,52 @@
       "scripts/run_lme_v2_state_aware.py"
     ],
     "code_sha256s": {
-      "crates/memphant-runtime/src/structured_state_openrouter.rs": "cc275c69e589d6a227c1a19af8f2b2673aea224351ee0e7d3450ee5f75b99b8e",
+      "crates/memphant-runtime/src/structured_state_openrouter.rs": "74f24ad8156b57062357934976945e7ef5a0b03107fffd53790c977f1b4482e6",
       "crates/memphant-core/src/service.rs": "4462d4f347e5bc00b7ed92aa5c78226d92de6fcfe549b942bcd659e6723795d3",
       "crates/memphant-core/src/structured_state.rs": "7b12b07517514ec837fbf7c3eaf56e0679d63cc60ecf226908a0e154b82d58c6",
       "benchmarks/longmemeval_v2/memphant_memory.py": "70c81b21efbd4755cc9b473e40f23689f3aefb56bf170469846d577fab817b71",
-      "crates/memphant-cli/src/structured_state_census.rs": "485c19f13449d1300bfd0d7064ba8d001ff530672801bd880f73276f62e04868",
-      "scripts/run_lme_v2_state_aware.py": "4a351a287b6a1522bef84ded8173249e29d7e3a55218ee053a6cfd870d3f3a5a"
+      "crates/memphant-cli/src/structured_state_census.rs": "8efd7ec151da41de7efd7042243ed5eacbd405b191f8e8f330ff0667eeb0cd5f",
+      "scripts/run_lme_v2_state_aware.py": "c83f0d24e898e8a1a3a5724591bb0097ec4ac3eaac1cfda0ebc1df2d1503675d"
+    },
+    "census_binary_build": {
+      "package": "memphant-cli",
+      "profile": "release",
+      "cargo_locked": true,
+      "cargo_lock_sha256": "ddce916121e07089eb68717e3f4860efc8394d7f904a9abc9a8d759f1b876aa6",
+      "source_set_sha256": "257e28a36a9fffea3ddf4edf7c06078b864ed0f76b2f3dc0732f4338193d1fa3",
+      "rustc_vv_sha256": "a9951fd2e18599557d1a289d74c50874d336477e219b1472508a63518090fa08",
+      "cargo_version_sha256": "4b38cfb28fee9bbb95897bc3793f5fce5f3ed35c732f29ad7d80f96ba96eac5b",
+      "source_paths": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates/memphant-cli/Cargo.toml",
+        "crates/memphant-cli/src/main.rs",
+        "crates/memphant-cli/src/structured_state_census.rs",
+        "crates/memphant-core/Cargo.toml",
+        "crates/memphant-core/src/lib.rs",
+        "crates/memphant-core/src/service.rs",
+        "crates/memphant-core/src/structured_state.rs",
+        "crates/memphant-runtime/Cargo.toml",
+        "crates/memphant-runtime/src/lib.rs",
+        "crates/memphant-runtime/src/structured_state_openrouter.rs",
+        "benchmarks/longmemeval_v2/memphant_memory.py",
+        "scripts/run_lme_v2_state_aware.py"
+      ]
     }
   },
   "reader_judge": {
     "reader": {
       "model": "qwen/qwen3.5-9b-20260310",
       "provider": "deepinfra",
+      "tokenizer_repository": "Qwen/Qwen3.5-9B",
+      "tokenizer_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "tokenizer_path": "qwen/tokenizer.json",
+      "tokenizer_config_path": "qwen/tokenizer_config.json",
+      "tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+      "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
       "memory_context_max_tokens": 200000,
-      "maximum_nonmemory_chat_tokens": 524,
-      "maximum_input_reservation_units": 200524,
+      "maximum_nonmemory_chat_tokens": 527,
+      "maximum_input_reservation_units": 200527,
       "maximum_output_tokens": 20000,
       "maximum_attempts": 1,
       "input_price_nanos_per_million": 100000000,

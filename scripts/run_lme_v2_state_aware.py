@@ -461,6 +461,177 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+BINARY_PROVENANCE_FIELDS = {
+    "binary_sha256",
+    "cargo_lock_sha256",
+    "source_set_sha256",
+    "rustc_vv_sha256",
+    "cargo_version_sha256",
+    "build_profile",
+    "cargo_locked",
+    "package",
+}
+
+
+def _validate_census_binary_provenance(
+    expected: dict[str, object], actual: dict[str, object]
+) -> None:
+    if (
+        set(expected) != BINARY_PROVENANCE_FIELDS
+        or set(actual) != BINARY_PROVENANCE_FIELDS
+        or any(expected.get(key) != actual.get(key) for key in BINARY_PROVENANCE_FIELDS)
+        or any(
+            not isinstance(actual.get(key), str) or not SHA256.fullmatch(actual[key])
+            for key in (
+                "binary_sha256",
+                "cargo_lock_sha256",
+                "source_set_sha256",
+                "rustc_vv_sha256",
+                "cargo_version_sha256",
+            )
+        )
+        or actual.get("build_profile") != "release"
+        or actual.get("cargo_locked") is not True
+        or actual.get("package") != "memphant-cli"
+    ):
+        raise RuntimeError("census binary provenance drift")
+
+
+def _verify_selected_census_binary(fresh_sha256: str, selected_binary: Path) -> None:
+    if (
+        not SHA256.fullmatch(fresh_sha256)
+        or not selected_binary.is_file()
+        or _sha256_file(selected_binary) != fresh_sha256
+    ):
+        raise RuntimeError("selected census binary differs from the fresh locked build")
+
+
+def _tool_output(command: list[str]) -> bytes:
+    completed = subprocess.run(
+        command, capture_output=True, check=False, env=os.environ.copy()
+    )
+    if completed.returncode != 0 or not completed.stdout.strip():
+        raise RuntimeError(f"build identity command failed: {command[0]}")
+    return completed.stdout.strip()
+
+
+def _current_build_provenance_inputs(
+    construction: dict[str, object], build: dict[str, object]
+) -> dict[str, object]:
+    source_paths = build.get("source_paths")
+    if (
+        build.get("package") != "memphant-cli"
+        or build.get("profile") != "release"
+        or build.get("cargo_locked") is not True
+        or not isinstance(source_paths, list)
+        or not source_paths
+        or not all(isinstance(path, str) and path for path in source_paths)
+    ):
+        raise RuntimeError("census binary build contract is incomplete")
+    source_hashes = {}
+    for relative in source_paths:
+        path = ROOT / relative
+        if not path.is_file():
+            raise RuntimeError(f"census binary source is missing: {relative}")
+        source_hashes[relative] = _sha256_file(path)
+    declared_code = construction.get("code_sha256s")
+    if not isinstance(declared_code, dict) or any(
+        source_hashes.get(relative) != expected
+        for relative, expected in declared_code.items()
+    ):
+        raise RuntimeError("census binary source identity drift")
+    cargo = shutil.which("cargo")
+    rustc = shutil.which("rustc")
+    if cargo is None or rustc is None:
+        raise RuntimeError("cargo and rustc are required for the census authority build")
+    cargo_version = _tool_output([cargo, "--version"])
+    rustc_vv = _tool_output([rustc, "-Vv"])
+    actual = {
+        "cargo_lock_sha256": _sha256_file(ROOT / "Cargo.lock"),
+        "source_set_sha256": sha256_json(source_hashes),
+        "rustc_vv_sha256": hashlib.sha256(rustc_vv).hexdigest(),
+        "cargo_version_sha256": hashlib.sha256(cargo_version).hexdigest(),
+    }
+    for key, value in actual.items():
+        if build.get(key) != value:
+            raise RuntimeError(f"census binary build identity drift: {key}")
+    return {**actual, "cargo": cargo}
+
+
+def _build_census_binary(
+    manifest: dict[str, object], selected_binary: Path | None = None
+) -> tuple[Path, dict[str, object]]:
+    construction = manifest.get("construction")
+    if not isinstance(construction, dict):
+        raise RuntimeError("census construction contract is missing")
+    build = construction.get("census_binary_build")
+    if not isinstance(build, dict):
+        raise RuntimeError("census binary build contract is missing")
+    identity = _current_build_provenance_inputs(construction, build)
+    with tempfile.TemporaryDirectory(prefix="memphant-census-build-") as temporary:
+        target_dir = Path(temporary) / "target"
+        environment = os.environ.copy()
+        environment.pop("RUSTFLAGS", None)
+        environment.pop("CARGO_ENCODED_RUSTFLAGS", None)
+        environment.pop("CARGO_TARGET_DIR", None)
+        environment["CARGO_INCREMENTAL"] = "0"
+        environment["SOURCE_DATE_EPOCH"] = "0"
+        completed = subprocess.run(
+            [
+                identity["cargo"],
+                "build",
+                "--locked",
+                "--release",
+                "-p",
+                "memphant-cli",
+                "--target-dir",
+                str(target_dir),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=environment,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                "fresh locked census binary build failed: " + completed.stderr.strip()
+            )
+        built = target_dir / "release" / (
+            "memphant-cli.exe" if sys.platform == "win32" else "memphant-cli"
+        )
+        if not built.is_file():
+            raise RuntimeError("fresh locked census build produced no memphant-cli binary")
+        built_sha256 = _sha256_file(built)
+        if selected_binary is not None:
+            _verify_selected_census_binary(built_sha256, selected_binary)
+        stable_dir = ROOT / "target/state-memory-census-bin" / built_sha256
+        stable_dir.mkdir(parents=True, exist_ok=True)
+        stable = stable_dir / built.name
+        if stable.exists() and _sha256_file(stable) != built_sha256:
+            raise RuntimeError("content-addressed census binary was substituted")
+        if not stable.exists():
+            with tempfile.NamedTemporaryFile(dir=stable_dir, delete=False) as handle:
+                temporary_binary = Path(handle.name)
+                with built.open("rb") as source:
+                    shutil.copyfileobj(source, handle)
+            temporary_binary.chmod(0o500)
+            os.replace(temporary_binary, stable)
+        if _sha256_file(stable) != built_sha256:
+            raise RuntimeError("content-addressed census binary hash drift")
+    provenance = {
+        "binary_sha256": built_sha256,
+        "cargo_lock_sha256": identity["cargo_lock_sha256"],
+        "source_set_sha256": identity["source_set_sha256"],
+        "rustc_vv_sha256": identity["rustc_vv_sha256"],
+        "cargo_version_sha256": identity["cargo_version_sha256"],
+        "build_profile": "release",
+        "cargo_locked": True,
+        "package": "memphant-cli",
+    }
+    return stable, provenance
+
+
 def _acquire_file(url: str, destination: Path, expected_bytes: int, expected_sha256: str) -> None:
     if destination.is_file() and destination.stat().st_size == expected_bytes and _sha256_file(destination) == expected_sha256:
         return
@@ -555,6 +726,83 @@ def _materialize_cli_input(data_root: Path, output: Path) -> dict[str, object]:
     }
 
 
+def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, object]:
+    prompts = _literal_assignment(
+        data_root / "upstream/evaluation/harness.py", "DOMAIN_SYSTEM_PROMPTS"
+    )
+    if (
+        not isinstance(prompts, dict)
+        or not prompts
+        or not all(isinstance(key, str) and isinstance(value, str) for key, value in prompts.items())
+    ):
+        raise RuntimeError("pinned official reader system prompts are invalid")
+    question_ids: set[str] = set()
+    rows = 0
+    image_rows = 0
+    with (data_root / "questions.jsonl").open(encoding="utf-8") as source, output.open(
+        "w", encoding="utf-8"
+    ) as target:
+        for line_number, line in enumerate(source, 1):
+            raw = json.loads(line)
+            if not isinstance(raw, dict):
+                raise RuntimeError(f"question line {line_number} is not an object")
+            question_id = raw.get("id")
+            domain = raw.get("domain")
+            question = raw.get("question")
+            image = raw.get("image")
+            if (
+                not isinstance(question_id, str)
+                or not question_id
+                or question_id in question_ids
+                or domain not in prompts
+                or not isinstance(question, str)
+                or not question.strip()
+                or (image is not None and (not isinstance(image, str) or not image.strip()))
+            ):
+                raise RuntimeError(f"question line {line_number} has an invalid reader shape")
+            question_ids.add(question_id)
+            has_image = image is not None
+            image_rows += int(has_image)
+            target.write(
+                canonical_json(
+                    {
+                        "question_id": question_id,
+                        "system_prompt": prompts[domain],
+                        "question_text": question,
+                        "has_image": has_image,
+                    }
+                ).decode("utf-8")
+                + "\n"
+            )
+            rows += 1
+    if rows != QUESTION_COUNT:
+        raise RuntimeError("official questions file must contain exactly 451 reader shapes")
+    return {
+        "fixture_sha256": _sha256_file(output),
+        "rows": rows,
+        "image_rows": image_rows,
+        "question_source_sha256": _sha256_file(data_root / "questions.jsonl"),
+        "question_ids_sha256": sha256_json(sorted(question_ids)),
+    }
+
+
+def _validated_reader_token_bound(
+    proof: dict[str, object], expected: dict[str, object]
+) -> int:
+    bindings = {
+        "reader_shape_fixture_sha256": "fixture_sha256",
+        "reader_shape_rows": "rows",
+        "reader_tokenizer_sha256": "tokenizer_sha256",
+        "reader_chat_template_sha256": "chat_template_sha256",
+    }
+    if any(proof.get(actual) != expected.get(bound) for actual, bound in bindings.items()):
+        raise RuntimeError("reader tokenization proof drift")
+    maximum = proof.get("reader_maximum_nonmemory_chat_tokens")
+    if type(maximum) is not int or maximum <= 0:
+        raise RuntimeError("reader tokenization proof drift")
+    return maximum
+
+
 def _ceil_cost(tokens: int, price_nanos_per_million: int) -> int:
     if type(tokens) is not int or tokens <= 0 or type(price_nanos_per_million) is not int or price_nanos_per_million <= 0:
         raise RuntimeError("token and price maxima must be positive integers")
@@ -605,7 +853,12 @@ def _judge_messages(kind: str) -> list[dict[str, str]]:
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def _official_request_shape_bounds(data_root: Path) -> dict[str, int]:
+def _official_request_shape_bounds(
+    data_root: Path,
+    reader_proof: dict[str, object],
+    reader_fixture: dict[str, object],
+    reader_config: dict[str, object],
+) -> dict[str, object]:
     harness_path = data_root / "upstream/evaluation/harness.py"
     qa_path = data_root / "upstream/evaluation/qa_eval_metrics.py"
     prompts = _literal_assignment(harness_path, "DOMAIN_SYSTEM_PROMPTS")
@@ -636,15 +889,31 @@ def _official_request_shape_bounds(data_root: Path) -> dict[str, int]:
         ]
         reader_empty_shapes.append(len(canonical_json(messages)))
     judge_fixed = max(len(canonical_json(_judge_messages(kind))) for kind in ("abstention", "gotchas"))
+    maximum_reader_tokens = _validated_reader_token_bound(
+        reader_proof,
+        {
+            "fixture_sha256": reader_fixture["fixture_sha256"],
+            "rows": QUESTION_COUNT,
+            "tokenizer_sha256": reader_config.get("tokenizer_sha256"),
+            "chat_template_sha256": reader_config.get("chat_template_sha256"),
+        },
+    )
     return {
         "question_rows": question_rows,
         "maximum_question_record_bytes": maximum_question_record_bytes,
         # Raw JSON-line bytes conservatively bind all escaped question fields
         # without decoding or selecting target/oracle fields.
         "reader_maximum_nonmemory_serialized_bytes": max(reader_empty_shapes) + maximum_question_record_bytes,
-        # Verified with the pinned tokenizer/chat-template fixture across all
-        # 451 official reader message shapes.
-        "reader_maximum_nonmemory_chat_tokens": 524,
+        "reader_shape_fixture_sha256": reader_fixture["fixture_sha256"],
+        "reader_shape_question_source_sha256": reader_fixture[
+            "question_source_sha256"
+        ],
+        "reader_shape_question_ids_sha256": reader_fixture["question_ids_sha256"],
+        "reader_shape_rows": reader_fixture["rows"],
+        "reader_shape_image_rows": reader_fixture["image_rows"],
+        "reader_tokenizer_sha256": reader_config.get("tokenizer_sha256"),
+        "reader_chat_template_sha256": reader_config.get("chat_template_sha256"),
+        "reader_maximum_nonmemory_chat_tokens": maximum_reader_tokens,
         # Exact canonical official judge messages across the 156 rows whose
         # eval functions invoke the native LLM judge, with response fields empty.
         "judge_maximum_fixed_serialized_bytes": 2_412,
@@ -761,7 +1030,11 @@ def _validate_deep_runtime_identity(config: dict[str, object]) -> None:
 
 
 def _full_census(
-    manifest: dict[str, object], manifest_path: Path, data_root: Path, cli_bin: Path
+    manifest: dict[str, object],
+    manifest_path: Path,
+    data_root: Path,
+    cli_bin: Path,
+    binary_provenance: dict[str, object],
 ) -> dict[str, object]:
     data = manifest["data"]
     for relative, record in data["files"].items():
@@ -779,19 +1052,27 @@ def _full_census(
         for path in code_paths
     ):
         raise RuntimeError("production construction planner identity drift")
-    request_shapes = _official_request_shape_bounds(data_root)
     reader = manifest["reader_judge"]["reader"]
     judge = manifest["reader_judge"]["judge"]
-    if reader.get("maximum_nonmemory_chat_tokens") != request_shapes["reader_maximum_nonmemory_chat_tokens"]:
-        raise RuntimeError("reader request maximum drift")
-    if judge.get("maximum_fixed_serialized_bytes") != request_shapes["judge_maximum_fixed_serialized_bytes"]:
-        raise RuntimeError("judge request maximum drift")
     _validate_deep_runtime_identity(manifest["deep_recall"])
     with tempfile.TemporaryDirectory(prefix="memphant-lme-v2-census-") as temporary:
-        input_jsonl = Path(temporary) / "resources.jsonl"
+        temporary_root = Path(temporary)
+        expected_binary_sha256 = binary_provenance.get("binary_sha256")
+        if (
+            not isinstance(expected_binary_sha256, str)
+            or not SHA256.fullmatch(expected_binary_sha256)
+        ):
+            raise RuntimeError("census binary provenance is malformed")
+        execution_cli = temporary_root / f"memphant-cli-{expected_binary_sha256}"
+        shutil.copyfile(cli_bin, execution_cli)
+        execution_cli.chmod(0o500)
+        _verify_selected_census_binary(expected_binary_sha256, execution_cli)
+        input_jsonl = temporary_root / "resources.jsonl"
+        reader_jsonl = temporary_root / "reader-shapes.jsonl"
         enumeration = _materialize_cli_input(data_root, input_jsonl)
+        reader_fixture = _materialize_reader_shapes(data_root, reader_jsonl)
         command = [
-            str(cli_bin),
+            str(execution_cli),
             "structured-state",
             "census",
             "--input-jsonl",
@@ -808,13 +1089,23 @@ def _full_census(
             str(data_root / construction["tokenizer_path"]),
             "--tokenizer-config-file",
             str(data_root / construction["tokenizer_config_path"]),
+            "--reader-input-jsonl",
+            str(reader_jsonl),
         ]
         if construction.get("reasoning_effort"):
             command += ["--reasoning-effort", construction["reasoning_effort"]]
         completed = subprocess.run(command, capture_output=True, text=True, check=False, env={})
+        _verify_selected_census_binary(expected_binary_sha256, execution_cli)
         if completed.returncode != 0:
             raise RuntimeError(f"production census planner failed: {completed.stderr.strip()}")
         planned = json.loads(completed.stdout)
+    request_shapes = _official_request_shape_bounds(
+        data_root, planned, reader_fixture, reader
+    )
+    if reader.get("maximum_nonmemory_chat_tokens") != request_shapes["reader_maximum_nonmemory_chat_tokens"]:
+        raise RuntimeError("reader request maximum drift")
+    if judge.get("maximum_fixed_serialized_bytes") != request_shapes["judge_maximum_fixed_serialized_bytes"]:
+        raise RuntimeError("judge request maximum drift")
     r_term = _reader_judge_liability(manifest["reader_judge"])
     deep_derivation = _deep_liability(manifest["deep_recall"])
     s_term = deep_derivation["maximum_liability_nanos"]
@@ -870,6 +1161,7 @@ def _full_census(
         "response_model": construction["response_model"],
         "requested_provider": construction["provider"],
         "construction_identity_sha256": sha256_json(construction),
+        "census_binary_provenance": binary_provenance,
         "parent_full_census_required_for_recost": False,
     }
     core = {
@@ -1065,7 +1357,153 @@ def _plan_inventory(plans: list[dict[str, object]]) -> tuple[list[dict[str, obje
     return normalized, total, sha256_json(normalized)
 
 
+def _validate_current_manifest_identities(manifest: dict[str, object]) -> None:
+    construction = manifest.get("construction")
+    if not isinstance(construction, dict):
+        raise RuntimeError("campaign construction identity is missing")
+    prompt = ROOT / str(construction.get("prompt_path", ""))
+    code_paths = construction.get("code_paths")
+    code_hashes = construction.get("code_sha256s")
+    if (
+        not prompt.is_file()
+        or _sha256_file(prompt) != construction.get("prompt_sha256")
+        or not isinstance(code_paths, list)
+        or not code_paths
+        or not isinstance(code_hashes, dict)
+        or any(
+            not isinstance(relative, str)
+            or not (ROOT / relative).is_file()
+            or _sha256_file(ROOT / relative) != code_hashes.get(relative)
+            for relative in code_paths
+        )
+    ):
+        raise RuntimeError("campaign production identity drift")
+    _validate_deep_runtime_identity(manifest.get("deep_recall", {}))
+
+
+def validate_campaign_authorization(
+    census_path: Path, manifest_path: Path
+) -> dict[str, object]:
+    census = json.loads(census_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(census, dict) or not isinstance(manifest, dict):
+        raise RuntimeError("campaign authorization packet is malformed")
+    _validate_census_hash(census, label="campaign")
+    if census.get("manifest_sha256") != _sha256_file(manifest_path):
+        raise RuntimeError("campaign manifest identity drift")
+    if census.get("paid_models_run") is not False or census.get("spend_nanos") != 0:
+        raise RuntimeError("construction wave requires a no-model campaign census")
+    benchmark = census.get("benchmark")
+    manifest_benchmark = manifest.get("benchmark")
+    if (
+        not isinstance(benchmark, dict)
+        or not isinstance(manifest_benchmark, dict)
+        or benchmark.get("questions") != QUESTION_COUNT
+        or benchmark.get("memory_context_max_tokens") != 200_000
+        or manifest_benchmark.get("questions") != QUESTION_COUNT
+        or manifest_benchmark.get("memory_context_max_tokens") != 200_000
+    ):
+        raise RuntimeError("campaign official benchmark identity drift")
+    construction = census.get("construction")
+    manifest_construction = manifest.get("construction")
+    terms = census.get("terms")
+    admission = census.get("admission")
+    if not all(
+        isinstance(value, dict)
+        for value in (construction, manifest_construction, terms, admission)
+    ):
+        raise RuntimeError("campaign admission equation drift")
+    first_attempt = construction.get("first_attempt_liability_nanos")
+    retry_pool = construction.get("retry_pool_nanos")
+    if type(first_attempt) is not int or first_attempt <= 0 or type(retry_pool) is not int or retry_pool < 0:
+        raise RuntimeError("campaign admission equation drift")
+    c_term = first_attempt + retry_pool
+    r_term = _reader_judge_liability(manifest.get("reader_judge", {}))
+    s_term = _deep_liability(manifest.get("deep_recall", {}))[
+        "maximum_liability_nanos"
+    ]
+    fixed_without_retries = (
+        OPENING_NANOS
+        + first_attempt
+        + QUESTION_COUNT * (2 * r_term + s_term)
+        + CONTINGENCY_NANOS
+    )
+    maximum_retry_pool = HARD_CEILING_NANOS - fixed_without_retries
+    total = (
+        OPENING_NANOS
+        + c_term
+        + QUESTION_COUNT * (2 * r_term + s_term)
+        + CONTINGENCY_NANOS
+    )
+    expected_admission = {
+        "formula": FORMULA,
+        "opening_liability_nanos": OPENING_NANOS,
+        "contingency_nanos": CONTINGENCY_NANOS,
+        "hard_ceiling_nanos": HARD_CEILING_NANOS,
+        "maximum_retry_pool_nanos": maximum_retry_pool,
+        "total_nanos": total,
+        "missing_bounds": [],
+        "missing_identities": [],
+        "authorized": total <= HARD_CEILING_NANOS,
+    }
+    if (
+        terms != {"C": c_term, "R": r_term, "S": s_term}
+        or admission != expected_admission
+        or total > HARD_CEILING_NANOS
+        or retry_pool > maximum_retry_pool
+        or construction.get("construction_liability_nanos") != c_term
+        or construction.get("maximum_retry_pool_nanos") != maximum_retry_pool
+        or construction.get("construction_identity_sha256")
+        != sha256_json(manifest_construction)
+    ):
+        raise RuntimeError("campaign admission equation drift")
+    reader = manifest.get("reader_judge", {}).get("reader", {})
+    request_shapes = census.get("liability_derivation", {}).get("request_shapes", {})
+    question_record = manifest.get("data", {}).get("files", {}).get("questions.jsonl", {})
+    if (
+        not isinstance(reader, dict)
+        or not isinstance(request_shapes, dict)
+        or request_shapes.get("reader_maximum_nonmemory_chat_tokens")
+        != reader.get("maximum_nonmemory_chat_tokens")
+        or request_shapes.get("reader_tokenizer_sha256") != reader.get("tokenizer_sha256")
+        or request_shapes.get("reader_chat_template_sha256")
+        != reader.get("chat_template_sha256")
+        or request_shapes.get("reader_shape_question_source_sha256")
+        != question_record.get("sha256")
+        or request_shapes.get("reader_shape_rows") != QUESTION_COUNT
+    ):
+        raise RuntimeError("campaign reader tokenization proof drift")
+    _validate_current_manifest_identities(manifest)
+    actual_binary, actual_provenance = _build_census_binary(manifest)
+    del actual_binary
+    expected_provenance = construction.get("census_binary_provenance")
+    if not isinstance(expected_provenance, dict):
+        raise RuntimeError("campaign census binary provenance is missing")
+    _validate_census_binary_provenance(expected_provenance, actual_provenance)
+    return census
+
+
 def authorize_construction_wave(
+    ledger: object,
+    census_path: Path,
+    manifest_path: Path,
+    plans: list[dict[str, object]],
+    *,
+    wave_kind: str,
+    launch,
+) -> dict[str, object]:
+    """Validate immutable authority, reserve, then invoke the launcher."""
+    census = validate_campaign_authorization(census_path, manifest_path)
+    return _authorize_validated_construction_wave(
+        ledger,
+        census,
+        plans,
+        wave_kind=wave_kind,
+        launch=launch,
+    )
+
+
+def _authorize_validated_construction_wave(
     ledger: object,
     census: dict[str, object],
     plans: list[dict[str, object]],
@@ -1491,13 +1929,14 @@ def census(
     deep_recall = manifest.get("deep_recall", {})
     if isinstance(manifest.get("data"), dict) and isinstance(manifest.get("upstream"), dict):
         resolved_data_root = data_root or Path(os.environ.get("MEMPHANT_LME_V2_DATA_ROOT", Path.home() / ".cache/memphant/longmemeval-v2"))
-        release_cli = ROOT / "target/release/memphant-cli"
-        resolved_cli = cli_bin or (
-            release_cli if release_cli.is_file() else ROOT / "target/debug/memphant-cli"
+        resolved_cli, binary_provenance = _build_census_binary(manifest, cli_bin)
+        return _full_census(
+            manifest,
+            manifest_path,
+            resolved_data_root,
+            resolved_cli,
+            binary_provenance,
         )
-        if not resolved_cli.is_file():
-            raise RuntimeError(f"build the no-model census binary first: {resolved_cli}")
-        return _full_census(manifest, manifest_path, resolved_data_root, resolved_cli)
     required = {
         "C": construction.get("maximum_liability_nanos"),
         "R": reader_judge.get("maximum_liability_nanos"),
