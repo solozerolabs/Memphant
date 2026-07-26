@@ -380,11 +380,11 @@ def test_paid_authorization_drift_fails_before_reader_or_provider_access(
     campaign = {
         "journal_path": "attempts.jsonl",
         "hard_ceiling_nanos": 200_000_000_000,
-        "opening_liability_nanos": 4_258_002_400,
+        "opening_liability_nanos": 5_141_664_250,
         "unallocated_reserve_nanos": 10_000_000_000,
         "opening_reservations": [{
             "reservation_id": "historical-opening",
-            "reserved_nanos": 4_258_002_400,
+            "reserved_nanos": 5_141_664_250,
             "receipt_sha256": "b" * 64,
             "proof_sha256": "c" * 64,
         }],
@@ -469,11 +469,11 @@ def test_paid_authorization_rejects_fresh_ledger_replay(tmp_path, monkeypatch) -
     campaign = {
         "journal_path": "attempts.jsonl",
         "hard_ceiling_nanos": 200_000_000_000,
-        "opening_liability_nanos": 4_258_002_400,
+        "opening_liability_nanos": 5_141_664_250,
         "unallocated_reserve_nanos": 10_000_000_000,
         "opening_reservations": [{
             "reservation_id": "historical-opening",
-            "reserved_nanos": 4_258_002_400,
+            "reserved_nanos": 5_141_664_250,
             "receipt_sha256": "b" * 64,
             "proof_sha256": "c" * 64,
         }],

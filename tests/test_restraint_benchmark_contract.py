@@ -1665,11 +1665,11 @@ def authorize_test_campaign(
     campaign = {
         "journal_path": str(journal.resolve()),
         "hard_ceiling_nanos": 200_000_000_000,
-        "opening_liability_nanos": 4_258_002_400,
+        "opening_liability_nanos": 5_141_664_250,
         "unallocated_reserve_nanos": 10_000_000_000,
         "opening_reservations": [{
             "reservation_id": "historical-opening",
-            "reserved_nanos": 4_258_002_400,
+            "reserved_nanos": 5_141_664_250,
             "receipt_sha256": "b" * 64,
             "proof_sha256": "c" * 64,
         }],
@@ -1965,13 +1965,15 @@ def test_memphant_adapter_retains_reflects_recalls_and_archives_trace_proof(
 
 
 def test_structured_prompt_types_preference_epistemic_role() -> None:
-    prompt = (ROOT / "config/structured-state-v1.txt").read_text(encoding="utf-8")
+    prompt = (ROOT / "config/structured-state-v2.txt").read_text(encoding="utf-8")
     assert "Never return an operation, target_unit_ids, tenant identity" in prompt
     assert 'Return exactly {"observations": []} when nothing qualifies.' in prompt
     assert "Explicit first-person likes, dislikes, and preferences" in prompt
     assert "other people's state" in prompt
     assert "Do not encode create, replace, delete, append, or upsert" in prompt
     assert "evidence_quote to an exact, nonempty, unique substring" in prompt
+    assert "JSON string, number, boolean, object, array, or null directly" in prompt
+    assert "value_json" not in prompt
 
 
 def test_structured_worker_failure_durably_aborts_later_samples(

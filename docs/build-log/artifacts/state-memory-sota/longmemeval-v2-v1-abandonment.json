@@ -1,0 +1,39 @@
+{
+  "campaign_ledger": {
+    "bytes": 1984,
+    "line_count": 2,
+    "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-ATTEMPTS.jsonl",
+    "sha256": "0ee106cee61e339515627ac2f6371a3ed96af057c333c5f2b898c1c8bb95973a"
+  },
+  "campaign_namespace": "longmemeval-v2-pilot-v1",
+  "ledger": {
+    "bytes": 313892,
+    "line_count": 392,
+    "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CONSTRUCTION-ATTEMPTS.jsonl",
+    "sha256": "dfb95975ec05b3f17525dc7eb5b20d65e87a58bc95810e2535dfaa3d8bc108d7"
+  },
+  "privacy": {
+    "inventory_hashes_only": true,
+    "large_input_committed": false,
+    "private_bodies_committed": false
+  },
+  "private_dispatch_inventory": {
+    "file_count": 346,
+    "generation_count": 164,
+    "inventory_sha256": "f48d084337ee885a01c22245e8d52f5242bda61f06d10d32e2b30073fb0a0871",
+    "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/private-construction-dispatches",
+    "response_count": 182
+  },
+  "proof_sha256": "10e8742ebdee3110daa2dbd6d539c52896adc1b2df68a263267ce31ca4925909",
+  "schema_version": 1,
+  "settlement": {
+    "captured_unmatched_response_count": 2,
+    "settled_nanos": 728696150,
+    "terminal_count": 180,
+    "total_new_liability_nanos": 883661850,
+    "unmatched_reservation_nanos": 154965700,
+    "unmatched_start_count": 32
+  },
+  "status": "ABANDONED_NEVER_RESUME",
+  "unmatched_attempt_inventory_sha256": "2704e82fab0241ebb2b91fa0bfdfbe75904d8abdfb06d82c6f8788571ae0d240"
+}

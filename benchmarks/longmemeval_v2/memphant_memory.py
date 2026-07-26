@@ -77,12 +77,12 @@ FORBIDDEN_EVALUATION_KEYS = {
 CONSTRUCTION_BINDING_ENV = "MEMPHANT_LME_CONSTRUCTION_BINDING"
 ROOT = Path(__file__).resolve().parents[2]
 CAMPAIGN_ARTIFACT_ROOT = (
-    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot"
+    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v2"
 )
 CANONICAL_AUTHORIZATION_PATH = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 CANONICAL_CENSUS_PATH = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
 CANONICAL_MANIFEST_PATH = (
-    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json"
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v2.json"
 )
 CANONICAL_WAVE_PATH = CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-WAVE.json"
 CANONICAL_BINDING_ROOT = CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-BINDINGS"
@@ -367,7 +367,7 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         isinstance(selection, dict)
         and set(selection)
         == {"selection_sha256", "input_manifest_sha256", "state_mode"}
-        and selection["state_mode"] == "structured-resource-v1",
+        and selection["state_mode"] == "structured-resource-v2",
         "construction proof selection is invalid",
     )
     _require(

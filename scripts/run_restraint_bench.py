@@ -303,7 +303,7 @@ def implementation_hashes() -> dict[str, str]:
         "structured_state_openrouter": sha256_file(
             ROOT / "crates/memphant-runtime/src/structured_state_openrouter.rs"
         ),
-        "structured_state_prompt": sha256_file(ROOT / "config/structured-state-v1.txt"),
+        "structured_state_prompt": sha256_file(ROOT / "config/structured-state-v2.txt"),
     }
 
 

@@ -347,7 +347,7 @@ def build_context(
                 ROOT / "crates/memphant-runtime/src/structured_state_openrouter.rs"
             ),
             "structured_state_prompt": _file_sha256(
-                ROOT / "config/structured-state-v1.txt"
+                ROOT / "config/structured-state-v2.txt"
             ),
         },
     }

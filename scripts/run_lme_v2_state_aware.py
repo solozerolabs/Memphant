@@ -53,11 +53,11 @@ from benchmarks.longmemeval_v2.construction_authority import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OPENING_NANOS = 4_258_002_400
+OPENING_NANOS = 5_141_664_250
 CONTINGENCY_NANOS = 10_000_000_000
 HARD_CEILING_NANOS = 200_000_000_000
 QUESTION_COUNT = 451
-FORMULA = "4258002400+C+2*R_sum+451*S+10000000000<=200000000000"
+FORMULA = "5141664250+C+2*R_sum+451*S+10000000000<=200000000000"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ORACLE_KEYS = {
     "answer",
@@ -71,9 +71,14 @@ ORACLE_KEYS = {
     "reference",
     "score",
 }
-CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot"
+V1_CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot"
+V1_ABANDONMENT_PROOF = (
+    ROOT
+    / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-v1-abandonment.json"
+)
+CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v2"
 CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
-CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json"
+CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v2.json"
 CANONICAL_CAMPAIGN_AUTHORIZATION = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 QWEN_ENDPOINTS_URL = "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints"
 OPENAI_GPT52_URL = "https://developers.openai.com/api/docs/models/gpt-5.2"
@@ -6714,6 +6719,136 @@ def validate_campaign_authorization(
     return census
 
 
+def derive_v1_abandonment_proof(
+    ledger_path: Path = V1_CAMPAIGN_ARTIFACT_ROOT / "CONSTRUCTION-ATTEMPTS.jsonl",
+    campaign_ledger_path: Path = V1_CAMPAIGN_ARTIFACT_ROOT
+    / "CAMPAIGN-ATTEMPTS.jsonl",
+    dispatch_root: Path = V1_CAMPAIGN_ARTIFACT_ROOT / "private-construction-dispatches",
+) -> dict[str, object]:
+    """Settle and cryptographically freeze the abandoned v1 paid inventory."""
+    rows = [
+        json.loads(line)
+        for line in ledger_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    starts = [row for row in rows if row.get("event") == "started"]
+    terminals = [row for row in rows if row.get("event") == "result"]
+    if len(starts) + len(terminals) != len(rows):
+        raise RuntimeError("v1 abandonment ledger contains an unknown event")
+
+    def identity(row: dict[str, object]) -> tuple[object, object]:
+        return row.get("campaign_attempt"), row.get("attempt_id")
+
+    started = {identity(row): row for row in starts}
+    terminal_ids = {identity(row) for row in terminals}
+    if len(started) != len(starts) or len(terminal_ids) != len(terminals):
+        raise RuntimeError("v1 abandonment ledger contains duplicate attempts")
+    if not terminal_ids.issubset(started):
+        raise RuntimeError("v1 abandonment ledger has a terminal without a start")
+    unmatched = [started[key] for key in sorted(set(started) - terminal_ids)]
+    settled_nanos = sum(
+        _cost_nanos_from_reported_usage(row["usage"])
+        for row in terminals
+        if isinstance(row.get("usage"), dict)
+    )
+    unmatched_reservation_nanos = sum(
+        int(row["per_attempt_reservation_nanos"]) for row in unmatched
+    )
+
+    inventory = []
+    captured_unmatched_responses = 0
+    unmatched_keys = {row.get("extraction_key") for row in unmatched}
+    kind_counts: Counter[str] = Counter()
+    dispatch_pattern = re.compile(
+        r"^[1-3]-([0-9a-f]{64})-(generation|response)\.json$"
+    )
+    for path in sorted(dispatch_root.iterdir(), key=lambda item: item.name):
+        if not path.is_file():
+            continue
+        match = dispatch_pattern.fullmatch(path.name)
+        if match is None:
+            raise RuntimeError("v1 abandonment dispatch inventory has an unknown file")
+        kind = match.group(2)
+        kind_counts[kind] += 1
+        if kind == "response" and match.group(1) in unmatched_keys:
+            captured_unmatched_responses += 1
+        inventory.append(
+            {
+                "path": path.name,
+                "bytes": path.stat().st_size,
+                "sha256": _sha256_file(path),
+            }
+        )
+    expected = {
+        "terminal_count": 180,
+        "settled_nanos": 728_696_150,
+        "unmatched_start_count": 32,
+        "captured_unmatched_response_count": 2,
+        "unmatched_reservation_nanos": 154_965_700,
+        "total_new_liability_nanos": 883_661_850,
+    }
+    actual = {
+        "terminal_count": len(terminals),
+        "settled_nanos": settled_nanos,
+        "unmatched_start_count": len(unmatched),
+        "captured_unmatched_response_count": captured_unmatched_responses,
+        "unmatched_reservation_nanos": unmatched_reservation_nanos,
+        "total_new_liability_nanos": settled_nanos + unmatched_reservation_nanos,
+    }
+    if actual != expected:
+        raise RuntimeError(f"v1 abandonment settlement drift: {actual!r}")
+    ledger_bytes = ledger_path.read_bytes()
+    campaign_ledger_bytes = campaign_ledger_path.read_bytes()
+    core = {
+        "schema_version": 1,
+        "status": "ABANDONED_NEVER_RESUME",
+        "campaign_namespace": "longmemeval-v2-pilot-v1",
+        "settlement": actual,
+        "ledger": {
+            "relative_path": str(ledger_path.relative_to(ROOT)),
+            "bytes": len(ledger_bytes),
+            "line_count": len(rows),
+            "sha256": hashlib.sha256(ledger_bytes).hexdigest(),
+        },
+        "campaign_ledger": {
+            "relative_path": str(campaign_ledger_path.relative_to(ROOT)),
+            "bytes": len(campaign_ledger_bytes),
+            "line_count": len(campaign_ledger_bytes.splitlines()),
+            "sha256": hashlib.sha256(campaign_ledger_bytes).hexdigest(),
+        },
+        "private_dispatch_inventory": {
+            "relative_root": str(dispatch_root.relative_to(ROOT)),
+            "file_count": len(inventory),
+            "generation_count": kind_counts["generation"],
+            "response_count": kind_counts["response"],
+            "inventory_sha256": sha256_json(inventory),
+        },
+        "unmatched_attempt_inventory_sha256": sha256_json(
+            sorted(
+                (
+                    {
+                        "attempt_id": row["attempt_id"],
+                        "campaign_attempt": row["campaign_attempt"],
+                        "extraction_key": row["extraction_key"],
+                        "per_attempt_reservation_nanos": row[
+                            "per_attempt_reservation_nanos"
+                        ],
+                        "request_sha256": row["request_sha256"],
+                    }
+                    for row in unmatched
+                ),
+                key=lambda row: (row["campaign_attempt"], row["attempt_id"]),
+            )
+        ),
+        "privacy": {
+            "private_bodies_committed": False,
+            "large_input_committed": False,
+            "inventory_hashes_only": True,
+        },
+    }
+    return {**core, "proof_sha256": sha256_json(core)}
+
+
 def _opening_reservations() -> list[dict[str, object]]:
     evidence = [
         (
@@ -6733,6 +6868,12 @@ def _opening_reservations() -> list[dict[str, object]]:
             233_472_000,
             ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/FEASIBILITY.json",
             ROOT / "docs/build-log/2026-07-25-state-memory-terminal-reconciliation.md",
+        ),
+        (
+            "longmemeval-v2-v1-abandoned-liability",
+            883_661_850,
+            V1_ABANDONMENT_PROOF,
+            V1_ABANDONMENT_PROOF,
         ),
     ]
     reservations = []
@@ -6824,7 +6965,7 @@ def _build_campaign_authorization(
             "sealed_prefix_count": 12,
             "remaining_count": 439,
             "official_question_count": QUESTION_COUNT,
-            "cache_namespace": "longmemeval-v2-construction-v1",
+            "cache_namespace": "longmemeval-v2-construction-v2",
             "resume_key": "extraction_key",
         },
     }
@@ -7236,6 +7377,9 @@ def prewarm_sealed_prefix(
             {
                 "MEMPHANT_STRUCTURED_STATE": "on",
                 "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
+                "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT": construction[
+                    "reasoning_effort"
+                ],
                 "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
                 "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
                 "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(construction["output_price_nanos_per_million"]),
@@ -7355,6 +7499,9 @@ def prewarm_remaining_construction(
         {
             "MEMPHANT_STRUCTURED_STATE": "on",
             "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
+            "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT": construction[
+                "reasoning_effort"
+            ],
             "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
             "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
             "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(construction["output_price_nanos_per_million"]),
@@ -7541,6 +7688,9 @@ def execute_construction_retry_shard(
                 {
                     "MEMPHANT_STRUCTURED_STATE": "on",
                     "MEMPHANT_STRUCTURED_STATE_MODEL": construction["model"],
+                    "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT": construction[
+                        "reasoning_effort"
+                    ],
                     "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
                     "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(construction["input_price_nanos_per_million"]),
                     "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(construction["output_price_nanos_per_million"]),
@@ -8623,6 +8773,7 @@ def main() -> int:
     recost_parser.add_argument("--parent-manifest", type=Path, required=True)
     recost_parser.add_argument("--manifest", type=Path, required=True)
     recost_parser.add_argument("--output", type=Path, required=True)
+    subparsers.add_parser("abandon-v1")
     subparsers.add_parser("authorize")
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--authorization", type=Path, required=True)
@@ -8647,6 +8798,11 @@ def main() -> int:
     if args.command == "authorize":
         packet = mint_campaign_authorization()
         print(json.dumps(packet, sort_keys=True))
+        return 0
+    if args.command == "abandon-v1":
+        proof = derive_v1_abandonment_proof()
+        _create_json(V1_ABANDONMENT_PROOF, proof)
+        print(json.dumps(proof, sort_keys=True))
         return 0
     if args.command == "run":
         data_root = args.data_root or Path(

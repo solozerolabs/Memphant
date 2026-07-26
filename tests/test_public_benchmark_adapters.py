@@ -156,7 +156,7 @@ def install_construction_binding(adapter, monkeypatch, tmp_path):
     binding_root.mkdir()
     manifest = {
         "construction": {
-            "state_mode": "structured-resource-v1",
+            "state_mode": "structured-resource-v2",
             "model": "qwen/qwen3.5-9b-20260310",
             "response_model": "qwen/qwen3.5-9b",
             "provider": "deepinfra",
@@ -249,7 +249,7 @@ def install_construction_binding(adapter, monkeypatch, tmp_path):
         "selection": {
             "selection_sha256": plan_subset_sha256,
             "input_manifest_sha256": "d" * 64,
-            "state_mode": "structured-resource-v1",
+            "state_mode": "structured-resource-v2",
         },
         "compiler": {
             "prompt_sha256": "e" * 64,
@@ -1089,7 +1089,7 @@ def test_memphant_query_only_fails_closed_on_tampered_or_out_of_order_proof(
         "selection": {
             "selection_sha256": "c" * 64,
             "input_manifest_sha256": "d" * 64,
-            "state_mode": "structured-resource-v1",
+            "state_mode": "structured-resource-v2",
         },
         "compiler": {
             "adapter_sha256": hashlib.sha256(MEMPHANT_ADAPTER.read_bytes()).hexdigest(),

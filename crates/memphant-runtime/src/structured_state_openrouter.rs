@@ -29,7 +29,7 @@ const DEEPSEEK_MODEL: &str = "deepseek/deepseek-v4-flash";
 const DEEPSEEK_PROVIDERS: [&str; 2] = ["deepinfra", "wandb"];
 const LME_V2_QWEN_MODEL: &str = "qwen/qwen3.5-9b-20260310";
 const LME_V2_QWEN_PROVIDER: &str = "deepinfra";
-const CONTRACT_REVISION: &str = "structured-observation.v1";
+const CONTRACT_REVISION: &str = "structured-observation.v2";
 // A provider call is one campaign-ledger wave attempt. Retrying inside this
 // process would bypass the aggregate wave reservation and is therefore
 // forbidden. The campaign may authorize up to three separately metered waves.
@@ -153,6 +153,11 @@ pub fn plan_structured_state_request_with_tokenizer(
     if input_price_nanos_per_million == 0 || output_price_nanos_per_million == 0 {
         return Err(invalid("structured-state price ceilings must be positive"));
     }
+    let reasoning_effort = if model == LME_V2_QWEN_MODEL {
+        Some(reasoning_effort.unwrap_or("none"))
+    } else {
+        reasoning_effort
+    };
     let schema = response_schema();
     let provider_policy = provider_preferences(
         model,
@@ -492,9 +497,12 @@ pub fn structured_state_provider_from_env()
         .ok()
         .filter(|value| !value.trim().is_empty())
     {
-        if !matches!(effort.as_str(), "minimal" | "low" | "medium" | "high") {
+        if !matches!(
+            effort.as_str(),
+            "none" | "minimal" | "low" | "medium" | "high"
+        ) {
             return Err(
-                "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT must be minimal, low, medium, or high"
+                "MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT must be none, minimal, low, medium, or high"
                     .to_string(),
             );
         }
@@ -1513,6 +1521,11 @@ fn provider_preferences(model: &str, input_price: u64, output_price: u64) -> Val
 }
 
 fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> String {
+    let reasoning_effort = if model == LME_V2_QWEN_MODEL {
+        Some(reasoning_effort.unwrap_or("none"))
+    } else {
+        reasoning_effort
+    };
     let mut identity = model.to_string();
     if model == FLASH_MODEL {
         identity.push_str(";provider=google-ai-studio");
@@ -1561,10 +1574,10 @@ fn response_schema() -> Value {
                             "items": {
                                 "type": "object",
                                 "additionalProperties": false,
-                                "required": ["key", "value_json"],
+                                "required": ["key", "value"],
                                 "properties": {
                                     "key": {"type": "string", "minLength": 1},
-                                    "value_json": {"type": "string"}
+                                    "value": {}
                                 }
                             }
                         },
@@ -1589,11 +1602,13 @@ struct ChatResponse {
 #[derive(Deserialize)]
 struct Choice {
     message: Message,
+    #[serde(default)]
+    finish_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct Message {
-    content: String,
+    content: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1619,7 +1634,7 @@ struct WireObservation {
 #[serde(deny_unknown_fields)]
 struct WireField {
     key: String,
-    value_json: String,
+    value: Value,
 }
 
 fn decode_response(
@@ -1632,8 +1647,17 @@ fn decode_response(
             "structured response has invalid model or choice count",
         ));
     }
-    let wire: WireResponse =
-        serde_json::from_str(&response.choices[0].message.content).map_err(invalid)?;
+    if response.choices[0].finish_reason.as_deref() == Some("length") {
+        return Err(invalid(
+            "structured response exhausted its output token budget",
+        ));
+    }
+    let content = response.choices[0]
+        .message
+        .content
+        .as_deref()
+        .ok_or_else(|| invalid("structured response content is null"))?;
+    let wire: WireResponse = serde_json::from_str(content).map_err(invalid)?;
     let slice_ids = request
         .evidence_slices
         .iter()
@@ -1652,9 +1676,7 @@ fn decode_response(
                         "observation field keys must be nonempty and unique",
                     ));
                 }
-                let value = serde_json::from_str(&field.value_json)
-                    .map_err(|error| invalid(format!("observation field JSON: {error}")))?;
-                fields.insert(field.key, value);
+                fields.insert(field.key, field.value);
             }
             Ok(StructuredObservation {
                 namespace: observation.namespace,
@@ -2438,7 +2460,7 @@ mod tests {
 
     fn prompt_fixture() -> String {
         fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/structured-state-v1.txt"),
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/structured-state-v2.txt"),
         )
         .unwrap()
     }
@@ -2544,7 +2566,7 @@ mod tests {
         json!({
             "namespace": "profile",
             "item_key": "city",
-            "fields": [{"key": "value", "value_json": "\"Oslo\""}],
+            "fields": [{"key": "value", "value": "Oslo"}],
             "disposition": "state",
             "evidence_slice_id": slice_id,
             "evidence_quote": "I live in Oslo.",
@@ -2595,6 +2617,37 @@ mod tests {
         .unwrap();
         assert_eq!(decoded[0].fields["value"], "Oslo");
 
+        let mut direct_values = wire_observation(&request.evidence_slices[0].id);
+        direct_values["fields"] = json!([
+            {"key": "string", "value": "Oslo"},
+            {"key": "number", "value": 42.5},
+            {"key": "boolean", "value": true},
+            {"key": "object", "value": {"nested": "value"}},
+            {"key": "array", "value": [1, "two"]},
+            {"key": "null", "value": null}
+        ]);
+        let decoded = decode_response(
+            response(json!({"observations": [direct_values]})).body,
+            &request,
+        )
+        .unwrap();
+        assert_eq!(decoded[0].fields["string"], json!("Oslo"));
+        assert_eq!(decoded[0].fields["number"], json!(42.5));
+        assert_eq!(decoded[0].fields["boolean"], json!(true));
+        assert_eq!(decoded[0].fields["object"], json!({"nested": "value"}));
+        assert_eq!(decoded[0].fields["array"], json!([1, "two"]));
+        assert_eq!(decoded[0].fields["null"], Value::Null);
+
+        let mut observed_invalid_v1 = wire_observation(&request.evidence_slices[0].id);
+        observed_invalid_v1["fields"] = json!([{"key": "value", "value_json": "Oslo"}]);
+        assert!(
+            decode_response(
+                response(json!({"observations": [observed_invalid_v1]})).body,
+                &request,
+            )
+            .is_err()
+        );
+
         let mut unknown = known.clone();
         unknown["evidence_slice_id"] = json!("slice-unknown");
         assert!(
@@ -2614,13 +2667,27 @@ mod tests {
             "CamelCase",
         ] {
             let mut nested = wire_observation(&request.evidence_slices[0].id);
-            nested["fields"] = json!([{"key": key, "value_json": "true"}]);
+            nested["fields"] = json!([{"key": key, "value": true}]);
             assert!(
                 decode_response(response(json!({"observations": [nested]})).body, &request)
                     .is_err(),
                 "nested field key {key:?} must fail closed"
             );
         }
+    }
+
+    #[test]
+    fn decode_rejects_observed_length_finish_before_content_decode() {
+        let request = request("user: I live in Oslo.");
+        let body = json!({
+            "model": DEFAULT_MODEL,
+            "choices": [{
+                "finish_reason": "length",
+                "message": {"content": null}
+            }]
+        });
+        let error = decode_response(body, &request).unwrap_err().to_string();
+        assert!(error.contains("output token budget"));
     }
 
     #[test]
@@ -2881,6 +2948,11 @@ mod tests {
         let body: Value = serde_json::from_slice(&plan.serialized_request).unwrap();
         assert_eq!(body["provider"]["only"], json!(["deepinfra"]));
         assert_eq!(body["provider"]["allow_fallbacks"], false);
+        assert_eq!(body["reasoning"], json!({"effort": "none"}));
+        let field_schema = &body["response_format"]["json_schema"]["schema"]["properties"]["observations"]
+            ["items"]["properties"]["fields"]["items"];
+        assert_eq!(field_schema["required"], json!(["key", "value"]));
+        assert!(field_schema["properties"].get("value_json").is_none());
     }
 
     #[test]
@@ -3376,7 +3448,7 @@ mod tests {
             "observations": [{
                 "namespace": "profile",
                 "item_key": "city",
-                "fields": [{"key": "value", "value_json": "\"Oslo\""}],
+                "fields": [{"key": "value", "value": "Oslo"}],
                 "disposition": "state",
                 "evidence_slice_id": request.evidence_slices[0].id,
                 "evidence_quote": evidence_quote,

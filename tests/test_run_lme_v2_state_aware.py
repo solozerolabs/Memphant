@@ -18,8 +18,44 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts/run_lme_v2_state_aware.py"
 STATE_AWARE_MANIFEST = (
-    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json"
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v2.json"
 )
+
+
+def test_v1_abandonment_proof_is_immutable_compact_and_fully_reserved() -> None:
+    runner = _load_runner()
+    proof = json.loads(runner.V1_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    core = {key: value for key, value in proof.items() if key != "proof_sha256"}
+    assert proof["proof_sha256"] == runner.sha256_json(core)
+    assert proof["status"] == "ABANDONED_NEVER_RESUME"
+    assert proof["campaign_namespace"] == "longmemeval-v2-pilot-v1"
+    assert proof["settlement"] == {
+        "terminal_count": 180,
+        "settled_nanos": 728_696_150,
+        "unmatched_start_count": 32,
+        "captured_unmatched_response_count": 2,
+        "unmatched_reservation_nanos": 154_965_700,
+        "total_new_liability_nanos": 883_661_850,
+    }
+    assert proof["private_dispatch_inventory"]["file_count"] == 346
+    assert proof["campaign_ledger"]["line_count"] == 2
+    assert proof["ledger"]["line_count"] == 392
+    assert proof["privacy"] == {
+        "private_bodies_committed": False,
+        "large_input_committed": False,
+        "inventory_hashes_only": True,
+    }
+    assert runner.OPENING_NANOS == 5_141_664_250
+    reservations = runner._opening_reservations()
+    assert sum(item["reserved_nanos"] for item in reservations) == runner.OPENING_NANOS
+    assert reservations[-1]["reserved_nanos"] == 883_661_850
+
+
+def test_v2_campaign_namespace_cannot_resume_v1_artifacts() -> None:
+    runner = _load_runner()
+    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v2"
+    assert runner.CAMPAIGN_ARTIFACT_ROOT != runner.V1_CAMPAIGN_ARTIFACT_ROOT
+    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v2.json")
 
 
 def _load_runner():
@@ -82,7 +118,7 @@ def test_census_refuses_authorization_without_exact_bounds(tmp_path: Path) -> No
     census = json.loads(output.read_text(encoding="utf-8"))
     assert census["benchmark"]["memory_context_max_tokens"] == 200000
     assert census["admission"]["formula"] == (
-        "4258002400+C+2*R_sum+451*S+10000000000<=200000000000"
+        "5141664250+C+2*R_sum+451*S+10000000000<=200000000000"
     )
     assert census["admission"]["authorized"] is False
 

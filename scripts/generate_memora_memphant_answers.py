@@ -136,7 +136,7 @@ BEHAVIOR_ENV = {
     "MEMPHANT_STRUCTURED_STATE_MODEL": STRUCTURED_STATE_MODEL,
     "MEMPHANT_STRUCTURED_STATE_CONCURRENCY": "4",
     "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(
-        ROOT / "config" / "structured-state-v1.txt"
+        ROOT / "config" / "structured-state-v2.txt"
     ),
 }
 
