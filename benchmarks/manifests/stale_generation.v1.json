@@ -2,9 +2,9 @@
   "dataset_lock_sha256": "fbd08253e4c89d39f1fbce64225bb25a8db0f3a541b0c7b15d459ab16bfcfe88",
   "output_schema_sha256": "59a35cf20c9b90b7bd55e8bc1a9a48683407150cc61acde7c16e2b84144ea061",
   "prompt_sha256": {
-    "dim1": "50549ef313bc8d36ec98b739e5bd996d37f53c54345d6741516d74974f5d88ff",
-    "dim2": "9e6eb5f852aff34d39560204591f729c5b163194fc2501c83374d2baafeca98d",
-    "dim3": "bdd7624a8531c7d7643a620934daa92d5baebb7c2f43e6f7e1398bf3e7f4599f"
+    "dim1": "69b7ad0f40296553ef46071e9e49abcc34c0aeb779dd2f30ed1bce9ca981580d",
+    "dim2": "4d5874479806df21102c270a09042f10f9ebf27b28870918c2a5e762a6f0436e",
+    "dim3": "79a00cc81d97508ebf24fe60901f9aca4f06c39646d1c27702fd5c420f6985b4"
   },
   "protocol": "stale-memphant-generation-v1",
   "reader": {

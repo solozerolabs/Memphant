@@ -159,9 +159,23 @@ def sha256_json(value: object) -> str:
 
 
 def prompt_hashes() -> dict[str, str]:
+    disposition = {
+        "contract_revision": "memphant.evidence_disposition.v1",
+        "status": "supported",
+        "answer_policy": "answer_normally",
+        "reason": "PROMPT_CONTRACT_REASON",
+    }
     return {
         dimension: hashlib.sha256(
-            f"{SYSTEM_PROMPTS[dimension]}\x1e{PROMPT_TEMPLATE}".encode()
+            (
+                f"{SYSTEM_PROMPTS[dimension]}\x1e"
+                + build_reader_prompt(
+                    ["PROMPT_CONTRACT_EVIDENCE"],
+                    "PROMPT_CONTRACT_QUERY",
+                    dimension,
+                    disposition,
+                )
+            ).encode()
         ).hexdigest()
         for dimension in ("dim1", "dim2", "dim3")
     }
@@ -217,10 +231,18 @@ def build_record_plan(record: dict) -> dict:
         }
         for index, (timestamp, _source_index, turns) in enumerate(ordered)
     ]
-    return {"uid": uid, "sessions": clean_sessions, "queries": clean_queries}
+    return {
+        "uid": uid,
+        "conflict_type": record.get("type"),
+        "record_sha256": sha256_json(record),
+        "sessions": clean_sessions,
+        "queries": clean_queries,
+    }
 
 
-def build_reader_prompt(evidence: list[str], query: str, dimension: str) -> str:
+def build_reader_prompt(
+    evidence: list[str], query: str, dimension: str, disposition: dict
+) -> str:
     if dimension not in SYSTEM_PROMPTS:
         raise ValueError(f"unknown STALE dimension: {dimension}")
     rendered = []
@@ -228,14 +250,62 @@ def build_reader_prompt(evidence: list[str], query: str, dimension: str) -> str:
         rendered.append(f"--- evidence item {rank} ---\n{body.strip()}")
     if not rendered:
         rendered.append("(no evidence was retrieved)")
-    return PROMPT_TEMPLATE.format(
+    prompt = PROMPT_TEMPLATE.format(
         evidence="\n\n".join(rendered),
         query_label="Latest Query" if dimension == "dim3" else "Question",
         query=query,
     )
+    return f"MemPhant evidence disposition: {canonical_json(disposition)}\n\n{prompt}"
 
 
-def select_plans(plans: list[dict], limit: int | None) -> tuple[list[dict], dict]:
+def select_plans(
+    plans: list[dict],
+    limit: int | None,
+    pilot_manifest: dict | None = None,
+    dataset_sha256: str | None = None,
+) -> tuple[list[dict], dict]:
+    if limit is not None and pilot_manifest is not None:
+        raise ValueError("--limit and --selection-manifest are mutually exclusive")
+    if pilot_manifest is not None:
+        records = pilot_manifest.get("records")
+        if (
+            pilot_manifest.get("protocol") != "stale-paired-pilot-v1"
+            or pilot_manifest.get("dataset_sha256") != dataset_sha256
+            or not isinstance(records, list)
+            or len(records) != 4
+            or sorted(record.get("conflict_type") for record in records)
+            != ["T1", "T1", "T2", "T2"]
+        ):
+            raise ValueError("STALE pilot requires exactly two T1 and two T2 records")
+        by_uid = {plan["uid"]: plan for plan in plans}
+        selected = []
+        seen = set()
+        for record in records:
+            uid = record.get("uid")
+            plan = by_uid.get(uid)
+            if (
+                not isinstance(uid, str)
+                or uid in seen
+                or plan is None
+                or record
+                != {
+                    key: plan.get(key)
+                    for key in ("uid", "conflict_type", "record_sha256")
+                }
+            ):
+                raise ValueError("STALE pilot selection record mismatch")
+            seen.add(uid)
+            selected.append(plan)
+        return selected, {
+            "method": "answer_blind_paired_manifest",
+            "manifest_sha256": sha256_json(pilot_manifest),
+            "upstream_revision": pilot_manifest.get("upstream_revision"),
+            "source_record_count": len(plans),
+            "record_count": 4,
+            "query_count": 12,
+            "smoke_only": False,
+            "promotion_ineligible": True,
+        }
     smoke = limit is not None
     if smoke and (limit < 1 or limit >= len(plans)):
         raise ValueError("STALE --limit must select a non-empty strict subset")
@@ -628,7 +698,7 @@ def recall_plan(
     agent_node_id: str,
     subject_generation: int,
     query: str,
-) -> tuple[list[str], str]:
+) -> tuple[list[str], str, dict, list[dict]]:
     response = client.post(
         "/v1/recall",
         {
@@ -654,6 +724,35 @@ def recall_plan(
         for item in items
     ):
         raise RuntimeError("STALE recall returned malformed items")
+    deep = response.get("deep")
+    disposition = deep.get("evidence") if isinstance(deep, dict) else None
+    if (
+        not isinstance(disposition, dict)
+        or set(disposition)
+        != {"contract_revision", "status", "answer_policy", "reason"}
+        or disposition.get("contract_revision")
+        != "memphant.evidence_disposition.v1"
+        or not isinstance(disposition.get("reason"), str)
+        or not disposition["reason"].strip()
+    ):
+        raise RuntimeError("STALE recall omitted valid Deep evidence disposition")
+    citations = response.get("citations")
+    by_unit = {
+        citation.get("unit_id"): citation
+        for citation in citations
+        if isinstance(citations, list) and isinstance(citation, dict)
+    } if isinstance(citations, list) else {}
+    receipts = []
+    for item in items:
+        verification = by_unit.get(item.get("unit_id"), {}).get("verification")
+        receipt = verification.get("receipt") if isinstance(verification, dict) else None
+        if (
+            not isinstance(verification, dict)
+            or verification.get("status") != "verified"
+            or not isinstance(receipt, dict)
+        ):
+            raise RuntimeError("STALE recall item lacks a verified evidence receipt")
+        receipts.append(receipt)
     trace_query = urllib.parse.urlencode(
         {
             "subject_id": subject_id,
@@ -666,7 +765,7 @@ def recall_plan(
     trace = client.get(f"/v1/traces/{trace_id}?{trace_query}")
     if not isinstance(trace, dict) or trace.get("id") != trace_id:
         raise RuntimeError(f"STALE trace coverage missing for {trace_id}")
-    return [item["body"] for item in items], trace_id
+    return [item["body"] for item in items], trace_id, disposition, receipts
 
 
 def run_reader_dimension(
@@ -674,8 +773,9 @@ def run_reader_dimension(
     dimension: str,
     query: str,
     evidence: list[str],
+    disposition: dict,
 ) -> dict:
-    prompt = build_reader_prompt(evidence, query, dimension)
+    prompt = build_reader_prompt(evidence, query, dimension, disposition)
     fresh_before = reader.fresh_calls
     cached_before = reader.cached_calls
     reader.set_provider_attempt_limit(reader.provider_attempts + 1)
@@ -707,13 +807,21 @@ def run_reader_dimension(
 
 
 def dimension_artifacts(
-    result: dict, trace_id: str, evidence: list[str], attempt_slice: list[dict]
+    result: dict,
+    trace_id: str,
+    evidence: list[str],
+    disposition: dict,
+    receipts: list[dict],
+    attempt_slice: list[dict],
 ) -> tuple[dict, dict]:
     trace_facts = {
         "trace_id": trace_id,
         "returned_items": len(evidence),
         "evidence_sha256": sha256_json(evidence),
         "degraded": False,
+        "evidence_disposition": disposition,
+        "verified_receipt_count": len(receipts),
+        "verified_receipts_sha256": sha256_json(receipts),
     }
     answer_facts = {
         key: value for key, value in (result | trace_facts).items()
@@ -795,6 +903,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--limit", type=int, help="deterministic prefix size for a smoke-only run"
     )
+    parser.add_argument(
+        "--selection-manifest",
+        type=Path,
+        help="answer-blind four-record paired pilot manifest",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--fixture",
@@ -820,7 +933,18 @@ def main() -> int:
     all_plans = [build_record_plan(row) for row in rows]
     if len({plan["uid"] for plan in all_plans}) != len(all_plans):
         raise ValueError("STALE dataset contains duplicate uids")
-    plans, selection = select_plans(all_plans, args.limit)
+    pilot_manifest = (
+        json.loads(args.selection_manifest.read_text(encoding="utf-8"))
+        if args.selection_manifest
+        else None
+    )
+    if pilot_manifest is not None:
+        stale_lock = json.loads(STALE_MANIFEST.read_text(encoding="utf-8"))
+        if pilot_manifest.get("upstream_revision") != stale_lock["dataset"]["revision"]:
+            raise ValueError("STALE pilot upstream revision mismatch")
+    plans, selection = select_plans(
+        all_plans, args.limit, pilot_manifest, dataset_sha
+    )
     structured_state = structured_state_contract(smoke=selection["smoke_only"])
 
     if args.dry_run:
@@ -989,7 +1113,7 @@ def main() -> int:
             dimension_results = {}
             dimension_proof = {}
             for dimension in ("dim1", "dim2", "dim3"):
-                evidence, trace_id = recall_plan(
+                evidence, trace_id, disposition, receipts = recall_plan(
                     client,
                     subject_id,
                     scope_id,
@@ -1000,11 +1124,22 @@ def main() -> int:
                 )
                 attempt_start = len(reader.provider_attempt_log)
                 result = run_reader_dimension(
-                    reader, dimension, plan["queries"][dimension], evidence
+                    reader,
+                    dimension,
+                    plan["queries"][dimension],
+                    evidence,
+                    disposition,
                 )
                 attempt_slice = reader.provider_attempt_log[attempt_start:]
                 dimension_results[dimension], dimension_proof[dimension] = (
-                    dimension_artifacts(result, trace_id, evidence, attempt_slice)
+                    dimension_artifacts(
+                        result,
+                        trace_id,
+                        evidence,
+                        disposition,
+                        receipts,
+                        attempt_slice,
+                    )
                 )
             client.conn.close()
             answer_row = build_answer_row(plan["uid"], dimension_results)

@@ -23,10 +23,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.lock.json"
 MEMPHANT_BOOTSTRAP = ROOT / "benchmarks/longmemeval_v2/harness_bootstrap.py"
-MEMORY_CONTEXT_MAX_TOKENS = 32768
+MEMORY_CONTEXT_MAX_TOKENS = 200000
+READER_TEMPERATURE = 0.6
+READER_TOP_P = 0.95
+READER_TOP_K = 20
+EVALUATOR_REASONING_EFFORT = "medium"
 MATRIX_DOMAINS = {"web", "enterprise"}
 MATRIX_TIERS = {"small", "medium"}
-MATRIX_ARMS = {"memphant", "no_retrieval"}
+MATRIX_ARMS = {"memphant_fast", "memphant_deep", "no_retrieval"}
 
 
 def release_urls(lock: dict) -> dict[str, str]:
@@ -220,12 +224,20 @@ def native_harness_command(
         reader_model,
         "--base-url",
         reader_base_url,
+        "--temperature",
+        str(READER_TEMPERATURE),
+        "--top-p",
+        str(READER_TOP_P),
+        "--top-k",
+        str(READER_TOP_K),
         "--memory-context-max-tokens",
         str(MEMORY_CONTEXT_MAX_TOKENS),
         "--evaluator-model",
         evaluator_model,
         "--evaluator-base-url",
         evaluator_base_url,
+        "--evaluator-reasoning-effort",
+        EVALUATOR_REASONING_EFFORT,
     ]
 
 
@@ -242,7 +254,7 @@ def memphant_harness_command(**kwargs: object) -> list[str]:
 
 
 def verify_execution_matrix(matrix: dict) -> dict[str, int]:
-    """Validate complete, same-reader MemPhant/no-retrieval leaderboard evidence."""
+    """Validate complete, same-reader Fast/Deep/control leaderboard evidence."""
     if matrix.get("schema_version") != 1 or matrix.get("benchmark") != "LongMemEval-V2":
         raise RuntimeError("LongMemEval-V2 execution matrix contract drift")
     if matrix.get("upstream_release_lock_sha256") != _sha256(DEFAULT_MANIFEST):
@@ -274,7 +286,7 @@ def verify_execution_matrix(matrix: dict) -> dict[str, int]:
             value = run.get(field)
             if not isinstance(value, str) or len(value) != 64:
                 raise RuntimeError(f"execution matrix run lacks {field}: {key}")
-        if key[2] == "memphant":
+        if key[2].startswith("memphant_"):
             binaries = run.get("binaries")
             if not isinstance(binaries, dict) or set(binaries) != {"server", "cli"}:
                 raise RuntimeError(f"MemPhant execution lacks binary fingerprints: {key}")
@@ -296,7 +308,6 @@ def verify_execution_matrix(matrix: dict) -> dict[str, int]:
         raise RuntimeError(f"execution matrix is incomplete: missing={sorted(expected - set(indexed))}")
     for domain in MATRIX_DOMAINS:
         for tier in MATRIX_TIERS:
-            candidate = indexed[(domain, tier, "memphant")]
             control = indexed[(domain, tier, "no_retrieval")]
             paired_fields = (
                 "question_count",
@@ -305,13 +316,17 @@ def verify_execution_matrix(matrix: dict) -> dict[str, int]:
                 "judge_contract_sha256",
                 "memory_context_max_tokens",
             )
-            if any(candidate[field] != control[field] for field in paired_fields):
-                raise RuntimeError(f"execution matrix arms are not paired: {(domain, tier)}")
+            for arm in ("memphant_fast", "memphant_deep"):
+                candidate = indexed[(domain, tier, arm)]
+                if any(candidate[field] != control[field] for field in paired_fields):
+                    raise RuntimeError(f"execution matrix arms are not paired: {(domain, tier)}")
     if len({run["reader_contract_sha256"] for run in runs}) != 1:
         raise RuntimeError("execution matrix reader contract drift")
     if len({run["judge_contract_sha256"] for run in runs}) != 1:
         raise RuntimeError("execution matrix judge contract drift")
-    candidate_binaries = [run["binaries"] for run in runs if run["arm"] == "memphant"]
+    candidate_binaries = [
+        run["binaries"] for run in runs if run["arm"].startswith("memphant_")
+    ]
     if any(binaries != candidate_binaries[0] for binaries in candidate_binaries[1:]):
         raise RuntimeError("execution matrix MemPhant binary drift")
     return {"runs": len(runs), "paired_cells": len(MATRIX_DOMAINS) * len(MATRIX_TIERS)}

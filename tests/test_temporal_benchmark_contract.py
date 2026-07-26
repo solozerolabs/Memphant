@@ -49,6 +49,15 @@ def paid_response(response_id: str = "gen-1") -> dict:
     }
 
 
+def deep_disposition() -> dict:
+    return {
+        "contract_revision": "memphant.evidence_disposition.v1",
+        "status": "supported",
+        "answer_policy": "answer_normally",
+        "reason": "Current evidence supports the answer.",
+    }
+
+
 def test_shared_attempt_ledger_rejects_interruption_duplicate_ids_and_hash_drift(
     tmp_path: Path,
 ) -> None:
@@ -346,6 +355,38 @@ def test_stale_record_plan_is_chronological_and_never_exposes_gold() -> None:
     assert "relevant_session_index" not in serialized
 
 
+def test_stale_reader_prompt_preserves_deep_premise_disposition() -> None:
+    generator = load_generator()
+    prompt = generator.build_reader_prompt(
+        ["The current destination is Kyoto."],
+        "Which Tokyo hotel should I book?",
+        "dim2",
+        {
+            "contract_revision": "memphant.evidence_disposition.v1",
+            "status": "contradicts-premise",
+            "answer_policy": "state_premise_false",
+            "reason": "The current state supersedes the question premise.",
+        },
+    )
+
+    assert "contradicts-premise" in prompt
+    assert "state_premise_false" in prompt
+    assert "The current state supersedes the question premise." in prompt
+
+
+def test_stale_prompt_lock_hashes_the_complete_rendered_prompt(monkeypatch) -> None:
+    generator = load_generator()
+    original = generator.prompt_hashes()
+    build = generator.build_reader_prompt
+    monkeypatch.setattr(
+        generator,
+        "build_reader_prompt",
+        lambda *args, **kwargs: build(*args, **kwargs) + "\ncontract mutation",
+    )
+
+    assert generator.prompt_hashes() != original
+
+
 def test_stale_runtime_requests_use_api_key_tenant_and_canonical_context() -> None:
     generator = load_generator()
 
@@ -359,7 +400,20 @@ def test_stale_runtime_requests_use_api_key_tenant_and_canonical_context() -> No
             self.requests.append((path, payload))
             if path == "/v1/episodes":
                 return {"episode_id": "episode-1"}
-            return {"degraded": False, "trace_id": "trace-1", "items": []}
+            return {
+                "degraded": False,
+                "trace_id": "trace-1",
+                "items": [],
+                "citations": [],
+                "deep": {
+                    "evidence": {
+                        "contract_revision": "memphant.evidence_disposition.v1",
+                        "status": "insufficient",
+                        "answer_policy": "abstain_unknown",
+                        "reason": "No current evidence.",
+                    }
+                },
+            }
 
         def put(self, path, payload):
             self.requests.append((path, payload))
@@ -402,7 +456,17 @@ def test_stale_runtime_requests_use_api_key_tenant_and_canonical_context() -> No
         agent_node_id,
         generation,
         "state?",
-    ) == ([], "trace-1")
+    ) == (
+        [],
+        "trace-1",
+        {
+            "contract_revision": "memphant.evidence_disposition.v1",
+            "status": "insufficient",
+            "answer_policy": "abstain_unknown",
+            "reason": "No current evidence.",
+        },
+        [],
+    )
 
     required_context = {
         "subject_id": subject_id,
@@ -609,6 +673,37 @@ def test_stale_smoke_selection_is_deterministic_and_promotion_ineligible() -> No
     with pytest.raises(ValueError, match="strict subset"):
         generator.select_plans(plans, 3)
 
+    pilot_plans = [
+        {"uid": "t1-a", "conflict_type": "T1", "record_sha256": "1" * 64},
+        {"uid": "t2-a", "conflict_type": "T2", "record_sha256": "2" * 64},
+        {"uid": "t1-b", "conflict_type": "T1", "record_sha256": "3" * 64},
+        {"uid": "t2-b", "conflict_type": "T2", "record_sha256": "4" * 64},
+        {"uid": "unused", "conflict_type": "T1", "record_sha256": "5" * 64},
+    ]
+    manifest = {
+        "protocol": "stale-paired-pilot-v1",
+        "upstream_revision": "617c51dc200b5ab09970834144c7e51c77959af0",
+        "dataset_sha256": "a" * 64,
+        "records": [
+            {key: plan[key] for key in ("uid", "conflict_type", "record_sha256")}
+            for plan in pilot_plans[:4]
+        ],
+    }
+    pilot, pilot_selection = generator.select_plans(
+        pilot_plans, None, manifest, "a" * 64
+    )
+    assert [plan["uid"] for plan in pilot] == ["t1-a", "t2-a", "t1-b", "t2-b"]
+    assert pilot_selection["method"] == "answer_blind_paired_manifest"
+    assert pilot_selection["query_count"] == 12
+    assert pilot_selection["promotion_ineligible"] is True
+    with pytest.raises(ValueError, match="two T1 and two T2"):
+        generator.select_plans(
+            pilot_plans,
+            None,
+            manifest | {"records": manifest["records"][:3] + [manifest["records"][0]]},
+            "a" * 64,
+        )
+
     dimension = {
         "elapsed_seconds": 0.1,
         "usage": paid_response()["usage"],
@@ -701,7 +796,9 @@ def test_stale_reader_preserves_openrouter_usage_and_cost() -> None:
             }
             return json.dumps({"notes": "", "answer": "current", "abstain": False})
 
-    result = generator.run_reader_dimension(Reader(), "dim1", "state?", ["evidence"])
+    result = generator.run_reader_dimension(
+        Reader(), "dim1", "state?", ["evidence"], deep_disposition()
+    )
     assert result["usage"] == {
         "prompt_tokens": 10,
         "completion_tokens": 20,
@@ -718,7 +815,9 @@ def test_stale_reader_preserves_openrouter_usage_and_cost() -> None:
             return json.dumps({"notes": "", "answer": "current", "abstain": False})
 
     with pytest.raises(RuntimeError, match="usage cost"):
-        generator.run_reader_dimension(MissingUsage(), "dim1", "state?", ["evidence"])
+        generator.run_reader_dimension(
+            MissingUsage(), "dim1", "state?", ["evidence"], deep_disposition()
+        )
 
 
 def test_stale_dimension_caps_transport_to_one_paid_attempt(
@@ -749,7 +848,9 @@ def test_stale_dimension_caps_transport_to_one_paid_attempt(
     reader.set_provider_attempt_hook(ledger.record)
 
     with pytest.raises(Exception):
-        generator.run_reader_dimension(reader, "dim1", "state?", ["evidence"])
+        generator.run_reader_dimension(
+            reader, "dim1", "state?", ["evidence"], deep_disposition()
+        )
 
     snapshot = ledger.snapshot()
     assert calls == [generator.run_reader.OPENROUTER_URL]
@@ -771,7 +872,7 @@ def test_stale_dimension_attempt_archive_stays_out_of_official_answer_metadata()
     attempt = {"response": paid_response()}
 
     answer_facts, proof_facts = generator.dimension_artifacts(
-        result, "trace-1", ["evidence"], [attempt]
+        result, "trace-1", ["evidence"], deep_disposition(), [{"receipt": "one"}], [attempt]
     )
     row = generator.build_answer_row(
         "uid", {dimension: answer_facts for dimension in ("dim1", "dim2", "dim3")}
@@ -781,6 +882,8 @@ def test_stale_dimension_attempt_archive_stays_out_of_official_answer_metadata()
     assert "provider_attempts" not in row["target_model_meta"]["dim1_meta"]
     assert proof_facts["provider_attempts"] == [attempt]
     assert proof_facts["parse_status"] == "parsed"
+    assert proof_facts["evidence_disposition"] == deep_disposition()
+    assert proof_facts["verified_receipt_count"] == 1
 
 
 def test_stale_smoke_binds_dimension_archives_to_global_ledger_and_answer_hash(

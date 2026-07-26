@@ -1,0 +1,27 @@
+{
+  "dataset_sha256": "5f3ec375179e20e2e94469e018189188f34e2e7e5f21cbecbd99fcfa648c1876",
+  "protocol": "stale-paired-pilot-v1",
+  "records": [
+    {
+      "conflict_type": "T1",
+      "record_sha256": "242bad938f13cac24f685dcddeac335e497126fb72fb15c104f69650a10d7084",
+      "uid": "7c0ae4e7-6b5a-42a2-891b-0ccf553bfe7f"
+    },
+    {
+      "conflict_type": "T2",
+      "record_sha256": "269f9ad19cbd6d4a235962438fdfdfe0231684e066eddf62d9bcdf172a109101",
+      "uid": "704cac18-885e-4437-b136-a7600650ba01"
+    },
+    {
+      "conflict_type": "T1",
+      "record_sha256": "478bc5959176fcc7b8c3787185fd19531cf59ae351ffb33aaf89160fea117204",
+      "uid": "34566789-711a-4361-856e-2f758a4f685e"
+    },
+    {
+      "conflict_type": "T2",
+      "record_sha256": "0f2f27885c9eaa0df9e2830deceb7b2b6c40dedbb52ad06983373588d89c4c6e",
+      "uid": "feef3933-9375-4fa2-ba80-ae65963e7466"
+    }
+  ],
+  "upstream_revision": "617c51dc200b5ab09970834144c7e51c77959af0"
+}

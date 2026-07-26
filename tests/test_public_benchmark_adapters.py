@@ -16,6 +16,7 @@ LOCK = ROOT / "benchmarks/manifests/longmemeval_v2.lock.json"
 EVOMEM_AUDIT = ROOT / "benchmarks/manifests/evomembench.release-audit.json"
 MEMPHANT_ADAPTER = ROOT / "benchmarks/longmemeval_v2/memphant_memory.py"
 MEMPHANT_CONFIG = ROOT / "benchmarks/longmemeval_v2/memphant.memory.json"
+MEMPHANT_FAST_CONFIG = ROOT / "benchmarks/longmemeval_v2/memphant.fast.memory.json"
 MEMPHANT_BOOTSTRAP = ROOT / "benchmarks/longmemeval_v2/harness_bootstrap.py"
 MATERIALIZER = ROOT / "scripts/materialize_longmemeval_v2_runtime.py"
 MEMPHANT_ADAPTER_LOCK = (
@@ -104,9 +105,13 @@ def test_native_command_delegates_generation_and_scoring_to_official_harness(tmp
 
     assert command[:2] == ["python3", str(official / "evaluation/harness.py")]
     assert "--memory-config-path" in command
-    assert command[command.index("--memory-context-max-tokens") + 1] == "32768"
+    assert command[command.index("--memory-context-max-tokens") + 1] == "200000"
     assert "--model" in command and "reader" in command
     assert "--evaluator-model" in command and "judge" in command
+    assert command[command.index("--temperature") + 1] == "0.6"
+    assert command[command.index("--top-p") + 1] == "0.95"
+    assert command[command.index("--top-k") + 1] == "20"
+    assert command[command.index("--evaluator-reasoning-effort") + 1] == "medium"
     assert not any("run_longmemeval_v2.py" in part for part in command)
 
 
@@ -787,7 +792,7 @@ def test_memphant_harness_command_bootstraps_adapter_without_patching_upstream(
     assert command[:2] == ["python3", str(MEMPHANT_BOOTSTRAP)]
     assert command[command.index("--official-dir") + 1] == str(tmp_path / "official")
     assert command[command.index("--memory-config-path") + 1] == str(MEMPHANT_CONFIG)
-    assert command[command.index("--memory-context-max-tokens") + 1] == "32768"
+    assert command[command.index("--memory-context-max-tokens") + 1] == "200000"
 
 
 def test_execution_matrix_requires_complete_paired_domains_tiers_and_binary_proof():
@@ -796,7 +801,7 @@ def test_execution_matrix_requires_complete_paired_domains_tiers_and_binary_proo
     runs = []
     for domain in ("web", "enterprise"):
         for tier in ("small", "medium"):
-            for arm in ("memphant", "no_retrieval"):
+            for arm in ("memphant_fast", "memphant_deep", "no_retrieval"):
                 row = {
                     "domain": domain,
                     "tier": tier,
@@ -807,10 +812,10 @@ def test_execution_matrix_requires_complete_paired_domains_tiers_and_binary_proo
                     "question_ids_sha256": digest,
                     "reader_contract_sha256": digest,
                     "judge_contract_sha256": digest,
-                    "memory_context_max_tokens": 32768,
+                    "memory_context_max_tokens": 200000,
                     "output_sha256": digest,
                 }
-                if arm == "memphant":
+                if arm.startswith("memphant_"):
                     row["binaries"] = {
                         "server": {"path": "/bin/server", "bytes": 1, "sha256": digest},
                         "cli": {"path": "/bin/cli", "bytes": 1, "sha256": digest},
@@ -823,7 +828,7 @@ def test_execution_matrix_requires_complete_paired_domains_tiers_and_binary_proo
         "runs": runs,
     }
 
-    assert adapter.verify_execution_matrix(matrix) == {"runs": 8, "paired_cells": 4}
+    assert adapter.verify_execution_matrix(matrix) == {"runs": 12, "paired_cells": 4}
     incomplete = json.loads(json.dumps(matrix))
     incomplete["runs"].pop()
     with pytest.raises(RuntimeError, match="incomplete"):
@@ -854,6 +859,9 @@ def test_memphant_adapter_artifacts_match_immutable_contract():
         "a5bac765d7c4c862a342d95b49049c27d3af57aea9f80af6d3a0a489ac055271"
     )
     assert lock["paid_models_run"] is False
+    fast = json.loads(MEMPHANT_FAST_CONFIG.read_text())
+    deep = json.loads(MEMPHANT_CONFIG.read_text())
+    assert fast["memory_params"] == deep["memory_params"] | {"mode": "fast"}
 
 
 def test_runtime_materializer_uses_official_selection_and_proves_complete_pairing(

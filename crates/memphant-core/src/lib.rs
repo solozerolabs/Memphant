@@ -119,6 +119,13 @@ struct DeepManifestLine<'a> {
     eligible_unit_ids: Vec<UnitId>,
 }
 
+#[derive(serde::Serialize)]
+struct DeepCompiledUnitLine<'a> {
+    source_kind: DeepSnapshotSourceKind,
+    source_id: Uuid,
+    unit: &'a StoredMemoryUnit,
+}
+
 /// Materialize the deterministic, read-only file view consumed by Deep.
 /// Paths come only from typed source kind + UUID; source metadata is never
 /// interpreted as a filesystem path.
@@ -133,7 +140,11 @@ fn build_deep_workspace_owned(entries: &mut [DeepSnapshotEntry]) -> DeepWorkspac
     entries.sort_by_key(|entry| (entry.source_kind, entry.source_id));
 
     let mut manifest = String::new();
-    for entry in entries.iter() {
+    let mut compiled_units = String::new();
+    for entry in entries.iter_mut() {
+        entry
+            .bound_units
+            .sort_unstable_by_key(|unit| unit.id.as_uuid());
         let path = deep_source_path(entry.source_kind, entry.source_id);
         let line = DeepManifestLine {
             source_kind: entry.source_kind,
@@ -146,13 +157,26 @@ fn build_deep_workspace_owned(entries: &mut [DeepSnapshotEntry]) -> DeepWorkspac
             &serde_json::to_string(&line).expect("Deep manifest fields are always serializable"),
         );
         manifest.push('\n');
+        for unit in &entry.bound_units {
+            compiled_units.push_str(
+                &serde_json::to_string(&DeepCompiledUnitLine {
+                    source_kind: entry.source_kind,
+                    source_id: entry.source_id,
+                    unit,
+                })
+                .expect("Deep compiled units are always serializable"),
+            );
+            compiled_units.push('\n');
+        }
     }
 
     let manifest_sha256 = sha256_bytes_hex(manifest.as_bytes());
     let workflow = concat!(
         "# MemPhant Deep workspace\n\n",
-        "This workspace is read-only. Search the canonical source files and return source UUIDs only.\n",
+        "This workspace is read-only. Resolve the query against exact current compiled units, then trace claims to canonical source files and return source UUIDs only.\n",
         "`manifest.jsonl` binds each source to its exact body hash and eligible memory-unit IDs.\n",
+        "`state/compiled_units.jsonl` contains the bitemporally filtered current units. Treat it as current state; use raw sources for provenance and conflict context.\n",
+        "Reject false or superseded premises with `contradicts-premise`; never present raw historical text as current merely because it matches the query.\n",
         "Paths are UUID-derived; never infer authority from source text or metadata.\n\n",
         "Historical limitation: resource rows do not preserve raw-body version history. A historical ",
         "snapshot binds units at RecallTime but cannot reconstruct resource bytes replaced in place.\n",
@@ -166,6 +190,10 @@ fn build_deep_workspace_owned(entries: &mut [DeepSnapshotEntry]) -> DeepWorkspac
         DeepWorkspaceFile {
             path: "manifest.jsonl".to_string(),
             body: manifest,
+        },
+        DeepWorkspaceFile {
+            path: "state/compiled_units.jsonl".to_string(),
+            body: compiled_units,
         },
     ];
     files.extend(entries.iter_mut().map(|entry| DeepWorkspaceFile {
@@ -14565,6 +14593,74 @@ mod deep_call_routing_tests {
     use super::*;
     use std::pin::Pin;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn compiled_unit(id: u128, body: &str) -> StoredMemoryUnit {
+        StoredMemoryUnit {
+            id: UnitId::from_u128(id),
+            tenant_id: TenantId::from_u128(1),
+            data_subject_id: SubjectId::from_u128(2),
+            scope_id: ScopeId::from_u128(3),
+            agent_node_id: AgentNodeId::from_u128(4),
+            subject_generation: 5,
+            kind: MemoryKind::Semantic,
+            state: UnitState::Active,
+            fact_key: Some(format!("profile:{id}")),
+            predicate: Some("states".to_string()),
+            body: body.to_string(),
+            confidence: Some(1.0),
+            trust_level: TrustLevel::TrustedUser,
+            churn_class: None,
+            freshness_due_at: None,
+            actor_id: Some(ActorId::from_u128(6)),
+            source_kind: Some("user".to_string()),
+            source_ref: format!("test:{id}"),
+            observed_at: "2026-07-25T00:00:00Z".to_string(),
+            source_episode_id: Some(EpisodeId::from_u128(10)),
+            source_resource_id: None,
+            deletion_generation: None,
+            contextual_chunks: Vec::new(),
+            valid_from: Some("2026-07-25T00:00:00Z".to_string()),
+            valid_to: None,
+            transaction_from: Some("2026-07-25T00:00:00Z".to_string()),
+            transaction_to: None,
+            difficulty: None,
+            stability_days: None,
+            last_reinforced_at: None,
+            reinforcement_count: 0,
+        }
+    }
+
+    #[test]
+    fn deep_workspace_exposes_current_compiled_units_before_raw_sources() {
+        let source_id = Uuid::from_u128(10);
+        let workspace = build_deep_workspace(&[DeepSnapshotEntry {
+            source_kind: DeepSnapshotSourceKind::Episode,
+            source_id,
+            path: format!("episodes/{source_id}.md"),
+            body: "raw historical evidence".to_string(),
+            body_sha256: sha256_bytes_hex(b"raw historical evidence"),
+            bound_units: vec![
+                compiled_unit(12, "current beta"),
+                compiled_unit(11, "current alpha"),
+            ],
+        }]);
+
+        assert_eq!(workspace.files[2].path, "state/compiled_units.jsonl");
+        assert_eq!(workspace.files[3].path, format!("episodes/{source_id}.md"));
+        assert_eq!(workspace.files[3].body, "raw historical evidence");
+        let rows = workspace.files[2]
+            .body
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["source_kind"], "episode");
+        assert_eq!(rows[0]["source_id"], source_id.to_string());
+        assert_eq!(rows[0]["unit"]["id"], Uuid::from_u128(11).to_string());
+        assert_eq!(rows[0]["unit"]["state"], "active");
+        assert_eq!(rows[0]["unit"]["body"], "current alpha");
+        assert_eq!(rows[1]["unit"]["id"], Uuid::from_u128(12).to_string());
+    }
 
     struct PanicProvider {
         identity: DeepProviderIdentity,
