@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "status": "CLOSED_PREPAID_OPERATIONAL_FAILURE",
+  "authorization_sha256": "c99d11d01b90440b18a606677d843c79993dcd6feee8c6814552e4deb51a75b1",
+  "closed_at": "2026-07-25T21:34:00-07:00",
+  "failure": "The STALE adapter passed an upstream timezone-naive timestamp to MemPhant and the first episode retain failed HTTP 422 before recall or reader execution.",
+  "provider_attempts": 0,
+  "settled_cost_usd": "0",
+  "attempt_ledger_sha256": "e4949f8089b3dbaeb338c5afbd336ec93a39e58cb61fc37de3a399d26da69ae4",
+  "server_log_sha256": "618c298cc982fbaf4142f5dae68b67499e9d29a4b49544868722722ef65d2a3a",
+  "root_cause_fix_commit": "c9ffc74fd65bfb292e82abbaea4ba40d34897485"
+}
