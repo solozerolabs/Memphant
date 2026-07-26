@@ -24,6 +24,7 @@ const DEEPSEEK_MODEL: &str = "deepseek/deepseek-v4-flash";
 const DEEPSEEK_PROVIDERS: [&str; 2] = ["deepinfra", "wandb"];
 const MAX_ATTEMPTS: usize = 3;
 const MAX_OUTPUT_TOKENS: u64 = 4096;
+const MAX_REQUEST_BYTES: usize = 128 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 // Accuracy-first reasoning can legitimately emit >15k hidden reasoning tokens.
 // Keep a single attempt inside the 15-minute, three-attempt queue lease while
@@ -185,11 +186,13 @@ impl OpenRouterStructuredState {
         request: &StructuredStateRequest,
     ) -> Result<Vec<StructuredStateOp>, StructuredStateProviderError> {
         let body = self.request(request);
-        let request_sha256 = sha256(
-            serde_json::to_vec(&body)
-                .expect("structured-state request serializes")
-                .as_slice(),
-        );
+        let request_bytes = serde_json::to_vec(&body).expect("structured-state request serializes");
+        if request_bytes.len() > MAX_REQUEST_BYTES {
+            return Err(StructuredStateProviderError::InvalidOutput(format!(
+                "request exceeds {MAX_REQUEST_BYTES}-byte limit"
+            )));
+        }
+        let request_sha256 = sha256(&request_bytes);
         let episode_id = request.episode_id.as_uuid().to_string();
         for attempt in 1..=MAX_ATTEMPTS {
             let attempt_id = uuid::Uuid::new_v4().to_string();
@@ -333,7 +336,7 @@ fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> Strin
     } else if model == DEEPSEEK_MODEL {
         identity.push_str(";providers=deepinfra,wandb");
     }
-    identity.push_str(";seed=0;max_tokens=4096");
+    identity.push_str(";seed=0;max_tokens=4096;max_request_bytes=131072");
     if model == FLASH_MODEL {
         identity.push_str(";temperature=0");
     }
@@ -2322,6 +2325,22 @@ mod tests {
     }
 
     #[test]
+    fn oversized_request_is_rejected_before_transport() {
+        let transport = FakeTransport::new(vec![]);
+        let error = provider(transport.clone())
+            .extract_sync(&request(&"x".repeat(MAX_REQUEST_BYTES)))
+            .unwrap_err();
+
+        assert_eq!(*transport.calls.lock().unwrap(), 0);
+        assert_eq!(
+            error,
+            StructuredStateProviderError::InvalidOutput(format!(
+                "request exceeds {MAX_REQUEST_BYTES}-byte limit"
+            ))
+        );
+    }
+
+    #[test]
     fn applicability_scope_schema_uses_only_exact_user_phrases() {
         let value = provider(FakeTransport::new(vec![])).request(&request(
             "user: For subjective choices, I usually prefer QuietTile.\n\nassistant: noted",
@@ -2973,7 +2992,7 @@ mod tests {
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(
             provider.identity().model,
-            "google/gemini-3.5-flash;provider=google-ai-studio;seed=0;max_tokens=4096;temperature=0;reasoning_effort=high"
+            "google/gemini-3.5-flash;provider=google-ai-studio;seed=0;max_tokens=4096;max_request_bytes=131072;temperature=0;reasoning_effort=high"
         );
         assert_eq!(value["seed"], 0);
         assert_eq!(value["temperature"], 0);
@@ -2995,7 +3014,7 @@ mod tests {
         assert_eq!(value["provider"]["require_parameters"], true);
         assert_eq!(
             provider.identity().model,
-            "deepseek/deepseek-v4-flash;providers=deepinfra,wandb;seed=0;max_tokens=4096"
+            "deepseek/deepseek-v4-flash;providers=deepinfra,wandb;seed=0;max_tokens=4096;max_request_bytes=131072"
         );
     }
 
@@ -3007,7 +3026,9 @@ mod tests {
         assert_eq!(value["reasoning"]["effort"], "high");
         assert_eq!(
             provider.identity().model,
-            format!("{DEFAULT_MODEL};seed=0;max_tokens=4096;reasoning_effort=high")
+            format!(
+                "{DEFAULT_MODEL};seed=0;max_tokens=4096;max_request_bytes=131072;reasoning_effort=high"
+            )
         );
     }
 
