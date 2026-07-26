@@ -11,6 +11,7 @@ use memphant_types::{
     ActorId, AgentNodeId, MemphantLock, ScopeId, SubjectId, TenantId, VerifyReport,
 };
 mod file_plane;
+mod structured_state_census;
 
 const DEFAULT_PROVIDER_PROFILE_DIR: &str = "deploy/provider-profiles";
 const PITR_RETENTION_MARGIN_DAYS: u64 = 1;
@@ -27,6 +28,9 @@ fn main() -> ExitCode {
     }
     if args.first().is_some_and(|verb| verb == "sync") {
         return file_plane::run_sync(&args[1..]);
+    }
+    if args.first().is_some_and(|verb| verb == "structured-state") {
+        return structured_state_census::run(&args[1..]);
     }
     if let Some(verb) = args.first().map(String::as_str)
         && matches!(
@@ -92,7 +96,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: memphant <compile|sync|verify|lock|retain|recall|reflect|correct|forget|mark|trace|db|admin> [options]; memory context commands use --subject-id <uuid> --scope <uuid> --actor <uuid> --agent-node <uuid> --subject-generation <n> (env: MEMPHANT_URL, MEMPHANT_API_KEY)"
+                "usage: memphant <compile|sync|verify|lock|retain|recall|reflect|correct|forget|mark|trace|structured-state|db|admin> [options]; memory context commands use --subject-id <uuid> --scope <uuid> --actor <uuid> --agent-node <uuid> --subject-generation <n> (env: MEMPHANT_URL, MEMPHANT_API_KEY)"
             );
             ExitCode::from(2)
         }

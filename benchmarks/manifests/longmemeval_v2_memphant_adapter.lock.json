@@ -2,10 +2,10 @@
   "benchmark": "LongMemEval-V2",
   "adapter": "MemPhant packaged REST",
   "schema_version": 8,
-  "upstream_release_lock_sha256": "8c2bf058404b3591445d55e2859d9a944d6234dc4d699b73b4a6f87d335d8997",
+  "upstream_release_lock_sha256": "e24388725b23d50766f1cf7e77ea6b41396d664dc1dce309cafe30cb897fe77d",
   "openapi_sha256": "a5bac765d7c4c862a342d95b49049c27d3af57aea9f80af6d3a0a489ac055271",
   "files": {
-    "benchmarks/longmemeval_v2/memphant_memory.py": "56c2a7264112e012f9376178cc2ef3383d70705f21255d4182e92bf62f8e206c",
+    "benchmarks/longmemeval_v2/memphant_memory.py": "70c81b21efbd4755cc9b473e40f23689f3aefb56bf170469846d577fab817b71",
     "benchmarks/longmemeval_v2/harness_bootstrap.py": "97b17ebc7091ffd624859ff62b509ab4c7e96586448c7904f208c31ddd8ac8e6",
     "benchmarks/longmemeval_v2/memphant.memory.json": "a2fbdbf36101d9e863006121ef84860e496f9d7d11967de96322e58479b0fe29",
     "benchmarks/longmemeval_v2/memphant.fast.memory.json": "ead5ac67d24df597587b53d5f105598d627adcb380a708197be6e40a512c9e5f",

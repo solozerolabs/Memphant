@@ -1,0 +1,87 @@
+{
+  "admission": {
+    "authorized": true,
+    "contingency_nanos": 10000000000,
+    "formula": "4258002400+C+451*(2*R+S)+10000000000<=200000000000",
+    "hard_ceiling_nanos": 200000000000,
+    "maximum_retry_pool_nanos": 10464653900,
+    "missing_bounds": [],
+    "missing_identities": [],
+    "opening_liability_nanos": 4258002400,
+    "total_nanos": 199535346100
+  },
+  "benchmark": {
+    "code_commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+    "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+    "memory_context_max_tokens": 200000,
+    "name": "LongMemEval-V2",
+    "questions": 451,
+    "tier": "medium"
+  },
+  "census_sha256": "3924ea807c0fabd25514c25de86693f49216749e7b406fbe70d878daa33a38a7",
+  "construction": {
+    "construction_identity_sha256": "9d4b387c727ff967833b8ea2d466fb8485f7d344ab16ce113ad5ba4423fcdd23",
+    "construction_liability_nanos": 65220602500,
+    "first_attempt_liability_nanos": 55220602500,
+    "full_three_wave_liability_nanos": 165661807500,
+    "input_manifest_sha256": "7637e95e4ddb3800830b282e6cc1888860f89f3bf21e0e32c782f0849cacaaad",
+    "maximum_attempts": 3,
+    "maximum_input_reservation_units": 55179,
+    "maximum_internal_attempts": 1,
+    "maximum_per_attempt_reservation_nanos": 6132300,
+    "maximum_request_bytes": 131071,
+    "maximum_retry_pool_nanos": 10464653900,
+    "maximum_retry_reservation_nanos": 18396900,
+    "parent_full_census_required_for_recost": false,
+    "planned_requests": 1910860,
+    "processed_plans": 11578,
+    "requested_model": "qwen/qwen3.5-9b-20260310",
+    "requested_provider": "deepinfra",
+    "resource_uses": 298393,
+    "response_model": "qwen/qwen3.5-9b",
+    "retry_pool_nanos": 10000000000,
+    "schema_version": 1,
+    "tokenizer_bound": true,
+    "unique_extraction_keys": 11578,
+    "unique_source_bodies": 1876
+  },
+  "enumeration": {
+    "case_order_sha256": "28de62f7ce1ce26c59fcec26958a52e00ba084a4aaa83bdb07007c740e50a96d",
+    "input_jsonl_sha256": "7637e95e4ddb3800830b282e6cc1888860f89f3bf21e0e32c782f0849cacaaad",
+    "question_pairs": 451,
+    "remaining_ids_sha256": "d3519ba2ffebb36c9c6d319e44195a5adfaa168602c3bc098ad5ce138ed50232",
+    "resource_rows": 1876,
+    "resource_uses": 298393,
+    "sealed_prefix_ids_sha256": "64199cb6ba5da6e4de8b34579ab4eb8cfce86a46dd550fa0bc501173903df9a8",
+    "trajectory_uses": 224634,
+    "unique_trajectories": 1473
+  },
+  "liability_derivation": {
+    "deep": {
+      "hard_spend_stop_nanos": 300000000,
+      "maximum_dispatches": 23,
+      "maximum_input_reservation_units": 1792,
+      "maximum_liability_nanos": 14310400,
+      "maximum_output_reservation_units": 94208,
+      "token_mix_liability_nanos": 14310400
+    },
+    "request_shapes": {
+      "judge_maximum_fixed_serialized_bytes": 2412,
+      "llm_judged_rows": 156,
+      "maximum_question_record_bytes": 2174,
+      "question_rows": 451,
+      "reader_maximum_nonmemory_chat_tokens": 524,
+      "reader_maximum_nonmemory_serialized_bytes": 2886
+    }
+  },
+  "manifest_path": "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json",
+  "manifest_sha256": "b9e80ec3e91aa13f0c077a7f3b98975696b7501feef3409d3dfa1e684c732fce",
+  "paid_models_run": false,
+  "schema_version": 1,
+  "spend_nanos": 0,
+  "terms": {
+    "C": 65220602500,
+    "R": 125945400,
+    "S": 14310400
+  }
+}

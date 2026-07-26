@@ -189,7 +189,7 @@ async fn worker_completed_count_excludes_a_stale_claim_noop() {
             predicate: None,
             body: "user: I live in Oslo.".to_string(),
             compiler_version: structured_compiler_identity(
-                &format!("{COMPILER_VERSION}+source-slice-batches-v1"),
+                &format!("{COMPILER_VERSION}+source-slice-greedy-batches-v2"),
                 &provider_identity,
             ),
         },

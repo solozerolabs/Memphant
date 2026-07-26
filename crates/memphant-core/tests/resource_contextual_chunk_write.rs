@@ -270,7 +270,7 @@ async fn resource_reflection_retains_raw_evidence_and_compiles_structured_units(
         queued[0].compiler_version,
         memphant_core::structured_compiler_identity(
             &format!(
-                "{}+source-slice-batches-v1",
+                "{}+source-slice-greedy-batches-v2",
                 memphant_types::COMPILER_VERSION
             ),
             provider.identity(),

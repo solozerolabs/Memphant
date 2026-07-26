@@ -11,6 +11,7 @@ cap-std.workspace = true
 cap-fs-ext.workspace = true
 jiff.workspace = true
 memphant-core.workspace = true
+memphant-runtime = { path = "../memphant-runtime" }
 memphant-store-postgres = { path = "../memphant-store-postgres" }
 memphant-types.workspace = true
 serde.workspace = true

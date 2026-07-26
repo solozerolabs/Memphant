@@ -1006,6 +1006,9 @@ name = "esaxx-rs"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "etcetera"
@@ -1180,6 +1183,16 @@ dependencies = [
  "io-lifetimes 2.0.4",
  "rustix",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -2275,6 +2288,7 @@ dependencies = [
  "candle-core",
  "eventsource-stream",
  "fastembed",
+ "fs2",
  "futures",
  "jiff",
  "memphant-core",
@@ -2284,6 +2298,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tokenizers",
  "tokio",
  "ureq",
  "uuid",
@@ -4118,6 +4133,7 @@ dependencies = [
  "derive_builder",
  "esaxx-rs",
  "getrandom 0.3.4",
+ "indicatif",
  "itertools",
  "log",
  "macro_rules_attribute",

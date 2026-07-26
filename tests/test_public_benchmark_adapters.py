@@ -32,10 +32,52 @@ def load_adapter():
     return module
 
 
+def install_construction_binding(monkeypatch, tmp_path):
+    binding = {
+        "authorization": {
+            "authorization_sha256": "a" * 64,
+            "campaign_sha256": "b" * 64,
+            "screen_id": "state-aware-full",
+        },
+        "selection": {
+            "selection_sha256": "c" * 64,
+            "input_manifest_sha256": "d" * 64,
+            "state_mode": "structured-resource-v1",
+        },
+        "compiler": {
+            "prompt_sha256": "e" * 64,
+            "schema_sha256": "f" * 64,
+            "provider_code_sha256": "1" * 64,
+        },
+        "provider": {
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_model": "qwen/qwen3.5-9b",
+            "requested_provider": "deepinfra",
+            "served_provider": "DeepInfra",
+            "input_price_nanos_per_million": 100_000_000,
+            "output_price_nanos_per_million": 150_000_000,
+            "maximum_output_tokens": 4096,
+            "maximum_attempts": 3,
+        },
+        "cache": {"namespace": "fixture-v1", "source_receipts_sha256": "2" * 64},
+        "ledger": {
+            "attempt_ids": ["attempt-1"],
+            "before_event_sha256": "3" * 64,
+            "after_event_sha256": "4" * 64,
+            "settled_nanos": 1,
+            "unresolved_nanos": 0,
+        },
+    }
+    path = tmp_path / "construction-binding.json"
+    path.write_text(json.dumps(binding), encoding="utf-8")
+    monkeypatch.setenv("MEMPHANT_LME_CONSTRUCTION_BINDING", str(path))
+    return binding
+
+
 def test_longmemeval_v2_release_is_immutably_pinned_and_native_scored():
     lock = json.loads(LOCK.read_text())
 
-    assert lock["code"]["commit"] == "be15ea6e995462f3391c1a610892df3f67dfa7bd"
+    assert lock["code"]["commit"] == "6f020ac2fc3275e46c706d3406e02c3ed79b7be2"
     assert lock["dataset"]["revision"] == "f152293e235517d504809563c833d7190b8c713b"
     assert lock["code"]["license"] == lock["dataset"]["license"] == "Apache-2.0"
     assert lock["protocol"]["generation_and_scoring"] == (
@@ -258,6 +300,7 @@ def test_memphant_memory_uses_isolated_rest_scope_and_emits_trace_proof(
     monkeypatch, tmp_path
 ):
     adapter, registry = load_memphant_adapter(monkeypatch)
+    install_construction_binding(monkeypatch, tmp_path)
     monkeypatch.setenv("MEMPHANT_SCRATCH_ACTIVE", "1")
     monkeypatch.setenv("MEMPHANT_TEST_DATABASE_URL", "postgres://fixture")
     monkeypatch.setenv("MEMPHANT_LME_SERVER_URL", "http://fixture")
@@ -432,7 +475,13 @@ def test_memphant_memory_uses_isolated_rest_scope_and_emits_trace_proof(
     )
     assert metadata["trace_id"] == "00000000-0000-0000-0000-000000000404"
     assert len(metadata["trace_sha256"]) == len(metadata["context_sha256"]) == 64
-    proof = json.loads(next((tmp_path / "proof").glob("*.json")).read_text())
+    proof = next(
+        candidate
+        for candidate in (
+            json.loads(path.read_text()) for path in (tmp_path / "proof").glob("*.json")
+        )
+        if "query" in candidate
+    )
     assert proof["pairing"]["trajectory_count"] == 1
     assert proof["pairing"]["resource_count"] == 1
     assert proof["pairing"]["worker"]["completed_sources"] == 1
@@ -462,6 +511,7 @@ def test_memphant_query_only_reuses_frozen_construction_without_writes(
     monkeypatch, tmp_path
 ):
     adapter, registry = load_memphant_adapter(monkeypatch)
+    install_construction_binding(monkeypatch, tmp_path)
     cli_bin = tmp_path / "cli"
     server_bin = tmp_path / "server"
     worker_bin = tmp_path / "worker"
@@ -596,7 +646,13 @@ def test_memphant_query_only_reuses_frozen_construction_without_writes(
         metadata["construction_proof_sha256"]
         == construction["construction_proof_sha256"]
     )
-    proof = json.loads(next((tmp_path / "proof").glob("*.json")).read_text())
+    proof = next(
+        candidate
+        for candidate in (
+            json.loads(path.read_text()) for path in (tmp_path / "proof").glob("*.json")
+        )
+        if candidate.get("pairing", {}).get("query_only") is True
+    )
     assert proof["pairing"]["query_only"] is True
     assert proof["pairing"]["resource_count"] == 1
     assert proof["pairing"]["worker"]["completed_sources"] == 1
@@ -643,15 +699,46 @@ def test_memphant_query_only_fails_closed_on_tampered_or_out_of_order_proof(
     }
     config = json.loads(MEMPHANT_CONFIG.read_text())["memory_params"]
     core = {
-        "schema_version": 1,
-        "contract": {
+        "schema_version": 2,
+        "authorization": {
+            "authorization_sha256": "a" * 64,
+            "campaign_sha256": "b" * 64,
+            "screen_id": "state-aware-full",
+        },
+        "selection": {
+            "selection_sha256": "c" * 64,
+            "input_manifest_sha256": "d" * 64,
+            "state_mode": "structured-resource-v1",
+        },
+        "compiler": {
             "adapter_sha256": hashlib.sha256(MEMPHANT_ADAPTER.read_bytes()).hexdigest(),
             "construction_params_sha256": adapter._construction_params_sha256(config),
+            "prompt_sha256": "e" * 64,
+            "schema_sha256": "f" * 64,
+            "provider_code_sha256": "1" * 64,
             "binaries": {
                 "server": adapter._binary_fingerprint(str(server_bin)),
                 "cli": adapter._binary_fingerprint(str(cli_bin)),
                 "worker": adapter._binary_fingerprint(str(worker_bin)),
             },
+        },
+        "provider": {
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_model": "qwen/qwen3.5-9b",
+            "requested_provider": "deepinfra",
+            "served_provider": "DeepInfra",
+            "input_price_nanos_per_million": 100_000_000,
+            "output_price_nanos_per_million": 150_000_000,
+            "maximum_output_tokens": 4096,
+            "maximum_attempts": 3,
+        },
+        "cache": {"namespace": "fixture-v1", "source_receipts_sha256": "2" * 64},
+        "ledger": {
+            "attempt_ids": ["attempt-1"],
+            "before_event_sha256": "3" * 64,
+            "after_event_sha256": "4" * 64,
+            "settled_nanos": 1,
+            "unresolved_nanos": 0,
         },
         "isolation": {
             "tenant_id": "00000000-0000-0000-0000-000000000111",
@@ -715,7 +802,7 @@ def test_memphant_query_only_fails_closed_on_tampered_or_out_of_order_proof(
         registry["memphant"](config)
 
     sealed["pairing"]["resource_count"] = 1
-    sealed["contract"]["adapter_sha256"] = "0" * 64
+    sealed["compiler"]["adapter_sha256"] = "0" * 64
     sealed["construction_proof_sha256"] = adapter._sha256_json(
         {
             key: value

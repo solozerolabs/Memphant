@@ -54,6 +54,7 @@ FORBIDDEN_EVALUATION_KEYS = {
     "gold",
     "reference",
 }
+CONSTRUCTION_BINDING_ENV = "MEMPHANT_LME_CONSTRUCTION_BINDING"
 TENANT_PATTERN = re.compile(r"tenant_created id=([0-9a-fA-F-]{36})")
 # Keep each retain safely below the server request-body ceiling while preserving
 # state boundaries. The runtime compiler owns bounded, complete chunk evidence;
@@ -283,7 +284,12 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         set(value)
         == {
             "schema_version",
-            "contract",
+            "authorization",
+            "selection",
+            "compiler",
+            "provider",
+            "cache",
+            "ledger",
             "isolation",
             "pairing",
             "construction_proof_sha256",
@@ -303,15 +309,113 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
         _sha256_json(core) == expected_sha256,
         "construction proof sha256 mismatch",
     )
-    _require(value["schema_version"] == 1, "unsupported construction proof schema")
+    _require(value["schema_version"] == 2, "unsupported construction proof schema")
 
-    contract = value["contract"]
-    _require(isinstance(contract, dict), "construction proof contract is invalid")
+    authorization = value["authorization"]
+    selection = value["selection"]
+    provider = value["provider"]
+    cache = value["cache"]
+    ledger = value["ledger"]
     _require(
-        set(contract) == {"adapter_sha256", "construction_params_sha256", "binaries"},
-        "construction proof contract is invalid",
+        isinstance(authorization, dict)
+        and set(authorization)
+        == {"authorization_sha256", "campaign_sha256", "screen_id"},
+        "construction proof authorization is invalid",
     )
-    for key in ("adapter_sha256", "construction_params_sha256"):
+    _require(
+        isinstance(selection, dict)
+        and set(selection)
+        == {"selection_sha256", "input_manifest_sha256", "state_mode"}
+        and selection["state_mode"] == "structured-resource-v1",
+        "construction proof selection is invalid",
+    )
+    _require(
+        isinstance(provider, dict)
+        and set(provider)
+        == {
+            "requested_model",
+            "served_model",
+            "requested_provider",
+            "served_provider",
+            "input_price_nanos_per_million",
+            "output_price_nanos_per_million",
+            "maximum_output_tokens",
+            "maximum_attempts",
+        },
+        "construction proof provider is invalid",
+    )
+    _require(
+        isinstance(cache, dict)
+        and set(cache) == {"namespace", "source_receipts_sha256"},
+        "construction proof cache is invalid",
+    )
+    _require(
+        isinstance(ledger, dict)
+        and set(ledger)
+        == {
+            "attempt_ids",
+            "before_event_sha256",
+            "after_event_sha256",
+            "settled_nanos",
+            "unresolved_nanos",
+        },
+        "construction proof ledger is invalid",
+    )
+    sha_fields = [
+        authorization.get("authorization_sha256"),
+        authorization.get("campaign_sha256"),
+        selection.get("selection_sha256"),
+        selection.get("input_manifest_sha256"),
+        cache.get("source_receipts_sha256"),
+        ledger.get("before_event_sha256"),
+        ledger.get("after_event_sha256"),
+    ]
+    _require(
+        all(isinstance(item, str) and re.fullmatch(r"[0-9a-f]{64}", item) is not None for item in sha_fields),
+        "construction proof binding sha256 is invalid",
+    )
+    _require(
+        isinstance(authorization.get("screen_id"), str)
+        and authorization["screen_id"]
+        and isinstance(cache.get("namespace"), str)
+        and cache["namespace"]
+        and isinstance(ledger.get("attempt_ids"), list)
+        and ledger["attempt_ids"]
+        and all(isinstance(item, str) and item for item in ledger["attempt_ids"])
+        and len(ledger["attempt_ids"]) == len(set(ledger["attempt_ids"]))
+        and all(
+            isinstance(ledger.get(key), int) and ledger[key] >= 0
+            for key in ("settled_nanos", "unresolved_nanos")
+        ),
+        "construction proof campaign binding is invalid",
+    )
+    _require(
+        all(isinstance(provider.get(key), str) and provider[key] for key in ("requested_model", "served_model", "requested_provider", "served_provider"))
+        and all(isinstance(provider.get(key), int) and provider[key] > 0 for key in ("input_price_nanos_per_million", "output_price_nanos_per_million", "maximum_output_tokens", "maximum_attempts")),
+        "construction proof provider identity or bounds are invalid",
+    )
+
+    contract = value["compiler"]
+    _require(isinstance(contract, dict), "construction proof compiler is invalid")
+    _require(
+        set(contract)
+        == {
+            "adapter_sha256",
+            "construction_params_sha256",
+            "prompt_sha256",
+            "schema_sha256",
+            "provider_code_sha256",
+            "binaries",
+        },
+        "construction proof compiler is invalid",
+    )
+    for key in (
+        "adapter_sha256",
+        "construction_params_sha256",
+        "prompt_sha256",
+        "schema_sha256",
+        "provider_code_sha256",
+    ):
         _require(
             isinstance(contract[key], str)
             and re.fullmatch(r"[0-9a-f]{64}", contract[key]) is not None,
@@ -488,6 +592,29 @@ def _load_construction_proof(path_value: str) -> dict[str, object]:
     return value
 
 
+def _load_construction_binding() -> dict[str, object]:
+    path_value = _required_env(CONSTRUCTION_BINDING_ENV)
+    path = Path(path_value).resolve()
+    _require(path.is_file(), f"construction binding is missing: {path}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("construction binding is not valid JSON") from error
+    _require(
+        isinstance(value, dict)
+        and set(value)
+        == {"authorization", "selection", "compiler", "provider", "cache", "ledger"},
+        "construction binding contract drift",
+    )
+    compiler = value.get("compiler")
+    _require(
+        isinstance(compiler, dict)
+        and set(compiler) == {"prompt_sha256", "schema_sha256", "provider_code_sha256"},
+        "construction binding compiler contract drift",
+    )
+    return value
+
+
 def _validate_trajectory(
     trajectory: dict[str, object], inserted_trajectory_ids: list[str]
 ) -> tuple[str, list[dict[str, object]], str, list[str], str]:
@@ -648,6 +775,15 @@ def _trajectory_fragments(
     return fragments
 
 
+def census_resource_rows(
+    trajectory: dict[str, object], *, uses: int
+) -> list[dict[str, object]]:
+    """Return query-blind resources under the exact production adapter contract."""
+    _require(type(uses) is int and uses > 0, "trajectory uses must be positive")
+    _, _, _, fragments, _ = _validate_trajectory(trajectory, [])
+    return [{"source_body": body, "uses": uses} for body in fragments]
+
+
 def _drain_worker(
     worker_bin: str, database_url: str, expected: int
 ) -> dict[str, object]:
@@ -658,7 +794,7 @@ def _drain_worker(
             "MEMPHANT_WORKER_DATABASE_URL": database_url,
             "MEMPHANT_WORKER_DRAIN": "1",
             "MEMPHANT_RESOURCE_CHUNKS": "on",
-            "MEMPHANT_STRUCTURED_STATE": "off",
+            "MEMPHANT_STRUCTURED_STATE": "on",
         }
     )
     completed = subprocess.run(
@@ -781,7 +917,7 @@ class MemphantMemory(Memory):
             _load_construction_proof(prebuilt_path) if prebuilt_path else None
         )
         if self.construction_proof is not None:
-            frozen_contract = self.construction_proof["contract"]
+            frozen_contract = self.construction_proof["compiler"]
             _require(
                 frozen_contract["adapter_sha256"] == _sha256_file(Path(__file__)),
                 "construction proof adapter mismatch",
@@ -935,15 +1071,27 @@ class MemphantMemory(Memory):
             self.worker_proof = _drain_worker(
                 self.worker_bin, self.database_url, self.resource_count
             )
+            binding = _load_construction_binding()
+            bound_compiler = binding["compiler"]
             core = {
-                "schema_version": 1,
-                "contract": {
+                "schema_version": 2,
+                "authorization": binding["authorization"],
+                "selection": binding["selection"],
+                "compiler": {
                     "adapter_sha256": _sha256_file(Path(__file__)),
                     "construction_params_sha256": _construction_params_sha256(
                         self.params
                     ),
+                    "prompt_sha256": bound_compiler["prompt_sha256"],
+                    "schema_sha256": bound_compiler["schema_sha256"],
+                    "provider_code_sha256": bound_compiler[
+                        "provider_code_sha256"
+                    ],
                     "binaries": self.binaries,
                 },
+                "provider": binding["provider"],
+                "cache": binding["cache"],
+                "ledger": binding["ledger"],
                 "isolation": {
                     "tenant_id": self.tenant_id,
                     "instance_id": self.instance_id,
@@ -960,6 +1108,9 @@ class MemphantMemory(Memory):
                 **core,
                 "construction_proof_sha256": _sha256_json(core),
             }
+            proof_path = self.proof_dir / f"construction.{self.instance_id}.v2.json"
+            _atomic_write_json(proof_path, self.construction_proof)
+            self.construction_proof = _load_construction_proof(str(proof_path))
         return json.loads(json.dumps(self.construction_proof))
 
     def query(

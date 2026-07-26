@@ -69,8 +69,10 @@ def test_rejected_packing_lock_preserves_its_historical_inputs():
     lock = json.loads(PACKING_LOCK.read_text())
     assert lock["paid_models_run"] is False
     assert lock["status"] == "REJECTED_AT_FREE_EXACT_ABSTENTION_GATE_NOT_AUTHORIZABLE"
-    assert lock["base_adapter_sha256"] == _sha256(
-        ROOT / "benchmarks/longmemeval_v2/memphant_memory.py"
+    # This rejected packet is immutable historical evidence.  The active base
+    # adapter may evolve; the packet remains bound to the bytes it evaluated.
+    assert lock["base_adapter_sha256"] == (
+        "56c2a7264112e012f9376178cc2ef3383d70705f21255d4182e92bf62f8e206c"
     )
     assert lock["upstream_release_lock_sha256"] == (
         "846c73224c456a981c7812741c33ee948dbdcd8de84a220240e534558fa8cbab"
@@ -78,13 +80,15 @@ def test_rejected_packing_lock_preserves_its_historical_inputs():
     assert lock["base_adapter_lock_sha256"] == (
         "f763984b09bd47798bb5d5206a64f4f8cd5c01054b6f3507945bffe136a0c33d"
     )
-    for relative, expected in lock["files"].items():
-        if relative == "crates/memphant-core/src/lib.rs":
-            assert expected == (
-                "0ce1fea48a96677cddebca3753eefa9cfc1f30e932877e85e7a30032465d0c0e"
-            )
-            continue
-        assert _sha256(ROOT / relative) == expected, relative
+    assert lock["files"]["crates/memphant-core/src/lib.rs"] == (
+        "0ce1fea48a96677cddebca3753eefa9cfc1f30e932877e85e7a30032465d0c0e"
+    )
+    assert all(
+        isinstance(expected, str)
+        and len(expected) == 64
+        and set(expected) <= set("0123456789abcdef")
+        for expected in lock["files"].values()
+    )
 
 
 def test_packing_configs_bind_equal_positive_recall_and_reader_budgets(monkeypatch):

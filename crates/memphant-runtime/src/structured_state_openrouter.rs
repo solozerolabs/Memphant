@@ -1,18 +1,20 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use fs2::FileExt;
 use memphant_core::{
-    StructuredObservation, StructuredObservationDisposition, StructuredStateProvider,
-    StructuredStateProviderError, StructuredStateProviderIdentity, StructuredStateRequest,
-    validate_structured_observation,
+    EvidenceSlice, StructuredObservation, StructuredObservationDisposition, StructuredSourceKind,
+    StructuredStateProvider, StructuredStateProviderError, StructuredStateProviderIdentity,
+    StructuredStateRequest, validate_structured_observation,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use tokenizers::Tokenizer;
 use ureq::Agent;
 
 const URL: &str = "https://openrouter.ai/api/v1/chat/completions";
@@ -22,8 +24,14 @@ const FLASH_MODEL: &str = "google/gemini-3.5-flash";
 const FLASH_PROVIDER: &str = "google-ai-studio";
 const DEEPSEEK_MODEL: &str = "deepseek/deepseek-v4-flash";
 const DEEPSEEK_PROVIDERS: [&str; 2] = ["deepinfra", "wandb"];
+const LME_V2_QWEN_MODEL: &str = "qwen/qwen3.5-9b-20260310";
+const LME_V2_QWEN_PROVIDER: &str = "deepinfra";
 const CONTRACT_REVISION: &str = "structured-observation.v1";
-const MAX_ATTEMPTS: usize = 3;
+// A provider call is one campaign-ledger wave attempt. Retrying inside this
+// process would bypass the aggregate wave reservation and is therefore
+// forbidden. The campaign may authorize up to three separately metered waves.
+const MAX_ATTEMPTS: usize = 1;
+const MAX_CAMPAIGN_ATTEMPTS: usize = 3;
 const MAX_OUTPUT_TOKENS: u64 = 4096;
 const MAX_REQUEST_BYTES: usize = 131_072;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -33,12 +41,60 @@ const PROMPT_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH";
 const LEDGER_ENV: &str = "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER";
 const INPUT_PRICE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION";
 const OUTPUT_PRICE_ENV: &str = "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION";
+const TOKENIZER_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH";
+const TOKENIZER_CONFIG_PATH_ENV: &str = "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH";
+const CAMPAIGN_ATTEMPT_ENV: &str = "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT";
+const AGGREGATE_RESERVATION_ENV: &str = "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS";
+const QWEN_CHAT_TEMPLATE_OVERHEAD_TOKENS: u64 = 15;
+const QWEN_TOKENIZER_SHA256: &str =
+    "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42";
+const QWEN_CHAT_TEMPLATE_SHA256: &str =
+    "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715";
+
+#[derive(Clone)]
+pub struct StructuredStateTokenizer {
+    tokenizer: Tokenizer,
+    tokenizer_sha256: String,
+    chat_template_sha256: String,
+    chat_template_overhead_tokens: u64,
+}
+
+pub fn load_structured_state_tokenizer(
+    tokenizer_path: &Path,
+    tokenizer_config_path: &Path,
+) -> Result<StructuredStateTokenizer, String> {
+    let tokenizer_bytes =
+        fs::read(tokenizer_path).map_err(|error| format!("failed to read tokenizer: {error}"))?;
+    let tokenizer_sha256 = sha256(&tokenizer_bytes);
+    let config_bytes = fs::read(tokenizer_config_path)
+        .map_err(|error| format!("failed to read tokenizer config: {error}"))?;
+    let config: Value = serde_json::from_slice(&config_bytes)
+        .map_err(|error| format!("tokenizer config is invalid JSON: {error}"))?;
+    let chat_template = config
+        .get("chat_template")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "tokenizer config is missing chat_template".to_string())?;
+    let chat_template_sha256 = sha256(chat_template.as_bytes());
+    if tokenizer_sha256 != QWEN_TOKENIZER_SHA256
+        || chat_template_sha256 != QWEN_CHAT_TEMPLATE_SHA256
+    {
+        return Err("Qwen tokenizer or chat template identity drift".to_string());
+    }
+    Ok(StructuredStateTokenizer {
+        tokenizer: Tokenizer::from_file(tokenizer_path)
+            .map_err(|_| "tokenizer.json is invalid".to_string())?,
+        tokenizer_sha256,
+        chat_template_sha256,
+        chat_template_overhead_tokens: QWEN_CHAT_TEMPLATE_OVERHEAD_TOKENS,
+    })
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuredStateRequestPlan {
     pub serialized_request: Vec<u8>,
     pub request_sha256: String,
     pub extraction_key: String,
+    pub input_reservation_units: u64,
     pub per_attempt_reservation_nanos: u64,
     pub maximum_reservation_nanos: u64,
     pub maximum_attempts: usize,
@@ -51,6 +107,26 @@ pub fn plan_structured_state_request(
     reasoning_effort: Option<&str>,
     input_price_nanos_per_million: u64,
     output_price_nanos_per_million: u64,
+) -> Result<StructuredStateRequestPlan, StructuredStateProviderError> {
+    plan_structured_state_request_with_tokenizer(
+        request,
+        model,
+        prompt,
+        reasoning_effort,
+        input_price_nanos_per_million,
+        output_price_nanos_per_million,
+        None,
+    )
+}
+
+pub fn plan_structured_state_request_with_tokenizer(
+    request: &StructuredStateRequest,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+    input_price_nanos_per_million: u64,
+    output_price_nanos_per_million: u64,
+    tokenizer: Option<&StructuredStateTokenizer>,
 ) -> Result<StructuredStateRequestPlan, StructuredStateProviderError> {
     if model.trim().is_empty() || prompt.trim().is_empty() {
         return Err(invalid(
@@ -125,33 +201,156 @@ pub fn plan_structured_state_request(
             "seed": 0,
             "max_output_tokens": MAX_OUTPUT_TOKENS,
             "max_request_bytes": MAX_REQUEST_BYTES,
-            "maximum_attempts": MAX_ATTEMPTS,
+            "maximum_attempts": MAX_CAMPAIGN_ATTEMPTS,
             "reasoning_effort": reasoning_effort,
+            "tokenizer": tokenizer.map(|tokenizer| json!({
+                "tokenizer_sha256": tokenizer.tokenizer_sha256,
+                "chat_template_sha256": tokenizer.chat_template_sha256,
+                "chat_template_overhead_tokens": tokenizer.chat_template_overhead_tokens,
+            })),
         }))
         .expect("structured-state extraction identity serializes")
         .as_slice(),
     );
-    // A byte can be at most one tokenizer token, so this stays conservative
-    // without importing a model-specific tokenizer into the pure census path.
-    let input = reserve_nanos(
-        serialized_request.len() as u64,
-        input_price_nanos_per_million,
-    )?;
+    let input_units = if let Some(tokenizer) = tokenizer {
+        let system = tokenizer
+            .tokenizer
+            .encode(prompt, false)
+            .map_err(|_| invalid("structured-state system prompt tokenization failed"))?
+            .len() as u64;
+        let user = tokenizer
+            .tokenizer
+            .encode(payload, false)
+            .map_err(|_| invalid("structured-state user payload tokenization failed"))?
+            .len() as u64;
+        system
+            .checked_add(user)
+            .and_then(|value| value.checked_add(tokenizer.chat_template_overhead_tokens))
+            .ok_or_else(|| invalid("structured-state token count overflow"))?
+    } else {
+        // Non-Qwen providers retain the conservative byte upper bound until
+        // their exact pinned chat tokenizer is part of the provider contract.
+        serialized_request.len() as u64
+    };
+    let input = reserve_nanos(input_units, input_price_nanos_per_million)?;
     let output = reserve_nanos(MAX_OUTPUT_TOKENS, output_price_nanos_per_million)?;
     let per_attempt_reservation_nanos = input
         .checked_add(output)
         .ok_or_else(|| invalid("structured-state reservation overflow"))?;
     let maximum_reservation_nanos = per_attempt_reservation_nanos
-        .checked_mul(MAX_ATTEMPTS as u64)
+        .checked_mul(MAX_CAMPAIGN_ATTEMPTS as u64)
         .ok_or_else(|| invalid("structured-state retry reservation overflow"))?;
     Ok(StructuredStateRequestPlan {
         serialized_request,
         request_sha256,
         extraction_key,
+        input_reservation_units: input_units,
         per_attempt_reservation_nanos,
         maximum_reservation_nanos,
-        maximum_attempts: MAX_ATTEMPTS,
+        maximum_attempts: MAX_CAMPAIGN_ATTEMPTS,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn plan_structured_state_batches(
+    source_kind: StructuredSourceKind,
+    source_body_sha256: &str,
+    evidence_slices: Vec<EvidenceSlice>,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+    input_price_nanos_per_million: u64,
+    output_price_nanos_per_million: u64,
+    tokenizer: Option<&StructuredStateTokenizer>,
+) -> Result<Vec<StructuredStateRequest>, StructuredStateProviderError> {
+    plan_structured_state_batches_with(
+        source_kind,
+        source_body_sha256,
+        evidence_slices,
+        |request| {
+            plan_structured_state_request_with_tokenizer(
+                request,
+                model,
+                prompt,
+                reasoning_effort,
+                input_price_nanos_per_million,
+                output_price_nanos_per_million,
+                None,
+            )
+        },
+        |request| {
+            plan_structured_state_request_with_tokenizer(
+                request,
+                model,
+                prompt,
+                reasoning_effort,
+                input_price_nanos_per_million,
+                output_price_nanos_per_million,
+                tokenizer,
+            )
+        },
+    )
+}
+
+fn plan_structured_state_batches_with<SizePlan, FinalPlan>(
+    source_kind: StructuredSourceKind,
+    source_body_sha256: &str,
+    evidence_slices: Vec<EvidenceSlice>,
+    mut size_plan: SizePlan,
+    mut final_plan: FinalPlan,
+) -> Result<Vec<StructuredStateRequest>, StructuredStateProviderError>
+where
+    SizePlan: FnMut(
+        &StructuredStateRequest,
+    ) -> Result<StructuredStateRequestPlan, StructuredStateProviderError>,
+    FinalPlan: FnMut(
+        &StructuredStateRequest,
+    ) -> Result<StructuredStateRequestPlan, StructuredStateProviderError>,
+{
+    let mut batches = Vec::new();
+    let mut cursor = 0;
+    while cursor < evidence_slices.len() {
+        let mut lower = cursor + 1;
+        let mut upper = evidence_slices.len();
+        let mut best = cursor;
+        while lower <= upper {
+            let end = lower + (upper - lower) / 2;
+            let candidate = StructuredStateRequest {
+                source_kind,
+                source_body_sha256: source_body_sha256.to_string(),
+                batch_index: batches.len(),
+                evidence_slices: evidence_slices[cursor..end].to_vec(),
+            };
+            if size_plan(&candidate).is_ok() {
+                best = end;
+                lower = end + 1;
+            } else if end == 0 {
+                break;
+            } else {
+                upper = end - 1;
+            }
+        }
+        if best == cursor {
+            let single = StructuredStateRequest {
+                source_kind,
+                source_body_sha256: source_body_sha256.to_string(),
+                batch_index: batches.len(),
+                evidence_slices: vec![evidence_slices[cursor].clone()],
+            };
+            size_plan(&single)?;
+            unreachable!("a successful single-slice request must advance the batch cursor");
+        }
+        let accepted = StructuredStateRequest {
+            source_kind,
+            source_body_sha256: source_body_sha256.to_string(),
+            batch_index: batches.len(),
+            evidence_slices: evidence_slices[cursor..best].to_vec(),
+        };
+        final_plan(&accepted)?;
+        batches.push(accepted);
+        cursor = best;
+    }
+    Ok(batches)
 }
 
 fn reserve_nanos(tokens: u64, nanos_per_million: u64) -> Result<u64, StructuredStateProviderError> {
@@ -175,21 +374,52 @@ pub(crate) fn provider_from_env() -> Result<Option<Arc<dyn StructuredStateProvid
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| format!("{PROMPT_PATH_ENV} is required"))?;
-    let prompt = load_prompt(&prompt_path)?;
+    let prompt = load_structured_state_prompt(&prompt_path)?;
     let input_price = parse_positive_u64_env(INPUT_PRICE_ENV)?;
     let output_price = parse_positive_u64_env(OUTPUT_PRICE_ENV)?;
+    let tokenizer = if model == LME_V2_QWEN_MODEL {
+        let path = PathBuf::from(required_env(TOKENIZER_PATH_ENV)?);
+        let config_path = PathBuf::from(required_env(TOKENIZER_CONFIG_PATH_ENV)?);
+        Some(load_structured_state_tokenizer(&path, &config_path)?)
+    } else {
+        None
+    };
     let ledger = std::env::var_os(LEDGER_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from);
+    if model == LME_V2_QWEN_MODEL && ledger.is_none() {
+        return Err(format!(
+            "{LEDGER_ENV} is required for the Qwen campaign route"
+        ));
+    }
+    let aggregate_reservation_nanos = if ledger.is_some() {
+        Some(parse_positive_u64_env(AGGREGATE_RESERVATION_ENV)?)
+    } else {
+        None
+    };
     let mut provider = OpenRouterStructuredState::new(
-        model,
+        model.clone(),
         prompt,
         input_price,
         output_price,
         Arc::new(UreqTransport::new(key)),
-        Duration::from_millis(500),
         ledger,
     );
+    if let Some(tokenizer) = tokenizer {
+        provider = provider.with_tokenizer(tokenizer);
+    }
+    let campaign_attempt = if model == LME_V2_QWEN_MODEL {
+        parse_positive_u64_env(CAMPAIGN_ATTEMPT_ENV)? as usize
+    } else {
+        std::env::var(CAMPAIGN_ATTEMPT_ENV)
+            .ok()
+            .map(|value| value.parse::<usize>())
+            .transpose()
+            .map_err(|_| format!("{CAMPAIGN_ATTEMPT_ENV} must be an integer"))?
+            .unwrap_or(1)
+    };
+    provider = provider.with_campaign_attempt(campaign_attempt)?;
+    provider.aggregate_reservation_nanos = aggregate_reservation_nanos;
     if let Some(effort) = std::env::var("MEMPHANT_STRUCTURED_STATE_REASONING_EFFORT")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -220,7 +450,7 @@ fn parse_positive_u64_env(name: &str) -> Result<u64, String> {
         .ok_or_else(|| format!("{name} must be a positive integer"))
 }
 
-fn load_prompt(path: &Path) -> Result<String, String> {
+pub fn load_structured_state_prompt(path: &Path) -> Result<String, String> {
     let prompt = fs::read_to_string(path).map_err(|error| {
         format!(
             "failed to read {PROMPT_PATH_ENV}={}: {error}",
@@ -248,8 +478,10 @@ struct OpenRouterStructuredState {
     transport: Arc<dyn Transport>,
     ledger: Option<PathBuf>,
     ledger_lock: Arc<Mutex<()>>,
-    retry_base: Duration,
     reasoning_effort: Option<String>,
+    tokenizer: Option<StructuredStateTokenizer>,
+    campaign_attempt: usize,
+    aggregate_reservation_nanos: Option<u64>,
 }
 
 impl OpenRouterStructuredState {
@@ -259,7 +491,6 @@ impl OpenRouterStructuredState {
         input_price_nanos_per_million: u64,
         output_price_nanos_per_million: u64,
         transport: Arc<dyn Transport>,
-        retry_base: Duration,
         ledger: Option<PathBuf>,
     ) -> Self {
         Self {
@@ -279,13 +510,56 @@ impl OpenRouterStructuredState {
             transport,
             ledger,
             ledger_lock: Arc::new(Mutex::new(())),
-            retry_base,
             reasoning_effort: None,
+            tokenizer: None,
+            campaign_attempt: 1,
+            aggregate_reservation_nanos: None,
         }
+    }
+
+    fn with_campaign_attempt(mut self, campaign_attempt: usize) -> Result<Self, String> {
+        if !(1..=MAX_CAMPAIGN_ATTEMPTS).contains(&campaign_attempt) {
+            return Err(format!(
+                "{CAMPAIGN_ATTEMPT_ENV} must be between 1 and {MAX_CAMPAIGN_ATTEMPTS}"
+            ));
+        }
+        self.campaign_attempt = campaign_attempt;
+        Ok(self)
+    }
+
+    fn with_tokenizer(mut self, tokenizer: StructuredStateTokenizer) -> Self {
+        self.identity.model.push_str(";tokenizer_sha256=");
+        self.identity.model.push_str(&tokenizer.tokenizer_sha256);
+        self.identity.model.push_str(";chat_template_sha256=");
+        self.identity
+            .model
+            .push_str(&tokenizer.chat_template_sha256);
+        self.identity
+            .model
+            .push_str(";chat_template_overhead_tokens=");
+        self.identity
+            .model
+            .push_str(&tokenizer.chat_template_overhead_tokens.to_string());
+        self.tokenizer = Some(tokenizer);
+        self
     }
 
     fn with_reasoning_effort(mut self, effort: String) -> Self {
         self.identity.model = compiler_model_identity(&self.model, Some(&effort));
+        if let Some(tokenizer) = &self.tokenizer {
+            self.identity.model.push_str(";tokenizer_sha256=");
+            self.identity.model.push_str(&tokenizer.tokenizer_sha256);
+            self.identity.model.push_str(";chat_template_sha256=");
+            self.identity
+                .model
+                .push_str(&tokenizer.chat_template_sha256);
+            self.identity
+                .model
+                .push_str(";chat_template_overhead_tokens=");
+            self.identity
+                .model
+                .push_str(&tokenizer.chat_template_overhead_tokens.to_string());
+        }
         self.reasoning_effort = Some(effort);
         self
     }
@@ -294,13 +568,14 @@ impl OpenRouterStructuredState {
         &self,
         request: &StructuredStateRequest,
     ) -> Result<StructuredStateRequestPlan, StructuredStateProviderError> {
-        plan_structured_state_request(
+        plan_structured_state_request_with_tokenizer(
             request,
             &self.model,
             &self.prompt,
             self.reasoning_effort.as_deref(),
             self.input_price_nanos_per_million,
             self.output_price_nanos_per_million,
+            self.tokenizer.as_ref(),
         )
     }
 
@@ -309,20 +584,18 @@ impl OpenRouterStructuredState {
         request: &StructuredStateRequest,
     ) -> Result<Vec<StructuredObservation>, StructuredStateProviderError> {
         let plan = self.plan(request)?;
-        for attempt in 1..=plan.maximum_attempts {
-            let attempt_id = uuid::Uuid::new_v4().to_string();
-            let started = Instant::now();
-            self.record_attempt(&AttemptEvent::started(
-                &attempt_id,
-                request,
-                &plan,
-                &self.model,
-                attempt,
-            ))?;
-            let response = match self.transport.post(&plan.serialized_request) {
-                Ok(response) => response,
-                Err(_) => {
-                    self.record_attempt(&AttemptEvent::failed(
+        let attempt = MAX_ATTEMPTS;
+        let attempt_id = uuid::Uuid::new_v4().to_string();
+        let started = Instant::now();
+        self.record_attempt(
+            &AttemptEvent::started(&attempt_id, request, &plan, &self.model, attempt)
+                .for_campaign_attempt(self.campaign_attempt),
+        )?;
+        let response = match self.transport.post(&plan.serialized_request) {
+            Ok(response) => response,
+            Err(_) => {
+                self.record_attempt(
+                    &AttemptEvent::failed(
                         &attempt_id,
                         request,
                         &plan,
@@ -330,14 +603,17 @@ impl OpenRouterStructuredState {
                         attempt,
                         "transport_error",
                         started.elapsed(),
-                    ))?;
-                    return Err(StructuredStateProviderError::Unavailable(
-                        "OpenRouter transport failed; completion was not resent".to_string(),
-                    ));
-                }
-            };
-            if !(200..300).contains(&response.status) {
-                self.record_attempt(&AttemptEvent::http_error(
+                    )
+                    .for_campaign_attempt(self.campaign_attempt),
+                )?;
+                return Err(StructuredStateProviderError::Unavailable(
+                    "OpenRouter transport failed; completion was not resent".to_string(),
+                ));
+            }
+        };
+        if !(200..300).contains(&response.status) {
+            self.record_attempt(
+                &AttemptEvent::http_error(
                     &attempt_id,
                     request,
                     &plan,
@@ -345,25 +621,20 @@ impl OpenRouterStructuredState {
                     attempt,
                     &response,
                     started.elapsed(),
-                ))?;
-                if is_retryable_status(response.status) && attempt < plan.maximum_attempts {
-                    std::thread::sleep(
-                        response
-                            .retry_after
-                            .unwrap_or_else(|| self.retry_base.saturating_mul(1 << (attempt - 1))),
-                    );
-                    continue;
-                }
-                return Err(StructuredStateProviderError::Unavailable(format!(
-                    "OpenRouter HTTP {}: {}",
-                    response.status,
-                    openrouter_error_message(&response.body)
-                )));
-            }
-            let reconciled = match reconcile_generation(self.transport.as_ref(), &response) {
-                Ok(reconciled) => reconciled,
-                Err(error) => {
-                    self.record_attempt(&AttemptEvent::generation_lookup_failed(
+                )
+                .for_campaign_attempt(self.campaign_attempt),
+            )?;
+            return Err(StructuredStateProviderError::Unavailable(format!(
+                "OpenRouter HTTP {}: {}",
+                response.status,
+                openrouter_error_message(&response.body)
+            )));
+        }
+        let reconciled = match reconcile_generation(self.transport.as_ref(), &response) {
+            Ok(reconciled) => reconciled,
+            Err(error) => {
+                self.record_attempt(
+                    &AttemptEvent::generation_lookup_failed(
                         &attempt_id,
                         request,
                         &plan,
@@ -371,14 +642,17 @@ impl OpenRouterStructuredState {
                         attempt,
                         &response,
                         started.elapsed(),
-                    ))?;
-                    return Err(StructuredStateProviderError::Unavailable(error));
-                }
-            };
-            let observations = match decode_response(reconciled.body.clone(), request) {
-                Ok(observations) => observations,
-                Err(error) => {
-                    self.record_attempt(&AttemptEvent::reconciled(
+                    )
+                    .for_campaign_attempt(self.campaign_attempt),
+                )?;
+                return Err(StructuredStateProviderError::Unavailable(error));
+            }
+        };
+        let observations = match decode_response(reconciled.body.clone(), request) {
+            Ok(observations) => observations,
+            Err(error) => {
+                self.record_attempt(
+                    &AttemptEvent::reconciled(
                         &attempt_id,
                         request,
                         &plan,
@@ -389,11 +663,14 @@ impl OpenRouterStructuredState {
                         "response_decode_error",
                         Some("response_decode_error"),
                         started.elapsed(),
-                    ))?;
-                    return Err(error);
-                }
-            };
-            self.record_attempt(&AttemptEvent::completed(
+                    )
+                    .for_campaign_attempt(self.campaign_attempt),
+                )?;
+                return Err(error);
+            }
+        };
+        self.record_attempt(
+            &AttemptEvent::completed(
                 &attempt_id,
                 request,
                 &plan,
@@ -402,10 +679,10 @@ impl OpenRouterStructuredState {
                 &reconciled,
                 &observations,
                 started.elapsed(),
-            ))?;
-            return Ok(observations);
-        }
-        unreachable!("bounded structured-state retry loop always returns")
+            )
+            .for_campaign_attempt(self.campaign_attempt),
+        )?;
+        Ok(observations)
     }
 
     fn record_attempt(&self, event: &AttemptEvent) -> Result<(), StructuredStateProviderError> {
@@ -417,7 +694,7 @@ impl OpenRouterStructuredState {
                 "structured-state attempt ledger lock poisoned".to_string(),
             )
         })?;
-        append_json_line(path, event).map_err(|error| {
+        append_json_line(path, event, self.aggregate_reservation_nanos).map_err(|error| {
             StructuredStateProviderError::Unavailable(format!(
                 "structured-state attempt ledger write failed: {error}"
             ))
@@ -428,6 +705,25 @@ impl OpenRouterStructuredState {
 impl StructuredStateProvider for OpenRouterStructuredState {
     fn identity(&self) -> &StructuredStateProviderIdentity {
         &self.identity
+    }
+
+    fn plan_batches(
+        &self,
+        source_kind: StructuredSourceKind,
+        source_body_sha256: &str,
+        evidence_slices: Vec<EvidenceSlice>,
+    ) -> Result<Vec<StructuredStateRequest>, StructuredStateProviderError> {
+        plan_structured_state_batches(
+            source_kind,
+            source_body_sha256,
+            evidence_slices,
+            &self.model,
+            &self.prompt,
+            self.reasoning_effort.as_deref(),
+            self.input_price_nanos_per_million,
+            self.output_price_nanos_per_million,
+            self.tokenizer.as_ref(),
+        )
     }
 
     fn extract<'a>(
@@ -469,6 +765,12 @@ fn provider_preferences(model: &str, input_price: u64, output_price: u64) -> Val
             "only": DEEPSEEK_PROVIDERS,
             "allow_fallbacks": false,
         })
+    } else if model == LME_V2_QWEN_MODEL {
+        json!({
+            "require_parameters": true,
+            "only": [LME_V2_QWEN_PROVIDER],
+            "allow_fallbacks": false,
+        })
     } else {
         json!({"require_parameters": true, "allow_fallbacks": false})
     };
@@ -485,6 +787,8 @@ fn compiler_model_identity(model: &str, reasoning_effort: Option<&str>) -> Strin
         identity.push_str(";provider=google-ai-studio");
     } else if model == DEEPSEEK_MODEL {
         identity.push_str(";providers=deepinfra,wandb");
+    } else if model == LME_V2_QWEN_MODEL {
+        identity.push_str(";provider=deepinfra");
     }
     identity.push_str(";fallbacks=false;seed=0;max_tokens=4096;max_request_bytes=131072");
     if model == FLASH_MODEL {
@@ -642,7 +946,6 @@ fn decode_response(
 struct HttpResponse {
     status: u16,
     body: Value,
-    retry_after: Option<Duration>,
 }
 
 trait Transport: Send + Sync {
@@ -687,12 +990,6 @@ impl Transport for UreqTransport {
             .get("x-generation-id")
             .and_then(|value| value.to_str().ok())
             .map(str::to_owned);
-        let retry_after = response
-            .headers()
-            .get("retry-after")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.trim().parse::<u64>().ok())
-            .map(Duration::from_secs);
         let mut body = response
             .body_mut()
             .with_config()
@@ -700,11 +997,7 @@ impl Transport for UreqTransport {
             .read_json()
             .map_err(|_| "OpenRouter response decode failed".to_string())?;
         backfill_response_id(&mut body, response_id.as_deref());
-        Ok(HttpResponse {
-            status,
-            body,
-            retry_after,
-        })
+        Ok(HttpResponse { status, body })
     }
 
     fn generation(&self, response_id: &str) -> Result<Value, String> {
@@ -787,7 +1080,6 @@ fn reconcile_generation(
     Ok(HttpResponse {
         status: response.status,
         body,
-        retry_after: response.retry_after,
     })
 }
 
@@ -806,10 +1098,6 @@ fn required_positive_u64(data: &serde_json::Map<String, Value>, key: &str) -> Re
         .and_then(Value::as_u64)
         .filter(|value| *value > 0)
         .ok_or_else(|| format!("OpenRouter generation statistics omitted {key}"))
-}
-
-fn is_retryable_status(status: u16) -> bool {
-    status == 429 || (500..600).contains(&status)
 }
 
 fn openrouter_error_message(body: &Value) -> &str {
@@ -831,6 +1119,7 @@ struct AttemptEvent {
     request_sha256: String,
     requested_model: String,
     attempt: usize,
+    campaign_attempt: usize,
     maximum_attempts: usize,
     per_attempt_reservation_nanos: u64,
     maximum_reservation_nanos: u64,
@@ -879,6 +1168,7 @@ impl AttemptEvent {
             request_sha256: plan.request_sha256.clone(),
             requested_model: model.to_string(),
             attempt,
+            campaign_attempt: 1,
             maximum_attempts: plan.maximum_attempts,
             per_attempt_reservation_nanos: plan.per_attempt_reservation_nanos,
             maximum_reservation_nanos: plan.maximum_reservation_nanos,
@@ -895,6 +1185,11 @@ impl AttemptEvent {
             reservation_status: "reserved",
             elapsed_seconds: elapsed.as_secs_f64(),
         }
+    }
+
+    fn for_campaign_attempt(mut self, campaign_attempt: usize) -> Self {
+        self.campaign_attempt = campaign_attempt;
+        self
     }
 
     fn started(
@@ -954,6 +1249,14 @@ impl AttemptEvent {
             elapsed,
         );
         event.http_status = Some(response.status);
+        event.result_sha256 = Some(sha256(
+            serde_json::to_vec(&response.body)
+                .expect("provider error response serializes")
+                .as_slice(),
+        ));
+        if is_typed_not_charged_pre_generation(response) {
+            event.reservation_status = "not_charged";
+        }
         event
     }
 
@@ -1066,11 +1369,107 @@ impl AttemptEvent {
     }
 }
 
-fn append_json_line(path: &Path, event: &AttemptEvent) -> std::io::Result<()> {
+fn is_typed_not_charged_pre_generation(response: &HttpResponse) -> bool {
+    let expected_type = match response.status {
+        429 => "rate_limit_exceeded",
+        502 => "provider_unavailable",
+        503 => "provider_overloaded",
+        _ => return false,
+    };
+    let error = match response.body.get("error").and_then(Value::as_object) {
+        Some(error) => error,
+        None => return false,
+    };
+    error.get("code").and_then(Value::as_u64) == Some(response.status.into())
+        && error
+            .get("message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| !message.is_empty())
+        && error
+            .get("metadata")
+            .and_then(Value::as_object)
+            .and_then(|metadata| metadata.get("error_type"))
+            .and_then(Value::as_str)
+            == Some(expected_type)
+        && response.body.get("id").is_none()
+        && response.body.get("usage").is_none()
+        && response.body.get("choices").is_none()
+}
+
+fn append_json_line(
+    path: &Path,
+    event: &AttemptEvent,
+    aggregate_reservation_nanos: Option<u64>,
+) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .append(true)
+        .open(path)?;
+    file.lock_exclusive()?;
+    let mut prior = String::new();
+    file.read_to_string(&mut prior)?;
+    let mut reserved = 0_u64;
+    for line in prior.lines() {
+        let value: Value = serde_json::from_str(line).map_err(|error| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("malformed structured-state attempt ledger: {error}"),
+            )
+        })?;
+        if value.get("schema_version").and_then(Value::as_u64) != Some(3)
+            || !matches!(
+                value.get("event").and_then(Value::as_str),
+                Some("started" | "result")
+            )
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "malformed structured-state attempt ledger event",
+            ));
+        }
+        if value.get("event").and_then(Value::as_str) == Some("started") {
+            reserved = reserved
+                .checked_add(
+                    value
+                        .get("per_attempt_reservation_nanos")
+                        .and_then(Value::as_u64)
+                        .filter(|value| *value > 0)
+                        .ok_or_else(|| {
+                            std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "malformed structured-state started reservation",
+                            )
+                        })?,
+                )
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "structured-state attempt reservation overflow",
+                    )
+                })?;
+        }
+    }
+    if event.event == "started" {
+        let cap = aggregate_reservation_nanos.ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "structured-state aggregate reservation is required before provider access",
+            )
+        })?;
+        if reserved
+            .checked_add(event.per_attempt_reservation_nanos)
+            .is_none_or(|next| next > cap)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "structured-state aggregate reservation exhausted",
+            ));
+        }
+    }
     serde_json::to_writer(&mut file, event)?;
     file.write_all(b"\n")?;
     file.sync_all()
@@ -1168,7 +1567,6 @@ mod tests {
             INPUT_PRICE,
             OUTPUT_PRICE,
             transport,
-            Duration::ZERO,
             None,
         )
     }
@@ -1181,7 +1579,6 @@ mod tests {
                 "model": DEFAULT_MODEL,
                 "choices": [{"message": {"content": content.to_string()}}]
             }),
-            retry_after: None,
         }
     }
 
@@ -1205,18 +1602,16 @@ mod tests {
             "memphant-structured-observation-{}.jsonl",
             uuid::Uuid::new_v4()
         ));
-        (
-            OpenRouterStructuredState::new(
-                DEFAULT_MODEL.to_string(),
-                "prompt".to_string(),
-                INPUT_PRICE,
-                OUTPUT_PRICE,
-                transport,
-                Duration::ZERO,
-                Some(ledger.clone()),
-            ),
-            ledger,
-        )
+        let mut provider = OpenRouterStructuredState::new(
+            DEFAULT_MODEL.to_string(),
+            "prompt".to_string(),
+            INPUT_PRICE,
+            OUTPUT_PRICE,
+            transport,
+            Some(ledger.clone()),
+        );
+        provider.aggregate_reservation_nanos = Some(u64::MAX);
+        (provider, ledger)
     }
 
     fn read_events(ledger: &Path) -> Vec<Value> {
@@ -1356,6 +1751,102 @@ mod tests {
     }
 
     #[test]
+    fn provider_never_hides_a_retry_inside_one_campaign_wave_attempt() {
+        let request = request("user: hello");
+        let transport = FakeTransport::new(vec![
+            Ok(HttpResponse {
+                status: 503,
+                body: json!({"error": {"message": "retry later"}}),
+            }),
+            Ok(response(json!({"observations": []}))),
+        ]);
+
+        assert!(provider(transport.clone()).extract_sync(&request).is_err());
+        assert_eq!(transport.posted.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn only_typed_pre_generation_capacity_errors_are_not_charged() {
+        let request = request("user: hello");
+        let typed = FakeTransport::new(vec![Ok(HttpResponse {
+            status: 503,
+            body: json!({
+                "error": {
+                    "code": 503,
+                    "message": "provider overloaded",
+                    "metadata": {"error_type": "provider_overloaded"}
+                }
+            }),
+        })]);
+        let (provider, ledger) = provider_with_ledger(typed);
+        assert!(provider.extract_sync(&request).is_err());
+        let events = read_events(&ledger);
+        assert_eq!(events[1]["reservation_status"], "not_charged");
+        assert_eq!(events[1]["http_status"], 503);
+        assert!(events[1]["result_sha256"].as_str().unwrap().len() == 64);
+        assert!(events[1].get("response_id").is_none());
+        assert!(events[1].get("usage").is_none());
+
+        let ambiguous = HttpResponse {
+            status: 503,
+            body: json!({
+                "id": "generation-maybe-started",
+                "error": {
+                    "code": 503,
+                    "message": "provider overloaded",
+                    "metadata": {"error_type": "provider_overloaded"}
+                }
+            }),
+        };
+        assert!(!is_typed_not_charged_pre_generation(&ambiguous));
+    }
+
+    #[test]
+    fn aggregate_cap_survives_restart_and_malformed_ledger_fails_before_transport() {
+        let request = request("user: cap me");
+        let first_transport = FakeTransport::new(vec![Ok(response(json!({
+            "observations": [wire_observation(&request.evidence_slices[0].id)]
+        })))]);
+        let (mut first, ledger) = provider_with_ledger(first_transport);
+        let one_attempt = first.plan(&request).unwrap().per_attempt_reservation_nanos;
+        first.aggregate_reservation_nanos = Some(one_attempt);
+        first.extract_sync(&request).unwrap();
+
+        let duplicate_transport = FakeTransport::new(vec![Ok(response(json!({
+            "observations": [wire_observation(&request.evidence_slices[0].id)]
+        })))]);
+        let mut restarted = OpenRouterStructuredState::new(
+            DEFAULT_MODEL.to_string(),
+            "prompt".to_string(),
+            INPUT_PRICE,
+            OUTPUT_PRICE,
+            duplicate_transport.clone(),
+            Some(ledger.clone()),
+        );
+        restarted.aggregate_reservation_nanos = Some(one_attempt);
+        assert!(restarted.extract_sync(&request).is_err());
+        assert!(duplicate_transport.posted.lock().unwrap().is_empty());
+        fs::remove_file(&ledger).unwrap();
+
+        fs::write(&ledger, b"{malformed\n").unwrap();
+        let malformed_transport = FakeTransport::new(vec![Ok(response(json!({
+            "observations": []
+        })))]);
+        let mut malformed = OpenRouterStructuredState::new(
+            DEFAULT_MODEL.to_string(),
+            "prompt".to_string(),
+            INPUT_PRICE,
+            OUTPUT_PRICE,
+            malformed_transport.clone(),
+            Some(ledger.clone()),
+        );
+        malformed.aggregate_reservation_nanos = Some(u64::MAX);
+        assert!(malformed.extract_sync(&request).is_err());
+        assert!(malformed_transport.posted.lock().unwrap().is_empty());
+        fs::remove_file(ledger).unwrap();
+    }
+
+    #[test]
     fn oversized_request_is_rejected_before_transport() {
         let body = format!("user: {}", "\\\"".repeat(MAX_REQUEST_BYTES));
         let request = request(&body);
@@ -1459,6 +1950,122 @@ mod tests {
     }
 
     #[test]
+    fn official_qwen_census_pins_one_provider_without_fallback() {
+        let request = StructuredStateRequest {
+            source_kind: StructuredSourceKind::Resource,
+            source_body_sha256: sha256(b"state"),
+            batch_index: 0,
+            evidence_slices: evidence_slices_for_resource("state", &[]).unwrap(),
+        };
+        let plan = plan_structured_state_request(
+            &request,
+            "qwen/qwen3.5-9b-20260310",
+            "prompt",
+            None,
+            100_000_000,
+            150_000_000,
+        )
+        .unwrap();
+        let body: Value = serde_json::from_slice(&plan.serialized_request).unwrap();
+        assert_eq!(body["provider"]["only"], json!(["deepinfra"]));
+        assert_eq!(body["provider"]["allow_fallbacks"], false);
+    }
+
+    #[test]
+    fn greedy_batches_are_ordered_and_maximal_under_the_exact_request_planner() {
+        use std::cell::Cell;
+
+        let slices = (0..300)
+            .map(|index| EvidenceSlice {
+                id: format!("slice-{index:04}"),
+                body: format!("{}-{index:04}", "x".repeat(1_000)),
+                source_span: format!("{}-{}", index * 1_001, (index + 1) * 1_001),
+            })
+            .collect::<Vec<_>>();
+        let batches = plan_structured_state_batches(
+            StructuredSourceKind::Resource,
+            &"a".repeat(64),
+            slices.clone(),
+            LME_V2_QWEN_MODEL,
+            "prompt",
+            None,
+            100_000_000,
+            150_000_000,
+            None,
+        )
+        .unwrap();
+        assert!(batches.len() < slices.len());
+        assert_eq!(
+            batches
+                .iter()
+                .flat_map(|batch| batch.evidence_slices.clone())
+                .collect::<Vec<_>>(),
+            slices
+        );
+        assert!(batches.iter().all(|batch| {
+            plan_structured_state_request(
+                batch,
+                LME_V2_QWEN_MODEL,
+                "prompt",
+                None,
+                100_000_000,
+                150_000_000,
+            )
+            .is_ok()
+        }));
+        for pair in batches.windows(2) {
+            let mut extended = pair[0].clone();
+            extended
+                .evidence_slices
+                .push(pair[1].evidence_slices[0].clone());
+            assert!(
+                plan_structured_state_request(
+                    &extended,
+                    LME_V2_QWEN_MODEL,
+                    "prompt",
+                    None,
+                    100_000_000,
+                    150_000_000,
+                )
+                .is_err()
+            );
+        }
+        let size_calls = Cell::new(0_usize);
+        let final_calls = Cell::new(0_usize);
+        let counted = plan_structured_state_batches_with(
+            StructuredSourceKind::Resource,
+            &"a".repeat(64),
+            slices.clone(),
+            |request| {
+                size_calls.set(size_calls.get() + 1);
+                plan_structured_state_request(
+                    request,
+                    LME_V2_QWEN_MODEL,
+                    "prompt",
+                    None,
+                    100_000_000,
+                    150_000_000,
+                )
+            },
+            |request| {
+                final_calls.set(final_calls.get() + 1);
+                plan_structured_state_request(
+                    request,
+                    LME_V2_QWEN_MODEL,
+                    "prompt",
+                    None,
+                    100_000_000,
+                    150_000_000,
+                )
+            },
+        )
+        .unwrap();
+        assert_eq!(counted, batches);
+        assert_eq!(final_calls.get(), batches.len());
+        assert!(size_calls.get() < slices.len());
+    }
+
+    #[test]
     fn attempt_receipt_binds_source_key_requested_and_served_identity() {
         let body = "user: I live in Oslo.";
         let request = request(body);
@@ -1466,6 +2073,7 @@ mod tests {
             "observations": [wire_observation(&request.evidence_slices[0].id)]
         })))]);
         let (provider, ledger) = provider_with_ledger(transport);
+        let provider = provider.with_campaign_attempt(2).unwrap();
         provider.extract_sync(&request).unwrap();
         let events = read_events(&ledger);
         assert_eq!(events[0]["source_kind"], "episode");
@@ -1473,6 +2081,8 @@ mod tests {
         assert!(events[0]["extraction_key"].as_str().unwrap().len() == 64);
         assert!(events[0].get("episode_id").is_none());
         assert_eq!(events[0]["requested_model"], DEFAULT_MODEL);
+        assert_eq!(events[0]["campaign_attempt"], 2);
+        assert_eq!(events[1]["campaign_attempt"], 2);
         assert_eq!(events[1]["served_model"], "served/model");
         assert_eq!(events[1]["served_provider"], "served-provider");
         assert_eq!(events[1]["response_id"], "generation-1");

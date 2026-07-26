@@ -1,0 +1,55 @@
+{
+  "admission": {
+    "authorized": false,
+    "contingency_nanos": 10000000000,
+    "formula": "4258002400+C+451*(2*R+S)+10000000000<=200000000000",
+    "hard_ceiling_nanos": 200000000000,
+    "missing_bounds": [],
+    "missing_identities": [],
+    "opening_liability_nanos": 4258002400,
+    "total_nanos": 3987763723900
+  },
+  "benchmark": {
+    "code_commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+    "dataset_revision": "f152293e235517d504809563c833d7190b8c713b",
+    "memory_context_max_tokens": 200000,
+    "name": "LongMemEval-V2",
+    "questions": 451,
+    "tier": "medium"
+  },
+  "census_sha256": "9cb270a4e69edaa225d590b573bc8babc9cd05c63ab353d264e940372e5e631e",
+  "construction": {
+    "construction_liability_nanos": 3136999580700,
+    "input_manifest_sha256": "7637e95e4ddb3800830b282e6cc1888860f89f3bf21e0e32c782f0849cacaaad",
+    "maximum_attempts": 3,
+    "maximum_per_attempt_reservation_nanos": 1319700,
+    "maximum_request_bytes": 7053,
+    "maximum_retry_reservation_nanos": 3959100,
+    "planned_requests": 143573489,
+    "resource_uses": 298393,
+    "schema_version": 1,
+    "unique_extraction_keys": 867870,
+    "unique_source_bodies": 1876
+  },
+  "enumeration": {
+    "case_order_sha256": "28de62f7ce1ce26c59fcec26958a52e00ba084a4aaa83bdb07007c740e50a96d",
+    "input_jsonl_sha256": "7637e95e4ddb3800830b282e6cc1888860f89f3bf21e0e32c782f0849cacaaad",
+    "question_pairs": 451,
+    "remaining_ids_sha256": "d3519ba2ffebb36c9c6d319e44195a5adfaa168602c3bc098ad5ce138ed50232",
+    "resource_rows": 1876,
+    "resource_uses": 298393,
+    "sealed_prefix_ids_sha256": "64199cb6ba5da6e4de8b34579ab4eb8cfce86a46dd550fa0bc501173903df9a8",
+    "trajectory_uses": 224634,
+    "unique_trajectories": 1473
+  },
+  "manifest_path": "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json",
+  "manifest_sha256": "b3382b0ddaf9b81f102f3c0269e8ee3bb03b4279aebc1f4e3b787ea00bdef48c",
+  "paid_models_run": false,
+  "schema_version": 1,
+  "spend_nanos": 0,
+  "terms": {
+    "C": 3136999580700,
+    "R": 777390400,
+    "S": 300000000
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "campaign": "state-aware-resource-compiler-full-451",
+  "upstream": {
+    "repository": "https://github.com/xiaowu0162/LongMemEval-V2",
+    "code_commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+    "code_lock_path": "benchmarks/manifests/longmemeval_v2.lock.json",
+    "code_lock_sha256": "e24388725b23d50766f1cf7e77ea6b41396d664dc1dce309cafe30cb897fe77d",
+    "dataset_repository": "xiaowu0162/longmemeval-v2",
+    "dataset_revision": "f152293e235517d504809563c833d7190b8c713b"
+  },
+  "benchmark": {
+    "tier": "medium",
+    "questions": 451,
+    "memory_context_max_tokens": 200000,
+    "case_order": "lexicographic question_id",
+    "sealed_prefix_count": 12,
+    "remaining_count": 439
+  },
+  "data": {
+    "files": {
+      "questions.jsonl": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/questions.jsonl",
+        "bytes": 286186,
+        "sha256": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7"
+      },
+      "trajectories.jsonl": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/trajectories.jsonl",
+        "bytes": 1195604539,
+        "sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6"
+      },
+      "haystacks/lme_v2_medium.json": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/haystacks/lme_v2_medium.json",
+        "bytes": 4054244,
+        "sha256": "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59"
+      },
+      "upstream/evaluation/harness.py": {
+        "url": "https://raw.githubusercontent.com/xiaowu0162/LongMemEval-V2/6f020ac2fc3275e46c706d3406e02c3ed79b7be2/evaluation/harness.py",
+        "bytes": 62985,
+        "sha256": "4a508fde65e382c45669fe7243348944628054c9ce6416d78c0a395ce1c3abcd"
+      },
+      "upstream/evaluation/qa_eval_metrics.py": {
+        "url": "https://raw.githubusercontent.com/xiaowu0162/LongMemEval-V2/6f020ac2fc3275e46c706d3406e02c3ed79b7be2/evaluation/qa_eval_metrics.py",
+        "bytes": 20800,
+        "sha256": "f8ba659e237c4282a07a92538090ea500ce8483820b390b1d19af187c01417ac"
+      },
+      "qwen/tokenizer.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/tokenizer.json",
+        "bytes": 12807982,
+        "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+      },
+      "qwen/tokenizer_config.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/tokenizer_config.json",
+        "bytes": 16710,
+        "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8"
+      }
+    }
+  },
+  "construction": {
+    "state_mode": "structured-resource-v1",
+    "model": "qwen/qwen3.5-9b-20260310",
+    "provider": "deepinfra",
+    "tokenizer_repository": "Qwen/Qwen3.5-9B",
+    "tokenizer_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "tokenizer_path": "qwen/tokenizer.json",
+    "tokenizer_config_path": "qwen/tokenizer_config.json",
+    "tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+    "chat_template_overhead_tokens": 15,
+    "empty_system_user_generation_token_ids": [248045, 8678, 198, 248046, 198, 248045, 846, 198, 248046, 198, 248045, 74455, 198, 248068, 198],
+    "chat_template_fixture_toolchain": {
+      "tokenizers": "0.22.2",
+      "transformers": "5.14.1"
+    },
+    "allow_fallbacks": false,
+    "reasoning_effort": null,
+    "input_price_nanos_per_million": 100000000,
+    "output_price_nanos_per_million": 150000000,
+    "maximum_output_tokens": 4096,
+    "maximum_attempts": 3,
+    "pricing_source": "https://openrouter.ai/qwen/qwen3.5-9b/api",
+    "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+    "pricing_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766",
+    "prompt_path": "config/structured-state-v1.txt",
+    "prompt_sha256": "75910ad5760ba04e6493389a7982b737d39b6b1a5e20ef5a67313549d501d9f2",
+    "code_paths": [
+      "crates/memphant-runtime/src/structured_state_openrouter.rs",
+      "crates/memphant-core/src/service.rs",
+      "benchmarks/longmemeval_v2/memphant_memory.py",
+      "crates/memphant-cli/src/structured_state_census.rs",
+      "scripts/run_lme_v2_state_aware.py"
+    ],
+    "code_sha256s": {
+      "crates/memphant-runtime/src/structured_state_openrouter.rs": "234a1331afdfc9e7b62ad82a00e222d2ec663f3e25192d17c3f2a8dd0585fcf0",
+      "crates/memphant-core/src/service.rs": "4462d4f347e5bc00b7ed92aa5c78226d92de6fcfe549b942bcd659e6723795d3",
+      "benchmarks/longmemeval_v2/memphant_memory.py": "70c81b21efbd4755cc9b473e40f23689f3aefb56bf170469846d577fab817b71",
+      "crates/memphant-cli/src/structured_state_census.rs": "cbef487a579605ccc69194976cc91d0e5ba8a23aed358ac26664fc73aaa92e99",
+      "scripts/run_lme_v2_state_aware.py": "91c609cb1eb669138b5276cb7240036232111778792e36dc45f630535eca1dc6"
+    }
+  },
+  "reader_judge": {
+    "reader": {
+      "model": "qwen/qwen3.5-9b-20260310",
+      "provider": "deepinfra",
+      "memory_context_max_tokens": 200000,
+      "maximum_nonmemory_chat_tokens": 524,
+      "maximum_input_reservation_units": 200524,
+      "maximum_output_tokens": 20000,
+      "maximum_attempts": 1,
+      "input_price_nanos_per_million": 100000000,
+      "output_price_nanos_per_million": 150000000,
+      "pricing_source": "https://openrouter.ai/qwen/qwen3.5-9b/api",
+      "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+      "pricing_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766"
+    },
+    "judge": {
+      "model": "gpt-5.2-2025-12-11",
+      "provider": "openai",
+      "reasoning_effort": "medium",
+      "maximum_fixed_serialized_bytes": 2412,
+      "reader_response_insertions": 2,
+      "reader_maximum_output_tokens": 20000,
+      "maximum_input_reservation_units": 42412,
+      "maximum_output_tokens": 4096,
+      "maximum_attempts": 1,
+      "input_price_nanos_per_million": 1750000000,
+      "output_price_nanos_per_million": 14000000000,
+      "pricing_source": "https://developers.openai.com/api/docs/models/gpt-5.2",
+      "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+      "pricing_sha256": "c14259d1298cf54cbbc0d09a5ed5cb3d4b2311f8e3beeaa78c708e6965143ced"
+    }
+  },
+  "deep_recall": {
+    "model": "openai/gpt-5.6-luna-20260709",
+    "provider": "azure",
+    "allow_fallbacks": false,
+    "input_price_nanos_per_million": 1000000000,
+    "output_price_nanos_per_million": 6000000000,
+    "maximum_context_tokens": 96000,
+    "maximum_output_tokens_per_turn": 4096,
+    "maximum_tool_iterations": 24,
+    "maximum_retries_per_turn": 2,
+    "maximum_attempts_per_turn": 3,
+    "maximum_spend_micros": 300000,
+    "maximum_liability_nanos": 300000000,
+    "pricing_source": "https://openrouter.ai/openai/gpt-5.6-luna-20260709",
+    "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+    "pricing_sha256": "d1863abb2989c52eea214bdf53eaeb36e852cecb28551d327c754b931236fbcb",
+    "runtime_code_path": "crates/memphant-runtime/src/deep_recall_openrouter.rs",
+    "runtime_code_sha256": "ed0565a7f776a9ce53ce684ae0bbc8fcd8565da2cf1ec8ca90656a26675b7498"
+  },
+  "statistics": {
+    "paired_risk_difference_method": "Bonferroni simultaneous one-sided Clopper-Pearson marginal bounds at alpha/2 per discordant cell",
+    "mcnemar": "one-sided exact integer binomial tail",
+    "alpha": "0.05",
+    "minimum_effect": "0.05",
+    "premise_regressions_max": 0
+  },
+  "claim_boundary": {
+    "internal_benchmark_success_requires_full_validation": true,
+    "external_sota_requires_accepted_submission_and_strict_frozen_leaderboard_win": true
+  }
+}

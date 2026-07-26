@@ -1966,13 +1966,12 @@ def test_memphant_adapter_retains_reflects_recalls_and_archives_trace_proof(
 
 def test_structured_prompt_types_preference_epistemic_role() -> None:
     prompt = (ROOT / "config/structured-state-v1.txt").read_text(encoding="utf-8")
-    assert "Never emit a state operation with neither generic fields nor a valid preference payload" in prompt
-    assert "memory_role to personalization" in prompt
-    assert "epistemic_use to not_factual_evidence" in prompt
-    assert "preferred answer or familiar answer phrasing" in prompt
-    assert "never store that proposition as factual state" in prompt
-    assert "only when its value is copied from an explicit scope phrase" in prompt
-    assert "never include user: or user_agent: in evidence_quote" in prompt
+    assert "Never return an operation, target_unit_ids, tenant identity" in prompt
+    assert 'Return exactly {"observations": []} when nothing qualifies.' in prompt
+    assert "Explicit first-person likes, dislikes, and preferences" in prompt
+    assert "other people's state" in prompt
+    assert "Do not encode create, replace, delete, append, or upsert" in prompt
+    assert "evidence_quote to an exact, nonempty, unique substring" in prompt
 
 
 def test_structured_worker_failure_durably_aborts_later_samples(

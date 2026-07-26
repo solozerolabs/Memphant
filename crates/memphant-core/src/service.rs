@@ -36,8 +36,8 @@ use crate::{
     StoreError, StructuredExtractionPacket, StructuredSourceKind, StructuredStateProvider,
     StructuredStateRequest, VectorQuery, apply_correction_transition, apply_unit_forget_transition,
     canonical_mutation_request_hash, correction_rectangles_with_ids, derive_episode_dedup_key,
-    embedding_profile_for, evidence_slices_for_episode, evidence_slices_for_resource,
-    fold_structured_observations, normalize_component, parse_content_date, prepare_compiled_write,
+    embedding_profile_for, evidence_slices_for_episode, fold_structured_observations,
+    normalize_component, parse_content_date, prepare_compiled_write,
     prepare_compiled_write_from_snapshot, project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed,
     structured_compiler_identity, structured_extraction_receipt_sha256, tokenize,
@@ -3200,7 +3200,7 @@ fn service_structured_compiler_identity(
     provider: &dyn StructuredStateProvider,
 ) -> String {
     structured_compiler_identity(
-        &format!("{compiler}+source-slice-batches-v1"),
+        &format!("{compiler}+source-slice-greedy-batches-v2"),
         provider.identity(),
     )
 }
@@ -5473,8 +5473,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 let Some(body) = resource.body.filter(|body| !body.trim().is_empty()) else {
                     return Ok(Vec::new());
                 };
-                let chunks = resource_contextual_chunks(resource_id, &resource.uri, &body);
-                let slices = evidence_slices_for_resource(&body, &chunks).map_err(|error| {
+                let slices = structured_state_slices_for_resource(&body).map_err(|error| {
                     ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
                 })?;
                 (
@@ -5493,16 +5492,16 @@ impl<S: MemoryStore> MemoryService<S> {
             batch_index: 0,
             evidence_slices: evidence_slices.clone(),
         };
-        let batches = evidence_slices
-            .into_iter()
-            .enumerate()
-            .map(|(batch_index, evidence_slice)| StructuredStateRequest {
-                source_kind,
-                source_body_sha256: source_body_sha256.clone(),
-                batch_index,
-                evidence_slices: vec![evidence_slice],
-            })
-            .collect::<Vec<_>>();
+        let batches = provider
+            .plan_batches(source_kind, &source_body_sha256, evidence_slices)
+            .map_err(|error| match error {
+                crate::StructuredStateProviderError::Unavailable(message) => {
+                    ServiceError::Core(CoreError::ProviderUnavailable(message))
+                }
+                crate::StructuredStateProviderError::InvalidOutput(message) => {
+                    ServiceError::Core(CoreError::ProviderInvalid(message))
+                }
+            })?;
         let provider_identity = provider.identity();
         let extraction_packets = if let Some(prepared) = self
             .store
@@ -5992,6 +5991,18 @@ fn resource_contextual_chunks(
             })
         })
         .collect()
+}
+
+/// Build the exact resource evidence slices used by structured reflection.
+/// Census callers use this pure seam so request planning cannot drift from the
+/// production compiler's paragraph/span contract.
+pub fn structured_state_slices_for_resource(
+    body: &str,
+) -> Result<Vec<crate::EvidenceSlice>, crate::StructuredStateProviderError> {
+    crate::evidence_slices_for_resource(
+        body,
+        &resource_contextual_chunks(ResourceId::new(), "census://resource", body),
+    )
 }
 
 // ===========================================================================

@@ -5,7 +5,7 @@
   "released_at": "2026-05-17",
   "code": {
     "repository": "https://github.com/xiaowu0162/LongMemEval-V2",
-    "commit": "be15ea6e995462f3391c1a610892df3f67dfa7bd",
+    "commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
     "license": "Apache-2.0",
     "files": {
       "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
@@ -14,8 +14,13 @@
       "data/prepare_data.py": "b8acf9509681266165f4bd6860b7a4007ffc020ed0fac1c4027b75ab00544796",
       "data/public_data.py": "d2b868bfb0b6f8b66489c9445389eb6d0f26975f940a9c2365be154e63649c89",
       "data/validate_data.py": "b5c7367a4ff26f5e57d2e2dd580aa179b10ad788680f753720d05645b5a1e332",
-      "evaluation/harness.py": "8c6d1bd124ce2caf8a4bdc8516ef1b54ffca98ea4c49b4e50355ee4207b55eb1",
+      "evaluation/harness.py": "4a508fde65e382c45669fe7243348944628054c9ce6416d78c0a395ce1c3abcd",
       "evaluation/qa_eval_metrics.py": "f8ba659e237c4282a07a92538090ea500ce8483820b390b1d19af187c01417ac",
+      "leaderboard/build_submission_step_1_single_operating_point.py": "8c197c28231a14b303ec8a11a5cd5ddbbe70a5e9072f1f97c28f30f484d8f078",
+      "leaderboard/build_submission_step_2_build_package.py": "ae727018666e7131d6f1415515405f51ab91365ac9929ad0990d083a8bcf4907",
+      "leaderboard/combine_aggregated_metrics.py": "b3b0a6af707aeb60fe985368aa2986968a4a9a266c2fff84b21f7e3d075d26cb",
+      "leaderboard/compute_lafs.py": "4670ea92ab87600e344bca7f387076b2a43f28b506d036950c10443ce2c8b8c2",
+      "leaderboard/submission_utils.py": "1aa6e83ab8434a4e55dee8a581beb8d0c5eb01cd1c1341c58349ba61d069b088",
       "memory_modules/memory.py": "512d48d93ff78208127c85ffd90ea4c63f1f9ccea3427f0a7b6928a39bdc6a59",
       "pyproject.toml": "06ef6a2b995126b1fb0d91f1a50ee1152a150c1754884db5a6e0fba2a09f434e"
     }

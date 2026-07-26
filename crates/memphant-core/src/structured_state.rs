@@ -186,6 +186,23 @@ pub enum StructuredStateProviderError {
 
 pub trait StructuredStateProvider: Send + Sync {
     fn identity(&self) -> &StructuredStateProviderIdentity;
+    fn plan_batches(
+        &self,
+        source_kind: StructuredSourceKind,
+        source_body_sha256: &str,
+        evidence_slices: Vec<EvidenceSlice>,
+    ) -> Result<Vec<StructuredStateRequest>, StructuredStateProviderError> {
+        Ok(evidence_slices
+            .into_iter()
+            .enumerate()
+            .map(|(batch_index, evidence_slice)| StructuredStateRequest {
+                source_kind,
+                source_body_sha256: source_body_sha256.to_string(),
+                batch_index,
+                evidence_slices: vec![evidence_slice],
+            })
+            .collect())
+    }
     fn extract<'a>(
         &'a self,
         request: &'a StructuredStateRequest,

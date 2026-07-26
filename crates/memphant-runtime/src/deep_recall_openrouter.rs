@@ -31,6 +31,7 @@ const DEFAULT_MAX_TOOL_ITERATIONS: u32 = 24;
 const DEFAULT_MAX_CONTEXT_TOKENS: u64 = 96_000;
 const DEFAULT_MAX_SPEND_MICROS: u64 = 300_000;
 const DEFAULT_OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
+const LME_V2_QWEN_MODEL: &str = "qwen/qwen3.5-9b-20260310";
 
 #[derive(Debug, Clone)]
 pub struct DeepConfig {
@@ -75,8 +76,15 @@ impl DeepConfig {
         if model.to_ascii_lowercase().contains("latest") || model.contains('*') {
             return Err("MEMPHANT_DEEP_MODEL must be an exact non-floating model id".to_string());
         }
-        if providers.as_slice() != ["azure"] {
-            return Err("MEMPHANT_DEEP_PROVIDERS must be exactly azure".to_string());
+        let required_provider = if model == LME_V2_QWEN_MODEL {
+            "deepinfra"
+        } else {
+            "azure"
+        };
+        if providers.as_slice() != [required_provider] {
+            return Err(format!(
+                "MEMPHANT_DEEP_PROVIDERS must be exactly {required_provider} for {model}"
+            ));
         }
         if input_price_micros_per_million == 0 || output_price_micros_per_million == 0 {
             return Err("Deep input and output price ceilings must be positive".to_string());
@@ -381,7 +389,7 @@ impl OpenRouterDeepRecall {
             "tools": tool_definitions(),
             "provider": {
                 "only": self.config.providers,
-                "allow_fallbacks": true,
+                "allow_fallbacks": false,
                 "require_parameters": true,
                 "data_collection": "deny",
                 "zdr": true,
@@ -2129,6 +2137,64 @@ mod tests {
         .unwrap()
     }
 
+    fn qwen_config() -> DeepConfig {
+        DeepConfig::new(
+            "secret".into(),
+            "qwen/qwen3.5-9b-20260310".into(),
+            "qwen/qwen3.5-9b".into(),
+            "Use tools only.".into(),
+            vec!["deepinfra".into()],
+            100_000,
+            150_000,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn qwen_campaign_route_is_deepinfra_only_without_fallbacks() {
+        let candidate = qwen_config();
+        let provider =
+            OpenRouterDeepRecall::with_transport(candidate.clone(), Arc::new(PanicTransport));
+        let body = provider.request_body(&[json!({"role": "user", "content": "q"})]);
+        assert_eq!(body["model"], "qwen/qwen3.5-9b-20260310");
+        assert_eq!(body["provider"]["only"], json!(["deepinfra"]));
+        assert_eq!(body["provider"]["allow_fallbacks"], false);
+
+        let mut state = LoopState::new(
+            DeepRecallProviderRequest {
+                query: "q".into(),
+                workspace: workspace().0,
+            },
+            &candidate,
+        )
+        .unwrap();
+        let turn = ParsedTurn {
+            tool_calls: Vec::new(),
+            reasoning_details: Vec::new(),
+            provider: "DeepInfra".into(),
+            model: "qwen/qwen3.5-9b".into(),
+            prompt_tokens: 1,
+            cost_micros: 1,
+        };
+        assert!(
+            state
+                .observe_route(&turn, &candidate.providers, &candidate.response_model)
+                .is_ok()
+        );
+        assert!(
+            state
+                .observe_route(
+                    &ParsedTurn {
+                        provider: "Azure".into(),
+                        ..turn
+                    },
+                    &candidate.providers,
+                    &candidate.response_model,
+                )
+                .is_err()
+        );
+    }
+
     #[test]
     fn request_is_exact_model_private_azure_and_locally_price_bounded() {
         let provider = OpenRouterDeepRecall::with_transport(config(), Arc::new(PanicTransport));
@@ -2193,6 +2259,18 @@ mod tests {
                 "key".into(),
                 "openai/gpt-latest".into(),
                 "openai/gpt".into(),
+                "prompt".into(),
+                vec!["azure".into()],
+                1,
+                1,
+            )
+            .is_err()
+        );
+        assert!(
+            DeepConfig::new(
+                "key".into(),
+                "qwen/qwen3.5-9b-20260310".into(),
+                "qwen/qwen3.5-9b".into(),
                 "prompt".into(),
                 vec!["azure".into()],
                 1,
