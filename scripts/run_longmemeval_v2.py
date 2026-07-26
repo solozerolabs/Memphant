@@ -113,7 +113,15 @@ def verify_dataset(data_root: Path, expected: dict) -> dict[str, int]:
             "upstream checksum entry count mismatch: "
             f"expected {checksum_spec['entries']}, got {len(upstream_entries)}"
         )
+    exceptions = expected.get("checksum_exceptions", {})
+    if set(exceptions) - set(upstream_entries):
+        raise RuntimeError("dataset checksum exception is not an upstream entry")
     for relative, expected_sha in upstream_entries.items():
+        exception = exceptions.get(relative)
+        if exception is not None:
+            if exception["upstream_sha256"] != expected_sha:
+                raise RuntimeError(f"upstream checksum exception drift: {relative}")
+            expected_sha = exception["snapshot_sha256"]
         _verify_file(
             data_root / relative,
             relative=relative,
@@ -130,6 +138,7 @@ def verify_dataset(data_root: Path, expected: dict) -> dict[str, int]:
         )
     return {
         "upstream_checksum_entries": len(upstream_entries),
+        "upstream_checksum_exceptions": len(exceptions),
         "separately_locked_files": len(expected["files"]),
     }
 

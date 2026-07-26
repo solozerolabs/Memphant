@@ -76,6 +76,42 @@ def test_verify_dataset_fails_closed_on_any_locked_file_drift(tmp_path):
         adapter.verify_dataset(data, expected)
 
 
+def test_verify_dataset_accepts_only_an_exact_locked_upstream_checksum_exception(tmp_path):
+    adapter = load_adapter()
+    data = tmp_path / "data"
+    data.mkdir()
+    snapshot = b"immutable snapshot\n"
+    upstream_sha = hashlib.sha256(b"pre-release content\n").hexdigest()
+    snapshot_sha = hashlib.sha256(snapshot).hexdigest()
+    checksums = f"{upstream_sha}  README.md\n"
+    (data / "README.md").write_bytes(snapshot)
+    (data / "checksums.sha256").write_text(checksums)
+    expected = {
+        "checksums_file": {
+            "path": "checksums.sha256",
+            "sha256": hashlib.sha256(checksums.encode()).hexdigest(),
+            "entries": 1,
+        },
+        "checksum_exceptions": {
+            "README.md": {
+                "upstream_sha256": upstream_sha,
+                "snapshot_sha256": snapshot_sha,
+            }
+        },
+        "files": {},
+    }
+
+    assert adapter.verify_dataset(data, expected) == {
+        "upstream_checksum_entries": 1,
+        "upstream_checksum_exceptions": 1,
+        "separately_locked_files": 0,
+    }
+
+    expected["checksum_exceptions"]["README.md"]["snapshot_sha256"] = "0" * 64
+    with pytest.raises(RuntimeError, match="dataset sha256 mismatch: README.md"):
+        adapter.verify_dataset(data, expected)
+
+
 def test_native_command_delegates_generation_and_scoring_to_official_harness(tmp_path):
     adapter = load_adapter()
     official = tmp_path / "official"

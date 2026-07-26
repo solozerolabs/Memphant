@@ -31,6 +31,13 @@
       "sha256": "b17a18daa52873f915808502217c3c5fab39d20638544f986401155c9e8d67a6",
       "entries": 37
     },
+    "checksum_exceptions": {
+      "README.md": {
+        "upstream_sha256": "bd0890407b11ea5e7f521f47f031823f58f77ac8c9e0b5837bb4cae9f6bc9837",
+        "snapshot_sha256": "c5de92eadfd8238802b476e446b05a766c312ab0f07518dbda434f914aa4df37",
+        "reason": "The immutable dataset revision contains a README newer than its checked-in checksums.sha256 entry."
+      }
+    },
     "files": {
       "questions.jsonl": {
         "sha256": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7",
