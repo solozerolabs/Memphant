@@ -2013,6 +2013,22 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn serde_json_number_encoding_matches_campaign_python_contract() {
+        for (value, expected) in [
+            (1.75e-6, "{\"value\":1.75e-6}"),
+            (1e-7, "{\"value\":1e-7}"),
+            (-1e-7, "{\"value\":-1e-7}"),
+            (1e20, "{\"value\":1e+20}"),
+            (-0.0, "{\"value\":-0.0}"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&json!({"value": value})).unwrap(),
+                expected
+            );
+        }
+    }
+
     const INPUT_PRICE: u64 = 2_000_000_000;
     const OUTPUT_PRICE: u64 = 10_000_000_000;
 
@@ -2889,16 +2905,29 @@ mod tests {
         let hit_root = root.join("cache-hits");
         fs::create_dir_all(&cache_root).unwrap();
         fs::create_dir_all(&hit_root).unwrap();
-        let ledger = root.join("paid-source.jsonl");
-        let body = "I live in Oslo.";
+        let ledger = root.join("CONSTRUCTION-ATTEMPTS.jsonl");
+        let body = std::env::var("MEMPHANT_TEST_CACHE_FIXTURE_BODY")
+            .unwrap_or_else(|_| "I live in Oslo.".to_string());
+        let evidence_quote = std::env::var("MEMPHANT_TEST_CACHE_FIXTURE_QUOTE")
+            .unwrap_or_else(|_| "I live in Oslo.".to_string());
         let request = StructuredStateRequest {
             source_kind: StructuredSourceKind::Resource,
             source_body_sha256: sha256(body.as_bytes()),
             batch_index: 0,
-            evidence_slices: evidence_slices_for_resource(body, &[]).unwrap(),
+            evidence_slices: memphant_core::service::structured_state_slices_for_resource(&body)
+                .unwrap(),
         };
         let content = json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [{
+                "namespace": "profile",
+                "item_key": "city",
+                "fields": [{"key": "value", "value_json": "\"Oslo\""}],
+                "disposition": "state",
+                "evidence_slice_id": request.evidence_slices[0].id,
+                "evidence_quote": evidence_quote,
+                "valid_from": null,
+                "valid_to": null
+            }]
         });
         let response_id = "fixture-generation-1";
         let initial = HttpResponse {
@@ -2920,9 +2949,12 @@ mod tests {
                 "total_cost": 0.00000175
             }})),
         );
-        let authorization = "a".repeat(64);
-        let campaign = "b".repeat(64);
-        let namespace = "scratch-cache-fixture-v1".to_string();
+        let authorization = std::env::var("MEMPHANT_TEST_CACHE_AUTHORIZATION_SHA256")
+            .unwrap_or_else(|_| "a".repeat(64));
+        let campaign =
+            std::env::var("MEMPHANT_TEST_CACHE_CAMPAIGN_SHA256").unwrap_or_else(|_| "b".repeat(64));
+        let namespace = std::env::var("MEMPHANT_TEST_CACHE_NAMESPACE")
+            .unwrap_or_else(|_| "scratch-cache-fixture-v1".to_string());
         let empty_prefix_sha256 = sha256(b"");
         let mut provider = OpenRouterStructuredState::new(
             LME_V2_QWEN_MODEL.to_string(),
@@ -2959,6 +2991,11 @@ mod tests {
             "source_body_sha256": request.source_body_sha256,
             "extraction_key": plan.extraction_key,
             "request_sha256": plan.request_sha256,
+            "per_attempt_reservation_nanos": plan.per_attempt_reservation_nanos,
+            "maximum_attempts": plan.maximum_attempts,
+            "source_kind": "resource",
+            "batch_index": 0,
+            "evidence_slices_sha256": canonical_sha256(&request.evidence_slices),
             "authorization_sha256": authorization,
             "campaign_sha256": campaign,
             "cache_namespace": namespace,

@@ -1,18 +1,20 @@
 {
+  "binding_sha256": "2c6f6411b7e1895a7af8041d0987c053229bd5325b3362b4938d1a973a226432",
   "cache_hit_receipts": 1,
-  "case_bank_sha256": "a20a4fc18ec918fc2e9e1f4bd6f36f01ca7473915fb944ac93f1e6a62610b17d",
-  "clone_sha256": "8f7999dc9d03234de6a7093c38c1e098b1fb9f7c27524a60153cf78b89402c60",
+  "canonical_binding_valid": true,
+  "canonical_receipts_valid": true,
+  "clone_sha256": "d576c7476a4fdd837852323effb163c9d969cc12671eb9e20bc3497a6a73d0cc",
   "clone_traces": {
     "deep": true,
     "fast": true
   },
-  "construction_proof_sha256": "5a78e60ca3dadd96a7a67968ce5d731584f9481bc8dbbe32314a6553501c153e",
+  "construction_proof_sha256": "b1b2d357d5d1ad9415dad0ec086ab6e7c6ed1e897e01f23bcb21f7a2929bfc45",
   "postgres_toolchain": {
     "identities": {
       "pg_dump": {
         "bytes": 462336,
-        "identity_sha256": "d33540e1e773ae2325570808b6a2e5bc49136b0131896f60cbc83666028c223b",
-        "path": "/opt/homebrew/Cellar/postgresql@17/17.10/bin/pg_dump",
+        "identity_sha256": "075c575c97861f741949040462df5356efa17798cf72a15ef756319495c4fb48",
+        "path": "postgres-client://pg_dump/17.10",
         "server_version_num": 170010,
         "sha256": "aa71717b27a8eddaab4efee4bca9b529c68b051947421ae71caa592757f5b22d",
         "tool": "pg_dump",
@@ -20,17 +22,20 @@
       },
       "pg_restore": {
         "bytes": 255520,
-        "identity_sha256": "aa01ba77e1f65536719212c004fd96d6f0d7dc267bdba69725fe46d9acdc686a",
-        "path": "/opt/homebrew/Cellar/postgresql@17/17.10/bin/pg_restore",
+        "identity_sha256": "1ffd45b36930741bffe36d8948e0ea4d071e21249f801052144fc57c4f8ecd1d",
+        "path": "postgres-client://pg_restore/17.10",
         "server_version_num": 170010,
         "sha256": "6dc5fa5b2d2dfff6ae9919162f50cede4408475f1caf05e3da8e960354f60115",
         "tool": "pg_restore",
         "version": "pg_restore (PostgreSQL) 17.10 (Homebrew)"
       }
     },
-    "toolchain_sha256": "c4b200e0efb2ff55fa10467ef45f61baa45703142ef24d5a91d4316d8dd137df"
+    "toolchain_sha256": "4be04b1cad42123260fe4f7cc79345055883d08d2750dfb4fbb4aa2dc786eff5"
   },
-  "postgres_toolchain_sha256": "c4b200e0efb2ff55fa10467ef45f61baa45703142ef24d5a91d4316d8dd137df",
+  "postgres_toolchain_sha256": "4be04b1cad42123260fe4f7cc79345055883d08d2750dfb4fbb4aa2dc786eff5",
   "provider_credentials_read": false,
-  "status": "PASS"
+  "runtime_case_bank_sha256": "ab05fe6def734fa7d0943c968adb46e1ee9cfa2c68f038cd6701dc3f543848b5",
+  "source_body_sha256": "8e5f838b0d77a03dace3b9a61e08ce0cdd9760ced3e99447edea78729d61839e",
+  "status": "PASS",
+  "trajectory_body_sha256": "193576795a0fc8f6da683b49b6dd545ccc215f7bc39e3f07be85f228ba96801f"
 }

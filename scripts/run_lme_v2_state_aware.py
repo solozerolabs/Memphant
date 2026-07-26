@@ -34,7 +34,9 @@ import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 
 from benchmarks.longmemeval_v2.construction_authority import (
+    derive_construction_receipts as _derive_canonical_construction_receipts,
     load_canonical_binding as _load_canonical_construction_binding,
+    rust_json as _rust_json,
     validate_cache_receipt as _validate_exact_cache_receipt,
 )
 
@@ -88,9 +90,7 @@ def sha256_json(value: object) -> str:
 
 
 def sha256_rust_json(value: object) -> str:
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
-    ).hexdigest()
+    return hashlib.sha256(_rust_json(value)).hexdigest()
 
 
 def _campaign_artifact_paths(root: Path) -> dict[str, str]:
@@ -1244,6 +1244,7 @@ def write_case_bank_manifest(
     output: Path,
     contract: dict[str, object],
     binding_path: Path,
+    binding_authority: dict[str, Path],
     construction_proof_path: Path,
     materialization: dict[str, object],
     logical_inventory: dict[str, int],
@@ -1269,8 +1270,38 @@ def write_case_bank_manifest(
         or binding_sha256 != sha256_json(binding_core)
     ):
         raise RuntimeError("case bank construction binding is invalid")
+    required_authority = {
+        "authorization_path",
+        "census_path",
+        "manifest_path",
+        "wave_path",
+        "binding_root",
+    }
+    if set(binding_authority) != required_authority or any(
+        not isinstance(path, Path) for path in binding_authority.values()
+    ):
+        raise RuntimeError("case bank canonical binding authority is incomplete")
+    canonical_binding = _load_canonical_construction_binding(
+        binding_path, **binding_authority
+    )
+    if canonical_binding != binding:
+        raise RuntimeError("case bank binding differs from canonical authority")
     validate_construction_proof_v2(construction_proof)
-    if construction_proof.get("binding_sha256") != binding_sha256:
+    derived_cache, derived_ledger = _derive_canonical_construction_receipts(binding)
+    proof_compiler = construction_proof.get("compiler")
+    if (
+        construction_proof.get("binding_sha256") != binding_sha256
+        or construction_proof.get("authorization") != binding.get("authorization")
+        or construction_proof.get("selection") != binding.get("selection")
+        or construction_proof.get("provider") != binding.get("provider")
+        or construction_proof.get("cache") != derived_cache
+        or construction_proof.get("ledger") != derived_ledger
+        or not isinstance(proof_compiler, dict)
+        or any(
+            proof_compiler.get(key) != binding.get("compiler", {}).get(key)
+            for key in ("prompt_sha256", "schema_sha256", "provider_code_sha256")
+        )
+    ):
         raise RuntimeError("case bank construction proof differs from binding")
     if (
         set(materialization)
@@ -3125,7 +3156,9 @@ def _build_construction_binding(
             "requested_model": manifest_construction["model"],
             "served_model": manifest_construction["response_model"],
             "requested_provider": manifest_construction["provider"],
-            "served_provider": manifest_construction["provider"],
+            # The request policy uses the canonical lower-case provider key;
+            # reconciled OpenRouter generation metadata uses this exact name.
+            "served_provider": "DeepInfra",
             "input_price_nanos_per_million": manifest_construction[
                 "input_price_nanos_per_million"
             ],

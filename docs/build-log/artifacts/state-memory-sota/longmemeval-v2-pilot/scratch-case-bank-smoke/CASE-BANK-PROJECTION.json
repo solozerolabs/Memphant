@@ -1,29 +1,12 @@
 {
   "archive": {
-    "bytes": 16378,
+    "bytes": 16830,
     "format": "pg_dump-custom-data-only-v1",
-    "sha256": "227d603c5fbb7f54f1688ad543e1065e37852f832e8973d0844c572ebf75dfea"
+    "sha256": "0c034f4fda89fe785b99f00de2a57f9fcf3d3c51fb91981fed97e0523e6c93cc"
   },
-  "case_bank_sha256": "a20a4fc18ec918fc2e9e1f4bd6f36f01ca7473915fb944ac93f1e6a62610b17d",
   "construction": {
-    "binding_sha256": "e043ef85cacca571ed05a939b388d61bb5676d65bf4537228402a841bd3fb96d",
-    "proof_sha256": "5a78e60ca3dadd96a7a67968ce5d731584f9481bc8dbbe32314a6553501c153e"
-  },
-  "contract": {
-    "base_identity": {
-      "database": "memphant",
-      "host": "localhost",
-      "port": 5432,
-      "scheme": "postgresql"
-    },
-    "case_key": "72ea44b9821b540d",
-    "contract_sha256": "25234119707365b71d0be964934ddc079d7decfd413a6926cff5340cd9f46c5c",
-    "databases": {
-      "deep": "memphant_lme2_72ea44b9821b540d_deep",
-      "fast": "memphant_lme2_72ea44b9821b540d_fast",
-      "source": "memphant_lme2_72ea44b9821b540d_source"
-    },
-    "schema_version": 1
+    "binding_sha256": "2c6f6411b7e1895a7af8041d0987c053229bd5325b3362b4938d1a973a226432",
+    "proof_sha256": "b1b2d357d5d1ad9415dad0ec086ab6e7c6ed1e897e01f23bcb21f7a2929bfc45"
   },
   "logical_inventory": {
     "actor": 1,
@@ -52,7 +35,7 @@
   },
   "logical_inventory_sha256": "28a66a2ce22f15d2c79376aa564d9fd1852da4130b363b123a5f45c454671103",
   "materialization": {
-    "trajectory_content_sha256": "d3f14de947d7469d8daff1d1a012861afff20f76138d69c494715d3aae917685",
+    "trajectory_content_sha256": "564aed5cc463e70db0607e7ed102ae99ac0b33f988d6e679ec906db5f00fac43",
     "trajectory_count": 1,
     "trajectory_ids_sha256": "fdfb05c09fa3dcf80c9ab185ab4ef258869a08a8a5003948870865388c9c38d5"
   },
@@ -60,8 +43,8 @@
     "identities": {
       "pg_dump": {
         "bytes": 462336,
-        "identity_sha256": "d33540e1e773ae2325570808b6a2e5bc49136b0131896f60cbc83666028c223b",
-        "path": "/opt/homebrew/Cellar/postgresql@17/17.10/bin/pg_dump",
+        "identity_sha256": "075c575c97861f741949040462df5356efa17798cf72a15ef756319495c4fb48",
+        "path": "postgres-client://pg_dump/17.10",
         "server_version_num": 170010,
         "sha256": "aa71717b27a8eddaab4efee4bca9b529c68b051947421ae71caa592757f5b22d",
         "tool": "pg_dump",
@@ -69,15 +52,16 @@
       },
       "pg_restore": {
         "bytes": 255520,
-        "identity_sha256": "aa01ba77e1f65536719212c004fd96d6f0d7dc267bdba69725fe46d9acdc686a",
-        "path": "/opt/homebrew/Cellar/postgresql@17/17.10/bin/pg_restore",
+        "identity_sha256": "1ffd45b36930741bffe36d8948e0ea4d071e21249f801052144fc57c4f8ecd1d",
+        "path": "postgres-client://pg_restore/17.10",
         "server_version_num": 170010,
         "sha256": "6dc5fa5b2d2dfff6ae9919162f50cede4408475f1caf05e3da8e960354f60115",
         "tool": "pg_restore",
         "version": "pg_restore (PostgreSQL) 17.10 (Homebrew)"
       }
     },
-    "toolchain_sha256": "c4b200e0efb2ff55fa10467ef45f61baa45703142ef24d5a91d4316d8dd137df"
+    "toolchain_sha256": "4be04b1cad42123260fe4f7cc79345055883d08d2750dfb4fbb4aa2dc786eff5"
   },
+  "runtime_case_bank_sha256": "ab05fe6def734fa7d0943c968adb46e1ee9cfa2c68f038cd6701dc3f543848b5",
   "schema_version": 1
 }

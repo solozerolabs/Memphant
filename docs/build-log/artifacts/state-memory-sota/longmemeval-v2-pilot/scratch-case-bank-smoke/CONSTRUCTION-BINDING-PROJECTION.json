@@ -1,0 +1,58 @@
+{
+  "authorization": {
+    "authorization_sha256": "507e715e8fe2e32f05465fc3b5bda9a5eebf6b358e2e709c0d19c77c95e1dd3b",
+    "campaign_sha256": "852d2c2d1c9c103cc1f71a57bca4f69dd15e08980cc3fbea8f60b3cb1d98779c",
+    "screen_id": "state-aware-full"
+  },
+  "binding_sha256": "2c6f6411b7e1895a7af8041d0987c053229bd5325b3362b4938d1a973a226432",
+  "cache": {
+    "namespace": "scratch-cache-fixture-v1"
+  },
+  "compiler": {
+    "prompt_sha256": "75910ad5760ba04e6493389a7982b737d39b6b1a5e20ef5a67313549d501d9f2",
+    "provider_code_sha256": "a2373bc7a1e8440108de18d6a218e7d7b5bcf47bc1b0089f616aed9e0bfa9cc4",
+    "schema_sha256": "84fa15f73be663402b9513ec5f17f89294fb004e1fe7563940a11a1b743ba2c2"
+  },
+  "coverage": {
+    "expected_extraction_keys": [
+      "51437bae8d8f7c753fcaa3f3a7b48c63532dda3f22d02d935dce8721b0c52f78"
+    ],
+    "expected_extraction_keys_sha256": "59fe0c5cbf6a34e349cdb108ef0a261951d00606b82b77231c06215af8753a0f",
+    "plans": [
+      {
+        "batch_index": 0,
+        "evidence_slices_sha256": "d0473f732f834fd651312bc728cb0c66c875d9f6662996caee7df56cb6bcd586",
+        "extraction_key": "51437bae8d8f7c753fcaa3f3a7b48c63532dda3f22d02d935dce8721b0c52f78",
+        "maximum_attempts": 3,
+        "per_attempt_reservation_nanos": 693600,
+        "request_sha256": "b55708b2c9529f2c05f8d339167b60f85c650c346cf2a3f8ddd39b826fa8c958",
+        "requested_model": "qwen/qwen3.5-9b-20260310",
+        "source_body_sha256": "8e5f838b0d77a03dace3b9a61e08ce0cdd9760ced3e99447edea78729d61839e",
+        "source_kind": "resource"
+      }
+    ]
+  },
+  "ledger": {
+    "before_event_sha256": "5aee07592051ae891fb38df31f4432e42f9881d63f026892116c562c09286087",
+    "campaign_journal_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_ledger_prefix_bytes": 1658,
+    "source_ledger_prefix_sha256": "5aee07592051ae891fb38df31f4432e42f9881d63f026892116c562c09286087"
+  },
+  "projection_sha256": "1186fd18e851e42201aef923c44cddf6f0a6ff19f64b048da36296665cdb69cd",
+  "provider": {
+    "input_price_nanos_per_million": 100000000,
+    "maximum_attempts": 3,
+    "maximum_output_tokens": 4096,
+    "output_price_nanos_per_million": 150000000,
+    "requested_model": "qwen/qwen3.5-9b-20260310",
+    "requested_provider": "deepinfra",
+    "served_model": "qwen/qwen3.5-9b",
+    "served_provider": "DeepInfra"
+  },
+  "schema_version": 1,
+  "selection": {
+    "input_manifest_sha256": "fe18aa449185cb06384f2e12389166bb0cdc0ec6cf70f9830be51e71be82d448",
+    "selection_sha256": "5256325c3b00d4e920c20158873e9b94091220e5423f5ba93443316128f2158f",
+    "state_mode": "structured-resource-v1"
+  }
+}

@@ -1,60 +1,93 @@
 {
   "authorization": {
-    "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "campaign_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorization_sha256": "507e715e8fe2e32f05465fc3b5bda9a5eebf6b358e2e709c0d19c77c95e1dd3b",
+    "campaign_sha256": "852d2c2d1c9c103cc1f71a57bca4f69dd15e08980cc3fbea8f60b3cb1d98779c",
     "screen_id": "state-aware-full"
   },
-  "binding_sha256": "e043ef85cacca571ed05a939b388d61bb5676d65bf4537228402a841bd3fb96d",
+  "binding_sha256": "2c6f6411b7e1895a7af8041d0987c053229bd5325b3362b4938d1a973a226432",
   "cache": {
     "namespace": "scratch-cache-fixture-v1",
-    "source_receipts_sha256": "757840c1d3d5655d4df8dbd0d5e05ed0914dcb64750ee78fff68e07bb48b3e1e"
+    "source_receipts_sha256": "44346ff4d44192c4551e873cc9f8315e64202814f9c3b8bbe1f09ab8e65eedcc"
   },
   "compiler": {
-    "adapter_sha256": "08b58a9b11cbf081deaa3575df77f562e60a2b1252e38abd8470c0a2711f06ce",
+    "adapter_sha256": "6059218b80d7498daf9b7e98f49fe6f62993adcda9ddf16ba576e40de864410b",
     "binaries": {
       "cli": {
         "bytes": 29260944,
-        "path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/target/debug/memphant-cli",
+        "path": "target/debug/memphant-cli",
         "sha256": "5ac2b9e70e50e6d6191b94a386633e7d2e9c0400e539e338619fd3914ebb7cd7"
       },
       "server": {
         "bytes": 70212480,
-        "path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/target/debug/memphant-server",
+        "path": "target/debug/memphant-server",
         "sha256": "bebde37998408c1d38dbf1ee46182aa8b67db44a88fff1cf90bca5aa511dbe74"
       },
       "worker": {
         "bytes": 57030512,
-        "path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/target/debug/memphant-worker",
+        "path": "target/debug/memphant-worker",
         "sha256": "cb0bf335ed11c2e6c35f768f63ef8c0225cbce1c408b5f06d64de57a4e39d1e0"
       }
     },
-    "construction_params_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "construction_params_sha256": "4d1241c11389a2a095de0490500ddeed96783c8d479e9a25a4ed76b98c8e488c",
     "prompt_sha256": "75910ad5760ba04e6493389a7982b737d39b6b1a5e20ef5a67313549d501d9f2",
-    "provider_code_sha256": "af0a19db6734c7a9336a75eca1c44adfd435b1a8450e99b5d0e1435a08630da1",
-    "schema_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    "provider_code_sha256": "a2373bc7a1e8440108de18d6a218e7d7b5bcf47bc1b0089f616aed9e0bfa9cc4",
+    "schema_sha256": "84fa15f73be663402b9513ec5f17f89294fb004e1fe7563940a11a1b743ba2c2"
   },
-  "construction_proof_sha256": "5a78e60ca3dadd96a7a67968ce5d731584f9481bc8dbbe32314a6553501c153e",
+  "construction_proof_sha256": "b1b2d357d5d1ad9415dad0ec086ab6e7c6ed1e897e01f23bcb21f7a2929bfc45",
   "isolation": {
-    "scratch": true,
-    "tenant_id": "1c882d71-9ea9-433f-96fb-e584fb344919"
+    "context": {
+      "actor_id": "019f9f3a-d59e-7840-8bb7-37ac37c831fb",
+      "agent_node_id": "019f9f3a-d5a1-7ef0-b3e6-cda73660ef81",
+      "scope_id": "019f9f3a-d5a0-73c1-9ee1-48625e04e589",
+      "subject_generation": 0,
+      "subject_id": "019f9f3a-d59c-74e2-b08f-8e54b85d24c7"
+    },
+    "instance_id": "7a13167006d64936b59d287cbcc9029e",
+    "tenant_id": "1e91a440-b1b6-4d1d-8d7b-431ba4497786"
   },
   "ledger": {
-    "after_event_sha256": "ecc177006967b7584fcfd7476a08f88cb14c9b0d447e2e422bc9f75a9a73e980",
+    "after_event_sha256": "5aee07592051ae891fb38df31f4432e42f9881d63f026892116c562c09286087",
     "attempt_ids": [
-      "c9cdf1dc-6d84-48f1-856b-34e61ea3113e"
+      "4a7f9a29-3418-4969-b724-0bd3d5ec1cd8"
     ],
-    "before_event_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "before_event_sha256": "5aee07592051ae891fb38df31f4432e42f9881d63f026892116c562c09286087",
     "campaign_journal_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "settled_nanos": 1750,
     "unresolved_nanos": 0
   },
   "pairing": {
     "resource_count": 1,
-    "trajectory_count": 1
+    "retains": [
+      {
+        "canonical_body_bytes": 244,
+        "canonical_body_sha256": "193576795a0fc8f6da683b49b6dd545ccc215f7bc39e3f07be85f228ba96801f",
+        "fragments": [
+          {
+            "body_bytes": 269,
+            "fragment_index": 1,
+            "idempotency_key_sha256": "0954163db0a12973b6a715fa22eae0e6b9e359d18f649445f20b8f34f85e4253",
+            "request_sha256": "48ad11f2260a095a98248b42a46bc35a8b91b1a9226caaac2835fccadecb1909",
+            "resource_body_sha256": "8e5f838b0d77a03dace3b9a61e08ce0cdd9760ced3e99447edea78729d61839e",
+            "resource_id": "019f9f3a-d5ad-7151-b47f-da2b038c2e49",
+            "response_sha256": "c5c730c248e52f1b01619dad45c2c25f714477188a25ac6de03a7e7c28d87ba4",
+            "serialized_request_bytes": 864
+          }
+        ],
+        "state_count": 1,
+        "trajectory_id": "synthetic-trajectory",
+        "trajectory_sha256": "564aed5cc463e70db0607e7ed102ae99ac0b33f988d6e679ec906db5f00fac43"
+      }
+    ],
+    "trajectory_count": 1,
+    "worker": {
+      "completed_sources": 1,
+      "stderr_sha256": "4285243e4f7b1be38e8c1bdf7b2b51d21c87ca7b1342a477a533b1e18df56e8d",
+      "stdout_sha256": "6851a75f95b0bfbc0ccc29312a0074e1612598895b98eb12a3fa2fca0666b3ec"
+    }
   },
   "provider": {
     "input_price_nanos_per_million": 100000000,
-    "maximum_attempts": 1,
+    "maximum_attempts": 3,
     "maximum_output_tokens": 4096,
     "output_price_nanos_per_million": 150000000,
     "requested_model": "qwen/qwen3.5-9b-20260310",
@@ -64,8 +97,8 @@
   },
   "schema_version": 2,
   "selection": {
-    "input_manifest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "selection_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "input_manifest_sha256": "fe18aa449185cb06384f2e12389166bb0cdc0ec6cf70f9830be51e71be82d448",
+    "selection_sha256": "5256325c3b00d4e920c20158873e9b94091220e5423f5ba93443316128f2158f",
     "state_mode": "structured-resource-v1"
   }
 }

@@ -109,6 +109,40 @@ def test_qwen_tokenizer_identity_and_chat_template_overhead_fixture_are_pinned()
     )
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1.75e-6, b'{"value":1.75e-6}'),
+        (1e-7, b'{"value":1e-7}'),
+        (-1e-7, b'{"value":-1e-7}'),
+        (1e20, b'{"value":1e+20}'),
+        (-0.0, b'{"value":-0.0}'),
+    ],
+)
+def test_rust_json_hash_matches_serde_numeric_encoding(
+    value: float, expected: bytes
+) -> None:
+    runner = _load_runner()
+    assert runner.sha256_rust_json({"value": value}) == hashlib.sha256(
+        expected
+    ).hexdigest()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_rust_json_hash_rejects_nonfinite_numbers(value: float) -> None:
+    runner = _load_runner()
+    with pytest.raises(ValueError, match="Out of range float values"):
+        runner.sha256_rust_json({"value": value})
+
+
+def test_rust_json_exponent_normalization_does_not_rewrite_strings() -> None:
+    runner = _load_runner()
+    expected = b'{"label":"e-007 and e+020","value":1e-7}'
+    assert runner.sha256_rust_json(
+        {"label": "e-007 and e+020", "value": 1e-7}
+    ) == hashlib.sha256(expected).hexdigest()
+
+
 def test_admitted_profile_pins_qwen_deepinfra_native_2048_and_aggregate_cap() -> None:
     manifest = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))
     assert manifest["reader_judge"]["judge"]["maximum_output_tokens"] == 2048
@@ -1445,19 +1479,29 @@ def test_cache_only_construction_environment_drops_provider_credentials(
 
 
 def test_case_bank_manifest_binds_archive_construction_and_logical_inventory(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch,
 ) -> None:
     runner = _load_runner()
     archive = tmp_path / "bank.dump"
     archive.write_bytes(b"immutable-bank")
-    binding_core = {"schema_version": 1, "coverage": {"plans": ["plan"]}}
+    proof = _proof(runner)
+    binding_core = {
+        "schema_version": 1,
+        "authorization": proof["authorization"],
+        "selection": proof["selection"],
+        "compiler": {
+            key: proof["compiler"][key]
+            for key in ("prompt_sha256", "schema_sha256", "provider_code_sha256")
+        },
+        "provider": proof["provider"],
+        "coverage": {"plans": ["plan"]},
+    }
     binding = {
         **binding_core,
         "binding_sha256": runner.sha256_json(binding_core),
     }
     binding_path = tmp_path / "binding.json"
     binding_path.write_text(json.dumps(binding), encoding="utf-8")
-    proof = _proof(runner)
     proof["binding_sha256"] = binding["binding_sha256"]
     proof["construction_proof_sha256"] = runner.sha256_json(
         {
@@ -1485,12 +1529,31 @@ def test_case_bank_manifest_binds_archive_construction_and_logical_inventory(
         "resource": 3,
         "memory_unit": 11,
     }
+    monkeypatch.setattr(
+        runner, "_load_canonical_construction_binding", lambda *args, **kwargs: binding
+    )
+    monkeypatch.setattr(
+        runner,
+        "_derive_canonical_construction_receipts",
+        lambda value: (proof["cache"], proof["ledger"]),
+    )
+    authority = {
+        key: tmp_path / key
+        for key in (
+            "authorization_path",
+            "census_path",
+            "manifest_path",
+            "wave_path",
+            "binding_root",
+        )
+    }
 
     manifest = runner.write_case_bank_manifest(
         archive=archive,
         output=output,
         contract=contract,
         binding_path=binding_path,
+        binding_authority=authority,
         construction_proof_path=proof_path,
         materialization=materialization,
         logical_inventory=logical_inventory,
@@ -1509,6 +1572,69 @@ def test_case_bank_manifest_binds_archive_construction_and_logical_inventory(
         logical_inventory
     )
     assert runner._contains_oracle_key(manifest) is False
+
+    unrelated = json.loads(json.dumps(proof))
+    unrelated["selection"]["selection_sha256"] = hashlib.sha256(
+        b"unrelated-selection"
+    ).hexdigest()
+    unrelated["construction_proof_sha256"] = runner.sha256_json(
+        {
+            key: value
+            for key, value in unrelated.items()
+            if key != "construction_proof_sha256"
+        }
+    )
+    unrelated_path = tmp_path / "unrelated-proof.json"
+    unrelated_path.write_text(json.dumps(unrelated), encoding="utf-8")
+    with pytest.raises(
+        RuntimeError, match="construction proof differs from binding"
+    ):
+        runner.write_case_bank_manifest(
+            archive=archive,
+            output=tmp_path / "unrelated-bank.json",
+            contract=contract,
+            binding_path=binding_path,
+            binding_authority=authority,
+            construction_proof_path=unrelated_path,
+            materialization=materialization,
+            logical_inventory=logical_inventory,
+            postgres_toolchain=_postgres_toolchain_fixture(runner),
+        )
+
+
+def test_committed_case_bank_evidence_has_no_local_paths_or_placeholder_hashes() -> None:
+    artifact_root = (
+        ROOT
+        / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot"
+        / "scratch-case-bank-smoke"
+    )
+    files = sorted(artifact_root.glob("*.json"))
+    assert files
+    forbidden_paths = (
+        "/Users/",
+        "/home/",
+        "/private/var/",
+        "/tmp/",
+        ".codex/worktrees",
+        "\\Users\\",
+    )
+    placeholders = {character * 64 for character in "0123456789abcdef"}
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        assert not any(value in text for value in forbidden_paths), path
+        assert not any(f'"{value}"' in text for value in placeholders), path
+    proof = json.loads(
+        (artifact_root / "CONSTRUCTION-PROOF.v2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert {
+        fingerprint["path"] for fingerprint in proof["compiler"]["binaries"].values()
+    } == {
+        "target/debug/memphant-server",
+        "target/debug/memphant-cli",
+        "target/debug/memphant-worker",
+    }
 
 
 def test_restore_case_bank_pair_creates_fresh_migrated_fast_and_deep_databases(

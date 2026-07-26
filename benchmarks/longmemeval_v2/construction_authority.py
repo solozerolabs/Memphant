@@ -23,10 +23,56 @@ def canonical_json(value: object) -> bytes:
     ).encode("utf-8")
 
 
+def _compact_json_exponents(encoded: str) -> str:
+    """Match serde_json's exponent spelling without touching JSON strings."""
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    cursor = 0
+    while cursor < len(encoded):
+        character = encoded[cursor]
+        if in_string:
+            output.append(character)
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            cursor += 1
+            continue
+        if character == '"':
+            in_string = True
+            output.append(character)
+            cursor += 1
+            continue
+        if character == "e" and cursor + 2 < len(encoded):
+            sign = encoded[cursor + 1]
+            if sign in "+-":
+                digits = cursor + 2
+                while digits + 1 < len(encoded) and encoded[digits] == "0":
+                    digits += 1
+                if encoded[digits].isdigit():
+                    output.extend(("e", sign))
+                    cursor = digits
+                    continue
+        output.append(character)
+        cursor += 1
+    return "".join(output)
+
+
 def rust_json(value: object) -> bytes:
-    return json.dumps(
-        value, sort_keys=True, ensure_ascii=False, separators=(",", ":")
-    ).encode("utf-8")
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    # serde_json's finite-number encoder emits compact exponent digits (for
+    # example ``1.75e-6``), while CPython emits ``1.75e-06``. Campaign hashes
+    # use the exact Rust spelling and reject numbers serde_json cannot encode.
+    return _compact_json_exponents(encoded).encode("utf-8")
 
 
 def sha256_json(value: object) -> str:

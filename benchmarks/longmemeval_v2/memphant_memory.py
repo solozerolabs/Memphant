@@ -127,8 +127,12 @@ def _sha256_file(path: Path) -> str:
 def _binary_fingerprint(path: str) -> dict[str, object]:
     binary = Path(path).resolve()
     _require(binary.is_file(), f"required packaged binary is missing: {binary}")
+    try:
+        stable_path = binary.relative_to(ROOT).as_posix()
+    except ValueError:
+        stable_path = f"external-binary://{binary.name}"
     return {
-        "path": str(binary),
+        "path": stable_path,
         "bytes": binary.stat().st_size,
         "sha256": _sha256_file(binary),
     }

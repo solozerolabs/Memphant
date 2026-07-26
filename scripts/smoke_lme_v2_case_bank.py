@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Secret-free real-binary smoke for the LongMemEval-V2 case-bank lifecycle."""
+"""Secret-free real-binary proof for the LongMemEval-V2 case-bank lifecycle."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import socket
 import subprocess
 import sys
@@ -24,6 +23,11 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "scripts/run_lme_v2_state_aware.py"
 DATA_ROOT = Path.home() / ".cache/memphant/longmemeval-v2"
+FORBIDDEN_PROVIDER_ENV = {
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "DEEPINFRA_API_KEY",
+}
 
 
 def _runner():
@@ -36,54 +40,31 @@ def _runner():
 
 
 def _run(command: list[str], *, env: dict[str, str] | None = None) -> str:
-    safe_environment = {"PATH": os.environ.get("PATH", "")}
+    environment = env if env is not None else {"PATH": os.environ.get("PATH", "")}
+    if FORBIDDEN_PROVIDER_ENV.intersection(environment):
+        raise RuntimeError("synthetic smoke environment contains a provider credential")
     completed = subprocess.run(
         command,
         cwd=ROOT,
-        env=env if env is not None else safe_environment,
+        env=environment,
         capture_output=True,
         text=True,
         check=False,
     )
     if completed.returncode != 0:
-        raise RuntimeError(
-            f"command failed ({command[0]}): {completed.stderr.strip()}"
-        )
+        raise RuntimeError(f"command failed ({command[0]}): {completed.stderr.strip()}")
     return completed.stdout
+
+
+def _write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _free_port() -> int:
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         return int(listener.getsockname()[1])
-
-
-def _api(
-    base_url: str,
-    key: str,
-    method: str,
-    path: str,
-    body: dict[str, object] | None = None,
-) -> dict[str, object]:
-    payload = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(
-        base_url + path,
-        data=payload,
-        method=method,
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-            "Idempotency-Key": f"case-bank-smoke-{time.time_ns()}",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        raise RuntimeError(
-            f"API {method} {path} failed: HTTP {error.code}: "
-            f"{error.read().decode(errors='replace')}"
-        ) from error
 
 
 def _start_server(
@@ -98,7 +79,7 @@ def _start_server(
         "MEMPHANT_BIND": f"127.0.0.1:{port}",
         **extra_environment,
     }
-    if any("API_KEY" in key for key in environment):
+    if FORBIDDEN_PROVIDER_ENV.intersection(environment):
         raise RuntimeError("smoke server environment contains a provider credential")
     process = subprocess.Popen(
         [str(server)],
@@ -131,25 +112,34 @@ def _stop(process: subprocess.Popen[bytes] | None) -> None:
         process.wait(timeout=10)
 
 
-def _admin_tenant_and_key(
-    cli: Path, database_url: str, *, tenant_id: str | None = None
-) -> tuple[str, str]:
-    if tenant_id is None:
-        output = _run(
-            [
-                str(cli),
-                "admin",
-                "create-tenant",
-                "--name",
-                f"lme-case-smoke-{time.time_ns()}",
-                "--database-url",
-                database_url,
-            ]
-        )
-        match = re.search(r"tenant_created id=([^ ]+)", output)
-        if match is None:
-            raise RuntimeError("tenant creation omitted its identity")
-        tenant_id = match.group(1)
+def _api(
+    base_url: str,
+    key: str,
+    method: str,
+    path: str,
+    body: dict[str, object] | None = None,
+) -> dict[str, object]:
+    request = urllib.request.Request(
+        base_url + path,
+        data=json.dumps(body).encode() if body is not None else None,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Idempotency-Key": f"case-bank-smoke-{time.time_ns()}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(
+            f"API {method} {path} failed: HTTP {error.code}: "
+            f"{error.read().decode(errors='replace')}"
+        ) from error
+
+
+def _admin_key(cli: Path, database_url: str, tenant_id: str) -> str:
     key = _run(
         [
             str(cli),
@@ -165,106 +155,250 @@ def _admin_tenant_and_key(
     ).strip().splitlines()[-1]
     if not key:
         raise RuntimeError("key creation failed")
-    return tenant_id, key
+    return key
 
 
-def _validated_test_proof(
-    runner, root: Path, binding_path: Path, tenant_id: str, fixture: dict[str, object]
-) -> Path:
-    binding = json.loads(binding_path.read_text(encoding="utf-8"))
-    binaries = {}
-    for name in ("server", "cli", "worker"):
-        path = ROOT / f"target/debug/memphant-{name}"
-        binaries[name] = {
-            "path": str(path.resolve()),
-            "bytes": path.stat().st_size,
-            "sha256": runner._sha256_file(path),
-        }
-    events = [
-        json.loads(line)
-        for line in (root / "paid-source.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
-    result = next(event for event in events if event["event"] == "result")
-    usage = result["usage"]
-    settled_nanos = (
-        int(usage["prompt_tokens"]) * 100_000_000
-        + int(usage["completion_tokens"]) * 150_000_000
-        + 999_999
-    ) // 1_000_000
-    core = {
-        "schema_version": 2,
-        "binding_sha256": binding["binding_sha256"],
-        "authorization": {
-            "authorization_sha256": fixture["authorization_sha256"],
-            "campaign_sha256": fixture["campaign_sha256"],
-            "screen_id": "state-aware-full",
-        },
-        "selection": {
-            "selection_sha256": "c" * 64,
-            "input_manifest_sha256": "d" * 64,
-            "state_mode": "structured-resource-v1",
-        },
-        "compiler": {
-            "adapter_sha256": runner._sha256_file(
-                ROOT / "benchmarks/longmemeval_v2/memphant_memory.py"
-            ),
-            "construction_params_sha256": "6" * 64,
-            "prompt_sha256": runner._sha256_file(
-                ROOT / "config/structured-state-v1.txt"
-            ),
-            "schema_sha256": "1" * 64,
-            "provider_code_sha256": runner._sha256_file(
-                ROOT / "crates/memphant-runtime/src/structured_state_openrouter.rs"
-            ),
-            "binaries": binaries,
-        },
-        "provider": {
-            "requested_model": "qwen/qwen3.5-9b-20260310",
-            "served_model": fixture["served_model"],
-            "requested_provider": "deepinfra",
-            "served_provider": fixture["served_provider"],
-            "input_price_nanos_per_million": 100_000_000,
-            "output_price_nanos_per_million": 150_000_000,
-            "maximum_output_tokens": 4096,
-            "maximum_attempts": 1,
-        },
-        "cache": {
-            "namespace": fixture["cache_namespace"],
-            "source_receipts_sha256": runner.sha256_json(
-                sorted(
-                    runner._sha256_file(path)
-                    for path in (root / "cache-hits").glob("*.json")
-                )
-            ),
-        },
-        "ledger": {
-            "attempt_ids": sorted({event["attempt_id"] for event in events}),
-            "before_event_sha256": hashlib.sha256(b"").hexdigest(),
-            "after_event_sha256": fixture["source_ledger_prefix_sha256"],
-            "campaign_journal_sha256": hashlib.sha256(b"").hexdigest(),
-            "settled_nanos": settled_nanos,
-            "unresolved_nanos": 0,
-        },
-        "isolation": {"tenant_id": tenant_id, "scratch": True},
-        "pairing": {"trajectory_count": 1, "resource_count": 1},
-    }
-    proof = {**core, "construction_proof_sha256": runner.sha256_json(core)}
-    runner.validate_construction_proof_v2(proof)
-    path = root / "construction-proof-v2.json"
-    path.write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return path
-
-
-def smoke(
-    base_database_url: str, *, artifact_root: Path | None = None
+def _emit_cache_fixture(
+    *,
+    root: Path,
+    construction: dict[str, object],
+    body: str,
+    quote: str,
+    authorization_sha256: str | None = None,
+    campaign_sha256: str | None = None,
+    namespace: str = "scratch-cache-fixture-v1",
 ) -> dict[str, object]:
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "MEMPHANT_TEST_CACHE_FIXTURE_ROOT": str(root),
+        "MEMPHANT_TEST_CACHE_FIXTURE_PROMPT": str(ROOT / str(construction["prompt_path"])),
+        "MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER": str(DATA_ROOT / str(construction["tokenizer_path"])),
+        "MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER_CONFIG": str(DATA_ROOT / str(construction["tokenizer_config_path"])),
+        "MEMPHANT_TEST_CACHE_FIXTURE_BODY": body,
+        "MEMPHANT_TEST_CACHE_FIXTURE_QUOTE": quote,
+        "MEMPHANT_TEST_CACHE_NAMESPACE": namespace,
+    }
+    if authorization_sha256 is not None:
+        environment["MEMPHANT_TEST_CACHE_AUTHORIZATION_SHA256"] = authorization_sha256
+    if campaign_sha256 is not None:
+        environment["MEMPHANT_TEST_CACHE_CAMPAIGN_SHA256"] = campaign_sha256
+    _run(
+        [
+            "cargo",
+            "test",
+            "-q",
+            "-p",
+            "memphant-runtime",
+            "emit_cache_only_resource_fixture_for_scratch_campaign",
+            "--",
+            "--ignored",
+        ],
+        env=environment,
+    )
+    return json.loads((root / "fixture.json").read_text(encoding="utf-8"))
+
+
+def _synthetic_authority(
+    runner,
+    *,
+    artifact_root: Path,
+    canonical_manifest: dict[str, object],
+    plan_fixture: dict[str, object],
+    source_body: str,
+) -> dict[str, object]:
+    paths = {
+        key: Path(value)
+        for key, value in runner._campaign_artifact_paths(artifact_root).items()
+    }
+    for directory in (
+        paths["observation_cache"],
+        paths["cache_hits"],
+        paths["construction_bindings"],
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+    paths["journal"].write_bytes(b"")
+    construction = json.loads(json.dumps(canonical_manifest["construction"]))
+    construction["prompt_sha256"] = runner._sha256_file(ROOT / construction["prompt_path"])
+    construction["code_sha256s"] = {
+        relative: runner._sha256_file(ROOT / relative)
+        for relative in construction["code_paths"]
+    }
+    manifest = {**canonical_manifest, "construction": construction}
+    manifest_path = artifact_root / "SYNTHETIC-MANIFEST.json"
+    _write_json(manifest_path, manifest)
+    input_row = {
+        "source_kind": "resource",
+        "source_body": source_body,
+        "source_body_sha256": hashlib.sha256(source_body.encode()).hexdigest(),
+    }
+    paths["construction_input"].write_bytes(runner.canonical_json(input_row) + b"\n")
+    plan = {
+        "extraction_key": plan_fixture["extraction_key"],
+        "request_sha256": plan_fixture["request_sha256"],
+        "per_attempt_reservation_nanos": plan_fixture["per_attempt_reservation_nanos"],
+        "requested_model": construction["model"],
+        "maximum_attempts": plan_fixture["maximum_attempts"],
+        "source_kind": plan_fixture["source_kind"],
+        "source_body_sha256": plan_fixture["source_body_sha256"],
+        "batch_index": plan_fixture["batch_index"],
+        "evidence_slices_sha256": plan_fixture["evidence_slices_sha256"],
+    }
+    plans, first_liability, plans_sha256 = runner._plan_inventory([plan])
+    census_core = {
+        "schema_version": 1,
+        "benchmark": {"name": "synthetic-case-bank-smoke", "questions": 1},
+        "construction": {
+            "plan_inventory": plans,
+            "plan_inventory_sha256": plans_sha256,
+            "processed_plans": 1,
+            "first_attempt_liability_nanos": first_liability,
+            "construction_identity_sha256": runner.sha256_json(construction),
+            "input_manifest_sha256": runner._sha256_file(paths["construction_input"]),
+        },
+        "manifest_sha256": runner._sha256_file(manifest_path),
+        "paid_models_run": False,
+        "spend_nanos": 0,
+    }
+    census = {**census_core, "census_sha256": runner.sha256_json(census_core)}
+    census_path = artifact_root / "SYNTHETIC-CENSUS.json"
+    _write_json(census_path, census)
+    wave_core = {
+        "schema_version": 1,
+        "campaign_census_sha256": census["census_sha256"],
+        "ordered_plans_sha256": plans_sha256,
+        "plans": plans,
+    }
+    wave = {**wave_core, "wave_sha256": runner.sha256_json(wave_core)}
+    _write_json(paths["construction_wave"], wave)
+    artifact_paths = {key: str(value.resolve()) for key, value in paths.items()}
+    scope = {
+        "campaign": {
+            "journal_path": paths["journal"].name,
+            "hard_ceiling_nanos": 200_000_000_000,
+            "opening_liability_nanos": 0,
+            "unallocated_reserve_nanos": 10_000_000_000,
+            "opening_reservations": [],
+            "aggregate_construction_reservation_nanos": first_liability,
+        },
+        "inputs": {
+            "census_path": str(census_path.resolve()),
+            "census_file_sha256": runner._sha256_file(census_path),
+            "census_sha256": census["census_sha256"],
+            "manifest_path": str(manifest_path.resolve()),
+            "manifest_sha256": runner._sha256_file(manifest_path),
+            "plan_inventory_sha256": plans_sha256,
+            "plan_count": 1,
+        },
+        "provider_authority": {
+            "synthetic": True,
+            "transport": "in-process-fake-no-network",
+            "requested_model": construction["model"],
+            "served_model": construction["response_model"],
+            "served_provider": "DeepInfra",
+        },
+        "artifacts": artifact_paths,
+        "execution": {
+            "cache_namespace": "scratch-cache-fixture-v1",
+            "construction_max_workers": 1,
+            "construction_hidden_retries": 0,
+        },
+    }
+    authorization = {
+        "schema_version": 1,
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        **scope,
+        "authorization": {"authorization_scope_sha256": runner.sha256_json(scope)},
+    }
+    authorization_path = artifact_root / "SYNTHETIC-AUTHORIZATION.json"
+    _write_json(authorization_path, authorization)
+    return {
+        "paths": paths,
+        "plans": plans,
+        "manifest": manifest,
+        "manifest_path": manifest_path,
+        "census": census,
+        "census_path": census_path,
+        "wave_path": paths["construction_wave"],
+        "authorization": authorization,
+        "authorization_path": authorization_path,
+    }
+
+
+def _public_binding_projection(binding: dict[str, object]) -> dict[str, object]:
+    core = {
+        "schema_version": 1,
+        "binding_sha256": binding["binding_sha256"],
+        "authorization": binding["authorization"],
+        "selection": binding["selection"],
+        "compiler": binding["compiler"],
+        "provider": binding["provider"],
+        "cache": {"namespace": binding["cache"]["namespace"]},
+        "ledger": {
+            key: binding["ledger"][key]
+            for key in (
+                "source_ledger_prefix_bytes",
+                "source_ledger_prefix_sha256",
+                "before_event_sha256",
+                "campaign_journal_sha256",
+            )
+        },
+        "coverage": binding["coverage"],
+    }
+    return {**core, "projection_sha256": hashlib.sha256(json.dumps(core, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
+
+
+def _redacted_toolchain(runner, toolchain: dict[str, object]) -> dict[str, object]:
+    identities = {}
+    for name, identity in toolchain["identities"].items():
+        core = {
+            **{key: value for key, value in identity.items() if key not in {"identity_sha256", "path"}},
+            "path": f"postgres-client://{name}/{identity['version'].split()[-2]}",
+        }
+        identities[name] = {**core, "identity_sha256": runner.sha256_json(core)}
+    core = {"identities": identities}
+    return {**core, "toolchain_sha256": runner.sha256_json(core)}
+
+
+def _assert_public_artifacts_clean(root: Path) -> None:
+    forbidden = re.compile(r"(?:/Users/|/home/|/private/var/|/tmp/|\\Users\\|\.codex/worktrees)")
+    placeholder = re.compile(r'"([0-9a-f])\1{63}"')
+    for path in root.glob("*.json"):
+        text = path.read_text(encoding="utf-8")
+        if forbidden.search(text):
+            raise RuntimeError(f"public smoke artifact leaks a local path: {path.name}")
+        if placeholder.search(text):
+            raise RuntimeError(f"public smoke artifact contains a placeholder identity: {path.name}")
+
+
+def smoke(base_database_url: str, *, artifact_root: Path | None = None) -> dict[str, object]:
     runner = _runner()
+    adapter = runner._load_adapter()
     question_id = "synthetic-cache-only-resource-case"
     contract = runner.scratch_case_database_contract(base_database_url, question_id)
-    manifest = json.loads(
+    canonical_manifest = json.loads(
         (ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v1.json").read_text()
     )
-    construction = manifest["construction"]
+    construction = canonical_manifest["construction"]
+    config = json.loads(
+        (ROOT / "benchmarks/longmemeval_v2/memphant.fast.memory.json").read_text()
+    )
+    trajectory = {
+        "id": "synthetic-trajectory",
+        "goal": "Remember the user's stated city.",
+        "states": [
+            {
+                "url": "https://example.invalid/profile",
+                "action": "read profile",
+                "thought": "Record only the stated location.",
+                "text": "I live in Oslo.",
+            }
+        ],
+        "outcome": "The location was recorded.",
+    }
+    _, _, canonical_body, fragments, trajectory_sha256 = adapter._validate_trajectory(trajectory, [])
+    if len(fragments) != 1:
+        raise RuntimeError("synthetic trajectory must produce exactly one resource")
+    source_body = f"Trajectory fragment 1/1\n\n{fragments[0]}"
     server = ROOT / "target/debug/memphant-server"
     worker = ROOT / "target/debug/memphant-worker"
     cli = ROOT / "target/debug/memphant-cli"
@@ -275,145 +409,99 @@ def smoke(
     source_server = None
     with tempfile.TemporaryDirectory(prefix="memphant-lme-case-bank-smoke-") as temporary:
         root = Path(temporary)
-        fixture_env = {
-            "PATH": os.environ.get("PATH", ""),
-            "MEMPHANT_TEST_CACHE_FIXTURE_ROOT": str(root),
-            "MEMPHANT_TEST_CACHE_FIXTURE_PROMPT": str(
-                ROOT / construction["prompt_path"]
-            ),
-            "MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER": str(
-                DATA_ROOT / construction["tokenizer_path"]
-            ),
-            "MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER_CONFIG": str(
-                DATA_ROOT / construction["tokenizer_config_path"]
-            ),
-        }
-        _run(
-            [
-                "cargo",
-                "test",
-                "-q",
-                "-p",
-                "memphant-runtime",
-                "emit_cache_only_resource_fixture_for_scratch_campaign",
-                "--",
-                "--ignored",
-            ],
-            env=fixture_env,
+        planning_fixture = _emit_cache_fixture(
+            root=root / "planning",
+            construction=construction,
+            body=source_body,
+            quote="I live in Oslo.",
         )
-        fixture = json.loads((root / "fixture.json").read_text())
-        if fixture != {**fixture, "provider_credentials_read": False}:
+        campaign_root = root / "campaign"
+        authority = _synthetic_authority(
+            runner,
+            artifact_root=campaign_root,
+            canonical_manifest=canonical_manifest,
+            plan_fixture=planning_fixture,
+            source_body=source_body,
+        )
+        fixture = _emit_cache_fixture(
+            root=campaign_root,
+            construction=authority["manifest"]["construction"],
+            body=source_body,
+            quote="I live in Oslo.",
+            authorization_sha256=authority["authorization"]["authorization"]["authorization_scope_sha256"],
+            campaign_sha256=authority["census"]["census_sha256"],
+        )
+        if fixture.get("provider_credentials_read") is not False:
             raise RuntimeError("fixture generator credential contract drift")
+        binding_path, binding = runner._build_construction_binding(
+            authorization_path=authority["authorization_path"],
+            census_path=authority["census_path"],
+            manifest_path=authority["manifest_path"],
+            wave_path=authority["wave_path"],
+            binding_root=authority["paths"]["construction_bindings"],
+            plans=authority["plans"],
+        )
+        runner._create_json(binding_path, binding)
+        binding_authority = {
+            "authorization_path": authority["authorization_path"],
+            "census_path": authority["census_path"],
+            "manifest_path": authority["manifest_path"],
+            "wave_path": authority["wave_path"],
+            "binding_root": authority["paths"]["construction_bindings"],
+        }
+        if runner._load_canonical_construction_binding(binding_path, **binding_authority) != binding:
+            raise RuntimeError("synthetic canonical binding validation drift")
         try:
             _run(["dropdb", f"--maintenance-db={base_database_url}", "--if-exists", "--force", source_name])
             _run(["createdb", f"--maintenance-db={base_database_url}", source_name])
             _run([sys.executable, str(ROOT / "scripts/apply_memphant_migrations.py"), "--database-url", source_url])
-            tenant_id, key = _admin_tenant_and_key(cli, source_url)
-            cache_environment = {
-                "MEMPHANT_STRUCTURED_STATE": "on",
-                "MEMPHANT_STRUCTURED_STATE_MODEL": "qwen/qwen3.5-9b-20260310",
-                "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(ROOT / construction["prompt_path"]),
-                "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": "100000000",
-                "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": "150000000",
-                "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH": str(DATA_ROOT / construction["tokenizer_path"]),
-                "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH": str(DATA_ROOT / construction["tokenizer_config_path"]),
-                "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER": str(root / "paid-source.jsonl"),
-                "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE": str(root / "observation-cache"),
-                "MEMPHANT_STRUCTURED_STATE_CACHE_HITS": str(root / "cache-hits"),
-                "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256": fixture["authorization_sha256"],
-                "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256": fixture["campaign_sha256"],
-                "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE": fixture["cache_namespace"],
-                "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER": str(root / "paid-source.jsonl"),
-                "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES": str(fixture["source_ledger_prefix_bytes"]),
-                "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256": fixture["source_ledger_prefix_sha256"],
-                "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL": fixture["served_model"],
-                "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER": fixture["served_provider"],
-                "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS": "18446744073709551615",
-                "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT": "1",
-                "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "on",
-            }
+            cache_environment = runner.cache_only_construction_environment(
+                binding_path=binding_path,
+                binding=binding,
+                manifest=authority["manifest"],
+                data_root=DATA_ROOT,
+                database_url=source_url,
+            )
             source_server, base_url = _start_server(server, source_url, cache_environment)
-            context = _api(base_url, key, "PUT", "/v1/context-bindings/lme-case-smoke", {
-                "subject": {"external_ref": "subject:lme-case-smoke", "kind": "user"},
-                "actor": {"external_ref": "actor:lme-case-smoke", "kind": "system"},
-                "scope": {"external_ref": "scope:lme-case-smoke", "kind": "user_root"},
-                "agent_node": {"external_ref": "agent:lme-case-smoke"},
-            })
-            context_fields = {
-                "subject_id": context["subject_id"],
-                "subject_generation": context["subject_generation"],
-                "scope_id": context["scope_id"],
-                "actor_id": context["actor_id"],
-                "agent_node_id": context["agent_node_id"],
-            }
-            body = fixture["source_body"]
-            retained = _api(base_url, key, "POST", "/v1/episodes", {
-                **context_fields,
-                "source_ref": "smoke:cache-only-resource",
-                "observed_at": "2026-07-26T00:00:00Z",
-                "payload": {"resource": {
-                    "uri": "repo://smoke/profile.txt",
-                    "mime_type": "text/plain",
-                    "content_hash": "sha256:" + hashlib.sha256(body.encode()).hexdigest(),
-                    "kind": "code",
-                    "revision": "fixture-v1",
-                    "body": body,
-                }},
-            })
-            queued_before_worker = _run(
-                [
-                    "psql",
-                    source_url,
-                    "-Atqc",
-                    "SELECT state || ':' || job_type FROM memphant.job_state ORDER BY queue_order",
-                ]
-            )
-            worker_environment = {
-                "PATH": os.environ.get("PATH", ""),
-                "MEMPHANT_WORKER_DATABASE_URL": source_url,
-                "MEMPHANT_WORKER_ONCE": "1",
+            adapter.CANONICAL_AUTHORIZATION_PATH = authority["authorization_path"]
+            adapter.CANONICAL_CENSUS_PATH = authority["census_path"]
+            adapter.CANONICAL_MANIFEST_PATH = authority["manifest_path"]
+            adapter.CANONICAL_WAVE_PATH = authority["wave_path"]
+            adapter.CANONICAL_BINDING_ROOT = authority["paths"]["construction_bindings"]
+            adapter_environment = {
                 **cache_environment,
+                "MEMPHANT_SCRATCH_ACTIVE": "1",
+                "MEMPHANT_TEST_DATABASE_URL": source_url,
+                "MEMPHANT_LME_SERVER_URL": base_url,
+                "MEMPHANT_CLI_BIN": str(cli),
+                "MEMPHANT_LME_SERVER_BIN": str(server),
+                "MEMPHANT_LME_WORKER_BIN": str(worker),
+                "MEMPHANT_LME_PROOF_DIR": str(campaign_root / "proof"),
+                "MEMPHANT_LME_RUN_ID": "synthetic-case-bank-smoke",
+                "MEMPHANT_RESOURCE_CHUNKS": "on",
             }
-            if any("API_KEY" in name for name in worker_environment):
-                raise RuntimeError("worker environment contains a provider credential")
-            worker_output = _run([str(worker)], env=worker_environment)
-            jobs_after_worker = _run(
-                [
-                    "psql",
-                    source_url,
-                    "-Atqc",
-                    (
-                        "SELECT state || ':' || job_type || ':' || "
-                        "(run_after <= now())::text || ':' || coalesce(last_error,'') "
-                        "FROM memphant.job_state ORDER BY queue_order"
-                    ),
-                ]
-            )
-            recall = _api(base_url, key, "POST", "/v1/recall", {
-                **context_fields,
-                "query": "Where do I live?",
-            })
-            if not recall.get("items") or "Oslo" not in json.dumps(recall["items"]):
-                raise RuntimeError(
-                    "cache-only compiled observation was not recalled: "
-                    + json.dumps(
-                        {
-                            "worker": worker_output,
-                            "retained": retained,
-                            "queued_before_worker": queued_before_worker,
-                            "jobs_after_worker": jobs_after_worker,
-                            "cache_hits": [
-                                path.name for path in (root / "cache-hits").glob("*.json")
-                            ],
-                            "recall": recall,
-                        },
-                        sort_keys=True,
-                    )
-                )
-            query = urllib.parse.urlencode(context_fields)
-            trace = _api(base_url, key, "GET", f"/v1/traces/{recall['trace_id']}?{query}")
-            if not trace:
-                raise RuntimeError("source trace smoke failed")
+            previous = {key: os.environ.get(key) for key in adapter_environment}
+            previous_provider = {key: os.environ.get(key) for key in FORBIDDEN_PROVIDER_ENV}
+            try:
+                for key in FORBIDDEN_PROVIDER_ENV:
+                    os.environ.pop(key, None)
+                os.environ.update(adapter_environment)
+                memory = adapter.MemphantMemory(config["memory_params"])
+                memory.get_query_context = lambda: {"question_id": question_id}
+                memory.insert(trajectory)
+                proof = memory.prepare()
+                recalled = memory.query("Where does the user live?")
+                if "Oslo" not in json.dumps(recalled):
+                    raise RuntimeError("adapter cache-only recall did not return Oslo")
+            finally:
+                for key, value in {**previous, **previous_provider}.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+            proof_path = next((campaign_root / "proof").glob("construction.*.v2.json"))
+            if json.loads(proof_path.read_text()) != proof:
+                raise RuntimeError("adapter construction proof artifact drift")
             _stop(source_server)
             source_server = None
             runner.assert_case_source_quiescent(source_url)
@@ -423,33 +511,20 @@ def smoke(
                 for tool in ("pg_dump", "pg_restore")
             }
             toolchain_core = {"identities": tool_identities}
-            postgres_toolchain = {
-                **toolchain_core,
-                "toolchain_sha256": runner.sha256_json(toolchain_core),
-            }
-            pg_dump = tool_identities["pg_dump"]["path"]
-            pg_restore = tool_identities["pg_restore"]["path"]
+            postgres_toolchain = {**toolchain_core, "toolchain_sha256": runner.sha256_json(toolchain_core)}
             archive = root / "case-bank.dump"
-            _run(
-                runner.case_bank_dump_command(
-                    source_url, archive, pg_dump=str(pg_dump)
-                )
-            )
-            binding_core = {"schema_version": 1, "coverage": {"plans": [fixture["extraction_key"]]}}
-            binding = {**binding_core, "binding_sha256": runner.sha256_json(binding_core)}
-            binding_path = root / "binding.json"
-            binding_path.write_text(json.dumps(binding), encoding="utf-8")
-            proof_path = _validated_test_proof(runner, root, binding_path, tenant_id, fixture)
+            _run(runner.case_bank_dump_command(source_url, archive, pg_dump=tool_identities["pg_dump"]["path"]))
             bank_manifest = runner.write_case_bank_manifest(
                 archive=archive,
                 output=root / "case-bank.json",
                 contract=contract,
                 binding_path=binding_path,
+                binding_authority=binding_authority,
                 construction_proof_path=proof_path,
                 materialization={
                     "trajectory_count": 1,
-                    "trajectory_ids_sha256": runner.sha256_json(["synthetic-trajectory"]),
-                    "trajectory_content_sha256": hashlib.sha256(body.encode()).hexdigest(),
+                    "trajectory_ids_sha256": runner.sha256_json([trajectory["id"]]),
+                    "trajectory_content_sha256": trajectory_sha256,
                 },
                 logical_inventory=logical_inventory,
                 postgres_toolchain=postgres_toolchain,
@@ -459,52 +534,60 @@ def smoke(
                 question_id=question_id,
                 archive=archive,
                 manifest=bank_manifest,
-                pg_restore=str(pg_restore),
+                pg_restore=tool_identities["pg_restore"]["path"],
             )
+            context_fields = proof["isolation"]["context"]
+            tenant_id = proof["isolation"]["tenant_id"]
+            query = urllib.parse.urlencode(context_fields)
             clone_traces = {}
             for arm, database_name in clone["databases"].items():
                 database_url = runner._database_url_for_name(base_database_url, database_name)
-                _, clone_key = _admin_tenant_and_key(cli, database_url, tenant_id=tenant_id)
+                key = _admin_key(cli, database_url, tenant_id)
                 process, clone_base = _start_server(server, database_url, {})
                 try:
-                    recalled = _api(clone_base, clone_key, "POST", "/v1/recall", {
-                        **context_fields,
-                        "query": "Where do I live?",
-                    })
-                    if not recalled.get("items") or "Oslo" not in json.dumps(recalled["items"]):
+                    response = _api(clone_base, key, "POST", "/v1/recall", {**context_fields, "query": "Where does the user live?"})
+                    if "Oslo" not in json.dumps(response.get("items")):
                         raise RuntimeError(f"{arm} clone recall failed")
-                    traced = _api(clone_base, clone_key, "GET", f"/v1/traces/{recalled['trace_id']}?{query}")
-                    clone_traces[arm] = bool(traced)
+                    trace = _api(clone_base, key, "GET", f"/v1/traces/{response['trace_id']}?{query}")
+                    clone_traces[arm] = bool(trace)
                 finally:
                     _stop(process)
+            public_toolchain = _redacted_toolchain(runner, postgres_toolchain)
             report = {
                 "status": "PASS",
                 "provider_credentials_read": False,
-                "cache_hit_receipts": len(list((root / "cache-hits").glob("*.json"))),
-                "case_bank_sha256": bank_manifest["case_bank_sha256"],
+                "canonical_binding_valid": True,
+                "canonical_receipts_valid": True,
+                "cache_hit_receipts": len(list(Path(binding["cache"]["source_receipts_path"]).glob("*.json"))),
+                "binding_sha256": binding["binding_sha256"],
+                "construction_proof_sha256": proof["construction_proof_sha256"],
+                "runtime_case_bank_sha256": bank_manifest["case_bank_sha256"],
                 "clone_sha256": clone["clone_sha256"],
                 "clone_traces": clone_traces,
-                "postgres_toolchain_sha256": postgres_toolchain[
-                    "toolchain_sha256"
-                ],
-                "postgres_toolchain": postgres_toolchain,
-                "construction_proof_sha256": json.loads(
-                    proof_path.read_text(encoding="utf-8")
-                )["construction_proof_sha256"],
+                "postgres_toolchain": public_toolchain,
+                "postgres_toolchain_sha256": public_toolchain["toolchain_sha256"],
+                "trajectory_body_sha256": hashlib.sha256(canonical_body.encode()).hexdigest(),
+                "source_body_sha256": hashlib.sha256(source_body.encode()).hexdigest(),
             }
             if artifact_root is not None:
                 artifact_root.mkdir(parents=True, exist_ok=True)
-                for source, name in (
-                    (root / "fixture.json", "SYNTHETIC-CACHE-FIXTURE.json"),
-                    (binding_path, "CONSTRUCTION-BINDING.json"),
-                    (proof_path, "CONSTRUCTION-PROOF.v2.json"),
-                    (root / "case-bank.json", "CASE-BANK-MANIFEST.json"),
-                ):
-                    shutil.copyfile(source, artifact_root / name)
-                (artifact_root / "SMOKE-REPORT.json").write_text(
-                    json.dumps(report, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
+                for obsolete in artifact_root.glob("*.json"):
+                    obsolete.unlink()
+                _write_json(artifact_root / "SYNTHETIC-CACHE-FIXTURE.json", fixture)
+                _write_json(artifact_root / "CONSTRUCTION-BINDING-PROJECTION.json", _public_binding_projection(binding))
+                _write_json(artifact_root / "CONSTRUCTION-PROOF.v2.json", proof)
+                _write_json(artifact_root / "CASE-BANK-PROJECTION.json", {
+                    "schema_version": 1,
+                    "runtime_case_bank_sha256": bank_manifest["case_bank_sha256"],
+                    "archive": bank_manifest["archive"],
+                    "construction": bank_manifest["construction"],
+                    "materialization": bank_manifest["materialization"],
+                    "logical_inventory": bank_manifest["logical_inventory"],
+                    "logical_inventory_sha256": bank_manifest["logical_inventory_sha256"],
+                    "postgres_toolchain": public_toolchain,
+                })
+                _write_json(artifact_root / "SMOKE-REPORT.json", report)
+                _assert_public_artifacts_clean(artifact_root)
             return report
         finally:
             _stop(source_server)
@@ -520,18 +603,10 @@ def smoke(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--base-database-url",
-        default="postgresql://memphant:memphant@localhost:5432/memphant",
-    )
+    parser.add_argument("--base-database-url", default="postgresql://memphant:memphant@localhost:5432/memphant")
     parser.add_argument("--artifact-root", type=Path)
     args = parser.parse_args()
-    print(
-        json.dumps(
-            smoke(args.base_database_url, artifact_root=args.artifact_root),
-            sort_keys=True,
-        )
-    )
+    print(json.dumps(smoke(args.base_database_url, artifact_root=args.artifact_root), sort_keys=True))
     return 0
 
 
