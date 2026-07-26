@@ -271,6 +271,7 @@ def refresh_campaign_provider_authority(fetch=_fetch_public_bytes) -> dict[str, 
     )
     reasoning_none_permitted = (
         isinstance(reasoning, dict)
+        and "supported_efforts" in reasoning
         and reasoning.get("mandatory") is False
         and (
             supported_efforts is None

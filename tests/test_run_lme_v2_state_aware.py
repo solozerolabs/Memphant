@@ -996,13 +996,19 @@ def test_construction_phase_selector_preserves_exact_crash_state(phase: str) -> 
     assert phase in {"prefix", "tail", "retry"}
 
 
-def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
+@pytest.mark.parametrize(
+    "supported_efforts",
+    [["high", "medium", "low", "minimal", "none"], None],
+)
+def test_provider_refresh_uses_only_public_exact_route_authority(
+    supported_efforts: list[str] | None,
+) -> None:
     runner = _load_runner()
     qwen = {
         "data": {
             "id": "qwen/qwen3.5-9b",
             "reasoning": {
-                "supported_efforts": ["high", "medium", "low", "minimal", "none"],
+                "supported_efforts": supported_efforts,
                 "mandatory": False,
             },
             "endpoints": [
@@ -1045,6 +1051,7 @@ def test_provider_refresh_uses_only_public_exact_route_authority() -> None:
         (["seed", "response_format", "structured_outputs", "max_tokens"], {"supported_efforts": ["none"], "mandatory": False}),
         (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["low", "medium"], "mandatory": False}),
         (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"supported_efforts": ["none", "low"], "mandatory": True}),
+        (["seed", "response_format", "structured_outputs", "max_tokens", "reasoning"], {"mandatory": False}),
     ],
 )
 def test_provider_refresh_rejects_route_without_explicit_reasoning_off_authority(

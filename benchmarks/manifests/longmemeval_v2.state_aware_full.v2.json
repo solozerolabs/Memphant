@@ -178,14 +178,14 @@
       "benchmarks/longmemeval_v2/qwen_reader_census.py": "251ef6a46713d6d72dabd0444325a232639842163decf98798bbe0a9aa38ca76",
       "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt": "979a7b3725fcc45809e6e707565b8f0d5ee2e749593ce52ae50a706653d160b0",
     "crates/memphant-cli/src/structured_state_census.rs": "369207478ca4a1cd5291e57352f8e6eddace5a9f34ddfa2f4badb6fa72aa1176",
-    "scripts/run_lme_v2_state_aware.py": "b3998080754a00c0e038f0b259a23e4fb5f1769c4f35216931e1b37fc0e87e4d"
+    "scripts/run_lme_v2_state_aware.py": "68831880ed790b6efba01717df02d98bc0a8234f18b99d2da844d60ab0f866b0"
     },
     "census_binary_build": {
       "package": "memphant-cli",
       "profile": "release",
       "cargo_locked": true,
     "cargo_lock_sha256": "8a3b85c525213aa4acb1acdb7f1a41ac5c896b101730e3b471c576bd443a21e9",
-    "source_set_sha256": "999ffb013989345046bdac32e509905d4590aeaded464102c531e2d2e16b7f44",
+    "source_set_sha256": "204d0686838900d12333ed60f9f180a06b133eb1adafa99b56356a92c0db613a",
       "rustc_vv_sha256": "a9951fd2e18599557d1a289d74c50874d336477e219b1472508a63518090fa08",
       "cargo_version_sha256": "4b38cfb28fee9bbb95897bc3793f5fce5f3ed35c732f29ad7d80f96ba96eac5b",
       "source_paths": [
