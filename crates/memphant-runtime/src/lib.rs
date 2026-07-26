@@ -1071,16 +1071,24 @@ impl MemoryStore for AnyStore {
     async fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        input_manifest_sha256: &str,
     ) -> Result<Option<Vec<memphant_core::ProjectedStructuredState>>, StoreError> {
-        delegate!(self, store => store.fetch_prepared_structured_state(claim).await)
+        delegate!(self, store => store.fetch_prepared_structured_state(claim, input_manifest_sha256).await)
     }
 
     async fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        input_manifest_sha256: String,
+        extraction_receipt_sha256s: Vec<String>,
         projections: Vec<memphant_core::ProjectedStructuredState>,
     ) -> Result<(), StoreError> {
-        delegate!(self, store => store.store_prepared_structured_state(claim, projections).await)
+        delegate!(self, store => store.store_prepared_structured_state(
+            claim,
+            input_manifest_sha256,
+            extraction_receipt_sha256s,
+            projections,
+        ).await)
     }
 
     async fn release_reflect_job(

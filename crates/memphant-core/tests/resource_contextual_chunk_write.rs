@@ -7,18 +7,107 @@
 //! chunk-matched resource and cites it back to the PARENT resource (chunk id ↔
 //! parent linkage), exactly like the episode twin.
 
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
 use memphant_core::service::MemoryService;
-use memphant_core::{FixedClock, InMemoryStore, MemoryStore, StubEmbedding};
+use memphant_core::{
+    FixedClock, InMemoryStore, MemoryStore, NoopEmbedding, StructuredObservation,
+    StructuredObservationDisposition, StructuredStateProvider, StructuredStateProviderError,
+    StructuredStateProviderIdentity, StructuredStateRequest, StubEmbedding,
+};
 use memphant_types::{
-    CitationVerification, EvidenceSourceKind, RecallHttpRequest, ResolvedMemoryContext,
+    CitationVerification, EvidenceSourceKind, MemoryKind, RecallHttpRequest, ResolvedMemoryContext,
     ResourceKind, RetainEpisodeHttpRequest, RetainResourcePayload, TenantId, TrustLevel,
 };
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 const CLOCK: FixedClock = FixedClock("2026-07-11T00:00:00Z");
 const RESOURCE_URI: &str = "syndai/docs/deploy/configuration.md";
+const STRUCTURED_RESOURCE_BODY: &str =
+    "Deployment region is eu-west-1. Always run migrations before rollout.";
+
+struct ResourceStructuredProvider {
+    identity: StructuredStateProviderIdentity,
+    calls: Mutex<Vec<StructuredStateRequest>>,
+}
+
+impl ResourceStructuredProvider {
+    fn new() -> Self {
+        Self {
+            identity: StructuredStateProviderIdentity {
+                model: "test/resource-compiler".to_string(),
+                prompt_hash: "resource-prompt".to_string(),
+                schema_hash: "resource-schema".to_string(),
+            },
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl StructuredStateProvider for ResourceStructuredProvider {
+    fn identity(&self) -> &StructuredStateProviderIdentity {
+        &self.identity
+    }
+
+    fn extract<'a>(
+        &'a self,
+        request: &'a StructuredStateRequest,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Vec<StructuredObservation>, StructuredStateProviderError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        self.calls.lock().unwrap().push(request.clone());
+        let evidence_slice_id = request.evidence_slices[0].id.clone();
+        let evidence_body = request.evidence_slices[0].body.clone();
+        let batch_index = request.batch_index;
+        Box::pin(async move {
+            if evidence_body != STRUCTURED_RESOURCE_BODY {
+                return Ok(vec![StructuredObservation {
+                    namespace: "deployment".to_string(),
+                    item_key: "region".to_string(),
+                    fields: BTreeMap::from([("value".to_string(), json!(batch_index))]),
+                    disposition: StructuredObservationDisposition::State,
+                    evidence_slice_id,
+                    evidence_quote: evidence_body,
+                    valid_from: None,
+                    valid_to: None,
+                }]);
+            }
+            Ok(vec![
+                StructuredObservation {
+                    namespace: "deployment".to_string(),
+                    item_key: "region".to_string(),
+                    fields: BTreeMap::from([("value".to_string(), json!("eu-west-1"))]),
+                    disposition: StructuredObservationDisposition::State,
+                    evidence_slice_id: evidence_slice_id.clone(),
+                    evidence_quote: "Deployment region is eu-west-1.".to_string(),
+                    valid_from: None,
+                    valid_to: None,
+                },
+                StructuredObservation {
+                    namespace: "workflow".to_string(),
+                    item_key: "migration".to_string(),
+                    fields: BTreeMap::from([(
+                        "step".to_string(),
+                        json!("run migrations before rollout"),
+                    )]),
+                    disposition: StructuredObservationDisposition::Event,
+                    evidence_slice_id,
+                    evidence_quote: "Always run migrations before rollout.".to_string(),
+                    valid_from: None,
+                    valid_to: None,
+                },
+            ])
+        })
+    }
+}
 
 /// A markdown section (as the gate ingests one: a `###` heading then several
 /// paragraphs) long enough to span more than one char-budget window, so the
@@ -72,6 +161,229 @@ fn retain_resource_request(
             body: Some(RESOURCE_BODY.to_string()),
         }),
     }
+}
+
+fn structured_resource_request(
+    context: &ResolvedMemoryContext,
+    body: &str,
+) -> RetainEpisodeHttpRequest {
+    RetainEpisodeHttpRequest {
+        subject_id: context.data_subject_id,
+        scope_id: context.scope_id,
+        actor_id: context.actor_id,
+        agent_node_id: context.agent_node_id,
+        subject_generation: context.subject_generation,
+        source_ref: "test://structured-resource".to_string(),
+        observed_at: CLOCK.0.to_string(),
+        payload: memphant_types::RetainPayload::Resource(RetainResourcePayload {
+            uri: "test://structured-resource".to_string(),
+            mime_type: "text/plain".to_string(),
+            content_hash: format!("sha256:{:x}", Sha256::digest(body.as_bytes())),
+            kind: Some(ResourceKind::Document),
+            revision: Some("v1".to_string()),
+            body: Some(body.to_string()),
+        }),
+    }
+}
+
+#[tokio::test]
+async fn resource_reflection_retains_raw_evidence_and_compiles_structured_units() {
+    let store = InMemoryStore::default();
+    let provider = Arc::new(ResourceStructuredProvider::new());
+    let service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(NoopEmbedding),
+    )
+    .with_structured_state_provider(provider.clone());
+    let context = memphant_store_testkit::bind_context(&store, TenantId::new()).await;
+    let retained = service
+        .retain(
+            &context,
+            concat!("test:", line!()),
+            TrustLevel::TrustedSystem,
+            structured_resource_request(&context, STRUCTURED_RESOURCE_BODY),
+        )
+        .await
+        .expect("retain resource");
+    let retained: memphant_types::RetainEpisodeHttpResponse =
+        serde_json::from_slice(retained.body()).expect("retain response");
+    let resource_id = retained.resource_id.expect("resource retained");
+    let queued = store.reflect_jobs(context.tenant_id);
+    assert_eq!(queued.len(), 1);
+    assert_eq!(
+        queued[0].compiler_version,
+        memphant_core::structured_compiler_identity(
+            &format!(
+                "{}+source-slice-batches-v1",
+                memphant_types::COMPILER_VERSION
+            ),
+            provider.identity(),
+        )
+    );
+
+    assert_eq!(service.run_worker_tick(1).await.expect("reflect"), 1);
+    {
+        let calls = provider.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "short resource uses one full-body fallback");
+        assert_eq!(
+            calls[0].source_kind,
+            memphant_core::StructuredSourceKind::Resource
+        );
+        assert_eq!(
+            calls[0].evidence_slices[0].source_span,
+            format!("0-{}", STRUCTURED_RESOURCE_BODY.len())
+        );
+    }
+    let page = store
+        .scope_memory_page(&context, None, 100)
+        .await
+        .expect("page");
+    let linked = page
+        .items
+        .iter()
+        .filter(|unit| unit.source_resource_id == Some(resource_id))
+        .collect::<Vec<_>>();
+    assert!(linked.iter().all(|unit| unit.source_episode_id.is_none()));
+    assert!(linked.iter().any(|unit| {
+        unit.kind == MemoryKind::Resource && unit.body == STRUCTURED_RESOURCE_BODY
+    }));
+    assert!(linked.iter().any(|unit| unit.kind == MemoryKind::Semantic));
+    assert!(
+        linked
+            .iter()
+            .any(|unit| unit.kind == MemoryKind::Procedural)
+    );
+}
+
+#[tokio::test]
+async fn resource_observation_batches_fold_once_in_source_order() {
+    let body = (0..4)
+        .map(|index| format!("section-{index} {}", "x".repeat(900)))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let store = InMemoryStore::default();
+    let provider = Arc::new(ResourceStructuredProvider::new());
+    let service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(NoopEmbedding),
+    )
+    .with_structured_state_provider(provider.clone());
+    let context = memphant_store_testkit::bind_context(&store, TenantId::new()).await;
+    let retained = service
+        .retain(
+            &context,
+            concat!("test:", line!()),
+            TrustLevel::TrustedSystem,
+            structured_resource_request(&context, &body),
+        )
+        .await
+        .expect("retain resource");
+    let retained: memphant_types::RetainEpisodeHttpResponse =
+        serde_json::from_slice(retained.body()).expect("retain response");
+    let resource_id = retained.resource_id.expect("resource retained");
+
+    assert_eq!(service.run_worker_tick(1).await.expect("reflect"), 1);
+    let expected_last = {
+        let calls = provider.calls.lock().unwrap();
+        assert!(calls.len() > 1, "oversized resources use multiple batches");
+        assert!(
+            calls
+                .iter()
+                .all(|request| request.evidence_slices.len() == 1)
+        );
+        assert_eq!(
+            calls
+                .iter()
+                .map(|request| request.batch_index)
+                .collect::<Vec<_>>(),
+            (0..calls.len()).collect::<Vec<_>>()
+        );
+        calls.len() - 1
+    };
+
+    let page = store
+        .scope_memory_page(&context, None, 100)
+        .await
+        .expect("page");
+    let compiled = page
+        .items
+        .iter()
+        .filter(|unit| {
+            unit.source_resource_id == Some(resource_id) && unit.kind == MemoryKind::Semantic
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(compiled.len(), 1, "all batches fold into one final state");
+    assert_eq!(
+        compiled[0].body,
+        format!("deployment item region: {{\"value\":{expected_last}}}")
+    );
+}
+
+#[tokio::test]
+async fn identical_resource_extraction_mints_tenant_local_units_and_citations() {
+    let store = InMemoryStore::default();
+    let service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(NoopEmbedding),
+    )
+    .with_structured_state_provider(Arc::new(ResourceStructuredProvider::new()));
+    let left = memphant_store_testkit::bind_context(&store, TenantId::new()).await;
+    let right = memphant_store_testkit::bind_context(&store, TenantId::new()).await;
+
+    for context in [&left, &right] {
+        service
+            .retain(
+                context,
+                "same-extraction",
+                TrustLevel::TrustedSystem,
+                structured_resource_request(context, STRUCTURED_RESOURCE_BODY),
+            )
+            .await
+            .expect("retain resource");
+    }
+    assert_eq!(service.run_worker_tick(2).await.expect("reflect"), 2);
+
+    let left_response = service
+        .recall(
+            left.clone(),
+            recall_request(&left, "deployment region eu-west-1"),
+        )
+        .await
+        .expect("left recall");
+    let right_response = service
+        .recall(
+            right.clone(),
+            recall_request(&right, "deployment region eu-west-1"),
+        )
+        .await
+        .expect("right recall");
+    let left_units = left_response
+        .items
+        .iter()
+        .map(|item| item.unit_id)
+        .collect::<std::collections::HashSet<_>>();
+    let right_units = right_response
+        .items
+        .iter()
+        .map(|item| item.unit_id)
+        .collect::<std::collections::HashSet<_>>();
+    assert!(!left_units.is_empty() && !right_units.is_empty());
+    assert!(left_units.is_disjoint(&right_units));
+    let left_citations = left_response
+        .citations
+        .iter()
+        .map(|citation| citation.unit_id)
+        .collect::<std::collections::HashSet<_>>();
+    let right_citations = right_response
+        .citations
+        .iter()
+        .map(|citation| citation.unit_id)
+        .collect::<std::collections::HashSet<_>>();
+    assert!(!left_citations.is_empty() && !right_citations.is_empty());
+    assert!(left_citations.is_disjoint(&right_citations));
 }
 
 fn recall_request(context: &ResolvedMemoryContext, query: &str) -> RecallHttpRequest {

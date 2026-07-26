@@ -3934,6 +3934,7 @@ impl MemoryStore for PgStore {
     async fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        expected_input_manifest_sha256: &str,
     ) -> Result<Option<Vec<memphant_core::ProjectedStructuredState>>, StoreError> {
         let tenant = claim.job.tenant_id;
         let mut tx = self.tenant_tx(tenant).await?;
@@ -3967,7 +3968,16 @@ impl MemoryStore for PgStore {
             .transpose()
             .map_err(|error| StoreError::Backend(format!("invalid reflect job result: {error}")))?
         {
-            Some(memphant_core::ReflectJobResult::Prepared { projections }) => {
+            Some(memphant_core::ReflectJobResult::Prepared {
+                input_manifest_sha256,
+                extraction_receipt_sha256s,
+                projections,
+            }) => {
+                memphant_core::validate_prepared_structured_state_binding(
+                    expected_input_manifest_sha256,
+                    &input_manifest_sha256,
+                    &extraction_receipt_sha256s,
+                )?;
                 Ok(Some(projections))
             }
             Some(memphant_core::ReflectJobResult::Completed { .. }) | None => Ok(None),
@@ -3977,10 +3987,21 @@ impl MemoryStore for PgStore {
     async fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        input_manifest_sha256: String,
+        extraction_receipt_sha256s: Vec<String>,
         projections: Vec<memphant_core::ProjectedStructuredState>,
     ) -> Result<(), StoreError> {
-        let value = serde_json::to_value(memphant_core::ReflectJobResult::Prepared { projections })
-            .map_err(|error| StoreError::Backend(error.to_string()))?;
+        memphant_core::validate_prepared_structured_state_binding(
+            &input_manifest_sha256,
+            &input_manifest_sha256,
+            &extraction_receipt_sha256s,
+        )?;
+        let value = serde_json::to_value(memphant_core::ReflectJobResult::Prepared {
+            input_manifest_sha256,
+            extraction_receipt_sha256s,
+            projections,
+        })
+        .map_err(|error| StoreError::Backend(error.to_string()))?;
         let tenant = claim.job.tenant_id;
         let mut tx = self.tenant_tx(tenant).await?;
         sqlx::query(

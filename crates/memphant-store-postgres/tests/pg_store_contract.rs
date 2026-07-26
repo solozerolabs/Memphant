@@ -2032,7 +2032,7 @@ async fn claim_reflect_jobs_is_disjoint_and_does_not_reclaim_fresh_claims() {
 
 #[tokio::test]
 #[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
-async fn concurrent_workers_cannot_split_a_scope_lane_and_reclaim_reuses_preparation() {
+async fn prepared_structured_state_survives_reclaim_without_splitting_scope_lane() {
     let store_a = connect().await;
     let store_b = connect().await;
     let tenant = fresh_tenant(&store_a).await;
@@ -2080,13 +2080,20 @@ async fn concurrent_workers_cannot_split_a_scope_lane_and_reclaim_reuses_prepara
     );
 
     let prepared_job = claimed[1].job.id;
+    let input_manifest_sha256 = "1".repeat(64);
+    let extraction_receipt_sha256s = vec!["2".repeat(64)];
     store_a
-        .store_prepared_structured_state(&claimed[1], Vec::new())
+        .store_prepared_structured_state(
+            &claimed[1],
+            input_manifest_sha256.clone(),
+            extraction_receipt_sha256s,
+            Vec::new(),
+        )
         .await
         .expect("persist preparation");
     assert_eq!(
         store_b
-            .fetch_prepared_structured_state(&claimed[1])
+            .fetch_prepared_structured_state(&claimed[1], &input_manifest_sha256)
             .await
             .expect("fresh-pool preparation read"),
         Some(Vec::new())
@@ -2143,11 +2150,30 @@ async fn concurrent_workers_cannot_split_a_scope_lane_and_reclaim_reuses_prepara
     assert_eq!(released_state, "queued");
     assert_eq!(
         store_b
-            .fetch_prepared_structured_state(&reclaimed[1])
+            .fetch_prepared_structured_state(&reclaimed[1], &input_manifest_sha256)
             .await
             .expect("reclaimed preparation"),
         Some(Vec::new()),
         "reclaim must not lose the paid preparation"
+    );
+
+    sqlx::query(
+        "update memphant.job_state
+         set result = jsonb_set(result, '{input_manifest_sha256}', to_jsonb($3::text))
+         where tenant_id = $1 and id = $2",
+    )
+    .bind(tenant.as_uuid())
+    .bind(prepared_job.as_uuid())
+    .bind("f".repeat(64))
+    .execute(store_a.pool())
+    .await
+    .expect("tamper prepared manifest");
+    assert!(
+        store_b
+            .fetch_prepared_structured_state(&reclaimed[1], &input_manifest_sha256)
+            .await
+            .is_err(),
+        "persisted prepared state must fail closed when its manifest hash changes"
     );
 }
 

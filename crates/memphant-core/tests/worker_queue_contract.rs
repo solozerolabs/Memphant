@@ -1,9 +1,14 @@
-use memphant_core::{InMemoryStore, JobFilter, MemoryStore};
+use memphant_core::{InMemoryStore, JobFilter, MemoryStore, ReflectJobResult};
 use memphant_types::{
     ActorId, AgentNodeId, ContextBindingAgentRef, ContextBindingEntityRef, ContextBindingRequest,
     ContextBindingScopeRef, NewEpisode, ReflectJob, ReflectJobKind, ScopeId, SubjectId, TenantId,
     TrustLevel,
 };
+
+const INPUT_MANIFEST_SHA256: &str =
+    "1111111111111111111111111111111111111111111111111111111111111111";
+const EXTRACTION_RECEIPT_SHA256: &str =
+    "2222222222222222222222222222222222222222222222222222222222222222";
 
 fn scope_job(context: &memphant_types::ResolvedMemoryContext) -> ReflectJob {
     ReflectJob {
@@ -328,7 +333,12 @@ async fn post_claim_operations_require_the_exact_claim_token() {
 
     for token in &forged {
         store
-            .store_prepared_structured_state(token, Vec::new())
+            .store_prepared_structured_state(
+                token,
+                INPUT_MANIFEST_SHA256.to_string(),
+                vec![EXTRACTION_RECEIPT_SHA256.to_string()],
+                Vec::new(),
+            )
             .await
             .unwrap();
         store
@@ -343,7 +353,10 @@ async fn post_claim_operations_require_the_exact_claim_token() {
     store.complete_reflect_job(&forged[1]).await.unwrap();
 
     assert_eq!(
-        store.fetch_prepared_structured_state(&claim).await.unwrap(),
+        store
+            .fetch_prepared_structured_state(&claim, INPUT_MANIFEST_SHA256)
+            .await
+            .unwrap(),
         None
     );
     assert!(
@@ -356,12 +369,30 @@ async fn post_claim_operations_require_the_exact_claim_token() {
     );
 
     store
-        .store_prepared_structured_state(&claim, Vec::new())
+        .store_prepared_structured_state(
+            &claim,
+            INPUT_MANIFEST_SHA256.to_string(),
+            vec![EXTRACTION_RECEIPT_SHA256.to_string()],
+            Vec::new(),
+        )
         .await
         .unwrap();
     assert_eq!(
-        store.fetch_prepared_structured_state(&claim).await.unwrap(),
+        store
+            .fetch_prepared_structured_state(&claim, INPUT_MANIFEST_SHA256)
+            .await
+            .unwrap(),
         Some(Vec::new())
+    );
+    assert!(
+        store
+            .fetch_prepared_structured_state(
+                &claim,
+                "3333333333333333333333333333333333333333333333333333333333333333",
+            )
+            .await
+            .is_err(),
+        "prepared state must reject an input-manifest hash mismatch"
     );
     store
         .release_reflect_job(&claim, 0, "retry".to_string())
@@ -376,7 +407,7 @@ async fn post_claim_operations_require_the_exact_claim_token() {
     assert_eq!(reclaimed.attempts, claim.attempts + 1);
     assert_eq!(
         store
-            .fetch_prepared_structured_state(&reclaimed)
+            .fetch_prepared_structured_state(&reclaimed, INPUT_MANIFEST_SHA256)
             .await
             .unwrap(),
         Some(Vec::new()),
@@ -392,4 +423,19 @@ async fn post_claim_operations_require_the_exact_claim_token() {
         "a stale completion must not release or complete the current attempt"
     );
     store.complete_reflect_job(&reclaimed).await.unwrap();
+}
+
+#[test]
+fn prepared_result_serialization_binds_input_and_extraction_receipts() {
+    let result = ReflectJobResult::Prepared {
+        input_manifest_sha256: INPUT_MANIFEST_SHA256.to_string(),
+        extraction_receipt_sha256s: vec![EXTRACTION_RECEIPT_SHA256.to_string()],
+        projections: Vec::new(),
+    };
+    let value = serde_json::to_value(result).unwrap();
+    assert_eq!(value["input_manifest_sha256"], INPUT_MANIFEST_SHA256);
+    assert_eq!(
+        value["extraction_receipt_sha256s"],
+        serde_json::json!([EXTRACTION_RECEIPT_SHA256])
+    );
 }

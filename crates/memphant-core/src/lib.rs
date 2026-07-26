@@ -782,11 +782,41 @@ pub enum ClaimMutationOutcome {
 #[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ReflectJobResult {
     Prepared {
+        input_manifest_sha256: String,
+        extraction_receipt_sha256s: Vec<String>,
         projections: Vec<ProjectedStructuredState>,
     },
     Completed {
         trace: ReflectTrace,
     },
+}
+
+pub fn validate_prepared_structured_state_binding(
+    expected_input_manifest_sha256: &str,
+    input_manifest_sha256: &str,
+    extraction_receipt_sha256s: &[String],
+) -> Result<(), StoreError> {
+    let is_sha256 = |value: &str| {
+        value.len() == 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    };
+    if !is_sha256(input_manifest_sha256)
+        || extraction_receipt_sha256s
+            .iter()
+            .any(|receipt| !is_sha256(receipt))
+    {
+        return Err(StoreError::Conflict(
+            "prepared structured-state binding is not a canonical SHA-256".to_string(),
+        ));
+    }
+    if input_manifest_sha256 != expected_input_manifest_sha256 {
+        return Err(StoreError::Conflict(
+            "prepared structured-state input manifest changed".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// A correction applied through the store seam. `now` is the injected clock's
@@ -1639,10 +1669,13 @@ pub trait MemoryStore: Send + Sync {
     fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        input_manifest_sha256: &str,
     ) -> impl Future<Output = Result<Option<Vec<ProjectedStructuredState>>, StoreError>> + Send;
     fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        input_manifest_sha256: String,
+        extraction_receipt_sha256s: Vec<String>,
         projections: Vec<ProjectedStructuredState>,
     ) -> impl Future<Output = Result<(), StoreError>> + Send;
     fn release_reflect_job(
@@ -1838,7 +1871,7 @@ struct InMemoryState {
     embeddings: HashMap<TenantId, Vec<EmbeddingRow>>,
     embedding_profiles: HashMap<TenantId, Vec<EmbeddingProfileRow>>,
     job_meta: HashMap<JobId, JobMeta>,
-    prepared_structured_state: HashMap<(TenantId, JobId), Vec<ProjectedStructuredState>>,
+    prepared_structured_state: HashMap<(TenantId, JobId), ReflectJobResult>,
     mutation_ledger: HashMap<(TenantId, MutationVerb, String), MutationLedgerEntry>,
     subject_tombstones: HashMap<(TenantId, SubjectId), SubjectTombstone>,
     deletion_generation: HashMap<(TenantId, SubjectId), u64>,
@@ -1868,7 +1901,7 @@ struct InMemoryContextState {
     embeddings: Vec<EmbeddingRow>,
     embedding_profiles: Vec<EmbeddingProfileRow>,
     job_meta: Vec<(JobId, JobMeta)>,
-    prepared: Vec<((TenantId, JobId), Vec<ProjectedStructuredState>)>,
+    prepared: Vec<((TenantId, JobId), ReflectJobResult)>,
     deletion_generation: u64,
 }
 
@@ -4930,22 +4963,44 @@ impl MemoryStore for InMemoryStore {
     async fn fetch_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        expected_input_manifest_sha256: &str,
     ) -> Result<Option<Vec<ProjectedStructuredState>>, StoreError> {
         let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
         if !state.claim_is_current(claim) {
             return Ok(None);
         }
-        Ok(state
+        match state
             .prepared_structured_state
             .get(&(claim.job.tenant_id, claim.job.id))
-            .cloned())
+        {
+            Some(ReflectJobResult::Prepared {
+                input_manifest_sha256,
+                extraction_receipt_sha256s,
+                projections,
+            }) => {
+                validate_prepared_structured_state_binding(
+                    expected_input_manifest_sha256,
+                    input_manifest_sha256,
+                    extraction_receipt_sha256s,
+                )?;
+                Ok(Some(projections.clone()))
+            }
+            Some(ReflectJobResult::Completed { .. }) | None => Ok(None),
+        }
     }
 
     async fn store_prepared_structured_state(
         &self,
         claim: &ReflectJobRow,
+        input_manifest_sha256: String,
+        extraction_receipt_sha256s: Vec<String>,
         projections: Vec<ProjectedStructuredState>,
     ) -> Result<(), StoreError> {
+        validate_prepared_structured_state_binding(
+            &input_manifest_sha256,
+            &input_manifest_sha256,
+            &extraction_receipt_sha256s,
+        )?;
         let mut state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
         if !state.claim_is_current(claim) {
             return Ok(());
@@ -4953,7 +5008,11 @@ impl MemoryStore for InMemoryStore {
         state
             .prepared_structured_state
             .entry((claim.job.tenant_id, claim.job.id))
-            .or_insert(projections);
+            .or_insert(ReflectJobResult::Prepared {
+                input_manifest_sha256,
+                extraction_receipt_sha256s,
+                projections,
+            });
         Ok(())
     }
 

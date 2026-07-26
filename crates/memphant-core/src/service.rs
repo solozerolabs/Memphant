@@ -36,9 +36,9 @@ use crate::{
     StoreError, StructuredSourceKind, StructuredStateProvider, StructuredStateRequest, VectorQuery,
     apply_correction_transition, apply_unit_forget_transition, canonical_mutation_request_hash,
     correction_rectangles_with_ids, derive_episode_dedup_key, embedding_profile_for,
-    evidence_slices_for_episode, fold_structured_observations, normalize_component,
-    parse_content_date, prepare_compiled_write, prepare_compiled_write_from_snapshot,
-    project_structured_state, recall_scope_admitted,
+    evidence_slices_for_episode, evidence_slices_for_resource, fold_structured_observations,
+    normalize_component, parse_content_date, prepare_compiled_write,
+    prepare_compiled_write_from_snapshot, project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed,
     structured_compiler_identity, tokenize, validate_valid_interval,
 };
@@ -2968,6 +2968,20 @@ impl From<StoreError> for ServiceError {
     }
 }
 
+fn structured_projection_kind(namespace: &str) -> Option<MemoryKind> {
+    matches!(namespace, "workflow" | "procedure" | "gotcha").then_some(MemoryKind::Procedural)
+}
+
+fn service_structured_compiler_identity(
+    compiler: &str,
+    provider: &dyn StructuredStateProvider,
+) -> String {
+    structured_compiler_identity(
+        &format!("{compiler}+source-slice-batches-v1"),
+        provider.identity(),
+    )
+}
+
 fn serialized_mutation_response(
     status: u16,
     value: &impl serde::Serialize,
@@ -3341,9 +3355,9 @@ impl<S: MemoryStore> MemoryService<S> {
         self
     }
 
-    /// Installs structured-state extraction at episode reflection. Provider
-    /// output is validated against exact USER evidence before it reaches the
-    /// existing admission and bitemporal storage path.
+    /// Installs structured-state extraction for episode and resource reflection.
+    /// Provider output is validated against exact source evidence before it
+    /// reaches the existing admission and bitemporal storage path.
     pub fn with_structured_state_provider(
         mut self,
         provider: Arc<dyn StructuredStateProvider>,
@@ -3459,6 +3473,13 @@ impl<S: MemoryStore> MemoryService<S> {
         let observed_at = request.observed_at;
         match request.payload {
             memphant_types::RetainPayload::Resource(resource) => {
+                let compiler_version = self
+                    .structured_state_provider
+                    .as_ref()
+                    .map(|provider| {
+                        service_structured_compiler_identity(&compiler_version, provider.as_ref())
+                    })
+                    .unwrap_or(compiler_version);
                 let mut tx = self.store.begin(context).await?;
                 match self.store.stage_mutation_claim(&mut tx, claim).await? {
                     MutationClaimOutcome::Replay(response) => {
@@ -3624,7 +3645,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     .structured_state_provider
                     .as_ref()
                     .map(|provider| {
-                        structured_compiler_identity(&compiler_version, provider.identity())
+                        service_structured_compiler_identity(&compiler_version, provider.as_ref())
                     })
                     .unwrap_or(compiler_version);
                 let mut tx = self.store.begin(context).await?;
@@ -5035,13 +5056,13 @@ impl<S: MemoryStore> MemoryService<S> {
                         None => self.prepare_structured_state(job, context).await?,
                     };
                     candidates.extend(projections.into_iter().map(|projection| ReflectCandidate {
+                        kind: structured_projection_kind(&projection.subject),
                         source_kind: episode.source_kind.clone(),
                         trust_level: episode.source_trust,
                         actor_id: episode.actor_id,
                         subject: Some(projection.subject),
                         predicate: Some(projection.predicate),
                         fact_key: None,
-                        kind: None,
                         body: projection.body,
                         confidence: None,
                         churn_class: None,
@@ -5086,29 +5107,53 @@ impl<S: MemoryStore> MemoryService<S> {
                 } else {
                     Vec::new()
                 };
+                let mut candidates = vec![ReflectCandidate {
+                    source_kind: "resource".to_string(),
+                    trust_level: resource.source_trust,
+                    actor_id: resource.actor_id,
+                    subject: None,
+                    predicate: None,
+                    fact_key: None,
+                    kind: Some(MemoryKind::Resource),
+                    body: body.clone(),
+                    confidence: None,
+                    churn_class: None,
+                    admission_hint: None,
+                    target_unit_ids: None,
+                    contextual_chunks,
+                    valid_from: None,
+                    valid_to: None,
+                }];
+                if self.structured_state_provider.is_some() {
+                    let projections = match prepared_structured_state {
+                        Some(projections) => projections.to_vec(),
+                        None => self.prepare_structured_state(job, context).await?,
+                    };
+                    candidates.extend(projections.into_iter().map(|projection| ReflectCandidate {
+                        kind: structured_projection_kind(&projection.subject),
+                        source_kind: "resource".to_string(),
+                        trust_level: resource.source_trust,
+                        actor_id: resource.actor_id,
+                        subject: Some(projection.subject),
+                        predicate: Some(projection.predicate),
+                        fact_key: None,
+                        body: projection.body,
+                        confidence: None,
+                        churn_class: None,
+                        admission_hint: projection.admission_hint,
+                        target_unit_ids: projection.target_unit_ids,
+                        contextual_chunks: projection.contextual_chunks,
+                        valid_from: projection.valid_from,
+                        valid_to: projection.valid_to,
+                    }));
+                }
                 (
                     None,
                     Some(resource.id),
                     resource.source_ref,
                     resource.observed_at,
                     Some(body.clone()),
-                    vec![ReflectCandidate {
-                        source_kind: "resource".to_string(),
-                        trust_level: resource.source_trust,
-                        actor_id: resource.actor_id,
-                        subject: None,
-                        predicate: None,
-                        fact_key: None,
-                        kind: Some(MemoryKind::Resource),
-                        body,
-                        confidence: None,
-                        churn_class: None,
-                        admission_hint: None,
-                        target_unit_ids: None,
-                        contextual_chunks,
-                        valid_from: None,
-                        valid_to: None,
-                    }],
+                    candidates,
                 )
             }
             ReflectJobKind::ReflectScope => (
@@ -5166,37 +5211,105 @@ impl<S: MemoryStore> MemoryService<S> {
         let Some(provider) = &self.structured_state_provider else {
             return Ok(Vec::new());
         };
-        if job.job.kind != ReflectJobKind::ReflectEpisode {
-            return Ok(Vec::new());
-        }
-        if let Some(prepared) = self.store.fetch_prepared_structured_state(job).await? {
+        let (source_kind, local_source_id, source_body, evidence_slices) = match job.job.kind {
+            ReflectJobKind::ReflectEpisode => {
+                let Some(episode_id) = job.job.episode_id else {
+                    return Ok(Vec::new());
+                };
+                let Some(episode) = self.store.fetch_episode(context, episode_id).await? else {
+                    return Ok(Vec::new());
+                };
+                let slices = evidence_slices_for_episode(&episode.body).map_err(|error| {
+                    ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+                })?;
+                (
+                    StructuredSourceKind::Episode,
+                    episode_id.as_uuid().to_string(),
+                    episode.body,
+                    slices,
+                )
+            }
+            ReflectJobKind::ReflectResource => {
+                let Some(resource_id) = job.job.resource_id else {
+                    return Ok(Vec::new());
+                };
+                let Some(resource) = self.store.fetch_resource(context, resource_id).await? else {
+                    return Ok(Vec::new());
+                };
+                let Some(body) = resource.body.filter(|body| !body.trim().is_empty()) else {
+                    return Ok(Vec::new());
+                };
+                let chunks = resource_contextual_chunks(resource_id, &resource.uri, &body);
+                let slices = evidence_slices_for_resource(&body, &chunks).map_err(|error| {
+                    ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+                })?;
+                (
+                    StructuredSourceKind::Resource,
+                    resource_id.as_uuid().to_string(),
+                    body,
+                    slices,
+                )
+            }
+            ReflectJobKind::ReflectScope => return Ok(Vec::new()),
+        };
+        let source_body_sha256 = format!("{:x}", Sha256::digest(source_body.as_bytes()));
+        let request = StructuredStateRequest {
+            source_kind,
+            source_body_sha256: source_body_sha256.clone(),
+            batch_index: 0,
+            evidence_slices: evidence_slices.clone(),
+        };
+        let batches = evidence_slices
+            .into_iter()
+            .enumerate()
+            .map(|(batch_index, evidence_slice)| StructuredStateRequest {
+                source_kind,
+                source_body_sha256: source_body_sha256.clone(),
+                batch_index,
+                evidence_slices: vec![evidence_slice],
+            })
+            .collect::<Vec<_>>();
+        let input_manifest_sha256 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&batches).map_err(|error| {
+                ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+            })?)
+        );
+        if let Some(prepared) = self
+            .store
+            .fetch_prepared_structured_state(job, &input_manifest_sha256)
+            .await?
+        {
             return Ok(prepared);
         }
-        let Some(episode_id) = job.job.episode_id else {
-            return Ok(Vec::new());
-        };
-        let Some(episode) = self.store.fetch_episode(context, episode_id).await? else {
-            return Ok(Vec::new());
-        };
-        let request = StructuredStateRequest {
-            source_kind: StructuredSourceKind::Episode,
-            source_body_sha256: format!("{:x}", Sha256::digest(episode.body.as_bytes())),
-            batch_index: 0,
-            evidence_slices: evidence_slices_for_episode(&episode.body).map_err(|error| {
-                ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
-            })?,
-        };
-        let observations = provider
-            .extract(&request)
-            .await
-            .map_err(|error| match error {
-                crate::StructuredStateProviderError::Unavailable(message) => {
-                    ServiceError::Core(CoreError::ProviderUnavailable(message))
-                }
-                crate::StructuredStateProviderError::InvalidOutput(message) => {
-                    ServiceError::Core(CoreError::ProviderInvalid(message))
-                }
-            })?;
+        let mut observations = Vec::new();
+        let mut extraction_receipt_sha256s = Vec::with_capacity(batches.len());
+        for batch in &batches {
+            let batch_observations =
+                provider.extract(batch).await.map_err(|error| match error {
+                    crate::StructuredStateProviderError::Unavailable(message) => {
+                        ServiceError::Core(CoreError::ProviderUnavailable(message))
+                    }
+                    crate::StructuredStateProviderError::InvalidOutput(message) => {
+                        ServiceError::Core(CoreError::ProviderInvalid(message))
+                    }
+                })?;
+            let identity = provider.identity();
+            let receipt = (
+                identity.model.as_str(),
+                identity.prompt_hash.as_str(),
+                identity.schema_hash.as_str(),
+                batch,
+                &batch_observations,
+            );
+            extraction_receipt_sha256s.push(format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&receipt).map_err(|error| {
+                    ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+                })?)
+            ));
+            observations.extend(batch_observations);
+        }
         let active_items = self
             .store
             .fetch_scope_open_units(context)
@@ -5205,19 +5318,22 @@ impl<S: MemoryStore> MemoryService<S> {
             .filter_map(crate::active_structured_state)
             .collect::<Vec<_>>();
         let operations =
-            fold_structured_observations(&episode.body, &request, &observations, &active_items)
+            fold_structured_observations(&source_body, &request, &observations, &active_items)
                 .map_err(|error| {
                     ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
                 })?;
-        let projections = project_structured_state(
-            StructuredSourceKind::Episode,
-            &episode_id.as_uuid().to_string(),
-            &episode.body,
-            &operations,
-        )
-        .map_err(|error| ServiceError::Core(CoreError::ProviderInvalid(error.to_string())))?;
+        let projections =
+            project_structured_state(source_kind, &local_source_id, &source_body, &operations)
+                .map_err(|error| {
+                    ServiceError::Core(CoreError::ProviderInvalid(error.to_string()))
+                })?;
         self.store
-            .store_prepared_structured_state(job, projections.clone())
+            .store_prepared_structured_state(
+                job,
+                input_manifest_sha256,
+                extraction_receipt_sha256s,
+                projections.clone(),
+            )
             .await?;
         Ok(projections)
     }
