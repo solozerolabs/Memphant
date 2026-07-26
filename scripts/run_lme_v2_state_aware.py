@@ -31,6 +31,7 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit
 
 from benchmarks.longmemeval_v2.construction_authority import (
     load_canonical_binding as _load_canonical_construction_binding,
@@ -869,6 +870,735 @@ def _materialize_cli_input(data_root: Path, output: Path) -> dict[str, object]:
         "remaining_ids_sha256": sha256_json(case_order[12:]),
         "input_jsonl_sha256": _sha256_file(output),
     }
+
+
+def build_execution_plan(
+    census: dict[str, object], data_root: Path
+) -> dict[str, object]:
+    """Build the oracle-free, census-bound paired row order.
+
+    The haystack map is the sole case-identity authority used here.  In
+    particular this function never opens the questions file, so neither query
+    text nor reference answers can influence construction or run order.
+    """
+    enumeration = census.get("enumeration")
+    if not isinstance(enumeration, dict):
+        raise RuntimeError("campaign census enumeration is missing")
+    try:
+        haystack = json.loads(
+            (data_root / "haystacks/lme_v2_medium.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("official Medium haystack is unavailable") from error
+    if (
+        not isinstance(haystack, dict)
+        or len(haystack) != QUESTION_COUNT
+        or any(
+            not isinstance(question_id, str)
+            or not question_id
+            or not isinstance(trajectory_ids, list)
+            or not trajectory_ids
+            or any(
+                not isinstance(trajectory_id, str) or not trajectory_id
+                for trajectory_id in trajectory_ids
+            )
+            for question_id, trajectory_ids in haystack.items()
+        )
+    ):
+        raise RuntimeError("official Medium haystack must contain 451 valid cases")
+    case_order = sorted(haystack)
+    expected = {
+        "question_pairs": QUESTION_COUNT,
+        "case_order_sha256": sha256_json(case_order),
+        "sealed_prefix_ids_sha256": sha256_json(case_order[:12]),
+        "remaining_ids_sha256": sha256_json(case_order[12:]),
+    }
+    if any(enumeration.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("execution inventory differs from census")
+    rows = [
+        {
+            "sequence": sequence,
+            "question_id": question_id,
+            "arm": arm,
+            "row_key": f"{question_id}:{arm}",
+        }
+        for sequence, (question_id, arm) in enumerate(
+            (
+                (question_id, arm)
+                for question_id in case_order
+                for arm in ("fast", "deep")
+            ),
+            1,
+        )
+    ]
+    core = {
+        "schema_version": 1,
+        "benchmark": "LongMemEval-V2/medium",
+        "case_count": QUESTION_COUNT,
+        "row_count": QUESTION_COUNT * 2,
+        "case_order_sha256": expected["case_order_sha256"],
+        "prefix": {
+            "count": 12,
+            "ids_sha256": expected["sealed_prefix_ids_sha256"],
+            "row_count": 24,
+        },
+        "remaining": {
+            "count": QUESTION_COUNT - 12,
+            "ids_sha256": expected["remaining_ids_sha256"],
+            "row_count": (QUESTION_COUNT - 12) * 2,
+        },
+        "rows": rows,
+        "rows_sha256": sha256_json(rows),
+    }
+    if _contains_oracle_key(core):
+        raise RuntimeError("execution plan contains oracle-bearing fields")
+    return {**core, "execution_plan_sha256": sha256_json(core)}
+
+
+CASE_BANK_EXCLUDED_TABLES = (
+    "memphant.api_key",
+    "memphant.event_outbox",
+    "memphant.job_state",
+    "memphant.retrieval_trace",
+    "memphant.review_event",
+    "memphant.review_event_unit",
+    # Every clone is migrated before restore. Restoring this table would
+    # duplicate its primary keys and, worse, disguise schema drift.
+    "memphant.schema_migrations",
+)
+
+
+def _parsed_scratch_postgres_url(
+    database_url: str, *, require_base: bool
+) -> tuple[object, str]:
+    try:
+        parsed = urlsplit(database_url)
+        port = parsed.port
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("local scratch Postgres base is invalid") from error
+    database = parsed.path.removeprefix("/")
+    allowed_database = (
+        database == "memphant"
+        if require_base
+        else database.startswith("memphant_lme2_")
+    )
+    if (
+        parsed.scheme not in {"postgres", "postgresql"}
+        or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+        or port != 5432
+        or not allowed_database
+        or "/" in database
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RuntimeError(
+            "local scratch Postgres base must be localhost:5432/memphant"
+        )
+    return parsed, database
+
+
+def scratch_case_database_contract(
+    base_database_url: str, question_id: str
+) -> dict[str, object]:
+    """Return credential-free identities for one isolated case bank and pair."""
+    parsed, database = _parsed_scratch_postgres_url(
+        base_database_url, require_base=True
+    )
+    if not isinstance(question_id, str) or not question_id:
+        raise RuntimeError("case bank question identity is invalid")
+    case_key = hashlib.sha256(question_id.encode("utf-8")).hexdigest()[:16]
+    databases = {
+        arm: f"memphant_lme2_{case_key}_{arm}"
+        for arm in ("source", "fast", "deep")
+    }
+    core = {
+        "schema_version": 1,
+        "case_key": case_key,
+        "base_identity": {
+            "scheme": "postgresql",
+            "host": parsed.hostname,
+            "port": parsed.port,
+            "database": database,
+        },
+        "databases": databases,
+    }
+    return {**core, "contract_sha256": sha256_json(core)}
+
+
+def case_bank_dump_command(
+    database_url: str, archive: Path, *, pg_dump: str = "pg_dump"
+) -> list[str]:
+    """Build the canonical data-only archive command for a quiescent source."""
+    _, database = _parsed_scratch_postgres_url(database_url, require_base=False)
+    if not database.endswith("_source"):
+        raise RuntimeError("case bank dump requires the isolated source database")
+    return [
+        pg_dump,
+        "--format=custom",
+        "--data-only",
+        "--schema=memphant",
+        *[
+            f"--exclude-table-data={table}"
+            for table in CASE_BANK_EXCLUDED_TABLES
+        ],
+        f"--file={archive.resolve()}",
+        database_url,
+    ]
+
+
+def postgres_tool_identity(
+    database_url: str, tool: str, *, run_command=subprocess.run
+) -> dict[str, object]:
+    """Resolve a client whose major version exactly matches scratch Postgres."""
+    if tool not in {"pg_dump", "pg_restore"}:
+        raise RuntimeError("unsupported Postgres case-bank tool")
+    _parsed_scratch_postgres_url(database_url, require_base=False)
+    server = _run_campaign_command(
+        ["psql", database_url, "-Atqc", "SHOW server_version_num"],
+        run_command=run_command,
+    ).stdout.strip()
+    if not server.isdigit() or int(server) < 100_000:
+        raise RuntimeError("scratch Postgres server version is invalid")
+    server_major = int(server) // 10_000
+    candidates = [
+        shutil.which(tool),
+        f"/opt/homebrew/opt/postgresql@{server_major}/bin/{tool}",
+        f"/usr/local/opt/postgresql@{server_major}/bin/{tool}",
+        f"/usr/lib/postgresql/{server_major}/bin/{tool}",
+    ]
+    seen: set[str] = set()
+    for candidate_value in candidates:
+        if not candidate_value:
+            continue
+        candidate = Path(candidate_value).resolve()
+        if str(candidate) in seen or not candidate.is_file():
+            continue
+        seen.add(str(candidate))
+        completed = run_command(
+            [str(candidate), "--version"],
+            cwd=ROOT,
+            env={"PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        match = re.search(r"\(PostgreSQL\)\s+(\d+)(?:\.|\b)", completed.stdout)
+        if completed.returncode != 0 or match is None or int(match.group(1)) != server_major:
+            continue
+        core = {
+            "tool": tool,
+            "path": str(candidate),
+            "bytes": candidate.stat().st_size,
+            "sha256": _sha256_file(candidate),
+            "version": completed.stdout.strip(),
+            "server_version_num": int(server),
+        }
+        return {**core, "identity_sha256": sha256_json(core)}
+    raise RuntimeError(
+        f"Postgres {server_major} {tool} is required for the scratch server"
+    )
+
+
+def cache_only_construction_environment(
+    *,
+    binding_path: Path,
+    binding: dict[str, object],
+    manifest: dict[str, object],
+    data_root: Path,
+    database_url: str,
+    base_environment: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Build a fail-closed construction environment with no provider secret.
+
+    Only a narrow benign process environment is inherited.  This makes the
+    cache-only guarantee independent of whichever provider credentials happen
+    to be present in the invoking shell.
+    """
+    _parsed_scratch_postgres_url(database_url, require_base=False)
+    try:
+        on_disk = json.loads(binding_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("construction binding is unavailable") from error
+    if on_disk != binding:
+        raise RuntimeError("construction binding differs from its immutable file")
+    construction = manifest.get("construction")
+    authorization = binding.get("authorization")
+    provider = binding.get("provider")
+    cache = binding.get("cache")
+    ledger = binding.get("ledger")
+    coverage = binding.get("coverage")
+    if not all(
+        isinstance(value, dict)
+        for value in (
+            construction,
+            authorization,
+            provider,
+            cache,
+            ledger,
+            coverage,
+        )
+    ):
+        raise RuntimeError("construction binding cache contract is incomplete")
+    plans = coverage.get("plans")
+    if (
+        construction.get("model") != "qwen/qwen3.5-9b-20260310"
+        or provider.get("requested_model") != construction.get("model")
+        or provider.get("served_model") != "qwen/qwen3.5-9b"
+        or str(provider.get("served_provider", "")).casefold()
+        != "deepinfra"
+        or not all(
+            _valid_sha256(authorization.get(field))
+            for field in ("authorization_sha256", "campaign_sha256")
+        )
+        or not isinstance(plans, list)
+        or not plans
+        or any(
+            not isinstance(plan, dict)
+            or type(plan.get("per_attempt_reservation_nanos")) is not int
+            or plan["per_attempt_reservation_nanos"] <= 0
+            for plan in plans
+        )
+    ):
+        raise RuntimeError("construction binding route or liability is invalid")
+    reservation = sum(plan["per_attempt_reservation_nanos"] for plan in plans)
+    inherited = base_environment if base_environment is not None else os.environ
+    environment = {
+        key: inherited[key]
+        for key in ("PATH", "TMPDIR", "SSL_CERT_FILE", "SSL_CERT_DIR", "RUST_BACKTRACE")
+        if inherited.get(key)
+    }
+    environment.update(
+        {
+            "MEMPHANT_APP_DATABASE_URL": database_url,
+            "MEMPHANT_AUTHN_DATABASE_URL": database_url,
+            "MEMPHANT_WORKER_DATABASE_URL": database_url,
+            "MEMPHANT_STRUCTURED_STATE": "on",
+            "MEMPHANT_STRUCTURED_STATE_MODEL": str(construction["model"]),
+            "MEMPHANT_STRUCTURED_STATE_PROMPT_PATH": str(
+                (ROOT / str(construction["prompt_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_INPUT_PRICE_NANOS_PER_MILLION": str(
+                provider["input_price_nanos_per_million"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_OUTPUT_PRICE_NANOS_PER_MILLION": str(
+                provider["output_price_nanos_per_million"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_TOKENIZER_PATH": str(
+                (data_root / str(construction["tokenizer_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_TOKENIZER_CONFIG_PATH": str(
+                (data_root / str(construction["tokenizer_config_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_ATTEMPT_LEDGER": str(
+                Path(str(ledger["subledger_path"])).resolve()
+            ),
+            "MEMPHANT_CAMPAIGN_ATTEMPT_LEDGER": str(
+                Path(str(ledger["campaign_journal_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE": str(
+                Path(str(cache["observation_cache_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_HITS": str(
+                Path(str(cache["source_receipts_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_AUTHORIZATION_SHA256": str(
+                authorization["authorization_sha256"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_SHA256": str(
+                authorization["campaign_sha256"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_NAMESPACE": str(cache["namespace"]),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER": str(
+                Path(str(ledger["subledger_path"])).resolve()
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_BYTES": str(
+                ledger["source_ledger_prefix_bytes"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SOURCE_LEDGER_PREFIX_SHA256": str(
+                ledger["source_ledger_prefix_sha256"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_MODEL": str(
+                provider["served_model"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CACHE_SERVED_PROVIDER": str(
+                provider["served_provider"]
+            ),
+            "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS": str(
+                reservation
+            ),
+            "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT": "1",
+            "MEMPHANT_STRUCTURED_STATE_CACHE_ONLY": "on",
+            "MEMPHANT_LME_CONSTRUCTION_BINDING": str(binding_path.resolve()),
+        }
+    )
+    if any("API_KEY" in key for key in environment):
+        raise RuntimeError("cache-only construction environment contains a credential")
+    return environment
+
+
+def write_case_bank_manifest(
+    *,
+    archive: Path,
+    output: Path,
+    contract: dict[str, object],
+    binding_path: Path,
+    construction_proof_path: Path,
+    materialization: dict[str, object],
+    logical_inventory: dict[str, int],
+    postgres_toolchain: dict[str, object],
+) -> dict[str, object]:
+    """Seal one cache-only source database into an immutable bank manifest."""
+    if not archive.is_file() or archive.stat().st_size <= 0:
+        raise RuntimeError("case bank archive is missing or empty")
+    try:
+        binding = json.loads(binding_path.read_text(encoding="utf-8"))
+        construction_proof = json.loads(
+            construction_proof_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("case bank construction authority is unavailable") from error
+    binding_core = {
+        key: value for key, value in binding.items() if key != "binding_sha256"
+    }
+    binding_sha256 = binding.get("binding_sha256")
+    if (
+        not isinstance(binding, dict)
+        or not _valid_sha256(binding_sha256)
+        or binding_sha256 != sha256_json(binding_core)
+    ):
+        raise RuntimeError("case bank construction binding is invalid")
+    validate_construction_proof_v2(construction_proof)
+    if construction_proof.get("binding_sha256") != binding_sha256:
+        raise RuntimeError("case bank construction proof differs from binding")
+    if (
+        set(materialization)
+        != {
+            "trajectory_count",
+            "trajectory_ids_sha256",
+            "trajectory_content_sha256",
+        }
+        or type(materialization.get("trajectory_count")) is not int
+        or materialization["trajectory_count"] <= 0
+        or not _valid_sha256(materialization.get("trajectory_ids_sha256"))
+        or not _valid_sha256(materialization.get("trajectory_content_sha256"))
+        or _contains_oracle_key(materialization)
+    ):
+        raise RuntimeError("case bank materialization identity is invalid")
+    if (
+        not isinstance(logical_inventory, dict)
+        or logical_inventory.get("schema_migrations", 0) <= 0
+        or logical_inventory.get("tenant") != 1
+        or any(
+            not isinstance(table, str)
+            or not table
+            or type(count) is not int
+            or count < 0
+            for table, count in logical_inventory.items()
+        )
+        or any(table.removeprefix("memphant.") in {
+            excluded.removeprefix("memphant.")
+            for excluded in CASE_BANK_EXCLUDED_TABLES
+        } - {"schema_migrations"} for table in logical_inventory)
+    ):
+        raise RuntimeError("case bank logical inventory is invalid")
+    toolchain_core = {
+        key: value
+        for key, value in postgres_toolchain.items()
+        if key != "toolchain_sha256"
+    }
+    identities = toolchain_core.get("identities")
+    if (
+        postgres_toolchain.get("toolchain_sha256") != sha256_json(toolchain_core)
+        or not isinstance(identities, dict)
+        or set(identities) != {"pg_dump", "pg_restore"}
+        or any(
+            not isinstance(identity, dict)
+            or identity.get("tool") != name
+            or identity.get("identity_sha256")
+            != sha256_json(
+                {
+                    key: value
+                    for key, value in identity.items()
+                    if key != "identity_sha256"
+                }
+            )
+            for name, identity in identities.items()
+        )
+        or identities["pg_dump"].get("server_version_num")
+        != identities["pg_restore"].get("server_version_num")
+    ):
+        raise RuntimeError("case bank Postgres toolchain identity is invalid")
+    contract_core = {
+        key: value for key, value in contract.items() if key != "contract_sha256"
+    }
+    if (
+        contract.get("contract_sha256") != sha256_json(contract_core)
+        or _contains_oracle_key(contract)
+    ):
+        raise RuntimeError("case bank scratch contract is invalid")
+    core = {
+        "schema_version": 1,
+        "contract": contract,
+        "archive": {
+            "bytes": archive.stat().st_size,
+            "sha256": _sha256_file(archive),
+            "format": "pg_dump-custom-data-only-v1",
+        },
+        "construction": {
+            "binding_sha256": binding_sha256,
+            "proof_sha256": construction_proof["construction_proof_sha256"],
+        },
+        "materialization": materialization,
+        "logical_inventory": dict(sorted(logical_inventory.items())),
+        "logical_inventory_sha256": sha256_json(
+            dict(sorted(logical_inventory.items()))
+        ),
+        "postgres_toolchain": postgres_toolchain,
+    }
+    if _contains_oracle_key(core):
+        raise RuntimeError("case bank manifest contains oracle-bearing fields")
+    manifest = {**core, "case_bank_sha256": sha256_json(core)}
+    _create_json(output, manifest)
+    return manifest
+
+
+def _database_url_for_name(base_database_url: str, database_name: str) -> str:
+    parsed, _ = _parsed_scratch_postgres_url(
+        base_database_url, require_base=True
+    )
+    if not re.fullmatch(r"memphant_lme2_[0-9a-f]{16}_(?:source|fast|deep)", database_name):
+        raise RuntimeError("scratch database name is outside the case contract")
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, f"/{database_name}", "", "")
+    )
+
+
+def _run_campaign_command(
+    command: list[str], *, run_command=subprocess.run
+) -> subprocess.CompletedProcess[str]:
+    completed = run_command(
+        command,
+        cwd=ROOT,
+        env={"PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip() if isinstance(completed.stderr, str) else ""
+        raise RuntimeError(
+            f"scratch case-bank command failed: {command[0]}: {stderr}"
+        )
+    return completed
+
+
+def database_logical_inventory(
+    database_url: str, *, run_command=subprocess.run
+) -> dict[str, int]:
+    """Count every durable bank table without reading row contents."""
+    _parsed_scratch_postgres_url(database_url, require_base=False)
+    tables_result = _run_campaign_command(
+        [
+            "psql",
+            database_url,
+            "-Atqc",
+            (
+                "select tablename from pg_catalog.pg_tables "
+                "where schemaname='memphant' order by tablename"
+            ),
+        ],
+        run_command=run_command,
+    )
+    tables = [line.strip() for line in tables_result.stdout.splitlines() if line.strip()]
+    if not tables or any(re.fullmatch(r"[a-z][a-z0-9_]*", table) is None for table in tables):
+        raise RuntimeError("scratch database memphant table inventory is invalid")
+    excluded = {
+        table.removeprefix("memphant.") for table in CASE_BANK_EXCLUDED_TABLES
+    } - {"schema_migrations"}
+    inventory: dict[str, int] = {}
+    for table in tables:
+        if table in excluded:
+            continue
+        result = _run_campaign_command(
+            [
+                "psql",
+                database_url,
+                "-Atqc",
+                f'SELECT count(*) FROM memphant."{table}"',
+            ],
+            run_command=run_command,
+        )
+        try:
+            count = int(result.stdout.strip())
+        except ValueError as error:
+            raise RuntimeError("scratch database row count is invalid") from error
+        if count < 0:
+            raise RuntimeError("scratch database row count is invalid")
+        inventory[table] = count
+    if inventory.get("schema_migrations", 0) <= 0 or inventory.get("tenant") != 1:
+        raise RuntimeError("scratch case database is not a migrated single-tenant bank")
+    return inventory
+
+
+def assert_case_source_quiescent(
+    database_url: str, *, run_command=subprocess.run
+) -> dict[str, int]:
+    """Require worker drain and stopped server before taking a case archive."""
+    _parsed_scratch_postgres_url(database_url, require_base=False)
+    result = _run_campaign_command(
+        [
+            "psql",
+            database_url,
+            "-Atqc",
+            (
+                "SELECT (SELECT count(*) FROM memphant.job_state "
+                "WHERE state IN ('queued','running')) || '|' || "
+                "(SELECT count(*) FROM pg_catalog.pg_stat_activity "
+                "WHERE datname=current_database() AND pid<>pg_backend_pid())"
+            ),
+        ],
+        run_command=run_command,
+    )
+    try:
+        active_jobs, other_connections = (
+            int(value) for value in result.stdout.strip().split("|", 1)
+        )
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("scratch case quiescence proof is invalid") from error
+    proof = {
+        "active_jobs": active_jobs,
+        "other_connections": other_connections,
+    }
+    if proof != {"active_jobs": 0, "other_connections": 0}:
+        raise RuntimeError("scratch case source is not quiescent")
+    return proof
+
+
+def restore_case_bank_pair(
+    *,
+    base_database_url: str,
+    question_id: str,
+    archive: Path,
+    manifest: dict[str, object],
+    run_command=subprocess.run,
+    pg_restore: str = "pg_restore",
+) -> dict[str, object]:
+    """Restore an immutable data bank into independent Fast and Deep DBs."""
+    contract = scratch_case_database_contract(base_database_url, question_id)
+    manifest_core = {
+        key: value for key, value in manifest.items() if key != "case_bank_sha256"
+    }
+    archive_proof = manifest.get("archive")
+    if (
+        manifest.get("case_bank_sha256") != sha256_json(manifest_core)
+        or manifest.get("contract") != contract
+        or not isinstance(archive_proof, dict)
+        or archive_proof.get("format") != "pg_dump-custom-data-only-v1"
+        or not archive.is_file()
+        or archive_proof.get("bytes") != archive.stat().st_size
+        or archive_proof.get("sha256") != _sha256_file(archive)
+        or manifest.get("logical_inventory_sha256")
+        != sha256_json(manifest.get("logical_inventory"))
+        or not isinstance(manifest.get("postgres_toolchain"), dict)
+        or manifest["postgres_toolchain"].get("toolchain_sha256")
+        != sha256_json(
+            {
+                key: value
+                for key, value in manifest["postgres_toolchain"].items()
+                if key != "toolchain_sha256"
+            }
+        )
+        or _contains_oracle_key(manifest)
+    ):
+        raise RuntimeError("case bank archive or manifest identity drift")
+    restore_identity = manifest["postgres_toolchain"].get("identities", {}).get(
+        "pg_restore"
+    )
+    resolved_restore = Path(shutil.which(pg_restore) or pg_restore).resolve()
+    if (
+        not isinstance(restore_identity, dict)
+        or not resolved_restore.is_file()
+        or str(resolved_restore) != restore_identity.get("path")
+        or resolved_restore.stat().st_size != restore_identity.get("bytes")
+        or _sha256_file(resolved_restore) != restore_identity.get("sha256")
+    ):
+        raise RuntimeError("case bank pg_restore binary identity drift")
+    restored: dict[str, str] = {}
+    created_databases: list[str] = []
+    try:
+        for arm in ("fast", "deep"):
+            database_name = contract["databases"][arm]
+            database_url = _database_url_for_name(
+                base_database_url, database_name
+            )
+            _run_campaign_command(
+                [
+                    "dropdb",
+                    f"--maintenance-db={base_database_url}",
+                    "--if-exists",
+                    "--force",
+                    database_name,
+                ],
+                run_command=run_command,
+            )
+            created_databases.append(database_name)
+            _run_campaign_command(
+                ["createdb", f"--maintenance-db={base_database_url}", database_name],
+                run_command=run_command,
+            )
+            _run_campaign_command(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/apply_memphant_migrations.py"),
+                    "--database-url",
+                    database_url,
+                ],
+                run_command=run_command,
+            )
+            _run_campaign_command(
+                [
+                    str(resolved_restore),
+                    "--exit-on-error",
+                    "--single-transaction",
+                    "--data-only",
+                    f"--dbname={database_url}",
+                    str(archive.resolve()),
+                ],
+                run_command=run_command,
+            )
+            restored_inventory = database_logical_inventory(
+                database_url, run_command=run_command
+            )
+            if restored_inventory != manifest["logical_inventory"]:
+                raise RuntimeError("restored case bank logical inventory drift")
+            restored[arm] = database_name
+    except BaseException:
+        for database_name in created_databases:
+            run_command(
+                [
+                    "dropdb",
+                    f"--maintenance-db={base_database_url}",
+                    "--if-exists",
+                    "--force",
+                    database_name,
+                ],
+                cwd=ROOT,
+                env={"PATH": os.environ.get("PATH", "")},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        raise
+    core = {
+        "schema_version": 1,
+        "case_bank_sha256": manifest["case_bank_sha256"],
+        "archive_sha256": archive_proof["sha256"],
+        "databases": restored,
+        "logical_inventory_sha256": manifest["logical_inventory_sha256"],
+    }
+    return {**core, "clone_sha256": sha256_json(core)}
 
 
 def _materialize_reader_shapes(data_root: Path, output: Path) -> dict[str, object]:

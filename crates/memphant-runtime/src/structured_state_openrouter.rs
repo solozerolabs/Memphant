@@ -2856,4 +2856,122 @@ mod tests {
         assert!(miss_transport.posted.lock().unwrap().is_empty());
         assert!(!miss_ledger.exists());
     }
+
+    /// Emit a cryptographically valid paid-source cache fixture for the
+    /// scratch-Postgres campaign smoke. The transport is in-process and fake:
+    /// this test cannot read credentials or reach a provider. It is ignored so
+    /// ordinary unit gates never create cross-test artifacts.
+    #[test]
+    #[ignore = "external scratch-Postgres orchestration fixture"]
+    fn emit_cache_only_resource_fixture_for_scratch_campaign() {
+        let root = PathBuf::from(
+            std::env::var("MEMPHANT_TEST_CACHE_FIXTURE_ROOT")
+                .expect("MEMPHANT_TEST_CACHE_FIXTURE_ROOT"),
+        );
+        let prompt_path = std::env::var("MEMPHANT_TEST_CACHE_FIXTURE_PROMPT")
+            .expect("MEMPHANT_TEST_CACHE_FIXTURE_PROMPT");
+        // Use the production loader so trailing-newline normalization is part
+        // of the fixture identity. A raw read silently produces a cache miss.
+        let prompt = load_structured_state_prompt(Path::new(&prompt_path)).unwrap();
+        let tokenizer = load_structured_state_tokenizer(
+            Path::new(
+                &std::env::var("MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER")
+                    .expect("MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER"),
+            ),
+            Path::new(
+                &std::env::var("MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER_CONFIG")
+                    .expect("MEMPHANT_TEST_CACHE_FIXTURE_TOKENIZER_CONFIG"),
+            ),
+        )
+        .unwrap();
+        fs::create_dir_all(&root).unwrap();
+        let cache_root = root.join("observation-cache");
+        let hit_root = root.join("cache-hits");
+        fs::create_dir_all(&cache_root).unwrap();
+        fs::create_dir_all(&hit_root).unwrap();
+        let ledger = root.join("paid-source.jsonl");
+        let body = "I live in Oslo.";
+        let request = StructuredStateRequest {
+            source_kind: StructuredSourceKind::Resource,
+            source_body_sha256: sha256(body.as_bytes()),
+            batch_index: 0,
+            evidence_slices: evidence_slices_for_resource(body, &[]).unwrap(),
+        };
+        let content = json!({
+            "observations": [wire_observation(&request.evidence_slices[0].id)]
+        });
+        let response_id = "fixture-generation-1";
+        let initial = HttpResponse {
+            status: 200,
+            body: json!({
+                "id": response_id,
+                "model": LME_V2_QWEN_MODEL,
+                "choices": [{"message": {"content": content.to_string()}}]
+            }),
+        };
+        let transport = FakeTransport::with_generation_response(
+            vec![Ok(initial)],
+            Ok(json!({"data": {
+                "id": response_id,
+                "model": "qwen/qwen3.5-9b",
+                "provider_name": "DeepInfra",
+                "tokens_prompt": 10,
+                "tokens_completion": 5,
+                "total_cost": 0.00000175
+            }})),
+        );
+        let authorization = "a".repeat(64);
+        let campaign = "b".repeat(64);
+        let namespace = "scratch-cache-fixture-v1".to_string();
+        let empty_prefix_sha256 = sha256(b"");
+        let mut provider = OpenRouterStructuredState::new(
+            LME_V2_QWEN_MODEL.to_string(),
+            prompt,
+            100_000_000,
+            150_000_000,
+            transport.clone(),
+            Some(ledger.clone()),
+        )
+        .with_tokenizer(tokenizer)
+        .with_campaign_cache(CampaignCache {
+            root: cache_root.clone(),
+            hit_root,
+            authorization_sha256: authorization.clone(),
+            campaign_sha256: campaign.clone(),
+            namespace: namespace.clone(),
+            source_ledger: ledger.clone(),
+            source_ledger_prefix_bytes: 0,
+            source_ledger_prefix_sha256: empty_prefix_sha256,
+            served_model: "qwen/qwen3.5-9b".to_string(),
+            served_provider: "DeepInfra".to_string(),
+        })
+        .unwrap();
+        provider.aggregate_reservation_nanos = Some(u64::MAX);
+        let observations = provider.extract_sync(&request).unwrap();
+        assert_eq!(transport.posted.lock().unwrap().len(), 1);
+        let plan = provider.plan(&request).unwrap();
+        let ledger_bytes = fs::read(&ledger).unwrap();
+        let metadata = json!({
+            "schema_version": 1,
+            "transport": "in-process-fake-no-network",
+            "provider_credentials_read": false,
+            "source_body": body,
+            "source_body_sha256": request.source_body_sha256,
+            "extraction_key": plan.extraction_key,
+            "request_sha256": plan.request_sha256,
+            "authorization_sha256": authorization,
+            "campaign_sha256": campaign,
+            "cache_namespace": namespace,
+            "served_model": "qwen/qwen3.5-9b",
+            "served_provider": "DeepInfra",
+            "source_ledger_prefix_bytes": ledger_bytes.len(),
+            "source_ledger_prefix_sha256": sha256(&ledger_bytes),
+            "observation_count": observations.len()
+        });
+        fs::write(
+            root.join("fixture.json"),
+            serde_json::to_vec_pretty(&metadata).unwrap(),
+        )
+        .unwrap();
+    }
 }

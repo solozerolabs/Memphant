@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import importlib.util
 import os
+import shutil
 from fractions import Fraction
 import hashlib
 from pathlib import Path
@@ -27,6 +28,23 @@ def _load_runner():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _postgres_toolchain_fixture(runner):
+    identities = {}
+    for name in ("pg_dump", "pg_restore"):
+        path = Path(shutil.which(name) or sys.executable).resolve()
+        core = {
+            "tool": name,
+            "path": str(path),
+            "bytes": path.stat().st_size,
+            "sha256": runner._sha256_file(path),
+            "version": f"{name} (PostgreSQL) 17.0",
+            "server_version_num": 170000,
+        }
+        identities[name] = {**core, "identity_sha256": runner.sha256_json(core)}
+    core = {"identities": identities}
+    return {**core, "toolchain_sha256": runner.sha256_json(core)}
 
 
 def test_census_refuses_authorization_without_exact_bounds(tmp_path: Path) -> None:
@@ -1201,3 +1219,382 @@ def test_sealed_prefix_encrypts_private_answers_and_exposes_only_public_predicat
     assert b"ORCHID-17" not in sealed.read_bytes()
     assert status == json.loads(status_path.read_text(encoding="utf-8"))
     assert not runner._contains_oracle_key(status)
+
+
+def test_execution_plan_freezes_exact_paired_order_without_oracle_input(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    data_root = tmp_path / "official"
+    haystack_path = data_root / "haystacks/lme_v2_medium.json"
+    haystack_path.parent.mkdir(parents=True)
+    # Reverse insertion order proves that the campaign order is derived from
+    # the frozen lexicographic identity contract, not source-file ordering.
+    haystack = {
+        f"question-{index:03}": [f"trajectory-{index % 17:02}"]
+        for index in reversed(range(451))
+    }
+    haystack_path.write_text(json.dumps(haystack), encoding="utf-8")
+    case_order = sorted(haystack)
+    census = {
+        "enumeration": {
+            "question_pairs": 451,
+            "case_order_sha256": runner.sha256_json(case_order),
+            "sealed_prefix_ids_sha256": runner.sha256_json(case_order[:12]),
+            "remaining_ids_sha256": runner.sha256_json(case_order[12:]),
+        }
+    }
+
+    plan = runner.build_execution_plan(census, data_root)
+
+    assert plan["case_count"] == 451
+    assert plan["row_count"] == 902
+    assert [row["arm"] for row in plan["rows"][:4]] == [
+        "fast",
+        "deep",
+        "fast",
+        "deep",
+    ]
+    assert [row["question_id"] for row in plan["rows"][:4]] == [
+        case_order[0],
+        case_order[0],
+        case_order[1],
+        case_order[1],
+    ]
+    assert plan["prefix"] == {
+        "count": 12,
+        "ids_sha256": runner.sha256_json(case_order[:12]),
+        "row_count": 24,
+    }
+    assert plan["remaining"] == {
+        "count": 439,
+        "ids_sha256": runner.sha256_json(case_order[12:]),
+        "row_count": 878,
+    }
+    assert plan["execution_plan_sha256"] == runner.sha256_json(
+        {key: value for key, value in plan.items() if key != "execution_plan_sha256"}
+    )
+    assert runner._contains_oracle_key(plan) is False
+
+
+def test_execution_plan_rejects_census_identity_drift(tmp_path: Path) -> None:
+    runner = _load_runner()
+    data_root = tmp_path / "official"
+    haystack_path = data_root / "haystacks/lme_v2_medium.json"
+    haystack_path.parent.mkdir(parents=True)
+    haystack = {
+        f"question-{index:03}": [f"trajectory-{index:03}"]
+        for index in range(451)
+    }
+    haystack_path.write_text(json.dumps(haystack), encoding="utf-8")
+    census = {
+        "enumeration": {
+            "question_pairs": 451,
+            "case_order_sha256": "0" * 64,
+            "sealed_prefix_ids_sha256": runner.sha256_json(sorted(haystack)[:12]),
+            "remaining_ids_sha256": runner.sha256_json(sorted(haystack)[12:]),
+        }
+    }
+
+    with pytest.raises(RuntimeError, match="execution inventory differs from census"):
+        runner.build_execution_plan(census, data_root)
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "postgresql://user:pass@example.com:5432/memphant",
+        "postgresql://user:pass@10.0.0.7:5432/memphant",
+        "postgresql://user:pass@localhost:5432/production",
+        "sqlite:///tmp/memphant.db",
+    ],
+)
+def test_scratch_case_bank_contract_rejects_remote_or_noncanonical_base(
+    database_url: str,
+) -> None:
+    runner = _load_runner()
+    with pytest.raises(RuntimeError, match="local scratch Postgres base"):
+        runner.scratch_case_database_contract(database_url, "question-000")
+
+
+def test_scratch_case_bank_contract_uses_three_distinct_content_addressed_databases() -> None:
+    runner = _load_runner()
+    contract = runner.scratch_case_database_contract(
+        "postgresql://memphant:memphant@localhost:5432/memphant",
+        "question/with unsafe punctuation?",
+    )
+
+    assert set(contract["databases"]) == {"source", "fast", "deep"}
+    assert len(set(contract["databases"].values())) == 3
+    assert all(
+        name.startswith("memphant_lme2_") and len(name) <= 63
+        for name in contract["databases"].values()
+    )
+    assert contract["base_identity"] == {
+        "scheme": "postgresql",
+        "host": "localhost",
+        "port": 5432,
+        "database": "memphant",
+    }
+    assert "memphant:memphant" not in json.dumps(contract)
+
+
+def test_case_bank_dump_is_data_only_and_excludes_ephemeral_or_secret_rows(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    archive = tmp_path / "case-bank.dump"
+    command = runner.case_bank_dump_command(
+        "postgresql://memphant:memphant@localhost:5432/memphant_lme2_deadbeef_source",
+        archive,
+    )
+
+    assert command[:4] == ["pg_dump", "--format=custom", "--data-only", "--schema=memphant"]
+    assert command[-2:] == [
+        f"--file={archive.resolve()}",
+        "postgresql://memphant:memphant@localhost:5432/memphant_lme2_deadbeef_source",
+    ]
+    excluded = {
+        item.split("=", 1)[1]
+        for item in command
+        if item.startswith("--exclude-table-data=")
+    }
+    assert excluded == {
+        "memphant.api_key",
+        "memphant.event_outbox",
+        "memphant.job_state",
+        "memphant.retrieval_trace",
+        "memphant.review_event",
+        "memphant.review_event_unit",
+        "memphant.schema_migrations",
+    }
+
+
+def test_cache_only_construction_environment_drops_provider_credentials(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    binding_path = tmp_path / "binding.json"
+    observation_cache = tmp_path / "observations"
+    source_receipts = tmp_path / "receipts"
+    subledger = tmp_path / "construction.jsonl"
+    campaign_journal = tmp_path / "campaign.jsonl"
+    binding = {
+        "authorization": {
+            "authorization_sha256": "a" * 64,
+            "campaign_sha256": "b" * 64,
+            "screen_id": "state-aware-full",
+        },
+        "provider": {
+            "requested_model": "qwen/qwen3.5-9b-20260310",
+            "served_model": "qwen/qwen3.5-9b",
+            "served_provider": "DeepInfra",
+            "input_price_nanos_per_million": 100_000_000,
+            "output_price_nanos_per_million": 150_000_000,
+        },
+        "cache": {
+            "namespace": "longmemeval-v2-construction-v1",
+            "observation_cache_path": str(observation_cache),
+            "source_receipts_path": str(source_receipts),
+        },
+        "ledger": {
+            "subledger_path": str(subledger),
+            "campaign_journal_path": str(campaign_journal),
+            "source_ledger_prefix_bytes": 0,
+            "source_ledger_prefix_sha256": hashlib.sha256(b"").hexdigest(),
+        },
+        "coverage": {
+            "plans": [{"per_attempt_reservation_nanos": 12_345}],
+        },
+    }
+    binding_path.write_text(json.dumps(binding), encoding="utf-8")
+    manifest = {
+        "construction": {
+            "model": "qwen/qwen3.5-9b-20260310",
+            "prompt_path": "benchmarks/prompts/structured_state_extractor.v1.md",
+            "tokenizer_path": "tokenizer/tokenizer.json",
+            "tokenizer_config_path": "tokenizer/tokenizer_config.json",
+        }
+    }
+    environment = runner.cache_only_construction_environment(
+        binding_path=binding_path,
+        binding=binding,
+        manifest=manifest,
+        data_root=tmp_path,
+        database_url=(
+            "postgresql://memphant:memphant@localhost:5432/"
+            "memphant_lme2_deadbeef_source"
+        ),
+        base_environment={
+            "PATH": "/usr/bin",
+            "OPENROUTER_API_KEY": "must-not-cross",
+            "OPENAI_API_KEY": "must-not-cross",
+            "DEEPINFRA_API_KEY": "must-not-cross",
+        },
+    )
+
+    assert environment["MEMPHANT_STRUCTURED_STATE_CACHE_ONLY"] == "on"
+    assert environment["MEMPHANT_LME_CONSTRUCTION_BINDING"] == str(
+        binding_path.resolve()
+    )
+    assert environment["MEMPHANT_STRUCTURED_STATE_OBSERVATION_CACHE"] == str(
+        observation_cache.resolve()
+    )
+    assert environment["PATH"] == "/usr/bin"
+    assert not any("API_KEY" in key for key in environment)
+
+
+def test_case_bank_manifest_binds_archive_construction_and_logical_inventory(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    archive = tmp_path / "bank.dump"
+    archive.write_bytes(b"immutable-bank")
+    binding_core = {"schema_version": 1, "coverage": {"plans": ["plan"]}}
+    binding = {
+        **binding_core,
+        "binding_sha256": runner.sha256_json(binding_core),
+    }
+    binding_path = tmp_path / "binding.json"
+    binding_path.write_text(json.dumps(binding), encoding="utf-8")
+    proof = _proof(runner)
+    proof["binding_sha256"] = binding["binding_sha256"]
+    proof["construction_proof_sha256"] = runner.sha256_json(
+        {
+            key: value
+            for key, value in proof.items()
+            if key != "construction_proof_sha256"
+        }
+    )
+    proof_path = tmp_path / "construction-proof.json"
+    proof_path.write_text(json.dumps(proof), encoding="utf-8")
+    contract = runner.scratch_case_database_contract(
+        "postgresql://memphant:memphant@localhost:5432/memphant",
+        "question-000",
+    )
+    output = tmp_path / "case-bank.json"
+    materialization = {
+        "trajectory_count": 2,
+        "trajectory_ids_sha256": "1" * 64,
+        "trajectory_content_sha256": "2" * 64,
+    }
+    logical_inventory = {
+        "schema_migrations": 3,
+        "tenant": 1,
+        "episode": 8,
+        "resource": 3,
+        "memory_unit": 11,
+    }
+
+    manifest = runner.write_case_bank_manifest(
+        archive=archive,
+        output=output,
+        contract=contract,
+        binding_path=binding_path,
+        construction_proof_path=proof_path,
+        materialization=materialization,
+        logical_inventory=logical_inventory,
+        postgres_toolchain=_postgres_toolchain_fixture(runner),
+    )
+
+    assert manifest == json.loads(output.read_text(encoding="utf-8"))
+    assert manifest["archive"] == {
+        "bytes": len(b"immutable-bank"),
+        "sha256": hashlib.sha256(b"immutable-bank").hexdigest(),
+        "format": "pg_dump-custom-data-only-v1",
+    }
+    assert manifest["construction"]["binding_sha256"] == binding["binding_sha256"]
+    assert manifest["materialization"] == materialization
+    assert manifest["logical_inventory_sha256"] == runner.sha256_json(
+        logical_inventory
+    )
+    assert runner._contains_oracle_key(manifest) is False
+
+
+def test_restore_case_bank_pair_creates_fresh_migrated_fast_and_deep_databases(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    base = "postgresql://memphant:memphant@localhost:5432/memphant"
+    question_id = "question-000"
+    contract = runner.scratch_case_database_contract(base, question_id)
+    archive = tmp_path / "bank.dump"
+    archive.write_bytes(b"immutable-bank")
+    manifest = {
+        "schema_version": 1,
+        "contract": contract,
+        "archive": {
+            "bytes": archive.stat().st_size,
+            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            "format": "pg_dump-custom-data-only-v1",
+        },
+        "construction": {
+            "binding_sha256": "a" * 64,
+            "proof_sha256": "b" * 64,
+        },
+        "materialization": {
+            "trajectory_count": 1,
+            "trajectory_ids_sha256": "c" * 64,
+            "trajectory_content_sha256": "d" * 64,
+        },
+        "logical_inventory": {"schema_migrations": 3, "tenant": 1},
+        "logical_inventory_sha256": runner.sha256_json(
+            {"schema_migrations": 3, "tenant": 1}
+        ),
+        "postgres_toolchain": _postgres_toolchain_fixture(runner),
+    }
+    manifest["case_bank_sha256"] = runner.sha256_json(manifest)
+    commands = []
+
+    def run_command(command, **kwargs):
+        commands.append((command, kwargs))
+        stdout = ""
+        if command[0] == "psql" and "select tablename" in command[-1]:
+            stdout = "schema_migrations\ntenant\n"
+        elif command[0] == "psql" and '"schema_migrations"' in command[-1]:
+            stdout = "3\n"
+        elif command[0] == "psql" and '"tenant"' in command[-1]:
+            stdout = "1\n"
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    clone = runner.restore_case_bank_pair(
+        base_database_url=base,
+        question_id=question_id,
+        archive=archive,
+        manifest=manifest,
+        run_command=run_command,
+    )
+
+    assert clone["databases"] == {
+        "fast": contract["databases"]["fast"],
+        "deep": contract["databases"]["deep"],
+    }
+    flat = [command for command, _ in commands]
+    for arm in ("fast", "deep"):
+        name = contract["databases"][arm]
+        assert [
+            "dropdb",
+            f"--maintenance-db={base}",
+            "--if-exists",
+            "--force",
+            name,
+        ] in flat
+        assert ["createdb", f"--maintenance-db={base}", name] in flat
+        assert any(
+            command[:2] == [sys.executable, str(ROOT / "scripts/apply_memphant_migrations.py")]
+            and command[-1].endswith(f"/{name}")
+            for command in flat
+        )
+        assert any(
+            Path(command[0]).name == "pg_restore"
+            and command[1:4]
+            == ["--exit-on-error", "--single-transaction", "--data-only"]
+            and command[-2:] == [
+                f"--dbname={runner._database_url_for_name(base, name)}",
+                str(archive.resolve()),
+            ]
+            for command in flat
+        )
+    assert clone["clone_sha256"] == runner.sha256_json(
+        {key: value for key, value in clone.items() if key != "clone_sha256"}
+    )

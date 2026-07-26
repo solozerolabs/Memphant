@@ -1,0 +1,17 @@
+{
+  "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "cache_namespace": "scratch-cache-fixture-v1",
+  "campaign_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "extraction_key": "43db664919190d8ec1ad0c757b692ad93dc013a73f4ce59066e47f53d47c9415",
+  "observation_count": 1,
+  "provider_credentials_read": false,
+  "request_sha256": "9d88d9cfa99400661aa6f642a19d74c61c0c094477653f7b1d2be8660b9ad56f",
+  "schema_version": 1,
+  "served_model": "qwen/qwen3.5-9b",
+  "served_provider": "DeepInfra",
+  "source_body": "I live in Oslo.",
+  "source_body_sha256": "d3f14de947d7469d8daff1d1a012861afff20f76138d69c494715d3aae917685",
+  "source_ledger_prefix_bytes": 1658,
+  "source_ledger_prefix_sha256": "ecc177006967b7584fcfd7476a08f88cb14c9b0d447e2e422bc9f75a9a73e980",
+  "transport": "in-process-fake-no-network"
+}

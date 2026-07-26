@@ -1,0 +1,71 @@
+{
+  "authorization": {
+    "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "campaign_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "screen_id": "state-aware-full"
+  },
+  "binding_sha256": "e043ef85cacca571ed05a939b388d61bb5676d65bf4537228402a841bd3fb96d",
+  "cache": {
+    "namespace": "scratch-cache-fixture-v1",
+    "source_receipts_sha256": "757840c1d3d5655d4df8dbd0d5e05ed0914dcb64750ee78fff68e07bb48b3e1e"
+  },
+  "compiler": {
+    "adapter_sha256": "08b58a9b11cbf081deaa3575df77f562e60a2b1252e38abd8470c0a2711f06ce",
+    "binaries": {
+      "cli": {
+        "bytes": 29260944,
+        "path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/target/debug/memphant-cli",
+        "sha256": "5ac2b9e70e50e6d6191b94a386633e7d2e9c0400e539e338619fd3914ebb7cd7"
+      },
+      "server": {
+        "bytes": 70212480,
+        "path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/target/debug/memphant-server",
+        "sha256": "bebde37998408c1d38dbf1ee46182aa8b67db44a88fff1cf90bca5aa511dbe74"
+      },
+      "worker": {
+        "bytes": 57030512,
+        "path": "/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota/target/debug/memphant-worker",
+        "sha256": "cb0bf335ed11c2e6c35f768f63ef8c0225cbce1c408b5f06d64de57a4e39d1e0"
+      }
+    },
+    "construction_params_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "prompt_sha256": "75910ad5760ba04e6493389a7982b737d39b6b1a5e20ef5a67313549d501d9f2",
+    "provider_code_sha256": "af0a19db6734c7a9336a75eca1c44adfd435b1a8450e99b5d0e1435a08630da1",
+    "schema_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "construction_proof_sha256": "5a78e60ca3dadd96a7a67968ce5d731584f9481bc8dbbe32314a6553501c153e",
+  "isolation": {
+    "scratch": true,
+    "tenant_id": "1c882d71-9ea9-433f-96fb-e584fb344919"
+  },
+  "ledger": {
+    "after_event_sha256": "ecc177006967b7584fcfd7476a08f88cb14c9b0d447e2e422bc9f75a9a73e980",
+    "attempt_ids": [
+      "c9cdf1dc-6d84-48f1-856b-34e61ea3113e"
+    ],
+    "before_event_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "campaign_journal_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "settled_nanos": 1750,
+    "unresolved_nanos": 0
+  },
+  "pairing": {
+    "resource_count": 1,
+    "trajectory_count": 1
+  },
+  "provider": {
+    "input_price_nanos_per_million": 100000000,
+    "maximum_attempts": 1,
+    "maximum_output_tokens": 4096,
+    "output_price_nanos_per_million": 150000000,
+    "requested_model": "qwen/qwen3.5-9b-20260310",
+    "requested_provider": "deepinfra",
+    "served_model": "qwen/qwen3.5-9b",
+    "served_provider": "DeepInfra"
+  },
+  "schema_version": 2,
+  "selection": {
+    "input_manifest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "selection_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "state_mode": "structured-resource-v1"
+  }
+}
