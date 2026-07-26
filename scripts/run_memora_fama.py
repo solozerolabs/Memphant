@@ -21,9 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from provider_attempts import (  # noqa: E402
-    ProviderAttemptLedger,
     install_openai_meter,
-    openrouter_generation_lookup,
+    open_campaign_ledger_from_env,
+    openrouter_generation_lookup_from_env,
     validate_provider_attempt_ledger,
 )
 DEFAULT_MANIFEST = ROOT / "benchmarks" / "manifests" / "memora.lock.json"
@@ -424,17 +424,12 @@ def main() -> None:
     for path in (args.out, proof_path, judge_ledger_path):
         if path.exists():
             raise ValueError(f"Memora scoring requires a fresh artifact path: {path}")
-    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPEN_ROUTER_API_KEY")
-    if not api_key:
-        raise RuntimeError("Memora scoring requires OPENROUTER_API_KEY")
-    import openai
-    judge_ledger = ProviderAttemptLedger(
-        judge_ledger_path,
-        hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
-        "memora-native-judge",
-        200_000_000_000,
-        4_258_002_400,
+    judge_ledger = open_campaign_ledger_from_env(
+        screen_id="memora-native-judge",
+        expected_journal_path=judge_ledger_path,
     )
+    import openai
+
     install_openai_meter(
         openai,
         judge_ledger,
@@ -444,7 +439,7 @@ def main() -> None:
             "official_revision": manifest["code"]["revision"],
             "selection": {"group": args.group or "all", "task": args.task or "all"},
         },
-        generation_lookup=openrouter_generation_lookup(api_key),
+        generation_lookup_factory=openrouter_generation_lookup_from_env,
     )
     native = load_native_module(repo, manifest["native_scorer"]["entrypoint"])
     evaluator = harden_native_evaluator(

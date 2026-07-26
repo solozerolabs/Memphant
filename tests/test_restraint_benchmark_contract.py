@@ -1658,6 +1658,33 @@ def open_test_ledger(attempts, path: Path, scope: str = "fixture", screen: str =
     )
 
 
+def authorize_test_campaign(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, journal: Path
+) -> Path:
+    packet = tmp_path / f"{journal.name}.authorization.json"
+    campaign = {
+        "journal_path": str(journal.resolve()),
+        "hard_ceiling_nanos": 200_000_000_000,
+        "opening_liability_nanos": 4_258_002_400,
+        "unallocated_reserve_nanos": 10_000_000_000,
+        "opening_reservations": [{
+            "reservation_id": "historical-opening",
+            "reserved_nanos": 4_258_002_400,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
+    }
+    packet.write_text(json.dumps({
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        "authorization": {"authorization_scope_sha256": sha256(
+            json.dumps({"campaign": campaign}, sort_keys=True, separators=(",", ":")).encode()
+        )},
+        "campaign": campaign,
+    }))
+    monkeypatch.setenv("MEMPHANT_CAMPAIGN_AUTHORIZATION", str(packet))
+    return packet
+
+
 def sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -2095,6 +2122,7 @@ def test_bootstrap_usage_meter_records_complete_usage_without_secrets(
 
     module = types.SimpleNamespace(OpenAI=OpenAI)
     ledger = tmp_path / "usage.jsonl"
+    authorize_test_campaign(monkeypatch, tmp_path, ledger)
     monkeypatch.setenv("MEMPHANT_MEMSYCO_ARM", "memphant")
     monkeypatch.setenv("MEMPHANT_MEMSYCO_TASK", "objective_fact_judgment")
     bootstrap.install_usage_meter(module, ledger)
@@ -2112,8 +2140,10 @@ def test_bootstrap_usage_meter_records_complete_usage_without_secrets(
         "total_tokens": 18,
         "cost": 0.02,
     }
-    assert row["arm"] == "memphant"
-    assert row["task"] == "objective_fact_judgment"
+    assert stored["attempts"][0]["result"]["context"] == {
+        "arm": "memphant",
+        "task": "objective_fact_judgment",
+    }
     assert row["requested_model"] == "requested-model"
     assert row["served_model"] == "served-model"
     assert row["response_id"] == "response-1"
@@ -2151,7 +2181,7 @@ def test_register_memphant_exposes_an_importable_package_spec(
 
 
 def test_bootstrap_usage_meter_fails_closed_when_provider_omits_usage(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bootstrap = load_bootstrap()
 
@@ -2164,13 +2194,15 @@ def test_bootstrap_usage_meter_fails_closed_when_provider_omits_usage(
             self.chat = types.SimpleNamespace(completions=Completions())
 
     module = types.SimpleNamespace(OpenAI=OpenAI)
-    bootstrap.install_usage_meter(module, tmp_path / "usage.jsonl")
+    ledger = tmp_path / "usage.jsonl"
+    authorize_test_campaign(monkeypatch, tmp_path, ledger)
+    bootstrap.install_usage_meter(module, ledger)
     with pytest.raises(RuntimeError, match="usage"):
         module.OpenAI().chat.completions.create(model="model", messages=[])
 
 
 def test_bootstrap_meter_wraps_async_client_and_disables_hidden_retries(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bootstrap = load_bootstrap()
     constructors = []
@@ -2193,6 +2225,7 @@ def test_bootstrap_meter_wraps_async_client_and_disables_hidden_retries(
 
     module = types.SimpleNamespace(AsyncOpenAI=AsyncOpenAI)
     ledger = tmp_path / "async-attempts.json"
+    authorize_test_campaign(monkeypatch, tmp_path, ledger)
     bootstrap.install_usage_meter(module, ledger)
     client = module.AsyncOpenAI(api_key="secret", max_retries=5)
     asyncio.run(client.chat.completions.create(model="requested", messages=[]))
@@ -2282,11 +2315,39 @@ def test_campaign_reconciliation_and_journal_closure_are_authoritative(
     attempts = load_provider_attempts()
     path = tmp_path / "campaign.jsonl"
     ledger = attempts.ProviderAttemptLedger(
-        path, "a" * 64, "reconcile-screen", 1_000, 500
+        path,
+        "a" * 64,
+        "reconcile-screen",
+        20_000_001_000,
+        500,
+        opening_reservations=[{
+            "reservation_id": "historical-deep-1",
+            "reserved_nanos": 300,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }, {
+            "reservation_id": "historical-structured-1",
+            "reserved_nanos": 200,
+            "receipt_sha256": "d" * 64,
+            "proof_sha256": "e" * 64,
+        }],
     )
+    with pytest.raises(ValueError, match="known opening reservation"):
+        ledger.record_reconciliation(
+            "invented",
+            settled_nanos=0,
+            receipt_sha256="b" * 64,
+            proof_sha256="c" * 64,
+        )
+    with pytest.raises(ValueError, match="opening reservation receipt"):
+        ledger.record_reconciliation(
+            "historical-deep-1",
+            settled_nanos=25,
+            receipt_sha256="f" * 64,
+            proof_sha256="c" * 64,
+        )
     ledger.record_reconciliation(
         "historical-deep-1",
-        reserved_nanos=300,
         settled_nanos=25,
         receipt_sha256="b" * 64,
         proof_sha256="c" * 64,
@@ -2302,7 +2363,22 @@ def test_campaign_reconciliation_and_journal_closure_are_authoritative(
     ledger.close()
 
     closed = attempts.ProviderAttemptLedger(
-        path, "a" * 64, "resume-screen", 1_000, 500
+        path,
+        "a" * 64,
+        "resume-screen",
+        20_000_001_000,
+        500,
+        opening_reservations=[{
+            "reservation_id": "historical-deep-1",
+            "reserved_nanos": 300,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }, {
+            "reservation_id": "historical-structured-1",
+            "reserved_nanos": 200,
+            "receipt_sha256": "d" * 64,
+            "proof_sha256": "e" * 64,
+        }],
     )
     with pytest.raises(RuntimeError, match="closed"):
         closed.assert_open()
@@ -2324,6 +2400,53 @@ def test_openai_meter_requires_reservation_before_sdk_construction(
     with pytest.raises(TypeError, match="max_liability_nanos"):
         attempts.install_openai_meter(types.SimpleNamespace(OpenAI=OpenAI), ledger)
     assert constructed == []
+
+
+def test_openai_meter_defers_credentials_lookup_and_client_until_after_start(
+    tmp_path: Path,
+) -> None:
+    attempts = load_provider_attempts()
+    ledger_path = tmp_path / "campaign.jsonl"
+    ledger = open_test_ledger(attempts, ledger_path, "credential-order")
+    order = []
+
+    def after_start(label: str) -> None:
+        snapshot = attempts.load_provider_attempt_ledger_snapshot(ledger_path)
+        assert snapshot["attempts"][0]["status"] == "started"
+        order.append(label)
+
+    class Completions:
+        def create(self, **_kwargs):
+            return types.SimpleNamespace(
+                id="ordered",
+                model="served",
+                provider="OpenAI",
+                usage=types.SimpleNamespace(
+                    prompt_tokens=2,
+                    completion_tokens=1,
+                    total_tokens=3,
+                    cost=0.01,
+                ),
+            )
+
+    class OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            after_start("client")
+            self.chat = types.SimpleNamespace(completions=Completions())
+
+    def lookup_factory():
+        after_start("credentials")
+        return None
+
+    sdk = types.SimpleNamespace(OpenAI=OpenAI)
+    attempts.install_openai_meter(
+        sdk,
+        ledger,
+        max_liability_nanos=100_000_000,
+        generation_lookup_factory=lookup_factory,
+    )
+    sdk.OpenAI().chat.completions.create(model="requested", messages=[])
+    assert order == ["credentials", "client"]
 
 
 def test_sync_meter_preserves_paid_response_when_generation_lookup_fails(
@@ -2779,8 +2902,6 @@ def test_memsyco_cli_exposes_complete_lifecycle_and_preserves_five_metrics(
                 "parse_status": "provider_response_validated",
                 "request_sha256": "1" * 64,
                 "result_sha256": "2" * 64,
-                "arm": "memphant",
-                "task": task,
             }
             attempt_ledger.record(
                 "start",
@@ -2789,12 +2910,18 @@ def test_memsyco_cli_exposes_complete_lifecycle_and_preserves_five_metrics(
                     "retry_index": 0,
                     "requested_model": model,
                     "request_sha256": "1" * 64,
-                    "arm": "memphant",
-                    "task": task,
+                    "context": {"arm": "memphant", "task": task},
                     "max_liability_nanos": 100_000_000,
                 },
             )
-            attempt_ledger.record("result", role, {"response": response})
+            attempt_ledger.record(
+                "result",
+                role,
+                {
+                    "context": {"arm": "memphant", "task": task},
+                    "response": response,
+                },
+            )
 
     verified = runner.verify_results(run_dir)
     assert set(verified["metrics_by_task"]) == set(runner.TASKS)

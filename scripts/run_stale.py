@@ -275,14 +275,12 @@ def verify_judge_provenance(
     validate_provider_attempt_ledger(judge_ledger)
     if judge_ledger.get("provider_attempts") != sample_count:
         raise ValueError("STALE smoke judge attempt count mismatch")
-    judge_responses = [
-        row["result"]["response"] for row in judge_ledger["attempts"]
-    ]
+    judge_rows = [row["result"] for row in judge_ledger["attempts"]]
+    judge_responses = [row["response"] for row in judge_rows]
     if any(
-        response.get("requested_model") != judge_model
-        or response.get("benchmark") != "STALE"
-        or response.get("arm") != "judge"
-        for response in judge_responses
+        row["response"].get("requested_model") != judge_model
+        or row.get("context") != {"benchmark": "STALE", "arm": "judge"}
+        for row in judge_rows
     ):
         raise ValueError("STALE smoke judge model or context mismatch")
     if any(response.get("retry_index") != 0 for response in judge_responses):

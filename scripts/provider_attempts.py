@@ -20,6 +20,10 @@ from typing import Any
 
 
 _LEDGER_LOCK = threading.RLock()
+CAMPAIGN_HARD_CEILING_NANOS = 200_000_000_000
+CAMPAIGN_UNALLOCATED_RESERVE_NANOS = 10_000_000_000
+CAMPAIGN_OPENING_LIABILITY_NANOS = 4_258_002_400
+CAMPAIGN_AUTHORIZATION_STATUS = "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
 
 
 def _sha256_json(value: Any) -> str:
@@ -83,6 +87,42 @@ def _valid_sha256(value: Any) -> bool:
     )
 
 
+def _validate_opening_reservations(
+    value: Any, opening_liability_nanos: int
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError("provider-attempt opening reservation inventory is malformed")
+    reservations: list[dict[str, Any]] = []
+    ids: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("provider-attempt opening reservation inventory is malformed")
+        reservation_id = item.get("reservation_id")
+        reserved_nanos = item.get("reserved_nanos")
+        if (
+            not isinstance(reservation_id, str)
+            or not reservation_id
+            or reservation_id in ids
+            or type(reserved_nanos) is not int
+            or reserved_nanos <= 0
+            or not _valid_sha256(item.get("receipt_sha256"))
+            or not _valid_sha256(item.get("proof_sha256"))
+        ):
+            raise ValueError("provider-attempt opening reservation inventory is malformed")
+        ids.add(reservation_id)
+        reservations.append({
+            "reservation_id": reservation_id,
+            "reserved_nanos": reserved_nanos,
+            "receipt_sha256": item["receipt_sha256"],
+            "proof_sha256": item["proof_sha256"],
+        })
+    if sum(item["reserved_nanos"] for item in reservations) != opening_liability_nanos:
+        raise ValueError(
+            "provider-attempt opening reservation inventory does not match opening liability"
+        )
+    return reservations
+
+
 def _cost_nanos(response: Any) -> int | None:
     usage = response.get("usage") if isinstance(response, dict) else None
     value = usage.get("cost") if isinstance(usage, dict) else None
@@ -106,6 +146,7 @@ def _replay_journal(
     expected_authorization_sha256: str | None = None,
     expected_hard_ceiling_nanos: int | None = None,
     expected_opening_liability_nanos: int | None = None,
+    expected_opening_reservations: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     raw = path.read_bytes()
     if not raw or not raw.endswith(b"\n"):
@@ -137,8 +178,13 @@ def _replay_journal(
         or header["hard_ceiling_nanos"] <= 0
         or type(header.get("opening_liability_nanos")) is not int
         or not 0 <= header["opening_liability_nanos"] <= header["hard_ceiling_nanos"]
+        or header.get("unallocated_reserve_nanos")
+        != CAMPAIGN_UNALLOCATED_RESERVE_NANOS
     ):
         raise ValueError("provider-attempt journal header is malformed")
+    opening_reservations = _validate_opening_reservations(
+        header.get("opening_reservations"), header["opening_liability_nanos"]
+    )
     authorization_sha256 = header["authorization_sha256"]
     if (
         expected_authorization_sha256 is not None
@@ -155,11 +201,18 @@ def _replay_journal(
         and header["opening_liability_nanos"] != expected_opening_liability_nanos
     ):
         raise ValueError("provider-attempt ledger opening liability mismatch")
+    if (
+        expected_opening_reservations is not None
+        and opening_reservations != expected_opening_reservations
+    ):
+        raise ValueError("provider-attempt ledger opening reservation mismatch")
 
     attempts: list[dict[str, Any]] = []
     by_id: dict[int, dict[str, Any]] = {}
     reconciled_ids: set[str] = set()
-    remaining_opening = header["opening_liability_nanos"]
+    opening_by_id = {
+        item["reservation_id"]: item for item in opening_reservations
+    }
     closed = False
     for event in events[1:]:
         kind = event.get("event")
@@ -174,20 +227,21 @@ def _replay_journal(
             reservation_id = payload.get("reservation_id")
             reserved_nanos = payload.get("reserved_nanos")
             settled_nanos = payload.get("settled_nanos")
+            opening_reservation = opening_by_id.get(reservation_id)
             if (
-                not isinstance(reservation_id, str)
-                or not reservation_id
+                opening_reservation is None
                 or reservation_id in reconciled_ids
                 or type(reserved_nanos) is not int
                 or type(settled_nanos) is not int
-                or not 0 <= settled_nanos <= reserved_nanos <= remaining_opening
-                or reserved_nanos <= 0
-                or not _valid_sha256(payload.get("receipt_sha256"))
-                or not _valid_sha256(payload.get("proof_sha256"))
+                or reserved_nanos != opening_reservation["reserved_nanos"]
+                or not 0 <= settled_nanos <= reserved_nanos
+                or payload.get("receipt_sha256")
+                != opening_reservation["receipt_sha256"]
+                or payload.get("proof_sha256")
+                != opening_reservation["proof_sha256"]
             ):
                 raise ValueError("provider-attempt reconciliation is malformed")
             reconciled_ids.add(reservation_id)
-            remaining_opening -= reserved_nanos
             continue
         if kind == "closed":
             payload = event.get("payload")
@@ -285,19 +339,24 @@ def _validate_reconciliation_candidate(
 ) -> None:
     payload = event["payload"]
     prior = [item["payload"] for item in events if item.get("event") == "reconcile"]
-    remaining = events[0]["opening_liability_nanos"] - sum(
-        item["reserved_nanos"] for item in prior
-    )
+    reservation_id = payload.get("reservation_id")
+    inventory = {
+        item["reservation_id"]: item
+        for item in events[0]["opening_reservations"]
+    }
+    opening = inventory.get(reservation_id)
+    if opening is None or reservation_id in {
+        item["reservation_id"] for item in prior
+    }:
+        raise ValueError("reconciliation requires a known opening reservation")
+    if payload.get("receipt_sha256") != opening["receipt_sha256"]:
+        raise ValueError("reconciliation opening reservation receipt mismatch")
+    if payload.get("proof_sha256") != opening["proof_sha256"]:
+        raise ValueError("reconciliation opening reservation proof mismatch")
     if (
-        not isinstance(payload.get("reservation_id"), str)
-        or not payload["reservation_id"]
-        or payload["reservation_id"] in {item["reservation_id"] for item in prior}
-        or type(payload.get("reserved_nanos")) is not int
+        payload.get("reserved_nanos") != opening["reserved_nanos"]
         or type(payload.get("settled_nanos")) is not int
-        or not 0 <= payload["settled_nanos"] <= payload["reserved_nanos"] <= remaining
-        or payload["reserved_nanos"] <= 0
-        or not _valid_sha256(payload.get("receipt_sha256"))
-        or not _valid_sha256(payload.get("proof_sha256"))
+        or not 0 <= payload["settled_nanos"] <= opening["reserved_nanos"]
     ):
         raise ValueError("provider-attempt reconciliation is malformed")
 
@@ -336,6 +395,8 @@ class ProviderAttemptLedger:
         screen_id: str,
         hard_ceiling_nanos: int,
         opening_liability_nanos: int,
+        *,
+        opening_reservations: list[dict[str, Any]] | None = None,
     ) -> None:
         path = Path(path).resolve()
         if not _valid_sha256(authorization_sha256):
@@ -349,11 +410,16 @@ class ProviderAttemptLedger:
             or not 0 <= opening_liability_nanos <= hard_ceiling_nanos
         ):
             raise ValueError("provider-attempt opening liability is invalid")
+        opening_reservations = _validate_opening_reservations(
+            [] if opening_reservations is None else opening_reservations,
+            opening_liability_nanos,
+        )
         self.path = path
         self.authorization_sha256 = authorization_sha256
         self.screen_id = screen_id
         self.hard_ceiling_nanos = hard_ceiling_nanos
         self.initial_opening_liability_nanos = opening_liability_nanos
+        self.opening_reservations = opening_reservations
         self._lock_path = path.with_name(path.name + ".lock")
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock_handle = self._lock_path.open("a+b")
@@ -378,6 +444,10 @@ class ProviderAttemptLedger:
                             "authorization_sha256": authorization_sha256,
                             "hard_ceiling_nanos": hard_ceiling_nanos,
                             "opening_liability_nanos": opening_liability_nanos,
+                            "unallocated_reserve_nanos": (
+                                CAMPAIGN_UNALLOCATED_RESERVE_NANOS
+                            ),
+                            "opening_reservations": opening_reservations,
                         }
                     )
             except BaseException:
@@ -415,6 +485,7 @@ class ProviderAttemptLedger:
             self.authorization_sha256,
             self.hard_ceiling_nanos,
             self.initial_opening_liability_nanos,
+            self.opening_reservations,
         )
 
     def assert_open(self) -> None:
@@ -442,8 +513,11 @@ class ProviderAttemptLedger:
                 if (
                     state["total_liability_nanos"] + reservation
                     > self.hard_ceiling_nanos
+                    - CAMPAIGN_UNALLOCATED_RESERVE_NANOS
                 ):
-                    raise RuntimeError("provider-attempt campaign hard ceiling exceeded")
+                    raise RuntimeError(
+                        "provider-attempt campaign unallocated reserve would be invaded"
+                    )
                 attempt_id = len(self.attempts) + 1
                 self._append(
                     {
@@ -483,7 +557,6 @@ class ProviderAttemptLedger:
         self,
         reservation_id: str,
         *,
-        reserved_nanos: int,
         settled_nanos: int,
         receipt_sha256: str,
         proof_sha256: str,
@@ -498,7 +571,14 @@ class ProviderAttemptLedger:
                 "screen_id": self.screen_id,
                 "payload": {
                     "reservation_id": reservation_id,
-                    "reserved_nanos": reserved_nanos,
+                    "reserved_nanos": next(
+                        (
+                            item["reserved_nanos"]
+                            for item in self.opening_reservations
+                            if item["reservation_id"] == reservation_id
+                        ),
+                        None,
+                    ),
                     "settled_nanos": settled_nanos,
                     "receipt_sha256": receipt_sha256,
                     "proof_sha256": proof_sha256,
@@ -507,6 +587,7 @@ class ProviderAttemptLedger:
             _validate_reconciliation_candidate(self._events, body)
             self._append(body)
             _, self._events, self.attempts = self._replay()
+
 
     def close_campaign(self, projection_path: Path) -> dict[str, Any]:
         with _LEDGER_LOCK:
@@ -560,6 +641,88 @@ class ProviderAttemptLedger:
                 "attempts_sha256": _sha256_json(self.attempts),
                 "attempts": self.attempts,
             }
+
+
+def open_campaign_ledger(
+    authorization_packet_path: Path,
+    *,
+    screen_id: str,
+    expected_journal_path: Path | None = None,
+) -> ProviderAttemptLedger:
+    """Open the sole journal named by a frozen campaign authorization packet."""
+    packet_path = Path(authorization_packet_path).resolve()
+    try:
+        packet = json.loads(packet_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("campaign authorization packet is unreadable") from error
+    authorization = packet.get("authorization") if isinstance(packet, dict) else None
+    campaign = packet.get("campaign") if isinstance(packet, dict) else None
+    scope = (
+        {
+            key: value
+            for key, value in packet.items()
+            if key not in {"schema_version", "status", "authorization"}
+        }
+        if isinstance(packet, dict)
+        else None
+    )
+    if (
+        not isinstance(packet, dict)
+        or packet.get("status") != CAMPAIGN_AUTHORIZATION_STATUS
+        or not isinstance(authorization, dict)
+        or not _valid_sha256(authorization.get("authorization_scope_sha256"))
+        or authorization["authorization_scope_sha256"] != _sha256_json(scope)
+        or not isinstance(campaign, dict)
+    ):
+        raise ValueError("campaign authorization packet is not active and canonical")
+    journal_value = campaign.get("journal_path")
+    if not isinstance(journal_value, str) or not journal_value:
+        raise ValueError("campaign authorization packet journal path is malformed")
+    journal_path = Path(journal_value)
+    if not journal_path.is_absolute():
+        journal_path = packet_path.parent / journal_path
+    journal_path = journal_path.resolve()
+    if (
+        expected_journal_path is not None
+        and Path(expected_journal_path).resolve() != journal_path
+    ):
+        raise ValueError("paid entrypoint differs from canonical campaign journal path")
+    if campaign.get("hard_ceiling_nanos") != CAMPAIGN_HARD_CEILING_NANOS:
+        raise ValueError("campaign authorization hard ceiling mismatch")
+    if (
+        campaign.get("unallocated_reserve_nanos")
+        != CAMPAIGN_UNALLOCATED_RESERVE_NANOS
+    ):
+        raise ValueError("campaign authorization unallocated reserve mismatch")
+    opening = campaign.get("opening_liability_nanos")
+    if opening != CAMPAIGN_OPENING_LIABILITY_NANOS:
+        raise ValueError("campaign authorization opening liability mismatch")
+    reservations = _validate_opening_reservations(
+        campaign.get("opening_reservations"), opening
+    )
+    return ProviderAttemptLedger(
+        journal_path,
+        authorization["authorization_scope_sha256"],
+        screen_id,
+        CAMPAIGN_HARD_CEILING_NANOS,
+        opening,
+        opening_reservations=reservations,
+    )
+
+
+def open_campaign_ledger_from_env(
+    *, screen_id: str, expected_journal_path: Path | None = None
+) -> ProviderAttemptLedger:
+    packet = os.environ.get("MEMPHANT_CAMPAIGN_AUTHORIZATION")
+    if not packet:
+        raise RuntimeError(
+            "paid execution requires MEMPHANT_CAMPAIGN_AUTHORIZATION"
+        )
+    return open_campaign_ledger(
+        Path(packet),
+        screen_id=screen_id,
+        expected_journal_path=expected_journal_path,
+    )
 
 
 def provider_attempt_ledger_is_complete(snapshot: dict[str, Any]) -> bool:
@@ -774,6 +937,7 @@ def install_openai_meter(
     max_liability_nanos: int,
     context: dict[str, Any] | None = None,
     generation_lookup=None,
+    generation_lookup_factory=None,
     max_output_tokens: int | None = None,
 ) -> ProviderAttemptLedger:
     """Wrap available sync/async OpenAI clients with the same durable meter."""
@@ -782,6 +946,10 @@ def install_openai_meter(
     if type(max_liability_nanos) is not int or max_liability_nanos <= 0:
         raise ValueError("max_liability_nanos must be positive")
     ledger.assert_open()
+    if generation_lookup is not None and generation_lookup_factory is not None:
+        raise ValueError(
+            "generation_lookup and generation_lookup_factory are mutually exclusive"
+        )
     context = dict(context or {})
 
     def cap_output(kwargs: dict[str, Any]) -> None:
@@ -823,14 +991,16 @@ def install_openai_meter(
                     cap_output(create_kwargs)
                     return await _meter_async(
                         original_create, create_args, create_kwargs, ledger,
-                        context, generation_lookup, max_liability_nanos,
+                        context, generation_lookup, generation_lookup_factory,
+                        max_liability_nanos,
                     )
             else:
                 def create(*create_args, **create_kwargs):
                     cap_output(create_kwargs)
                     return _meter_sync(
                         original_create, create_args, create_kwargs, ledger,
-                        context, generation_lookup, max_liability_nanos,
+                        context, generation_lookup, generation_lookup_factory,
+                        max_liability_nanos,
                     )
 
             class Completions:
@@ -893,6 +1063,16 @@ def openrouter_generation_lookup(api_key: str):
     return lookup
 
 
+def openrouter_generation_lookup_from_env():
+    """Resolve OpenRouter credentials only after an attempt is durable."""
+    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get(
+        "OPEN_ROUTER_API_KEY"
+    )
+    if not api_key:
+        return None
+    return openrouter_generation_lookup(api_key)
+
+
 def _attempt_input(
     kwargs: dict[str, Any], context: dict[str, Any], max_liability_nanos: int
 ) -> tuple[str, dict[str, Any]]:
@@ -901,7 +1081,7 @@ def _attempt_input(
         raise RuntimeError("completion request omitted model")
     request_sha256 = _sha256_json(kwargs)
     return request_sha256, {
-        **context,
+        "context": context,
         "retry_index": 0,
         "requested_model": requested_model,
         "request_sha256": request_sha256,
@@ -910,40 +1090,65 @@ def _attempt_input(
 
 
 def _meter_sync(
-    create, args, kwargs, ledger, context, generation_lookup, max_liability_nanos
+    create,
+    args,
+    kwargs,
+    ledger,
+    context,
+    generation_lookup,
+    generation_lookup_factory,
+    max_liability_nanos,
 ):
     request_key, start = _attempt_input(kwargs, context, max_liability_nanos)
     with _LEDGER_LOCK:
         ledger.record("start", request_key, start)
     started = time.monotonic()
     try:
+        active_lookup = (
+            generation_lookup_factory()
+            if generation_lookup_factory is not None
+            else generation_lookup
+        )
         response = create(*args, **kwargs)
         normalized = _normalize_response(
             response, start["requested_model"], time.monotonic() - started,
-            start["request_sha256"], generation_lookup,
+            start["request_sha256"], active_lookup,
         )
-        normalized.update(context)
     except BaseException as error:
         with _LEDGER_LOCK:
             ledger.record(
                 "error",
                 request_key,
-                _error_payload(error, time.monotonic() - started),
+                {**_error_payload(error, time.monotonic() - started), "context": context},
             )
         raise
     with _LEDGER_LOCK:
-        ledger.record("result", request_key, {"response": normalized, **context})
+        ledger.record(
+            "result", request_key, {"context": context, "response": normalized}
+        )
     return response
 
 
 async def _meter_async(
-    create, args, kwargs, ledger, context, generation_lookup, max_liability_nanos
+    create,
+    args,
+    kwargs,
+    ledger,
+    context,
+    generation_lookup,
+    generation_lookup_factory,
+    max_liability_nanos,
 ):
     request_key, start = _attempt_input(kwargs, context, max_liability_nanos)
     with _LEDGER_LOCK:
         ledger.record("start", request_key, start)
     started = time.monotonic()
     try:
+        active_lookup = (
+            generation_lookup_factory()
+            if generation_lookup_factory is not None
+            else generation_lookup
+        )
         response = await create(*args, **kwargs)
         normalized = await asyncio.to_thread(
             _normalize_response,
@@ -951,17 +1156,18 @@ async def _meter_async(
             start["requested_model"],
             time.monotonic() - started,
             start["request_sha256"],
-            generation_lookup,
+            active_lookup,
         )
-        normalized.update(context)
     except BaseException as error:
         with _LEDGER_LOCK:
             ledger.record(
                 "error",
                 request_key,
-                _error_payload(error, time.monotonic() - started),
+                {**_error_payload(error, time.monotonic() - started), "context": context},
             )
         raise
     with _LEDGER_LOCK:
-        ledger.record("result", request_key, {"response": normalized, **context})
+        ledger.record(
+            "result", request_key, {"context": context, "response": normalized}
+        )
     return response

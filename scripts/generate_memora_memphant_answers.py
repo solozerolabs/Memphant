@@ -31,6 +31,7 @@ import run_memora_fama  # noqa: E402
 from provider_attempts import (  # noqa: E402
     ProviderAttemptLedger,
     fresh_paid_usage,
+    open_campaign_ledger_from_env,
     provider_attempt_ledger_is_complete,
     validate_provider_attempt_ledger,
 )
@@ -2081,12 +2082,9 @@ def main() -> None:
         runtime_proof, selection, args.out, attempt_ledger_path, args.cache_dir
     )
     ledger_existed = attempt_ledger_path.exists()
-    attempt_ledger = ProviderAttemptLedger(
-        attempt_ledger_path,
-        sha256_file(args.generation_lock),
-        "memora-reader",
-        200_000_000_000,
-        4_258_002_400,
+    attempt_ledger = open_campaign_ledger_from_env(
+        screen_id="memora-reader",
+        expected_journal_path=attempt_ledger_path,
     )
     validate_reader_cache_contract(
         args.cache_dir, attempt_ledger, ledger_existed=ledger_existed

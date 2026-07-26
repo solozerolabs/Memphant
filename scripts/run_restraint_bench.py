@@ -454,10 +454,11 @@ def _verify_legacy_results(run_dir: Path) -> dict:
             raise RuntimeError(f"MemSyco {task} answer/judge attempt count mismatch")
         requested = []
         for attempt in snapshot["attempts"]:
-            response = attempt["result"]["response"]
+            result = attempt["result"]
+            response = result["response"]
             if response.get("retry_index") != 0:
                 raise RuntimeError(f"MemSyco {task} contains a retry")
-            if response.get("arm") != "memphant" or response.get("task") != task:
+            if result.get("context") != {"arm": "memphant", "task": task}:
                 raise RuntimeError(f"MemSyco {task} attempt context mismatch")
             response_ids.append(response["response_id"])
             requested.append(response.get("requested_model"))
@@ -545,11 +546,11 @@ def _verify_manifest_results(run_dir: Path, contract: dict) -> dict:
         raise RuntimeError("MemSyco manifest answer/judge attempt count mismatch")
     requested: list[str] = []
     for attempt in snapshot["attempts"]:
-        response = attempt["result"]["response"]
+        result = attempt["result"]
+        response = result["response"]
         if (
             response.get("retry_index") != 0
-            or response.get("arm") != arm
-            or response.get("task") != task
+            or result.get("context") != {"arm": arm, "task": task}
         ):
             raise RuntimeError("MemSyco manifest contains retry/context drift")
         response_ids.append(response["response_id"])

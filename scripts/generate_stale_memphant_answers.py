@@ -31,6 +31,7 @@ import run_reader  # noqa: E402
 from provider_attempts import (  # noqa: E402
     ProviderAttemptLedger,
     fresh_paid_usage,
+    open_campaign_ledger_from_env,
     validate_provider_attempt_ledger,
 )
 from gate_runtime import episode_retain_payload, reexec_through_scratch_db  # noqa: E402
@@ -1047,12 +1048,9 @@ def main() -> int:
             "completion": Decimal("6"),
         },
     )
-    attempt_ledger = ProviderAttemptLedger(
-        attempt_ledger_path,
-        sha256_file(GENERATION_MANIFEST),
-        "stale-answer-reader",
-        200_000_000_000,
-        4_258_002_400,
+    attempt_ledger = open_campaign_ledger_from_env(
+        screen_id="stale-answer-reader",
+        expected_journal_path=attempt_ledger_path,
     )
     if completed:
         embedded = json.loads(proof_path.read_text(encoding="utf-8")).get(

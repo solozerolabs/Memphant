@@ -377,15 +377,28 @@ def test_paid_authorization_drift_fails_before_reader_or_provider_access(
         "cache_dir": "cache",
         "output": "out.json",
     }}
+    campaign = {
+        "journal_path": "attempts.jsonl",
+        "hard_ceiling_nanos": 200_000_000_000,
+        "opening_liability_nanos": 4_258_002_400,
+        "unallocated_reserve_nanos": 10_000_000_000,
+        "opening_reservations": [{
+            "reservation_id": "historical-opening",
+            "reserved_nanos": 4_258_002_400,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
+    }
     scope = {
         "frozen_inputs": frozen,
         "models": models,
         "hard_limits": hard_limits,
         "execution": execution,
+        "campaign": campaign,
     }
     manifest = {
         "schema_version": 2,
-        "status": "AUTHORIZED_FOR_PAID_EXECUTION",
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
         **scope,
         "authorization": {
             "authorized_by": "test-user",
@@ -453,9 +466,21 @@ def test_paid_authorization_rejects_fresh_ledger_replay(tmp_path, monkeypatch) -
         "run_id": "baseline", "attempt_ledger": "attempts.jsonl",
         "cache_dir": "cache", "output": "out.json",
     }}
-    scope = {"frozen_inputs": frozen, "models": models, "hard_limits": hard_limits, "execution": execution}
+    campaign = {
+        "journal_path": "attempts.jsonl",
+        "hard_ceiling_nanos": 200_000_000_000,
+        "opening_liability_nanos": 4_258_002_400,
+        "unallocated_reserve_nanos": 10_000_000_000,
+        "opening_reservations": [{
+            "reservation_id": "historical-opening",
+            "reserved_nanos": 4_258_002_400,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
+    }
+    scope = {"frozen_inputs": frozen, "models": models, "hard_limits": hard_limits, "execution": execution, "campaign": campaign}
     manifest = {
-        "schema_version": 2, "status": "AUTHORIZED_FOR_PAID_EXECUTION", **scope,
+        "schema_version": 2, "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN", **scope,
         "authorization": {
             "authorized_by": "test", "authorized_at": "2026-07-23T00:00:00Z",
             "authorization_scope_sha256": reader.sha256_text(
@@ -477,6 +502,15 @@ def test_paid_authorization_rejects_fresh_ledger_replay(tmp_path, monkeypatch) -
     reader.validate_paid_authorization(
         manifest_path, attempt_ledger_path=canonical_ledger, **kwargs
     )
+    ledger = reader.open_campaign_ledger(
+        manifest_path,
+        screen_id="reader-baseline",
+        expected_journal_path=canonical_ledger,
+    )
+    assert ledger.authorization_sha256 == manifest["authorization"][
+        "authorization_scope_sha256"
+    ]
+    ledger.close()
     with pytest.raises(ValueError, match="attempt_ledger drift"):
         reader.validate_paid_authorization(
             manifest_path, attempt_ledger_path=tmp_path / "fresh.jsonl", **kwargs

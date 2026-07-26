@@ -116,7 +116,10 @@ authorization.
 - `docs/build-log/artifacts/next-evidence/forgeteval/root-cause-and-transitions.json`
 - `scripts/run_forgeteval.py`
 - `scripts/analyze_forgeteval.py`
-- `scripts/generate_forgeteval_proposals.py`
+- `scripts/generate_forgeteval_proposals.py` is immutable, hash-pinned evidence
+  of the completed 2026-07-24 run and is not an active execution entrypoint.
+  Any newly authorized campaign must use `scripts/run_forgeteval_proposals.py`,
+  which opens the single campaign journal named by the new authorization packet.
 
 Historical focused verification: 64 tests passed. Paid calls at this
 checkpoint: 0. Settled cost at this checkpoint: $0. See the superseding source

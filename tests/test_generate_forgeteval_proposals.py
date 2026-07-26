@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
+MAINTAINED_ENTRYPOINT = ROOT / "scripts/run_forgeteval_proposals.py"
 SPEC = importlib.util.spec_from_file_location(
     "generate_forgeteval_proposals",
     ROOT / "scripts/generate_forgeteval_proposals.py",
@@ -15,6 +16,13 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
+
+
+def test_maintained_entrypoint_uses_canonical_campaign_authority() -> None:
+    source = MAINTAINED_ENTRYPOINT.read_text(encoding="utf-8")
+    assert "open_campaign_ledger" in source
+    assert "ProviderAttemptLedger(" not in source
+    assert "generate_forgeteval_proposals.py" not in source
 
 
 def proposal_input(operation="supersede"):

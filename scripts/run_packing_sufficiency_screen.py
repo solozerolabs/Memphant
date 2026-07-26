@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from provider_attempts import ProviderAttemptLedger
+from provider_attempts import open_campaign_ledger
 from run_reader import ReaderCli, restore_spend_from_attempts
 
 
@@ -284,12 +284,10 @@ def main() -> int:
     official_rows = json.loads(dataset_path.read_text())
     dataset = {row["question_id"]: row for row in official_rows}
 
-    ledger = ProviderAttemptLedger(
-        attempt_path,
-        sha256_file(Path(args.authorization_manifest)),
-        "packing-sufficiency",
-        200_000_000_000,
-        4_258_002_400,
+    ledger = open_campaign_ledger(
+        Path(args.authorization_manifest),
+        screen_id="packing-sufficiency",
+        expected_journal_path=attempt_path,
     )
     try:
         cli = ReaderCli(

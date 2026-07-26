@@ -64,6 +64,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from provider_attempts import (
     ProviderAttemptLedger,
+    open_campaign_ledger,
     openrouter_generation_lookup,
     provider_response_evidence,
 )
@@ -158,15 +159,19 @@ def validate_paid_authorization(
     for field, actual in execution_expectations.items():
         if execution.get(field) != actual:
             raise ValueError(f"paid authorization execution field {field} drift")
+    campaign = manifest.get("campaign")
+    if not isinstance(campaign, dict):
+        raise ValueError("paid authorization campaign authority is missing")
     scope = {
         "frozen_inputs": frozen,
         "models": models,
         "hard_limits": manifest["hard_limits"],
         "execution": manifest["execution"],
+        "campaign": campaign,
     }
     authorization = manifest.get("authorization")
     if (
-        manifest.get("status") != "AUTHORIZED_FOR_PAID_EXECUTION"
+        manifest.get("status") != "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
         or not isinstance(authorization, dict)
         or not isinstance(authorization.get("authorized_by"), str)
         or not authorization["authorized_by"].strip()
@@ -1810,12 +1815,10 @@ def main() -> int:
             parser.error(str(error))
     attempt_ledger = None
     if args.attempt_ledger:
-        attempt_ledger = ProviderAttemptLedger(
-            Path(args.attempt_ledger),
-            _file_sha256(Path(args.authorization_manifest)),
-            f"reader-{args.authorization_arm}",
-            200_000_000_000,
-            4_258_002_400,
+        attempt_ledger = open_campaign_ledger(
+            Path(args.authorization_manifest),
+            screen_id=f"reader-{args.authorization_arm}",
+            expected_journal_path=Path(args.attempt_ledger),
         )
     cli = ReaderCli(
         args.engine,

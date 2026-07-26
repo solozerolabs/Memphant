@@ -70,8 +70,19 @@ def test_campaign_ledger_enforces_cumulative_liability_across_screens(
         "requested_model": "openai/gpt-5.6-luna-pro",
         "request_sha256": "1" * 64,
     }
+    inventory = [{
+        "reservation_id": "opening",
+        "reserved_nanos": 10_000,
+        "receipt_sha256": "b" * 64,
+        "proof_sha256": "c" * 64,
+    }]
     first = attempts.ProviderAttemptLedger(
-        path, auth, "screen-a", 200_000, 10_000
+        path,
+        auth,
+        "screen-a",
+        10_000_200_000,
+        10_000,
+        opening_reservations=inventory,
     )
     first.record("start", "a", {**start, "max_liability_nanos": 100_000})
     first.record(
@@ -80,11 +91,86 @@ def test_campaign_ledger_enforces_cumulative_liability_across_screens(
     first.close()
 
     second = attempts.ProviderAttemptLedger(
-        path, auth, "screen-b", 200_000, 10_000
+        path,
+        auth,
+        "screen-b",
+        10_000_200_000,
+        10_000,
+        opening_reservations=inventory,
     )
-    with pytest.raises(RuntimeError, match="campaign hard ceiling"):
+    with pytest.raises(RuntimeError, match="campaign unallocated reserve"):
         second.record(
             "start", "b", {**start, "max_liability_nanos": 150_001}
+        )
+
+
+def test_campaign_authorization_opens_one_scope_and_journal_for_every_screen(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+    journal = tmp_path / "campaign.jsonl"
+    packet = tmp_path / "authorization.json"
+    scope = {"campaign": {
+        "journal_path": journal.name,
+        "hard_ceiling_nanos": attempts.CAMPAIGN_HARD_CEILING_NANOS,
+        "opening_liability_nanos": attempts.CAMPAIGN_OPENING_LIABILITY_NANOS,
+        "unallocated_reserve_nanos": attempts.CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
+        "opening_reservations": [{
+            "reservation_id": "historical-opening",
+            "reserved_nanos": attempts.CAMPAIGN_OPENING_LIABILITY_NANOS,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
+    }}
+    authorization = attempts._sha256_json(scope)
+    packet.write_text(json.dumps({
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        "authorization": {"authorization_scope_sha256": authorization},
+        **scope,
+    }))
+
+    first = attempts.open_campaign_ledger(packet, screen_id="screen-a")
+    assert first.path == journal.resolve()
+    assert first.authorization_sha256 == authorization
+    first.close()
+    second = attempts.open_campaign_ledger(
+        packet, screen_id="screen-b", expected_journal_path=journal
+    )
+    assert second.path == first.path
+    assert second.authorization_sha256 == first.authorization_sha256
+    second.close()
+
+    with pytest.raises(ValueError, match="canonical campaign journal path"):
+        attempts.open_campaign_ledger(
+            packet,
+            screen_id="screen-c",
+            expected_journal_path=tmp_path / "alternate.jsonl",
+        )
+
+
+def test_campaign_start_preserves_exact_ten_dollar_reserve(tmp_path: Path) -> None:
+    attempts = load_attempts()
+    ledger = attempts.ProviderAttemptLedger(
+        tmp_path / "campaign.jsonl",
+        "a" * 64,
+        "screen-a",
+        attempts.CAMPAIGN_HARD_CEILING_NANOS,
+        0,
+    )
+    start = {
+        "retry_index": 0,
+        "requested_model": "model",
+        "request_sha256": "1" * 64,
+    }
+    ledger.record(
+        "start",
+        "allowed",
+        {**start, "max_liability_nanos": 190_000_000_000},
+    )
+    ledger.assert_open()
+    with pytest.raises(RuntimeError, match="campaign unallocated reserve"):
+        ledger.record(
+            "start", "reserve-invader", {**start, "max_liability_nanos": 1}
         )
 
 
@@ -93,7 +179,17 @@ def test_campaign_ledger_retains_unresolved_reservations_and_rounds_cost_up(
 ) -> None:
     attempts = load_attempts()
     ledger = attempts.ProviderAttemptLedger(
-        tmp_path / "campaign.jsonl", "a" * 64, "screen-a", 1_000, 10
+        tmp_path / "campaign.jsonl",
+        "a" * 64,
+        "screen-a",
+        10_000_001_000,
+        10,
+        opening_reservations=[{
+            "reservation_id": "opening",
+            "reserved_nanos": 10,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
     )
     start = {
         "retry_index": 0,
@@ -124,14 +220,18 @@ def test_campaign_ledger_assert_open_allows_exact_ceiling(
 ) -> None:
     attempts = load_attempts()
     ledger = attempts.ProviderAttemptLedger(
-        tmp_path / "campaign.jsonl", "a" * 64, "cache-screen", 110, 10
+        tmp_path / "campaign.jsonl",
+        "a" * 64,
+        "cache-screen",
+        attempts.CAMPAIGN_HARD_CEILING_NANOS,
+        attempts.CAMPAIGN_HARD_CEILING_NANOS,
+        opening_reservations=[{
+            "reservation_id": "opening",
+            "reserved_nanos": attempts.CAMPAIGN_HARD_CEILING_NANOS,
+            "receipt_sha256": "b" * 64,
+            "proof_sha256": "c" * 64,
+        }],
     )
-    ledger.record("start", "cached", {
-        "retry_index": 0,
-        "requested_model": "model",
-        "request_sha256": "1" * 64,
-        "max_liability_nanos": 100,
-    })
 
     ledger.assert_open()
 
@@ -337,6 +437,58 @@ def test_shared_meter_context_cannot_override_reserved_liability(tmp_path: Path)
     sdk.OpenAI().chat.completions.create(model="judge", messages=[])
 
     assert ledger.attempts[0]["start"]["max_liability_nanos"] == 100_000_000
+
+
+def test_shared_meter_namespaces_context_away_from_authoritative_evidence(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+
+    class Completions:
+        def create(self, **_kwargs):
+            payload = {
+                "id": "judge-authoritative",
+                "model": "served-authoritative",
+                "provider": "OpenAI",
+                "usage": {
+                    "prompt_tokens": 2,
+                    "completion_tokens": 1,
+                    "total_tokens": 3,
+                    "cost": 0.01,
+                },
+            }
+            return types.SimpleNamespace(
+                **payload, model_dump=lambda **_kwargs: payload
+            )
+
+    class OpenAI:
+        def __init__(self, **_kwargs):
+            self.chat = types.SimpleNamespace(completions=Completions())
+
+    collisions = {
+        "usage": {"cost": "0.000000001"},
+        "response": {"usage": {"cost": "0.000000001"}},
+        "request_sha256": "f" * 64,
+        "result_sha256": "e" * 64,
+        "requested_model": "caller-model",
+        "served_model": "caller-served",
+        "provider": "caller-provider",
+    }
+    ledger = open_test_ledger(attempts, tmp_path / "judge.jsonl", "judge")
+    sdk = types.SimpleNamespace(OpenAI=OpenAI)
+    attempts.install_openai_meter(
+        sdk, ledger, max_liability_nanos=100_000_000, context=collisions
+    )
+    sdk.OpenAI().chat.completions.create(model="requested-authoritative", messages=[])
+
+    row = ledger.snapshot()["attempts"][0]
+    assert row["start"]["context"] == collisions
+    assert row["result"]["context"] == collisions
+    assert row["result"]["response"]["usage"]["cost"] == 0.01
+    assert row["result"]["response"]["requested_model"] == "requested-authoritative"
+    assert row["result"]["response"]["served_model"] == "served-authoritative"
+    assert row["result"]["response"]["provider"] == "OpenAI"
+    assert ledger.snapshot()["settled_nanos"] == 10_000_000
 
 
 def load_script():
@@ -1075,7 +1227,6 @@ def test_stale_smoke_binds_dimension_archives_to_global_ledger_and_answer_hash(
             response = paid_response(response_id)
             response["requested_model"] = requested_model
             response["served_model"] = served_model
-            response.update(context or {})
             value.record(
                 "start",
                 response_id,
@@ -1086,7 +1237,11 @@ def test_stale_smoke_binds_dimension_archives_to_global_ledger_and_answer_hash(
                     "max_liability_nanos": 100_000_000,
                 },
             )
-            value.record("result", response_id, {"response": response})
+            value.record(
+                "result",
+                response_id,
+                {"context": context or {}, "response": response},
+            )
             responses.append(response)
         return value.snapshot(), responses
 

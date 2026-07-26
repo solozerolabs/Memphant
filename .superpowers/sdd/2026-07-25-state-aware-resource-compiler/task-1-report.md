@@ -1,6 +1,6 @@
 # Task 1 report: campaign-wide attempt ledger and closure authority
 
-Status: `DONE_WITH_CONCERNS`
+Status: `DONE`
 
 ## Outcome
 
@@ -23,12 +23,16 @@ No paid/model execution was authorized or performed.
 - `scripts/run_packing_sufficiency_screen.py`
 - `scripts/validate_memora_reasoning_proof.py`
 - `scripts/run_memora_fama.py`
+- `scripts/run_forgeteval_proposals.py`
+- `scripts/run_restraint_bench.py`
+- `scripts/run_stale.py`
 - `benchmarks/memsyco/harness_bootstrap.py`
 - `benchmarks/stale/harness_bootstrap.py`
 - `tests/test_temporal_benchmark_contract.py`
 - `tests/test_restraint_benchmark_contract.py`
 - `tests/test_memora_benchmark_contract.py`
 - `tests/test_run_reader_contract.py`
+- `tests/test_generate_forgeteval_proposals.py`
 - `.superpowers/sdd/2026-07-25-state-aware-resource-compiler/task-1-report.md`
 
 ## TDD evidence
@@ -87,13 +91,67 @@ then passed, and the final full suite was green.
 - Appended and fsynced `closed` before attempting the atomic JSON closure
   projection, so projection failure cannot reopen a campaign.
 
-## Concerns and follow-up
+## Review fix round
 
-- `scripts/generate_forgeteval_proposals.py` remains byte-identical because a
-  completed paid child packet cryptographically pins it. It still contains the
-  old constructor call and now fails before reader/cache/credential access; it
-  is historical evidence, not an active execution path. Rewriting it would
-  invalidate provenance and must not be done.
+The independent review identified four critical and two important gaps. The
+fix round closed each at the shared contract rather than adding per-run guards:
+
+- **C1:** `open_campaign_ledger` now validates the new frozen campaign status,
+  recomputes its authorization-scope hash, and opens only the packet's resolved
+  canonical journal path. Every maintained paid screen uses this loader (or its
+  environment-backed form) and varies only `screen_id`; caller-specific lock,
+  manifest, and output hashes no longer mint campaign authorities.
+- **C2:** the schema-v2 header binds the exact `10_000_000_000` nano-USD
+  unallocated reserve. `assert_open()` still permits cache-only replay at the
+  exact `200_000_000_000` ceiling, while every new start must fit at or below
+  `190_000_000_000` total liability.
+- **C3:** native SDK adapters no longer read OpenRouter credentials or construct
+  generation-statistics lookups. The meter appends and fsyncs `start`, then
+  invokes the credential-backed lookup factory and lazily constructs the SDK
+  client. A regression test inspects the persisted `started` row from both
+  boundaries.
+- **C4:** caller metadata is stored only under `context` in start, result, and
+  error payloads. It is never merged into provider evidence; collision tests
+  cover `usage`, `response`, request/result hashes, requested/served model, and
+  provider identity.
+- **I1:** the header now binds a durable opening-reservation inventory whose
+  exact sum equals opening liability. Reconciliation derives the reserved
+  amount from a known unreconciled entry and requires its exact receipt and
+  proof hashes before reducing carried liability.
+- **I2:** the hash-pinned historical generator remains byte-identical at
+  `faa1fbffcca57e3e62a98c4791a4daff15595b117d49d33e9f459670600e8356`.
+  New execution uses maintained `scripts/run_forgeteval_proposals.py`, which
+  validates the new campaign packet and opens its canonical journal. Current
+  documentation labels the old path immutable historical evidence.
+
+Fix-round RED evidence:
+
+```text
+canonical authority / reserve / exact-ceiling / context regressions: 4 failed
+receipt-bound opening inventory regression: 1 failed
+maintained ForgetEval entrypoint regression: 1 failed
+```
+
+Final fix-round verification:
+
+```text
+python3 -m pytest tests/test_temporal_benchmark_contract.py tests/test_restraint_benchmark_contract.py tests/test_run_reader_contract.py tests/test_generate_forgeteval_proposals.py -q
+160 passed in 1.05s
+
+python3 -m pytest tests/ -q
+864 passed, 12 skipped in 27.11s
+
+python3 -m py_compile <all changed Python production files>
+passed
+
+git diff --check
+passed
+```
+
+No paid/model execution was authorized or performed during the fix round.
+
+## Follow-up
+
 - Legacy native scorer bootstraps now reserve a conservative
   `10_000_000_000` nano-USD per SDK attempt. Tasks 5-6 must replace legacy
   campaign entrypoints with the census-derived, authorization-bound exact
