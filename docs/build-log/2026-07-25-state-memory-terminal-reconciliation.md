@@ -27,7 +27,8 @@ decision, not as a SOTA result.
 
 ### STALE
 
-- Code: `ea7d391103a151927cd29d2f01d87597a782bdcb`, Apache-2.0.
+- Code: `ea7d391103a151927cd29d2f01d87597a782bdcb`, MIT; dataset:
+  CC-BY-4.0.
 - Dataset: `617c51dc200b5ab09970834144c7e51c77959af0`, 400 scenarios,
   305,908,212 bytes, SHA-256
   `5f3ec375179e20e2e94469e018189188f34e2e7e5f21cbecbd99fcfa648c1876`.

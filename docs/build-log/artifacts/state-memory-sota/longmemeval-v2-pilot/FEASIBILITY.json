@@ -31,6 +31,7 @@
     "trajectories_sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6",
     "adapter_sha256": "56c2a7264112e012f9376178cc2ef3383d70705f21255d4182e92bf62f8e206c",
     "service_sha256": "30b93fbd0d28551b0aa1a298e0453a0d56a1090fcaf687c91422bb4a4c227ad3",
+    "structured_provider_path": "crates/memphant-runtime/src/structured_state_openrouter.rs",
     "structured_provider_sha256": "66026cd4c67fcbad3a263ca5c77e8ab471e41343197d27e352060e958ea31a81",
     "structured_prompt_sha256": "915c0adc64c5839bc7094fb3fb92be301436f5b7d68df363d6862768d53cafee"
   },
@@ -75,7 +76,7 @@
     "max_attempts_per_resource": 3,
     "one_attempt_max_token_liability_usd": "1852.366848",
     "three_attempt_max_token_liability_usd": "5557.100544",
-    "note": "This is a conservative liability bound for the obvious resource-extraction extension, not incurred spend. The extension would still fail the input-size contract."
+    "note": "This deliberately conservative ceiling treats each permitted input byte as a possible token; it is not expected cost or incurred spend. The obvious extension would still fail the input-size contract."
   },
   "gate_failures": [
     "candidate mechanism absent from the adapter construction path",
