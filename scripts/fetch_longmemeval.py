@@ -153,6 +153,22 @@ def build_split_manifest(dataset_path: Path) -> dict:
 
     dataset_ids = set(by_id)
     exposed, commit, artifact_count, matching_count = exposed_question_ids(dataset_ids)
+    # The development cohort is FROZEN, not a live recomputation: its ID-set
+    # sha256 is a hash-bound term of benchmarks/manifests/reader_lattices.v1.json
+    # and the recorded validity transform, so recomputing it would silently
+    # redefine the cohort and break same-lattice comparability. Exposure keeps
+    # growing as evidence lands; that drift belongs in current_exposure, and it
+    # is what seals the confirmation set below.
+    frozen_development = set(exposed)
+    if SPLIT_MANIFEST.exists():
+        previous = json.loads(SPLIT_MANIFEST.read_text(encoding="utf-8"))
+        frozen_development = set(previous["exposed_development"]["question_ids"])
+        if not frozen_development <= exposed:
+            raise ValueError(
+                "frozen development cohort is no longer fully exposed; committed "
+                "evidence was deleted: "
+                f"{sorted(frozen_development - exposed)}"
+            )
     exposed_answer_sessions = {
         session_id
         for question_id in exposed
@@ -203,7 +219,12 @@ def build_split_manifest(dataset_path: Path) -> dict:
                 "intersect with cleaned dataset IDs."
             ),
         },
-        "exposed_development": split(exposed),
+        "exposed_development": split(frozen_development),
+        "current_exposure": {
+            **split(exposed),
+            "exposure_class": "every-question-id-present-in-committed-evidence",
+            "beyond_frozen_development_count": len(exposed - frozen_development),
+        },
         "answer_bearing_session_disjoint_confirmation": {
             **split(answer_disjoint),
             "exposure_class": "question-unseen-and-answer-bearing-session-disjoint",

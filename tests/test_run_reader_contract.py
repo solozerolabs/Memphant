@@ -125,16 +125,8 @@ def test_corrupt_first_download_leaves_no_dataset_file(tmp_path, monkeypatch) ->
 # benchmarks/data/longmemeval_s.development.controls.json, and
 # docs/build-log/artifacts/unified-sota-20260713/validity-transform-v1.json.
 # Regenerating it would silently redefine the lattice cohort and break
-# same-lattice comparability, so this suite pins the cohort and separately
-# ratchets how far real exposure has drifted past it.
-#
-# Known debt at 2026-07-27: evidence landed after the cohort was frozen exposes
-# 60 more question IDs, and 58 of them fall inside the 319-question held-out
-# confirmation set. Those 58 are contaminated as confirmation material. Fixing
-# that means re-cutting the split AND re-issuing the lattices and the recorded
-# validity transform, which changes the standing of recorded results — an owner
-# decision, not a test edit. This ratchet stops it getting worse meanwhile.
-KNOWN_CONFIRMATION_CONTAMINATION = 58
+# same-lattice comparability, so this suite pins the cohort and checks live
+# exposure separately.
 
 
 def test_frozen_development_cohort_still_binds_the_reader_lattices() -> None:
@@ -172,23 +164,35 @@ def test_cleaned_split_manifest_recomputes_exposure_and_answer_session_disjointn
     fetch = _load_fetch_longmemeval()
     split = fetch.build_split_manifest(dataset_path)
     committed = json.loads(fetch.SPLIT_MANIFEST.read_text(encoding="utf-8"))
+    # The frozen cohort must survive regeneration untouched, or the lattices
+    # silently stop binding.
+    assert (
+        split["exposed_development"]["question_ids_sorted_sha256"]
+        == committed["exposed_development"]["question_ids_sorted_sha256"]
+    )
     frozen = set(committed["exposed_development"]["question_ids"])
-    current = set(split["exposed_development"]["question_ids"])
+    current = set(split["current_exposure"]["question_ids"])
     # Exposure is append-only: an ID leaving it means committed evidence was
     # deleted, which would silently launder a question back into evaluation.
     assert frozen <= current, sorted(frozen - current)
-    held_out = set(committed["answer_bearing_session_disjoint_confirmation"]["question_ids"])
-    contaminated = held_out & (current - frozen)
-    assert len(contaminated) <= KNOWN_CONFIRMATION_CONTAMINATION, (
-        f"{len(contaminated)} held-out confirmation questions are now exposed in "
-        f"committed evidence (known debt {KNOWN_CONFIRMATION_CONTAMINATION}); "
-        "re-cut the split and re-issue the lattices before scoring on it"
-    )
+    # The confirmation set is sealed: no question in it may appear anywhere in
+    # committed evidence. This is the invariant that a hardcoded count hid --
+    # 58 confirmation questions had been burned by the P1 adversarial pool.
+    for section in (
+        "answer_bearing_session_disjoint_confirmation",
+        "strict_all_haystack_session_disjoint_confirmation",
+    ):
+        sealed = set(split[section]["question_ids"])
+        assert sealed.isdisjoint(current), sorted(sealed & current)
+        assert split[section]["count"] == committed[section]["count"], section
     assert split["strict_all_haystack_session_disjoint_confirmation"]["count"] == 0
     rows = {row["question_id"]: row for row in json.loads(dataset_path.read_text())}
+    # Disjointness is measured against everything exposed, not just the frozen
+    # cohort: a confirmation question whose answer sessions were seen through
+    # any later evidence is no longer clean.
     exposed_answers = {
         session_id
-        for question_id in split["exposed_development"]["question_ids"]
+        for question_id in split["current_exposure"]["question_ids"]
         for session_id in rows[question_id]["answer_session_ids"]
     }
     for question_id in split["answer_bearing_session_disjoint_confirmation"][
