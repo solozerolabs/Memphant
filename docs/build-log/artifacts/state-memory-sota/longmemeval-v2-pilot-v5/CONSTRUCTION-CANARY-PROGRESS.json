@@ -1,0 +1,11 @@
+{
+  "authorization_sha256": "71a388d99597481e99b524cb8fd289b59fd0e646766ca5fd29ba6b9094449c1c",
+  "campaign_census_sha256": "58aef24a14abbb41ff2a67ab8c3a42f0c4ca55299c7528a63bb1be772d1dae34",
+  "processor_result": {
+    "allowed_plans_sha256": "2a1dcd65e561d81cd74d8c541dfe9a4cd920958a2992f1f1fb5c07ea0db1ae38",
+    "executed_plan_count": 64,
+    "hidden_retries": 0,
+    "maximum_workers": 4,
+    "schema_version": 1
+  }
+}
