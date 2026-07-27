@@ -276,7 +276,7 @@ def test_v5_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     assert (v4_root / "CAMPAIGN-AUTHORIZATION.json").is_file()
     with pytest.raises(RuntimeError, match="canonical authorization"):
         runner.prewarm_sealed_prefix(v4_root / "CAMPAIGN-AUTHORIZATION.json")
-    assert not (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json").exists()
+    assert (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json").is_file()
     assert not (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json").exists()
     assert all(
         Path(path).is_relative_to(runner.CAMPAIGN_ARTIFACT_ROOT)
@@ -1416,34 +1416,34 @@ def _canary_plans(runner, count: int = 128) -> list[dict[str, object]]:
     preferred_hashes = sorted(preferred)
     v4_failures = [
         (
-            "00272ebbf9e7b528e3042ab7ba2371b93c324e5fae440c8245f03c944790fa27",
             "21bbbfb39a195cbac881c4bf918163dc43d0af8a53234c2604c633f6110de406",
+            8,
         ),
         (
-            "002f4114e0ce7e31a7a9d9e3d0e729fa1a3286e6b750ceb2b578cab9cc2db466",
             "2527ee5adb13339436f1a491f85c70d40e579f9532f814497659aacf386aa465",
+            4,
         ),
         (
-            "022e0efc1da02a3bcc2394578699f73947c2634e2c87a237584670d6891e06a7",
             "91b2752c89dd5ae4ee9f82ef7a5a76a4c7b0d88c8efec62384fda7373ca544b7",
+            6,
         ),
         (
-            "06d7515812aeecf8aef50ecd62551834086d1a94398fd329ca0c9e21a94ce7f7",
             "2c3df8467ac637d4d0965e9349930a66b047748e1f22630088603ebe2658257d",
+            3,
         ),
         (
-            "0769da56e60bef7a4d6898ccdfe67db573a1f6b0f1dd5c30840aa716e193bcb7",
             "38dfc4ece78dc8a4feecd49f81e933b0a3901f5db05faa995c6e216111076e68",
+            3,
         ),
         (
-            "0acffac48f688711da9e5cae4d36600ec338f18c09582d3708402749eb561b2d",
             "6bf4f293a47f08630e7e00043adc01f4810d80c4d56c6a70dca8391eb18f9031",
+            0,
         ),
     ]
     plans = []
     for index in range(count):
         source_body_sha256 = (
-            v4_failures[index][1]
+            v4_failures[index][0]
             if index < len(v4_failures)
             else preferred_hashes[index]
             if index < min(32, len(preferred_hashes))
@@ -1451,11 +1451,7 @@ def _canary_plans(runner, count: int = 128) -> list[dict[str, object]]:
         )
         plans.append(
             {
-                "extraction_key": (
-                    v4_failures[index][0]
-                    if index < len(v4_failures)
-                    else hashlib.sha256(f"key-{index}".encode()).hexdigest()
-                ),
+                "extraction_key": hashlib.sha256(f"v5-key-{index}".encode()).hexdigest(),
                 "request_sha256": hashlib.sha256(
                     f"request-{index}".encode()
                 ).hexdigest(),
@@ -1464,7 +1460,11 @@ def _canary_plans(runner, count: int = 128) -> list[dict[str, object]]:
                 "maximum_attempts": 3,
                 "source_kind": "episode" if index % 2 else "resource",
                 "source_body_sha256": source_body_sha256,
-                "batch_index": index,
+                "batch_index": (
+                    v4_failures[index][1]
+                    if index < len(v4_failures)
+                    else index
+                ),
                 "evidence_slices_sha256": hashlib.sha256(
                     f"evidence-{index}".encode()
                 ).hexdigest(),
@@ -1505,7 +1505,7 @@ def test_construction_canary_prefers_exact_v4_then_v1_failures() -> None:
         for kind in ("episode", "resource")
         for quantile in range(1, 5)
     }
-    assert canary["preferred_v4_failed_extraction_key_count"] == 6
+    assert canary["preferred_v4_failed_plan_count"] == 6
     assert canary["preferred_v1_failed_source_count"] > 0
     assert canary["gate"]["maximum_statistical_failures"] == 4
     assert canary["gate"]["maximum_semantic_failures"] == 0

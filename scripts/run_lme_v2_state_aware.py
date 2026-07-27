@@ -94,6 +94,7 @@ V3_ABANDONMENT_PROOF = (
 V4_CAMPAIGN_ARTIFACT_ROOT = (
     ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4"
 )
+V4_CANONICAL_CAMPAIGN_CENSUS = V4_CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
 V4_ABANDONMENT_PROOF = (
     ROOT
     / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-v4-abandonment.json"
@@ -6715,7 +6716,7 @@ def _v1_failed_source_body_sha256s() -> tuple[set[str], str]:
     return set(hashes), _sha256_file(V1_FAILED_SOURCE_INVENTORY)
 
 
-def _v4_failed_source_identities() -> tuple[set[tuple[str, str]], str]:
+def _v4_failed_plan_identities() -> tuple[set[tuple[str, int]], str, str]:
     value = json.loads(V4_FAILED_SOURCE_INVENTORY.read_text(encoding="utf-8"))
     failures = value.get("failures") if isinstance(value, dict) else None
     abandonment = json.loads(V4_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
@@ -6771,14 +6772,56 @@ def _v4_failed_source_identities() -> tuple[set[tuple[str, str]], str]:
         "http_429_error_unresolved": 1,
     }:
         raise RuntimeError("v4 failed-source canary classes drift")
-    return identities, inventory_file_sha256
+    census = json.loads(V4_CANONICAL_CAMPAIGN_CENSUS.read_text(encoding="utf-8"))
+    census_file_sha256 = _sha256_file(V4_CANONICAL_CAMPAIGN_CENSUS)
+    census_core = {key: item for key, item in census.items() if key != "census_sha256"}
+    canary = census.get("construction", {}).get("construction_canary", {})
+    plans = canary.get("plans") if isinstance(canary, dict) else None
+    source_canary = abandonment.get("canary_plan_inventory", {})
+    if (
+        census.get("census_sha256") != sha256_json(census_core)
+        or source_canary.get("relative_path")
+        != str(V4_CANONICAL_CAMPAIGN_CENSUS.relative_to(ROOT))
+        or source_canary.get("bytes") != V4_CANONICAL_CAMPAIGN_CENSUS.stat().st_size
+        or source_canary.get("sha256") != census_file_sha256
+        or not isinstance(plans, list)
+        or canary.get("plan_count") != len(plans)
+        or canary.get("plans_sha256") != sha256_json(plans)
+        or source_canary.get("plan_count") != len(plans)
+        or source_canary.get("plans_sha256") != canary.get("plans_sha256")
+    ):
+        raise RuntimeError("v4 source census canary identity drift")
+    plans_by_failed_identity = {
+        (plan.get("extraction_key"), plan.get("source_body_sha256")): plan
+        for plan in plans
+        if isinstance(plan, dict)
+        and _valid_sha256(plan.get("extraction_key"))
+        and _valid_sha256(plan.get("source_body_sha256"))
+        and type(plan.get("batch_index")) is int
+        and plan["batch_index"] >= 0
+    }
+    if len(plans_by_failed_identity) != len(plans) or any(
+        identity not in plans_by_failed_identity for identity in identities
+    ):
+        raise RuntimeError("v4 failed-source plans are absent or ambiguous")
+    stable_identities = {
+        (source_body_sha256, plans_by_failed_identity[(extraction_key, source_body_sha256)]["batch_index"])
+        for extraction_key, source_body_sha256 in identities
+    }
+    if len(stable_identities) != len(identities):
+        raise RuntimeError("v4 failed-source stable plan identities are not unique")
+    return stable_identities, inventory_file_sha256, census_file_sha256
 
 
 def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, object]:
     """Choose a stable, reservation-stratified preflight subset."""
     normalized, _reservation, inventory_sha256 = _plan_inventory(plans)
     preferred_v1, preferred_v1_inventory_sha256 = _v1_failed_source_body_sha256s()
-    preferred_v4, preferred_v4_inventory_sha256 = _v4_failed_source_identities()
+    (
+        preferred_v4,
+        preferred_v4_inventory_sha256,
+        preferred_v4_census_sha256,
+    ) = _v4_failed_plan_identities()
     target = min(CONSTRUCTION_CANARY_PLAN_COUNT, len(normalized))
     groups: dict[str, list[dict[str, object]]] = {}
     source_kinds = sorted(
@@ -6805,10 +6848,7 @@ def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, obje
     for candidates in groups.values():
         candidates.sort(
             key=lambda plan: (
-                (
-                    plan.get("extraction_key"),
-                    plan.get("source_body_sha256"),
-                )
+                (plan.get("source_body_sha256"), plan.get("batch_index"))
                 not in preferred_v4,
                 plan.get("source_body_sha256") not in preferred_v1,
                 plan["extraction_key"],
@@ -6832,19 +6872,19 @@ def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, obje
     core = {
         "schema_version": 1,
         "plan_count": target,
-        "selection_method": "source-kind-x-within-kind-reservation-quartile-round-robin-v2",
+        "selection_method": "source-kind-x-within-kind-reservation-quartile-round-robin-v3",
         "full_plan_inventory_sha256": inventory_sha256,
         "plans": selected,
         "plans_sha256": sha256_json(selected),
         "stratum_counts": dict(sorted(group_counts.items())),
-        "preferred_v4_failed_extraction_key_count": sum(
-            (plan.get("extraction_key"), plan.get("source_body_sha256"))
-            in preferred_v4
+        "preferred_v4_failed_plan_count": sum(
+            (plan.get("source_body_sha256"), plan.get("batch_index")) in preferred_v4
             for plan in selected
         ),
         "preferred_v4_failed_source_inventory_file_sha256": (
             preferred_v4_inventory_sha256
         ),
+        "preferred_v4_source_census_file_sha256": preferred_v4_census_sha256,
         "preferred_v1_failed_source_count": sum(
             plan.get("source_body_sha256") in preferred_v1 for plan in selected
         ),
