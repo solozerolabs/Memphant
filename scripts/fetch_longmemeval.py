@@ -75,6 +75,31 @@ def _question_ids(value: object) -> set[str]:
     return set()
 
 
+def _load_json_or_jsonl(raw: bytes, path: str) -> object:
+    """Parse a committed artifact that may be a JSON document or a JSONL ledger.
+
+    Some hash-chained attempt ledgers are committed as ``*.attempts.json`` even
+    though they are line-delimited. This scan is a benchmark leak guard, so it
+    must read their contents rather than crash on them — a guard that aborts
+    covers nothing. Anything that parses as neither still raises.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    records = []
+    for number, line in enumerate(raw.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"{path} parses as neither JSON nor JSONL (line {number})"
+            ) from error
+    return records
+
+
 def exposed_question_ids(dataset_ids: set[str]) -> tuple[set[str], str, int, int]:
     commit = subprocess.run(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
@@ -107,7 +132,7 @@ def exposed_question_ids(dataset_ids: set[str]) -> tuple[set[str], str, int, int
             check=True,
             capture_output=True,
         ).stdout
-        found = _question_ids(json.loads(raw)) & dataset_ids
+        found = _question_ids(_load_json_or_jsonl(raw, path)) & dataset_ids
         if found:
             matching_files += 1
             exposed.update(found)
