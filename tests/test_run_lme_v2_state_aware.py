@@ -380,6 +380,13 @@ def test_census_refuses_authorization_without_exact_bounds(tmp_path: Path) -> No
         capture_output=True,
         text=True,
         check=False,
+        # The runner imports `benchmarks.longmemeval_v2.construction_authority`,
+        # and `benchmarks/` is a namespace package in a repo with no pyproject,
+        # so the repo root must be on the path. The runner's own bytes are a
+        # frozen term of the v5 campaign authorization chain (manifest
+        # `code_sha256s` -> `source_set_sha256` -> committed CAMPAIGN-CENSUS),
+        # so this contract belongs in the caller, not in a sys.path edit.
+        env={**os.environ, "PYTHONPATH": str(ROOT)},
     )
 
     assert completed.returncode == 0, completed.stderr

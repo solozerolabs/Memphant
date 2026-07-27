@@ -32,6 +32,16 @@ MemPhant is the public Apache-2.0 memory substrate repo. Treat `docs/superpowers
 - Preserve unrelated dirty work in this repo and in any private Syndai checkout.
 - `openapi/memphant.v1.json` and `mcp/memphant.tools.v1.json` are generated artifacts — regenerate via the server/mcp binaries, never hand-edit.
 
+## Benchmark Dataset Cache
+
+- Benchmark corpora and paid-run caches live OUTSIDE the repo under two roots: `~/.cache/memphant-bench/` and `~/.cache/memphant/`. Both hold real benchmark state, not disposable build output — do NOT include either in disk cleanups or blanket `rm -rf ~/.cache` sweeps. `~/.cache/memphant-byo-minilm/` holds a pinned local embedder.
+- `~/.cache/memphant-bench/` holds the public corpora: `longmemeval-v2-<rev>/` (~13 GB, most of it `data/trajectory_screenshots/`), `memora/` (~1.1 GB), `sota-paid-rung/` (~307 MB), plus per-run state/stale dirs and the flat sha256-named downloads owned by `scripts/ingest_public_bench.py`.
+- `~/.cache/memphant/` is the LongMemEval-V2 data root used by `scripts/run_lme_v2_state_aware.py` (`--data-root` / `MEMPHANT_LME_V2_DATA_ROOT`). It holds campaign state that is **not** re-downloadable, so it is the more dangerous of the two to delete.
+- `--cache-dir` means two different things: a *corpus* cache in `run_memora_fama.py` / `run_stale.py` / `run_state_bench.py`, and a *paid provider-response* cache in `run_reader.py`, `generate_*_answers.py`, `code_lane_mine.py`, and `gate_mine_goldens.py`. Deleting the latter re-spends real money.
+- Pinned dataset revisions are part of promotion provenance (`benchmarks/manifests/*.json`, `STATUS.md`): deleting a cached revision can invalidate reproduction of a recorded run.
+- Paid-run response bodies and resumable state under `docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/` are gitignored by design and live only on disk. Only the compact authorization/census/canary-gate proofs are committed.
+- `benchmarks/` is a namespace package and the repo has no `pyproject.toml`, so scripts importing it must be invoked with the repo root on the path: `PYTHONPATH=. python3 scripts/<script>.py ...`. `scripts/run_lme_v2_state_aware.py` is pinned by sha256 in the v5 campaign manifest — do not "fix" its imports; that would invalidate a live authorization chain.
+
 ## Verification
 
 Run the narrowest meaningful checks while iterating, then the full gate before claiming a workstream exit:
