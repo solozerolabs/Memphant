@@ -1,0 +1,68 @@
+{
+  "cache_inventory": {
+    "decoded_key_match_count": 58,
+    "file_count": 58,
+    "inventory_sha256": "f1caad464a93e0d6f194dceaa4689b5de5f84feb4b3d797e82302e1a100d5cdd",
+    "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/observation-cache",
+    "total_bytes": 80883
+  },
+  "campaign_ledger": {
+    "bytes": 2488,
+    "line_count": 2,
+    "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-ATTEMPTS.jsonl",
+    "sha256": "425c9d94709ca0c05096e6ad9625fb8aaaaf43d967c8160f5a0f62b0a47d3b48"
+  },
+  "campaign_namespace": "longmemeval-v2-pilot-v4",
+  "construction_ledger": {
+    "bytes": 108089,
+    "line_count": 128,
+    "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CONSTRUCTION-ATTEMPTS.jsonl",
+    "sha256": "f79a8073c87341934126a583c02521173c2ea7d740841cacba4d66ad52a2a23c"
+  },
+  "outcome": {
+    "accepted": false,
+    "broad_dispatch_started": false,
+    "campaign_attempts": [
+      1
+    ],
+    "canary_plan_count": 64,
+    "construction_ledger_unique_plan_count": 64,
+    "gate_artifact_present": false,
+    "progress_artifact_present": false
+  },
+  "privacy": {
+    "inventory_hashes_only": true,
+    "large_input_committed": false,
+    "private_bodies_committed": false
+  },
+  "private_dispatch_inventory": {
+    "file_count": 127,
+    "generation_count": 63,
+    "inventory_sha256": "bcd037f668cea644abcd93cd32bca1564d1fc76f03981756c6ec8becd0b6a2e1",
+    "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/private-construction-dispatches",
+    "response_count": 64,
+    "total_bytes": 211794
+  },
+  "proof_sha256": "299fe0d6d9a0053713715c9a1213e27800836a9de9e40ddd4bd14ede91f6805d",
+  "schema_version": 1,
+  "settlement": {
+    "provider_reported_settled_cost_nanos": 273440100,
+    "result_count": 64,
+    "result_status_counts": {
+      "http_200_decoded_settled": 62,
+      "http_200_response_decode_error_settled": 1,
+      "http_429_error_unresolved": 1
+    },
+    "served_models": {
+      "qwen/qwen3.5-9b-20260310": 63
+    },
+    "served_providers": {
+      "DeepInfra": 63
+    },
+    "start_count": 64,
+    "total_new_liability_nanos": 288631500,
+    "unresolved_reservation_nanos": 15191400,
+    "validated_cache_entry_count": 58
+  },
+  "status": "ABANDONED_NEVER_RESUME"
+}

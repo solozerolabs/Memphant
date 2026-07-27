@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts/run_lme_v2_state_aware.py"
 STATE_AWARE_MANIFEST = (
-    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v4.json"
+    ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v5.json"
 )
 
 
@@ -47,7 +47,7 @@ def test_v1_abandonment_proof_is_immutable_compact_and_fully_reserved() -> None:
     }
     assert runner.PRE_V3_OPENING_NANOS == 5_141_664_250
     reservations = runner._opening_reservations()
-    assert reservations[-2]["reserved_nanos"] == 883_661_850
+    assert reservations[-3]["reserved_nanos"] == 883_661_850
 
 
 def test_v3_abandonment_proof_is_compact_exact_and_conservatively_reserved() -> None:
@@ -99,14 +99,114 @@ def test_v3_abandonment_proof_is_compact_exact_and_conservatively_reserved() -> 
         "large_input_committed": False,
         "inventory_hashes_only": True,
     }
-    assert runner.OPENING_NANOS == 5_434_506_750
+    assert runner.PRE_V5_OPENING_NANOS == 5_434_506_750
     reservations = runner._opening_reservations()
     assert sum(item["reserved_nanos"] for item in reservations) == runner.OPENING_NANOS
-    assert reservations[-1]["reservation_id"] == "longmemeval-v2-v3-abandoned-liability"
+    assert reservations[-2]["reservation_id"] == "longmemeval-v2-v3-abandoned-liability"
+    assert reservations[-2]["reserved_nanos"] == proof["settlement"]["total_new_liability_nanos"]
+
+
+def test_v4_abandonment_proof_is_compact_exact_and_conservatively_reserved() -> None:
+    runner = _load_runner()
+    proof = json.loads(runner.V4_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    core = {key: value for key, value in proof.items() if key != "proof_sha256"}
+    assert proof["proof_sha256"] == runner.sha256_json(core)
+    assert proof["status"] == "ABANDONED_NEVER_RESUME"
+    assert proof["campaign_namespace"] == "longmemeval-v2-pilot-v4"
+    assert proof["outcome"] == {
+        "accepted": False,
+        "broad_dispatch_started": False,
+        "campaign_attempts": [1],
+        "canary_plan_count": 64,
+        "construction_ledger_unique_plan_count": 64,
+        "gate_artifact_present": False,
+        "progress_artifact_present": False,
+    }
+    assert proof["settlement"] == {
+        "start_count": 64,
+        "result_count": 64,
+        "result_status_counts": {
+            "http_200_decoded_settled": 62,
+            "http_200_response_decode_error_settled": 1,
+            "http_429_error_unresolved": 1,
+        },
+        "served_models": {"qwen/qwen3.5-9b-20260310": 63},
+        "served_providers": {"DeepInfra": 63},
+        "provider_reported_settled_cost_nanos": 273_440_100,
+        "unresolved_reservation_nanos": 15_191_400,
+        "total_new_liability_nanos": 288_631_500,
+        "validated_cache_entry_count": 58,
+    }
+    assert proof["campaign_ledger"] == {
+        "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-ATTEMPTS.jsonl",
+        "bytes": 2_488,
+        "line_count": 2,
+        "sha256": "425c9d94709ca0c05096e6ad9625fb8aaaaf43d967c8160f5a0f62b0a47d3b48",
+    }
+    assert proof["construction_ledger"] == {
+        "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CONSTRUCTION-ATTEMPTS.jsonl",
+        "bytes": 108_089,
+        "line_count": 128,
+        "sha256": "f79a8073c87341934126a583c02521173c2ea7d740841cacba4d66ad52a2a23c",
+    }
+    assert proof["private_dispatch_inventory"] == {
+        "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/private-construction-dispatches",
+        "file_count": 127,
+        "generation_count": 63,
+        "response_count": 64,
+        "total_bytes": 211_794,
+        "inventory_sha256": "bcd037f668cea644abcd93cd32bca1564d1fc76f03981756c6ec8becd0b6a2e1",
+    }
+    assert proof["cache_inventory"] == {
+        "relative_root": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/observation-cache",
+        "file_count": 58,
+        "decoded_key_match_count": 58,
+        "total_bytes": 80_883,
+        "inventory_sha256": "f1caad464a93e0d6f194dceaa4689b5de5f84feb4b3d797e82302e1a100d5cdd",
+    }
+    assert proof["privacy"] == {
+        "private_bodies_committed": False,
+        "large_input_committed": False,
+        "inventory_hashes_only": True,
+    }
+    assert runner.OPENING_NANOS == 5_723_138_250
+    reservations = runner._opening_reservations()
+    assert sum(item["reserved_nanos"] for item in reservations) == runner.OPENING_NANOS
+    assert reservations[-1]["reservation_id"] == "longmemeval-v2-v4-abandoned-liability"
     assert reservations[-1]["reserved_nanos"] == proof["settlement"]["total_new_liability_nanos"]
 
 
-def test_v4_campaign_namespace_cannot_resume_prior_artifacts() -> None:
+def test_v4_failed_source_inventory_is_hash_only_and_ledger_bound() -> None:
+    runner = _load_runner()
+    inventory = json.loads(
+        runner.V4_FAILED_SOURCE_INVENTORY.read_text(encoding="utf-8")
+    )
+    failures = [
+        {
+            "extraction_key": "00272ebbf9e7b528e3042ab7ba2371b93c324e5fae440c8245f03c944790fa27",
+            "source_body_sha256": "21bbbfb39a195cbac881c4bf918163dc43d0af8a53234c2604c633f6110de406",
+            "failure_class": "http_200_response_decode_error_settled",
+        },
+        {
+            "extraction_key": "0769da56e60bef7a4d6898ccdfe67db573a1f6b0f1dd5c30840aa716e193bcb7",
+            "source_body_sha256": "38dfc4ece78dc8a4feecd49f81e933b0a3901f5db05faa995c6e216111076e68",
+            "failure_class": "http_429_error_unresolved",
+        },
+    ]
+    assert inventory == {
+        "schema_version": 1,
+        "source_campaign": "longmemeval-v2-pilot-v4",
+        "source_construction_ledger_sha256": "f79a8073c87341934126a583c02521173c2ea7d740841cacba4d66ad52a2a23c",
+        "contains_source_bodies": False,
+        "failure_count": 2,
+        "failures": failures,
+        "failure_inventory_sha256": "c006917d4bfc314c12fff29d450dac15f16984df63e74d204a6a8e8904efc060",
+    }
+    assert inventory["failure_inventory_sha256"] == runner.sha256_json(failures)
+    assert not ({"body", "request", "response", "observations"} & set(inventory))
+
+
+def test_v5_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     runner = _load_runner()
     v2_root = (
         ROOT
@@ -116,30 +216,40 @@ def test_v4_campaign_namespace_cannot_resume_prior_artifacts() -> None:
         ROOT
         / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3"
     )
-    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v4"
+    v4_root = (
+        ROOT
+        / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4"
+    )
+    assert runner.CAMPAIGN_ARTIFACT_ROOT.name == "longmemeval-v2-pilot-v5"
     assert runner.CAMPAIGN_ARTIFACT_ROOT != runner.V1_CAMPAIGN_ARTIFACT_ROOT
     assert runner.CAMPAIGN_ARTIFACT_ROOT != v2_root
     assert runner.CAMPAIGN_ARTIFACT_ROOT != v3_root
+    assert runner.CAMPAIGN_ARTIFACT_ROOT != v4_root
     assert (v2_root / "CAMPAIGN-CENSUS.json").is_file()
     assert not (v2_root / "CAMPAIGN-AUTHORIZATION.json").exists()
     assert (v3_root / "CAMPAIGN-AUTHORIZATION.json").is_file()
     with pytest.raises(RuntimeError, match="canonical authorization"):
         runner.prewarm_sealed_prefix(v3_root / "CAMPAIGN-AUTHORIZATION.json")
+    assert (v4_root / "CAMPAIGN-AUTHORIZATION.json").is_file()
+    with pytest.raises(RuntimeError, match="canonical authorization"):
+        runner.prewarm_sealed_prefix(v4_root / "CAMPAIGN-AUTHORIZATION.json")
+    assert not (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json").exists()
+    assert not (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json").exists()
     assert all(
         Path(path).is_relative_to(runner.CAMPAIGN_ARTIFACT_ROOT)
         for path in runner.campaign_artifact_paths().values()
     )
-    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v4.json")
+    assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v5.json")
 
 
-def test_v4_keeps_the_v3_construction_request_body_contract() -> None:
-    v3 = json.loads(
+def test_v5_keeps_the_v4_construction_request_body_contract() -> None:
+    v4 = json.loads(
         (
             ROOT
-            / "benchmarks/manifests/longmemeval_v2.state_aware_full.v3.json"
+            / "benchmarks/manifests/longmemeval_v2.state_aware_full.v4.json"
         ).read_text(encoding="utf-8")
     )["construction"]
-    v4 = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))["construction"]
+    v5 = json.loads(STATE_AWARE_MANIFEST.read_text(encoding="utf-8"))["construction"]
     request_fields = {
         "state_mode",
         "model",
@@ -160,11 +270,11 @@ def test_v4_keeps_the_v3_construction_request_body_contract() -> None:
         "maximum_attempts",
         "prompt_sha256",
     }
-    assert {key: v4[key] for key in request_fields} == {
-        key: v3[key] for key in request_fields
+    assert {key: v5[key] for key in request_fields} == {
+        key: v4[key] for key in request_fields
     }
-    assert (ROOT / v4["prompt_path"]).read_bytes() == (
-        ROOT / v3["prompt_path"]
+    assert (ROOT / v5["prompt_path"]).read_bytes() == (
+        ROOT / v4["prompt_path"]
     ).read_bytes()
 
 
@@ -228,7 +338,7 @@ def test_census_refuses_authorization_without_exact_bounds(tmp_path: Path) -> No
     census = json.loads(output.read_text(encoding="utf-8"))
     assert census["benchmark"]["memory_context_max_tokens"] == 200000
     assert census["admission"]["formula"] == (
-        "5434506750+C+2*R_sum+451*S+10000000000<=200000000000"
+        "5723138250+C+2*R_sum+451*S+10000000000<=200000000000"
     )
     assert census["admission"]["authorized"] is False
 
@@ -322,7 +432,7 @@ def test_admitted_profile_pins_qwen_deepinfra_native_2048_and_aggregate_cap() ->
     assert manifest["construction"]["response_model"] == (
         "qwen/qwen3.5-9b-20260310"
     )
-    assert manifest["construction"]["prompt_path"] == "config/structured-state-v4.txt"
+    assert manifest["construction"]["prompt_path"] == "config/structured-state-v5.txt"
 
 
 def test_reader_liability_inventory_stratifies_text_and_multimodal_billing() -> None:
@@ -1021,7 +1131,7 @@ def test_authorization_packet_is_canonical_inventory_bound_and_create_only(
     assert packet["execution"]["construction_max_workers"] == 4
     assert packet["execution"]["construction_hidden_retries"] == 0
     assert packet["execution"]["cache_namespace"] == (
-        "longmemeval-v2-construction-v4"
+        "longmemeval-v2-construction-v5"
     )
     assert packet["execution"]["construction_canary"] == runner.derive_construction_canary(
         [plan]
@@ -1256,16 +1366,32 @@ def test_provider_refresh_rejects_route_without_explicit_reasoning_disable_autho
 def _canary_plans(runner, count: int = 128) -> list[dict[str, object]]:
     preferred, _inventory_sha256 = runner._v1_failed_source_body_sha256s()
     preferred_hashes = sorted(preferred)
+    v4_failures = [
+        (
+            "00272ebbf9e7b528e3042ab7ba2371b93c324e5fae440c8245f03c944790fa27",
+            "21bbbfb39a195cbac881c4bf918163dc43d0af8a53234c2604c633f6110de406",
+        ),
+        (
+            "0769da56e60bef7a4d6898ccdfe67db573a1f6b0f1dd5c30840aa716e193bcb7",
+            "38dfc4ece78dc8a4feecd49f81e933b0a3901f5db05faa995c6e216111076e68",
+        ),
+    ]
     plans = []
     for index in range(count):
         source_body_sha256 = (
-            preferred_hashes[index]
+            v4_failures[index][1]
+            if index < len(v4_failures)
+            else preferred_hashes[index]
             if index < min(32, len(preferred_hashes))
             else hashlib.sha256(f"source-{index}".encode()).hexdigest()
         )
         plans.append(
             {
-                "extraction_key": hashlib.sha256(f"key-{index}".encode()).hexdigest(),
+                "extraction_key": (
+                    v4_failures[index][0]
+                    if index < len(v4_failures)
+                    else hashlib.sha256(f"key-{index}".encode()).hexdigest()
+                ),
                 "request_sha256": hashlib.sha256(
                     f"request-{index}".encode()
                 ).hexdigest(),
@@ -1303,7 +1429,7 @@ def _canary_result(
     }
 
 
-def test_construction_canary_is_deterministic_stratified_and_prefers_v1_failures() -> None:
+def test_construction_canary_prefers_exact_v4_then_v1_failures() -> None:
     runner = _load_runner()
     plans = _canary_plans(runner)
     canary = runner.derive_construction_canary(plans)
@@ -1315,6 +1441,7 @@ def test_construction_canary_is_deterministic_stratified_and_prefers_v1_failures
         for kind in ("episode", "resource")
         for quantile in range(1, 5)
     }
+    assert canary["preferred_v4_failed_extraction_key_count"] == 2
     assert canary["preferred_v1_failed_source_count"] > 0
     assert canary["gate"]["maximum_statistical_failures"] == 4
     assert canary["gate"]["maximum_semantic_failures"] == 0
@@ -1342,7 +1469,7 @@ def test_construction_canary_exact_gate_rejects_every_non_success_without_retry(
     cache_bound = runner.bind_construction_canary_cache(
         accepted, canary, tmp_path
     )
-    assert cache_bound["canonical_cache"]["namespace"].endswith("-v4")
+    assert cache_bound["canonical_cache"]["namespace"].endswith("-v5")
     assert len(cache_bound["canonical_cache"]["entries"]) == 64
 
     semantic = list(decoded)

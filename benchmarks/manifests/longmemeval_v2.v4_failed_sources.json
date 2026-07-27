@@ -1,0 +1,20 @@
+{
+  "contains_source_bodies": false,
+  "failure_count": 2,
+  "failure_inventory_sha256": "c006917d4bfc314c12fff29d450dac15f16984df63e74d204a6a8e8904efc060",
+  "failures": [
+    {
+      "extraction_key": "00272ebbf9e7b528e3042ab7ba2371b93c324e5fae440c8245f03c944790fa27",
+      "failure_class": "http_200_response_decode_error_settled",
+      "source_body_sha256": "21bbbfb39a195cbac881c4bf918163dc43d0af8a53234c2604c633f6110de406"
+    },
+    {
+      "extraction_key": "0769da56e60bef7a4d6898ccdfe67db573a1f6b0f1dd5c30840aa716e193bcb7",
+      "failure_class": "http_429_error_unresolved",
+      "source_body_sha256": "38dfc4ece78dc8a4feecd49f81e933b0a3901f5db05faa995c6e216111076e68"
+    }
+  ],
+  "schema_version": 1,
+  "source_campaign": "longmemeval-v2-pilot-v4",
+  "source_construction_ledger_sha256": "f79a8073c87341934126a583c02521173c2ea7d740841cacba4d66ad52a2a23c"
+}

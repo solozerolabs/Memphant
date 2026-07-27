@@ -123,6 +123,20 @@ docs/build-log/artifacts/r15-docs/chat/ev-*.jsonl
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/ROW-RESERVATION-PLAN.json
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/observation-cache/
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v3/private-construction-dispatches/
+# Failed v4 canary bodies and resumable state remain local. The compact public
+# abandonment proof commits only exact hashes, counts, route, and liability.
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-ATTEMPTS.jsonl*
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-RUN.lock
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CONSTRUCTION-ATTEMPTS.jsonl
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CONSTRUCTION-CANARY-PLANS.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CONSTRUCTION-RESOURCES.jsonl
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CONSTRUCTION-WAVE.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/EXECUTION-PLAN.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/PREFIX-12-CONSTRUCTION-PLANS.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/REMAINING-439-COMMITMENT.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/ROW-RESERVATION-PLAN.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/observation-cache/
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/private-construction-dispatches/
 # Paid campaign evidence stays on disk; canonical small files are force-added
 # per docs/build-log/artifacts/canonical-artifact-allowlist.txt.
 docs/build-log/artifacts/unified-sota-20260713/

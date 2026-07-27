@@ -54,6 +54,7 @@ from benchmarks.longmemeval_v2.construction_authority import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PRE_V3_OPENING_NANOS = 5_141_664_250
+PRE_V5_OPENING_NANOS = 5_434_506_750
 CONTINGENCY_NANOS = 10_000_000_000
 HARD_CEILING_NANOS = 200_000_000_000
 QUESTION_COUNT = 451
@@ -90,9 +91,19 @@ V3_ABANDONMENT_PROOF = (
     ROOT
     / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-v3-abandonment.json"
 )
-CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4"
+V4_CAMPAIGN_ARTIFACT_ROOT = (
+    ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4"
+)
+V4_ABANDONMENT_PROOF = (
+    ROOT
+    / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-v4-abandonment.json"
+)
+V4_FAILED_SOURCE_INVENTORY = (
+    ROOT / "benchmarks/manifests/longmemeval_v2.v4_failed_sources.json"
+)
+CAMPAIGN_ARTIFACT_ROOT = ROOT / "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v5"
 CANONICAL_CAMPAIGN_CENSUS = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json"
-CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v4.json"
+CANONICAL_CAMPAIGN_MANIFEST = ROOT / "benchmarks/manifests/longmemeval_v2.state_aware_full.v5.json"
 CANONICAL_CAMPAIGN_AUTHORIZATION = CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json"
 QWEN_ENDPOINTS_URL = "https://openrouter.ai/api/v1/models/qwen/qwen3.5-9b/endpoints"
 QWEN_MODEL_URL = "https://openrouter.ai/api/v1/model/qwen/qwen3.5-9b"
@@ -124,25 +135,41 @@ def sha256_rust_json(value: object) -> str:
     return hashlib.sha256(_rust_json(value)).hexdigest()
 
 
-def _v3_abandonment_liability() -> int:
+def _abandonment_liability(
+    proof_path: Path, campaign_namespace: str, expected_liability: int
+) -> int:
     try:
-        proof = json.loads(V3_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+        proof = json.loads(proof_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError("v3 abandonment proof is unavailable") from error
+        raise RuntimeError(f"{campaign_namespace} abandonment proof is unavailable") from error
     core = {key: value for key, value in proof.items() if key != "proof_sha256"}
     liability = proof.get("settlement", {}).get("total_new_liability_nanos")
     if (
         proof.get("proof_sha256") != sha256_json(core)
         or proof.get("status") != "ABANDONED_NEVER_RESUME"
-        or proof.get("campaign_namespace") != "longmemeval-v2-pilot-v3"
+        or proof.get("campaign_namespace") != campaign_namespace
         or type(liability) is not int
-        or liability != 292_842_500
+        or liability != expected_liability
     ):
-        raise RuntimeError("v3 abandonment proof identity or settlement drift")
+        raise RuntimeError(
+            f"{campaign_namespace} abandonment proof identity or settlement drift"
+        )
     return liability
 
 
-OPENING_NANOS = PRE_V3_OPENING_NANOS + _v3_abandonment_liability()
+def _v3_abandonment_liability() -> int:
+    return _abandonment_liability(
+        V3_ABANDONMENT_PROOF, "longmemeval-v2-pilot-v3", 292_842_500
+    )
+
+
+def _v4_abandonment_liability() -> int:
+    return _abandonment_liability(
+        V4_ABANDONMENT_PROOF, "longmemeval-v2-pilot-v4", 288_631_500
+    )
+
+
+OPENING_NANOS = PRE_V5_OPENING_NANOS + _v4_abandonment_liability()
 FORMULA = (
     f"{OPENING_NANOS}+C+2*R_sum+451*S+{CONTINGENCY_NANOS}<={HARD_CEILING_NANOS}"
 )
@@ -6688,10 +6715,46 @@ def _v1_failed_source_body_sha256s() -> tuple[set[str], str]:
     return set(hashes), _sha256_file(V1_FAILED_SOURCE_INVENTORY)
 
 
+def _v4_failed_source_identities() -> tuple[set[tuple[str, str]], str]:
+    value = json.loads(V4_FAILED_SOURCE_INVENTORY.read_text(encoding="utf-8"))
+    failures = value.get("failures") if isinstance(value, dict) else None
+    abandonment = json.loads(V4_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    if (
+        not isinstance(failures, list)
+        or failures
+        != sorted(failures, key=lambda item: item.get("extraction_key", ""))
+        or value.get("failure_count") != len(failures)
+        or value.get("failure_inventory_sha256") != sha256_json(failures)
+        or value.get("contains_source_bodies") is not False
+        or value.get("source_campaign") != "longmemeval-v2-pilot-v4"
+        or value.get("source_construction_ledger_sha256")
+        != abandonment.get("construction_ledger", {}).get("sha256")
+        or any(
+            not isinstance(item, dict)
+            or not _valid_sha256(item.get("extraction_key"))
+            or not _valid_sha256(item.get("source_body_sha256"))
+            or item.get("failure_class")
+            not in {
+                "http_200_response_decode_error_settled",
+                "http_429_error_unresolved",
+            }
+            for item in failures
+        )
+    ):
+        raise RuntimeError("v4 failed-source canary inventory drift")
+    identities = {
+        (item["extraction_key"], item["source_body_sha256"]) for item in failures
+    }
+    if len(identities) != len(failures):
+        raise RuntimeError("v4 failed-source canary inventory is not unique")
+    return identities, _sha256_file(V4_FAILED_SOURCE_INVENTORY)
+
+
 def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, object]:
     """Choose a stable, reservation-stratified preflight subset."""
     normalized, _reservation, inventory_sha256 = _plan_inventory(plans)
-    preferred, preferred_inventory_sha256 = _v1_failed_source_body_sha256s()
+    preferred_v1, preferred_v1_inventory_sha256 = _v1_failed_source_body_sha256s()
+    preferred_v4, preferred_v4_inventory_sha256 = _v4_failed_source_identities()
     target = min(CONSTRUCTION_CANARY_PLAN_COUNT, len(normalized))
     groups: dict[str, list[dict[str, object]]] = {}
     source_kinds = sorted(
@@ -6718,7 +6781,12 @@ def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, obje
     for candidates in groups.values():
         candidates.sort(
             key=lambda plan: (
-                plan.get("source_body_sha256") not in preferred,
+                (
+                    plan.get("extraction_key"),
+                    plan.get("source_body_sha256"),
+                )
+                not in preferred_v4,
+                plan.get("source_body_sha256") not in preferred_v1,
                 plan["extraction_key"],
             )
         )
@@ -6740,15 +6808,25 @@ def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, obje
     core = {
         "schema_version": 1,
         "plan_count": target,
-        "selection_method": "source-kind-x-within-kind-reservation-quartile-round-robin-v1",
+        "selection_method": "source-kind-x-within-kind-reservation-quartile-round-robin-v2",
         "full_plan_inventory_sha256": inventory_sha256,
         "plans": selected,
         "plans_sha256": sha256_json(selected),
         "stratum_counts": dict(sorted(group_counts.items())),
-        "preferred_v1_failed_source_count": sum(
-            plan.get("source_body_sha256") in preferred for plan in selected
+        "preferred_v4_failed_extraction_key_count": sum(
+            (plan.get("extraction_key"), plan.get("source_body_sha256"))
+            in preferred_v4
+            for plan in selected
         ),
-        "preferred_v1_failed_source_inventory_file_sha256": preferred_inventory_sha256,
+        "preferred_v4_failed_source_inventory_file_sha256": (
+            preferred_v4_inventory_sha256
+        ),
+        "preferred_v1_failed_source_count": sum(
+            plan.get("source_body_sha256") in preferred_v1 for plan in selected
+        ),
+        "preferred_v1_failed_source_inventory_file_sha256": (
+            preferred_v1_inventory_sha256
+        ),
         "gate": {
             "failure_definition": (
                 "any incomplete, non-200, schema, semantic, or duplicate result"
@@ -6877,7 +6955,7 @@ def bind_construction_canary_cache(
         if key not in {"gate_sha256", "canonical_cache"}
     }
     core["canonical_cache"] = {
-        "namespace": "longmemeval-v2-construction-v4",
+        "namespace": "longmemeval-v2-construction-v5",
         "entries": inventory,
         "entries_sha256": sha256_json(inventory),
     }
@@ -7224,6 +7302,12 @@ def _opening_reservations() -> list[dict[str, object]]:
             V3_ABANDONMENT_PROOF,
             V3_ABANDONMENT_PROOF,
         ),
+        (
+            "longmemeval-v2-v4-abandoned-liability",
+            _v4_abandonment_liability(),
+            V4_ABANDONMENT_PROOF,
+            V4_ABANDONMENT_PROOF,
+        ),
     ]
     reservations = []
     for reservation_id, amount, receipt, proof in evidence:
@@ -7323,7 +7407,7 @@ def _build_campaign_authorization(
             "sealed_prefix_count": 12,
             "remaining_count": 439,
             "official_question_count": QUESTION_COUNT,
-            "cache_namespace": "longmemeval-v2-construction-v4",
+            "cache_namespace": "longmemeval-v2-construction-v5",
             "resume_key": "extraction_key",
             "construction_canary": construction_canary,
         },

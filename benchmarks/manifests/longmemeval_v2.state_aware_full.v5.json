@@ -1,0 +1,297 @@
+{
+  "schema_version": 2,
+  "campaign": "state-aware-resource-compiler-full-451-v5",
+  "upstream": {
+    "repository": "https://github.com/xiaowu0162/LongMemEval-V2",
+    "code_commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+    "code_lock_path": "benchmarks/manifests/longmemeval_v2.lock.json",
+    "code_lock_sha256": "e24388725b23d50766f1cf7e77ea6b41396d664dc1dce309cafe30cb897fe77d",
+    "dataset_repository": "xiaowu0162/longmemeval-v2",
+    "dataset_revision": "f152293e235517d504809563c833d7190b8c713b"
+  },
+  "benchmark": {
+    "tier": "medium",
+    "questions": 451,
+    "memory_context_max_tokens": 200000,
+    "case_order": "lexicographic question_id",
+    "sealed_prefix_count": 12,
+    "remaining_count": 439
+  },
+  "data": {
+    "files": {
+      "questions.jsonl": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/questions.jsonl",
+        "bytes": 286186,
+        "sha256": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7"
+      },
+      "trajectories.jsonl": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/trajectories.jsonl",
+        "bytes": 1195604539,
+        "sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6"
+      },
+      "haystacks/lme_v2_medium.json": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/haystacks/lme_v2_medium.json",
+        "bytes": 4054244,
+        "sha256": "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59"
+      },
+      "upstream/evaluation/harness.py": {
+        "url": "https://raw.githubusercontent.com/xiaowu0162/LongMemEval-V2/6f020ac2fc3275e46c706d3406e02c3ed79b7be2/evaluation/harness.py",
+        "bytes": 62985,
+        "sha256": "4a508fde65e382c45669fe7243348944628054c9ce6416d78c0a395ce1c3abcd"
+      },
+      "upstream/evaluation/qa_eval_metrics.py": {
+        "url": "https://raw.githubusercontent.com/xiaowu0162/LongMemEval-V2/6f020ac2fc3275e46c706d3406e02c3ed79b7be2/evaluation/qa_eval_metrics.py",
+        "bytes": 20800,
+        "sha256": "f8ba659e237c4282a07a92538090ea500ce8483820b390b1d19af187c01417ac"
+      },
+      "checksums.sha256": {
+        "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/checksums.sha256",
+        "bytes": 3561,
+        "sha256": "b17a18daa52873f915808502217c3c5fab39d20638544f986401155c9e8d67a6"
+      },
+      "qwen/config.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/config.json",
+        "bytes": 3126,
+        "sha256": "d0883072e01861ed0b2d47be3c16c36a8e81c224c7ffaa310c6558fb3f932b05"
+      },
+      "qwen/tokenizer.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/tokenizer.json",
+        "bytes": 12807982,
+        "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+      },
+      "qwen/tokenizer_config.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/tokenizer_config.json",
+        "bytes": 16710,
+        "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8"
+      },
+      "qwen/chat_template.jinja": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/chat_template.jinja",
+        "bytes": 7756,
+        "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+      },
+      "qwen/preprocessor_config.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/preprocessor_config.json",
+        "bytes": 390,
+        "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+      },
+      "qwen/video_preprocessor_config.json": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-9B/resolve/c202236235762e1c871ad0ccb60c8ee5ba337b9a/video_preprocessor_config.json",
+        "bytes": 385,
+        "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+      }
+    },
+    "question_screenshots": {
+      "base_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2/resolve/f152293e235517d504809563c833d7190b8c713b/",
+      "files": {
+        "question_screenshots/0574c69a.png": "62f19636923def38517feb066afb327338012215eeecde2f63b358aaede11c45",
+        "question_screenshots/07a0145f.png": "029d6dff731620358a2b786804fa7d632b5e9294deeb01c7205898c972556d63",
+        "question_screenshots/18b91103.png": "bbea42dba9cd03527a8a8ddba81f26040a1022866ec93de8f774c55010b6413a",
+        "question_screenshots/1d864942.png": "cf1f053f4f0702daefef59a861ac1e771910c8354e059d825ac566103c63f1b4",
+        "question_screenshots/1e77eb4b.png": "196b973d7cac067e76cf19f8ddff1cd7602739d4940e974d9154704f5d63eb3d",
+        "question_screenshots/285db8ec.png": "cc26abf45342265e012caf3f27040d137f5c459766dfeda29a8745688a79474c",
+        "question_screenshots/2cc1b9ca.png": "e967d2efa9e9a0b2eca3129da4a9e5293138279165728c6d6935b5a5e3596b6c",
+        "question_screenshots/2f6a21cd.png": "a77eaead88f1224bbb6f5c0ad6cd85b65ed9d608def25b1d2e93caf43cc80a25",
+        "question_screenshots/302bf60e.png": "3676a0004d85cfd55ceebf250af4ad1d178af440373779fd18b4aa86f6601e1e",
+        "question_screenshots/42d13006.png": "e005d86ecc6b595e593b5a88fb89172812d1d5c2d4de932f806ce0b5e3b5d569",
+        "question_screenshots/48a52262.png": "192b92f176772ceb627dbff6fb99621b12f560e5ed470ad06d8d524dddb1cb25",
+        "question_screenshots/4964afed.png": "4c34dd2abc22e9afa87d6bbcf4340ffbce7eea4ec710713056c145b08021ca39",
+        "question_screenshots/50d92f55.png": "d66cad5875db8b052206fa0c75808d97a7c1aa25bc67e04b84481fa180a3de81",
+        "question_screenshots/626e401e.png": "fda1f973a575430256888c2177a933eb049f65a4645746699996b1ec9d511d3f",
+        "question_screenshots/7586cf7c.png": "aff0665a68d29a2414d4a12ab21e1905de9a55087f2384f08fc9cf5bae587d47",
+        "question_screenshots/77258cda.png": "a48baf68f1fac917314904b1f7e129d09ea192ca03c659eebe0d75e2774e84c3",
+        "question_screenshots/81180ae9.png": "eb088d8d7afebb9208a0c0cf9868f183a3d9b16b0c6674a9164b31315edd8a70",
+        "question_screenshots/8e21c6e5.png": "abaec4759d3b7d463419012bdec1c91daed23268fb9cd0fa77435380b7c69a86",
+        "question_screenshots/910135bb.png": "fb89c26e0fb7ba7f389ffcd79e541a9b940da14a575bfdeecca919f9635a4a0a",
+        "question_screenshots/914ab1d4.png": "210883019e0ccb5f3c6cb7de6ef82588c097a05a2f1580afc1f6c21a5b530e75",
+        "question_screenshots/af2ebaed.png": "43b4ef22be21d6869aa3681637ada80f0d8d0ffd6e635d0e58957c099e5f28e9",
+        "question_screenshots/b339209c.png": "9767f63510c5175cabcf89a6af498284e318fb990c5c8c24ec7d97572420998e",
+        "question_screenshots/c35bfeed.png": "1485db143d25d413d903db47c1df0d8262594ee7f6914b77bd55257108ffe6eb",
+        "question_screenshots/ce9aa351.png": "5c5dfb81edb824964b386e53edd33edcc96dc85aa75e9857e52b63aece1dbd65",
+        "question_screenshots/ea361b20.png": "2eb74d20dcd6fe0b253a9c405eef2a079f35b74ca3e68f8626dbae64f0153553",
+        "question_screenshots/f2b221fd.png": "be85e8d2b5352961620ce63d20a96ab71d495b9a9da73c04a60e6bca644810f4",
+        "question_screenshots/fa504f5e.png": "551d6faa51fd82d3ba1529a6cc3944742b9f3318dded3275ba3431eb7c1ab0d8",
+        "question_screenshots/fb56a896.png": "5934817de4e512d38c0421f10c3e68c4d84cad3284e4a733dcbce365971d070c",
+        "question_screenshots/fdeddf71.png": "e3b4fb256bea33cad6049509a436d93ef4e16eecb58deebfbc275f53b243b154"
+      }
+    }
+  },
+  "construction": {
+    "state_mode": "structured-resource-v2",
+    "model": "qwen/qwen3.5-9b-20260310",
+    "response_model": "qwen/qwen3.5-9b-20260310",
+    "provider": "deepinfra",
+    "tokenizer_repository": "Qwen/Qwen3.5-9B",
+    "tokenizer_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "tokenizer_path": "qwen/tokenizer.json",
+    "tokenizer_config_path": "qwen/tokenizer_config.json",
+    "tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+    "chat_template_overhead_tokens": 15,
+    "empty_system_user_generation_token_ids": [248045, 8678, 198, 248046, 198, 248045, 846, 198, 248046, 198, 248045, 74455, 198, 248068, 198],
+    "chat_template_fixture_toolchain": {
+      "tokenizers": "0.22.2",
+      "transformers": "5.14.1"
+    },
+    "allow_fallbacks": false,
+    "reasoning_mode": "disabled",
+    "input_price_nanos_per_million": 100000000,
+    "output_price_nanos_per_million": 150000000,
+    "maximum_output_tokens": 4096,
+    "maximum_attempts": 3,
+    "wave_policy": {
+      "maximum_internal_attempts": 1,
+      "maximum_campaign_waves": 3,
+      "first_wave_reservation": "sum_exact_per_attempt_reservation_nanos",
+      "retry_wave_reservation": "campaign-ledger-authorized-aggregate",
+      "retry_pool_nanos": 10000000000,
+      "requires_exact_subledger_coverage": true,
+      "rust_subledger_aggregate_cap_env": "MEMPHANT_STRUCTURED_STATE_AGGREGATE_RESERVATION_NANOS",
+      "rust_subledger_campaign_attempt_env": "MEMPHANT_STRUCTURED_STATE_CAMPAIGN_ATTEMPT",
+      "not_charged_pre_generation_http_statuses": [502, 503],
+      "error_contract_source": "https://openrouter.ai/docs/api_reference/errors-and-debugging",
+      "billing_contract_source": "https://openrouter.ai/docs/guides/features/zero-completion-insurance",
+      "parent_census_sha256": "32aca5d9fc61ed7445b67e3eaa79717fbbc55f0c2388044d55c7fbb1f4b11b75",
+      "parent_construction_sha256": "41c287e9e475e3cfef12ffa8c891c94bc578d073f7c56803e09314bd6235a488"
+    },
+    "pricing_source": "https://openrouter.ai/qwen/qwen3.5-9b/api",
+    "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+    "pricing_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766",
+    "prompt_path": "config/structured-state-v5.txt",
+    "prompt_sha256": "e40ab5b02aa8b3b2dc6297ba271f7b7a730f7efec14af046ac15cb3997fd7217",
+    "code_paths": [
+      "crates/memphant-runtime/src/structured_state_openrouter.rs",
+      "crates/memphant-core/src/service.rs",
+      "crates/memphant-core/src/structured_state.rs",
+      "benchmarks/longmemeval_v2/memphant_memory.py",
+      "benchmarks/longmemeval_v2/construction_authority.py",
+      "benchmarks/longmemeval_v2/qwen_reader_census.py",
+      "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt",
+      "crates/memphant-cli/src/structured_state_census.rs",
+      "scripts/run_lme_v2_state_aware.py"
+    ],
+    "code_sha256s": {
+      "crates/memphant-runtime/src/structured_state_openrouter.rs": "dd14d325b09b152a8dbe09eb6539ccadd205f2dd7bdfe37438a781a1b7067a3f",
+      "crates/memphant-core/src/service.rs": "1452bfd8de38f72510fa5a31fd49bc0e1391089d6d8e98cba195f2ecb9e71fb3",
+      "crates/memphant-core/src/structured_state.rs": "7b12b07517514ec837fbf7c3eaf56e0679d63cc60ecf226908a0e154b82d58c6",
+      "benchmarks/longmemeval_v2/memphant_memory.py": "aeb9b6b4430a384b1d342d5d27af236c3434b9232cd0f660aa35da155d222968",
+      "benchmarks/longmemeval_v2/construction_authority.py": "ece448a1e27c9caa5ba367b38bc96b3c5986948c60dbea95aa1f06bf1680b7f0",
+      "benchmarks/longmemeval_v2/qwen_reader_census.py": "251ef6a46713d6d72dabd0444325a232639842163decf98798bbe0a9aa38ca76",
+      "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt": "979a7b3725fcc45809e6e707565b8f0d5ee2e749593ce52ae50a706653d160b0",
+    "crates/memphant-cli/src/structured_state_census.rs": "60536997586ee64efd17badbcedeadcd1850845cd26c1c88b65c3ba14e3be899",
+    "scripts/run_lme_v2_state_aware.py": "0c869e0b75f82a8e9b6055ff2a3776e68cbd7246f5d1c69d4f2dd5bb0a978931"
+    },
+    "census_binary_build": {
+      "package": "memphant-cli",
+      "profile": "release",
+      "cargo_locked": true,
+    "cargo_lock_sha256": "8a3b85c525213aa4acb1acdb7f1a41ac5c896b101730e3b471c576bd443a21e9",
+    "source_set_sha256": "8c8b61f6119b6552f9ae013f32144ce56a7b0277653c11775c205c24b8c3c715",
+      "rustc_vv_sha256": "a9951fd2e18599557d1a289d74c50874d336477e219b1472508a63518090fa08",
+      "cargo_version_sha256": "4b38cfb28fee9bbb95897bc3793f5fce5f3ed35c732f29ad7d80f96ba96eac5b",
+      "source_paths": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates/memphant-cli/Cargo.toml",
+        "crates/memphant-cli/src/main.rs",
+        "crates/memphant-cli/src/structured_state_census.rs",
+        "crates/memphant-core/Cargo.toml",
+        "crates/memphant-core/src/lib.rs",
+        "crates/memphant-core/src/service.rs",
+        "crates/memphant-core/src/structured_state.rs",
+        "crates/memphant-runtime/Cargo.toml",
+        "crates/memphant-runtime/src/lib.rs",
+        "crates/memphant-runtime/src/structured_state_openrouter.rs",
+        "benchmarks/longmemeval_v2/memphant_memory.py",
+        "benchmarks/longmemeval_v2/construction_authority.py",
+        "benchmarks/longmemeval_v2/qwen_reader_census.py",
+        "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt",
+        "scripts/run_lme_v2_state_aware.py"
+      ]
+    }
+  },
+  "reader_judge": {
+    "reader": {
+      "model": "qwen/qwen3.5-9b-20260310",
+      "provider": "deepinfra",
+      "tokenizer_repository": "Qwen/Qwen3.5-9B",
+      "tokenizer_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "tokenizer_path": "qwen/tokenizer.json",
+      "tokenizer_config_path": "qwen/tokenizer_config.json",
+      "tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+      "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+      "preprocessor_config_path": "qwen/preprocessor_config.json",
+      "preprocessor_config_sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+      "processor_source_sha256": "add767ca5e9511e1db0a69091d51b1d0b2078c874d59ee3a58c4748b5d9014a4",
+      "image_processor_source_sha256": "f19497685281402691f0049a0ab5be8085f92fb5c37adfcc680e4ccd17863a77",
+      "processor_toolchain_sha256": "c954a627ff1823aa343f71b9f9da68bafd4c56faa313ff82f6fdeec8ba0ca104",
+      "processor_runtime": {
+        "script_path": "benchmarks/longmemeval_v2/qwen_reader_census.py",
+        "script_sha256": "251ef6a46713d6d72dabd0444325a232639842163decf98798bbe0a9aa38ca76",
+        "requirements_path": "benchmarks/longmemeval_v2/requirements-state-aware-reader.txt",
+        "requirements_sha256": "979a7b3725fcc45809e6e707565b8f0d5ee2e749593ce52ae50a706653d160b0",
+        "python": "3.12.12",
+        "uv_version_sha256": "09c452877e1f9f77eaf5b62076477813fa617e2b034a56fdaa883cdb350c4b2b"
+      },
+      "memory_context_max_tokens": 200000,
+      "multimodal_provider_prompt_ceiling_tokens": 262144,
+      "provider_maximum_output_tokens": 81920,
+      "provider_prompt_ceiling_source": "https://openrouter.ai/qwen/qwen3.5-9b/pricing",
+      "provider_prompt_ceiling_source_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766",
+      "multimodal_billing_authority": "full-provider-prompt-ceiling-per-image-row",
+      "maximum_output_tokens": 20000,
+      "maximum_attempts": 1,
+      "input_price_nanos_per_million": 100000000,
+      "output_price_nanos_per_million": 150000000,
+      "pricing_source": "https://openrouter.ai/qwen/qwen3.5-9b/api",
+      "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+      "pricing_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766"
+    },
+    "judge": {
+      "model": "gpt-5.2-2025-12-11",
+      "provider": "openai",
+      "reasoning_effort": "medium",
+      "maximum_fixed_serialized_bytes": 2412,
+      "reader_response_insertions": 2,
+      "reader_maximum_output_tokens": 20000,
+      "maximum_input_reservation_units": 42412,
+      "maximum_output_tokens": 2048,
+      "maximum_attempts": 1,
+      "input_price_nanos_per_million": 1750000000,
+      "output_price_nanos_per_million": 14000000000,
+      "pricing_source": "https://developers.openai.com/api/docs/models/gpt-5.2",
+      "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+      "pricing_sha256": "c14259d1298cf54cbbc0d09a5ed5cb3d4b2311f8e3beeaa78c708e6965143ced"
+    }
+  },
+  "deep_recall": {
+    "model": "qwen/qwen3.5-9b-20260310",
+    "response_model": "qwen/qwen3.5-9b-20260310",
+    "provider": "deepinfra",
+    "allow_fallbacks": false,
+    "input_price_nanos_per_million": 100000000,
+    "output_price_nanos_per_million": 150000000,
+    "maximum_context_tokens": 96000,
+    "maximum_output_tokens_per_turn": 4096,
+    "maximum_tool_iterations": 24,
+    "maximum_retries_per_turn": 2,
+    "maximum_attempts_per_turn": 3,
+    "maximum_spend_micros": 300000,
+    "maximum_liability_nanos": 14310400,
+    "pricing_source": "https://openrouter.ai/qwen/qwen3.5-9b/api",
+    "pricing_retrieved_at": "2026-07-26T10:01:26Z",
+    "pricing_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766",
+    "runtime_code_path": "crates/memphant-runtime/src/deep_recall_openrouter.rs",
+    "runtime_code_sha256": "157ce47084cf102c09ba068c0cae3ea65572dd3370c539673c1cb8fa58e60f75"
+  },
+  "statistics": {
+    "paired_risk_difference_method": "Bonferroni simultaneous one-sided Clopper-Pearson marginal bounds at alpha/2 per discordant cell",
+    "mcnemar": "one-sided exact integer binomial tail",
+    "alpha": "0.05",
+    "minimum_effect": "0.05",
+    "premise_regressions_max": 0
+  },
+  "claim_boundary": {
+    "internal_benchmark_success_requires_full_validation": true,
+    "external_sota_requires_accepted_submission_and_strict_frozen_leaderboard_win": true
+  }
+}
