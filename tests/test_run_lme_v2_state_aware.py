@@ -2561,8 +2561,14 @@ def test_restore_case_bank_pair_creates_fresh_migrated_fast_and_deep_databases(
             and command[-1].endswith(f"/{name}")
             for command in flat
         )
+        # Compare against the same resolution the runner performs. Asserting the
+        # basename breaks on Debian/Ubuntu, where /usr/bin/pg_restore is a
+        # symlink to pg_wrapper and .resolve() yields that name instead.
+        expected_restore = str(
+            Path(shutil.which("pg_restore") or "pg_restore").resolve()
+        )
         assert any(
-            Path(command[0]).name == "pg_restore"
+            command[0] == expected_restore
             and command[1:4]
             == ["--exit-on-error", "--single-transaction", "--data-only"]
             and command[-2:] == [

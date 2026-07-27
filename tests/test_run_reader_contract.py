@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
-import subprocess
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -120,14 +119,63 @@ def test_corrupt_first_download_leaves_no_dataset_file(tmp_path, monkeypatch) ->
     assert not (tmp_path / "longmemeval_s.json").exists()
 
 
+# The development cohort in longmemeval_s.split.json is FROZEN, not a live
+# recomputation: its ID-set sha256 is a hash-bound term of
+# benchmarks/manifests/reader_lattices.v1.json,
+# benchmarks/data/longmemeval_s.development.controls.json, and
+# docs/build-log/artifacts/unified-sota-20260713/validity-transform-v1.json.
+# Regenerating it would silently redefine the lattice cohort and break
+# same-lattice comparability, so this suite pins the cohort and separately
+# ratchets how far real exposure has drifted past it.
+#
+# Known debt at 2026-07-27: evidence landed after the cohort was frozen exposes
+# 60 more question IDs, and 58 of them fall inside the 319-question held-out
+# confirmation set. Those 58 are contaminated as confirmation material. Fixing
+# that means re-cutting the split AND re-issuing the lattices and the recorded
+# validity transform, which changes the standing of recorded results — an owner
+# decision, not a test edit. This ratchet stops it getting worse meanwhile.
+KNOWN_CONFIRMATION_CONTAMINATION = 58
+
+
+def test_frozen_development_cohort_still_binds_the_reader_lattices() -> None:
+    """The cohort hash must keep matching every artifact that pins it."""
+    fetch = _load_fetch_longmemeval()
+    committed = json.loads(fetch.SPLIT_MANIFEST.read_text(encoding="utf-8"))
+    cohort_sha256 = committed["exposed_development"]["question_ids_sorted_sha256"]
+    assert fetch.id_list_sha256(
+        committed["exposed_development"]["question_ids"]
+    ) == cohort_sha256
+    for path, key in (
+        ("benchmarks/manifests/reader_lattices.v1.json",
+         "development_question_ids_sorted_sha256"),
+        ("benchmarks/data/longmemeval_s.development.controls.json",
+         "development_question_ids_sorted_sha256"),
+        ("docs/build-log/artifacts/unified-sota-20260713/validity-transform-v1.json",
+         "question_set_sha256"),
+    ):
+        bound = json.loads((ROOT / path).read_text(encoding="utf-8"))[key]
+        assert bound == cohort_sha256, path
+
+
 def test_cleaned_split_manifest_recomputes_exposure_and_answer_session_disjointness() -> None:
     dataset_path = ROOT / "benchmarks" / "data" / "longmemeval_s.json"
     if not dataset_path.exists():
         return
     fetch = _load_fetch_longmemeval()
     split = fetch.build_split_manifest(dataset_path)
-    assert split["exposed_development"]["count"] == 178
-    assert split["answer_bearing_session_disjoint_confirmation"]["count"] == 319
+    committed = json.loads(fetch.SPLIT_MANIFEST.read_text(encoding="utf-8"))
+    frozen = set(committed["exposed_development"]["question_ids"])
+    current = set(split["exposed_development"]["question_ids"])
+    # Exposure is append-only: an ID leaving it means committed evidence was
+    # deleted, which would silently launder a question back into evaluation.
+    assert frozen <= current, sorted(frozen - current)
+    held_out = set(committed["answer_bearing_session_disjoint_confirmation"]["question_ids"])
+    contaminated = held_out & (current - frozen)
+    assert len(contaminated) <= KNOWN_CONFIRMATION_CONTAMINATION, (
+        f"{len(contaminated)} held-out confirmation questions are now exposed in "
+        f"committed evidence (known debt {KNOWN_CONFIRMATION_CONTAMINATION}); "
+        "re-cut the split and re-issue the lattices before scoring on it"
+    )
     assert split["strict_all_haystack_session_disjoint_confirmation"]["count"] == 0
     rows = {row["question_id"]: row for row in json.loads(dataset_path.read_text())}
     exposed_answers = {
