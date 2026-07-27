@@ -277,7 +277,7 @@ def test_v5_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     with pytest.raises(RuntimeError, match="canonical authorization"):
         runner.prewarm_sealed_prefix(v4_root / "CAMPAIGN-AUTHORIZATION.json")
     assert (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-CENSUS.json").is_file()
-    assert not (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json").exists()
+    assert (runner.CAMPAIGN_ARTIFACT_ROOT / "CAMPAIGN-AUTHORIZATION.json").is_file()
     assert all(
         Path(path).is_relative_to(runner.CAMPAIGN_ARTIFACT_ROOT)
         for path in runner.campaign_artifact_paths().values()
