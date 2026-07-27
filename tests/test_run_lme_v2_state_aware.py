@@ -285,7 +285,7 @@ def test_v5_campaign_namespace_cannot_resume_prior_artifacts() -> None:
     assert runner.CANONICAL_CAMPAIGN_MANIFEST.name.endswith(".v5.json")
 
 
-def test_v5_keeps_the_v4_construction_request_body_contract() -> None:
+def test_v5_changes_only_the_structured_extraction_wire_contract_from_v4() -> None:
     v4 = json.loads(
         (
             ROOT
@@ -311,14 +311,19 @@ def test_v5_keeps_the_v4_construction_request_body_contract() -> None:
         "output_price_nanos_per_million",
         "maximum_output_tokens",
         "maximum_attempts",
-        "prompt_sha256",
     }
     assert {key: v5[key] for key in request_fields} == {
         key: v4[key] for key in request_fields
     }
-    assert (ROOT / v5["prompt_path"]).read_bytes() == (
-        ROOT / v4["prompt_path"]
-    ).read_bytes()
+    v5_prompt = (ROOT / v5["prompt_path"]).read_bytes()
+    v4_prompt = (ROOT / v4["prompt_path"]).read_bytes()
+    assert v5_prompt != v4_prompt
+    assert v5["prompt_sha256"] == hashlib.sha256(v5_prompt).hexdigest()
+    assert v5["prompt_sha256"] != v4["prompt_sha256"]
+    text = v5_prompt.decode("utf-8")
+    assert "evidence_slice_alias" in text
+    assert "evidence first" in text.lower()
+    assert "evidence_slice_id" not in text
 
 
 def _load_runner():

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -29,7 +29,11 @@ const DEEPSEEK_MODEL: &str = "deepseek/deepseek-v4-flash";
 const DEEPSEEK_PROVIDERS: [&str; 2] = ["deepinfra", "wandb"];
 const LME_V2_QWEN_MODEL: &str = "qwen/qwen3.5-9b-20260310";
 const LME_V2_QWEN_PROVIDER: &str = "deepinfra";
-const CONTRACT_REVISION: &str = "structured-observation.v2";
+const CONTRACT_REVISION: &str = "structured-observation.v3";
+const ALIAS_ALGORITHM_REVISION: &str = "sequential-s000.v1";
+const CANONICAL_PLANNING_ENVELOPE_REVISION: &str = "structured-observation.v2";
+const CANONICAL_KEY_PATTERN: &str = "^[a-z0-9]+(?:_[a-z0-9]+)*$";
+const MAX_EVIDENCE_SLICE_ALIASES: usize = 1_000;
 // A provider call is one campaign-ledger wave attempt. Retrying inside this
 // process would bypass the aggregate wave reservation and is therefore
 // forbidden. The campaign may authorize up to three separately metered waves.
@@ -117,6 +121,101 @@ pub struct StructuredStateRequestPlan {
     pub maximum_attempts: usize,
 }
 
+#[derive(Serialize)]
+struct ModelEvidenceSlice<'a> {
+    alias: &'a str,
+    body: &'a str,
+}
+
+#[derive(Serialize)]
+struct ModelStructuredStateRequest<'a> {
+    source_kind: &'a StructuredSourceKind,
+    source_body_sha256: &'a str,
+    batch_index: usize,
+    evidence_slices: Vec<ModelEvidenceSlice<'a>>,
+}
+
+#[derive(Serialize)]
+struct RequestMessage<'a> {
+    role: &'static str,
+    content: &'a str,
+}
+
+#[derive(Serialize)]
+struct StructuredOutputFormat<S> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    json_schema: StructuredOutputSchema<S>,
+}
+
+#[derive(Serialize)]
+struct StructuredOutputSchema<S> {
+    name: &'static str,
+    strict: bool,
+    schema: S,
+}
+
+#[derive(Serialize)]
+struct OpenRouterRequest<'a, S> {
+    model: &'a str,
+    messages: [RequestMessage<'a>; 2],
+    seed: u8,
+    stream: bool,
+    max_tokens: u64,
+    response_format: StructuredOutputFormat<S>,
+    provider: &'a Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<&'a Value>,
+}
+
+#[derive(Serialize)]
+struct ResponseSchema {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    #[serde(rename = "additionalProperties")]
+    additional_properties: bool,
+    required: [&'static str; 1],
+    properties: ResponseProperties,
+}
+
+#[derive(Serialize)]
+struct ResponseProperties {
+    observations: ObservationArraySchema,
+}
+
+#[derive(Serialize)]
+struct ObservationArraySchema {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    items: ObservationSchema,
+}
+
+#[derive(Serialize)]
+struct ObservationSchema {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    #[serde(rename = "additionalProperties")]
+    additional_properties: bool,
+    required: [&'static str; 8],
+    properties: ObservationProperties,
+}
+
+// Struct serialization preserves this evidence-first property order. The
+// decoder remains order-insensitive and independently validates every field.
+#[derive(Serialize)]
+struct ObservationProperties {
+    evidence_slice_alias: Value,
+    evidence_quote: Value,
+    namespace: Value,
+    item_key: Value,
+    fields: Value,
+    disposition: Value,
+    valid_from: Value,
+    valid_to: Value,
+}
+
 fn reasoning_payload(model: &str, mode: &str) -> Result<Value, StructuredStateProviderError> {
     if model == LME_V2_QWEN_MODEL && mode != "disabled" {
         return Err(invalid("Qwen construction reasoning mode must be disabled"));
@@ -134,6 +233,79 @@ fn reasoning_payload(model: &str, mode: &str) -> Result<Value, StructuredStatePr
         }
         _ => Err(invalid("structured-state reasoning mode is invalid")),
     }
+}
+
+fn evidence_slice_aliases(
+    request: &StructuredStateRequest,
+) -> Result<Vec<String>, StructuredStateProviderError> {
+    if request.evidence_slices.len() > MAX_EVIDENCE_SLICE_ALIASES {
+        return Err(invalid(format!(
+            "structured-state request exceeds {MAX_EVIDENCE_SLICE_ALIASES} evidence-slice aliases"
+        )));
+    }
+    Ok((0..request.evidence_slices.len())
+        .map(|index| format!("s{index:03}"))
+        .collect())
+}
+
+fn model_request_payload<'a>(
+    request: &'a StructuredStateRequest,
+    aliases: &'a [String],
+) -> ModelStructuredStateRequest<'a> {
+    ModelStructuredStateRequest {
+        source_kind: &request.source_kind,
+        source_body_sha256: &request.source_body_sha256,
+        batch_index: request.batch_index,
+        evidence_slices: request
+            .evidence_slices
+            .iter()
+            .zip(aliases)
+            .map(|(slice, alias)| ModelEvidenceSlice {
+                alias,
+                body: &slice.body,
+            })
+            .collect(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn serialize_openrouter_request<S: Serialize>(
+    model: &str,
+    prompt: &str,
+    payload: &str,
+    schema: S,
+    provider: &Value,
+    reasoning: Option<&Value>,
+    temperature: Option<u8>,
+) -> Result<Vec<u8>, StructuredStateProviderError> {
+    serde_json::to_vec(&OpenRouterRequest {
+        model,
+        messages: [
+            RequestMessage {
+                role: "system",
+                content: prompt,
+            },
+            RequestMessage {
+                role: "user",
+                content: payload,
+            },
+        ],
+        seed: 0,
+        stream: false,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        response_format: StructuredOutputFormat {
+            kind: "json_schema",
+            json_schema: StructuredOutputSchema {
+                name: "memphant_structured_observations",
+                strict: true,
+                schema,
+            },
+        },
+        provider,
+        temperature,
+        reasoning,
+    })
+    .map_err(|error| invalid(format!("structured-state request: {error}")))
 }
 
 pub fn plan_structured_state_request(
@@ -177,41 +349,29 @@ pub fn plan_structured_state_request_with_tokenizer(
     } else {
         reasoning_mode
     };
-    let schema = response_schema();
+    let aliases = evidence_slice_aliases(request)?;
+    let schema = response_schema(&aliases);
     let provider_policy = provider_preferences(
         model,
         input_price_nanos_per_million,
         output_price_nanos_per_million,
     );
-    let payload = serde_json::to_string(request)
+    let payload = serde_json::to_string(&model_request_payload(request, &aliases))
         .map_err(|error| invalid(format!("structured-state request payload: {error}")))?;
-    let mut body = json!({
-        "model": model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": payload}
-        ],
-        "seed": 0,
-        "stream": false,
-        "max_tokens": MAX_OUTPUT_TOKENS,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "memphant_structured_observations",
-                "strict": true,
-                "schema": schema
-            }
-        },
-        "provider": provider_policy,
-    });
-    if model == FLASH_MODEL {
-        body["temperature"] = json!(0);
-    }
-    if let Some(mode) = reasoning_mode {
-        body["reasoning"] = reasoning_payload(model, mode)?;
-    }
-    let serialized_request = serde_json::to_vec(&body)
-        .map_err(|error| invalid(format!("structured-state request: {error}")))?;
+    let reasoning = reasoning_mode
+        .map(|mode| reasoning_payload(model, mode))
+        .transpose()?;
+    let schema_bytes =
+        serde_json::to_vec(&schema).expect("structured-state request schema serializes");
+    let serialized_request = serialize_openrouter_request(
+        model,
+        prompt,
+        &payload,
+        schema,
+        &provider_policy,
+        reasoning.as_ref(),
+        (model == FLASH_MODEL).then_some(0),
+    )?;
     if serialized_request.len() >= MAX_REQUEST_BYTES {
         return Err(invalid(format!(
             "request reaches or exceeds {MAX_REQUEST_BYTES}-byte limit"
@@ -219,14 +379,25 @@ pub fn plan_structured_state_request_with_tokenizer(
     }
 
     let request_sha256 = sha256(&serialized_request);
-    let schema_sha256 = sha256(
-        serde_json::to_vec(&response_schema())
-            .expect("static structured-state schema serializes")
-            .as_slice(),
+    let schema_sha256 = sha256(&schema_bytes);
+    let alias_map_sha256 = sha256(
+        serde_json::to_vec(
+            &aliases
+                .iter()
+                .zip(&request.evidence_slices)
+                .map(|(alias, slice)| (alias, &slice.id))
+                .collect::<Vec<_>>(),
+        )
+        .expect("structured-state alias map serializes")
+        .as_slice(),
     );
     let extraction_key = sha256(
         serde_json::to_vec(&json!({
             "contract_revision": CONTRACT_REVISION,
+            "alias_algorithm_revision": ALIAS_ALGORITHM_REVISION,
+            "alias_map_sha256": alias_map_sha256,
+            "max_slices_per_batch": MAX_EVIDENCE_SLICE_ALIASES,
+            "canonical_planning_envelope_revision": CANONICAL_PLANNING_ENVELOPE_REVISION,
             "source_kind": request.source_kind,
             "source_body_sha256": request.source_body_sha256,
             "batch_index": request.batch_index,
@@ -254,19 +425,19 @@ pub fn plan_structured_state_request_with_tokenizer(
         .as_slice(),
     );
     let input_units = if let Some(tokenizer) = tokenizer {
-        let system = tokenizer
+        // Tokenize the complete concrete request, including the dynamic alias
+        // enum. JSON framing is a deliberate conservative upper bound.
+        let request_tokens = tokenizer
             .tokenizer
-            .encode(prompt, false)
-            .map_err(|_| invalid("structured-state system prompt tokenization failed"))?
+            .encode(
+                std::str::from_utf8(&serialized_request)
+                    .expect("structured-state request serialization is UTF-8"),
+                false,
+            )
+            .map_err(|_| invalid("structured-state request tokenization failed"))?
             .len() as u64;
-        let user = tokenizer
-            .tokenizer
-            .encode(payload, false)
-            .map_err(|_| invalid("structured-state user payload tokenization failed"))?
-            .len() as u64;
-        system
-            .checked_add(user)
-            .and_then(|value| value.checked_add(tokenizer.chat_template_overhead_tokens))
+        request_tokens
+            .checked_add(tokenizer.chat_template_overhead_tokens)
             .ok_or_else(|| invalid("structured-state token count overflow"))?
     } else {
         // Non-Qwen providers retain the conservative byte upper bound until
@@ -292,6 +463,84 @@ pub fn plan_structured_state_request_with_tokenizer(
     })
 }
 
+fn canonical_batch_envelope_schema() -> Value {
+    let mut schema = serde_json::to_value(response_schema_template())
+        .expect("structured-state schema template serializes");
+    let observation = &mut schema["properties"]["observations"]["items"];
+    observation["required"] = json!([
+        "namespace",
+        "item_key",
+        "fields",
+        "disposition",
+        "evidence_slice_id",
+        "evidence_quote",
+        "valid_from",
+        "valid_to"
+    ]);
+    let properties = observation["properties"]
+        .as_object_mut()
+        .expect("observation properties are an object");
+    properties.remove("evidence_slice_alias");
+    properties.insert(
+        "evidence_slice_id".to_string(),
+        json!({"type": "string", "minLength": 1}),
+    );
+    for name in ["namespace", "item_key"] {
+        properties.insert(name.to_string(), json!({"type": "string", "minLength": 1}));
+    }
+    let branches = properties["fields"]["items"]["anyOf"]
+        .as_array_mut()
+        .expect("field schema branches are an array");
+    for branch in branches {
+        branch["properties"]["key"] = json!({"type": "string", "minLength": 1});
+        if let Some(object_fields) = branch["properties"].get_mut("object_fields") {
+            object_fields["items"]["properties"]["key"] = json!({"type": "string", "minLength": 1});
+        }
+    }
+    schema
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_canonical_batch_envelope(
+    request: &StructuredStateRequest,
+    model: &str,
+    prompt: &str,
+    reasoning_mode: Option<&str>,
+    input_price_nanos_per_million: u64,
+    output_price_nanos_per_million: u64,
+) -> Result<(), StructuredStateProviderError> {
+    let reasoning_mode = if model == LME_V2_QWEN_MODEL {
+        Some(reasoning_mode.unwrap_or("disabled"))
+    } else {
+        reasoning_mode
+    };
+    let provider_policy = provider_preferences(
+        model,
+        input_price_nanos_per_million,
+        output_price_nanos_per_million,
+    );
+    let payload = serde_json::to_string(request)
+        .map_err(|error| invalid(format!("structured-state batch envelope payload: {error}")))?;
+    let reasoning = reasoning_mode
+        .map(|mode| reasoning_payload(model, mode))
+        .transpose()?;
+    let serialized = serialize_openrouter_request(
+        model,
+        prompt,
+        &payload,
+        canonical_batch_envelope_schema(),
+        &provider_policy,
+        reasoning.as_ref(),
+        (model == FLASH_MODEL).then_some(0),
+    )?;
+    if serialized.len() >= MAX_REQUEST_BYTES {
+        return Err(invalid(format!(
+            "request reaches or exceeds {MAX_REQUEST_BYTES}-byte canonical batch envelope"
+        )));
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn plan_structured_state_batches(
     source_kind: StructuredSourceKind,
@@ -309,6 +558,14 @@ pub fn plan_structured_state_batches(
         source_body_sha256,
         evidence_slices,
         |request| {
+            validate_canonical_batch_envelope(
+                request,
+                model,
+                prompt,
+                reasoning_mode,
+                input_price_nanos_per_million,
+                output_price_nanos_per_million,
+            )?;
             plan_structured_state_request_with_tokenizer(
                 request,
                 model,
@@ -911,11 +1168,9 @@ fn validate_cached_observations(
                 "cached observation names an unknown evidence slice",
             ));
         };
-        if !body.contains(&observation.evidence_quote) {
-            return Err(invalid(
-                "cached observation quote is not grounded in its evidence slice",
-            ));
-        }
+        validate_exact_unique_quote(body, &observation.evidence_quote).map_err(|_| {
+            invalid("cached observation quote is not exact and unique in its evidence slice")
+        })?;
     }
     Ok(())
 }
@@ -1013,11 +1268,7 @@ impl OpenRouterStructuredState {
             identity: StructuredStateProviderIdentity {
                 model: compiler_model_identity(&model, None),
                 prompt_hash: sha256(prompt.as_bytes()),
-                schema_hash: sha256(
-                    serde_json::to_vec(&response_schema())
-                        .expect("static structured-state schema serializes")
-                        .as_slice(),
-                ),
+                schema_hash: compiler_schema_hash(),
             },
             model,
             prompt,
@@ -1556,7 +1807,7 @@ fn compiler_model_identity(model: &str, reasoning_mode: Option<&str>) -> String 
     identity
 }
 
-fn response_schema() -> Value {
+fn response_schema(aliases: &[String]) -> ResponseSchema {
     let scalar_value = json!({
         "anyOf": [
             {"type": "string"},
@@ -1570,7 +1821,10 @@ fn response_schema() -> Value {
         "additionalProperties": false,
         "required": ["key", "value"],
         "properties": {
-            "key": {"type": "string", "minLength": 1},
+            "key": {
+                "type": "string",
+                "pattern": CANONICAL_KEY_PATTERN
+            },
             "value": scalar_value
         }
     });
@@ -1589,61 +1843,95 @@ fn response_schema() -> Value {
             {"type": "null"}
         ]
     });
-    json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["observations"],
-        "properties": {
-            "observations": {
-                "type": "array",
-                "items": {
+    let canonical_key = json!({
+        "type": "string",
+        "pattern": CANONICAL_KEY_PATTERN
+    });
+    let fields = json!({
+        "type": "array",
+        "items": {
+            "anyOf": [
+                {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": [
-                        "namespace", "item_key", "fields", "disposition",
-                        "evidence_slice_id", "evidence_quote", "valid_from", "valid_to"
-                    ],
+                    "required": ["key", "value"],
                     "properties": {
-                        "namespace": {"type": "string", "minLength": 1},
-                        "item_key": {"type": "string", "minLength": 1},
-                        "fields": {
+                        "key": canonical_key,
+                        "value": direct_value
+                    }
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["key", "object_fields"],
+                    "properties": {
+                        "key": canonical_key,
+                        "object_fields": {
                             "type": "array",
-                            "items": {
-                                "anyOf": [
-                                    {
-                                        "type": "object",
-                                        "additionalProperties": false,
-                                        "required": ["key", "value"],
-                                        "properties": {
-                                            "key": {"type": "string", "minLength": 1},
-                                            "value": direct_value
-                                        }
-                                    },
-                                    {
-                                        "type": "object",
-                                        "additionalProperties": false,
-                                        "required": ["key", "object_fields"],
-                                        "properties": {
-                                            "key": {"type": "string", "minLength": 1},
-                                            "object_fields": {
-                                                "type": "array",
-                                                "items": scalar_field
-                                            }
-                                        }
-                                    }
-                                ]
-                            }
-                        },
-                        "disposition": {"type": "string", "enum": ["state", "event"]},
-                        "evidence_slice_id": {"type": "string", "minLength": 1},
-                        "evidence_quote": {"type": "string", "minLength": 1},
-                        "valid_from": nullable_timestamp,
-                        "valid_to": nullable_timestamp,
+                            "items": scalar_field
+                        }
                     }
                 }
-            }
+            ]
         }
-    })
+    });
+    ResponseSchema {
+        kind: "object",
+        additional_properties: false,
+        required: ["observations"],
+        properties: ResponseProperties {
+            observations: ObservationArraySchema {
+                kind: "array",
+                items: ObservationSchema {
+                    kind: "object",
+                    additional_properties: false,
+                    required: [
+                        "evidence_slice_alias",
+                        "evidence_quote",
+                        "namespace",
+                        "item_key",
+                        "fields",
+                        "disposition",
+                        "valid_from",
+                        "valid_to",
+                    ],
+                    properties: ObservationProperties {
+                        evidence_slice_alias: json!({
+                            "type": "string",
+                            "enum": aliases
+                        }),
+                        evidence_quote: json!({"type": "string", "minLength": 1}),
+                        namespace: canonical_key.clone(),
+                        item_key: canonical_key,
+                        fields,
+                        disposition: json!({
+                            "type": "string",
+                            "enum": ["state", "event"]
+                        }),
+                        valid_from: nullable_timestamp.clone(),
+                        valid_to: nullable_timestamp,
+                    },
+                },
+            },
+        },
+    }
+}
+
+fn response_schema_template() -> ResponseSchema {
+    response_schema(&["s000".to_string()])
+}
+
+fn compiler_schema_hash() -> String {
+    sha256(
+        serde_json::to_vec(&json!({
+            "contract_revision": CONTRACT_REVISION,
+            "alias_algorithm_revision": ALIAS_ALGORITHM_REVISION,
+            "max_slices_per_batch": MAX_EVIDENCE_SLICE_ALIASES,
+            "schema": response_schema_template(),
+        }))
+        .expect("structured-state compiler schema identity serializes")
+        .as_slice(),
+    )
 }
 
 #[derive(Deserialize)]
@@ -1672,12 +1960,12 @@ struct WireResponse {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WireObservation {
+    evidence_slice_alias: String,
+    evidence_quote: String,
     namespace: String,
     item_key: String,
     fields: Vec<WireField>,
     disposition: StructuredObservationDisposition,
-    evidence_slice_id: String,
-    evidence_quote: String,
     valid_from: Option<String>,
     valid_to: Option<String>,
 }
@@ -1732,16 +2020,21 @@ fn decode_response(
         .as_deref()
         .ok_or_else(|| invalid("structured response content is null"))?;
     let wire: WireResponse = serde_json::from_str(content).map_err(invalid)?;
-    let slice_ids = request
-        .evidence_slices
-        .iter()
-        .map(|slice| slice.id.as_str())
-        .collect::<BTreeSet<_>>();
+    let aliases = evidence_slice_aliases(request)?;
     wire.observations
         .into_iter()
         .map(|observation| {
-            if !slice_ids.contains(observation.evidence_slice_id.as_str()) {
-                return Err(invalid("observation names an unknown evidence slice"));
+            let slice_index = aliases
+                .iter()
+                .position(|alias| alias == &observation.evidence_slice_alias)
+                .ok_or_else(|| invalid("observation names an unknown evidence slice alias"))?;
+            let slice = &request.evidence_slices[slice_index];
+            validate_exact_unique_quote(&slice.body, &observation.evidence_quote)?;
+            if !is_canonical_key(&observation.namespace) || !is_canonical_key(&observation.item_key)
+            {
+                return Err(invalid(
+                    "observation namespace and item key must be canonical snake_case",
+                ));
             }
             let mut fields = BTreeMap::new();
             for field in observation.fields {
@@ -1758,7 +2051,7 @@ fn decode_response(
                 item_key: observation.item_key,
                 fields,
                 disposition: observation.disposition,
-                evidence_slice_id: observation.evidence_slice_id,
+                evidence_slice_id: slice.id.clone(),
                 evidence_quote: observation.evidence_quote,
                 valid_from: observation.valid_from,
                 valid_to: observation.valid_to,
@@ -1771,8 +2064,39 @@ fn decode_response(
         .collect()
 }
 
+fn is_canonical_key(value: &str) -> bool {
+    !value.is_empty()
+        && value.split('_').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        })
+}
+
+fn validate_exact_unique_quote(
+    body: &str,
+    quote: &str,
+) -> Result<(), StructuredStateProviderError> {
+    if quote.is_empty() {
+        return Err(invalid("observation evidence quote is empty"));
+    }
+    let mut matches = body.match_indices(quote);
+    if matches.next().is_none() {
+        return Err(invalid(
+            "observation evidence quote does not match its named slice",
+        ));
+    }
+    if matches.next().is_some() {
+        return Err(invalid(
+            "observation evidence quote is ambiguous in its named slice",
+        ));
+    }
+    Ok(())
+}
+
 fn decode_wire_value(field: WireField) -> Result<(String, Value), StructuredStateProviderError> {
-    match field {
+    let decoded = match field {
         WireField::Direct(WireDirectField {
             key,
             value: Value::String(value),
@@ -1804,7 +2128,7 @@ fn decode_wire_value(field: WireField) -> Result<(String, Value), StructuredStat
         WireField::Object(WireObjectField { key, object_fields }) => {
             let mut object = serde_json::Map::new();
             for field in object_fields {
-                if field.key.is_empty()
+                if !is_canonical_key(&field.key)
                     || object.contains_key(&field.key)
                     || !matches!(
                         field.value,
@@ -1822,7 +2146,13 @@ fn decode_wire_value(field: WireField) -> Result<(String, Value), StructuredStat
         _ => Err(invalid(
             "observation value must match one strict scalar, scalar-array, or object-field form",
         )),
+    }?;
+    if !is_canonical_key(&decoded.0) {
+        return Err(invalid(
+            "observation field keys must be canonical snake_case",
+        ));
     }
+    Ok(decoded)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -2690,17 +3020,196 @@ mod tests {
         (bytes.len(), sha256(&bytes))
     }
 
-    fn wire_observation(slice_id: &str) -> Value {
+    fn wire_observation(slice_alias: &str) -> Value {
         json!({
+            "evidence_slice_alias": slice_alias,
+            "evidence_quote": "I live in Oslo.",
             "namespace": "profile",
             "item_key": "city",
             "fields": [{"key": "value", "value": "Oslo"}],
             "disposition": "state",
-            "evidence_slice_id": slice_id,
-            "evidence_quote": "I live in Oslo.",
             "valid_from": null,
             "valid_to": null
         })
+    }
+
+    fn aliased_wire_observation(alias: &str, quote: &str) -> Value {
+        let mut observation = wire_observation(alias);
+        observation["evidence_quote"] = json!(quote);
+        observation
+    }
+
+    fn two_slice_request() -> StructuredStateRequest {
+        StructuredStateRequest {
+            source_kind: StructuredSourceKind::Resource,
+            source_body_sha256: "f".repeat(64),
+            batch_index: 7,
+            evidence_slices: vec![
+                EvidenceSlice {
+                    id: "a".repeat(64),
+                    body: "alpha unique quote".to_string(),
+                    source_span: "0-18".to_string(),
+                },
+                EvidenceSlice {
+                    id: "b".repeat(64),
+                    body: "beta unique quote; repeated repeated".to_string(),
+                    source_span: "18-54".to_string(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn request_uses_only_short_aliases_and_an_evidence_first_dynamic_schema() {
+        let request = two_slice_request();
+        let plan = plan_structured_state_request(
+            &request,
+            DEFAULT_MODEL,
+            "prompt",
+            None,
+            INPUT_PRICE,
+            OUTPUT_PRICE,
+        )
+        .unwrap();
+        assert_eq!(
+            plan.input_reservation_units,
+            plan.serialized_request.len() as u64
+        );
+        let serialized = String::from_utf8(plan.serialized_request.clone()).unwrap();
+        for slice in &request.evidence_slices {
+            assert!(
+                !serialized.contains(&slice.id),
+                "canonical slice IDs are trusted-only and must not reach the model"
+            );
+        }
+
+        let value: Value = serde_json::from_str(&serialized).unwrap();
+        let payload: Value =
+            serde_json::from_str(value["messages"][1]["content"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            payload["evidence_slices"],
+            json!([
+                {"alias": "s000", "body": "alpha unique quote"},
+                {"alias": "s001", "body": "beta unique quote; repeated repeated"}
+            ])
+        );
+
+        let observation = &value["response_format"]["json_schema"]["schema"]["properties"]["observations"]
+            ["items"];
+        assert_eq!(
+            observation["required"],
+            json!([
+                "evidence_slice_alias",
+                "evidence_quote",
+                "namespace",
+                "item_key",
+                "fields",
+                "disposition",
+                "valid_from",
+                "valid_to"
+            ])
+        );
+        assert_eq!(
+            observation["properties"]["evidence_slice_alias"]["enum"],
+            json!(["s000", "s001"])
+        );
+        assert!(observation["properties"].get("evidence_slice_id").is_none());
+        let canonical_key_pattern = "^[a-z0-9]+(?:_[a-z0-9]+)*$";
+        assert_eq!(
+            observation["properties"]["namespace"]["pattern"],
+            canonical_key_pattern
+        );
+        assert_eq!(
+            observation["properties"]["item_key"]["pattern"],
+            canonical_key_pattern
+        );
+        for branch in observation["properties"]["fields"]["items"]["anyOf"]
+            .as_array()
+            .unwrap()
+        {
+            assert_eq!(
+                branch["properties"]["key"]["pattern"],
+                canonical_key_pattern
+            );
+        }
+        assert_eq!(
+            observation["properties"]["fields"]["items"]["anyOf"][1]["properties"]["object_fields"]
+                ["items"]["properties"]["key"]["pattern"],
+            canonical_key_pattern
+        );
+
+        let alias_position = serialized.find("\"evidence_slice_alias\"").unwrap();
+        let quote_position = serialized.find("\"evidence_quote\"").unwrap();
+        let namespace_position = serialized.find("\"namespace\"").unwrap();
+        let fields_position = serialized.find("\"fields\"").unwrap();
+        assert!(alias_position < quote_position);
+        assert!(quote_position < namespace_position);
+        assert!(quote_position < fields_position);
+    }
+
+    #[test]
+    fn decode_maps_alias_to_canonical_slice_and_rejects_every_non_exact_association() {
+        let request = two_slice_request();
+        let decoded = decode_response(
+            response(json!({
+                "observations": [aliased_wire_observation("s000", "alpha unique quote")]
+            }))
+            .body,
+            &request,
+        )
+        .unwrap();
+        assert_eq!(decoded[0].evidence_slice_id, request.evidence_slices[0].id);
+        assert_eq!(decoded[0].evidence_quote, "alpha unique quote");
+
+        for invalid in [
+            aliased_wire_observation("s001", "alpha unique quote"),
+            aliased_wire_observation("s999", "alpha unique quote"),
+            aliased_wire_observation("s000", "Alpha unique quote"),
+            aliased_wire_observation("s001", "repeated"),
+        ] {
+            assert!(
+                decode_response(
+                    response(json!({"observations": [
+                        aliased_wire_observation("s000", "alpha unique quote"), invalid
+                    ]}))
+                    .body,
+                    &request
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn decode_rejects_noncanonical_namespace_item_and_field_keys() {
+        let request = two_slice_request();
+        for (field, value) in [("namespace", "ProfileState"), ("item_key", "city-name")] {
+            let mut invalid = aliased_wire_observation("s000", "alpha unique quote");
+            invalid[field] = json!(value);
+            assert!(
+                decode_response(response(json!({"observations": [invalid]})).body, &request)
+                    .is_err(),
+                "noncanonical {field} must fail closed"
+            );
+        }
+
+        for key in ["FieldName", "field-name", "field__name", "_field"] {
+            let mut invalid = aliased_wire_observation("s000", "alpha unique quote");
+            invalid["fields"] = json!([{"key": key, "value": true}]);
+            assert!(
+                decode_response(response(json!({"observations": [invalid]})).body, &request)
+                    .is_err(),
+                "noncanonical field key {key:?} must fail closed"
+            );
+        }
+        let mut nested = aliased_wire_observation("s000", "alpha unique quote");
+        nested["fields"] = json!([{
+            "key": "outer",
+            "object_fields": [{"key": "nested-key", "value": true}]
+        }]);
+        assert!(
+            decode_response(response(json!({"observations": [nested]})).body, &request).is_err()
+        );
     }
 
     #[test]
@@ -2737,7 +3246,7 @@ mod tests {
     #[test]
     fn strict_decode_accepts_known_slice_and_rejects_unknown_or_extra_fields() {
         let request = request("user: I live in Oslo.");
-        let known = wire_observation(&request.evidence_slices[0].id);
+        let known = wire_observation("s000");
         let decoded = decode_response(
             response(json!({"observations": [known.clone()]})).body,
             &request,
@@ -2745,7 +3254,7 @@ mod tests {
         .unwrap();
         assert_eq!(decoded[0].fields["value"], "Oslo");
 
-        let mut direct_values = wire_observation(&request.evidence_slices[0].id);
+        let mut direct_values = wire_observation("s000");
         direct_values["fields"] = json!([
             {"key": "string", "value": "Oslo"},
             {"key": "number", "value": 42.5},
@@ -2766,7 +3275,7 @@ mod tests {
         assert_eq!(decoded[0].fields["array"], json!([1, "two"]));
         assert_eq!(decoded[0].fields["null"], Value::Null);
 
-        let mut observed_invalid_v1 = wire_observation(&request.evidence_slices[0].id);
+        let mut observed_invalid_v1 = wire_observation("s000");
         observed_invalid_v1["fields"] = json!([{"key": "value", "value_json": "Oslo"}]);
         assert!(
             decode_response(
@@ -2782,7 +3291,7 @@ mod tests {
                 {"key": "same", "value": 1}, {"key": "same", "value": 2}
             ]}]),
         ] {
-            let mut invalid = wire_observation(&request.evidence_slices[0].id);
+            let mut invalid = wire_observation("s000");
             invalid["fields"] = invalid_fields;
             assert!(
                 decode_response(response(json!({"observations": [invalid]})).body, &request)
@@ -2791,7 +3300,7 @@ mod tests {
         }
 
         let mut unknown = known.clone();
-        unknown["evidence_slice_id"] = json!("slice-unknown");
+        unknown["evidence_slice_alias"] = json!("s999");
         assert!(
             decode_response(response(json!({"observations": [unknown]})).body, &request).is_err()
         );
@@ -2808,7 +3317,7 @@ mod tests {
             " ",
             "CamelCase",
         ] {
-            let mut nested = wire_observation(&request.evidence_slices[0].id);
+            let mut nested = wire_observation("s000");
             nested["fields"] = json!([{"key": key, "value": true}]);
             assert!(
                 decode_response(response(json!({"observations": [nested]})).body, &request)
@@ -2862,6 +3371,16 @@ mod tests {
             plan(&request, DEFAULT_MODEL, "prompt-b").extraction_key
         );
         assert_eq!(base.request_sha256, sha256(&base.serialized_request));
+        assert_eq!(CONTRACT_REVISION, "structured-observation.v3");
+        assert_ne!(
+            base.extraction_key, "4eed7c7a507e2fe6f82fbd2c297fe8dd625b32c03a09ecbdbd9976d3003fd143",
+            "the same request under v5 must not read its v4 cache entry"
+        );
+        assert_ne!(
+            compiler_schema_hash(),
+            "03dc469dfe389e201b404fd24a9f39b6a2054c0f9f0cc384574e1476e05e59ad",
+            "the v5 compiler identity must not collide with v4"
+        );
     }
 
     #[test]
@@ -2949,7 +3468,7 @@ mod tests {
     fn aggregate_cap_survives_restart_and_malformed_ledger_fails_before_transport() {
         let request = request("user: cap me");
         let first_transport = FakeTransport::new(vec![Ok(response(json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [aliased_wire_observation("s000", "cap me")]
         })))]);
         let (mut first, ledger) = provider_with_ledger(first_transport);
         let dispatch_root = first.dispatch_root.clone().unwrap();
@@ -2958,7 +3477,7 @@ mod tests {
         first.extract_sync(&request).unwrap();
 
         let duplicate_transport = FakeTransport::new(vec![Ok(response(json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [aliased_wire_observation("s000", "cap me")]
         })))]);
         let mut restarted =
             restarted_provider(duplicate_transport.clone(), &ledger, &dispatch_root);
@@ -3052,7 +3571,7 @@ mod tests {
     fn dispatch_consumes_the_exact_planned_bytes() {
         let request = request("user: I live in Oslo.");
         let transport = FakeTransport::new(vec![Ok(response(json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [wire_observation("s000")]
         })))]);
         let provider = provider(transport.clone());
         let plan = provider.plan(&request).unwrap();
@@ -3160,6 +3679,14 @@ mod tests {
             None,
         )
         .unwrap();
+        assert_eq!(
+            batches
+                .iter()
+                .map(|batch| batch.evidence_slices.len())
+                .collect::<Vec<_>>(),
+            vec![119, 119, 62],
+            "short aliases must not silently pack more slices than the canonical v4 envelope"
+        );
         assert!(batches.len() < slices.len());
         assert_eq!(
             batches
@@ -3185,7 +3712,7 @@ mod tests {
                 .evidence_slices
                 .push(pair[1].evidence_slices[0].clone());
             assert!(
-                plan_structured_state_request(
+                validate_canonical_batch_envelope(
                     &extended,
                     LME_V2_QWEN_MODEL,
                     "prompt",
@@ -3204,6 +3731,14 @@ mod tests {
             slices.clone(),
             |request| {
                 size_calls.set(size_calls.get() + 1);
+                validate_canonical_batch_envelope(
+                    request,
+                    LME_V2_QWEN_MODEL,
+                    "prompt",
+                    None,
+                    100_000_000,
+                    150_000_000,
+                )?;
                 plan_structured_state_request(
                     request,
                     LME_V2_QWEN_MODEL,
@@ -3236,7 +3771,7 @@ mod tests {
         let body = "user: I live in Oslo.";
         let request = request(body);
         let transport = FakeTransport::new(vec![Ok(response(json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [wire_observation("s000")]
         })))]);
         let (provider, ledger) = provider_with_ledger(transport);
         let provider = provider.with_campaign_attempt(2).unwrap();
@@ -3256,7 +3791,7 @@ mod tests {
         assert_eq!(events[1]["reservation_status"], "settled");
         assert_eq!(events[1]["usage"]["cost"], 0.001);
         let content = json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [wire_observation("s000")]
         });
         assert_eq!(
             events[1]["result_sha256"],
@@ -3339,7 +3874,7 @@ mod tests {
     fn terminal_before_cache_progress_reuses_the_exact_ledger_event_hashes() {
         let request = request("user: I live in Oslo.");
         let content = json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [wire_observation("s000")]
         });
         let first_transport = FakeTransport::new(vec![Ok(response(content))]);
         let (first, ledger) = provider_with_ledger(first_transport);
@@ -3411,7 +3946,7 @@ mod tests {
         let campaign = "b".repeat(64);
         let request = request("user: I live in Oslo.");
         let content = json!({
-            "observations": [wire_observation(&request.evidence_slices[0].id)]
+            "observations": [wire_observation("s000")]
         });
         let paid_transport = FakeTransport::new(vec![Ok(response(content))]);
         let (paid, paid_ledger) = provider_with_ledger(paid_transport.clone());
@@ -3628,12 +4163,12 @@ mod tests {
         };
         let content = json!({
             "observations": [{
+                "evidence_slice_alias": "s000",
+                "evidence_quote": evidence_quote,
                 "namespace": "profile",
                 "item_key": "city",
                 "fields": [{"key": "value", "value": "Oslo"}],
                 "disposition": "state",
-                "evidence_slice_id": request.evidence_slices[0].id,
-                "evidence_quote": evidence_quote,
                 "valid_from": null,
                 "valid_to": null
             }]

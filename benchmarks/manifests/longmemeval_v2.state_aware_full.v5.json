@@ -157,7 +157,7 @@
     "pricing_retrieved_at": "2026-07-26T10:01:26Z",
     "pricing_sha256": "5eb279b6be2ccc8a1ce9e9fcedd492b65679493f7d2b8f69985bf07849484766",
     "prompt_path": "config/structured-state-v5.txt",
-    "prompt_sha256": "e40ab5b02aa8b3b2dc6297ba271f7b7a730f7efec14af046ac15cb3997fd7217",
+    "prompt_sha256": "e8bf2ae1d0667bb116460bd2fa57316b7422ffe09b0657854cff681a89a33dff",
     "code_paths": [
       "crates/memphant-runtime/src/structured_state_openrouter.rs",
       "crates/memphant-core/src/service.rs",
@@ -170,7 +170,7 @@
       "scripts/run_lme_v2_state_aware.py"
     ],
     "code_sha256s": {
-      "crates/memphant-runtime/src/structured_state_openrouter.rs": "dd14d325b09b152a8dbe09eb6539ccadd205f2dd7bdfe37438a781a1b7067a3f",
+      "crates/memphant-runtime/src/structured_state_openrouter.rs": "ab4b76134c9a46a3941fbe42fea934a4b347146ce45f848c15743f5277339a97",
       "crates/memphant-core/src/service.rs": "1452bfd8de38f72510fa5a31fd49bc0e1391089d6d8e98cba195f2ecb9e71fb3",
       "crates/memphant-core/src/structured_state.rs": "7b12b07517514ec837fbf7c3eaf56e0679d63cc60ecf226908a0e154b82d58c6",
       "benchmarks/longmemeval_v2/memphant_memory.py": "aeb9b6b4430a384b1d342d5d27af236c3434b9232cd0f660aa35da155d222968",
@@ -185,7 +185,7 @@
       "profile": "release",
       "cargo_locked": true,
     "cargo_lock_sha256": "8a3b85c525213aa4acb1acdb7f1a41ac5c896b101730e3b471c576bd443a21e9",
-    "source_set_sha256": "d819c7b0ed89b6d02d44305443ddb63f9c354bbb8ccbcd48cb35e2d242f31497",
+    "source_set_sha256": "a34ffc6ff1ff98434147723cee921b842699129545c4549539bd07b51f632acf",
       "rustc_vv_sha256": "a9951fd2e18599557d1a289d74c50874d336477e219b1472508a63518090fa08",
       "cargo_version_sha256": "4b38cfb28fee9bbb95897bc3793f5fce5f3ed35c732f29ad7d80f96ba96eac5b",
       "source_paths": [
