@@ -145,15 +145,23 @@ def test_frozen_development_cohort_still_binds_the_reader_lattices() -> None:
     assert fetch.id_list_sha256(
         committed["exposed_development"]["question_ids"]
     ) == cohort_sha256
-    for path, key in (
-        ("benchmarks/manifests/reader_lattices.v1.json",
-         "development_question_ids_sorted_sha256"),
+    # reader_lattices.v1.json is the tracked binding and always checked. The
+    # other two live under gitignored roots, so they are only present on a
+    # machine that generated them; check them when they are.
+    tracked = ("benchmarks/manifests/reader_lattices.v1.json",
+               "development_question_ids_sorted_sha256")
+    local_only = (
         ("benchmarks/data/longmemeval_s.development.controls.json",
          "development_question_ids_sorted_sha256"),
         ("docs/build-log/artifacts/unified-sota-20260713/validity-transform-v1.json",
          "question_set_sha256"),
-    ):
-        bound = json.loads((ROOT / path).read_text(encoding="utf-8"))[key]
+    )
+    for path, key in (tracked, *local_only):
+        artifact = ROOT / path
+        if not artifact.exists():
+            assert (path, key) != tracked, f"{path} must be tracked"
+            continue
+        bound = json.loads(artifact.read_text(encoding="utf-8"))[key]
         assert bound == cohort_sha256, path
 
 
