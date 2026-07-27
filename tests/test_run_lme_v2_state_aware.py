@@ -130,12 +130,30 @@ def test_v4_abandonment_proof_is_compact_exact_and_conservatively_reserved() -> 
             "http_200_response_decode_error_settled": 1,
             "http_429_error_unresolved": 1,
         },
+        "failed_plan_count": 6,
+        "failure_class_counts": {
+            "http_200_decoded_settled_cache_rejected_semantic_grounding": 4,
+            "http_200_response_decode_error_settled": 1,
+            "http_429_error_unresolved": 1,
+        },
         "served_models": {"qwen/qwen3.5-9b-20260310": 63},
         "served_providers": {"DeepInfra": 63},
         "provider_reported_settled_cost_nanos": 273_440_100,
         "unresolved_reservation_nanos": 15_191_400,
         "total_new_liability_nanos": 288_631_500,
         "validated_cache_entry_count": 58,
+    }
+    assert proof["canary_plan_inventory"] == {
+        "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-CENSUS.json",
+        "bytes": 7_248_821,
+        "plan_count": 64,
+        "plans_sha256": "367360a1350f7b62a2bd26fed568cae96125586405b108c574d0815940bb6192",
+        "sha256": "c3b654108854d7362c965cd30ee113280d6694dc2e2893a0bbd6ca0612b2fc9a",
+    }
+    assert proof["failed_source_inventory"] == {
+        "relative_path": "benchmarks/manifests/longmemeval_v2.v4_failed_sources.json",
+        "failure_count": 6,
+        "sha256": "798e104190eee5e966bdc263fdfb23de1096c772f8189f57c4a386e1cfe69401",
     }
     assert proof["campaign_ledger"] == {
         "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-ATTEMPTS.jsonl",
@@ -188,19 +206,44 @@ def test_v4_failed_source_inventory_is_hash_only_and_ledger_bound() -> None:
             "failure_class": "http_200_response_decode_error_settled",
         },
         {
+            "extraction_key": "002f4114e0ce7e31a7a9d9e3d0e729fa1a3286e6b750ceb2b578cab9cc2db466",
+            "source_body_sha256": "2527ee5adb13339436f1a491f85c70d40e579f9532f814497659aacf386aa465",
+            "failure_class": "http_200_decoded_settled_cache_rejected_semantic_grounding",
+        },
+        {
+            "extraction_key": "022e0efc1da02a3bcc2394578699f73947c2634e2c87a237584670d6891e06a7",
+            "source_body_sha256": "91b2752c89dd5ae4ee9f82ef7a5a76a4c7b0d88c8efec62384fda7373ca544b7",
+            "failure_class": "http_200_decoded_settled_cache_rejected_semantic_grounding",
+        },
+        {
+            "extraction_key": "06d7515812aeecf8aef50ecd62551834086d1a94398fd329ca0c9e21a94ce7f7",
+            "source_body_sha256": "2c3df8467ac637d4d0965e9349930a66b047748e1f22630088603ebe2658257d",
+            "failure_class": "http_200_decoded_settled_cache_rejected_semantic_grounding",
+        },
+        {
             "extraction_key": "0769da56e60bef7a4d6898ccdfe67db573a1f6b0f1dd5c30840aa716e193bcb7",
             "source_body_sha256": "38dfc4ece78dc8a4feecd49f81e933b0a3901f5db05faa995c6e216111076e68",
             "failure_class": "http_429_error_unresolved",
+        },
+        {
+            "extraction_key": "0acffac48f688711da9e5cae4d36600ec338f18c09582d3708402749eb561b2d",
+            "source_body_sha256": "6bf4f293a47f08630e7e00043adc01f4810d80c4d56c6a70dca8391eb18f9031",
+            "failure_class": "http_200_decoded_settled_cache_rejected_semantic_grounding",
         },
     ]
     assert inventory == {
         "schema_version": 1,
         "source_campaign": "longmemeval-v2-pilot-v4",
         "source_construction_ledger_sha256": "f79a8073c87341934126a583c02521173c2ea7d740841cacba4d66ad52a2a23c",
+        "source_canary_plan_inventory_sha256": "367360a1350f7b62a2bd26fed568cae96125586405b108c574d0815940bb6192",
+        "validated_cache_inventory_sha256": "f1caad464a93e0d6f194dceaa4689b5de5f84feb4b3d797e82302e1a100d5cdd",
+        "derivation": "authorized_canary_plan_keys_minus_validated_cache_entry_keys",
+        "authorized_canary_plan_count": 64,
+        "validated_cache_entry_count": 58,
         "contains_source_bodies": False,
-        "failure_count": 2,
+        "failure_count": 6,
         "failures": failures,
-        "failure_inventory_sha256": "c006917d4bfc314c12fff29d450dac15f16984df63e74d204a6a8e8904efc060",
+        "failure_inventory_sha256": "49c9d8f4a18c1503b4c7ef81623b833d31be4a85a69dd665a9de441e8851fd91",
     }
     assert inventory["failure_inventory_sha256"] == runner.sha256_json(failures)
     assert not ({"body", "request", "response", "observations"} & set(inventory))
@@ -1372,8 +1415,24 @@ def _canary_plans(runner, count: int = 128) -> list[dict[str, object]]:
             "21bbbfb39a195cbac881c4bf918163dc43d0af8a53234c2604c633f6110de406",
         ),
         (
+            "002f4114e0ce7e31a7a9d9e3d0e729fa1a3286e6b750ceb2b578cab9cc2db466",
+            "2527ee5adb13339436f1a491f85c70d40e579f9532f814497659aacf386aa465",
+        ),
+        (
+            "022e0efc1da02a3bcc2394578699f73947c2634e2c87a237584670d6891e06a7",
+            "91b2752c89dd5ae4ee9f82ef7a5a76a4c7b0d88c8efec62384fda7373ca544b7",
+        ),
+        (
+            "06d7515812aeecf8aef50ecd62551834086d1a94398fd329ca0c9e21a94ce7f7",
+            "2c3df8467ac637d4d0965e9349930a66b047748e1f22630088603ebe2658257d",
+        ),
+        (
             "0769da56e60bef7a4d6898ccdfe67db573a1f6b0f1dd5c30840aa716e193bcb7",
             "38dfc4ece78dc8a4feecd49f81e933b0a3901f5db05faa995c6e216111076e68",
+        ),
+        (
+            "0acffac48f688711da9e5cae4d36600ec338f18c09582d3708402749eb561b2d",
+            "6bf4f293a47f08630e7e00043adc01f4810d80c4d56c6a70dca8391eb18f9031",
         ),
     ]
     plans = []
@@ -1441,7 +1500,7 @@ def test_construction_canary_prefers_exact_v4_then_v1_failures() -> None:
         for kind in ("episode", "resource")
         for quantile in range(1, 5)
     }
-    assert canary["preferred_v4_failed_extraction_key_count"] == 2
+    assert canary["preferred_v4_failed_extraction_key_count"] == 6
     assert canary["preferred_v1_failed_source_count"] > 0
     assert canary["gate"]["maximum_statistical_failures"] == 4
     assert canary["gate"]["maximum_semantic_failures"] == 0

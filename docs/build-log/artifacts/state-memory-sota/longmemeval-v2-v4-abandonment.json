@@ -13,6 +13,13 @@
     "sha256": "425c9d94709ca0c05096e6ad9625fb8aaaaf43d967c8160f5a0f62b0a47d3b48"
   },
   "campaign_namespace": "longmemeval-v2-pilot-v4",
+  "canary_plan_inventory": {
+    "bytes": 7248821,
+    "plan_count": 64,
+    "plans_sha256": "367360a1350f7b62a2bd26fed568cae96125586405b108c574d0815940bb6192",
+    "relative_path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot-v4/CAMPAIGN-CENSUS.json",
+    "sha256": "c3b654108854d7362c965cd30ee113280d6694dc2e2893a0bbd6ca0612b2fc9a"
+  },
   "construction_ledger": {
     "bytes": 108089,
     "line_count": 128,
@@ -30,6 +37,11 @@
     "gate_artifact_present": false,
     "progress_artifact_present": false
   },
+  "failed_source_inventory": {
+    "failure_count": 6,
+    "relative_path": "benchmarks/manifests/longmemeval_v2.v4_failed_sources.json",
+    "sha256": "798e104190eee5e966bdc263fdfb23de1096c772f8189f57c4a386e1cfe69401"
+  },
   "privacy": {
     "inventory_hashes_only": true,
     "large_input_committed": false,
@@ -43,9 +55,15 @@
     "response_count": 64,
     "total_bytes": 211794
   },
-  "proof_sha256": "299fe0d6d9a0053713715c9a1213e27800836a9de9e40ddd4bd14ede91f6805d",
+  "proof_sha256": "f49e56accc419c87d93785a0f932a3aeb23aa5176f980c752cc127ed933c31e4",
   "schema_version": 1,
   "settlement": {
+    "failed_plan_count": 6,
+    "failure_class_counts": {
+      "http_200_decoded_settled_cache_rejected_semantic_grounding": 4,
+      "http_200_response_decode_error_settled": 1,
+      "http_429_error_unresolved": 1
+    },
     "provider_reported_settled_cost_nanos": 273440100,
     "result_count": 64,
     "result_status_counts": {

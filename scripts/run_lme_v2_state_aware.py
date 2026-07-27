@@ -6719,6 +6719,7 @@ def _v4_failed_source_identities() -> tuple[set[tuple[str, str]], str]:
     value = json.loads(V4_FAILED_SOURCE_INVENTORY.read_text(encoding="utf-8"))
     failures = value.get("failures") if isinstance(value, dict) else None
     abandonment = json.loads(V4_ABANDONMENT_PROOF.read_text(encoding="utf-8"))
+    inventory_file_sha256 = _sha256_file(V4_FAILED_SOURCE_INVENTORY)
     if (
         not isinstance(failures, list)
         or failures
@@ -6727,14 +6728,30 @@ def _v4_failed_source_identities() -> tuple[set[tuple[str, str]], str]:
         or value.get("failure_inventory_sha256") != sha256_json(failures)
         or value.get("contains_source_bodies") is not False
         or value.get("source_campaign") != "longmemeval-v2-pilot-v4"
+        or value.get("derivation")
+        != "authorized_canary_plan_keys_minus_validated_cache_entry_keys"
+        or value.get("authorized_canary_plan_count") != 64
+        or value.get("validated_cache_entry_count") != 58
+        or len(failures) != 64 - 58
         or value.get("source_construction_ledger_sha256")
         != abandonment.get("construction_ledger", {}).get("sha256")
+        or value.get("source_canary_plan_inventory_sha256")
+        != abandonment.get("canary_plan_inventory", {}).get("plans_sha256")
+        or value.get("validated_cache_inventory_sha256")
+        != abandonment.get("cache_inventory", {}).get("inventory_sha256")
+        or abandonment.get("failed_source_inventory")
+        != {
+            "relative_path": str(V4_FAILED_SOURCE_INVENTORY.relative_to(ROOT)),
+            "failure_count": len(failures),
+            "sha256": inventory_file_sha256,
+        }
         or any(
             not isinstance(item, dict)
             or not _valid_sha256(item.get("extraction_key"))
             or not _valid_sha256(item.get("source_body_sha256"))
             or item.get("failure_class")
             not in {
+                "http_200_decoded_settled_cache_rejected_semantic_grounding",
                 "http_200_response_decode_error_settled",
                 "http_429_error_unresolved",
             }
@@ -6747,7 +6764,14 @@ def _v4_failed_source_identities() -> tuple[set[tuple[str, str]], str]:
     }
     if len(identities) != len(failures):
         raise RuntimeError("v4 failed-source canary inventory is not unique")
-    return identities, _sha256_file(V4_FAILED_SOURCE_INVENTORY)
+    failure_classes = Counter(item["failure_class"] for item in failures)
+    if failure_classes != {
+        "http_200_decoded_settled_cache_rejected_semantic_grounding": 4,
+        "http_200_response_decode_error_settled": 1,
+        "http_429_error_unresolved": 1,
+    }:
+        raise RuntimeError("v4 failed-source canary classes drift")
+    return identities, inventory_file_sha256
 
 
 def derive_construction_canary(plans: list[dict[str, object]]) -> dict[str, object]:
