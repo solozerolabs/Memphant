@@ -1,9 +1,11 @@
 # State-aware memory v5 campaign handoff
 
+Current STATUS mirror: RUNTIME COMPLETE — BENCHMARK EVIDENCE PENDING
+
 Date: 2026-07-27
-Repository: `/Users/sidsharma/.codex/worktrees/Memphant/state-memory-sota`
-Branch: `codex/memphant-state-memory-sota`
-HEAD: `0b72b9fa` (`docs: authorize v5 state-memory campaign`)
+Repository: `/Users/sidsharma/Memphant`
+Branch: `main` (landed from `codex/memphant-state-memory-sota`)
+HEAD at authorization: `0b72b9fa` (`docs: authorize v5 state-memory campaign`)
 State: **PAUSED AFTER THE AUTHORIZED RUN — DO NOT BLINDLY RESUME**
 
 ## Executive state
