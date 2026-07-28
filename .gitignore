@@ -111,6 +111,7 @@ docs/build-log/artifacts/r15-docs/chat/ev-*.jsonl
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/PREFIX-12-CONSTRUCTION-PLANS.json
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/REMAINING-439-COMMITMENT.json
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/ROW-RESERVATION-PLAN.json
+/docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/SHA256SUMS
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/case-banks/
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/observation-cache/
 /docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/private-construction-dispatches/
