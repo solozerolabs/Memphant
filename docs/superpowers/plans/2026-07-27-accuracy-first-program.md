@@ -26,7 +26,7 @@ stand at any budget.
 
 Model representativeness is a standing rule: any run whose verdict can flip a
 production default uses a reader that represents deployed traffic —
-`claude-opus-4-8`, the Claude Code executor's workhorse default — either as the
+`claude-opus-5`, the Claude Code executor's workhorse default — either as the
 primary reader (Phase 3) or as the mandatory robustness arm (Phase 2). Eval-only
 lattices are legitimate for screening and for reusing frozen evidence, never as the
 sole basis for a promotion.
@@ -251,7 +251,7 @@ one-line decision-register entry naming who valued it and why).
 spent exactly once, exposure recorded immediately after; public claims say
 "answer-session disjoint", never "fully held out" (strict all-haystack-disjoint
 count is 0); and (ii) a **production-representative robustness arm**: replicate the
-headline comparison with reader `claude-opus-4-8` — the model Syndai's Claude Code
+headline comparison with reader `claude-opus-5` — the model Syndai's Claude Code
 executor actually serves (`harness_models.py:34`, "workhorse default") — frozen as
 its own lattice, direction-agreement bar (not significance). A default that only
 wins on the eval-lattice reader is fragile evidence AND unrepresentative of
@@ -268,7 +268,7 @@ early-warning gate. Primary comparison: best MemPhant arm vs BM25 — the first
 measured answer to "does MemPhant memory help a coding agent". Secondary: cap-OFF
 vs cap-1200 decides the coding-lane packing default on its own corpus.
 
-**Reader = production-representative by design:** `claude-opus-4-8` — the model
+**Reader = production-representative by design:** `claude-opus-5` — the model
 Syndai's Claude Code executor serves as its workhorse default
 (`backend/src/features/coding/harness_models.py:34`) — frozen with a pinned
 snapshot and a same-lattice judge in the schema_version-3 packet. The decision run
