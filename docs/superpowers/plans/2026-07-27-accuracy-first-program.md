@@ -71,6 +71,12 @@ screens as non-decisional tripwires. Record SWE-ContextBench first-tranche satur
 as terminal for the current tranche. Re-issue the reader-QA packet as schema_version 2
 with the reconciled design in Phase 2.
 
+Also in Phase 0 (both $0): a dated STATUS.md banner-note addendum (notes only, no
+checkbox flips) recording the sentinel's reclassification, so the live ledger does
+not contradict the amended decision record; and the re-issued packet is
+schema_version **3** (the tombstoned packet is already v2 — keep the supersedes
+chain unambiguous).
+
 Kill gate: none — this is a $0 correction of a measurement instrument, argued from
 recorded per-question artifacts.
 
@@ -95,21 +101,44 @@ builds the asset every coding-lane measurement depends on.
     *Track U (user learning):* goldens for what the agent must learn about the USER —
     corrections, preferences, standing rules, identity facts — mined read-only from
     real material we already own (same pattern as the C1 prod extract): the 60
-    `feedback_*` memory files across `~/.claude/projects/*/memory/` (ready-made
-    user-correction goldens), Syndai `LEARNINGS.md` (25 provenance-tagged
-    self-corrections), and AGENTS.md hard-rule sections (~15 guardrails). Category
-    weights follow the measured distribution of a real power user, not intuition:
-    ~65% procedural workflow rules/traps, ~20% semantic project/config facts, ~10%
+    `feedback_*` memory files across `~/.claude/projects/*/memory/` (verified count),
+    Syndai `LEARNINGS.md` self-corrections, and AGENTS.md hard-rule sections (pin
+    exact source counts at extraction time — the ~25/~15 estimates are unverified).
+    Category weights follow the measured distribution of a real power user (n=1 —
+    adopt now, preregister revisiting once real CaaS telemetry exists): ~65%
+    procedural workflow rules/traps, ~20% semantic project/config facts, ~10%
     guardrails with exception clauses, ~5% identity/style. Every correction golden is
     a BUNDLE (rule + triggering incident + how-to-apply), because that is the
-    real-world unit — not isolated fact triples. See "User-learning axis" below for
-    the eval axes these goldens must cover.
+    real-world unit — not isolated fact triples.
+
+    **First slice = three axes only** (correction retention, staleness/invalidation,
+    scope contradiction) — the ones scoreable with the existing retrieval + reader-QA
+    machinery today. The other four axes (guardrail exceptions, sycophancy,
+    lifecycle, adherence) need end-behavior scoring that does not exist yet; they are
+    preregistered as deferred, not silently in scope. Landing place: new
+    `scripts/user_lane_extract.py` on the `episodic_lane_corpus.py` pattern —
+    gitignored bank + committed lock. Target: 40–60 first-slice goldens.
+
+    **Privacy preregistration (before mining, $0):** the Track U bank is mined from
+    the owner's real personal memory. Bodies are gitignored/private per the C1
+    pattern and never committed. Any EXTERNAL claim (including the correction-
+    retention numbers the positioning note wants published) requires a
+    public-reproducible variant — paraphrase-scrubbed or synthetic clones,
+    re-adjudicated to the same quality bar. Paraphrase-don't-quote applies to every
+    derived artifact.
 
 1b. **Substrate-transfer replay ($0, deterministic):** rerun the Budget-drop diagnosis
     (cap=None vs cap=1200) on the ingested code-trajectory corpus. This answers
     "do packing principles transfer across substrates" with zero model calls: if the
     per-item-cost pathology (one long body starving the pack) does not recur on code
     bodies, pack_render_cap is a chat-lane footnote and Phase 2 drops in priority.
+    Landing place: extend `code_lane_run_memphant.py` to record
+    `dropped_items`/`RecallDropReason` from the recall trace (already exposed in
+    `openapi/memphant.v1.json`) and admit `MEMPHANT_PACK_RENDER_CAP` into its packing
+    config; query set = the Track R goldens from 1a. External prior worth citing in
+    the write-up: memory-condensation strategies showed no quality gain for coding
+    agents on DiscoveryBench (arXiv 2605.18854) — transfer is the question, not the
+    assumption.
 
 1c. **Retrieval probe:** MemPhant packaged runtime vs the BM25 deterministic control
     (`code_lane_run_deterministic.py`) on the new goldens, r@10, free.
@@ -122,7 +151,9 @@ MemPhant does not beat BM25 on retrieval, the ownership decision (d) defaults to
 ### Phase 2 — ~$10–25. pack_render_cap paired reader-QA (chat lane)
 
 Conditional on: Phase 0 landed, AND (Phase 1b shows the pathology recurs on code
-bodies OR the chat lane is explicitly valued on its own).
+bodies OR the chat lane is explicitly valued on its own — the OR branch requires a
+one-line decision-register entry naming who valued it and why, so the free gate is
+bypassed on a recorded judgment, not silently).
 
 One reconciled design (the lenses proposed three; this is the pick):
 - **Pool:** all 238 current-exposure questions — reuse the two hash-pinned 178-row
@@ -135,15 +166,30 @@ One reconciled design (the lenses proposed three; this is the pick):
 - **Reader/judge:** frozen lattice pair — reader `openai/gpt-5.6-terra` (medium),
   judge `anthropic/claude-sonnet-5` rag-supported-v1 prompt v3, per the tombstoned
   packet. Same-lattice pairing is mandatory.
-- **Primary endpoint:** paired McNemar on answer correctness, d_min = 7pt at n=238
-  (powered ~80% at ψ≈0.15; a 5pt effect is undecidable on unsealed material —
-  pre-commit to |Δ|<7pt = no flip).
+- **Primary endpoint:** paired McNemar on answer correctness. Denominator is the
+  **221 scored (non-`_abs`) rows** — abstention is a guardrail stratum, not part of
+  the powered test. d_min = 7pt (powered ~80% at ψ≈0.15; a 5pt effect is undecidable
+  on unsealed material — pre-commit to |Δ|<7pt = no flip). Commit the analysis code
+  before unblinding results.
 - **Abstention:** fail-closed guardrail, not a powered stratum — reader-judged
   (`abstain=true ∧ answer=null`) on all 17 unsealed `_abs` cases; any net regression
   blocks promotion. No synthetic gold-ablation probes (they test "abstain on empty
   evidence", not "abstain despite traps" — wrong construct).
-- **Cost basis:** ~$0.02–0.03/call observed → ~$10–25 realistic, $116 worst-case
-  ceiling per the frozen derivation.
+- **Latency/cost guardrail (preregistered beside the accuracy endpoint):** the cap is
+  construction-time-only at the identical 8192 pack budget and lowers reader tokens,
+  so promotion is expected latency-neutral — but the promotion criteria still re-run
+  the existing $0 SLO harness (p50<200ms / p95<500ms bars) and record the
+  reader-token delta as a non-regression check. Assumed-neutral is not preregistered-
+  neutral.
+- **Lattice reconciliation (recorded override):** Phase 2 and its confirmation run
+  end-to-end on the terra/sonnet pair from the frozen packet — an explicit recorded
+  override of the standing Sol-finalist judge designation for this lane. Rationale:
+  the only existing paired evidence (two frozen 178-row files) was generated on that
+  pair; switching lattices orphans it. Same-lattice discipline holds within the lane.
+- **Cost basis (re-derived for the 238 pool):** ~$0.02–0.03/call observed →
+  **~$18–40 realistic, ~$155 worst-case** (the old $116 ceiling was the 178-row
+  derivation). The conditional sealed-259 confirmation run is a separate named
+  budget line (~$15–30 realistic) spent only on a pass.
 - **Promotion:** a pass flips the default for the CHAT lane only. Coding-lane default
   waits for Phase 3 on its own corpus. The sealed 259 confirmation set is spent
   exactly once, only for a promotion-grade confirmation, and its exposure is recorded
@@ -155,8 +201,15 @@ One reconciled design (the lenses proposed three; this is the pick):
 
 MemPhant vs BM25-control paired reader-QA on the Phase-1 golden bank, same McNemar
 machinery, preregistered d_min before launch. This is the first measured answer to
-"does MemPhant memory help a coding agent". Replicate the headline result on the
-270-row Syndai C1 prod extract before acting on it.
+"does MemPhant memory help a coding agent".
+
+The MemPhant arm's packing config **inherits the Phase 1b verdict** (cap stays OFF
+unless 1b showed the code-body pathology). Phase 3 as designed does NOT decide the
+coding-lane cap default — that is decided by 1b + Phase 2 transfer reasoning, or by
+an explicitly named third arm (+$8–15) if a direct measurement is wanted. The C1
+replication is **$0 corpus-only retrieval replication** (rerun the retrieval probe on
+the 270-row prod extract), not a paid reader run — C1 has no mined goldens and
+minting them is out of scope here.
 
 Kill gate: no paired win over BM25 → the substrate does not yet earn the coding lane;
 ownership stays with Syndai's tables and the roadmap pivots to closing the measured
@@ -303,13 +356,20 @@ converge on manually; the substrate should make it native.
 
 | Axis | Probe shape | Scored win |
 |---|---|---|
-| Correction retention | correction in session N → temptation to repeat in N+k | mistake not repeated |
-| Staleness/invalidation | preference changed / rule retired | old memory NOT applied |
-| Scope contradiction | same user, opposite rules in two repos | scope-correct rule retrieved |
-| Guardrail exceptions | "never X unless explicitly asked" ± explicit ask | exception grammar honored both ways |
-| Sycophancy | wrong user "correction" vs verified repo fact | fact survives; preference updates still land |
-| Lifecycle | superseded + killed entries | newer rule wins; killed work not resurrected |
-| Adherence | rule stored and retrieved | end behavior complies (not just retrieval@k) |
+| Correction retention (slice 1) | correction in session N → temptation to repeat in N+k | mistake not repeated |
+| Staleness/invalidation (slice 1) | preference changed / rule retired | old memory NOT applied |
+| Scope contradiction (slice 1) | same user, opposite rules in two repos | scope-correct rule retrieved |
+| Guardrail exceptions (deferred) | "never X unless explicitly asked" ± explicit ask | exception grammar honored both ways |
+| Sycophancy (deferred) | wrong user "correction" vs verified repo fact | fact survives; preference updates still land; **conflict surfaced to the user**, never silently ignored |
+| Lifecycle (deferred) | superseded + killed entries | newer rule wins; killed work not resurrected |
+| Adherence (deferred) | rule stored and retrieved | end behavior complies (not just retrieval@k) |
+
+Slice-1 axes are scoreable with existing retrieval + reader-QA machinery; deferred
+axes need end-behavior scoring that must be built and preregistered first. For the
+scope-contradiction and guardrail axes, score BOTH sides by name — Misapplication
+Rate and Appropriate Application Rate (the BenchPreS metric pair) — so suppression
+wins can't masquerade as application wins. Graduation (re-learn-count-before-
+promotion) has no probe yet and moves to the not-doing list until one exists.
 
 Positioning note: users explicitly distrust memory vendors for shipping zero measured
 evidence, and distrust cloud memory on privacy (Cursor removed Memories over it).
@@ -332,9 +392,29 @@ Publishing correction-retention numbers from a self-hostable substrate answers b
 - 7-table Syndai→MemPhant migration sequencing — no migration before measurement (see d).
 - Any n≤12 frozen screen as a decision instrument — tripwires only, preregistered as
   non-decisional.
+- Auto-research / LLM-designed experiments for these runs — at our scale (2–3 paired
+  runs, $10–60, one-shot sealed sets) the scarce resources are question exposure and
+  evidence credibility, not design bandwidth; best current systems hit ~45% on
+  ablation planning (AblationBench v3). Keep the automation we already use where it
+  pays: agent-adjudicated mining with human spot-checks, deterministic replays,
+  frozen same-lattice judging.
+- Graduation-pipeline probes (re-learn count before promotion) — until an
+  end-behavior probe design exists; the axis is recorded, not scheduled.
+- The four deferred Track-U axes as Phase-1 scope — first slice is three axes;
+  deferred axes enter only with their own preregistered scorers.
 
 ## Budget picture
 
-Phases 0–1: $0. Phase 2: ~$10–25 (ceiling $116). Phase 3: ~$15–30. Phase 4 if
-resumed: ~$20–45 within the standing $200 campaign ceiling. Total new spend to a
-coding-lane verdict: **under $60 realistic**, every dollar behind a free gate.
+Phases 0–1: $0 (accounting convention: golden mining/adjudication runs on
+subscription-model agent calls — marginal-$0, not zero-compute). Phase 2: ~$18–40
+(ceiling ~$155, re-derived for the 238 pool), plus a named conditional line ~$15–30
+for the sealed-259 confirmation spent only on a pass. Phase 3: ~$15–30 (+$8–15 only
+if a third cap arm is explicitly added). Phase 4 if resumed: ~$20–45 within the
+standing $200 campaign ceiling. Total new spend to a coding-lane verdict:
+**~$35–70 realistic**, every dollar behind a free gate or a recorded decision.
+
+Phase 4 note for whenever it unparks: the official LME-V2 leaderboard scores LAFS
+Gain — an accuracy-LATENCY frontier over 1–200s budgets — so a submission needs a
+preregistered latency budget, not just accuracy. And the SWE-Explore monitor entry:
+the upstream README claims issue text is included; the shipped JSONL (pinned rev
+bdb0ae4, still latest) has 0/848 — re-verify the data, not the README.
