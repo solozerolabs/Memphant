@@ -79,7 +79,9 @@ recorded per-question artifacts.
 This phase decides whether the chat-lane lever matters for our users at all, and
 builds the asset every coding-lane measurement depends on.
 
-1a. **Rebuild the coding golden bank** from `nebius/SWE-rebench-openhands-trajectories`
+1a. **Rebuild the coding golden bank — two tracks.**
+
+    *Track R (repo memory):* from `nebius/SWE-rebench-openhands-trajectories`
     (CC-BY-4.0, pinned) via the existing `materialize_public_code_lane.py` +
     `code_lane_*` machinery — mechanism is proven; only golden mining failed. The new
     miner must fix the three recorded failure modes: questions must causally identify
@@ -89,6 +91,19 @@ builds the asset every coding-lane measurement depends on.
     across state-churn / file-symbol-grounding / task-resumption question shapes.
     Also target `syndai.trajectory_events` (schema-native internal source) via the same
     adapter for a smaller internal slice.
+
+    *Track U (user learning):* goldens for what the agent must learn about the USER —
+    corrections, preferences, standing rules, identity facts — mined read-only from
+    real material we already own (same pattern as the C1 prod extract): the 60
+    `feedback_*` memory files across `~/.claude/projects/*/memory/` (ready-made
+    user-correction goldens), Syndai `LEARNINGS.md` (25 provenance-tagged
+    self-corrections), and AGENTS.md hard-rule sections (~15 guardrails). Category
+    weights follow the measured distribution of a real power user, not intuition:
+    ~65% procedural workflow rules/traps, ~20% semantic project/config facts, ~10%
+    guardrails with exception clauses, ~5% identity/style. Every correction golden is
+    a BUNDLE (rule + triggering incident + how-to-apply), because that is the
+    real-world unit — not isolated fact triples. See "User-learning axis" below for
+    the eval axes these goldens must cover.
 
 1b. **Substrate-transfer replay ($0, deterministic):** rerun the Budget-drop diagnosis
     (cap=None vs cap=1200) on the ingested code-trajectory corpus. This answers
@@ -183,6 +198,7 @@ best available source:
 | Repo exploration | SWE-Explore-Bench | blocked upstream (missing issue text); monitor |
 | Long tool-call trajectories | LME-V2 trajectories (1.2 GB, pinned) | cached |
 | Internal schema-native traces | `syndai.trajectory_events` | table contract live; local dump wiped |
+| User corrections / preferences / rules | 60 `feedback_*` memory files + LEARNINGS.md + AGENTS.md hard rules (read-only extract) | ready; Track U, Phase 1a |
 
 **Principles transfer across substrates is testable, not assumable** — Phase 1b tests
 the packing principle on code bodies for $0; Phase 3 vs Phase 2 tests whether the
@@ -203,6 +219,101 @@ pattern. Permanently Syndai-side regardless: persona rendering, behavioral
 reinforcement, managed repo-doc reconciliation, turn accounting (`agent_runs.turns_used`)
 — orchestration state, not memory. Mobile is the binding surface (Flutter memory hub
 reads `syndai.*`); web imposes no constraint.
+
+## User-learning axis (CaaS chat scope — added 2026-07-27)
+
+The CaaS product is users *chatting* with coding agents: follow-ups, corrections,
+volunteered facts, preferences, skill-driven work (SEO, UI, video). The memory that
+matters most to those users is memory of THEM, not only of the repo. Three-source
+investigation (Tacitry repo, this power user's own 357-entry agent-memory corpus,
+2026 user-voice research) yields the following design inputs and eval axes.
+Scope note: this covers the coding/CaaS lane only — Syndai's multi-hierarchical
+task/ask/research side is explicitly out of scope here.
+
+### What the evidence says users need (in priority order)
+
+1. **Correction retention** — the #1 user-voiced pain across Claude Code / Cursor /
+   Copilot / Windsurf: re-explaining conventions, re-correcting the same mistake 4+
+   times. No coding-specific benchmark measures this (MemSyco-Bench / PrefEval /
+   PERMA are chat-domain) — **a first-mover eval slot** consistent with the 2026-07
+   landscape memo. PrefEval shows preference-following collapses below 10% after ~10
+   turns without memory; that is the baseline to beat.
+2. **Staleness is worse than no memory** — Windsurf's hidden auto-memories applying
+   dead rules/stale URLs is the strongest pain signal after forgetting. Invalidation
+   (changed preference, retired rule) must be a *scored* behavior: the win is NOT
+   applying the old memory.
+3. **Scope-keyed, never global** — measured in this user's own corpus: the same user
+   holds opposite standing rules in two repos (worktrees mandatory vs forbidden),
+   both correct in scope. Every 2026 product treats repo-scope vs user-global as
+   structural. Global-preference baselines must FAIL the contradiction probes.
+4. **Sycophancy resistance** — wrong user "corrections" must not clobber verified
+   repo facts (MemSyco-Bench axis): preference updates overwrite; fact corruption
+   must not.
+5. **Adherence ≠ retrieval** — users' sharpest complaint is stored-but-ignored
+   instructions ("CLAUDE.md is the least effective way to communicate with it").
+   The eval must score end behavior, not retrieval@k.
+6. **Graduation** — recurring memories should promote to durable standing
+   instructions; measurable as re-learn count before promotion. Matches the
+   episodic→semantic direction and what users explicitly request.
+
+### Tacitry: steal / reject (verified against its source)
+
+Steal into the procedural substrate design:
+- **The durability gate**: an extraction router must decide `durable: true/false`
+  *before* emitting anything ("would this lesson be correct on a future, unrelated
+  task, without the original context?"), enforced at the boundary (non-durable drops
+  any emitted rule), with empty output explicitly valid. Durable-rate is itself an
+  audit signal of over/under-extraction.
+- **Dual application path**: prose rules injected into context may or may not be
+  honored — mechanically checkable rules (style tells, forbidden patterns) get
+  structured `applicability` and are enforced *deterministically* post-generation.
+  This is the adherence answer: don't trust the model to obey prose; gate what can
+  be gated.
+- **Scope specificity ranking** at retrieval (thread > recipient > class > workspace
+  ⇒ for us: task > repo > org > user-global), with the more-specific rule beating
+  the general one on the same tell.
+- **Corrections as full audit rows**: decision, edit diff, what was extracted,
+  router rationale, durable verdict — the provenance chain MemPhant's trust model
+  already wants.
+- **Paraphrase-don't-quote** in extracted rules, so one incident doesn't leak
+  verbatim into every future generation.
+- **Closed vocabulary of memory paths** (hard-validated file/topic namespace) rather
+  than free-form keys.
+
+Reject:
+- **Insert-only rules** — Tacitry's biggest gap: weight frozen at 1.0, no dedup, no
+  supersede-on-contradiction, no decay, append-only memory files. MemPhant's
+  correct/forget/supersede machinery is precisely its advantage; do not copy the gap.
+- Its pg_trgm retrieval — MemPhant's retrieval stack is strictly stronger.
+- Autonomy-as-user-toggle is fine for Tacitry's send-gating; not a memory concern.
+
+### The real power-user write path (measured, n=357 entries)
+
+Raw episodes are almost never stored. Everything is distilled at write time into
+rule + incident-why + how-to-apply with provenance (source agent, date, confidence,
+session id) — episodic material survives as *justification attached to the rule*.
+Two authority classes with different override rights: user-issued corrections (quote
+the user, high authority) vs agent self-learned postmortems (revisable). Negative/
+lifecycle entries ("killed, do not retry", dated supersession chains) are first-class
+— a substrate without tombstones resurrects rejected work. Two-tier index+detail
+(always-loaded one-liners under a size budget; long tail on demand) is what users
+converge on manually; the substrate should make it native.
+
+### Eval axes for the Track-U golden bank (each preregistered with its own probes)
+
+| Axis | Probe shape | Scored win |
+|---|---|---|
+| Correction retention | correction in session N → temptation to repeat in N+k | mistake not repeated |
+| Staleness/invalidation | preference changed / rule retired | old memory NOT applied |
+| Scope contradiction | same user, opposite rules in two repos | scope-correct rule retrieved |
+| Guardrail exceptions | "never X unless explicitly asked" ± explicit ask | exception grammar honored both ways |
+| Sycophancy | wrong user "correction" vs verified repo fact | fact survives; preference updates still land |
+| Lifecycle | superseded + killed entries | newer rule wins; killed work not resurrected |
+| Adherence | rule stored and retrieved | end behavior complies (not just retrieval@k) |
+
+Positioning note: users explicitly distrust memory vendors for shipping zero measured
+evidence, and distrust cloud memory on privacy (Cursor removed Memories over it).
+Publishing correction-retention numbers from a self-hostable substrate answers both.
 
 ## Explicitly not doing (delete list, with reasons)
 
