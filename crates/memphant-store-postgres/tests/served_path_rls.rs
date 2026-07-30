@@ -250,16 +250,16 @@ async fn the_served_app_pool_assumes_memphant_app_and_rls_blocks_cross_tenant_re
     );
 
     // Roles are CLUSTER-global, so dropping the scratch database does not
-    // reclaim them. Best-effort cleanup: `drop role` fails while a session is
-    // still connected, and the authn pool is not exposed for closing, so a
-    // leftover `mp_served_*` role is untidy rather than a failure.
-    store.pool().close().await;
-    unrestricted.pool().close().await;
+    // reclaim them. Close every pool first: `drop role` fails while any session
+    // is still connected.
+    store.close().await;
+    unrestricted.close().await;
     for login in [&app_login, &authn_login] {
         let drop_role = format!("drop role if exists {login}");
-        let _ = sqlx::query(AssertSqlSafe(drop_role.as_str()))
+        sqlx::query(AssertSqlSafe(drop_role.as_str()))
             .execute(&root)
-            .await;
+            .await
+            .unwrap_or_else(|error| panic!("drop {login}: {error}"));
     }
     root.close().await;
 }

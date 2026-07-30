@@ -49,7 +49,7 @@ pub const WORKER_ROLE: &str = "memphant_worker";
 pub const PROVISIONER_ROLE: &str = "memphant_provisioner";
 
 /// Marker the fail-closed RLS refusal carries, so wrapping never buries it.
-const RLS_REFUSAL: &str = "refusing to serve: row-level security would be bypassed";
+const RLS_REFUSAL: &str = "refusing to serve";
 
 /// A credential plus the capability role its connections assume.
 #[derive(Clone, Copy)]
@@ -77,11 +77,7 @@ impl<'a> PoolSpec<'a> {
             return error;
         }
         match self.role {
-            Some(role) => StoreError::Backend(format!(
-                "could not open a `{role}` pool: {error}. The credential must be a login role \
-                 that is a member of `{role}` (`grant {role} to <login>`); migration \
-                 20260730_004_served_login_roles ships `{role}_login` for exactly this."
-            )),
+            Some(role) => StoreError::Backend(format!("could not open a `{role}` pool: {error}.")),
             None => error,
         }
     }
@@ -368,6 +364,13 @@ impl PgStore {
         max_connections: u32,
         role: Option<&'static str>,
     ) -> Result<PgPool, StoreError> {
+        // A `SET ROLE` that fails inside `after_connect` is retried by the pool
+        // and surfaces 30 s later as an opaque acquire timeout. Probe it once on
+        // a throwaway connection first so a credential that was never granted
+        // membership fails immediately, saying so.
+        if let Some(role) = role {
+            Self::probe_role_membership(&options, role).await?;
+        }
         let pool = PgPoolOptions::new()
             .max_connections(max_connections)
             .after_connect(move |connection, _| {
@@ -415,6 +418,29 @@ impl PgStore {
         Ok(pool)
     }
 
+    async fn probe_role_membership(
+        options: &PgConnectOptions,
+        role: &str,
+    ) -> Result<(), StoreError> {
+        use sqlx::Connection;
+        let mut probe = sqlx::PgConnection::connect_with(options)
+            .await
+            .map_err(backend)?;
+        let assumed = sqlx::query("select pg_catalog.set_config('role', $1, false)")
+            .bind(role)
+            .execute(&mut probe)
+            .await;
+        let _ = probe.close().await;
+        assumed.map_err(|error| {
+            StoreError::Backend(format!(
+                "refusing to serve: the credential cannot assume the capability role `{role}`: \
+                 {error}. Grant it (`grant {role} to <login>`), or use the `{role}_login` role \
+                 that migration 20260730_004_served_login_roles ships."
+            ))
+        })?;
+        Ok(())
+    }
+
     /// Fail-closed startup guard: a served pool must run as its non-superuser
     /// capability role. A superuser or `BYPASSRLS` effective role silently
     /// disables every `_tenant_isolation` policy, leaving tenant isolation to
@@ -437,7 +463,7 @@ impl PgStore {
         let bypasses_rls: bool = row.try_get("bypasses_rls").map_err(backend)?;
         if effective != role || is_superuser || bypasses_rls {
             return Err(StoreError::Backend(format!(
-                "{RLS_REFUSAL}. \
+                "refusing to serve: row-level security would be bypassed. \
                  The connection must run as the non-superuser capability role `{role}`, but the \
                  effective role is `{effective}` (login `{login}`, rolsuper={is_superuser}, \
                  rolbypassrls={bypasses_rls}). Apply migration \
@@ -451,6 +477,18 @@ impl PgStore {
 
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    /// Close every pool this store owns. Tests that mint throwaway login roles
+    /// need it: `drop role` fails while any session is still connected.
+    pub async fn close(&self) {
+        self.pool.close().await;
+        for pool in [self.auth_pool.as_ref(), self.provision_pool.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            pool.close().await;
+        }
     }
 
     async fn tenant_tx(
