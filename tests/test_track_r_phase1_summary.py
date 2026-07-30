@@ -136,3 +136,72 @@ def test_changed_pack_witness_reads_as_interpretable(summary_module):
     assert witness["cap_changed_packing"] is True
     assert witness["cap_1200"]["packed_items_total"] == 6
     assert json.loads(json.dumps(built))["arms"]["bm25_control"]["n"] == 2
+
+
+# --- Phase 1c scoped comparison ------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def scoped_module():
+    spec = importlib.util.spec_from_file_location(
+        "track_r_scoped_bm25_compare", ROOT / "scripts/track_r_scoped_bm25_compare.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_scoped_comparison_paired_counts_are_per_question_flips(scoped_module):
+    rows = [
+        {"left": True, "right": True},
+        {"left": True, "right": False},
+        {"left": False, "right": True},
+        {"left": False, "right": True},
+        {"left": False, "right": False},
+    ]
+
+    flips = scoped_module.paired(
+        rows, lambda row: row["left"], lambda row: row["right"]
+    )
+
+    assert flips == {
+        "both_hit": 1,
+        "left_only": 1,
+        "right_only": 2,
+        "neither": 1,
+        "discordant": 3,
+    }
+
+
+def test_scoped_comparison_scoping_witness_flags_a_haystack_mismatch(scoped_module):
+    corpus_rows = [
+        {
+            "attempt_id": "a1",
+            "events": [
+                {"sequence": 0, "role": "user", "text": "one"},
+                {"sequence": 1, "role": "assistant", "text": "two"},
+            ],
+        }
+    ]
+    goldens = [{"question_id": "q1", "provenance": [{"attempt_id": "a1"}]}]
+    matched = scoped_module.scoping_witness(
+        goldens,
+        corpus_rows,
+        {"per_question": [{"question_id": "q1", "documents_searched": 2}]},
+        {"per_question": [{"question_id": "q1", "pool_size": 2}]},
+    )
+    mismatched = scoped_module.scoping_witness(
+        goldens,
+        corpus_rows,
+        {"per_question": [{"question_id": "q1", "documents_searched": 7}]},
+        {"per_question": [{"question_id": "q1", "pool_size": 2}]},
+    )
+
+    assert matched["bm25_documents_searched_equals_attempt_events"] == 1
+    assert matched["memphant_pool_size_le_bm25_documents_searched"] == 1
+    assert matched["violations"] == []
+    assert mismatched["bm25_documents_searched_equals_attempt_events"] == 0
+    assert mismatched["violations"] == [
+        {"question_id": "q1", "documents_searched": 7, "attempt_events": 2}
+    ]
