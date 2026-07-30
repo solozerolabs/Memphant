@@ -130,3 +130,15 @@ docs/build-log/artifacts/pmu-full300-sequential-20260717/
 .claude/feature-flow/
 benchmarks/data/private/
 .gstack/
+
+# Phase 1a-R Track R repo-memory golden bank. The nebius trajectory corpus and
+# the mined golden bodies are licensed third-party content and full event text;
+# only the lock file is committed (same rule as coding_events_golden.lock.json).
+docs/build-log/artifacts/track-r/corpus.jsonl
+docs/build-log/artifacts/track-r/corpus-adapter.lock.json
+docs/build-log/artifacts/track-r/adapter-goldens.jsonl
+docs/build-log/artifacts/track-r/agent-cache/
+docs/build-log/artifacts/track-r/requests/
+benchmarks/data/track_r_repo_memory_golden.jsonl
+benchmarks/data/track_r_repo_memory_spotcheck.jsonl
+!benchmarks/data/track_r_repo_memory_golden.lock.json
