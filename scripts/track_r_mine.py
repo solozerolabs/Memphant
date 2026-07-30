@@ -94,9 +94,9 @@ PREVIEW_MAX_CHARS_EACH = 400
 DISTRACTOR_MAX = 5
 DISTRACTOR_EXCERPT_CHARS = 1200
 CANDIDATES_PER_SHAPE = 200
-PREFETCH = 260
-GEN_BATCH = 12
-ADJ_BATCH = 8
+PREFETCH = 420
+GEN_BATCH = 20
+ADJ_BATCH = 12
 SPOTCHECK_N = 15
 
 IDENT_RE = re.compile(r"[a-z0-9_]{4,}")
@@ -354,8 +354,11 @@ def adj_prompt(question: str, answer: str, candidate: dict, distractors: list[di
     parts = [
         f"QUESTION: {question}",
         f"CLAIMED ANSWER (verbatim from the target event): {answer}",
+        # The target gets the SAME window the generator saw, not the shorter
+        # distractor excerpt: adjudicating a target clipped before its own
+        # answer span produced spurious "answer not in the event" verdicts.
         f"TARGET EVENT (repository {candidate['repository']}, role "
-        f"{candidate['role']}):\n{candidate['text'][:DISTRACTOR_EXCERPT_CHARS]}",
+        f"{candidate['role']}):\n{candidate['text'][:EVENT_MAX_CHARS_PROMPT]}",
     ]
     if distractors:
         for number, event in enumerate(distractors, start=1):

@@ -161,3 +161,20 @@
 - Live-run rule: construct all 12 case banks normally in the fresh output root; no cross-root import or dependency on the ignored exact dump
 - No-paid JIT preflight: frozen 12/24/12 bounds, 1.2 GB pinned acquisition, 12 materialized cases/pairing proofs, official harness environment, PostgreSQL 17.10 tools, release binaries, disk, and current endpoint inventory verified
 - Remaining prerequisite: `OPENROUTER_API_KEY` is absent; `OPENAI_API_KEY` is present. No provider/model/database call was made
+
+## Phase 1a-R - Track R repo-memory golden bank (accuracy-first program)
+
+- Status: mined, deterministic, and **one preregistered check short of the bar** - not shipped as passing
+- Bar preregistered and committed BEFORE mining: `docs/build-log/2026-07-30-track-r-golden-bar.md` (`0cf468eb`)
+- Miner: `scripts/track_r_mine.py` + `tests/test_track_r_mine.py` (`bdc76b35`)
+- Corpus: `nebius/SWE-rebench-openhands-trajectories` rev `35455389ab51bf5e2306bfd436ef72d0f98bf882`, CC-BY-4.0, materialized through the proven `scripts/materialize_public_code_lane.py` adapter - 495 attempts / 330 repositories / 64,055 events, corpus sha256 `c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669`
+- Bank: 180 goldens, 60 per shape (state-churn / file-symbol-grounding / task-resumption), 156 distinct attempts, 129 distinct repositories, sha256 `6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d`
+- Lock (only committed artifact): `benchmarks/data/track_r_repo_memory_golden.lock.json`; bodies and the 15-golden spot-check sample are gitignored
+- Accept rate 180/412 = 0.4369, above the preregistered 0.40 dataset kill gate
+- Rejects by reason: distractor_also_answers 82, insufficient_distinguishing_tokens 77, shape_target_met 63, identification_not_narrowed 51, adjudication_target_not_identified 12, too_generic_span 8, per_repo_cap 6, adjudication_parse_failed 2
+- 14 of 15 bar checks pass. **Failing check: `with_distractors_ge_50pct`** - 75/180 (41.7%) goldens carry at least one explicitly adjudicated distractor, against a preregistered floor of 50%. The bar was NOT lowered. Diagnosis: the identification gate is stronger than the bar assumed - most accepted questions narrow the 64k-event corpus to the target alone, so there is no plausible distractor left to adjudicate. Every golden is still agent-adjudicated (100%), zero ship with an unadjudicated distractor, and zero ship with a distractor judged to also answer. Whether to amend that one threshold is an owner decision, not a miner decision.
+- Generic-template failure mode is closed by measurement: 180 distinct question skeletons for 180 goldens, max single-skeleton share 0.56%, mean question/answer lexical overlap 0.052 (max 0.323)
+- Spot-check sample emitted at `benchmarks/data/track_r_repo_memory_spotcheck.jsonl`, state `emitted_pending_owner_review` recorded in the lock; no published number may cite this bank until the owner advances that state
+- Determinism: `python3 scripts/track_r_mine.py --verify-lock` re-mines from the warm cache and compares to the lock - currently OK (`6f549daaa3cc` == `6f549daaa3cc`, 180/180)
+- Paid API spend: $0. Generation and adjudication ran entirely on subscription-model agent calls (688 cached replies, content-hash keyed), never OpenRouter
+- Defect found and fixed mid-run: the adjudication prompt clipped the target event to 1,200 chars while the generator saw 3,000, so adjudicators were rejecting goldens whose answer sat past the clip. Fixed, and the whole adjudication wave was re-run rather than kept
