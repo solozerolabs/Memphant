@@ -44,13 +44,35 @@ def _report(hits: dict[str, bool], cap, pack_items=4, pack_chars=400) -> dict:
         "golden_sha256": "g" * 64,
         "corpus_sha256": "c" * 64,
         "pack_render_cap": cap,
+        "k": 10,
         "pack_drop_summary": _pack_summary(pack_items, pack_chars),
         "runtime_identity": {"command": f"cmd cap={cap}"},
         "per_question": [
-            {"question_id": qid, "hit_at_5": hit, "hit_at_10": hit}
+            {
+                "question_id": qid,
+                "hit_at_5": hit,
+                "hit_at_10": hit,
+                "bucket": "hit" if hit else "in_pool_unpacked",
+                "gold_in_pool": True,
+                "gold_fused_rank": 2 if hit else 40,
+                "packed_size": 10,
+            }
             for qid, hit in hits.items()
         ],
     }
+
+
+def test_stage_decomposition_localizes_the_miss(summary_module):
+    decomposition = summary_module.stage_decomposition(
+        _report({"q1": True, "q2": False}, None)
+    )
+
+    assert decomposition["gold_in_pool_rate"] == 1.0
+    assert decomposition["recall_at_10"] == 0.5
+    assert decomposition["in_pool_unpacked"] == 1
+    assert decomposition["in_pool_unpacked_gold_rank_within_k"] == 0
+    assert decomposition["in_pool_unpacked_gold_rank_beyond_k"] == 1
+    assert decomposition["packed_size_histogram"] == {"10": 2}
 
 
 def test_recall_splits_by_adjudicated_distractor(summary_module):

@@ -80,6 +80,35 @@ def paired_flips(left: dict, right: dict, key: str) -> dict:
     }
 
 
+def stage_decomposition(report: dict) -> dict:
+    """Where a MemPhant miss happens: candidate pool vs the packed top-k.
+
+    ``gold_in_pool_rate`` is the substrate's candidate-stage recall;
+    ``recall_at_10`` is what survives packing. A large gap localizes the deficit
+    in pack selection, not in retrieval. ``in_pool_unpacked_gold_rank_within_k``
+    counts the misses whose best gold pool unit was ALREADY inside the top-k
+    fused ranks and still did not reach the pack.
+    """
+    rows = report["per_question"]
+    unpacked = [row for row in rows if row["bucket"] == "in_pool_unpacked"]
+    k = report["k"]
+    ranks = [
+        row["gold_fused_rank"] for row in unpacked if row["gold_fused_rank"] is not None
+    ]
+    sizes = [row["packed_size"] for row in rows]
+    return {
+        "n": len(rows),
+        "gold_in_pool_rate": sum(bool(row["gold_in_pool"]) for row in rows) / len(rows),
+        "recall_at_10": rate(rows, "hit_at_10"),
+        "in_pool_unpacked": len(unpacked),
+        "in_pool_unpacked_gold_rank_within_k": sum(1 for rank in ranks if rank <= k),
+        "in_pool_unpacked_gold_rank_beyond_k": sum(1 for rank in ranks if rank > k),
+        "packed_size_histogram": {
+            str(size): sizes.count(size) for size in sorted(set(sizes))
+        },
+    }
+
+
 def render_witness(report: dict) -> dict:
     summary = report["pack_drop_summary"]
     return {
@@ -121,6 +150,10 @@ def build_summary(
         "paired_hit_at_10": {
             "memphant_cap_off_vs_bm25": paired_flips(cap_off, bm25, "hit_at_10"),
             "cap_1200_vs_cap_off": paired_flips(cap_1200, cap_off, "hit_at_10"),
+        },
+        "memphant_stage_decomposition": {
+            "cap_off": stage_decomposition(cap_off),
+            "cap_1200": stage_decomposition(cap_1200),
         },
         "hypothesis_b_render_witness": {
             "cap_off": off_witness,

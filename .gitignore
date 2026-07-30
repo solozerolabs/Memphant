@@ -139,6 +139,10 @@ docs/build-log/artifacts/track-r/corpus-adapter.lock.json
 docs/build-log/artifacts/track-r/adapter-goldens.jsonl
 docs/build-log/artifacts/track-r/agent-cache/
 docs/build-log/artifacts/track-r/requests/
+# Phase 1b/1c run outputs. The evidence JSONLs carry full retrieved event text
+# (third-party bodies); the provenance reports are large per-question dumps.
+# Only the derived `track_r_phase1_retrieval_summary.json` alongside is committed.
+docs/build-log/artifacts/track-r/phase1/
 benchmarks/data/track_r_repo_memory_golden.jsonl
 benchmarks/data/track_r_repo_memory_spotcheck.jsonl
 !benchmarks/data/track_r_repo_memory_golden.lock.json

@@ -1,0 +1,143 @@
+{
+  "arm_provenance": {
+    "bm25_control": null,
+    "memphant_cap_1200": "python3 scripts/code_lane_run_memphant.py --database-url postgres://memphant:memphant@localhost:5432/memphant --corpus docs/build-log/artifacts/track-r/corpus.jsonl --golden benchmarks/data/track_r_repo_memory_golden.jsonl --out-evidence docs/build-log/artifacts/track-r/phase1/memphant-cap1200-evidence.jsonl --out-provenance docs/build-log/artifacts/track-r/phase1/memphant-cap1200-provenance.json --embed-model off --mode fast --k 10 --budget-tokens 8192 --pack-render-cap 1200 --label track-r-cap1200 --port 39433 --server-bin target/release/memphant-server --worker-bin target/release/memphant-worker --cli-bin target/release/memphant-cli",
+    "memphant_cap_off": "python3 scripts/code_lane_run_memphant.py --database-url postgres://memphant:memphant@localhost:5432/memphant --corpus docs/build-log/artifacts/track-r/corpus.jsonl --golden benchmarks/data/track_r_repo_memory_golden.jsonl --out-evidence docs/build-log/artifacts/track-r/phase1/memphant-capoff-evidence.jsonl --out-provenance docs/build-log/artifacts/track-r/phase1/memphant-capoff-provenance.json --embed-model off --mode fast --k 10 --budget-tokens 8192 --label track-r-capoff --port 39431 --server-bin target/release/memphant-server --worker-bin target/release/memphant-worker --cli-bin target/release/memphant-cli"
+  },
+  "arms": {
+    "bm25_control": {
+      "n": 180,
+      "recall_at_10": 0.8055555555555556,
+      "recall_at_5": 0.7611111111111111,
+      "with_adjudicated_distractor": {
+        "n": 75,
+        "recall_at_10": 0.7866666666666666,
+        "recall_at_5": 0.7333333333333333
+      },
+      "without_adjudicated_distractor": {
+        "n": 105,
+        "recall_at_10": 0.819047619047619,
+        "recall_at_5": 0.780952380952381
+      }
+    },
+    "memphant_cap_1200": {
+      "n": 180,
+      "recall_at_10": 0.5055555555555555,
+      "recall_at_5": 0.45,
+      "with_adjudicated_distractor": {
+        "n": 75,
+        "recall_at_10": 0.5733333333333334,
+        "recall_at_5": 0.4666666666666667
+      },
+      "without_adjudicated_distractor": {
+        "n": 105,
+        "recall_at_10": 0.45714285714285713,
+        "recall_at_5": 0.4380952380952381
+      }
+    },
+    "memphant_cap_off": {
+      "n": 180,
+      "recall_at_10": 0.5055555555555555,
+      "recall_at_5": 0.45,
+      "with_adjudicated_distractor": {
+        "n": 75,
+        "recall_at_10": 0.5733333333333334,
+        "recall_at_5": 0.4666666666666667
+      },
+      "without_adjudicated_distractor": {
+        "n": 105,
+        "recall_at_10": 0.45714285714285713,
+        "recall_at_5": 0.4380952380952381
+      }
+    }
+  },
+  "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+  "golden_path": "benchmarks/data/track_r_repo_memory_golden.jsonl",
+  "golden_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d",
+  "hypothesis_b_render_witness": {
+    "cap_1200": {
+      "buckets": {
+        "absent_from_pool": 4,
+        "hit": 91,
+        "in_pool_unpacked": 85
+      },
+      "budget_share_of_in_pool_unpacked": 0.0,
+      "in_pool_unpacked": 85,
+      "in_pool_unpacked_gold_drop_reasons": {
+        "not_in_dropped_items": 28,
+        "rerank": 57
+      },
+      "pack_render_cap": 1200,
+      "packed_item_chars_max": 4011,
+      "packed_item_chars_mean": 1094.3835227272727,
+      "packed_item_chars_total": 1926115,
+      "packed_items_mean": 9.777777777777779,
+      "packed_items_total": 1760
+    },
+    "cap_changed_packing": true,
+    "cap_off": {
+      "buckets": {
+        "absent_from_pool": 4,
+        "hit": 91,
+        "in_pool_unpacked": 85
+      },
+      "budget_share_of_in_pool_unpacked": 0.011764705882352941,
+      "in_pool_unpacked": 85,
+      "in_pool_unpacked_gold_drop_reasons": {
+        "budget": 1,
+        "not_in_dropped_items": 28,
+        "rerank": 56
+      },
+      "pack_render_cap": null,
+      "packed_item_chars_max": 7039,
+      "packed_item_chars_mean": 1147.0255681818182,
+      "packed_item_chars_total": 2018765,
+      "packed_items_mean": 9.777777777777779,
+      "packed_items_total": 1760
+    },
+    "reading": "cap altered the pack on this corpus; the retrieval delta is interpretable"
+  },
+  "memphant_stage_decomposition": {
+    "cap_1200": {
+      "gold_in_pool_rate": 0.9777777777777777,
+      "in_pool_unpacked": 85,
+      "in_pool_unpacked_gold_rank_beyond_k": 29,
+      "in_pool_unpacked_gold_rank_within_k": 56,
+      "n": 180,
+      "packed_size_histogram": {
+        "0": 4,
+        "10": 176
+      },
+      "recall_at_10": 0.5055555555555555
+    },
+    "cap_off": {
+      "gold_in_pool_rate": 0.9777777777777777,
+      "in_pool_unpacked": 85,
+      "in_pool_unpacked_gold_rank_beyond_k": 29,
+      "in_pool_unpacked_gold_rank_within_k": 56,
+      "n": 180,
+      "packed_size_histogram": {
+        "0": 4,
+        "10": 176
+      },
+      "recall_at_10": 0.5055555555555555
+    }
+  },
+  "note": "Kill-gate and bar decisions are the owner's; with_distractors_ge_50pct stays false in the golden lock.",
+  "paid_api_spend_usd": 0,
+  "paired_hit_at_10": {
+    "cap_1200_vs_cap_off": {
+      "both_hit": 91,
+      "left_only": 0,
+      "neither": 89,
+      "right_only": 0
+    },
+    "memphant_cap_off_vs_bm25": {
+      "both_hit": 76,
+      "left_only": 15,
+      "neither": 20,
+      "right_only": 69
+    }
+  },
+  "schema": "memphant.eval.track-r-phase1-summary.v1"
+}
