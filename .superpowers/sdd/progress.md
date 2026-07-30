@@ -688,3 +688,114 @@ the single failure is the pre-existing environmental
 
 **No checkbox moved** — STATUS gains one note; checked-box count is 21 before
 and after.
+## W3.3 — the `memphant_app` served role (2026-07-30, branch `af-w3-rls`)
+
+**The hole.** `20260703_001` put `ENABLE` + `FORCE ROW LEVEL SECURITY` on 28
+tables with 27 `_tenant_isolation` policies keyed on
+`memphant.current_tenant_id()`. None of it was active on the served path:
+`connect_pool`'s `after_connect` set only `search_path`, `SET ROLE` appeared
+zero times outside `tests/`, no migration/script/CLI/profile ever created a
+login role that was a member of `memphant_app`, and every packaging path
+shipped a bypassing credential (compose: the initdb superuser, plus the stale
+bare `DATABASE_URL` the runtime rejects; Neon: `memphant_owner`, which holds a
+`using(true)` owner policy; Supabase: the project superuser). Tenant isolation
+rested entirely on application predicates. The tests did what production did
+not.
+
+**What landed.**
+
+1. `20260730_004_served_login_roles` — one NOINHERIT **login** role per served
+   capability (`memphant_{app,authn,worker,provisioner}_login`), each a member
+   of exactly one capability role, with `revoke all on schema memphant` so the
+   login itself reaches nothing directly. Passwordless on purpose: migrations
+   live in git, and a passwordless LOGIN role cannot authenticate under
+   scram/md5. `scripts/provision_login_roles.sh` is the provisioning step; it
+   refuses to hand back a credential that is SUPERUSER or BYPASSRLS.
+2. `PgStore` pools now carry the capability role they serve and issue an
+   explicit `SET ROLE` in `after_connect`. A pool is shared between
+   capabilities only when the credential **and** the role match, so
+   `connect_app` no longer collapses the disjoint app and authn capabilities
+   onto one connection when both URLs are the same (which every shipped profile
+   and the e2e probe do).
+3. Fail-closed startup assertion: the pool refuses to serve unless
+   `current_user` is exactly the capability role and is neither `rolsuper` nor
+   `rolbypassrls`. Verified by deleting the `SET ROLE` and re-running — the
+   store refuses with the actionable message rather than serving without RLS.
+4. Packaging: compose gained a one-shot `bootstrap` service (new Dockerfile
+   stage, so the runtime image gains no psql/python) that applies migrations
+   and provisions credentials; server/worker wait on it and use the split
+   credentials. Both provider profiles document `DATABASE_URL` as the migrator
+   credential and add the three served URLs. `memphant db bootstrap-check` now
+   rejects a served credential that reuses the migrator login or names a known
+   RLS-bypassing role.
+5. `crates/memphant-store-postgres/tests/served_path_rls.rs` — hands
+   `connect_app` an ordinary member login and runs a bare cross-tenant query
+   through the **store's own pool** (no `set local role` in the harness), with
+   an unrestricted control asserted to leak so the zero is not vacuous.
+   `e2e_probe.sh` now runs the real server and worker under probe-minted
+   non-superuser member logins; its standing "RLS never fires here" note is
+   gone because it is no longer true.
+
+**Superuser dependencies found (the point of the exercise).**
+
+- `hot_path_slo_pg.rs` drained the reflect queue through the **app** store.
+  `claim_reflect_jobs` is granted to `memphant_worker` alone, so this worked
+  only while the app credential was a superuser. Fixed by draining on a worker
+  store, which is what production does. No grant was widened.
+- `memphant admin create-key --subject-id …` calls `resolve_memory_context`,
+  which reads `context_binding`/`subject`. The provisioner capability has
+  execute on three SECURITY DEFINER functions and **no table access at all**
+  (verified: `permission denied for table context_binding`), a boundary
+  `role_matrix.rs` asserts deliberately. `connect_provisioner` therefore stays
+  unrestricted, documented in the code. Making the admin CLI least-privilege
+  needs a second app-capability connection or a narrower provisioning
+  function — a real follow-on, not something to buy by widening the grant.
+- Latent, pre-existing, **not** fixed: `memphant-cli`'s `connect_pg` builds the
+  pool in one `block_on` runtime and every operation runs in a second. The
+  pool's connections belong to the dead first runtime, so any acquire that has
+  to re-establish times out. Adding one query to the connect path was enough to
+  surface it as `pool timed out while waiting for an open connection`. The
+  three `admin` subcommands each pay this.
+- Role-level GUCs (`alter role memphant_app set statement_timeout = '30s'`)
+  apply at **login**, not at `SET ROLE`, so the per-role timeouts still do not
+  reach the served session. They did not before this change either (the server
+  logged in as the superuser), so this is a standing gap, not a regression.
+
+**Verification** (`af-w3-rls`, commits `07a3b788`, `0f401dea`, `6009645b`,
+`0b1845ec`):
+
+- `cargo fmt --all --check` clean; `cargo clippy --workspace --all-targets`
+  clean.
+- `cargo test --workspace --no-fail-fast`: 674 passed, 1 failed, 94 ignored.
+  The one failure, `memphant-eval syndai_coding_continuity_fixture_families_pass`,
+  reproduces on the stashed branch base — pre-existing, not from this work.
+- `python3 -m pytest tests/ -q`: 1026 passed, 15 skipped, 3 failed before
+  repair; `test_wsa_migration_contract` was mine (migration count 3→4) and is
+  fixed. `test_public_launch_gate` and `test_repo_contract::…spec_drift…` fail
+  identically on the stashed base.
+- Scratch-DB leg (`with_scratch_db.sh … -p memphant-store-postgres -p
+  memphant-worker -- --ignored --test-threads=1`): **81 passed, 0 failed.**
+  Two tests needed repair first (both recorded above as superuser
+  dependencies): `hot_path_slo_pg` and `pg_store_contract`'s readiness probe,
+  which called `connect_worker` with a login granted only `memphant_app`.
+- `scripts/e2e_probe.sh`: ALL CHECKS PASSED with the server and worker running
+  as `memphant_app` / `memphant_authn` / `memphant_worker`. No missing grant
+  surfaced across retain, recall, MCP, correct, forget, mark, traces or
+  restart durability.
+- `docker compose config` valid; the `bootstrap` stage was built and run
+  against a real database — 4 migrations applied, three credentials issued.
+  A full `docker compose up --build` was **not** run (multi-minute release
+  build); the server/worker containers are unexercised end to end.
+- `db lint` clean for all three providers; two-migration dry-run reports
+  `migration_plan=4`.
+
+**Residual gaps.**
+
+- The spec-25 correction adds `25-…md` to `check_spec_drift.py`'s output. That
+  check was already dirty at the branch base (5 files); the same one-paragraph
+  correction should be mirrored into the private spec copy, which lives outside
+  this worktree.
+- The compose stack is verified by `config` + a live bootstrap run, not by a
+  full `up --build`.
+- The CLI two-runtime pool bug and the admin CLI's superuser dependency are
+  reported, not fixed.

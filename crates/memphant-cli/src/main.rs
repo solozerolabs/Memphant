@@ -808,9 +808,11 @@ fn validate_provider_profile(
     {
         findings.push(format!("profile:schema_mismatch:actual={schema}"));
     }
-    if let Some(database_url) = require_key(profile, "DATABASE_URL", &mut findings) {
+    let migrator_url = require_key(profile, "DATABASE_URL", &mut findings);
+    if let Some(database_url) = migrator_url {
         validate_database_url(provider, database_url, &mut findings);
     }
+    validate_served_credentials(provider, profile, migrator_url, &mut findings);
     validate_residency_and_retention(profile, &mut findings);
 
     match provider {
@@ -820,6 +822,61 @@ fn validate_provider_profile(
     }
 
     findings
+}
+
+/// Login names that carry `rolsuper` or a `using(true)` bypass policy on the
+/// providers MemPhant ships profiles for. `memphant_owner` owns every table
+/// and holds the `memphant_*_owner` bypass policies; the rest are the
+/// providers' own elevated logins. A served process using any of them silently
+/// disables all 27 `_tenant_isolation` policies.
+const RLS_BYPASSING_LOGINS: &[&str] = &[
+    "memphant_owner",
+    "postgres",
+    "supabase_admin",
+    "rdsadmin",
+    "cloudsqlsuperuser",
+    "neondb_owner",
+];
+
+/// The served processes must not share the migrator credential, and must not
+/// use a login that bypasses row-level security. `PgStore` refuses to serve on
+/// a bypassing role at startup; this catches the same mistake in the profile,
+/// before a maintenance window.
+fn validate_served_credentials(
+    provider: Provider,
+    profile: &BTreeMap<String, String>,
+    migrator_url: Option<&str>,
+    findings: &mut Vec<String>,
+) {
+    let migrator_login = migrator_url.and_then(url_login);
+    for key in [
+        "MEMPHANT_APP_DATABASE_URL",
+        "MEMPHANT_AUTHN_DATABASE_URL",
+        "MEMPHANT_WORKER_DATABASE_URL",
+    ] {
+        let Some(url) = require_key(profile, key, findings) else {
+            continue;
+        };
+        validate_database_url(provider, url, findings);
+        let Some(login) = url_login(url) else {
+            findings.push(format!("{key}:missing_login_role"));
+            continue;
+        };
+        if RLS_BYPASSING_LOGINS.contains(&login) {
+            findings.push(format!("{key}:rls_bypassing_login:{login}"));
+        }
+        if migrator_login == Some(login) {
+            findings.push(format!("{key}:reuses_migrator_credential:{login}"));
+        }
+    }
+}
+
+/// Userinfo login name from a `scheme://user:password@host/...` URL.
+fn url_login(url: &str) -> Option<&str> {
+    let (_, tail) = url.split_once("://")?;
+    let authority = tail.split(['/', '?']).next()?;
+    let userinfo = authority.rsplit_once('@')?.0;
+    Some(userinfo.split_once(':').map_or(userinfo, |(user, _)| user))
 }
 
 fn validate_database_url(provider: Provider, database_url: &str, findings: &mut Vec<String>) {

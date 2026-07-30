@@ -1,3 +1,17 @@
+# Local validation stack.
+#
+# The database superuser (`memphant`) is the MIGRATOR credential and nothing
+# else. The server and worker connect as `memphant_app_login` /
+# `memphant_authn_login` / `memphant_worker_login` — ordinary non-superuser
+# login roles that are NOINHERIT members of the matching capability role, so
+# the pools must SET ROLE and Postgres FORCE RLS actually enforces tenant
+# isolation. Handing these processes the superuser would silently bypass every
+# `_tenant_isolation` policy; `PgStore` refuses to serve if that happens.
+#
+# MEMPHANT_LOGIN_PASSWORD is a local-development convenience so the bootstrap
+# and the services agree on a secret. A real deployment runs
+# `scripts/provision_login_roles.sh` with no fixed password and captures the
+# generated credentials.
 services:
   postgres:
     image: pgvector/pgvector:0.8.4-pg17
@@ -15,18 +29,39 @@ services:
     volumes:
       - memphant-postgres:/var/lib/postgresql/data
 
+  # Applies the bundled migrations (which create the NOLOGIN capability roles
+  # and the login roles that are their members), then gives those login roles
+  # passwords. Runs to completion before anything serves.
+  bootstrap:
+    build:
+      context: .
+      target: bootstrap
+    command:
+      - bash
+      - -euc
+      - |
+        python3 /app/scripts/apply_memphant_migrations.py --database-url "$$MEMPHANT_ADMIN_DATABASE_URL"
+        bash /app/scripts/provision_login_roles.sh "$$MEMPHANT_ADMIN_DATABASE_URL" app authn worker >/dev/null
+    environment:
+      MEMPHANT_ADMIN_DATABASE_URL: postgres://memphant:memphant@postgres:5432/memphant
+      MEMPHANT_LOGIN_PASSWORD: ${MEMPHANT_LOGIN_PASSWORD:-memphant_local_login}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   server:
     build: .
     command: ["memphant-server"]
     environment:
-      DATABASE_URL: postgres://memphant:memphant@postgres:5432/memphant
+      MEMPHANT_APP_DATABASE_URL: postgres://memphant_app_login:${MEMPHANT_LOGIN_PASSWORD:-memphant_local_login}@postgres:5432/memphant
+      MEMPHANT_AUTHN_DATABASE_URL: postgres://memphant_authn_login:${MEMPHANT_LOGIN_PASSWORD:-memphant_local_login}@postgres:5432/memphant
       MEMPHANT_PROVIDER: plain-postgres
       MEMPHANT_SCHEMA: memphant
       MEMPHANT_BIND: 0.0.0.0:3000
       RUST_LOG: ${RUST_LOG:-info}
     depends_on:
-      postgres:
-        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:${MEMPHANT_HTTP_PORT:-3000}:3000"
     healthcheck:
@@ -39,14 +74,13 @@ services:
     build: .
     command: ["memphant-worker"]
     environment:
-      DATABASE_URL: postgres://memphant:memphant@postgres:5432/memphant
+      MEMPHANT_WORKER_DATABASE_URL: postgres://memphant_worker_login:${MEMPHANT_LOGIN_PASSWORD:-memphant_local_login}@postgres:5432/memphant
       MEMPHANT_PROVIDER: plain-postgres
       MEMPHANT_SCHEMA: memphant
       RUST_LOG: ${RUST_LOG:-info}
     depends_on:
-      postgres:
-        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
 
 volumes:
   memphant-postgres:
-

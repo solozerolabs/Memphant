@@ -153,11 +153,17 @@ async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied()
         .execute(&pool)
         .await
         .expect("create app readiness login");
-    let grant_app = format!("grant memphant_app to {app_login}");
-    sqlx::query(sqlx::AssertSqlSafe(grant_app.as_str()))
-        .execute(&pool)
-        .await
-        .expect("grant app capability");
+    // Both served capabilities, because `connect_app` opens an app pool AND an
+    // authn pool and each ASSUMES its own role (they are NOINHERIT). A real
+    // deployment uses two separate logins; one login with both memberships is
+    // enough for a readiness probe.
+    for capability in ["memphant_app", "memphant_authn"] {
+        let grant = format!("grant {capability} to {app_login}");
+        sqlx::query(sqlx::AssertSqlSafe(grant.as_str()))
+            .execute(&pool)
+            .await
+            .expect("grant served capability");
+    }
     let (_, host) = database_url
         .split_once('@')
         .expect("database URL has credentials");
@@ -167,7 +173,7 @@ async fn ping_rejects_bootstrap_only_schema_until_required_revision_is_applied()
         "postgres://"
     };
     let app_database_url = format!("{scheme}{app_login}:pg_contract_password@{host}");
-    let app_store = PgStore::connect_worker(&app_database_url)
+    let app_store = PgStore::connect_app(&app_database_url, &app_database_url)
         .await
         .expect("connect least-privilege app store");
     app_store

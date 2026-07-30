@@ -272,12 +272,15 @@ def test_apply_runner_dry_run_reports_ordered_migrations() -> None:
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "migration_plan=3" in result.stdout
+    assert "migration_plan=4" in result.stdout
     assert result.stdout.index("20260703_001_wsa_bootstrap.sql") < result.stdout.index(
         "20260723_002_file_sync_mutation_verb.sql"
     )
     assert result.stdout.index("20260723_002_file_sync_mutation_verb.sql") < result.stdout.index(
         "20260724_003_worker_claim_throughput.sql"
+    )
+    assert result.stdout.index("20260724_003_worker_claim_throughput.sql") < result.stdout.index(
+        "20260730_004_served_login_roles.sql"
     )
 
 
@@ -316,14 +319,14 @@ def test_apply_runner_executes_migration_and_ledger_in_one_transaction(
     assert result.returncode == 0, result.stdout + result.stderr
     calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     mutation_calls = [call for call in calls if "--file" in call]
-    assert len(mutation_calls) == 3
+    assert len(mutation_calls) == 4
     for call in mutation_calls:
         assert "ON_ERROR_STOP=1" in call
         assert "--single-transaction" in call
         assert "--file" in call
         assert "--command" in call
         assert "insert into memphant.schema_migrations" in call[call.index("--command") + 1]
-    assert len(calls) == 4, "ledger must not execute in a second psql process"
+    assert len(calls) == 5, "ledger must not execute in a second psql process"
 
 
 def test_apply_runner_failure_keeps_migration_and_ledger_in_same_failed_transaction(
@@ -544,10 +547,11 @@ def test_live_forward_migration_upgrades_applied_bootstrap_atomically() -> None:
         "select count(*) from memphant.schema_migrations "
         "where version in ('20260703_001_wsa_bootstrap', "
         "'20260723_002_file_sync_mutation_verb', "
-        "'20260724_003_worker_claim_throughput')",
+        "'20260724_003_worker_claim_throughput', "
+        "'20260730_004_served_login_roles')",
     )
     assert readback.returncode == 0, readback.stderr
-    assert readback.stdout.strip() == "3"
+    assert readback.stdout.strip() == "4"
 
 
 def test_wsa_bootstrap_has_schema_migration_compat_floor() -> None:

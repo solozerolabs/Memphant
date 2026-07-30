@@ -41,13 +41,26 @@ SERVER_PID=""
 
 log()  { printf '\n### %s\n' "$*"; }
 fail() { printf 'PROBE FAILED: %s\n' "$*" >&2; exit 1; }
-cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true; }
+
+# Login roles are CLUSTER-global, so the scratch-DB drop does not reclaim them:
+# mint probe-unique ones and drop them here.
+PROBE_LOGINS=""
+cleanup() {
+  [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
+  for login in $PROBE_LOGINS; do
+    psql "$DATABASE_URL" -q -c "drop role if exists \"$login\"" >/dev/null 2>&1 || true
+  done
+}
 trap cleanup EXIT
 
 jget() { python3 -c "import json,sys;d=json.load(sys.stdin);print(d$1)"; }
 
+# Splice a login credential into the scratch URL (plain postgres:// URL, same
+# assumption with_scratch_db.sh makes).
+login_url() { printf '%s://%s:%s@%s' "${DATABASE_URL%%://*}" "$1" "$2" "${DATABASE_URL#*@}"; }
+
 start_server() {
-  env -u DATABASE_URL MEMPHANT_APP_DATABASE_URL="$DATABASE_URL" MEMPHANT_AUTHN_DATABASE_URL="$DATABASE_URL" MEMPHANT_BIND="127.0.0.1:${PORT}" "$SERVER" &
+  env -u DATABASE_URL MEMPHANT_APP_DATABASE_URL="$APP_URL" MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" MEMPHANT_BIND="127.0.0.1:${PORT}" "$SERVER" &
   SERVER_PID=$!
   # 60s window: first boot loads embedding weights and a loaded machine
   # (parallel cargo builds) can push startup past the old 10s budget.
@@ -58,7 +71,7 @@ start_server() {
   fail "server did not become healthy on :$PORT"
 }
 
-worker_once() { env -u DATABASE_URL MEMPHANT_WORKER_DATABASE_URL="$DATABASE_URL" MEMPHANT_WORKER_ONCE=1 "$WORKER" >/dev/null; }
+worker_once() { env -u DATABASE_URL MEMPHANT_WORKER_DATABASE_URL="$WORKER_URL" MEMPHANT_WORKER_ONCE=1 "$WORKER" >/dev/null; }
 
 api() { # api KEY METHOD PATH [JSON]
   local key="$1" method="$2" path="$3" body="${4:-}"
@@ -91,6 +104,28 @@ log "build binaries (debug)"
 
 log "apply migrations (idempotent)"
 python3 "$ROOT/scripts/apply_memphant_migrations.py" --database-url "$DATABASE_URL" | tail -1
+
+# W3.3: the probe runs the server and worker under real non-superuser login
+# roles that are members of `memphant_app` / `memphant_authn` /
+# `memphant_worker`. This is what makes FORCE RLS actually fire on the served
+# path here (the roles are NOINHERIT, so `PgStore::connect_pool` must SET ROLE,
+# and its startup assertion refuses to serve if the effective role is superuser
+# or BYPASSRLS). Before this, the probe ran as the scratch-DB superuser and its
+# cross-tenant checks proved only the app + `current_tenant_id()` GUC layer.
+log "mint non-superuser served login roles"
+PROBE_PASSWORD="probe$(uuidgen | tr -dc 'A-Za-z0-9')"
+for pair in "app:memphant_app" "authn:memphant_authn" "worker:memphant_worker"; do
+  capability="${pair#*:}"
+  login="mp_probe_${pair%%:*}_$$"
+  PROBE_LOGINS="$PROBE_LOGINS $login"
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q \
+    -c "create role \"$login\" login noinherit password '$PROBE_PASSWORD'" \
+    -c "grant $capability to \"$login\"" \
+    -c "revoke all on schema memphant from \"$login\"" || fail "could not mint $login"
+done
+APP_URL=$(login_url "mp_probe_app_$$" "$PROBE_PASSWORD")
+AUTHN_URL=$(login_url "mp_probe_authn_$$" "$PROBE_PASSWORD")
+WORKER_URL=$(login_url "mp_probe_worker_$$" "$PROBE_PASSWORD")
 
 log "provision tenants + keys via admin CLI"
 TENANT_A=$("$CLI" admin create-tenant --name "probe-a-$RANDOM" --database-url "$DATABASE_URL" | sed -n 's/^tenant_created id=\([^ ]*\).*/\1/p')
@@ -151,8 +186,8 @@ echo "$RECALL_RES" | python3 -c "import json,sys;d=json.load(sys.stdin);assert a
 log "real MCP stdio binary lists and reads the bound canonical projection"
 api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:mcp:unit\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"unit\":{\"kind\":\"semantic\",\"fact_key\":\"mcp-probe\",\"predicate\":\"memory_file\",\"body\":\"Real MCP resource body\",\"confidence\":1.0}}}" >/dev/null
 env -u DATABASE_URL \
-  MEMPHANT_APP_DATABASE_URL="$DATABASE_URL" \
-  MEMPHANT_AUTHN_DATABASE_URL="$DATABASE_URL" \
+  MEMPHANT_APP_DATABASE_URL="$APP_URL" \
+  MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
   MEMPHANT_API_KEY="$MCP_KEY" \
   MEMPHANT_MCP_PROBE_BINARY="$MCP" \
   python3 - <<'PY'
@@ -249,13 +284,13 @@ STATUS_B=$(api_status "$KEY_B" GET "/v1/traces/$TRACE_ID?$QS_B")
 STATUS_A=$(api_status "$KEY_A" GET "/v1/traces/$TRACE_ID?$QS_A")
 [ "$STATUS_A" = "200" ] || fail "tenant A cannot read own trace ($STATUS_A)"
 
-# Cross-tenant EPISODIC read isolation (app + tenant-GUC layer). NOTE: this
-# proves the application + `current_tenant_id()` GUC filter, NOT the Postgres
-# RLS backstop — the server connects as the scratch-DB superuser login
-# (rolbypassrls=true), so FORCE RLS never fires here. The RLS swap itself is
-# proven under the real `memphant_app` role by
-# `crates/memphant-store-postgres/tests/episodic_rls_leakage.rs`.
-log "cross-tenant: B's episode is invisible to A's recall (app+GUC layer)"
+# Cross-tenant EPISODIC read isolation. Since W3.3 the server runs under a
+# non-superuser login that has ASSUMED `memphant_app`, so this exercises BOTH
+# the application + `current_tenant_id()` GUC filter AND the Postgres FORCE-RLS
+# backstop. (`crates/memphant-store-postgres/tests/served_path_rls.rs` isolates
+# the RLS half by issuing a bare, unfiltered cross-tenant query through the
+# store's own pool; `episodic_rls_leakage.rs` covers the policy half.)
+log "cross-tenant: B's episode is invisible to A's recall (app + GUC + RLS)"
 CTX_B="\"subject_id\":\"$SUBJ_B\",\"scope_id\":\"$(echo "$BIND_B" | jget "['scope_id']")\",\"actor_id\":\"$(echo "$BIND_B" | jget "['actor_id']")\",\"agent_node_id\":\"$(echo "$BIND_B" | jget "['agent_node_id']")\",\"subject_generation\":$(echo "$BIND_B" | jget "['subject_generation']")"
 api "$KEY_B" POST /v1/episodes "{$CTX_B,\"source_ref\":\"probe:episode:b\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"episode\":{\"source_kind\":\"user\",\"body\":\"Tenant B private secret is Zurich.\"}}}" >/dev/null
 worker_once
