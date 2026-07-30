@@ -595,6 +595,52 @@ pub struct PackLevers {
     pub submodular_ordering_enabled: bool,
 }
 
+/// Which lexical scorer the fusion's lexical family uses, threaded
+/// construction-time exactly like [`PackLevers`] — no `RecallRequest`/wire
+/// field. [`LexicalScorer::Overlap`] is the DEFAULT and byte-identical to
+/// today: two token-overlap passes (body-overlap density + token-set Jaccard)
+/// both reported under `RecallChannel::Lexical`.
+///
+/// The BM25 variants replace BOTH of those passes with ONE Okapi BM25 pass
+/// (k1=1.2, b=0.75) scored over the recall candidate pool, still reported under
+/// `RecallChannel::Lexical`, at the combined weight of the two passes it
+/// replaces. They differ only in tokenization. Motivation is measured, not
+/// assumed: neither overlap pass carries IDF, and both divide by document
+/// length (density) or by the token union (Jaccard), which penalizes long
+/// bodies far harder than BM25's `b`-normalization — so a rare identifier match
+/// inside a long tool result loses to a short body sharing a common word.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LexicalScorer {
+    /// Today's two token-overlap passes. Default; off-path is unchanged.
+    #[default]
+    Overlap,
+    /// BM25 over [`bm25_control_tokens`] — the tokenization the repo's own
+    /// deterministic BM25 control uses (`scripts/code_lane_run_deterministic.py`),
+    /// so the arm is comparable to that control by construction.
+    Bm25Control,
+    /// BM25 over [`bm25_code_tokens`]: every control token PLUS its
+    /// alphanumeric sub-tokens, so `src/foo/bar.py` and `snake_case_name`
+    /// match both as a whole identifier and by part.
+    Bm25Code,
+}
+
+impl LexicalScorer {
+    fn tokens(self, text: &str) -> Vec<String> {
+        match self {
+            Self::Overlap | Self::Bm25Control => bm25_control_tokens(text),
+            Self::Bm25Code => bm25_code_tokens(text),
+        }
+    }
+
+    fn flag(self) -> Option<&'static str> {
+        match self {
+            Self::Overlap => None,
+            Self::Bm25Control => Some("lexical_scorer:bm25-control"),
+            Self::Bm25Code => Some("lexical_scorer:bm25-code"),
+        }
+    }
+}
+
 /// The active vector query for recall: the embedded query plus the embedding
 /// profile id its stored counterparts must match. The profile predicate is
 /// mandatory (spec 03 — the `<=>` path filters `embedding_profile_id = $pid`,
@@ -6140,6 +6186,7 @@ where
         clock,
         DEFAULT_RECALL_POOL_DEPTH,
         PackLevers::default(),
+        LexicalScorer::default(),
         false,
         None,
     )
@@ -6678,6 +6725,7 @@ pub async fn recall_with_pool<S>(
     clock: &dyn Clock,
     recall_pool_depth: usize,
     pack_levers: PackLevers,
+    lexical_scorer: LexicalScorer,
     temporal_grounding_enabled: bool,
     cross_reranker: Option<&dyn CrossReranker>,
 ) -> Result<RecallResponse, CoreError>
@@ -6691,6 +6739,7 @@ where
         clock,
         recall_pool_depth,
         pack_levers,
+        lexical_scorer,
         temporal_grounding_enabled,
         cross_reranker,
         CrossRerankCandidateSelection::FusedHead,
@@ -6706,6 +6755,7 @@ pub async fn recall_with_pool_and_selection<S>(
     clock: &dyn Clock,
     recall_pool_depth: usize,
     pack_levers: PackLevers,
+    lexical_scorer: LexicalScorer,
     temporal_grounding_enabled: bool,
     cross_reranker: Option<&dyn CrossReranker>,
     cross_rerank_candidate_selection: CrossRerankCandidateSelection,
@@ -6720,6 +6770,7 @@ where
         clock,
         recall_pool_depth,
         pack_levers,
+        lexical_scorer,
         temporal_grounding_enabled,
         cross_reranker,
         cross_rerank_candidate_selection,
@@ -6750,6 +6801,7 @@ pub async fn recall_with_pool_and_selection_and_deep<S>(
     clock: &dyn Clock,
     recall_pool_depth: usize,
     pack_levers: PackLevers,
+    lexical_scorer: LexicalScorer,
     temporal_grounding_enabled: bool,
     cross_reranker: Option<&dyn CrossReranker>,
     cross_rerank_candidate_selection: CrossRerankCandidateSelection,
@@ -6766,6 +6818,7 @@ where
         clock,
         recall_pool_depth,
         pack_levers,
+        lexical_scorer,
         temporal_grounding_enabled,
         cross_reranker,
         cross_rerank_candidate_selection,
@@ -6784,6 +6837,7 @@ pub(crate) async fn recall_with_pool_and_selection_and_deep_started<S>(
     clock: &dyn Clock,
     recall_pool_depth: usize,
     pack_levers: PackLevers,
+    lexical_scorer: LexicalScorer,
     temporal_grounding_enabled: bool,
     cross_reranker: Option<&dyn CrossReranker>,
     cross_rerank_candidate_selection: CrossRerankCandidateSelection,
@@ -6801,6 +6855,7 @@ where
         clock,
         recall_pool_depth,
         pack_levers,
+        lexical_scorer,
         temporal_grounding_enabled,
         cross_reranker,
         cross_rerank_candidate_selection,
@@ -6926,6 +6981,7 @@ async fn recall_with_pool_and_selection_impl<S>(
     clock: &dyn Clock,
     recall_pool_depth: usize,
     pack_levers: PackLevers,
+    lexical_scorer: LexicalScorer,
     temporal_grounding_enabled: bool,
     cross_reranker: Option<&dyn CrossReranker>,
     cross_rerank_candidate_selection: CrossRerankCandidateSelection,
@@ -7172,14 +7228,16 @@ where
     // The token-overlap scorers all run under the honest `lexical` label; the
     // `vector` channel is only emitted by a real embedding path and is traced
     // as disabled otherwise.
-    let channels = [
-        ChannelPass::Exact,
-        ChannelPass::Lexical,
-        ChannelPass::Semantic,
-        ChannelPass::Temporal,
-        ChannelPass::Edge,
-    ];
-    let mut main_channels: Vec<ChannelPass> = channels.to_vec();
+    let bm25_scores: Option<HashMap<UnitId, f32>> = (lexical_scorer != LexicalScorer::Overlap)
+        .then(|| bm25_unit_scores(&tenant_units, &request.query, lexical_scorer));
+    let lexical_family: &[ChannelPass] = if bm25_scores.is_some() {
+        &[ChannelPass::Bm25]
+    } else {
+        &[ChannelPass::Lexical, ChannelPass::Semantic]
+    };
+    let mut main_channels: Vec<ChannelPass> = vec![ChannelPass::Exact];
+    main_channels.extend_from_slice(lexical_family);
+    main_channels.extend_from_slice(&[ChannelPass::Temporal, ChannelPass::Edge]);
     if vector_scores.is_some() {
         main_channels.push(ChannelPass::Vector);
     }
@@ -7195,6 +7253,7 @@ where
             &request,
             &query_tokens,
             vector_scores.as_ref(),
+            bm25_scores.as_ref(),
             &recall_time,
             temporal_window.as_ref(),
         );
@@ -7433,6 +7492,9 @@ where
         feature_flags.push("cross_rerank_enabled".to_string());
     }
     append_pack_feature_flags(&mut feature_flags, pack_levers);
+    if let Some(flag) = lexical_scorer.flag() {
+        feature_flags.push(flag.to_string());
+    }
     let trace = RetrievalTrace {
         id: trace_id,
         tenant_id: request.context.tenant_id,
@@ -9894,6 +9956,10 @@ enum ChannelPass {
     Exact,
     Lexical,
     Semantic,
+    /// Okapi BM25 over the candidate pool. Replaces BOTH `Lexical` and
+    /// `Semantic` when a [`LexicalScorer`] BM25 variant is selected; never runs
+    /// alongside them.
+    Bm25,
     Temporal,
     Edge,
     /// Real embedding cosine scores; only runs when a query vector exists.
@@ -9904,7 +9970,7 @@ impl ChannelPass {
     fn label(self) -> RecallChannel {
         match self {
             Self::Exact => RecallChannel::Exact,
-            Self::Lexical | Self::Semantic => RecallChannel::Lexical,
+            Self::Lexical | Self::Semantic | Self::Bm25 => RecallChannel::Lexical,
             Self::Temporal => RecallChannel::Temporal,
             Self::Edge => RecallChannel::Edge,
             Self::Vector => RecallChannel::Vector,
@@ -9920,6 +9986,7 @@ fn channel_candidates(
     request: &RecallRequest,
     query_tokens: &[String],
     vector_scores: Option<&HashMap<UnitId, f32>>,
+    bm25_scores: Option<&HashMap<UnitId, f32>>,
     time: &RecallTime,
     temporal_window: Option<&DateWindow>,
 ) -> Vec<(StoredMemoryUnit, f32)> {
@@ -9945,6 +10012,9 @@ fn channel_candidates(
                 ChannelPass::Exact => exact_score(unit, query_tokens),
                 ChannelPass::Lexical => lexical_score(unit, query_tokens),
                 ChannelPass::Semantic => token_set_overlap_score(unit, query_tokens),
+                ChannelPass::Bm25 => bm25_scores
+                    .and_then(|scores| scores.get(&unit.id).copied())
+                    .unwrap_or(0.0),
                 ChannelPass::Temporal => temporal_score(unit, &request.query, temporal_window),
                 ChannelPass::Edge => edge_score(
                     unit,
@@ -10665,6 +10735,100 @@ pub(crate) fn token_set_overlap_text_score(text: &str, query_tokens: &[String]) 
     }
 }
 
+/// Okapi BM25 free parameters, pinned to the values the repo's deterministic
+/// BM25 control already uses (`scripts/code_lane_run_deterministic.py`), so an
+/// arm scored here is comparable to that control without a second calibration.
+const BM25_K1: f32 = 1.2;
+const BM25_B: f32 = 0.75;
+
+/// Maximal runs of `[a-z0-9_./-]` over ASCII-lowercased text — identifiers,
+/// dotted paths and hyphenated flags survive whole. Deliberately the same class
+/// the deterministic BM25 control tokenizes with.
+pub(crate) fn bm25_control_tokens(text: &str) -> Vec<String> {
+    text.to_ascii_lowercase()
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '/' | '-')))
+        .filter(|token| !token.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+/// [`bm25_control_tokens`] plus, for any token that is not already a single
+/// alphanumeric run, its alphanumeric sub-tokens. `src/foo/bar.py` yields the
+/// whole path AND `src`/`foo`/`bar`/`py`, so a query naming either the file or
+/// its directory scores, and IDF still rewards whichever is rarer.
+pub(crate) fn bm25_code_tokens(text: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    for token in bm25_control_tokens(text) {
+        let parts: Vec<&str> = token
+            .split(|ch: char| !ch.is_ascii_alphanumeric())
+            .filter(|part| !part.is_empty())
+            .collect();
+        if parts.len() > 1 {
+            tokens.extend(parts.into_iter().map(ToString::to_string));
+        }
+        tokens.push(token);
+    }
+    tokens
+}
+
+/// Okapi BM25 over the recall candidate pool. The pool IS the corpus: `N`,
+/// `df` and the average document length are all computed from `units`, which is
+/// what makes IDF meaningful here (a term common to this attempt is cheap; a
+/// term appearing in one body is expensive). Standard textbook formulation, no
+/// third-party code.
+fn bm25_unit_scores(
+    units: &[StoredMemoryUnit],
+    query: &str,
+    scorer: LexicalScorer,
+) -> HashMap<UnitId, f32> {
+    let mut query_terms: Vec<String> = scorer.tokens(query);
+    query_terms.sort_unstable();
+    query_terms.dedup();
+    let mut scores = HashMap::new();
+    if units.is_empty() || query_terms.is_empty() {
+        return scores;
+    }
+    let documents: Vec<(UnitId, Vec<String>)> = units
+        .iter()
+        .map(|unit| (unit.id, scorer.tokens(&unit.body)))
+        .collect();
+    let total_length: usize = documents.iter().map(|(_, tokens)| tokens.len()).sum();
+    let average_length = (total_length as f32 / documents.len() as f32).max(1.0);
+    let mut document_frequency: HashMap<&str, usize> = HashMap::new();
+    for (_, tokens) in &documents {
+        let distinct: HashSet<&str> = tokens.iter().map(String::as_str).collect();
+        for term in &query_terms {
+            if distinct.contains(term.as_str()) {
+                *document_frequency.entry(term.as_str()).or_insert(0) += 1;
+            }
+        }
+    }
+    let corpus = documents.len() as f32;
+    for (id, tokens) in &documents {
+        let mut frequencies: HashMap<&str, usize> = HashMap::new();
+        for token in tokens {
+            *frequencies.entry(token.as_str()).or_insert(0) += 1;
+        }
+        let length = tokens.len() as f32;
+        let mut score = 0.0f32;
+        for term in &query_terms {
+            let frequency = *frequencies.get(term.as_str()).unwrap_or(&0) as f32;
+            if frequency == 0.0 {
+                continue;
+            }
+            let df = *document_frequency.get(term.as_str()).unwrap_or(&0) as f32;
+            let idf = (1.0 + (corpus - df + 0.5) / (df + 0.5)).ln();
+            let denominator =
+                frequency + BM25_K1 * (1.0 - BM25_B + BM25_B * length / average_length);
+            score += idf * frequency * (BM25_K1 + 1.0) / denominator;
+        }
+        if score > 0.0 {
+            scores.insert(*id, score);
+        }
+    }
+    scores
+}
+
 fn tokens_related(left: &str, right: &str) -> bool {
     left == right
         || (left.len() >= 5
@@ -10726,6 +10890,10 @@ fn channel_weight(pass: ChannelPass, query: &str, temporal_window: Option<&DateW
         ChannelPass::Exact => EXACT_CHANNEL_WEIGHT,
         ChannelPass::Lexical => LEXICAL_CHANNEL_WEIGHT,
         ChannelPass::Semantic => SEMANTIC_CHANNEL_WEIGHT,
+        // BM25 stands in for BOTH overlap passes, so it carries their combined
+        // weight — the lever changes the lexical SCORER, not how much the
+        // lexical family is worth relative to the other channels.
+        ChannelPass::Bm25 => LEXICAL_CHANNEL_WEIGHT + SEMANTIC_CHANNEL_WEIGHT,
         // A dated query is explicit temporal intent, weighted like a recency
         // query. `temporal_window` is `Some` only when the flag is on AND the
         // query carried a date; when it is `None` this branch is unreachable and
@@ -13770,6 +13938,105 @@ mod pack_cost_tests {
         }
     }
 
+    #[test]
+    fn control_tokens_keep_identifiers_and_paths_whole() {
+        assert_eq!(
+            bm25_control_tokens("TypeError in src/foo/bar.py: snake_case_name --dry-run"),
+            [
+                "typeerror",
+                "in",
+                "src/foo/bar.py",
+                "snake_case_name",
+                "--dry-run",
+            ]
+        );
+    }
+
+    #[test]
+    fn code_tokens_add_sub_tokens_without_losing_the_whole_token() {
+        assert_eq!(
+            bm25_code_tokens("src/foo/bar.py plain"),
+            ["src", "foo", "bar", "py", "src/foo/bar.py", "plain"]
+        );
+    }
+
+    #[test]
+    fn bm25_prefers_the_rare_query_term_over_the_common_one() {
+        // `parser` appears in every body (df = 3, near-zero idf); `xylotron`
+        // appears in one. A pure overlap/Jaccard scorer cannot tell them apart.
+        let units = vec![
+            unit(1, "parser xylotron failed", Vec::new()),
+            unit(2, "parser parser parser parser", Vec::new()),
+            unit(3, "parser ran clean", Vec::new()),
+        ];
+        let scores = bm25_unit_scores(&units, "parser xylotron", LexicalScorer::Bm25Control);
+        assert!(
+            scores[&UnitId::from_u128(1)] > scores[&UnitId::from_u128(2)],
+            "the rare-term body must outrank the repeated common-term body: {scores:?}"
+        );
+        assert!(scores.contains_key(&UnitId::from_u128(3)));
+    }
+
+    #[test]
+    fn bm25_length_normalization_is_gentler_than_overlap_density() {
+        // Same single rare match, one short body and one long body. BM25's
+        // b-normalization must not collapse the long body the way dividing by
+        // document length does.
+        let long_body = format!("xylotron {}", "filler ".repeat(200));
+        let units = vec![
+            unit(1, "xylotron", Vec::new()),
+            unit(2, &long_body, Vec::new()),
+        ];
+        let scores = bm25_unit_scores(&units, "xylotron", LexicalScorer::Bm25Control);
+        let ratio = scores[&UnitId::from_u128(2)] / scores[&UnitId::from_u128(1)];
+        let query = vec!["xylotron".to_string()];
+        let density_ratio =
+            lexical_text_score(&long_body, &query) / lexical_text_score("xylotron", &query);
+        assert!(
+            ratio > density_ratio * 10.0,
+            "bm25 ratio {ratio} should be far above the density ratio {density_ratio}"
+        );
+    }
+
+    #[test]
+    fn bm25_scores_only_units_that_match_a_query_term() {
+        let units = vec![
+            unit(1, "alpha beta", Vec::new()),
+            unit(2, "gamma", Vec::new()),
+        ];
+        let scores = bm25_unit_scores(&units, "alpha", LexicalScorer::Bm25Control);
+        assert_eq!(scores.len(), 1);
+        assert!(scores.contains_key(&UnitId::from_u128(1)));
+    }
+
+    #[test]
+    fn code_tokenization_matches_a_path_the_control_tokenization_misses() {
+        // Query names the directory; the body names the full path. The control
+        // class keeps `src/foo/bar.py` whole, so it never matches `foo`.
+        let units = vec![unit(1, "edited src/foo/bar.py", Vec::new())];
+        assert!(bm25_unit_scores(&units, "foo", LexicalScorer::Bm25Control).is_empty());
+        assert!(!bm25_unit_scores(&units, "foo", LexicalScorer::Bm25Code).is_empty());
+    }
+
+    #[test]
+    fn bm25_channel_carries_the_weight_of_both_overlap_passes_it_replaces() {
+        assert_eq!(
+            channel_weight(ChannelPass::Bm25, "q", None),
+            channel_weight(ChannelPass::Lexical, "q", None)
+                + channel_weight(ChannelPass::Semantic, "q", None)
+        );
+    }
+
+    #[test]
+    fn the_default_lexical_scorer_emits_no_feature_flag() {
+        assert_eq!(LexicalScorer::default(), LexicalScorer::Overlap);
+        assert_eq!(LexicalScorer::Overlap.flag(), None);
+        assert_eq!(
+            LexicalScorer::Bm25Code.flag(),
+            Some("lexical_scorer:bm25-code")
+        );
+    }
+
     fn candidate(unit: StoredMemoryUnit, fused_score: f32) -> CandidateAccumulator {
         let decay = DecayScore::neutral(&unit);
         CandidateAccumulator {
@@ -15105,6 +15372,7 @@ mod deep_call_routing_tests {
                 &FixedClock("2026-07-20T00:00:00Z"),
                 DEFAULT_RECALL_POOL_DEPTH,
                 PackLevers::default(),
+                LexicalScorer::default(),
                 false,
                 None,
                 CrossRerankCandidateSelection::FusedHead,

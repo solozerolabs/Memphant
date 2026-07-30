@@ -580,6 +580,25 @@ def test_pack_render_cap_is_admitted_only_when_explicitly_selected(clr, monkeypa
     assert server_env(on.pack_render_cap)["MEMPHANT_PACK_RENDER_CAP"] == "1200"
 
 
+def test_lexical_scorer_is_admitted_only_when_explicitly_selected(clr, monkeypatch):
+    """Same contract as the packing cap: the BM25 lexical arm is selected by
+    flag, and an ambient MEMPHANT_LEXICAL_SCORER never leaks into an arm."""
+    monkeypatch.setenv("MEMPHANT_LEXICAL_SCORER", "bm25-code")
+    base = ["--out-evidence", "/dev/null", "--out-provenance", "/dev/null"]
+
+    off = clr.build_parser().parse_args(base)
+    on = clr.build_parser().parse_args(base + ["--lexical-scorer", "bm25-code"])
+
+    assert off.lexical_scorer is None
+    assert on.lexical_scorer == "bm25-code"
+
+    def server_env(scorer):
+        return clr.gr.Server("s", "postgres://x/y", 1, "off", lexical_scorer=scorer).environment()
+
+    assert "MEMPHANT_LEXICAL_SCORER" not in server_env(off.lexical_scorer)
+    assert server_env(on.lexical_scorer)["MEMPHANT_LEXICAL_SCORER"] == "bm25-code"
+
+
 def test_deterministic_file_search_ranks_raw_matching_event_first():
     search = _load("code_lane_run_deterministic", "scripts/code_lane_run_deterministic.py")
     documents = search.event_documents(
