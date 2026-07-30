@@ -16,7 +16,17 @@ def status_marks_restraint_complete() -> bool:
     return "- [x] **Restraint launch gate**" in status
 
 
-def test_restraint_scorecard_enforces_op_bench_launch_threshold() -> None:
+# Restraint-instrument substitution (2026-07-30, `26` §3 D-2026-07-30c, `27` §1):
+# OP-Bench has no runnable public release and PS-Bench has no license, so the
+# instrument that is pinned, adapted, and executed is MemSyco-Bench
+# (`benchmarks/manifests/memsyco.lock.json`, `scripts/run_restraint_bench.py`).
+# Before this set admitted "memsyco-bench", a PASSING MemSyco run would have
+# failed the gate's own contract test. Only the instrument identity moved: the
+# drop threshold, sample floor, and CI upper bound below are unchanged.
+ADMISSIBLE_RESTRAINT_BENCHMARKS = {"memsyco-bench", "op-bench", "ps-bench"}
+
+
+def test_restraint_scorecard_enforces_launch_threshold() -> None:
     scorecard = load_scorecard()
 
     # Evidence reset (2026-07-09): the 2026-07-04 run was answer-seeded
@@ -31,7 +41,7 @@ def test_restraint_scorecard_enforces_op_bench_launch_threshold() -> None:
     assert scorecard["relevance_gate_mandatory_if_drop_exceeds_threshold"] is True
     assert scorecard["pinned_block_in_scope"] is True
     if scorecard["status"] == "pass":
-        assert scorecard["benchmark"] in {"op-bench", "ps-bench"}
+        assert scorecard["benchmark"] in ADMISSIBLE_RESTRAINT_BENCHMARKS
         assert scorecard["sample_count"] >= 50
         assert scorecard["ci"]["upper"] <= scorecard["threshold_max_drop"]
         assert scorecard["measured_drop"] <= scorecard["threshold_max_drop"]
@@ -75,5 +85,7 @@ def test_pinned_block_content_is_in_scope_for_restraint_gate() -> None:
     owner_text = "\n".join((ROOT / path).read_text(encoding="utf-8") for path in scorecard["owner_refs"])
 
     assert "pinned-block content" in owner_text or "pinned block" in owner_text
-    assert "OP-Bench-gated" in owner_text
+    # Renamed with the instrument substitution (`04` §12 "Restraint-gated");
+    # the older spelling stays admissible so this asserts the rule, not a label.
+    assert "Restraint-gated" in owner_text or "OP-Bench-gated" in owner_text
     assert "must not drop >15%" in owner_text

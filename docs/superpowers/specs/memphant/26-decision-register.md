@@ -82,6 +82,56 @@ This file records final launch-critical decisions. If another doc conflicts with
 | Golden tests | executable fixtures with expected IDs, citations, forbidden leaks, trace assertions |
 | SOTA policy | no SOTA claim without paired ablations and security evals |
 | SOTA ladder | `27-sota-ladder-and-validation.md` is the activation and proof contract |
+| Restraint launch-gate instrument | **MemSyco-Bench** (MIT, pinned `XMUDeepLIT/MemSyco-Bench@c31e2c85`), substituted for OP-Bench (no runnable release) and PS-Bench (no license); thresholds unchanged — D-2026-07-30c below |
+
+### D-2026-07-30c — Restraint launch gate: MemSyco-Bench is the instrument
+
+**Decision.** The `27` §1 restraint launch gate is measured with
+**MemSyco-Bench**. The canonical scorecard identity is
+`"benchmark": "memsyco-bench"`. OP-Bench and PS-Bench remain *admissible*
+instrument names for the same gate but are not runnable today.
+
+**Why this was forced.** The gate contradicted itself. `27` §1 and
+`docs/launch/restraint-launch-scorecard.json` named OP-Bench/PS-Bench, and
+`tests/test_restraint_launch_gate.py` asserted
+`scorecard["benchmark"] in {"op-bench","ps-bench"}` whenever status is `pass` —
+so **a passing MemSyco run would have failed the gate's own contract test**,
+while a passing run of either named instrument was impossible to produce.
+
+**Why MemSyco and not a local approximation.** `26` §3 already forbids replacing
+an unavailable public benchmark with a local approximation, and that decision
+stands unamended: this is **not** a local approximation. MemSyco-Bench is a
+complete, MIT-licensed, externally published official release (arXiv 2607.01071),
+pinned by revision and per-file sha256 in `benchmarks/manifests/memsyco.lock.json`
+with its **native** scorer, run through `scripts/run_restraint_bench.py`. It is a
+substitution of one legitimate public instrument for two unavailable ones, which
+is exactly the move `26` §3 permits and the reconstructed-scorer move it forbids.
+
+**Why it measures the same construct.** MemSyco's five tasks are
+objective-fact judgment (memory must be ignored as evidence), contextual scope
+control, memory-vs-evidence conflict, valid-memory selection, and personalized
+memory use. That is over-retrieval harm and memory over-trust — the axis the
+gate exists to bound. It is not a perfect superset: OP-Bench's explicit
+irrelevance/sycophancy/repetition taxonomy and PS-Bench's intent-legitimation
+attack surface are **not** separately scored by MemSyco. Intent-legitimation
+therefore stays tracked where it already lives, as a threat row in `06` §9 with
+PS-Bench cited as published prior art, not as a gate we run.
+
+**What did NOT change.** Every substantive threshold: relative drop vs
+memory-free baseline ≤ 0.15; sample ≥ 50; paired-delta CI upper bound ≤ 0.15;
+`05` §1.5 relevance gate mandatory on breach; pinned-block content (`04` §12)
+in-scope; the promotion-provenance rule (packaged Postgres runtime, pinned real
+corpora, executed scorer).
+
+**Evidence status.** A five-task MemSyco smoke passed 5/5 at $0.23557035
+(`docs/build-log/2026-07-15-memsyco-smoke.md`). That is a smoke, explicitly
+promotion-ineligible. **The restraint checkbox stays unchecked**; this decision
+makes a passing run *expressible*, it does not assert one.
+
+**Reopen test.** A complete, legally usable official OP-Bench or PS-Bench
+release appears — then it is added as a run instrument alongside MemSyco, not as
+a replacement, and the two are reported separately (never pooled).
+
 
 ## 4. Security and Data Decisions
 
