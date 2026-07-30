@@ -497,3 +497,52 @@ Commits (none pushed): `03fa1266` → `cc69a608` → `26a3c032` → `4628d88b`.
 Artifacts: `docs/build-log/artifacts/track-r/track_r_phase1d_packing_rank_order.json`,
 `docs/build-log/artifacts/rung7-packing-reader-gate/phase1d/chat-lane-nonregression.json`
 (both committed; per-question dumps gitignored, third-party bodies).
+## Phase 1r — code-lane retrieval fix (2026-07-30, branch `af-retrieval`)
+
+Answers the Phase 1c kill gate on its own construct. Build log:
+`docs/build-log/2026-07-30-phase1r-retrieval-bm25.md`. $0 paid spend.
+
+`MEMPHANT_LEXICAL_SCORER` (default `overlap`, byte-identical off-path) replaces
+fusion's two token-overlap passes with ONE Okapi BM25 pass over the recall
+candidate pool. Same 180 goldens (`6f549daa…`), same attempt-scoped haystack,
+same stage (fused ranked top-k), exact McNemar:
+
+| arm | embed | r@5 | r@10 | @5 vs scoped BM25 | @10 vs scoped BM25 |
+|---|---|---:|---:|---|---|
+| scoped BM25 control | — | 0.8278 | 0.8944 | — | — |
+| `overlap` (default) | off | 0.6278 | 0.8167 | 14/50 p=0.00001 ✗ | 14/28 p=0.0436 ✗ |
+| `bm25-control` | off | 0.8722 | 0.9056 | 10/2 p=0.0386 ✓ | 5/3 p=0.727 null |
+| **`bm25-code`** | off | **0.9500** | **0.9611** | 24/2 p=0.00001 ✓ | 15/3 p=0.0075 ✓ |
+| `overlap` + dense | small | 0.7778 | 0.9000 | 15/24 p=0.200 null | 16/15 p=1.000 null |
+| `bm25-code` + dense | small | 0.9111 | 0.9556 | 24/9 p=0.0135 ✓ | 17/6 p=0.0347 ✓ |
+
+- Arm 0 reproduces the committed Phase 1c baseline EXACTLY (fused 113/147, pool
+  176, rank-1 59, packed buckets 4/91/85), and the re-run scoped BM25 control's
+  per-question vector is byte-identical to `track_r_phase1c_scoped_bm25_comparison.json`.
+- **Worked:** BM25 instead of token overlap (+0.244 r@5 / +0.089 r@10) and
+  code-aware tokenization on top of it (+0.078 / +0.056). Gold at rank 1
+  59 → 135 vs the control's 91.
+- **Did not work:** dense embeddings. Big lift over `overlap` (+35/−8 @5
+  p=0.00004) but only to a null vs BM25 (p=0.200 / p=1.000), and ON TOP OF
+  `bm25-code` it is −10/+3 @5 (p=0.092) and −3/+2 @10 (p=1.000). No hybrid.
+- **Not taken:** the briefed Postgres `english`→`simple` swap. Pool covers a
+  median 0.985 of the attempt, no attempt hits the 200-row cap, and all 4
+  residual pool misses are `below_trust_floor` drops of the WHOLE attempt from 4
+  benign queries tripping `high_risk_action_query` (`create`+`claim`,
+  `create`+`registry`, `script`+`library`, `script`+`support`) — a policy
+  ceiling of 176/180, not a tokenizer one. Measured migration cost on the real
+  64,013 unit bodies: 8.0 s table rewrite + GIN rebuild under ACCESS EXCLUSIVE,
+  table 128.9 MB → 149.6 MB (+16.0%).
+- **Chat lane improves**, does not regress: LME-S retrieval-only, seed 1,
+  n=120 (111 graded) 66 → 75, +10/−1, exact p = 0.0117.
+- **Blocking (owner decision, nothing re-pinned):** `service.rs` is sha-pinned by
+  `longmemeval_v2.state_aware_full.v{1..5}.json` and `gate_runtime.py` by a
+  committed SWE-ContextBench rehearsal; both pins now drift. Pre-existing and
+  unrelated: `check_spec_drift.py` dirty, and the launch-gate test needs
+  `playwright`.
+- Adapted OSS: **none**. Textbook BM25 written against this repo's own control.
+
+Runnable check: `python3 -m pytest tests/test_track_r_retrieval_arm_compare.py
+tests/test_code_lane_run_memphant.py tests/test_gate_runtime.py -q` → 81 passed;
+`cargo test --all-targets --all-features` → 73 suites, 0 failures. Reproduce
+commands in the build log.

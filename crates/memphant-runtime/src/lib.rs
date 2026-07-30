@@ -17,10 +17,10 @@ use memphant_core::{
     ApiKeyRow, CompiledWrite, CorrectOutcome, CorrectionWrite, CrossRerankCandidateSelection,
     CrossRerankGranularity, CrossReranker, DEFAULT_RECALL_POOL_DEPTH, EmbedError,
     EmbeddingProfileRow, EmbeddingProvider, EmbeddingRow, FileSyncTransitionSnapshot,
-    ForgetOutcome, ForgetWrite, InMemoryStore, InMemoryTxn, JobFilter, MemoryStore, MutationClaim,
-    MutationClaimOutcome, MutationLedgerStore, MutationResponse, NoopEmbedding, ReflectJobRow,
-    ResolvedMemoryContext, ReviewEventRow, ScopePage, StoreError, SubjectErasureReceipt,
-    SystemClock,
+    ForgetOutcome, ForgetWrite, InMemoryStore, InMemoryTxn, JobFilter, LexicalScorer, MemoryStore,
+    MutationClaim, MutationClaimOutcome, MutationLedgerStore, MutationResponse, NoopEmbedding,
+    ReflectJobRow, ResolvedMemoryContext, ReviewEventRow, ScopePage, StoreError,
+    SubjectErasureReceipt, SystemClock,
 };
 use memphant_store_postgres::{
     DEFAULT_DATABASE_MAX_CONNECTIONS, MAX_WORKER_DATABASE_MAX_CONNECTIONS, PgStore, PgTxn,
@@ -444,6 +444,10 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
     let service = MemoryService::new(Arc::new(store), Arc::new(SystemClock), build_embedder())
         .with_resource_chunks_write_enabled(resource_chunks_write_from_env())
         .with_recall_pool_depth(recall_pool_depth_from_env())
+        .with_lexical_scorer(
+            lexical_scorer_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_LEXICAL_SCORER: {error}")),
+        )
         .with_pack_render_cap(
             pack_render_cap_from_env()
                 .unwrap_or_else(|error| panic!("MEMPHANT_PACK_RENDER_CAP: {error}")),
@@ -553,6 +557,26 @@ fn pack_submodular_ordering_from_env() -> Result<bool, String> {
 /// `MEMPHANT_RESOURCE_CHUNKS` → bool. Truthy (`1`/`true`/`on`, case-insensitive)
 /// enables the resource-chunk write path; unset/empty/anything else keeps it OFF
 /// (the shipped default), so no env means byte-identical-to-today behavior.
+/// `MEMPHANT_LEXICAL_SCORER` → [`LexicalScorer`]. Unset/empty/`overlap` keeps
+/// today's two token-overlap passes; `bm25-control` and `bm25-code` select the
+/// Okapi BM25 lexical family. Threaded from ONE env var into
+/// [`build_base_service`] so server and worker resolve it identically, the same
+/// pattern as `MEMPHANT_RECALL_POOL_DEPTH`.
+fn lexical_scorer_from_env() -> Result<LexicalScorer, String> {
+    lexical_scorer_from_value(std::env::var("MEMPHANT_LEXICAL_SCORER").ok().as_deref())
+}
+
+fn lexical_scorer_from_value(value: Option<&str>) -> Result<LexicalScorer, String> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        None | Some("overlap") => Ok(LexicalScorer::Overlap),
+        Some("bm25-control") => Ok(LexicalScorer::Bm25Control),
+        Some("bm25-code") => Ok(LexicalScorer::Bm25Code),
+        Some(other) => Err(format!(
+            "must be one of overlap, bm25-control, bm25-code, got {other:?}"
+        )),
+    }
+}
+
 fn resource_chunks_write_from_env() -> bool {
     matches!(
         std::env::var("MEMPHANT_RESOURCE_CHUNKS")
@@ -1258,11 +1282,11 @@ impl MutationLedgerStore for AnyStore {
 #[cfg(test)]
 mod tests {
     use super::{
-        embedder_from_id, optional_positive_usize_from_value, strict_bool_from_value,
-        structured_state_prefetch_concurrency_from_value, worker_compile_concurrency_from_value,
-        worker_database_max_connections_from_value,
+        embedder_from_id, lexical_scorer_from_value, optional_positive_usize_from_value,
+        strict_bool_from_value, structured_state_prefetch_concurrency_from_value,
+        worker_compile_concurrency_from_value, worker_database_max_connections_from_value,
     };
-    use memphant_core::{EmbedError, EmbeddingProvider, embedding_profile_for};
+    use memphant_core::{EmbedError, EmbeddingProvider, LexicalScorer, embedding_profile_for};
 
     #[test]
     fn structured_state_concurrency_is_bounded() {
@@ -1317,6 +1341,23 @@ mod tests {
         assert!(optional_positive_usize_from_value(Some("0")).is_err());
         assert!(optional_positive_usize_from_value(Some("-1")).is_err());
         assert!(optional_positive_usize_from_value(Some("wide")).is_err());
+    }
+
+    #[test]
+    fn lexical_scorer_defaults_to_overlap_and_fails_closed() {
+        for value in [None, Some(""), Some("  "), Some("overlap")] {
+            assert_eq!(lexical_scorer_from_value(value), Ok(LexicalScorer::Overlap));
+        }
+        assert_eq!(
+            lexical_scorer_from_value(Some(" bm25-control ")),
+            Ok(LexicalScorer::Bm25Control)
+        );
+        assert_eq!(
+            lexical_scorer_from_value(Some("bm25-code")),
+            Ok(LexicalScorer::Bm25Code)
+        );
+        assert!(lexical_scorer_from_value(Some("bm25")).is_err());
+        assert!(lexical_scorer_from_value(Some("BM25-CODE")).is_err());
     }
 
     #[test]

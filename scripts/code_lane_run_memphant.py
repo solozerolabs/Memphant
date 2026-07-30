@@ -675,6 +675,15 @@ def build_parser():
              "else: gate_runtime.Server closes inherited packing env vars, so an "
              "ambient MEMPHANT_PACK_RENDER_CAP can never leak into an arm",
     )
+    parser.add_argument(
+        "--lexical-scorer", default=None,
+        choices=("overlap", "bm25-control", "bm25-code"),
+        help="MEMPHANT_LEXICAL_SCORER for the server arm (fusion's lexical "
+             "family: today's two token-overlap passes, or one Okapi BM25 pass "
+             "over the candidate pool). Omit for the default overlap arm; like "
+             "--pack-render-cap it is selected here and nowhere else, and "
+             "gate_runtime.Server closes the inherited variable",
+    )
     return parser
 
 
@@ -728,6 +737,7 @@ def main() -> int:
     server = gr.Server(
         args.server_bin, args.database_url, args.port, args.embed_model,
         log_path=server_log_path, pack_render_cap=args.pack_render_cap,
+        lexical_scorer=args.lexical_scorer,
     )
     # Symmetric cleanup: start() and the ingest/recall body are both inside
     # this try so the server child is always killed on any exception path,
@@ -850,6 +860,7 @@ def main() -> int:
             "recall_mode": args.mode,
             "budget_tokens": args.budget_tokens,
             "pack_render_cap": args.pack_render_cap,
+            "lexical_scorer": args.lexical_scorer or "overlap",
             "ingested_attempts": len(ingest_rows),
             "ingested_events": evaluation_events + isolation_sentinel_events,
             "evaluation_events": evaluation_events,

@@ -11,8 +11,8 @@ use memphant_core::deep_recall::{
 };
 use memphant_core::{
     CrossRerankCandidateSelection, DEFAULT_RECALL_POOL_DEPTH, FixedClock, InMemoryStore,
-    MemoryStore, PackLevers, forget_memory, recall, recall_with_pool_and_selection_and_deep,
-    record_mark,
+    LexicalScorer, MemoryStore, PackLevers, forget_memory, recall,
+    recall_with_pool_and_selection_and_deep, record_mark,
 };
 
 /// Deterministic clock for eval fixtures (pinned to the WS-A methodology date).
@@ -2029,6 +2029,7 @@ async fn run_golden_case_inner(
         &EVAL_CLOCK,
         DEFAULT_RECALL_POOL_DEPTH,
         PackLevers::default(),
+        LexicalScorer::default(),
         false,
         None,
         CrossRerankCandidateSelection::FusedHead,

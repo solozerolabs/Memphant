@@ -31,14 +31,15 @@ use crate::{
     ClaimMutationOutcome, Clock, CompiledWrite, CoreError, CorrectionUnitIds, CorrectionWrite,
     CrossRerankCandidateSelection, CrossRerankGranularity, CrossReranker,
     DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, EmbeddingTaskKind, FileSyncTransitionSnapshot,
-    ForgetWrite, JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome, MutationLedgerStore,
-    MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite, ReflectJobRow, ScopePage,
-    StoreError, StructuredExtractionPacket, StructuredSourceKind, StructuredStateProvider,
-    StructuredStateRequest, VectorQuery, apply_correction_transition, apply_unit_forget_transition,
-    canonical_mutation_request_hash, correction_rectangles_with_ids, derive_episode_dedup_key,
-    embedding_profile_for, evidence_slices_for_episode, fold_structured_observations,
-    normalize_component, parse_content_date, prepare_compiled_write_from_snapshot_owned,
-    prepare_compiled_write_owned, project_structured_state, recall_scope_admitted,
+    ForgetWrite, JobFilter, LexicalScorer, MemoryStore, MutationClaim, MutationClaimOutcome,
+    MutationLedgerStore, MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite,
+    ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket, StructuredSourceKind,
+    StructuredStateProvider, StructuredStateRequest, VectorQuery, apply_correction_transition,
+    apply_unit_forget_transition, canonical_mutation_request_hash, correction_rectangles_with_ids,
+    derive_episode_dedup_key, embedding_profile_for, evidence_slices_for_episode,
+    fold_structured_observations, normalize_component, parse_content_date,
+    prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
+    project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed_owned,
     run_embedding_task, structured_compiler_identity, structured_extraction_receipt_sha256,
     tokenize, validate_structured_observations_for_request, validate_valid_interval,
@@ -3377,6 +3378,11 @@ pub struct MemoryService<S: MemoryStore> {
     /// default-on only after the accuracy-wave measurement campaign, so the bench
     /// needs the flags. Set via `with_sibling_gather_enabled` / `with_session_quota`.
     pack_levers: PackLevers,
+    /// Which lexical scorer the fusion's lexical family uses, threaded
+    /// construction-time like `pack_levers`. `LexicalScorer::Overlap` is the
+    /// DEFAULT and leaves fusion byte-identical; the BM25 variants are selected
+    /// by `with_lexical_scorer` (runtime: `MEMPHANT_LEXICAL_SCORER`).
+    lexical_scorer: LexicalScorer,
     /// W5 temporal-grounding toggle (DEFAULT OFF). Gates all three temporal
     /// behaviours together: reflect-stage content-date grounding of `valid_from`
     /// and dated contextual-chunk headers (`compile_job`), query-date windowing
@@ -3419,6 +3425,7 @@ impl<S: MemoryStore> Clone for MemoryService<S> {
             resource_chunks_write_enabled: self.resource_chunks_write_enabled,
             recall_pool_depth: self.recall_pool_depth,
             pack_levers: self.pack_levers,
+            lexical_scorer: self.lexical_scorer,
             temporal_grounding_enabled: self.temporal_grounding_enabled,
             fact_extraction_enabled: self.fact_extraction_enabled,
             cross_reranker: self.cross_reranker.clone(),
@@ -3442,6 +3449,7 @@ impl<S: MemoryStore> MemoryService<S> {
             resource_chunks_write_enabled: false,
             recall_pool_depth: DEFAULT_RECALL_POOL_DEPTH,
             pack_levers: PackLevers::default(),
+            lexical_scorer: LexicalScorer::default(),
             temporal_grounding_enabled: false,
             fact_extraction_enabled: false,
             cross_reranker: None,
@@ -3485,6 +3493,14 @@ impl<S: MemoryStore> MemoryService<S> {
     /// changes.
     pub fn with_recall_pool_depth(mut self, depth: usize) -> Self {
         self.recall_pool_depth = depth;
+        self
+    }
+
+    /// Selects the fusion's lexical scorer (default [`LexicalScorer::Overlap`],
+    /// byte-identical to today). Threaded construction-time exactly like
+    /// `with_recall_pool_depth`: no recall-request or wire change.
+    pub fn with_lexical_scorer(mut self, scorer: LexicalScorer) -> Self {
+        self.lexical_scorer = scorer;
         self
     }
 
@@ -3998,6 +4014,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 self.clock.as_ref(),
                 self.recall_pool_depth,
                 self.pack_levers,
+                self.lexical_scorer,
                 self.temporal_grounding_enabled,
                 self.cross_reranker.as_deref(),
                 self.cross_rerank_candidate_selection,
@@ -4041,6 +4058,7 @@ impl<S: MemoryStore> MemoryService<S> {
             self.clock.as_ref(),
             self.recall_pool_depth,
             self.pack_levers,
+            self.lexical_scorer,
             self.temporal_grounding_enabled,
             self.cross_reranker.as_deref(),
             self.cross_rerank_candidate_selection,
