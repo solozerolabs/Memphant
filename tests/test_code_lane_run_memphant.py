@@ -394,6 +394,120 @@ def test_ingest_attempt_rejects_unmapped_event_role(clr):
         )
 
 
+# --- Phase 1b substrate-transfer replay instrumentation ---------------------
+#
+# ONE check for the two mechanisms 1b adds: the recall trace's
+# dropped_items/RecallDropReason must reach the per-question artifact, and
+# MEMPHANT_PACK_RENDER_CAP must be admitted only when explicitly selected.
+
+
+_P1B_GOLDEN = {
+    "question_id": "q1",
+    "question_type": "coding-continuity",
+    "provenance": [{"span": "ERROR exact failure"}],
+}
+_P1B_UNIT_BODIES = {
+    "unit-gold": "toolResult: ERROR exact failure in module",
+    "unit-other": "assistant: unrelated build chatter",
+}
+_P1B_TRACE = {
+    "id": "trace-1",
+    "candidates": [
+        {"unit_id": "unit-other", "fused_rank": 1, "fused_score": 0.9},
+        {"unit_id": "unit-gold", "fused_rank": 2, "fused_score": 0.8},
+    ],
+    "dropped_items": [
+        {"unit_id": "unit-gold", "reason": "budget"},
+        {"unit_id": "unit-dupe", "reason": "duplicate"},
+    ],
+}
+
+
+def test_pack_drop_diagnosis_records_the_trace_drop_reason_for_unpacked_gold(clr):
+    row = clr.pack_drop_diagnosis(
+        _P1B_GOLDEN, _P1B_TRACE, _P1B_UNIT_BODIES, ["assistant: unrelated build chatter"], 10
+    )
+
+    assert row["bucket"] == "in_pool_unpacked"
+    assert row["gold_in_pool"] is True
+    assert row["gold_fused_rank"] == 2
+    assert row["gold_drop_reason"] == "budget"
+    assert row["drop_reasons"] == {"budget": 1, "duplicate": 1}
+    assert row["pool_size"] == 2
+
+    summary = clr.pack_drop_summary([{**row, "question_id": "q1"}])
+    assert summary["buckets"] == {"in_pool_unpacked": 1}
+    assert summary["in_pool_unpacked_gold_drop_reasons"] == {"budget": 1}
+    assert summary["budget_share_of_in_pool_unpacked"] == 1.0
+
+
+def test_pack_drop_diagnosis_separates_hits_from_pool_absence(clr):
+    hit = clr.pack_drop_diagnosis(
+        _P1B_GOLDEN, _P1B_TRACE, _P1B_UNIT_BODIES,
+        ["toolResult: ERROR exact failure in module"], 10,
+    )
+    absent = clr.pack_drop_diagnosis(
+        _P1B_GOLDEN, {"id": "t", "candidates": [], "dropped_items": []},
+        _P1B_UNIT_BODIES, [], 10,
+    )
+
+    assert hit["bucket"] == "hit"
+    assert absent["bucket"] == "absent_from_pool"
+    assert absent["gold_in_pool"] is False
+    assert absent["gold_drop_reason"] is None
+
+
+def test_recall_with_trace_reads_the_trace_through_the_bound_context(clr):
+    class Client:
+        def __init__(self):
+            self.gets = []
+
+        def post(self, path, payload):
+            return {"trace_id": "trace-1", "items": [{"body": "b"}], "degraded": False}
+
+        def get(self, path):
+            self.gets.append(path)
+            return _P1B_TRACE
+
+    client = Client()
+    bodies, degraded, trace = clr.recall_with_trace(
+        client,
+        {
+            "subject_id": "s", "scope_id": "sc", "actor_id": "a",
+            "agent_node_id": "n", "subject_generation": 0,
+        },
+        "why did the build fail", 10, 8192, "fast",
+    )
+
+    assert bodies == ["b"] and degraded is False
+    assert trace["dropped_items"][0]["reason"] == "budget"
+    assert client.gets == [
+        "/v1/traces/trace-1?subject_id=s&scope_id=sc&actor_id=a"
+        "&agent_node_id=n&subject_generation=0"
+    ]
+
+
+def test_pack_render_cap_is_admitted_only_when_explicitly_selected(clr, monkeypatch):
+    """The cap arm is selected by flag. The shared server harness closes
+    inherited packing env vars, so an ambient cap can never leak into an arm."""
+    monkeypatch.setenv("MEMPHANT_PACK_RENDER_CAP", "9999")
+    base = [
+        "--out-evidence", "/dev/null", "--out-provenance", "/dev/null",
+    ]
+
+    off = clr.build_parser().parse_args(base)
+    on = clr.build_parser().parse_args(base + ["--pack-render-cap", "1200"])
+
+    assert off.pack_render_cap is None
+    assert on.pack_render_cap == 1200
+
+    def server_env(cap):
+        return clr.gr.Server("s", "postgres://x/y", 1, "off", pack_render_cap=cap).environment()
+
+    assert "MEMPHANT_PACK_RENDER_CAP" not in server_env(off.pack_render_cap)
+    assert server_env(on.pack_render_cap)["MEMPHANT_PACK_RENDER_CAP"] == "1200"
+
+
 def test_deterministic_file_search_ranks_raw_matching_event_first():
     search = _load("code_lane_run_deterministic", "scripts/code_lane_run_deterministic.py")
     documents = search.event_documents(

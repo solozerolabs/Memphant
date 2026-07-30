@@ -28,6 +28,16 @@ is an accepted characteristic of the existing convention, not new here).
 Event roles map explicitly to the public source taxonomy: user→user,
 assistant→agent, and toolResult→tool. Trust is API-key-bound.
 
+Packing diagnosis (Phase 1b, substrate transfer — FREE, retrieval-trace only,
+no reader and no model call): every recall also reads its
+``GET /v1/traces/{id}`` and records the trace's ``dropped_items`` /
+``RecallDropReason`` per question, so the chat-lane Budget-drop diagnosis
+(64/64 in-pool-unpacked misses were per-item Budget drops) can be replayed on
+code bodies. ``--pack-render-cap`` selects the ``MEMPHANT_PACK_RENDER_CAP`` arm
+for the server; cap-OFF vs cap-1200 is two runs of this script differing in
+that one flag. The cap is only ever admitted when explicitly selected —
+``gate_runtime.Server`` closes inherited packing env vars.
+
 Isolation: each run re-execs itself through ``scripts/with_scratch_db.sh``
 (``gate_runtime.reexec_through_scratch_db``) onto a fresh, migrated, per-run
 scratch DB minted from ``--database-url`` (the campaign *base* server) and
@@ -50,6 +60,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -251,6 +262,156 @@ def validate_recall_configuration(embed_model: str, mode: str) -> None:
         raise RuntimeError("deep recall requires an embeddings model; use fast with off")
 
 
+# --- rung-7 packing diagnosis (FREE, retrieval-trace only) -------------------
+#
+# Mirrors the chat-lane instrument in `memphant-eval::bench_lme`
+# (`classify_gold_drop_cause`, `FastMissBucket`) on code bodies: of the
+# gold-bearing pool units, take the BEST-ranked one (min fused_rank) and report
+# its fused rank/score plus its pack drop reason from the recall trace's
+# `dropped_items`/`RecallDropReason` (already in `openapi/memphant.v1.json`).
+# Chat-lane gold identity is session-keyed; this lane has no session key, so a
+# pool unit is "gold-bearing" when its body contains ANY required gold span
+# under the same `gate_common.contains_gold` matcher the graders use.
+
+
+def gold_bearing_units(golden: dict, unit_bodies: dict[str, str]) -> set[str]:
+    spans = gc.required_spans(golden)
+    return {
+        unit_id
+        for unit_id, body in unit_bodies.items()
+        if any(gc.contains_gold(body, span) for span in spans)
+    }
+
+
+def pack_drop_diagnosis(
+    golden: dict,
+    trace: dict,
+    unit_bodies: dict[str, str],
+    packed_bodies: list[str],
+    k: int,
+) -> dict:
+    """Per-question packing diagnosis from one recall trace.
+
+    ``bucket`` is ``hit`` when the packed top-k covers the gold spans,
+    ``in_pool_unpacked`` when gold reached the candidate pool but not the pack,
+    ``absent_from_pool`` otherwise — the same three-way split the chat-lane
+    Budget-drop diagnosis was read off. ``gold_drop_reason is None`` means the
+    best-ranked gold pool unit never appears in ``dropped_items`` (it survived
+    the pack loop but below the answer, or was never reached)."""
+    candidates = trace.get("candidates") or []
+    drops = trace.get("dropped_items") or []
+    pool_ids = {candidate["unit_id"] for candidate in candidates}
+    gold_ids = gold_bearing_units(golden, unit_bodies) & pool_ids
+    ranked = [
+        (candidate["fused_rank"], candidate)
+        for candidate in candidates
+        if candidate["unit_id"] in gold_ids and candidate.get("fused_rank") is not None
+    ]
+    best = min(ranked, key=lambda pair: pair[0])[1] if ranked else None
+    drop_reason = None
+    if best is not None:
+        drop_reason = next(
+            (
+                item["reason"]
+                for item in drops
+                if item["unit_id"] == best["unit_id"]
+            ),
+            None,
+        )
+    reason_histogram: dict[str, int] = {}
+    for item in drops:
+        reason_histogram[item["reason"]] = reason_histogram.get(item["reason"], 0) + 1
+    hit = gc.provenance_hit(golden, packed_bodies, k)
+    return {
+        "pool_size": len(pool_ids),
+        "packed_size": len(packed_bodies),
+        "gold_pool_units": len(gold_ids),
+        "gold_in_pool": bool(gold_ids),
+        "gold_fused_rank": best["fused_rank"] if best is not None else None,
+        "gold_fused_score": best.get("fused_score") if best is not None else None,
+        "gold_drop_reason": drop_reason,
+        "bucket": (
+            "hit" if hit else "in_pool_unpacked" if gold_ids else "absent_from_pool"
+        ),
+        "dropped_items": len(drops),
+        "drop_reasons": dict(sorted(reason_histogram.items())),
+    }
+
+
+def pack_drop_summary(rows: list[dict]) -> dict:
+    """Run-level roll-up: the bucket split, and — for the in-pool-unpacked
+    misses only — the drop-reason histogram of the best-ranked gold pool unit.
+    This is the number Phase 1b turns on: on the chat lane 64/64 in-pool-
+    unpacked misses were ``budget`` drops."""
+    buckets: dict[str, int] = {}
+    for row in rows:
+        buckets[row["bucket"]] = buckets.get(row["bucket"], 0) + 1
+    unpacked = [row for row in rows if row["bucket"] == "in_pool_unpacked"]
+    reasons: dict[str, int] = {}
+    for row in unpacked:
+        key = row["gold_drop_reason"] or "not_in_dropped_items"
+        reasons[key] = reasons.get(key, 0) + 1
+    return {
+        "buckets": dict(sorted(buckets.items())),
+        "in_pool_unpacked": len(unpacked),
+        "in_pool_unpacked_gold_drop_reasons": dict(sorted(reasons.items())),
+        "budget_share_of_in_pool_unpacked": (
+            reasons.get("budget", 0) / len(unpacked) if unpacked else None
+        ),
+    }
+
+
+def trace_context_query(ctx: dict) -> str:
+    """The strict trace endpoint resolves the same bound context as recall, so
+    the five ids + generation ride as query params (GET has no body)."""
+    return urllib.parse.urlencode(
+        {
+            "subject_id": ctx["subject_id"],
+            "scope_id": ctx["scope_id"],
+            "actor_id": ctx["actor_id"],
+            "agent_node_id": ctx["agent_node_id"],
+            "subject_generation": ctx["subject_generation"],
+        }
+    )
+
+
+def recall_with_trace(
+    client: gr.ApiClient, ctx: dict, query: str, k: int, budget_tokens: int, mode: str
+) -> tuple[list[str], bool, dict]:
+    """``gr.recall_query`` plus the recall trace this lane's packing diagnosis
+    needs (deterministic, no reader, no paid model call)."""
+    response = client.post(
+        "/v1/recall",
+        {**ctx, "query": query, "limit": k, "budget_tokens": budget_tokens, "mode": mode},
+    )
+    trace_id = response.get("trace_id")
+    if not isinstance(trace_id, str) or not trace_id:
+        raise RuntimeError("recall response is missing trace_id")
+    trace = client.get(f"/v1/traces/{trace_id}?{trace_context_query(ctx)}")
+    if not isinstance(trace, dict) or trace.get("id") != trace_id:
+        raise RuntimeError(f"missing or mismatched recall trace for trace_id={trace_id}")
+    bodies = [item["body"] for item in response.get("items", [])]
+    return bodies, bool(response.get("degraded", False)), trace
+
+
+def episodic_unit_bodies(database_url: str, tenant_id: str) -> dict[str, str]:
+    """``unit_id -> body`` for one tenant's episodic units. The recall trace
+    carries unit ids only, so gold-bearing pool units are resolved by body
+    here — read-only, on the per-run scratch DB."""
+    query = (
+        "select coalesce(json_object_agg(id::text, body), '{}'::json)::text "
+        "from memphant.memory_unit where tenant_id = "
+        f"'{uuid.UUID(tenant_id)}'::uuid and kind = 'episodic'"
+    )
+    result = gr.sh([
+        "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+        "--set", "ON_ERROR_STOP=1", database_url, "--command", query,
+    ])
+    if result.returncode != 0:
+        raise RuntimeError(f"unit body read failed: {result.stderr.strip()[:300]}")
+    return json.loads(result.stdout)
+
+
 def compilation_summary(database_url: str, tenant_ids: list[str]) -> dict:
     ids = [str(uuid.UUID(value)) for value in tenant_ids]
     tenant_array = "array[" + ",".join(f"'{value}'::uuid" for value in ids) + "]"
@@ -411,7 +572,7 @@ def ingest_isolation_sentinel(client: gr.ApiClient, ctx: dict, row: dict) -> tup
     return source_ref, f"{event['role']}: {ISOLATION_SENTINEL_TEXT}"
 
 
-def main() -> int:
+def build_parser():
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -441,7 +602,18 @@ def main() -> int:
     parser.add_argument("--server-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-server"))
     parser.add_argument("--worker-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-worker"))
     parser.add_argument("--cli-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-cli"))
-    args = parser.parse_args()
+    parser.add_argument(
+        "--pack-render-cap", type=int, default=None,
+        help="MEMPHANT_PACK_RENDER_CAP for the server arm (per-item render cap; "
+             "omit for the cap-OFF arm). Explicitly selected here and nowhere "
+             "else: gate_runtime.Server closes inherited packing env vars, so an "
+             "ambient MEMPHANT_PACK_RENDER_CAP can never leak into an arm",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     validate_recall_configuration(args.embed_model, args.mode)
 
     golden_path = Path(args.golden)
@@ -489,7 +661,7 @@ def main() -> int:
     server_log_path = Path(args.out_provenance).resolve().parent / log_name
     server = gr.Server(
         args.server_bin, args.database_url, args.port, args.embed_model,
-        log_path=server_log_path,
+        log_path=server_log_path, pack_render_cap=args.pack_render_cap,
     )
     # Symmetric cleanup: start() and the ingest/recall body are both inside
     # this try so the server child is always killed on any exception path,
@@ -551,12 +723,13 @@ def main() -> int:
         )
         compiled_corpus["deduplicated_episodes"] = expected_jobs - expected_projections
 
+        unit_bodies = episodic_unit_bodies(args.database_url, principals[0][0])
         evidence_rows = []
         provenance_rows = []
         recall_started = time.time()
         for i, golden in enumerate(goldens):
             attempt_id = golden["provenance"][0]["attempt_id"]
-            bodies, degraded = gr.recall_query(
+            bodies, degraded, trace = recall_with_trace(
                 clients[0], evaluation_contexts[attempt_id], retrieval_query(golden), args.k,
                 args.budget_tokens, args.mode
             )
@@ -569,6 +742,9 @@ def main() -> int:
                     "degraded": degraded,
                     "hit_at_5": gc.provenance_hit(golden, bodies, 5),
                     "hit_at_10": gc.provenance_hit(golden, bodies, min(10, args.k)),
+                    **pack_drop_diagnosis(
+                        golden, trace, unit_bodies, bodies, min(10, args.k)
+                    ),
                 }
             )
             if (i + 1) % 10 == 0:
@@ -606,6 +782,7 @@ def main() -> int:
             "k": args.k,
             "recall_mode": args.mode,
             "budget_tokens": args.budget_tokens,
+            "pack_render_cap": args.pack_render_cap,
             "ingested_attempts": len(ingest_rows),
             "ingested_events": evaluation_events + isolation_sentinel_events,
             "evaluation_events": evaluation_events,
@@ -661,11 +838,14 @@ def main() -> int:
             "control_input_readiness": input_readiness,
             "recall_at_5": r5,
             "recall_at_10": r10,
+            "pack_drop_summary": pack_drop_summary(provenance_rows),
             "per_question": provenance_rows,
         }
         Path(args.out_provenance).write_text(json.dumps(report, indent=2) + "\n")
         print(
             f"{label_prefix}done: R@5={r5:.3f} R@10={r10:.3f} n={n} "
+            f"cap={args.pack_render_cap or 'off'} "
+            f"drops={json.dumps(report['pack_drop_summary'])} "
             f"evidence={args.out_evidence} provenance={args.out_provenance}",
             file=sys.stderr,
         )
