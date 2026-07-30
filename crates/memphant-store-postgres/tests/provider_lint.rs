@@ -11,7 +11,7 @@ fn bundled_wsa_migration_passes_all_provider_lints() {
 }
 
 #[test]
-fn bundled_migrations_are_ordered_through_worker_claim_forward_migration() {
+fn bundled_migrations_are_ordered_through_served_login_roles_migration() {
     let versions: Vec<_> = MIGRATIONS.iter().map(|(version, _)| *version).collect();
     assert_eq!(
         versions,
@@ -19,6 +19,7 @@ fn bundled_migrations_are_ordered_through_worker_claim_forward_migration() {
             "20260703_001_wsa_bootstrap",
             "20260723_002_file_sync_mutation_verb",
             "20260724_003_worker_claim_throughput",
+            "20260730_004_served_login_roles",
         ]
     );
     assert_eq!(MIGRATIONS.last().unwrap().0, MIGRATION_HEAD);
