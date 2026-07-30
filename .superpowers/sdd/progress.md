@@ -214,3 +214,88 @@
 - Determinism: `python3 scripts/track_r_mine.py --verify-lock` re-mines from the warm cache and compares to the lock - currently OK (`6f549daaa3cc` == `6f549daaa3cc`, 180/180)
 - Paid API spend: $0. Generation and adjudication ran entirely on subscription-model agent calls (688 cached replies, content-hash keyed), never OpenRouter
 - Defect found and fixed mid-run: the adjudication prompt clipped the target event to 1,200 chars while the generator saw 3,000, so adjudicators were rejecting goldens whose answer sat past the clip. Fixed, and the whole adjudication wave was re-run rather than kept
+## Accuracy-first Phase 1c retrieval probe + Phase 1b authoritative substrate-transfer replay
+
+- Status: **executed**. Three arms, same 180 Track R goldens, $0 paid spend (no reader, no judge, no paid model call; `--embed-model off --mode fast`, `check_embed_model_key` never asked for a key). Each arm on its own fresh scratch DB via `scripts/with_scratch_db.sh`, own port, own outputs
+- Worktree/branch: `/Users/sidsharma/Memphant-accuracy-first`, `accuracy-first`; base `eecc59ba`
+- Commits: `27c00c95` (instrument seams + summary aggregator + tests), `d2f99e01` (executed measurement + committed summary + gitignore for run outputs). Not pushed
+- Inputs verified before any DB or server process was created: corpus sha256 `c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669` (495 attempts / 64,055 events), golden sha256 `6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d` (180 goldens) — both match `benchmarks/data/track_r_repo_memory_golden.lock.json`, and every one of the 180 golden-to-event provenance edges (event_id pairing + exact span at char_start:char_end) re-verified
+
+### Results (every number from an executed run)
+
+| Arm | r@5 | r@10 | Provenance artifact |
+|---|---|---|---|
+| BM25 deterministic control | 0.761 | **0.806** | `docs/build-log/artifacts/track-r/phase1/bm25-provenance.json` |
+| MemPhant cap-OFF | 0.450 | **0.506** | `docs/build-log/artifacts/track-r/phase1/memphant-capoff-provenance.json` |
+| MemPhant cap-1200 | 0.450 | **0.506** | `docs/build-log/artifacts/track-r/phase1/memphant-cap1200-provenance.json` |
+
+- Committed derived summary (no bodies, public CC-BY-4.0 corpus): `docs/build-log/artifacts/track-r/track_r_phase1_retrieval_summary.json`
+- Run outputs under `docs/build-log/artifacts/track-r/phase1/` are gitignored — the evidence JSONLs carry full retrieved third-party event text
+- Ingest/compile integrity per MemPhant arm: 64,055 evaluation events + 1 isolation sentinel ingested, `compiled=64056` jobs, `pending_jobs=0`, `dead_jobs=0`, 64,014 episodic units (42 exact-duplicate bodies deduplicated), `validate_compilation_summary` passed — so the numbers are not a half-drained-worker artifact. Both two-tenant negative recalls passed
+- Paired at r@10: MemPhant cap-OFF vs BM25 — both 76, MemPhant-only 15, BM25-only 69, neither 20. cap-1200 vs cap-OFF — both 91, neither 89, **zero flips in either direction**
+
+### Hypothesis A — bank saturation: NOT saturated
+
+- BM25 r@10 = **0.806**, not 1.0. 35/180 goldens are unsolved by the lexical control, so the bank has 19.4pt of headroom in which a substrate win could have been expressed. This is not the SWE-ContextBench failure mode (baseline 10/10, required gain impossible)
+- With-distractor subset (n=75) r@10 **0.787**; no-distractor subset (n=105) r@10 **0.819**. A 3.2pt gap: the 105 goldens that the `with_distractors_ge_50pct` check flagged are NOT a lexically-trivial subset, so the coverage miss reads as a threshold artifact of a stronger-than-assumed identification gate, not as a defect that inflates the control. (The 50% threshold decision remains the owner's; `bar_passed` stays `false`.)
+- By shape, BM25 r@10: state-churn 0.683 / file-symbol-grounding 0.850 / task-resumption 0.883 — state-churn is the hardest stratum for the control, as its "a later touch, so a stale answer is wrong" precondition predicts
+- Recorded mean question/answer lexical overlap 0.0517 (max 0.3226) is now corroborated by measurement rather than trusted as a proxy
+
+### Hypothesis B — render-cap inertness: the cap RAN, and changed nothing
+
+- Packed-items delta read BEFORE any retrieval delta, as preregistered. The cap **is** live on this corpus: per-item render chars fell **2,018,765 -> 1,926,115** total (mean 1147.0 -> 1094.4) and the largest single packed render fell **7,039 -> 4,011** chars. Offline pre-check agrees: 30,768 / 64,055 episode bodies (48.0%) exceed the 4-segment window and therefore mint contextual chunks, so the single-line-body inertness caveat from the instrument-proving run does not apply here
+- Downstream it changed nothing: `packed_items_total` **1,760 in both arms** (mean 9.78/question), r@5 and r@10 byte-identical, zero per-question flips
+- **The chat-lane Budget-drop pathology does not recur on code bodies.** `budget_share_of_in_pool_unpacked` = **0.0118** cap-OFF (1 of 85) and **0.0** cap-1200, against **1.00** (64/64) on the chat lane. The binding constraint here is the k=10 output-slot limit, not the 8192-token budget: 176/180 questions pack exactly 10 items, and the dominant in-pool-unpacked drop reason is `rerank` (56 cap-OFF / 57 cap-1200), which `admit_or_drop` emits only from the `acc.items.len() >= output_limit` branch — never from the budget branch
+- Correct reading: this is a real measured null about the cap on code bodies (it ran, at a measured render-size delta, and moved no retrieval), not the false null "the cap did not run". Per the plan's own conditional, pack_render_cap is a chat-lane footnote on this evidence and Phase 2 drops in priority
+
+### Where the MemPhant deficit actually lives
+
+- Candidate stage is nearly perfect: gold reaches the pool on **176/180** questions (`gold_in_pool_rate` 0.978, median pool size 124). Only **91** survive packing. `absent_from_pool` is 4
+- Of the 85 `in_pool_unpacked` misses, **56 had their best gold pool unit already inside the top-10 fused ranks** (median gold fused rank 8; hits have median 2) and still did not reach the pack. 29 sat beyond k
+- So the loss is **pack selection**, not retrieval. Any Phase 3 coding-lane work aimed at embeddings or recall breadth would be aimed at the 2.2pt part of the problem
+- Fairness note that strengthens the finding, not weakens it: MemPhant recall is bound per attempt (`bind_attempt_context`), so each query searches only its own trajectory (~124 candidates), while BM25 ranks all 64,055 events corpus-wide. MemPhant loses by 30.0pt at r@10 **despite** the narrower haystack
+
+### Kill gate
+
+- The Phase 1 kill gate "MemPhant does not beat BM25 on retrieval" is **TRIPPED as measured**: 0.506 vs 0.806 at r@10, 0.450 vs 0.761 at r@5, and BM25 wins 69 questions MemPhant loses against 15 the other way. The gate's consequence — ownership decision (d) defaults to "Syndai keeps its tables" until the substrate wins — is the owner's call, recorded here as measurement, not decided here
+- Caveat that belongs with the number: the bank's spot-check state is still `emitted_pending_owner_review`, so per the bar no published number may cite this bank yet
+
+### Reproduce
+
+```
+cd /Users/sidsharma/Memphant-accuracy-first            # branch accuracy-first, commit d2f99e01
+cargo build --release --bin memphant-server --bin memphant-worker --bin memphant-cli
+
+# arm 1 - BM25 deterministic control (~15 min, no DB)
+python3 scripts/code_lane_run_deterministic.py \
+  --corpus docs/build-log/artifacts/track-r/corpus.jsonl \
+  --golden benchmarks/data/track_r_repo_memory_golden.jsonl \
+  --out-evidence docs/build-log/artifacts/track-r/phase1/bm25-evidence.jsonl \
+  --out-provenance docs/build-log/artifacts/track-r/phase1/bm25-provenance.json --k 10
+
+# arm 2 - MemPhant cap-OFF   (~40 min: 670s ingest, 906s compile, 728s recall)
+python3 scripts/code_lane_run_memphant.py \
+  --database-url postgres://memphant:memphant@localhost:5432/memphant \
+  --corpus docs/build-log/artifacts/track-r/corpus.jsonl \
+  --golden benchmarks/data/track_r_repo_memory_golden.jsonl \
+  --out-evidence docs/build-log/artifacts/track-r/phase1/memphant-capoff-evidence.jsonl \
+  --out-provenance docs/build-log/artifacts/track-r/phase1/memphant-capoff-provenance.json \
+  --embed-model off --mode fast --k 10 --budget-tokens 8192 \
+  --label track-r-capoff --port 39431 \
+  --server-bin target/release/memphant-server \
+  --worker-bin target/release/memphant-worker \
+  --cli-bin target/release/memphant-cli
+
+# arm 3 - MemPhant cap-1200: arm 2 plus `--pack-render-cap 1200`, with
+#   --label track-r-cap1200 --port 39433 and the cap1200 output paths
+
+python3 scripts/track_r_phase1_summary.py \
+  --golden benchmarks/data/track_r_repo_memory_golden.jsonl \
+  --bm25 docs/build-log/artifacts/track-r/phase1/bm25-provenance.json \
+  --cap-off docs/build-log/artifacts/track-r/phase1/memphant-capoff-provenance.json \
+  --cap-1200 docs/build-log/artifacts/track-r/phase1/memphant-cap1200-provenance.json \
+  --out docs/build-log/artifacts/track-r/track_r_phase1_retrieval_summary.json
+```
+
+- Instrument changes were three small seams, not a new instrument: `corpus_contract()` accepts the golden lock's corpus block under either committed key (`extraction` from the v3 miner, `corpus` from the Track R miner) with `corpus_bytes` optional since sha256 already witnesses it; `retrieval_query()` falls back to the golden's `question` so both arms query the identical string (the gold-leak guard still fires, and all 180 pass it); `pack_drop_diagnosis`/`pack_drop_summary` additionally record packed-item counts and per-item render sizes so an inert cap arm can never be misread as an ineffective one
+- Runnable check: `python3 -m pytest tests/test_code_lane_run_memphant.py tests/test_track_r_phase1_summary.py -q` -> 36 passed (6 new cases: the query fallback + its leak guard, the lock-key normalization, a lock without `corpus_bytes`, the render-size witness, the stage decomposition, and both readings of the hypothesis-B witness)
