@@ -1,0 +1,124 @@
+{
+  "golden_path": "benchmarks/data/user_lane_golden.jsonl",
+  "sha256": "e29821b24aff753a3bd5f58653f65044851485d1a7690d1081dedcb1a5200b87",
+  "bytes": 145100,
+  "count": 51,
+  "target_range": [
+    40,
+    60
+  ],
+  "strata": {
+    "by_axis": {
+      "correction_retention": 27,
+      "scope_contradiction": 12,
+      "staleness": 12
+    },
+    "by_category": {
+      "guardrail_exception": 5,
+      "identity": 2,
+      "procedural": 34,
+      "semantic": 10
+    },
+    "by_axis_category": {
+      "correction_retention/guardrail_exception": 5,
+      "correction_retention/identity": 2,
+      "correction_retention/procedural": 17,
+      "correction_retention/semantic": 3,
+      "scope_contradiction/procedural": 8,
+      "scope_contradiction/semantic": 4,
+      "staleness/procedural": 9,
+      "staleness/semantic": 3
+    },
+    "by_scope": {
+      "repo:Ideas": 3,
+      "repo:MemPhant": 3,
+      "repo:Syndai": 32,
+      "repo:Tacitry": 3,
+      "repo:Yurivan": 7,
+      "task:Yurivan/upload-hotcomics": 1,
+      "task:Yurivan/upload-pixiv": 1,
+      "task:Yurivan/upload-video": 1
+    },
+    "by_authority": {
+      "agent_learned": 19,
+      "user_correction": 32
+    },
+    "by_source_kind": {
+      "agents": 7,
+      "feedback": 40,
+      "learnings": 4
+    }
+  },
+  "category_weight_targets": {
+    "procedural": 0.65,
+    "semantic": 0.2,
+    "guardrail_exception": 0.1,
+    "identity": 0.05
+  },
+  "category_weight_deviations": {
+    "guardrail_exception": -0.002,
+    "identity": -0.0108,
+    "procedural": 0.0167,
+    "semantic": -0.0039
+  },
+  "params": {
+    "seed": 20260730,
+    "max_temptation_overlap": 0.34,
+    "max_verbatim_run_words": 7,
+    "min_rule_chars": 40,
+    "weight_tolerance": 0.08,
+    "axes": [
+      "correction_retention",
+      "staleness",
+      "scope_contradiction"
+    ],
+    "deferred_axes": [
+      "guardrail_exceptions",
+      "sycophancy",
+      "lifecycle",
+      "adherence"
+    ]
+  },
+  "stats": {
+    "candidates": 60,
+    "accepted": 51,
+    "rejected": 9,
+    "rejects_by_reason": {
+      "bundle_incomplete": 1,
+      "content_sensitive_excluded": 2,
+      "duplicate_of_accepted_golden": 1,
+      "end_behavior_not_checkable": 2,
+      "no_incident_in_bundle": 1,
+      "source_conflict_unresolved": 2
+    }
+  },
+  "source_counts": {
+    "feedback_files_total": 90,
+    "feedback_files_by_project": {
+      "-Users-sidsharma-Ideas": 3,
+      "-Users-sidsharma-Ideas-tacitry": 3,
+      "-Users-sidsharma-Namera": 1,
+      "-Users-sidsharma-Syndai": 67,
+      "-Users-sidsharma-Yurivan": 14,
+      "-Users-sidsharma-sprntly": 2
+    },
+    "learnings_entries": 61,
+    "agents_rules_by_section": {
+      "memphant:Benchmark Dataset Cache": 7,
+      "memphant:CI monitoring": 1,
+      "memphant:Database Rules": 4,
+      "memphant:Repo Boundaries": 4,
+      "memphant:Sister Project and Secrets": 5,
+      "memphant:Working Rules": 5,
+      "syndai:Hard Rules": 17,
+      "syndai:Session Execution": 9
+    }
+  },
+  "probes_file": {
+    "path": "benchmarks/data/user_lane_probes.jsonl",
+    "sha256": "dff3b42903121a8a40998b5bf172e3b827f5ca0a8520cfbc11599465b1ef1a6a",
+    "count": 60,
+    "committed": false
+  },
+  "privacy_prereg": "docs/build-log/2026-07-30-track-u-privacy-prereg.md"
+}
