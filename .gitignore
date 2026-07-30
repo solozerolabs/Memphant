@@ -170,3 +170,5 @@ docs/build-log/artifacts/track-r-paraphrase/run/
 benchmarks/data/track_r_paraphrase_golden.jsonl
 benchmarks/data/track_r_paraphrase_spotcheck.jsonl
 !benchmarks/data/track_r_paraphrase_golden.lock.json
+docs/build-log/artifacts/track-r-floor/agent-cache/
+docs/build-log/artifacts/track-r-floor/requests/
