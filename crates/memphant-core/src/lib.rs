@@ -8678,11 +8678,6 @@ struct PackCtx<'a> {
     /// W5: when on, each admitted item records its grounded date so the post-fill
     /// pass can prefix `[date YYYY-MM-DD]`. Off ⇒ no prefixes recorded or applied.
     temporal_grounding_enabled: bool,
-    /// R1.5-T0: `true` when a rank signal external to `packing_relevance_score`
-    /// (cross-encoder rerank, decomposition, or the deterministic/learned
-    /// reranker) governs this candidate list's established sort order. See
-    /// `admit_or_drop`'s "output already full" branch.
-    rank_based_ordering_active: bool,
     /// Policy-filtered, recallable heads participating in this recall. A
     /// historical Contradicts edge is unresolved only when both endpoints are
     /// simultaneously live candidates; superseded endpoints never enter this
@@ -8804,17 +8799,6 @@ fn pack_recall_context(
     let live_candidate_ids = fused.iter().map(|candidate| candidate.unit.id).collect();
     let goal_companion_id = goal_companion_id(&fused, query_tokens);
 
-    // R1.5-T0: does an EXTERNAL rank signal (Deep or cross-encoder rerank) govern
-    // this candidate list's order? Mirrors the exact per-pair conditions the
-    // `fused.sort_by` below uses. Threaded into `PackCtx` so `admit_or_drop`
-    // can tell whether the established sort order is rank-authoritative (see
-    // the comment on the "output already full" branch there for why that
-    // matters).
-    let rank_based_ordering_active = pack_levers.submodular_ordering_enabled
-        || fused.iter().any(|candidate| {
-            candidate.deep_rank.is_some() || candidate.cross_rerank_rank.is_some()
-        });
-
     if request.context_packing_abstention_enabled {
         fused.sort_by(|left, right| {
             if left.deep_rank.is_some() || right.deep_rank.is_some() {
@@ -8883,7 +8867,6 @@ fn pack_recall_context(
         output_limit: request.k.max(1),
         sibling_gather_enabled: pack_levers.sibling_gather_enabled,
         temporal_grounding_enabled,
-        rank_based_ordering_active,
         live_candidate_ids,
         goal_companion_id,
         pack_render_cap: pack_levers.pack_render_cap,
@@ -9038,36 +9021,32 @@ fn admit_or_drop(
         // 30-q + partial 100-q, pool 64, k 10): every suppression this gate
         // performed (97 + 179) had the candidate WORSE-ranked than its
         // would-be evictee under the authoritative order — zero cross-tier,
-        // zero same-rank ties. A per-item tier-aware comparator would
-        // suppress the identical set, so this all-or-nothing gate IS the
-        // correct permanent mechanism, not a stopgap. Do not build the
-        // tier-aware replacement unless a future ordering introduces
-        // same-rank ties (multiple candidates sharing one rank key).
-        let replace_index = if ctx.rank_based_ordering_active {
-            None
-        } else {
-            replacement_index(
-                &acc.token_counts,
-                &acc.relevance_scores,
-                acc.token_estimate,
-                unit_tokens,
-                candidate_score,
-                request.budget_tokens,
-            )
-        };
-        if let Some(replace_index) = replace_index {
-            let replaced_id = acc.evict(replace_index);
-            dropped_items.push(RecallDroppedItem {
-                unit_id: replaced_id,
-                reason: RecallDropReason::Rerank,
-            });
-            admit_new(acc, ctx, admission);
-        } else {
-            dropped_items.push(RecallDroppedItem {
-                unit_id: candidate_id,
-                reason: RecallDropReason::Rerank,
-            });
-        }
+        // zero same-rank ties. That measurement is sound but it only ever
+        // observed the arm where `rank_based_ordering_active` is TRUE and the
+        // contest never ran.
+        //
+        // MEASURED 2026-07-30 (Track R, 180 code goldens, Fast, no reranker —
+        // so `rank_based_ordering_active` is FALSE and the contest DID run):
+        // gold reached the fused top-10 on 147/180 but survived packing on only
+        // 91, and 27 of the 56 displaced golds are recorded as `Rerank` drops of
+        // an ALREADY-ADMITTED top-10 item, evicted by a candidate from fused
+        // ranks 11..64. The eviction is decided by `packing_relevance_score`,
+        // which is not the order the pack was handed, so a worse-ranked
+        // candidate takes a top-k slot on the strength of a different formula.
+        // No caller opted into that re-scoring: it became reachable only as a
+        // side effect of R1.5-T0 widening the scan window past `k`.
+        //
+        // So the established order wins here, unconditionally. Filling `k`
+        // slots in the order the ranking stage produced is the contract of this
+        // branch; anything that overrides it has to be a signal the ranking
+        // stage itself carries (Deep, cross-encoder, submodular), and those
+        // already sort the list before this loop. The BUDGET-driven replacement
+        // below is a separate, unaffected mechanism — a legitimate substitution
+        // when a candidate would not fit as a fresh addition regardless of rank.
+        dropped_items.push(RecallDroppedItem {
+            unit_id: candidate_id,
+            reason: RecallDropReason::Rerank,
+        });
         return;
     }
     if acc.token_estimate + unit_tokens > request.budget_tokens {
@@ -14336,16 +14315,16 @@ mod pack_cost_tests {
     }
 
     #[test]
-    fn quantity_rollup_does_not_disable_ordinary_relevance_replacement() {
-        let weak = candidate(unit(1, "irrelevant", Vec::new()), 2.0);
-        let strong = candidate(unit(2, "quantum", Vec::new()), 1.0);
+    fn quantity_rollup_consumes_one_slot_and_leaves_the_rest_in_rank_order() {
+        let top = candidate(unit(1, "irrelevant", Vec::new()), 2.0);
+        let next = candidate(unit(2, "quantum", Vec::new()), 1.0);
         let mut rollup = candidate(unit(3, "quantity rollup quantum", Vec::new()), 100.0);
         rollup.unit.source_kind = Some("quantity_rollup".to_string());
         let mut request = request(100);
         request.k = 2;
 
         let packed = pack_recall_context(
-            vec![weak, strong, rollup],
+            vec![top, next, rollup],
             &request,
             &[],
             &tokenize("quantum"),
@@ -14361,8 +14340,56 @@ mod pack_cost_tests {
                 .iter()
                 .map(|item| item.unit_id)
                 .collect::<Vec<_>>(),
-            vec![UnitId::from_u128(3), UnitId::from_u128(2)],
-            "the projection consumes one slot but must not freeze a weaker ordinary item",
+            vec![UnitId::from_u128(3), UnitId::from_u128(1)],
+            "the projection consumes one slot; the rest fill in the established \
+             order, not by a packing-only re-score",
+        );
+    }
+
+    /// Track R (2026-07-30) measured 27 of 56 displaced golds as `Rerank`
+    /// evictions of an ALREADY-ADMITTED top-k item by a candidate from below the
+    /// cut. `packing_relevance_score` is not the order the pack was handed, so
+    /// once the output is full the established rank decides and later candidates
+    /// are dropped, never swapped in.
+    #[test]
+    fn full_pack_keeps_rank_order_against_a_lexically_stronger_late_candidate() {
+        let ranked_first = candidate(unit(1, "alpha", Vec::new()), 9.0);
+        let ranked_second = candidate(unit(2, "beta", Vec::new()), 8.0);
+        // Below the cut, but every packing-only term (exact/lexical/overlap)
+        // favours it, so the old contest evicted `ranked_second` for it.
+        let late = candidate(unit(3, "quantum quantum quantum", Vec::new()), 0.1);
+        let mut request = request(100);
+        request.k = 2;
+
+        let packed = pack_recall_context(
+            vec![ranked_first, ranked_second, late],
+            &request,
+            &[],
+            &tokenize("quantum"),
+            Vec::new(),
+            3,
+            PackLevers::default(),
+            false,
+        );
+
+        assert_eq!(
+            packed
+                .items
+                .iter()
+                .map(|item| item.unit_id)
+                .collect::<Vec<_>>(),
+            vec![UnitId::from_u128(1), UnitId::from_u128(2)],
+            "a below-the-cut candidate must not take a packed slot from a \
+             higher-ranked admitted item",
+        );
+        assert!(
+            packed
+                .dropped_items
+                .iter()
+                .any(|dropped| dropped.unit_id == UnitId::from_u128(3)
+                    && dropped.reason == RecallDropReason::Rerank),
+            "the late candidate is the one dropped: {:?}",
+            packed.dropped_items,
         );
     }
 
