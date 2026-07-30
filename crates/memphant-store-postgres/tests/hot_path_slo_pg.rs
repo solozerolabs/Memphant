@@ -103,7 +103,20 @@ async fn fast_mode_recall_holds_release_hot_path_slo_on_postgres() {
         Arc::new(CLOCK),
         Arc::new(StubEmbedding::default()),
     );
-    seed_reference_corpus(&service, &context).await;
+    // The drain runs on a WORKER store, as production does: `claim_reflect_jobs`
+    // is granted to `memphant_worker` only, and since W3.3 the app pool really
+    // is `memphant_app`, so a tick through the app credential is (correctly)
+    // `permission denied for function claim_reflect_jobs`.
+    let worker = MemoryService::new(
+        Arc::new(
+            PgStore::connect_worker(&db_url())
+                .await
+                .expect("connect worker store"),
+        ),
+        Arc::new(CLOCK),
+        Arc::new(StubEmbedding::default()),
+    );
+    seed_reference_corpus(&service, &worker, &context).await;
     let request = |()| RecallHttpRequest {
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
@@ -164,7 +177,11 @@ fn percentile(samples: &[Duration], quantile: f64) -> Duration {
 /// compile path (not hand-staged units) so recall measures the genuine packaged
 /// read path over genuinely-compiled units — the same path the Python runner and
 /// role_matrix.rs exercise. One answer episode buried among filler.
-async fn seed_reference_corpus(service: &MemoryService<PgStore>, context: &ResolvedMemoryContext) {
+async fn seed_reference_corpus(
+    service: &MemoryService<PgStore>,
+    worker: &MemoryService<PgStore>,
+    context: &ResolvedMemoryContext,
+) {
     for index in 0..CORPUS_ROWS {
         let body = if index == 121 {
             "Atlas rollback release owner is platform on-call; cite runbook RB-77.".to_string()
@@ -198,7 +215,7 @@ async fn seed_reference_corpus(service: &MemoryService<PgStore>, context: &Resol
     // Drain the reflect queue so recall reads compiled units, not degraded
     // read-your-own-writes episodes.
     loop {
-        let compiled = service.run_worker_tick(256).await.expect("worker tick");
+        let compiled = worker.run_worker_tick(256).await.expect("worker tick");
         if compiled == 0 {
             break;
         }
