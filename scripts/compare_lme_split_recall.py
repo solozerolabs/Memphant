@@ -28,8 +28,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from math import comb
 from pathlib import Path
+
+# Seeded so a rerun reproduces the interval exactly.
+BOOTSTRAP_RESAMPLES = 10000
+BOOTSTRAP_SEED = 20260731
 
 # Harness settings that must agree before a delta is attributable to the split.
 # Anything that changes what retrieval does belongs here; a default is not
@@ -72,6 +77,33 @@ def rate(hits: int, scored: int) -> float | None:
     return hits / scored if scored else None
 
 
+def bootstrap_delta_ci(deltas: list[int]) -> dict:
+    """Seeded percentile bootstrap 95% CI over per-question paired deltas.
+
+    Reported because a null McNemar on one discordant pair is not evidence of
+    equivalence on its own — the interval is what says how large a real
+    difference this sample could still have hidden.
+    """
+    if not deltas:
+        return {"mean": None, "ci95_low": None, "ci95_high": None}
+    rng = random.Random(BOOTSTRAP_SEED)
+    n = len(deltas)
+    means = []
+    for _ in range(BOOTSTRAP_RESAMPLES):
+        means.append(sum(rng.choice(deltas) for _ in range(n)) / n)
+    means.sort()
+    low = means[int(0.025 * BOOTSTRAP_RESAMPLES)]
+    high = means[int(0.975 * BOOTSTRAP_RESAMPLES) - 1]
+    return {
+        "mean": sum(deltas) / n,
+        "ci95_low": low,
+        "ci95_high": high,
+        "ci_excludes_zero": low > 0 or high < 0,
+        "resamples": BOOTSTRAP_RESAMPLES,
+        "seed": BOOTSTRAP_SEED,
+    }
+
+
 def compare_at(k: str, base: dict, arm: dict, ids: list[str]) -> dict:
     """Paired comparison over questions scored (non-abstention) in BOTH arms."""
     scored = [q for q in ids if base[q][k] is not None and arm[q][k] is not None]
@@ -95,6 +127,9 @@ def compare_at(k: str, base: dict, arm: dict, ids: list[str]) -> dict:
         "arm_only_wins": len(arm_only),
         "baseline_only_wins": len(base_only),
         "exact_mcnemar_two_sided_p": exact_mcnemar_p(len(arm_only), len(base_only)),
+        "bootstrap_delta_ci95": bootstrap_delta_ci(
+            [int(bool(arm[q][k])) - int(bool(base[q][k])) for q in scored]
+        ),
         "arm_only_question_ids": arm_only,
         "baseline_only_question_ids": base_only,
     }
