@@ -148,6 +148,9 @@ docs/build-log/artifacts/track-r/phase1d/
 # retrieved event text and the provenance reports are large per-question dumps.
 # Only the derived `track_r_phase1r_retrieval_arms.json` alongside is committed.
 docs/build-log/artifacts/track-r/phase1r/
+# Phase 1e combined-build (retrieval + packing) run outputs, same rule.
+# Only the derived `track_r_phase1e_combined_fixes.json` alongside is committed.
+docs/build-log/artifacts/track-r/phase1e/
 benchmarks/data/track_r_repo_memory_golden.jsonl
 benchmarks/data/track_r_repo_memory_spotcheck.jsonl
 !benchmarks/data/track_r_repo_memory_golden.lock.json

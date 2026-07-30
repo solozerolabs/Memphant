@@ -546,3 +546,73 @@ Runnable check: `python3 -m pytest tests/test_track_r_retrieval_arm_compare.py
 tests/test_code_lane_run_memphant.py tests/test_gate_runtime.py -q` → 81 passed;
 `cargo test --all-targets --all-features` → 73 suites, 0 failures. Reproduce
 commands in the build log.
+
+## Phase 1e — the two fixes measured together (2026-07-30)
+
+Cost: **$0**. Deterministic retrieval only — no reader, no judge, no paid model
+call, embeddings OFF (dense was measured null-to-negative on this lane in Phase
+1r and was not re-enabled). One new arm executed at `a6d1d9b0` (both fixes
+merged), `--lexical-scorer bm25-code --embed-model off --mode fast --k 10
+--budget-tokens 8192`, cap off, release binaries built in this worktree, own
+scratch Postgres auto-dropped, worker fully drained before any query
+(`compiled=64056`, `pending_jobs=0`, `dead_jobs=0`, 64,014 units after 42
+dedups). Golden sha256 `6f549daa…` and corpus sha256 `c008142e…` verified before
+the run. Nothing else was executed: the three baselines are the committed runs,
+reused per-question.
+
+**Two stages, combined build (n = 180):**
+
+| stage | r@5 | r@10 |
+|---|---:|---:|
+| fused (ranking) | **0.9500** (171) | **0.9611** (173) |
+| packed (what reaches a reader) | **0.7278** (131) | **0.7722** (139) |
+
+**Paired, exact McNemar:**
+
+| comparison | k | after-only | before-only | exact p |
+|---|---|---:|---:|---:|
+| combined fused vs scoped BM25 control (0.8278/0.8944) | @5 | 24 | 2 | **1.0e-05** |
+| " | @10 | 15 | 3 | **0.00754** |
+| combined packed vs packing-fix-only packed (113) | @10 | 28 | 2 | **8.68e-07** |
+| " | @5 | 51 | 3 | **2.92e-12** |
+| combined packed vs original packed (91) | @10 | 49 | 1 | **9.06e-14** |
+| " | @5 | 53 | 3 | **8.14e-13** |
+| combined packed vs retrieval-fix-only packed (97) | @10 | 43 | 1 | **5.12e-12** |
+
+**Fused→packed gap: 34 questions at k=10** (173 → 139, 0.9611 → 0.7722, −0.1889)
+and 40 at k=5. That is the remaining packing loss and the size of the next
+target. Its composition: 30 render losses (`not_in_dropped_items` with the gold
+unit in a packed slot — the defect §6 of the packing build log quantified and
+deliberately did not fix), 4 `budget`, 3 `rerank` (all at fused rank ≥ 11, i.e.
+genuinely below the cut), plus 4 `absent_from_pool` policy drops.
+
+**The fixes are super-additive, not merely additive.** Full 2×2 on packed hits
+of 180 — neither 91, packing-only 113 (+22), retrieval-only 97 (+6), both
+**139** (+48). Additive prediction was 119; the interaction term is **+20
+questions at k=10** and **+33 at k=5**. Mechanism: better ranking supplies more
+top-10 golds *and* the packer no longer lets rank-11–64 candidates evict them —
+each fix converts questions the other one alone could not. Retrieval-only packed
+gained just 6 because the old packer discarded the ranking win (79 in-pool
+golds unpacked, 44 of them `rerank`-evicted); with the packer fixed the same
+retrieval gain lands. Fused is unchanged by the packing fix (173 in both, 147
+in both unfixed arms), which is the check that no stage bled into the other.
+
+Cross-branch pairing is licensed by evidence, not assumption: the unfixed
+baseline was executed independently in two worktrees and all 180 questions agree
+on `hit_at_5`/`hit_at_10`/`gold_fused_rank`/`gold_in_pool`/`packed_size`/
+`gold_drop_reason`/`bucket`; only `track_r_064`'s `pool_size` differs (131 vs
+120), with the same outcome.
+
+**Not production-representative, and not a claim.** The bank is lexically biased
+toward its targets (question→target token coverage 0.396 vs 0.094 to a random
+non-target in the same attempt; 105/180 questions narrow to exactly one event),
+and a third-party measurement puts BM25 at R@10 ~18 on genuine NL→code queries.
+These are numbers on this instrument. No checkbox, default, cutover, deployment
+or SOTA claim moves; the Phase 1r pin collision (`service.rs` under the v5
+census, `gate_runtime.py` under the SWE-ContextBench rehearsal) is unchanged and
+still an owner decision.
+
+Artifact: `docs/build-log/artifacts/track-r/track_r_phase1e_combined_fixes.json`
+(committed). Per-question evidence and the three analyzer outputs under
+`…/track-r/phase1e/` are gitignored under the same rule as `phase1/`, `phase1d/`
+and `phase1r/` — they carry third-party event bodies.

@@ -1,0 +1,194 @@
+{
+ "schema": "memphant.eval.track-r-combined-fixes.v1",
+ "question": "combined effect of the BM25/code-aware retrieval fix and the packing rank-order fix, measured together",
+ "paid_api_spend_usd": 0,
+ "golden_path": "benchmarks/data/track_r_repo_memory_golden.jsonl",
+ "golden_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d",
+ "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+ "n": 180,
+ "combined_run": {
+  "git_head": "a6d1d9b0bf950eba47bd4154b635c6d715947a3d",
+  "tracked_dirty": true,
+  "dirty_paths": [
+   ".gitignore (phase1e ignore rule only; no code change)"
+  ],
+  "lexical_scorer": "bm25-code",
+  "embed_model": "off",
+  "recall_mode": "fast",
+  "k": 10,
+  "budget_tokens": 8192,
+  "pack_render_cap": null,
+  "compiled_corpus": {
+   "episodes": 64056,
+   "episodic_units": 64014,
+   "distinct_source_episodes": 64014,
+   "missing_source_episodes": 42,
+   "done_jobs": 64056,
+   "dead_jobs": 0,
+   "pending_jobs": 0,
+   "deduplicated_episodes": 42
+  },
+  "timings_seconds": {
+   "ingest_seconds": 599.9,
+   "compile_seconds": 668.2,
+   "recall_seconds": 674.7,
+   "events_per_ingest_second": 106.8
+  },
+  "provenance_path": "docs/build-log/artifacts/track-r/phase1e/combined-bm25code-provenance.json (gitignored)",
+  "two_stage": {
+   "fused_recall_at_5": 0.95,
+   "fused_recall_at_10": 0.9611111111111111,
+   "packed_recall_at_5": 0.7277777777777777,
+   "packed_recall_at_10": 0.7722222222222223,
+   "fused_to_packed_gap_at_5_questions": 40,
+   "fused_to_packed_gap_at_10_questions": 34,
+   "fused_to_packed_gap_at_10_recall": 0.18888888888888888
+  },
+  "pack_drop_summary": {
+   "buckets": {
+    "absent_from_pool": 4,
+    "hit": 139,
+    "in_pool_unpacked": 37
+   },
+   "in_pool_unpacked": 37,
+   "in_pool_unpacked_gold_drop_reasons": {
+    "budget": 4,
+    "not_in_dropped_items": 30,
+    "rerank": 3
+   },
+   "budget_share_of_in_pool_unpacked": 0.10810810810810811,
+   "in_pool_unpacked_with_gold_unit_packed": 30,
+   "gold_rank_within_k_unpacked": 34,
+   "packed_items_total": 1760,
+   "packed_items_mean": 9.777777777777779,
+   "packed_item_chars_total": 3329242,
+   "packed_item_chars_mean": 1891.6147727272728,
+   "packed_item_chars_max": 7362
+  }
+ },
+ "scoped_bm25_control": {
+  "provenance_path": "/Users/sidsharma/Memphant-af-retrieval/docs/build-log/artifacts/track-r/phase1r/bm25-scoped-provenance.json (gitignored, reused unchanged)",
+  "recall_at_5": 0.8277777777777777,
+  "recall_at_10": 0.8944444444444445
+ },
+ "paired_tests": {
+  "combined_fused_vs_scoped_bm25_control": {
+   "at_5": {
+    "both": 147,
+    "arm_only": 24,
+    "control_only": 2,
+    "neither": 7,
+    "mcnemar_exact_p": 1.049041748046875e-05
+   },
+   "at_10": {
+    "both": 158,
+    "arm_only": 15,
+    "control_only": 3,
+    "neither": 4,
+    "mcnemar_exact_p": 0.007537841796875
+   }
+  },
+  "combined_packed_vs_packing_fix_only_packed": {
+   "paired_at_5": {
+    "after_only": 51,
+    "before_only": 3,
+    "both": 80,
+    "mcnemar_exact_p": 2.9187763317395365e-12,
+    "n": 180,
+    "neither": 46
+   },
+   "paired_at_10": {
+    "after_only": 28,
+    "before_only": 2,
+    "both": 111,
+    "mcnemar_exact_p": 8.67992639541626e-07,
+    "n": 180,
+    "neither": 39
+   }
+  },
+  "combined_packed_vs_original_packed": {
+   "paired_at_5": {
+    "after_only": 53,
+    "before_only": 3,
+    "both": 78,
+    "mcnemar_exact_p": 8.137102103233929e-13,
+    "n": 180,
+    "neither": 46
+   },
+   "paired_at_10": {
+    "after_only": 49,
+    "before_only": 1,
+    "both": 90,
+    "mcnemar_exact_p": 9.059419880941277e-14,
+    "n": 180,
+    "neither": 40
+   }
+  },
+  "combined_packed_vs_retrieval_fix_only_packed": {
+   "paired_at_5": {
+    "after_only": 38,
+    "before_only": 3,
+    "both": 93,
+    "mcnemar_exact_p": 1.0479197953827679e-08,
+    "n": 180,
+    "neither": 46
+   },
+   "paired_at_10": {
+    "after_only": 43,
+    "before_only": 1,
+    "both": 96,
+    "mcnemar_exact_p": 5.115907697472721e-12,
+    "n": 180,
+    "neither": 40
+   }
+  }
+ },
+ "factorial_2x2_hits_of_180": {
+  "arms": {
+   "neither_fix": {
+    "packed_hits_at_5": 81,
+    "packed_hits_at_10": 91,
+    "fused_hits_at_5": 113,
+    "fused_hits_at_10": 147,
+    "git_head": "cc69a608f7b4275f02988cabade25a52bf3010ad",
+    "label": "track-r-phase1d-baseline"
+   },
+   "packing_fix_only": {
+    "packed_hits_at_5": 83,
+    "packed_hits_at_10": 113,
+    "fused_hits_at_5": 113,
+    "fused_hits_at_10": 147,
+    "git_head": "cc69a608f7b4275f02988cabade25a52bf3010ad",
+    "label": "track-r-phase1d-rankorder"
+   },
+   "retrieval_fix_only": {
+    "packed_hits_at_5": 96,
+    "packed_hits_at_10": 97,
+    "fused_hits_at_5": 171,
+    "fused_hits_at_10": 173,
+    "git_head": "d60ba6d02fab8de2721c58cd4bab130e26cce844",
+    "label": "armAB-bm25code"
+   },
+   "both_fixes": {
+    "packed_hits_at_5": 131,
+    "packed_hits_at_10": 139,
+    "fused_hits_at_5": 171,
+    "fused_hits_at_10": 173,
+    "git_head": "a6d1d9b0bf950eba47bd4154b635c6d715947a3d",
+    "label": "track-r-phase1e-combined"
+   }
+  },
+  "interaction_packed_at_10_questions": 20,
+  "interaction_packed_at_5_questions": 33,
+  "interaction_fused_at_10_questions": 0,
+  "reading": "positive interaction = the two fixes together beat the sum of their separate gains (super-additive)"
+ },
+ "baseline_reuse_check": {
+  "note": "the unfixed baseline was executed independently in two worktrees (af-packing/baseline, af-retrieval/arm0-overlap); all 180 questions agree on hit_at_5, hit_at_10, gold_fused_rank, gold_in_pool, packed_size, gold_drop_reason and bucket. One question (track_r_064) differs in pool_size only (131 vs 120), with the same outcome. This licenses pairing across branches."
+ },
+ "caveats": [
+  "This bank is lexically biased toward its targets (question->target token coverage 0.396 vs 0.094 to a random non-target in the same attempt; 105/180 questions narrow to exactly one event).",
+  "A third-party measurement puts BM25 at R@10 ~18 on genuine NL->code queries. Nothing here is production-representative.",
+  "Retrieval-only stage; no reader, no judge, no paid model call. No checkbox, default, cutover, deployment or SOTA claim moves."
+ ]
+}
