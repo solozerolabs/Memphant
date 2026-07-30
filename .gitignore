@@ -55,6 +55,13 @@ benchmarks/data/coding_events_corpus.jsonl
 benchmarks/data/coding_events_corpus.stats.json
 benchmarks/data/coding_events_golden.jsonl
 !benchmarks/data/coding_events_golden.lock.json
+# Track U (user-learning bank) derives from the owner's PERSONAL agent memory.
+# Bodies and the authored probe layer (which paraphrases them) are never
+# committed — only the lock. Binding rules:
+# docs/build-log/2026-07-30-track-u-privacy-prereg.md
+benchmarks/data/user_lane_probes.jsonl
+benchmarks/data/user_lane_golden.jsonl
+!benchmarks/data/user_lane_golden.lock.json
 .fastembed_cache/
 # Reader-lane evidence packs embed raw LongMemEval session text (the raw
 # dataset stays out of the repo); the scored reader-*.json reports are committed.

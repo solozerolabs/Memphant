@@ -181,3 +181,20 @@
   `python3 scripts/code_lane_run_memphant.py --corpus <bank>/corpus.jsonl --golden <bank>/goldens.jsonl --out-evidence <out>/evidence-cap1200.jsonl --out-provenance <out>/provenance-cap1200.json --embed-model off --mode fast --k 10 --budget-tokens 8192 --label p1b-cap1200 --port 39466 --pack-render-cap 1200 --server-bin target/release/memphant-server --worker-bin target/release/memphant-worker --cli-bin target/release/memphant-cli`
   (drop `--pack-render-cap 1200` and change label/port/outputs for the cap-OFF arm)
 - Not pushed
+## Phase 1a-U — Track U user-learning golden bank, first slice
+
+- Status: completed. $0 paid spend; no network, provider or database call.
+- Privacy preregistration (committed BEFORE extraction): `docs/build-log/2026-07-30-track-u-privacy-prereg.md` (`10ea21aa`)
+- Extractor: `scripts/user_lane_extract.py`; tests: `tests/test_user_lane_extract.py` (26 passed)
+- Committed lock: `benchmarks/data/user_lane_golden.lock.json` (`b72d2082`)
+- Gitignored (never committed): `benchmarks/data/user_lane_golden.jsonl` (bodies), `benchmarks/data/user_lane_probes.jsonl` (authored probe layer — it paraphrases private memory, so it is treated as a body)
+- Bank: 51 goldens, sha256 `e29821b2…`, from 60 candidates (9 rejected)
+- Axis strata: correction_retention 27 / staleness 12 / scope_contradiction 12; the four deferred axes are not built
+- Category strata: procedural 34 / semantic 10 / guardrail_exception 5 / identity 2 — within 1.7pp of the measured 65/20/10/5 power-user distribution
+- Rejects by reason: content_sensitive_excluded 2, source_conflict_unresolved 2, end_behavior_not_checkable 2, no_incident_in_bundle 1, duplicate_of_accepted_golden 1, bundle_incomplete 1 (that last one fired mechanically against real data, so the bundle gate is exercised outside its fixture)
+- Source counts pinned at extraction: 90 `feedback_*` files across six projects (the plan's "~60" was stale), 61 Syndai `LEARNINGS.md` entries, 26 Syndai + 25 MemPhant `AGENTS.md` rule bullets
+- Every golden records the observable correct behavior and the forbidden behavior, not only a retrieval target, so a future scorer grades end behavior; correction goldens are full bundles (rule + incident + how-to-apply) by enforced check
+- Scope goldens are mirror pairs with identical temptations (worktree policy, ship path, CI polling, model-billing, database project, schema ownership), so only scope-keyed retrieval wins both sides
+- Reproduce / verify: `cd /Users/sidsharma/Memphant-af-track-u && PYTHONPATH=. python3 scripts/user_lane_extract.py --check` (exit 0 = bank still reproduces the committed lock; drift or a parse break exits 1). Re-cut with the same command minus `--check`.
+- Sources were opened read-only; nothing was written under `~/.claude/projects/` or in `/Users/sidsharma/Syndai-memphant-ref`
+- Pre-existing unrelated failure in the full suite: `tests/test_public_launch_gate.py::test_public_sota_claim_policy_is_explicit_and_bare_claims_are_guarded` (shells out to `npm test`), reproduced on a clean stash
