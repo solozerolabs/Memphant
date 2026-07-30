@@ -1,5 +1,13 @@
 # Packing technique screen — 2026-07-24
 
+> **AMENDED 2026-07-30** — `docs/build-log/2026-07-30-packing-gate-amendment.md`
+> rescinds the exact-abstention sentinel leg below as a decision gate for
+> reader-visible levers (it is a no-model retrieval proxy, and the LME `_abs`
+> gold answers require the trap content in context), and reclassifies every
+> n ≤ 12 frozen screen here as a non-decisional tripwire. The recorded numbers
+> stand; their decisional authority does not. `pack_render_cap` returns to the
+> queue as undecided — not promoted.
+
 ## Boundary
 
 This is a diagnostic, no-model LongMemEval-S screen. It selects the next

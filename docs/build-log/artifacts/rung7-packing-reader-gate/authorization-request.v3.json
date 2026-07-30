@@ -1,0 +1,151 @@
+{
+  "schema_version": 3,
+  "supersedes": "authorization-request.json",
+  "supersedes_status": "SUPERSEDED_REJECTED_BY_2026_07_24_FREE_EXACT_ABSTENTION_GATE",
+  "reissue_basis": "docs/build-log/2026-07-30-packing-gate-amendment.md",
+  "plan": "docs/superpowers/plans/2026-07-27-accuracy-first-program.md",
+  "status": "ISSUED_UNAUTHORIZED",
+  "authorization": null,
+  "paid_calls_executed": 0,
+  "settled_cost_usd": "0",
+  "blocking_preconditions": [
+    "Owner signature on this packet (authorization is null).",
+    "Phase 0 landed: the gate amendment is committed.",
+    "Phase 1 kill gates passed: the Track R golden bank met its preregistered bar, and either Phase 1b shows the per-item-cost pathology recurs on code bodies OR a decision-register entry names who valued the chat lane on its own.",
+    "Analysis code committed before unblinding."
+  ],
+  "lever_under_test": {
+    "name": "MEMPHANT_PACK_RENDER_CAP",
+    "arms": [
+      "baseline (cap off)",
+      "cap=1200"
+    ],
+    "construction_time_only": true,
+    "pack_budget_tokens": 8192,
+    "k": 10,
+    "recorded_free_retrieval_result": {
+      "baseline_recall_at_10": 0.6144578313253012,
+      "cap1200_recall_at_10": 0.8433734939759037,
+      "source": "v2 packet free_packaged_rehearsal (unchanged)"
+    }
+  },
+  "frozen_inputs": {
+    "longmemeval_s_development_sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",
+    "baseline_retrieval_sha256": "9bc12884f32e07c56c213f3314b142560a1f6f976bef41750e9d2f45aecb7569",
+    "rendercap1200_retrieval_sha256": "105ea035ebb677ae86355c9108574088fa2131167f09a2ed502e99d4a77673ee",
+    "arms": {
+      "baseline": {
+        "evidence_file": "baseline-evidence.jsonl",
+        "evidence_sha256": "a3ff83622b451c38afa5ca8bf155f3b9c914752f03068a18ba63dabd2c5b4338",
+        "rows": 178,
+        "abstention_rows": 12,
+        "max_row_bytes": 25807,
+        "mean_row_bytes": 24846
+      },
+      "rendercap1200": {
+        "evidence_file": "rendercap1200-evidence.jsonl",
+        "evidence_sha256": "143a245584f4a179ba6b7adf1f1cf7db6a33fd8edcc0bfe4837df10881565a26",
+        "rows": 178,
+        "abstention_rows": 12,
+        "max_row_bytes": 25909,
+        "mean_row_bytes": 25194
+      }
+    }
+  },
+  "pool": {
+    "frozen_rows_per_arm": 178,
+    "burned_rows_per_arm": 60,
+    "burned_rows_evidence_source": "free deterministic `bench-lme --emit-qa` run per arm",
+    "current_exposure_pool": 238,
+    "natural_abstention_rows_frozen_measured": 12,
+    "natural_abstention_rows_pool_total": 17,
+    "scored_rows_pool_238": 221,
+    "abs_variants_to_mint_max": 60,
+    "abs_variants_to_mint_min": 40,
+    "dual_analysis": [
+      "frozen-178 subset (lattice-comparable to the recorded evidence)",
+      "full-238 pool (powered)"
+    ]
+  },
+  "endpoints": {
+    "primary": {
+      "name": "paired McNemar on answer correctness",
+      "rows": 221,
+      "d_min_points": 7,
+      "power_note": "~80% at psi~=0.15; 5pt is undecidable on unsealed material",
+      "pre_commitment": "|delta| < 7pt is recorded as NO FLIP, not as a trend"
+    },
+    "secondary_abstention": {
+      "name": "reader-judged abstention",
+      "definition": "abstain=true AND answer=null",
+      "construct": "answer session withheld, near-miss traps KEPT in the haystack",
+      "rejected_construct": "gold-ablation 'abstain on empty evidence' probes",
+      "rows": "17 natural unsealed + 40-60 minted variants",
+      "blocking": "a net abstention regression blocks promotion regardless of the primary result",
+      "adjudication": "every minted variant adjudicated before freezing"
+    },
+    "two_sided_naming": {
+      "misapplication_rate": "memory applied when it should not be",
+      "appropriate_application_rate": "memory applied when it should be",
+      "reason": "so a suppression win cannot masquerade as an application win"
+    }
+  },
+  "models": {
+    "provider": "OpenRouter",
+    "reader": "openai/gpt-5.6-terra",
+    "reader_reasoning_effort": "medium",
+    "judge": "anthropic/claude-sonnet-5",
+    "judge_profile": "rag-supported-v1",
+    "prompt_version": 3,
+    "max_output_tokens_per_request": 1024,
+    "provider_max_price_usd_per_million": {
+      "prompt": "2.75",
+      "completion": "16.5"
+    },
+    "judge_price_guard": "the runner must refuse to launch if the live judge price exceeds the reader maxima above; the ceiling prices every call, reader and judge alike, at those maxima",
+    "lattice_override": "RECORDED. This lane keeps the terra/sonnet pair against the standing Sol-finalist judge designation, because the only frozen paired evidence lives on this pair and switching lattices orphans it. Same-lattice discipline holds within the lane, including the confirmation."
+  },
+  "hard_limits": {
+    "prompt_token_bound_per_call": 26000,
+    "widest_measured_frozen_row_bytes": 25909,
+    "reader_calls": 596,
+    "judge_calls": 596,
+    "paired_recheck_calls_worst_case": 298,
+    "minting_calls": 120,
+    "combined_max_logical_calls": 1610,
+    "combined_max_provider_attempts": 1610,
+    "max_usd_per_call": "0.08839600",
+    "combined_max_spend_usd": "142.31756000",
+    "realistic_expected_spend_usd": "30-60",
+    "realistic_basis": "observed $0.02-0.03 per call on this lattice",
+    "derivation": "One-byte-per-prompt-token liability at the widest measured frozen evidence row (25909 bytes, rounded to 26000) plus 1024 completion tokens, priced at the provider maxima, times the enumerated call budget. Provider attempts equal logical calls, so retries cannot expand the authorized attempt count. Derived by scripts/derive_phase2_packet.py; rerun to verify."
+  },
+  "guardrails": {
+    "latency": "promotion re-runs the $0 SLO harness (p50<200ms / p95<500ms). The cap is construction-time-only at an identical 8192 budget, so neutrality is expected -- but assumed-neutral is not preregistered-neutral.",
+    "reader_tokens": "record the reader-token delta beside the accuracy endpoint",
+    "scratch_db_only": true,
+    "no_gold_or_answer_session_ids_in_prompts": true
+  },
+  "promotion_requirements": {
+    "confirmation": {
+      "set": "sealed-259",
+      "spend_policy": "spent exactly once; exposure recorded immediately after",
+      "claim_language": "answer-session disjoint",
+      "forbidden_claim": "fully held out (strict all-haystack-disjoint count is 0)"
+    },
+    "robustness_arm": {
+      "reader": "claude-opus-5",
+      "rationale": "the model Syndai's Claude Code executor serves as its workhorse default (backend/src/features/coding/harness_models.py:34)",
+      "lattice": "frozen as its own lattice",
+      "bar": "direction agreement, not significance",
+      "reason": "a default that only wins on the eval-lattice reader is fragile and unrepresentative of deployed traffic",
+      "pricing": "pinned at authorization time; not priced in the ceiling above, which covers the screening run only"
+    }
+  },
+  "non_claims": [
+    "This packet authorizes nothing; authorization is null.",
+    "Re-issuing the packet does not promote pack_render_cap on any lane.",
+    "The rescinded free exact-abstention sentinel is not evidence for or against the lever.",
+    "No checkbox, default, cutover, deployment, or SOTA claim moves on issuance."
+  ]
+}
