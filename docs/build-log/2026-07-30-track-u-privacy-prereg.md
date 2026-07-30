@@ -99,3 +99,28 @@ reject reason (`content_sensitive_excluded`) in the lock, not silently dropped.
 $0 paid spend. Adjudication runs on subscription-model agent calls. The extractor
 makes no network call and no provider call at all; it is pure local parsing plus
 validation, so a rerun is free and byte-deterministic.
+
+## Durability of the gitignored inputs (added 2026-07-30, integration)
+
+The authored probe layer is **human-authored and irreplaceable**: the extractor
+is deterministic, but it derives the bank *from* the probes, so the lock verifies
+nothing without them. Gitignored-and-single-copy is exactly how this repo
+previously lost the ~64k-event local code-lane corpus, so the probe layer and the
+bank are mirrored outside every worktree at `~/.memphant-private/track-u/`
+(outside any git repository, never committed, never published):
+
+| file | sha256 |
+|---|---|
+| `user_lane_probes.jsonl` | `dff3b42903121a8a40998b5bf172e3b827f5ca0a8520cfbc11599465b1ef1a6a` |
+| `user_lane_golden.jsonl` | `e29821b24aff753a3bd5f58653f65044851485d1a7690d1081dedcb1a5200b87` |
+| `user_lane_golden.lock.json` | `13e32d160eda5dfeeae5be6ce0229401285265a79c99314df9a72bb3a99a6c70` |
+
+The bank hash matches `benchmarks/data/user_lane_golden.lock.json`, so the mirror
+is verifiable against the committed lock without exposing any content. Recording
+the hashes here keeps the committed record sufficient to detect tampering or
+drift in the mirror; it does not make the private material recoverable from the
+repository, which is the intent.
+
+This does not weaken the privacy posture: the mirror is local-disk-only, and the
+external-claim rule above is unchanged — any published number still requires the
+paraphrase-scrubbed or synthetic public variant, re-adjudicated to the same bar.
