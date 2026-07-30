@@ -1,0 +1,87 @@
+{
+  "schema": "memphant.eval.lme-s-lexical-scorer-nonregression.v1",
+  "paid_api_spend_usd": 0,
+  "note": "LME-S retrieval-only chat-lane control for the code-lane MEMPHANT_LEXICAL_SCORER lever; abstention questions carry null hits and are excluded, exactly as bench_lme's own recall does",
+  "arms": {
+    "lme_s_n30_seed1": {
+      "sampled_n": 30,
+      "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "seed": 1,
+      "embed_model": "small",
+      "k": 10,
+      "granularity": "session",
+      "overlap_report": "docs/build-log/artifacts/track-r/phase1r/lme-s-n30-overlap.json",
+      "bm25_code_report": "docs/build-log/artifacts/track-r/phase1r/lme-s-n30-bm25code.json",
+      "lexical_scorer_recorded": [
+        null,
+        null
+      ],
+      "paired": {
+        "at_5": {
+          "graded_n": 30,
+          "overlap_hits": 17,
+          "bm25_code_hits": 18,
+          "overlap_recall": 0.5666666666666667,
+          "bm25_code_recall": 0.6,
+          "both": 16,
+          "arm_only": 2,
+          "control_only": 1,
+          "neither": 11,
+          "mcnemar_exact_p": 1.0
+        },
+        "at_10": {
+          "graded_n": 30,
+          "overlap_hits": 17,
+          "bm25_code_hits": 18,
+          "overlap_recall": 0.5666666666666667,
+          "bm25_code_recall": 0.6,
+          "both": 16,
+          "arm_only": 2,
+          "control_only": 1,
+          "neither": 11,
+          "mcnemar_exact_p": 1.0
+        }
+      }
+    },
+    "lme_s_n120_seed1": {
+      "sampled_n": 120,
+      "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "seed": 1,
+      "embed_model": "small",
+      "k": 10,
+      "granularity": "session",
+      "overlap_report": "docs/build-log/artifacts/track-r/phase1r/lme-s-n120-overlap.json",
+      "bm25_code_report": "docs/build-log/artifacts/track-r/phase1r/lme-s-n120-bm25code.json",
+      "lexical_scorer_recorded": [
+        "overlap",
+        "bm25-code"
+      ],
+      "paired": {
+        "at_5": {
+          "graded_n": 111,
+          "overlap_hits": 66,
+          "bm25_code_hits": 75,
+          "overlap_recall": 0.5945945945945946,
+          "bm25_code_recall": 0.6756756756756757,
+          "both": 65,
+          "arm_only": 10,
+          "control_only": 1,
+          "neither": 35,
+          "mcnemar_exact_p": 0.01171875
+        },
+        "at_10": {
+          "graded_n": 111,
+          "overlap_hits": 66,
+          "bm25_code_hits": 75,
+          "overlap_recall": 0.5945945945945946,
+          "bm25_code_recall": 0.6756756756756757,
+          "both": 65,
+          "arm_only": 10,
+          "control_only": 1,
+          "neither": 35,
+          "mcnemar_exact_p": 0.01171875
+        }
+      }
+    }
+  }
+}
