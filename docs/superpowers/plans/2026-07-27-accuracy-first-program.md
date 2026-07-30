@@ -2,6 +2,37 @@
 
 Date: 2026-07-27
 Status: APPROVED FOR EXECUTION (tri-lens final review passed; does not touch STATUS.md checkboxes)
+
+> **EXECUTION UPDATE 2026-07-30 — Phases 0 and 1 are DONE, $0, and Phase 1's kill
+> gate FIRED.** Evidence: `docs/build-log/2026-07-30-packing-gate-amendment.md`
+> and `docs/build-log/2026-07-30-phase1-golden-banks-and-retrieval-probe.md`
+> (branch `accuracy-first`, unpushed).
+> - **Phase 0 landed.** The free exact-abstention gate is rescinded, n≤12 screens
+>   are tripwires, and the packet is re-issued as schema_version 3 — still
+>   `authorization: null`. Its ceiling is now **derived** ($142.31756000 over
+>   1,610 calls, via `scripts/derive_phase2_packet.py --check`); the ~$175 below
+>   was loose.
+> - **Phase 1 banks landed.** Track R = 180 goldens, **14/15 bar checks**
+>   (`with_distractors_ge_50pct` misses at 41.7% — a stronger-than-assumed
+>   identification gate, not softness; threshold is an open owner decision).
+>   Track U = 51 goldens on the three slice-1 axes. **Correction to §Phase 1a-U
+>   below: `feedback_*` files number 90, not "~60 (verified count)".**
+> - **Phase 1b is a valid null.** The cap provably ran and moved nothing, and the
+>   chat-lane Budget pathology does not recur on code bodies (binding constraint
+>   is the k=10 slot limit). Per the conditional in §Phase 2, **Phase 2 drops in
+>   priority**.
+> - **Phase 1c: BM25 beats MemPhant** on one stage and one attempt-scoped
+>   haystack — r@10 0.8944 vs 0.8167 (McNemar exact p=0.0436), r@5 0.8278 vs
+>   0.6278 (p=0.00001). So **ownership question (d) defaults to "Syndai keeps its
+>   tables until the substrate wins"** and the roadmap pivots to closing the
+>   measured gap. An earlier 0.506-vs-0.806 figure is **void** (packing statistic
+>   vs retrieval statistic) and must not be cited.
+> - **Therefore: do NOT launch Phase 3 as designed** (§Phase 3's primary
+>   comparison already resolves negatively for $0). The two localized free
+>   targets are a dense-embedding arm (nothing dense has been measured — 1c ran
+>   `--embed-model off`) and the 38% packing displacement of top-10 gold.
+> - Nothing here is publishable: the Track R spot-check is
+>   `emitted_pending_owner_review`.
 Method: 7-lens research fan-out (library docs, 2026 papers/blogs, OSS repos, codebase,
 tests/datasets, experimental design, platform surfaces) + user-learning investigation
 (Tacitry, power-user corpus census, 2026 user-voice research) + adversarial
