@@ -85,6 +85,60 @@ def test_retrieval_query_is_required_and_cannot_leak_answer(clr):
         clr.retrieval_query(golden)
 
 
+def test_retrieval_query_falls_back_to_question_and_still_guards_leaks(clr):
+    """Track R goldens have no separate ``retrieval_query``: the question IS
+    the query, exactly as the BM25 control searches it. The gold-leak guard
+    still applies to the fallback."""
+    golden = _golden("a1")
+    golden.update({"question": "which conditional gates the patch?", "gold_answer": "if x:"})
+    assert clr.retrieval_query(golden) == "which conditional gates the patch?"
+
+    golden["question"] = "which line — if x: — gates it?"
+    with pytest.raises(RuntimeError, match="leaks gold answer"):
+        clr.retrieval_query(golden)
+
+
+def test_corpus_contract_accepts_either_committed_lock_key(clr):
+    block = {"corpus_sha256": "a" * 64, "sampled_attempts": 1}
+    assert clr.corpus_contract({"extraction": block}) is block
+    assert clr.corpus_contract({"corpus": block}) is block
+    with pytest.raises(RuntimeError, match="missing extraction corpus contract"):
+        clr.corpus_contract({"sha256": "x"})
+
+
+def test_verify_input_contract_accepts_a_lock_without_corpus_bytes(clr, tmp_path):
+    """The Track R lock records ``corpus`` (not ``extraction``) and no
+    ``corpus_bytes``; the sha256 is the load-bearing witness."""
+    import hashlib
+
+    corpus = tmp_path / "corpus.jsonl"
+    golden = tmp_path / "golden.jsonl"
+    corpus_row = _row("a1")
+    corpus_row["events"] = [
+        {"sequence": 7, "event_id": "event-7", "role": "assistant", "text": "exact span"}
+    ]
+    golden_row = _golden("a1")
+    golden_row["provenance"][0].update(
+        {"event_sequence": 7, "event_id": "event-7", "char_start": 0, "char_end": 10,
+         "span": "exact span"}
+    )
+    corpus.write_text(json.dumps(corpus_row) + "\n")
+    golden.write_text(json.dumps(golden_row) + "\n")
+    lock = {
+        "sha256": hashlib.sha256(golden.read_bytes()).hexdigest(),
+        "bytes": golden.stat().st_size,
+        "count": 1,
+        "corpus": {
+            "corpus_sha256": hashlib.sha256(corpus.read_bytes()).hexdigest(),
+            "sampled_attempts": 1,
+        },
+    }
+
+    corpus_rows, goldens = clr.verify_input_contract(corpus, golden, lock)
+    assert corpus_rows == [corpus_row]
+    assert goldens == [golden_row]
+
+
 def test_deep_recall_rejects_embeddings_off(clr):
     clr.validate_recall_configuration("off", "fast")
     clr.validate_recall_configuration("small", "deep")
@@ -439,6 +493,24 @@ def test_pack_drop_diagnosis_records_the_trace_drop_reason_for_unpacked_gold(clr
     assert summary["buckets"] == {"in_pool_unpacked": 1}
     assert summary["in_pool_unpacked_gold_drop_reasons"] == {"budget": 1}
     assert summary["budget_share_of_in_pool_unpacked"] == 1.0
+
+
+def test_pack_drop_records_render_sizes_so_an_inert_cap_arm_is_visible(clr):
+    """Hypothesis-B witness: the packed item count and per-item render sizes
+    must reach the artifact, so "the cap did not run on this corpus" is
+    distinguishable from "the cap did not help"."""
+    row = clr.pack_drop_diagnosis(
+        _P1B_GOLDEN, _P1B_TRACE, _P1B_UNIT_BODIES, ["abc", "de"], 10
+    )
+
+    assert row["packed_body_chars"] == [3, 2]
+
+    summary = clr.pack_drop_summary([{**row, "question_id": "q1"}])
+    assert summary["packed_items_total"] == 2
+    assert summary["packed_items_mean"] == 2.0
+    assert summary["packed_item_chars_total"] == 5
+    assert summary["packed_item_chars_mean"] == 2.5
+    assert summary["packed_item_chars_max"] == 3
 
 
 def test_pack_drop_diagnosis_separates_hits_from_pool_absence(clr):

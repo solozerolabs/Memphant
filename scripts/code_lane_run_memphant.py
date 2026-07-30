@@ -84,6 +84,21 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def corpus_contract(lock: dict) -> dict:
+    """The golden lock's corpus block, under either committed key name.
+
+    The R0/v3 code-lane miner wrote it as ``extraction``; the Track R miner
+    writes it as ``corpus``. Both carry the same load-bearing fields
+    (``corpus_sha256``, ``sampled_attempts``), so this normalizes the key
+    instead of duplicating the contract check per bank.
+    """
+    for key in ("extraction", "corpus"):
+        block = lock.get(key)
+        if isinstance(block, dict):
+            return block
+    raise RuntimeError("golden lock missing extraction corpus contract")
+
+
 # --- pure functions (unit-tested in tests/test_code_lane_run_memphant.py) ---
 
 
@@ -145,13 +160,13 @@ def verify_input_contract(
     """
     corpus_bytes = corpus_path.read_bytes()
     golden_bytes = golden_path.read_bytes()
-    extraction = lock.get("extraction")
-    if not isinstance(extraction, dict):
-        raise RuntimeError("golden lock missing extraction corpus contract")
+    extraction = corpus_contract(lock)
     corpus_sha = gc.sha256_hex(corpus_bytes)
     if corpus_sha != extraction.get("corpus_sha256"):
         raise RuntimeError("corpus sha256 mismatch")
-    if len(corpus_bytes) != extraction.get("corpus_bytes"):
+    # `corpus_bytes` is optional: it is a redundant witness of the sha256 above,
+    # and the Track R lock does not record it.
+    if "corpus_bytes" in extraction and len(corpus_bytes) != extraction["corpus_bytes"]:
         raise RuntimeError("corpus byte count mismatch")
     golden_sha = gc.sha256_hex(golden_bytes)
     if golden_sha != lock.get("sha256"):
@@ -247,8 +262,15 @@ def control_input_readiness(corpus_rows: list[dict], goldens: list[dict]) -> dic
 
 
 def retrieval_query(golden: dict) -> str:
-    """Return the source-derived query while keeping the grader prompt immutable."""
-    query = golden.get("retrieval_query")
+    """Return the source-derived query while keeping the grader prompt immutable.
+
+    Banks that mine a separate ``retrieval_query`` (R0/v3) use it. Banks whose
+    ``question`` IS the retrieval query — Track R, whose preregistered bar
+    already bounds question↔answer lexical overlap and whose BM25 control
+    searches on ``question`` — fall back to it, so both arms of the probe query
+    the identical string. The gold-leak guard below applies either way.
+    """
+    query = golden.get("retrieval_query") or golden.get("question")
     if not isinstance(query, str) or not query.strip():
         raise RuntimeError(f"retrieval query missing: {golden.get('question_id')}")
     answer = golden.get("gold_answer")
@@ -335,6 +357,12 @@ def pack_drop_diagnosis(
         ),
         "dropped_items": len(drops),
         "drop_reasons": dict(sorted(reason_histogram.items())),
+        # Phase 1b hypothesis-B witness: the render cap only compacts
+        # chunk-rendered items, so before ANY retrieval delta is read the packed
+        # item count and per-item render sizes must be shown to differ between
+        # the cap-OFF and cap-N arms. Identical values ⇒ the cap did not run on
+        # this corpus (a null about the run), NOT that the cap does not help.
+        "packed_body_chars": [len(body) for body in packed_bodies],
     }
 
 
@@ -351,6 +379,8 @@ def pack_drop_summary(rows: list[dict]) -> dict:
     for row in unpacked:
         key = row["gold_drop_reason"] or "not_in_dropped_items"
         reasons[key] = reasons.get(key, 0) + 1
+    packed_counts = [row["packed_size"] for row in rows]
+    item_chars = [chars for row in rows for chars in row.get("packed_body_chars", [])]
     return {
         "buckets": dict(sorted(buckets.items())),
         "in_pool_unpacked": len(unpacked),
@@ -358,6 +388,12 @@ def pack_drop_summary(rows: list[dict]) -> dict:
         "budget_share_of_in_pool_unpacked": (
             reasons.get("budget", 0) / len(unpacked) if unpacked else None
         ),
+        # Hypothesis-B arm witness (see pack_drop_diagnosis).
+        "packed_items_total": sum(packed_counts),
+        "packed_items_mean": (sum(packed_counts) / len(rows) if rows else None),
+        "packed_item_chars_total": sum(item_chars),
+        "packed_item_chars_mean": (sum(item_chars) / len(item_chars) if item_chars else None),
+        "packed_item_chars_max": (max(item_chars) if item_chars else None),
     }
 
 
@@ -802,7 +838,7 @@ def main() -> int:
             "corpus_attempts": len(corpus_rows),
             "limit_attempts": args.limit_attempts,
             "golden_sha256": golden_sha,
-            "corpus_sha256": lock["extraction"]["corpus_sha256"],
+            "corpus_sha256": corpus_contract(lock)["corpus_sha256"],
             "golden_lock_sha256": sha256_file(lock_path),
             "golden_count": n,
             "runtime_identity": {

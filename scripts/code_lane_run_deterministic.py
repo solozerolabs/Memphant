@@ -113,7 +113,7 @@ def main() -> int:
         "mechanism": "BM25 over one immutable raw source-event document",
         "generated_memory": False,
         "outcome_feedback": False,
-        "corpus_sha256": lock["extraction"]["corpus_sha256"],
+        "corpus_sha256": memphant_runner.corpus_contract(lock)["corpus_sha256"],
         "golden_sha256": lock["sha256"],
         "document_count": len(documents),
         "golden_count": count,
