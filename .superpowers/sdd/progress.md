@@ -299,3 +299,122 @@ python3 scripts/track_r_phase1_summary.py \
 
 - Instrument changes were three small seams, not a new instrument: `corpus_contract()` accepts the golden lock's corpus block under either committed key (`extraction` from the v3 miner, `corpus` from the Track R miner) with `corpus_bytes` optional since sha256 already witnesses it; `retrieval_query()` falls back to the golden's `question` so both arms query the identical string (the gold-leak guard still fires, and all 180 pass it); `pack_drop_diagnosis`/`pack_drop_summary` additionally record packed-item counts and per-item render sizes so an inert cap arm can never be misread as an ineffective one
 - Runnable check: `python3 -m pytest tests/test_code_lane_run_memphant.py tests/test_track_r_phase1_summary.py -q` -> 36 passed (6 new cases: the query fallback + its leak guard, the lock-key normalization, a lock without `corpus_bytes`, the render-size witness, the stage decomposition, and both readings of the hypothesis-B witness)
+
+## 2026-07-30 — Phase 1c: the scoped-haystack arm (Track R, executed, $0)
+
+The three Phase 1b/1c arms were compared across two constructs at once, in
+opposite directions, so neither the 0.8056-vs-0.5056 gap nor its retraction
+could be read off them:
+
+1. **Stage.** BM25's `hit_at_10` was a plain ranked top-10; MemPhant's was the
+   10 items that survived packing (`packed_size` ∈ {0, 10}).
+2. **Haystack.** BM25 ranked all 64,055 corpus events; MemPhant's candidate pool
+   never leaves the one coding attempt its recall context is bound to.
+
+This entry removes both. No new MemPhant arm was run: the ranked stage is read
+off the committed per-question provenance.
+
+### MemPhant's actual scoping rule (determined from the runner, then verified)
+
+`code_lane_run_memphant.bind_attempt_context()` binds
+`scope_ref`/`actor_ref`/`agent_node_ref` = `code-lane:*:{attempt_id}` (subject =
+`run_id`), and the evaluation loop recalls through
+`evaluation_contexts[golden["provenance"][0]["attempt_id"]]`. All 180 goldens
+have single-attempt provenance, so the haystack is exactly one attempt. Empirical
+witness in the artifact, all 180/180:
+
+- scoped BM25 `documents_searched` == that attempt's event count (0 violations)
+- MemPhant `pool_size` <= the attempt's unique contextual-body count
+- MemPhant `pool_size` <= scoped BM25 `documents_searched`, ratio mean 0.953
+- median haystack: scoped BM25 126 events vs MemPhant `pool_size` 124
+
+MemPhant's pool is a *lexically prefiltered subset* (`websearch_to_tsquery` +
+`ts_rank_cd`, `limit 200`, `memphant-store-postgres/src/store.rs:2148`) of the
+same attempt, so the scoped control is given the larger of the two haystacks —
+the residual asymmetry now runs against BM25, not for it. It cannot be closed
+further from committed artifacts: the provenance records pool *counts*, not pool
+unit ids.
+
+### Construct-identity checks
+
+- **Gold predicate: identical.** Both runners grade with
+  `gate_common.provenance_hit`. The fused-rank stage uses
+  `gate_common.contains_gold` via `gold_bearing_units`, the same matcher
+  `provenance_hit` calls per span, and all 180 goldens carry exactly ONE
+  required span (asserted in the comparison, not assumed), so
+  `gold_fused_rank <= k` **is** `provenance_hit` at k.
+- **Query string: identical.** The bank has no `retrieval_query` field, so
+  `retrieval_query()` returns `question` for both arms. The control now calls
+  that seam directly instead of reading `golden["question"]`; the change is
+  numerically inert — the re-run corpus-scope arm is **byte-identical** evidence
+  and an identical per-question hit vector (r@5 0.7611, r@10 0.8056).
+
+### Executed numbers (n=180, paid spend $0, no reader, no judge, no DB)
+
+| arm | haystack | r@5 | r@10 |
+|---|---|---|---|
+| BM25, corpus scope (original control) | 64,055 events | 0.7611 | 0.8056 |
+| **BM25, attempt scope** | median 126 events | **0.8278** | **0.8944** |
+| MemPhant fused ranked top-k | median pool 124 | 0.6278 | 0.8167 |
+| MemPhant packed top-10 (as previously reported) | median pool 124 | 0.4500 | 0.5056 |
+
+Scoped BM25 subsets — with adjudicated distractor (75): r@5 0.7600, r@10 0.8667;
+without (105): r@5 0.8762, r@10 0.9143. By shape: file-symbol-grounding
+0.9000/0.9167, state-churn 0.7167/0.8333, task-resumption 0.8667/0.9333.
+MemPhant fused by shape (r@5/r@10): 0.5667/0.8333, 0.6500/0.7833, 0.6667/0.8333.
+
+Paired, same haystack and same stage (MemPhant fused vs scoped BM25):
+
+| | both | MemPhant only | BM25 only | neither | discordant |
+|---|---|---|---|---|---|
+| @10 | 133 | 14 | 28 | 5 | 42 |
+| @5 | 99 | 14 | 50 | 17 | 64 |
+
+@10 by shape (MemPhant-only / BM25-only): file-symbol-grounding 4/9, state-churn
+8/11, task-resumption 2/8. With distractor 8/9; without 6/19. Reference pairing
+of MemPhant's *packed* top-10 vs scoped BM25 @10: 80 both, 11 MemPhant-only, 81
+BM25-only. Gold rank 1: scoped BM25 91/180, MemPhant fused 59/180. Gold reaches
+MemPhant's pool on 176/180; scoped BM25 fails to surface gold in its top-10 on
+19/180.
+
+Artifacts: `docs/build-log/artifacts/track-r/track_r_phase1c_scoped_bm25_comparison.json`
+(committed); raw arms under the gitignored
+`docs/build-log/artifacts/track-r/phase1/` as
+`bm25-attempt-scoped-{provenance.json,evidence.jsonl}` and
+`bm25-corpus-scoped-{provenance.json,evidence.jsonl}`.
+
+No kill-gate verdict, no ownership call and no bar amendment is recorded here —
+those remain owner decisions.
+
+### Reproduce
+
+```
+cd /Users/sidsharma/Memphant-accuracy-first            # branch accuracy-first
+
+# scoped BM25 arm (~4 s, no DB, no server, no model call)
+python3 scripts/code_lane_run_deterministic.py \
+  --corpus docs/build-log/artifacts/track-r/corpus.jsonl \
+  --golden benchmarks/data/track_r_repo_memory_golden.jsonl \
+  --out-evidence docs/build-log/artifacts/track-r/phase1/bm25-attempt-scoped-evidence.jsonl \
+  --out-provenance docs/build-log/artifacts/track-r/phase1/bm25-attempt-scoped-provenance.json \
+  --k 10 --scope attempt
+
+# corpus-scope arm re-run, the inertness control for the query seam (~15 min)
+python3 scripts/code_lane_run_deterministic.py \
+  --corpus docs/build-log/artifacts/track-r/corpus.jsonl \
+  --golden benchmarks/data/track_r_repo_memory_golden.jsonl \
+  --out-evidence docs/build-log/artifacts/track-r/phase1/bm25-corpus-scoped-evidence.jsonl \
+  --out-provenance docs/build-log/artifacts/track-r/phase1/bm25-corpus-scoped-provenance.json \
+  --k 10 --scope corpus
+
+python3 scripts/track_r_scoped_bm25_compare.py \
+  --golden benchmarks/data/track_r_repo_memory_golden.jsonl \
+  --corpus docs/build-log/artifacts/track-r/corpus.jsonl \
+  --bm25-corpus-scope docs/build-log/artifacts/track-r/phase1/bm25-corpus-scoped-provenance.json \
+  --bm25-attempt-scope docs/build-log/artifacts/track-r/phase1/bm25-attempt-scoped-provenance.json \
+  --memphant docs/build-log/artifacts/track-r/phase1/memphant-capoff-provenance.json \
+  --out docs/build-log/artifacts/track-r/track_r_phase1c_scoped_bm25_comparison.json
+```
+
+- Runnable check: `python3 -m pytest tests/test_code_lane_run_memphant.py tests/test_track_r_phase1_summary.py -q` -> 39 passed (3 new: `--scope attempt` hands BM25 exactly the attempt `bind_attempt_context` binds and `--scope corpus` keeps the corpus; the paired flip counts; the scoping witness flagging a haystack mismatch)
+- Input contract verified before the runs: `corpus_sha256 c008142e...4c9669`, `golden_sha256 6f549daa...2a89b6d`
