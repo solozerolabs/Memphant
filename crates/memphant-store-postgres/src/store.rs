@@ -40,6 +40,53 @@ const TRANSACTION_POOLER_ERROR: &str = "persistent Postgres connections cannot u
 pub const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 8;
 pub const MAX_WORKER_DATABASE_MAX_CONNECTIONS: u32 = 64;
 
+/// Capability roles a served pool assumes on every physical connection. They
+/// are NOLOGIN + NOINHERIT, so the credential in the URL must be a *member*
+/// and the connection must issue an explicit `SET ROLE`.
+pub const APP_ROLE: &str = "memphant_app";
+pub const AUTHN_ROLE: &str = "memphant_authn";
+pub const WORKER_ROLE: &str = "memphant_worker";
+pub const PROVISIONER_ROLE: &str = "memphant_provisioner";
+
+/// Marker the fail-closed RLS refusal carries, so wrapping never buries it.
+const RLS_REFUSAL: &str = "refusing to serve: row-level security would be bypassed";
+
+/// A credential plus the capability role its connections assume.
+#[derive(Clone, Copy)]
+struct PoolSpec<'a> {
+    url: &'a str,
+    role: Option<&'static str>,
+}
+
+impl<'a> PoolSpec<'a> {
+    fn capability(url: &'a str, role: &'static str) -> Self {
+        Self {
+            url,
+            role: Some(role),
+        }
+    }
+
+    fn unrestricted(url: &'a str) -> Self {
+        Self { url, role: None }
+    }
+
+    /// Wrap a connect failure with the role the credential failed to assume —
+    /// the common cause is a login role that was never granted membership.
+    fn context(&self, error: StoreError) -> StoreError {
+        if error.to_string().contains(RLS_REFUSAL) {
+            return error;
+        }
+        match self.role {
+            Some(role) => StoreError::Backend(format!(
+                "could not open a `{role}` pool: {error}. The credential must be a login role \
+                 that is a member of `{role}` (`grant {role} to <login>`); migration \
+                 20260730_004_served_login_roles ships `{role}_login` for exactly this."
+            )),
+            None => error,
+        }
+    }
+}
+
 fn ts(column: &str) -> String {
     format!("to_char({column} at time zone 'utc', {TS_FMT})")
 }
@@ -181,11 +228,16 @@ impl PgStore {
         database_url: &str,
         auth_database_url: &str,
     ) -> Result<Self, StoreError> {
-        Self::connect_pools(database_url, Some(auth_database_url), None).await
+        Self::connect_pools(
+            PoolSpec::capability(database_url, APP_ROLE),
+            Some(PoolSpec::capability(auth_database_url, AUTHN_ROLE)),
+            None,
+        )
+        .await
     }
 
     pub async fn connect_worker(database_url: &str) -> Result<Self, StoreError> {
-        Self::connect_pools(database_url, None, None).await
+        Self::connect_pools(PoolSpec::capability(database_url, WORKER_ROLE), None, None).await
     }
 
     pub async fn connect_worker_with_max_connections(
@@ -197,75 +249,110 @@ impl PgStore {
                 "worker database max connections must be from 1 through {MAX_WORKER_DATABASE_MAX_CONNECTIONS}"
             )));
         }
-        Self::connect_pools_with_database_capacity(database_url, None, None, max_connections).await
+        Self::connect_pools_with_database_capacity(
+            PoolSpec::capability(database_url, WORKER_ROLE),
+            None,
+            None,
+            max_connections,
+        )
+        .await
     }
 
+    /// Operator/admin credential (`memphant admin …`, test provisioning). NOT
+    /// a served path, and deliberately does NOT assume `memphant_provisioner`:
+    /// `memphant admin create-key --subject-id …` calls
+    /// `resolve_memory_context`, which reads `context_binding`/`subject`, and
+    /// the provisioner capability is granted execute on three SECURITY DEFINER
+    /// functions and no table access at all (`permission denied for table
+    /// context_binding`, asserted deliberately in `role_matrix.rs`). Making the
+    /// admin CLI least-privilege needs either a second app-capability
+    /// connection for that read or a narrower provisioning function — a real
+    /// follow-on, not something to buy by widening the grant.
     pub async fn connect_provisioner(database_url: &str) -> Result<Self, StoreError> {
-        Self::connect_pools(database_url, None, Some(database_url)).await
+        Self::connect_pools(
+            PoolSpec::unrestricted(database_url),
+            None,
+            Some(PoolSpec::unrestricted(database_url)),
+        )
+        .await
     }
 
+    /// Single-credential convenience used by contract tests, benches and the
+    /// eval harnesses: one URL plays all three capabilities at once, so no
+    /// capability role can be assumed (they are disjoint by construction) and
+    /// the served-path RLS assertion does not apply. Never a serving path —
+    /// the binaries go through `connect_app`/`connect_worker`.
     pub async fn connect_with_capabilities(
         database_url: &str,
         auth_database_url: &str,
         provision_database_url: &str,
     ) -> Result<Self, StoreError> {
         Self::connect_pools(
-            database_url,
-            Some(auth_database_url),
-            Some(provision_database_url),
+            PoolSpec::unrestricted(database_url),
+            Some(PoolSpec::unrestricted(auth_database_url)),
+            Some(PoolSpec::unrestricted(provision_database_url)),
         )
         .await
     }
 
     async fn connect_pools(
-        database_url: &str,
-        auth_database_url: Option<&str>,
-        provision_database_url: Option<&str>,
+        database: PoolSpec<'_>,
+        auth: Option<PoolSpec<'_>>,
+        provision: Option<PoolSpec<'_>>,
     ) -> Result<Self, StoreError> {
         Self::connect_pools_with_database_capacity(
-            database_url,
-            auth_database_url,
-            provision_database_url,
+            database,
+            auth,
+            provision,
             DEFAULT_DATABASE_MAX_CONNECTIONS,
         )
         .await
     }
 
     async fn connect_pools_with_database_capacity(
-        database_url: &str,
-        auth_database_url: Option<&str>,
-        provision_database_url: Option<&str>,
+        database: PoolSpec<'_>,
+        auth: Option<PoolSpec<'_>>,
+        provision: Option<PoolSpec<'_>>,
         database_max_connections: u32,
     ) -> Result<Self, StoreError> {
-        let database_options = Self::persistent_connect_options(database_url)?;
-        let auth_options = auth_database_url
-            .map(Self::persistent_connect_options)
-            .transpose()?;
-        let provision_options = provision_database_url
-            .map(Self::persistent_connect_options)
-            .transpose()?;
-        let pool = Self::connect_pool(database_options, database_max_connections).await?;
-        let auth_pool = match (auth_database_url, auth_options) {
-            (Some(url), _) if url == database_url => Some(pool.clone()),
-            (Some(_), Some(options)) => {
-                Some(Self::connect_pool(options, DEFAULT_DATABASE_MAX_CONNECTIONS).await?)
-            }
-            (None, None) => None,
-            _ => unreachable!("auth URL and parsed options must match"),
-        };
-        let provision_pool = match (provision_database_url, provision_options) {
-            (Some(url), _) if url == database_url => Some(pool.clone()),
-            (Some(_), Some(options)) => {
-                Some(Self::connect_pool(options, DEFAULT_DATABASE_MAX_CONNECTIONS).await?)
-            }
-            (None, None) => None,
-            _ => unreachable!("provision URL and parsed options must match"),
-        };
+        // Every URL is parsed and shape-checked BEFORE any network work, so a
+        // bad auth/provision URL is reported even when the database URL is
+        // unreachable (`persistent_connection.rs` pins this).
+        let database_options = Self::persistent_connect_options(database.url)?;
+        for spec in [auth, provision].into_iter().flatten() {
+            Self::persistent_connect_options(spec.url)?;
+        }
+        let pool = Self::connect_pool(database_options, database_max_connections, database.role)
+            .await
+            .map_err(|error| database.context(error))?;
+        // A pool is reused only when BOTH the credential and the assumed
+        // capability role match; `connect_app` shares one URL across the app
+        // and authn capabilities in every shipped profile, and those two roles
+        // are deliberately disjoint.
+        let auth_pool = Self::sibling_pool(&pool, database, auth).await?;
+        let provision_pool = Self::sibling_pool(&pool, database, provision).await?;
         Ok(Self {
             pool,
             auth_pool,
             provision_pool,
         })
+    }
+
+    async fn sibling_pool(
+        primary: &PgPool,
+        primary_spec: PoolSpec<'_>,
+        spec: Option<PoolSpec<'_>>,
+    ) -> Result<Option<PgPool>, StoreError> {
+        let Some(spec) = spec else { return Ok(None) };
+        if spec.url == primary_spec.url && spec.role == primary_spec.role {
+            return Ok(Some(primary.clone()));
+        }
+        let options = Self::persistent_connect_options(spec.url)?;
+        Ok(Some(
+            Self::connect_pool(options, DEFAULT_DATABASE_MAX_CONNECTIONS, spec.role)
+                .await
+                .map_err(|error| spec.context(error))?,
+        ))
     }
 
     fn persistent_connect_options(database_url: &str) -> Result<PgConnectOptions, StoreError> {
@@ -279,10 +366,11 @@ impl PgStore {
     async fn connect_pool(
         options: PgConnectOptions,
         max_connections: u32,
+        role: Option<&'static str>,
     ) -> Result<PgPool, StoreError> {
         let pool = PgPoolOptions::new()
             .max_connections(max_connections)
-            .after_connect(|connection, _| {
+            .after_connect(move |connection, _| {
                 Box::pin(async move {
                     sqlx::query(
                         "select pg_catalog.set_config(
@@ -299,8 +387,18 @@ impl PgStore {
                             ) schemas) || ',pg_catalog',
                            false)",
                     )
-                    .execute(connection)
+                    .execute(&mut *connection)
                     .await?;
+                    // The capability roles are NOINHERIT, so membership alone
+                    // grants nothing: the served connection must ASSUME the
+                    // role. Assuming it also drops superuser/BYPASSRLS, which
+                    // is what makes FORCE RLS bite on the served path.
+                    if let Some(role) = role {
+                        sqlx::query("select pg_catalog.set_config('role', $1, false)")
+                            .bind(role)
+                            .execute(&mut *connection)
+                            .await?;
+                    }
                     Ok(())
                 })
             })
@@ -311,7 +409,44 @@ impl PgStore {
             .execute(&pool)
             .await
             .map_err(backend)?;
+        if let Some(role) = role {
+            Self::assert_row_security_enforced(&pool, role).await?;
+        }
         Ok(pool)
+    }
+
+    /// Fail-closed startup guard: a served pool must run as its non-superuser
+    /// capability role. A superuser or `BYPASSRLS` effective role silently
+    /// disables every `_tenant_isolation` policy, leaving tenant isolation to
+    /// application predicates alone — so refuse to serve instead.
+    async fn assert_row_security_enforced(pool: &PgPool, role: &str) -> Result<(), StoreError> {
+        let row = sqlx::query(
+            "select current_user::text as effective_role,
+                    coalesce(role.rolsuper, false) as is_superuser,
+                    coalesce(role.rolbypassrls, false) as bypasses_rls,
+                    session_user::text as login_role
+             from (select 1) probe
+             left join pg_catalog.pg_roles role on role.rolname = current_user",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(backend)?;
+        let effective: String = row.try_get("effective_role").map_err(backend)?;
+        let login: String = row.try_get("login_role").map_err(backend)?;
+        let is_superuser: bool = row.try_get("is_superuser").map_err(backend)?;
+        let bypasses_rls: bool = row.try_get("bypasses_rls").map_err(backend)?;
+        if effective != role || is_superuser || bypasses_rls {
+            return Err(StoreError::Backend(format!(
+                "{RLS_REFUSAL}. \
+                 The connection must run as the non-superuser capability role `{role}`, but the \
+                 effective role is `{effective}` (login `{login}`, rolsuper={is_superuser}, \
+                 rolbypassrls={bypasses_rls}). Apply migration \
+                 20260730_004_served_login_roles and point the credential at a login role that is \
+                 a member of `{role}` and is neither SUPERUSER nor BYPASSRLS \
+                 (`grant {role} to <login>`)."
+            )));
+        }
+        Ok(())
     }
 
     pub fn pool(&self) -> &PgPool {
