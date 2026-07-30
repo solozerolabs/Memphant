@@ -7,6 +7,7 @@ OpenRouter calls — these run under plain ``pytest tests/``.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 from pathlib import Path
 
@@ -193,3 +194,48 @@ def test_build_context_preview_empty_when_target_is_first(clm):
     events = [{"sequence": 0, "role": "user", "text": "TARGET"}]
     preview = clm.build_context_preview(events, target_index=0, max_events=3, max_chars_each=300)
     assert preview == ""
+
+
+# --- no-provider-path guard -------------------------------------------------
+
+
+def test_module_has_no_provider_calling_path(clm):
+    """The miner CLI is deleted, so this module must stay purely local.
+
+    It previously called ``gate_mine_goldens.MinerCli`` — a name that exists
+    nowhere — so it raised AttributeError before ever reaching a provider. This
+    guard fails if anyone reintroduces a paid path here instead of in
+    ``scripts/track_r_mine.py``: no reader/miner machinery imported, and no CLI
+    entry point to invoke one. Checked over the AST, not the raw text, so the
+    module docstring may name the deleted machinery without tripping it.
+    """
+    tree = ast.parse((ROOT / "scripts" / "code_lane_mine.py").read_text())
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+    assert imported == {"__future__", "random", "re"}, f"unexpected imports: {imported}"
+    attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert not {"MinerCli", "ReaderCli"} & attrs
+
+    assert not hasattr(clm, "main"), "code_lane_mine must expose no CLI entry point"
+    assert not hasattr(clm, "mine"), "mining belongs in track_r_mine.py"
+    # Every surviving symbol is a pure function or a compiled regex.
+    assert sorted(n for n in vars(clm) if not n.startswith("_") and callable(getattr(clm, n))) == [
+        "build_candidate_pool",
+        "build_context_preview",
+        "candidate_key",
+        "content_words",
+        "lexical_overlap",
+        "locate_span_in_event",
+        "stratified_candidates",
+        "too_generic",
+    ]
+
+
+def test_live_helpers_are_the_ones_track_r_mine_imports():
+    """track_r_mine.py is the reason this module still exists; keep that true."""
+    source = (ROOT / "scripts" / "track_r_mine.py").read_text()
+    assert "from code_lane_mine import lexical_overlap, locate_span_in_event, too_generic" in source
