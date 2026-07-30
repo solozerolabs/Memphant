@@ -93,12 +93,12 @@
     }
   },
   "source_counts": {
-    "feedback_files_total": 90,
+    "feedback_files_total": 91,
     "feedback_files_by_project": {
       "-Users-sidsharma-Ideas": 3,
       "-Users-sidsharma-Ideas-tacitry": 3,
       "-Users-sidsharma-Namera": 1,
-      "-Users-sidsharma-Syndai": 67,
+      "-Users-sidsharma-Syndai": 68,
       "-Users-sidsharma-Yurivan": 14,
       "-Users-sidsharma-sprntly": 2
     },
@@ -113,6 +113,11 @@
       "syndai:Hard Rules": 17,
       "syndai:Session Execution": 9
     }
+  },
+  "source_snapshot": {
+    "pinned": true,
+    "snapshot_sha256": "5501ab7e12f7591805537502c6249c635a889aca6310b9e70116c41101a2fbc6",
+    "file_count": 94
   },
   "probes_file": {
     "path": "benchmarks/data/user_lane_probes.jsonl",

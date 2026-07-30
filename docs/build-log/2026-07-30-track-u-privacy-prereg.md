@@ -124,3 +124,29 @@ repository, which is the intent.
 This does not weaken the privacy posture: the mirror is local-disk-only, and the
 external-claim rule above is unchanged — any published number still requires the
 paraphrase-scrubbed or synthetic public variant, re-adjudicated to the same bar.
+
+## Source snapshot pinning (added 2026-07-30, after a live-drift failure)
+
+The bank was extracted from the **live** `~/.claude/projects/*/memory/` tree. That
+tree mutates: on 2026-07-30 a concurrent Syndai session wrote
+`feedback_guard_the_door_the_callers_actually_use.md`, moving
+`feedback_files_total` **90 → 91** and failing `--check` on a bank nobody had
+touched. An eval corpus that drifts under its own lock is not an instrument.
+
+Extraction is now pinned to a frozen snapshot at
+`~/.memphant-private/track-u/sources/` (94 files: 91 `feedback_*`, plus
+`LEARNINGS.md` and both `AGENTS.md`), hash-recorded in
+`~/.memphant-private/track-u/sources.manifest.json` with
+`snapshot_sha256 = 5501ab7e12f7591805537502c6249c635a889aca6310b9e70116c41101a2fbc6`.
+The lock now carries a `source_snapshot` block, so it pins its own inputs instead
+of trusting whatever the live tree happens to hold; if no snapshot is present the
+block records `pinned: false` rather than silently reading live.
+
+**The drift was inert with respect to bank content**: re-cutting against the
+snapshot reproduced the bank byte-for-byte at `sha256 = e29821b24aff…`, with only
+the recorded source count moving 90 → 91. The 51 goldens, all strata, and all
+reject reasons are unchanged.
+
+Privacy posture is unchanged: the snapshot lives outside every worktree and every
+git repository, is never committed, and the external-claim rule still requires a
+paraphrase-scrubbed or synthetic public variant.

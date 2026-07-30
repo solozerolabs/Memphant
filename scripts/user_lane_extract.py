@@ -54,11 +54,44 @@ import gate_common as gc  # noqa: E402
 
 # --- sources (read-only; every path is opened, never written) ----------------
 
-CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
+# The live sources are a MUTATING directory: any session writing a memory
+# changes them. On 2026-07-30 a concurrent Syndai session added a `feedback_*`
+# file mid-run, moving the count 90 -> 91 and breaking `--check` on a bank
+# nobody had touched. An eval corpus that drifts under its own lock is not an
+# instrument, so extraction is pinned to a frozen snapshot, hash-recorded in
+# `~/.memphant-private/track-u/sources.manifest.json`. Live paths remain
+# reachable via the CLI flags for re-snapshotting.
+SNAPSHOT_ROOT = Path.home() / ".memphant-private" / "track-u" / "sources"
+_SNAPSHOT_LIVE = SNAPSHOT_ROOT.is_dir()
+
+CLAUDE_PROJECTS = SNAPSHOT_ROOT if _SNAPSHOT_LIVE else Path.home() / ".claude" / "projects"
 SYNDAI_REF = Path("/Users/sidsharma/Syndai-memphant-ref")
-SYNDAI_LEARNINGS = SYNDAI_REF / "LEARNINGS.md"
-SYNDAI_AGENTS = SYNDAI_REF / "AGENTS.md"
-MEMPHANT_AGENTS = gc.MEMPHANT_ROOT / "AGENTS.md"
+SYNDAI_LEARNINGS = (
+    SNAPSHOT_ROOT / "_docs" / "LEARNINGS.md" if _SNAPSHOT_LIVE else SYNDAI_REF / "LEARNINGS.md"
+)
+SYNDAI_AGENTS = (
+    SNAPSHOT_ROOT / "_docs" / "syndai-AGENTS.md" if _SNAPSHOT_LIVE else SYNDAI_REF / "AGENTS.md"
+)
+MEMPHANT_AGENTS = (
+    SNAPSHOT_ROOT / "_docs" / "memphant-AGENTS.md"
+    if _SNAPSHOT_LIVE
+    else gc.MEMPHANT_ROOT / "AGENTS.md"
+)
+
+SNAPSHOT_MANIFEST = SNAPSHOT_ROOT.parent / "sources.manifest.json"
+
+
+def _snapshot_provenance() -> dict:
+    """Identify the frozen input set, or record plainly that we read live."""
+    if not (_SNAPSHOT_LIVE and SNAPSHOT_MANIFEST.is_file()):
+        return {"pinned": False, "note": "read from live mutating sources"}
+    manifest = json.loads(SNAPSHOT_MANIFEST.read_text())
+    return {
+        "pinned": True,
+        "snapshot_sha256": manifest["snapshot_sha256"],
+        "file_count": manifest["file_count"],
+    }
+
 
 PROBES_PATH = gc.MEMPHANT_ROOT / "benchmarks" / "data" / "user_lane_probes.jsonl"
 GOLDEN_PATH = gc.MEMPHANT_ROOT / "benchmarks" / "data" / "user_lane_golden.jsonl"
@@ -560,6 +593,9 @@ def main() -> int:
             "rejects_by_reason": rejects,
         },
         "source_counts": source_counts,
+        # Pins the exact input set the counts were taken from, so the lock is
+        # self-describing rather than trusting whatever the live tree holds.
+        "source_snapshot": _snapshot_provenance(),
         "probes_file": {
             "path": "benchmarks/data/user_lane_probes.jsonl",
             "sha256": gc.sha256_hex(probes_path.read_bytes()),
