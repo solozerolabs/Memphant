@@ -161,3 +161,23 @@
 - Live-run rule: construct all 12 case banks normally in the fresh output root; no cross-root import or dependency on the ignored exact dump
 - No-paid JIT preflight: frozen 12/24/12 bounds, 1.2 GB pinned acquisition, 12 materialized cases/pairing proofs, official harness environment, PostgreSQL 17.10 tools, release binaries, disk, and current endpoint inventory verified
 - Remaining prerequisite: `OPENROUTER_API_KEY` is absent; `OPENAI_API_KEY` is present. No provider/model/database call was made
+
+## Accuracy-first Phase 1b - substrate-transfer replay instrumentation
+
+- Status: instrument landed and proven end-to-end; authoritative replay pending the Track R golden bank
+- Worktree/branch: `/Users/sidsharma/Memphant-af-p1b`, `af-p1b`
+- Base: `bf2c87c3`
+- Implementation commit: `a2838bf1` (`scripts/code_lane_run_memphant.py`, `tests/test_code_lane_run_memphant.py`)
+- Mechanism 1: every recall reads `GET /v1/traces/{id}` and records the trace's `dropped_items`/`RecallDropReason` per question (`pool_size`, `packed_size`, `gold_in_pool`, `gold_fused_rank`, `gold_fused_score`, `gold_drop_reason`, `drop_reasons`, `bucket`) plus a run-level `pack_drop_summary` (bucket split, `in_pool_unpacked_gold_drop_reasons`, `budget_share_of_in_pool_unpacked`). Mirrors `memphant-eval::bench_lme::classify_gold_drop_cause`; contract fields only, none invented
+- Mechanism 2: `--pack-render-cap` admits `MEMPHANT_PACK_RENDER_CAP` for the server arm. `gate_runtime.Server` still closes inherited packing env vars, so the cap can only enter by explicit selection
+- Gold identity on this lane is span-based (no session key), so gold-bearing pool units are resolved by reading episodic unit bodies from the per-run scratch DB and matching with `gate_common.contains_gold`
+- Runnable check: `python3 -m pytest tests/test_code_lane_run_memphant.py -q` -> 26 passed. Four new cases cover the drop-reason plumbing, the hit/in-pool-unpacked/absent-from-pool split, the trace read through the bound context, and cap admission-not-inheritance (an ambient `MEMPHANT_PACK_RENDER_CAP=9999` must not reach a cap-OFF arm)
+- Spend: $0. Deterministic retrieval-side only; no reader, no judge, no paid model call on any code path touched
+- Instrument-proving runs (SYNTHETIC corpus, NOT evidence; scratchpad only, never committed): 4 attempts x 12 multi-line events, `--embed-model off --mode fast --k 10`, per-run scratch DBs via `with_scratch_db.sh`, release binaries built in this worktree
+  - `--budget-tokens 512`: 6/6 questions `in_pool_unpacked`, `budget_share_of_in_pool_unpacked` 1.0 - the drop-reason plumbing produces populated per-question reasons
+  - `--budget-tokens 8192`, cap OFF vs cap 1200: packed items per question 5 -> 7 with smaller per-item renders (q0 item chars `[3611, 7211, 3583, 3592, 3592]` -> `[3288, 3341, 3261, 3269, 3269, 3310, 3270]`), R@10 1.0 in both arms. The cap flag demonstrably reaches the packer
+- Corpus-shape caveat found while proving the instrument: `episode_contextual_chunks` mints no chunks for a single-segment body, and `packed_render` only compacts chunk-rendered items - so on single-line event bodies the render cap is inert by construction (measured: byte-identical arms). The authoritative replay's cap arm is only interpretable on multi-line event bodies, which real OpenHands trajectory events have. Record the packed-item delta per arm before reading any retrieval delta
+- Authoritative replay, one command per arm once a Track R bank exists (paths are explicit inputs; the golden lock next to `--golden` pins the corpus):
+  `python3 scripts/code_lane_run_memphant.py --corpus <bank>/corpus.jsonl --golden <bank>/goldens.jsonl --out-evidence <out>/evidence-cap1200.jsonl --out-provenance <out>/provenance-cap1200.json --embed-model off --mode fast --k 10 --budget-tokens 8192 --label p1b-cap1200 --port 39466 --pack-render-cap 1200 --server-bin target/release/memphant-server --worker-bin target/release/memphant-worker --cli-bin target/release/memphant-cli`
+  (drop `--pack-render-cap 1200` and change label/port/outputs for the cap-OFF arm)
+- Not pushed
