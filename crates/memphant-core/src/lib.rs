@@ -609,7 +609,8 @@ pub struct PackLevers {
 /// length (density) or by the token union (Jaccard), which penalizes long
 /// bodies far harder than BM25's `b`-normalization — so a rare identifier match
 /// inside a long tool result loses to a short body sharing a common word.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum LexicalScorer {
     /// Today's two token-overlap passes. Default; off-path is unchanged.
     #[default]

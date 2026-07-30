@@ -33,7 +33,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use memphant_core::service::MemoryService;
-use memphant_core::{EmbeddingProvider, MemoryStore, NoopEmbedding, SystemClock};
+use memphant_core::{EmbeddingProvider, LexicalScorer, MemoryStore, NoopEmbedding, SystemClock};
 use memphant_store_postgres::PgStore;
 use memphant_types::{
     ContextBindingAgentRef, ContextBindingEntityRef, ContextBindingRequest, ContextBindingScopeRef,
@@ -124,6 +124,10 @@ pub struct BenchLmeOptions {
     /// threaded via `with_pack_render_cap`. Bounds each packed item's chunk-render
     /// budget so a large chunk-matched body cannot hog the pack budget.
     pub pack_render_cap: Option<usize>,
+    /// Which lexical scorer fusion uses (`--lexical-scorer`, default
+    /// `LexicalScorer::Overlap`) threaded via `with_lexical_scorer`. The BM25
+    /// variants replace both token-overlap passes with one Okapi BM25 pass.
+    pub lexical_scorer: LexicalScorer,
     /// Budgeted submodular evidence ordering (`--pack-submodular-ordering`,
     /// default off).
     pub pack_submodular_ordering: bool,
@@ -897,6 +901,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
     .with_sibling_gather_enabled(options.sibling_gather)
     .with_session_quota(options.session_quota)
     .with_pack_render_cap(options.pack_render_cap)
+    .with_lexical_scorer(options.lexical_scorer)
     .with_pack_submodular_ordering_enabled(options.pack_submodular_ordering)
     // W5 temporal grounding: query-date windowing + dated packs at recall. Set
     // explicitly here too so the vector-disabled fresh recall service (which is
