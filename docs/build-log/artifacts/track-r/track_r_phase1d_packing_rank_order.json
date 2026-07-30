@@ -1,0 +1,138 @@
+{
+  "after": {
+    "label": "track-r-phase1d-rankorder",
+    "pack_drop_summary": {
+      "buckets": {
+        "absent_from_pool": 4,
+        "hit": 113,
+        "in_pool_unpacked": 63
+      },
+      "budget_share_of_in_pool_unpacked": 0.015873015873015872,
+      "gold_rank_within_k_unpacked": 34,
+      "in_pool_unpacked": 63,
+      "in_pool_unpacked_gold_drop_reasons": {
+        "budget": 1,
+        "not_in_dropped_items": 33,
+        "rerank": 29
+      },
+      "in_pool_unpacked_with_gold_unit_packed": 33,
+      "packed_item_chars_max": 7362,
+      "packed_item_chars_mean": 1242.9693181818182,
+      "packed_item_chars_total": 2187626,
+      "packed_items_mean": 9.777777777777779,
+      "packed_items_total": 1760
+    },
+    "recall_at_10": 0.6277777777777778,
+    "recall_at_5": 0.46111111111111114
+  },
+  "before": {
+    "label": "track-r-phase1d-baseline",
+    "pack_drop_summary": {
+      "buckets": {
+        "absent_from_pool": 4,
+        "hit": 91,
+        "in_pool_unpacked": 85
+      },
+      "budget_share_of_in_pool_unpacked": 0.011764705882352941,
+      "gold_rank_within_k_unpacked": 56,
+      "in_pool_unpacked": 85,
+      "in_pool_unpacked_gold_drop_reasons": {
+        "budget": 1,
+        "not_in_dropped_items": 28,
+        "rerank": 56
+      },
+      "in_pool_unpacked_with_gold_unit_packed": 28,
+      "packed_item_chars_max": 7039,
+      "packed_item_chars_mean": 1147.0255681818182,
+      "packed_item_chars_total": 2018765,
+      "packed_items_mean": 9.777777777777779,
+      "packed_items_total": 1760
+    },
+    "recall_at_10": 0.5055555555555555,
+    "recall_at_5": 0.45
+  },
+  "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+  "displacement_target": {
+    "n": 56,
+    "recovered": 22,
+    "recovered_question_ids": [
+      "track_r_003",
+      "track_r_012",
+      "track_r_014",
+      "track_r_019",
+      "track_r_033",
+      "track_r_035",
+      "track_r_058",
+      "track_r_062",
+      "track_r_067",
+      "track_r_080",
+      "track_r_105",
+      "track_r_109",
+      "track_r_111",
+      "track_r_117",
+      "track_r_126",
+      "track_r_131",
+      "track_r_136",
+      "track_r_151",
+      "track_r_160",
+      "track_r_170",
+      "track_r_176",
+      "track_r_179"
+    ],
+    "still_missing_question_ids": [
+      "track_r_001",
+      "track_r_021",
+      "track_r_022",
+      "track_r_023",
+      "track_r_029",
+      "track_r_032",
+      "track_r_039",
+      "track_r_043",
+      "track_r_049",
+      "track_r_054",
+      "track_r_057",
+      "track_r_060",
+      "track_r_063",
+      "track_r_068",
+      "track_r_083",
+      "track_r_085",
+      "track_r_088",
+      "track_r_095",
+      "track_r_098",
+      "track_r_099",
+      "track_r_104",
+      "track_r_114",
+      "track_r_115",
+      "track_r_118",
+      "track_r_123",
+      "track_r_127",
+      "track_r_137",
+      "track_r_145",
+      "track_r_146",
+      "track_r_149",
+      "track_r_154",
+      "track_r_164",
+      "track_r_168",
+      "track_r_171"
+    ]
+  },
+  "fused_top10_ceiling_after": 147,
+  "fused_top10_ceiling_before": 147,
+  "golden_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d",
+  "paired_at_10": {
+    "after_only": 22,
+    "before_only": 0,
+    "both": 91,
+    "mcnemar_exact_p": 4.76837158203125e-07,
+    "n": 180,
+    "neither": 67
+  },
+  "paired_at_5": {
+    "after_only": 3,
+    "before_only": 1,
+    "both": 80,
+    "mcnemar_exact_p": 0.625,
+    "n": 180,
+    "neither": 96
+  }
+}
