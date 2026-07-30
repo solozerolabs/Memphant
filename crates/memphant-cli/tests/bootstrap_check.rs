@@ -69,6 +69,47 @@ MEMPHANT_OBJECT_RETENTION_DAYS=14
     );
 }
 
+/// W3.3: a served credential that bypasses RLS must never reach a maintenance
+/// window. The Neon profile shipped exactly this mistake — `memphant_owner`,
+/// which holds the `memphant_*_owner` `using(true)` policies.
+#[test]
+fn bootstrap_check_rejects_a_served_credential_that_bypasses_rls() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let profile = dir.path().join("neon.env");
+    let poisoned =
+        fs::read_to_string(repo_root().join("deploy/provider-profiles/neon.env.example"))
+            .expect("read default profile")
+            .replace(
+                "MEMPHANT_APP_DATABASE_URL=postgresql://memphant_app_login:",
+                "MEMPHANT_APP_DATABASE_URL=postgresql://memphant_owner:",
+            );
+    fs::write(&profile, poisoned).expect("write profile");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .current_dir(repo_root())
+        .args([
+            "db",
+            "bootstrap-check",
+            "--provider",
+            "neon",
+            "--profile",
+            profile.to_str().expect("profile path"),
+        ])
+        .output()
+        .expect("run bootstrap check");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "stderr:\n{stderr}");
+    assert!(
+        stderr.contains("MEMPHANT_APP_DATABASE_URL:rls_bypassing_login:memphant_owner"),
+        "stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("MEMPHANT_APP_DATABASE_URL:reuses_migrator_credential:memphant_owner"),
+        "stderr:\n{stderr}"
+    );
+}
+
 #[test]
 fn bootstrap_check_rejects_supabase_memphant_schema_exposure() {
     let dir = tempfile::tempdir().expect("tempdir");
