@@ -330,6 +330,10 @@ pub struct BenchLmeReport {
     /// `None` when off. Serde default `None` for pre-flag reports.
     #[serde(default)]
     pub pack_render_cap: Option<usize>,
+    /// The lexical scorer fusion used for this run (`--lexical-scorer`). Serde
+    /// default `Overlap` for pre-flag reports, which is what they ran.
+    #[serde(default)]
+    pub lexical_scorer: LexicalScorer,
     /// Whether budgeted submodular evidence ordering was enabled.
     #[serde(default)]
     pub pack_submodular_ordering: bool,
@@ -1388,6 +1392,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         sibling_gather: options.sibling_gather,
         session_quota: options.session_quota,
         pack_render_cap: options.pack_render_cap,
+        lexical_scorer: options.lexical_scorer,
         pack_submodular_ordering: options.pack_submodular_ordering,
         temporal_grounding: options.temporal_grounding,
         fact_extraction: options.fact_extraction,

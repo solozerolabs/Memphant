@@ -143,6 +143,10 @@ docs/build-log/artifacts/track-r/requests/
 # (third-party bodies); the provenance reports are large per-question dumps.
 # Only the derived `track_r_phase1_retrieval_summary.json` alongside is committed.
 docs/build-log/artifacts/track-r/phase1/
+# Phase 1r retrieval-arm run outputs, same rule: the evidence JSONLs carry full
+# retrieved event text and the provenance reports are large per-question dumps.
+# Only the derived `track_r_phase1r_retrieval_arms.json` alongside is committed.
+docs/build-log/artifacts/track-r/phase1r/
 benchmarks/data/track_r_repo_memory_golden.jsonl
 benchmarks/data/track_r_repo_memory_spotcheck.jsonl
 !benchmarks/data/track_r_repo_memory_golden.lock.json
