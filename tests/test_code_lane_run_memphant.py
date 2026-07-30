@@ -535,14 +535,18 @@ def test_recall_with_trace_reads_the_trace_through_the_bound_context(clr):
             self.gets = []
 
         def post(self, path, payload):
-            return {"trace_id": "trace-1", "items": [{"body": "b"}], "degraded": False}
+            return {
+                "trace_id": "trace-1",
+                "items": [{"body": "b", "unit_id": "unit-b"}],
+                "degraded": False,
+            }
 
         def get(self, path):
             self.gets.append(path)
             return _P1B_TRACE
 
     client = Client()
-    bodies, degraded, trace = clr.recall_with_trace(
+    bodies, degraded, trace, unit_ids = clr.recall_with_trace(
         client,
         {
             "subject_id": "s", "scope_id": "sc", "actor_id": "a",
@@ -551,7 +555,7 @@ def test_recall_with_trace_reads_the_trace_through_the_bound_context(clr):
         "why did the build fail", 10, 8192, "fast",
     )
 
-    assert bodies == ["b"] and degraded is False
+    assert bodies == ["b"] and degraded is False and unit_ids == ["unit-b"]
     assert trace["dropped_items"][0]["reason"] == "budget"
     assert client.gets == [
         "/v1/traces/trace-1?subject_id=s&scope_id=sc&actor_id=a"

@@ -311,6 +311,7 @@ def pack_drop_diagnosis(
     unit_bodies: dict[str, str],
     packed_bodies: list[str],
     k: int,
+    packed_unit_ids: list[str] | None = None,
 ) -> dict:
     """Per-question packing diagnosis from one recall trace.
 
@@ -352,6 +353,21 @@ def pack_drop_diagnosis(
         "gold_fused_rank": best["fused_rank"] if best is not None else None,
         "gold_fused_score": best.get("fused_score") if best is not None else None,
         "gold_drop_reason": drop_reason,
+        # Phase-1d displacement forensics: a gold pool unit that is neither
+        # packed nor in `dropped_items` is a DIFFERENT failure from one the pack
+        # evicted, and a gold unit that IS packed while the question still misses
+        # means the RENDER dropped the span, not the selection. Recording both
+        # separates the two without a second run.
+        "gold_best_unit_packed": (
+            None
+            if best is None or packed_unit_ids is None
+            else best["unit_id"] in set(packed_unit_ids)
+        ),
+        "gold_units_packed": (
+            None
+            if packed_unit_ids is None
+            else len(gold_ids & set(packed_unit_ids))
+        ),
         "bucket": (
             "hit" if hit else "in_pool_unpacked" if gold_ids else "absent_from_pool"
         ),
@@ -388,6 +404,16 @@ def pack_drop_summary(rows: list[dict]) -> dict:
         "budget_share_of_in_pool_unpacked": (
             reasons.get("budget", 0) / len(unpacked) if unpacked else None
         ),
+        # Of the in-pool-unpacked misses, how many actually had a gold unit in a
+        # packed slot (⇒ a render loss, not a selection loss).
+        "in_pool_unpacked_with_gold_unit_packed": sum(
+            1 for row in unpacked if row.get("gold_units_packed")
+        ),
+        "gold_rank_within_k_unpacked": sum(
+            1
+            for row in unpacked
+            if row["gold_fused_rank"] is not None and row["gold_fused_rank"] <= 10
+        ),
         # Hypothesis-B arm witness (see pack_drop_diagnosis).
         "packed_items_total": sum(packed_counts),
         "packed_items_mean": (sum(packed_counts) / len(rows) if rows else None),
@@ -413,9 +439,11 @@ def trace_context_query(ctx: dict) -> str:
 
 def recall_with_trace(
     client: gr.ApiClient, ctx: dict, query: str, k: int, budget_tokens: int, mode: str
-) -> tuple[list[str], bool, dict]:
+) -> tuple[list[str], bool, dict, list[str]]:
     """``gr.recall_query`` plus the recall trace this lane's packing diagnosis
-    needs (deterministic, no reader, no paid model call)."""
+    needs (deterministic, no reader, no paid model call). The packed items' unit
+    ids ride alongside their bodies so the diagnosis can tell "gold never made a
+    slot" apart from "gold made a slot but rendered without its span"."""
     response = client.post(
         "/v1/recall",
         {**ctx, "query": query, "limit": k, "budget_tokens": budget_tokens, "mode": mode},
@@ -426,8 +454,10 @@ def recall_with_trace(
     trace = client.get(f"/v1/traces/{trace_id}?{trace_context_query(ctx)}")
     if not isinstance(trace, dict) or trace.get("id") != trace_id:
         raise RuntimeError(f"missing or mismatched recall trace for trace_id={trace_id}")
-    bodies = [item["body"] for item in response.get("items", [])]
-    return bodies, bool(response.get("degraded", False)), trace
+    items = response.get("items", [])
+    bodies = [item["body"] for item in items]
+    unit_ids = [item["unit_id"] for item in items]
+    return bodies, bool(response.get("degraded", False)), trace, unit_ids
 
 
 def episodic_unit_bodies(database_url: str, tenant_id: str) -> dict[str, str]:
@@ -765,7 +795,7 @@ def main() -> int:
         recall_started = time.time()
         for i, golden in enumerate(goldens):
             attempt_id = golden["provenance"][0]["attempt_id"]
-            bodies, degraded, trace = recall_with_trace(
+            bodies, degraded, trace, packed_unit_ids = recall_with_trace(
                 clients[0], evaluation_contexts[attempt_id], retrieval_query(golden), args.k,
                 args.budget_tokens, args.mode
             )
@@ -779,7 +809,8 @@ def main() -> int:
                     "hit_at_5": gc.provenance_hit(golden, bodies, 5),
                     "hit_at_10": gc.provenance_hit(golden, bodies, min(10, args.k)),
                     **pack_drop_diagnosis(
-                        golden, trace, unit_bodies, bodies, min(10, args.k)
+                        golden, trace, unit_bodies, bodies, min(10, args.k),
+                        packed_unit_ids,
                     ),
                 }
             )

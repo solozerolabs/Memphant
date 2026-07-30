@@ -418,3 +418,82 @@ python3 scripts/track_r_scoped_bm25_compare.py \
 
 - Runnable check: `python3 -m pytest tests/test_code_lane_run_memphant.py tests/test_track_r_phase1_summary.py -q` -> 39 passed (3 new: `--scope attempt` hands BM25 exactly the attempt `bind_attempt_context` binds and `--scope corpus` keeps the corpus; the paired flip counts; the scoping witness flagging a haystack mismatch)
 - Input contract verified before the runs: `corpus_sha256 c008142e...4c9669`, `golden_sha256 6f549daa...2a89b6d`
+
+## 2026-07-30 — Phase 1d: the packing displacement fix (Track R, executed, $0)
+
+Answers Phase 1 §5(b). Worktree `/Users/sidsharma/Memphant-af-packing`, branch
+`af-packing`. Full write-up: `docs/build-log/2026-07-30-packing-rank-order-fix.md`.
+
+**The 56 "displaced" golds were two defects, not one.** Splitting them was the
+first result, and it needed an instrument change: 28 of the 56 carried no drop
+reason, which was ambiguous between "never took a packed slot" and "took one and
+was rendered without the span". Recording the packed items' unit ids resolves it:
+
+| of the 56 | drop reason | gold units in packed slots |
+|---:|---|---|
+| 27 | `rerank` | 0 — rank displacement |
+| 28 | *(none)* | 1 or 2 — **render loss, not displacement** |
+| 1 | `budget` | 0 |
+
+**Mechanism (cause 1).** `admit_or_drop`'s output-full branch let a candidate
+from fused ranks 11–64 evict an already-packed item whenever it scored higher
+under `packing_relevance_score` — fused score *plus* exact/lexical/overlap/
+retrievability, which is not the order the pack was handed. Unreachable in Fast
+until R1.5-T0 widened the scan window past `k`. The `rank_based_ordering_active`
+gate switched the contest off for Deep/cross-encoder/submodular, so it ran in
+exactly one configuration: the plain Fast default. The 2026-07-12 verdict that
+found this gate "measured-permanent" was taken on the cross-rerank arm, where the
+contest never executes — it measured the gate's *off* state. Worst case observed:
+a gold at **fused rank 3** evicted from a full pack.
+
+**Fix** (`03fa1266`): once the output is full the established order wins and the
+late candidate is dropped, never swapped in; `rank_based_ordering_active` goes
+with the contest. The budget-driven replacement below it is untouched — that one
+is a real substitution, not a re-score.
+
+**Result** (baseline arm re-executed, reproduces the committed Phase 1b run to
+the digit — 91 hits, 1760 packed items, 2,018,765 packed chars):
+
+| arm | r@5 | r@10 | packed |
+|---|---:|---:|---:|
+| baseline | 0.4500 | 0.5056 | 91/180 |
+| rank-order fix | 0.4611 | **0.6278** | **113/180** |
+
+- @10 paired: **22 gains, 0 losses**, McNemar exact **p = 4.77e-07**.
+- @5 paired: 3 gains, 1 loss, p = 0.625 (ns).
+- **22 of the 56** preregistered displaced golds recovered (not 27 — 5 of the
+  eviction cases now reach a slot and hit cause 2 instead).
+- Displacement **eliminated**: golds at fused rank ≤10 that are `Rerank`-dropped
+  go **27 → 0**; the best-ranked gold that still loses the contest sits at rank
+  12, i.e. genuinely below the cut.
+- `fused_top10_ceiling` 147/180 in both arms — retrieval untouched.
+
+**Chat lane: inert, not merely neutral.** Two LME-S arms (dataset `e4667bed…`,
+`--sample 178 --seed 20260710`), r@5 = r@10 = 0.6145 in both, **0 flips** across
+166 scored questions, and after normalizing per-run episode UUIDs the packed
+context is **byte-identical on all 178 questions**. Mechanistically forced: LME-S
+packs 2–9 items and never reaches k=10, so the branch is unreachable there — the
+other side of the rung-7 budget-bound pathology. `pack_render_cap` untouched and
+still `undecided`.
+
+**Not bundled in — cause 2 (render loss), 33 of the 34 remaining rank-≤10
+misses.** `packed_render` charges each chunk block its header on top of its body,
+so full coverage always costs more than the whole body and an uncapped chunked
+item can never emit all of itself; it drops chunks while charging nearly the
+whole-body price. The one-line fallback was implemented, measured, and reverted:
+it raises per-item cost (wrong direction for the chat lane's budget-bound pack),
+it collides with `sibling_gather`'s own invariant test, and it is adjacent to the
+`undecided` `pack_render_cap`. It is the next localized target and needs its own
+paired chat-lane arm. Closing it takes the pack from 113 to ~146 against a
+147/180 fused ceiling.
+
+**Owner decision:** `test_canonical_census_source_inventory_covers_declared_campaign_code`
+fails on this branch and passes at base `a96c289c` — any `memphant-core` edit
+moves `source_set_sha256`, which the v5 campaign census pins. Not bumped; v5 is
+parked. Two other failures (`test_public_sota_claim_policy_…`, Syndai spec drift)
+are pre-existing at base.
+
+Commits (none pushed): `03fa1266` → `cc69a608` → `26a3c032` → `4628d88b`.
+Artifacts: `docs/build-log/artifacts/track-r/track_r_phase1d_packing_rank_order.json`,
+`docs/build-log/artifacts/rung7-packing-reader-gate/phase1d/chat-lane-nonregression.json`
+(both committed; per-question dumps gitignored, third-party bodies).
