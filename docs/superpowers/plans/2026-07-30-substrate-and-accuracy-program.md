@@ -206,6 +206,70 @@ authors measured the fix under **oracle retrieval — our exact regime**:
   worth one free A/B**, not an adoption — the specific recipe appears only in blog
   sources.
 
+### W2b — External corroboration: ARC-AGI-3 (OpenAI, 2026-07-29)
+
+OpenAI reports that two **context-management** settings tripled GPT-5.6 Sol's
+ARC-AGI-3 public-set score — **13.3% → 38.3%** RHAE (estimated human tester
+average 48%) — with **~6× fewer output tokens**, model unchanged. The two
+settings:
+
+1. **Retained reasoning** — the model's private chain-of-thought is preserved
+   across turns (via `previous_response_id`) instead of discarded after every
+   action. The official harness threw it away, so the model "was asked to figure
+   out the game anew" each turn; it could see past moves, but not the plans and
+   insights that produced them.
+2. **Compaction** — when context fills, prior context is **summarized rather
+   than truncated**. The official harness used rolling truncation, discarding
+   oldest messages past a 175,000-character window.
+
+This is billed as a reasoning result. It is a **memory result**: both settings
+are about not throwing state away. Three consequences for this program.
+
+**(a) It corroborates the chat-lane diagnosis independently.** We measured that
+lane as reader/composition-bound (R@10 0.83–0.94 against QA 0.56), and the
+LongMemEval authors measured up to +10 points from composition alone under oracle
+retrieval. This is a third, larger datapoint in the same direction: with
+retrieval held constant, how context is *carried and composed* moved the score
+3×. It strengthens W2 relative to W1 in expected value.
+
+**(b) Compaction is a direct candidate for the packing displacement (W1.5).**
+Our packer's failure mode is structurally the same as the harness's: hard
+discard under a cap. We drop 56 of 147 top-10 golds because the binding
+constraint is the k=10 output-slot limit — a slot budget, hit with truncation.
+"Summarize instead of discard" is the exact substitution that paid here. Adopt
+it as an arm in W1.5, **not** as a default: compaction is an LLM call at compose
+time, which is a real latency and cost line, and its benefit here was measured on
+a single long episode with no retrieval available. MemPhant's thesis is that you
+retrieve instead of summarize, so compaction competes with our own mechanism
+rather than obviously complementing it — that is a measurement, not a
+prediction. Note it does **not** violate deterministic-writes/no-LLM-at-ingest:
+compose-time ≠ ingest-time.
+
+**(c) Retained reasoning names a memory type we cannot store.** `MemoryKind` has
+nothing for the agent's own prior reasoning or plan state — episodic records what
+happened, not why the agent chose it. This is the same insight Track U encodes at
+a slower timescale (corrections as rule + incident + how-to-apply bundles, never
+bare triples). Fold into W3.2 alongside `Preference` and `Knowledge`.
+
+**Evidence handling — binding.** The 38.3% is **OpenAI-self-run on their own
+harness** and is not an ARC Prize leaderboard result; official Sol on ARC's board
+is far lower, and other models' ARC-protocol numbers were produced under a
+different harness. **We may cite the 13.3 → 38.3 delta as evidence about
+harnesses, and never as a cross-model comparison** — comparing a
+self-harnessed number against a leaderboard number is precisely the error our
+same-lattice rule exists to prevent. OpenAI's closing recommendation, that
+comparisons should use the settings they deploy, is a reasonable engineering
+point and also self-serving; treat the mechanism as adoptable and the
+comparative framing as unestablished.
+
+**Turn it on ourselves first.** Their finding is that a benchmark number was
+depressed by harness defaults nobody chose deliberately. We just ran the entire
+code lane with `--embed-model off` and have **never** run a dense arm, and our
+chat lane sits on a split its upstream has deprecated. W0 already covers both;
+this raises their priority. Add a standing check: **every promotion-capable run
+records its harness settings beside its score**, and a harness default is not
+evidence merely because it was the default.
+
 ### W3 — Substrate completion (spec first, then code)
 
 - **W3.1 Write the governance-core spec** into `04-memory-model-spec.md` /
@@ -302,8 +366,22 @@ packaged runtime — the single binding accuracy criterion; (6) re-derive
 | `timescale/pg_textsearch` | PostgreSQL | **DEFER** — breaks Neon/Supabase profiles |
 | ParadeDB `pg_search`, VectorChord-bm25, `bm25_turbo` | AGPL / ELv2 | **REJECT** |
 | Jina rerankers/embeddings incl. v3.5, SFR-Embedding-Code, Qodo-Embed-1 | CC-BY-NC / RAIL | **REJECT** |
-| PrefEval | CC-BY-**NC** | **REJECT** (cite the published figure only) |
+| PrefEval | CC-BY-**NC** | **REJECT** the data; **rebuild the design** (Track U) |
 | `voyage-code-3` | hosted API | **REJECT** — no weights; product dependency |
+
+**Nothing above is a capability block** (`26` §D-2026-07-30b). A restrictive
+licence blocks *their code*, never the behaviour. Every AGPL/ELv2 row here is a
+BM25 implementation, and BM25 is a published 1994 formula — W1.1 already
+implements it from the description, so those rejections cost us nothing but a
+dependency we did not want. Same for fusion: TM2C2 and interleave are described
+in a refereed paper and in public code comments respectively.
+
+The two genuine limits, stated rather than wished away: **model weights cannot be
+reimplemented** — a CC-BY-NC reranker is not a technique we can rebuild, only a
+permissive alternative or our own training run — and **datasets cannot be
+reimplemented, though their methodology is free**, which is exactly why Track U
+is a legitimate answer to PrefEval and its data is not. Clean room also gives no
+patent defence.
 
 ## 7. Sequencing and budget
 

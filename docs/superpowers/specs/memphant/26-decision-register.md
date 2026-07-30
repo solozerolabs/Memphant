@@ -183,3 +183,60 @@ weights is a trap that this register must not paper over.
 **Not changed:** every measurement rule. Reuse does not lower the promotion bar
 — adopted code still earns its default through the same paired, preregistered,
 same-lattice evidence, and a technique's published gain is never our number.
+
+### D-2026-07-30b — Never license-blocked: tiered independent implementation
+
+**Decision (owner):** a restrictive license on someone else's implementation
+never blocks MemPhant from having the capability. If we cannot use the code, we
+reimplement the behavior independently — from papers, docs, blogs, observable
+behavior, or a strict clean-room reading of the source.
+
+**Why this is mostly free:** copyright protects *expression*, not ideas,
+algorithms, or methods. BM25, RRF, TM2C2, reciprocal-rank variants, compaction,
+interleave fusion and the rest are published techniques. Implementing them from
+their published description is ordinary independent work, not a workaround, and
+carries no licence obligation from any repository that also implements them. In
+almost every case we never needed the restricted repo at all.
+
+**Protocol — pick the lowest tier that suffices:**
+
+- **Tier 0 — published technique.** A paper, spec, or docs page describes it.
+  Implement directly, cite the source. No ceremony. This covers the overwhelming
+  majority of our cases, including every AGPL BM25 implementation we rejected.
+- **Tier 1 — observable behavior.** No paper, but behavior is visible through
+  docs, an API, or outputs. Write a functional description from observation, then
+  implement from that description.
+- **Tier 2 — strict clean room.** Only when the behavior genuinely cannot be
+  derived otherwise. Two separated roles: a **reader** who may consult the
+  restricted source and writes a functional specification containing **no code
+  and no expressive detail** (no identifiers, no structure, no comments, no
+  ordering that only makes sense as transliteration), and an **implementer** who
+  has never seen the source and works solely from that specification. Record both
+  roles, the specification, and the fact that the implementer was unexposed.
+
+**Hard limits — state them rather than pretend the principle dissolves them:**
+
+- **Model weights cannot be clean-roomed.** A CC-BY-NC or RAIL-licensed model
+  (Jina rerankers, SFR-Embedding-Code, Qodo-Embed) is not reimplementable; the
+  artifact *is* the licensed thing. The only routes are a permissively licensed
+  alternative or training our own. Do not describe either as clean room.
+- **Datasets cannot be clean-roomed either**, but their *methodology* is free:
+  PrefEval's data is CC-BY-NC and unusable, while building our own bank to the
+  same published design — which is what Track U is — is unrestricted.
+- **Clean room defends against copyright, not patents.** It provides no patent
+  defence. Low practical risk for retrieval scoring, but it is not zero and the
+  principle does not make it zero.
+- **Never** copy-paste, transliterate structure, or have one agent read
+  restricted source and then write the implementation "from memory". That is the
+  pattern that creates both legal exposure and a discoverable evidence trail,
+  and it is precisely what the tiers exist to avoid.
+
+**Operational note for subagents:** an agent that has read restricted source is
+exposed for that component and must not implement it. Dispatch reading and
+implementing to different agents, and say so in the brief.
+
+**Unchanged:** permissive reuse (D-2026-07-30) is still preferred over
+reimplementation when available — it is cheaper and carries attribution rather
+than risk. And an independently implemented technique still earns its default
+through the same paired, preregistered evidence; the published gain is never our
+number.
