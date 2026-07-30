@@ -616,3 +616,75 @@ Artifact: `docs/build-log/artifacts/track-r/track_r_phase1e_combined_fixes.json`
 (committed). Per-question evidence and the three analyzer outputs under
 `…/track-r/phase1e/` are gitignored under the same rule as `phase1/`, `phase1d/`
 and `phase1r/` — they carry third-party event bodies.
+
+---
+
+## 2026-07-30 — W3.1 governance-core spec + W5.3 restraint reconciliation (`af-w3-spec`)
+
+Docs and one test only. No Rust touched.
+
+**W3.1 — the R3 governance core now has a spec.** It previously existed only in
+`docs/reports/2026-07-11-prosumer-memory-campaign-report.md:231-275`, so
+"finish all substrates" had no contract to finish against. Written into the
+owning docs per `00` §1: the memory model into `04`, the ops half into `14`.
+
+- `04` **§13 Governance Core** (new): §13.0 verified starting state with a
+  file:line per claim; §13.1 the typed write-router — dispatch on `kind` first,
+  one arm per kind, invariants RW-1..RW-8 (kind-totality with **no `_` arm** as
+  the enforcement mechanism, arm purity/no-LLM, own-kind writes, append-only
+  transaction time, idempotence, traced decisions, no widening/no trust
+  escalation, principal fidelity) plus a per-arm contract table
+  (trigger/operation/must-guarantee/forbidden/code-state); §13.2 the kind
+  extension — `preference` and `working_state` policy rows written and passing
+  the `04` §0.1 admission test but **PROPOSED-unminted**, with `knowledge`
+  resolved as an arm name rather than a variant; §13.3 `retention_tier` as a
+  state machine — transition table with predicates, exactly one writer
+  (`tier_episode`), invariants RT-1..RT-6, and five conformance tests;
+  §13.4 demotion-vs-deletion as two orthogonal mechanisms with contract
+  DM-1..DM-5 and the storage mechanism left open; §13.5 principal-scoped
+  multi-agent access PS-1..PS-5; §13.6 the specced-but-unbuilt register;
+  §13.7 six open decisions, each with the evidence that closes it.
+- `04` §2.4, §4.2, §8, §12: UNBUILT markers and corrected pointers where the
+  existing prose read as description of code that does not exist.
+- `14` **§3.3 Governance-Core Jobs** (new): the ops contract for `tier_episode`
+  (schedule, inputs, enqueue sources, batch bounds, idempotency, trace, failure,
+  never-does) and `promote_procedure`; unit demotion deliberately has no job
+  because its mechanism is `04` §13.7 OPEN-4.
+
+`chain_head` is specified as **derived, not a column** — it is §7.3a's open
+generation, already enforced by the partial-unique index. Adding a column would
+be a second source of truth.
+
+**Correction to the W3.2 brief, recorded rather than silently applied.**
+`Preference` is minted as a real kind. `Knowledge` is **not**: run through
+`04` §0.1 it fills the same policy row as `semantic` on all six columns, and a
+sixth variant would fork the bitemporal supersession contract. It is the
+router-arm name (`knowledge_arm`); the rename of the enum variant is OPEN-2 with
+its cost (breaking migration across `04`/`05`/`06`/`08`/`20`, both SDKs, every
+stored `kind` string) stated.
+
+**W5.3 — the restraint gate no longer rejects its own passing run.** `27` §1 and
+the scorecard named OP-Bench/PS-Bench while
+`tests/test_restraint_launch_gate.py` asserted
+`benchmark in {"op-bench","ps-bench"}` on `pass`, and the only pinned, adapted,
+executed instrument is MemSyco. `27` §1 substitutes **MemSyco-Bench** with the
+justification recorded (OP-Bench has no runnable release; PS-Bench has no
+license; MemSyco is MIT, pinned by revision + per-file sha256, native scorer,
+and measures the same construct across its five tasks). `26` §3 gains
+D-2026-07-30c with the scope limit, the non-overlap MemSyco does **not** cover
+(OP-Bench's irrelevance/sycophancy/repetition taxonomy; PS-Bench's
+intent-legitimation, which stays a `06` §9 threat row), and a reopen test. The
+test admits `memsyco-bench` alongside both older names. **No substantive
+threshold moved**: drop ≤ 0.15, sample ≥ 50, CI upper ≤ 0.15, `05` §1.5 gate
+mandatory on breach, pinned-block in-scope.
+
+**Verification.** `python3 scripts/check_spec_drift.py` → `spec_drift=clean`
+(mirror synced file-by-file for only the five files touched, after confirming
+each matched this branch's base — the Syndai tree's other modifications were
+left alone). `python3 -m pytest tests/` → **1028 passed, 15 skipped, 1 failed**;
+the single failure is the pre-existing environmental
+`test_public_launch_gate.py::test_public_sota_claim_policy_...`
+(`sh: playwright: command not found`), unrelated to this change.
+
+**No checkbox moved** — STATUS gains one note; checked-box count is 21 before
+and after.
