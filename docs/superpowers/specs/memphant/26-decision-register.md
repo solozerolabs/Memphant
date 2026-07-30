@@ -157,3 +157,29 @@ MemPhant is Apache-2.0, so every reused component and studied competitor is lice
 | **Zep product** (vs. Graphiti engine) | closed-source SaaS | only the Apache-2.0 Graphiti engine is reusable |
 
 Rule: copying code from an ELv2/AGPL/SSPL/closed project is forbidden; architecture study is always allowed. Re-verify a license before any code reuse — projects relicense.
+
+### D-2026-07-30 — Reuse policy is license-governed, not category-governed
+
+**Decision (owner):** rescind `13` §0's blanket "copy patterns, not code". Code
+reuse is permitted from MIT / Apache-2.0 / BSD / PostgreSQL-licensed projects
+with attribution, including from competitors; AGPL / GPL / LGPL / SSPL / BUSL /
+ELv2 / CC-BY-NC remain forbidden to vendor (study only). Competitor *products*
+remain excluded as **runtime dependencies** — reusing a competitor's Apache-2.0
+source is reuse; depending on their hosted service is a dependency, and MemPhant
+must stand up without anyone else's service running.
+
+**Why:** `13` §0 was stricter than this register's own §8, which already carries
+per-project REUSE-OK verdicts. The stricter line bought no legal protection and
+was blocking adoption of permissively licensed work at a moment when the
+measured accuracy gaps are exactly the kind that published, permissively
+licensed implementations address.
+
+**Obligations attached:** record source + license + exact commit/revision at the
+point of reuse; carry the required NOTICE; verify from the LICENSE file rather
+than a README badge or a cached belief; and record **model-weights licenses
+separately from repository licenses** — a permissive repo with non-commercial
+weights is a trap that this register must not paper over.
+
+**Not changed:** every measurement rule. Reuse does not lower the promotion bar
+— adopted code still earns its default through the same paired, preregistered,
+same-lattice evidence, and a technique's published gain is never our number.

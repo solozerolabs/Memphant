@@ -2,7 +2,31 @@
 
 ## 0. Read This Correctly
 
-MemPhant should copy good architecture patterns, not code. All competitor claims are re-verified before public use.
+**Amended 2026-07-30 (owner decision).** The former blanket rule — "copy good
+architecture patterns, not code" — is rescinded. It was stricter than
+`26` §8, which already records per-project REUSE-OK / LANDMINE verdicts, and it
+was costing us adoptable permissively licensed work for no legal reason.
+
+The rule is now **license-governed, not category-governed**:
+
+- **Code reuse is permitted from MIT / Apache-2.0 / BSD / PostgreSQL-licensed
+  projects**, with attribution per the license, whether or not the project is a
+  competitor. Record source, license, and the exact commit/revision at the point
+  of reuse, and carry the required NOTICE.
+- **Forbidden to vendor: AGPL, GPL, LGPL, SSPL, BUSL, Elastic License 2.0, and
+  any non-commercial license (CC-BY-NC).** Architecture study is always allowed.
+  Standing landmines are enumerated in `26` §8.
+- **Competitor *products* remain excluded as runtime dependencies.** Using a
+  competitor's Apache-2.0 source is reuse; depending on their hosted service is
+  a dependency. The no-competitor-dependence position was always about the
+  latter — MemPhant must stand up without anyone else's service running.
+- **Model weights carry their own license, separate from the repository's.** A
+  permissively licensed repo with non-commercial weights is a trap; check both
+  and record both.
+- Re-verify from the LICENSE file, never a README badge, and never a cached
+  belief — projects relicense.
+
+All competitor claims are still re-verified before public use.
 
 ## 1. Competitor Map
 
