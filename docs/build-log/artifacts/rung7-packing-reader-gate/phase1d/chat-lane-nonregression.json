@@ -1,0 +1,41 @@
+{
+  "after_overall": {
+    "abstention_correct": 7,
+    "abstention_n": 12,
+    "n": 178,
+    "n_scored": 166,
+    "question_type": "overall",
+    "recall_at_10": 0.6144578313253012,
+    "recall_at_5": 0.6144578313253012
+  },
+  "before_overall": {
+    "abstention_correct": 7,
+    "abstention_n": 12,
+    "n": 178,
+    "n_scored": 166,
+    "question_type": "overall",
+    "recall_at_10": 0.6144578313253012,
+    "recall_at_5": 0.6144578313253012
+  },
+  "dataset_sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",
+  "packed_context_identical": true,
+  "paired_at_10": {
+    "after_hits": 102,
+    "after_only": 0,
+    "before_hits": 102,
+    "before_only": 0,
+    "mcnemar_exact_p": 1.0,
+    "n": 166
+  },
+  "paired_at_5": {
+    "after_hits": 102,
+    "after_only": 0,
+    "before_hits": 102,
+    "before_only": 0,
+    "mcnemar_exact_p": 1.0,
+    "n": 166
+  },
+  "per_question_vector_identical": true,
+  "sample_n": 178,
+  "sample_seed": 20260710
+}
