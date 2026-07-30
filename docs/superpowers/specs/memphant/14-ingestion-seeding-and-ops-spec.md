@@ -90,11 +90,11 @@ extract_entities
 extract_fact_candidates
 dedupe_memory_units        # derived-unit dedup (distinct from episode near-dedup, 04 §2.3)
 promote_semantic           # independent-source corroboration gate (04 §5)
-promote_procedure
+promote_procedure          # write side of the 04 §4.2 gate — UNBUILT (§3.3)
 detect_contradiction       # subject-key + proximity + valid-overlap (04 §3.1)
 update_decay
 refresh_stale_fact         # active freshness due scan; no separate queue (04 §8.1)
-tier_episode               # retention-tier hot/warm/cold demotion+promotion (04 §2.4)
+tier_episode               # retention-tier hot/warm/cold demotion+promotion (04 §2.4, §13.3) — UNBUILT (§3.3)
 reembed_profile
 purge_forget
 ```
@@ -131,6 +131,48 @@ job_state
 ```
 
 Jobs must be resumable after process death. No correctness-critical state lives only in memory. `locked_until` is **live, not decorative**: it is written when the job is claimed (`= now() + pgmq_vt`, `02` §6.2) and is the lease the failed-job sweep (§4.1) and `job_heartbeats` dead-man's-switch (`02` §6.1) read to detect a worker that died holding a job.
+
+### 3.3 Governance-Core Jobs (the ops contract for `04` §13)
+
+> **SPECCED-UNBUILT (verified 2026-07-30).** `tier_episode` is named in this
+> list, in `04` §2.4, and in `02` §6, and **does not exist in code**:
+> `grep -rn 'retention_tier' crates --include='*.rs'` returns **0 hits**, so the
+> column (`memphant_migrations/versions/20260703_001_wsa_bootstrap.sql:278`) has
+> zero readers and zero writers and every episode is `'hot'` forever. The
+> *lifecycle* contract these jobs implement is owned by `04` §13 (§13.3
+> transitions, §13.4 demotion); this section owns only the **ops** half —
+> schedule, inputs, bounds, idempotency, failure handling, alarm.
+
+**`tier_episode`** — the only writer of `episode.retention_tier` (`04` §13.3
+RT-3).
+
+| Property | Contract |
+|---|---|
+| Schedule | periodic via the §3.2 substrate (pg_cron → pgmq → Temporal). **Never** an in-process loop; **never** on the recall path |
+| Inputs | episode age, last citing-recall timestamp, DSR retrievability of derived units (`04` §8), and the tenant policy parameters `T_warm`/`R_warm`/`W_warm`/`W_cold` |
+| Enqueue sources | (a) the periodic schedule for demotion; (b) the Stage-7 cold-fetch path for **re-promotion only** — recall may enqueue, never write (`04` §13.3 RT-3) |
+| Batch bounds | capped episodes-per-round with the §3.2 bisection-retry discipline; one malformed episode never blocks the round |
+| Idempotency | `(tier_episode, episode_id, compiler_version)` — two runs in one policy window produce one transition (`04` §13.3 RT-5) |
+| Trace | every transition records the from/to tier **and the predicate values that fired it** (`04` §13.3 RT-4). A silent transition is a defect |
+| Failure | a failed demotion leaves the episode at its current tier — demotion is never partially applied. A failed *re-promotion* must retry: an episode stuck cold after a citing recall is the user-visible failure mode |
+| Never does | delete a raw episode, drop a citation, or change unit `state`. Deletion is `purge_forget` and is a different mechanism entirely (`04` §13.4) |
+
+**`promote_procedure`** — the write side of the `04` §4.2 gate, which today has
+none (the read gate at `crates/memphant-core/src/lib.rs:8362` has nothing that
+can pass it).
+
+| Property | Contract |
+|---|---|
+| Trigger | a recorded validation outcome (replay result or deterministic check), never a schedule and never recall frequency |
+| Effect | `procedure_candidate → validated` **only** when `validation = {method, trials, wins}` meets the `04` §4.2 threshold **and** the adversarial high-risk-step assertion passes |
+| Idempotency | `(promote_procedure, unit_id, compiler_version)`; re-running a promotion that already happened is a no-op, not a second generation |
+| Trace | the validation evidence is durable and replayable — a `validated` unit whose promoting evidence cannot be re-read is a defect |
+| Never does | promote on corroboration count, on agreement between agents, or on an LLM judgment (`04` §4.2) |
+
+**Unit demotion has no job yet, on purpose.** Whether demotion is a stored tier
+(needing a `demote_unit` sweep) or a pure recall-time predicate (needing no job
+at all) is **`04` §13.7 OPEN-4**. Do not add a job for it before that closes —
+adding the sweep first would pick the answer by accident.
 
 ## 4. Operational Jobs
 

@@ -50,6 +50,8 @@ The analogs justify separation of policy. They do not justify claims of scientif
 
 If a memory cannot name its policy row, it should not be stored.
 
+**Two further kinds are PROPOSED and not yet minted** — `preference` (§13.2a) and `working_state` (§13.2b). Their policy rows are written there and pass the §0.1 admission test; the enum in code remains the five variants at `crates/memphant-types/src/lib.rs:968` until the `00` §4 / `25` §11c additive migration lands (W3.2). `knowledge` is **not** a proposed kind — it is the router-arm name for `semantic` (§13.2c), because it fills no distinct policy row.
+
 ## 2. Episodic Memory
 
 Purpose: preserve ground truth.
@@ -98,6 +100,8 @@ Invariant #1 keeps raw episodes as *recoverable* ground truth — but unbounded 
 - A provider sunset (an embedding model deprecated mid-corpus) is survivable precisely because re-embedding runs offline from the raw episode (`14` §10) — a direct payoff of keeping ground truth recoverable.
 
 `episode.retention_tier` is **frozen now**. Storage-growth-per-tenant is a first-class SLI with an alarm threshold (`22` §SLIs).
+
+> **UNBUILT (verified 2026-07-30).** This section froze the vocabulary and named the job; it never said who writes the column or on what predicate. As a result `episode.retention_tier` (`20260703_001_wsa_bootstrap.sql:278`) has **0 readers and 0 writers** in `crates/` and every episode is `'hot'` forever, and `tier_episode` **does not exist in code**. The transition table, writers, invariants, and conformance tests are in **§13.3**; the demotion-vs-deletion distinction is **§13.4**.
 
 ## 3. Semantic Memory
 
@@ -180,6 +184,8 @@ A `procedure` is `kind='procedural'` in `memory_unit`; its structured payload li
 ### 4.2 Candidate → validated (the gate)
 
 A candidate is **not recallable as trusted context** (§7.1). It crosses to `validated` by **replay** (`method='replay'`, ≥ threshold wins over trials in the eval harness) or **deterministic validation** (the effect is statically checkable) — **never by corroboration count.** Replay is **adversarial**: it proves "it ran" *and* asserts no high-risk/destructive step (force-push, validation-skip, secret exfiltration), because a poisoned procedure can pass naive replay (MemoryGraft, arxiv 2512.16962). Procedural recall applies the `06` §4.2 high-risk-arg label to the *steps*, not just the unit. A procedure many agents agree on but that fails replay is still wrong: procedures gate on *outcome*, beliefs on *source independence* (§5). A `failure` unit is validated when its failure is *reproduced/confirmed* — true when the bad path reliably fails — then it lives only to *suppress* a path, never to drive one.
+
+> **The write side of this gate is UNBUILT (verified 2026-07-30).** `UnitState::Validated` is *required* on the read path (`crates/memphant-core/src/lib.rs:8362`, eligibility predicates `lib.rs:3284-3285` / `store.rs:3724`, `:3765`), but **no write path in `crates/*/src/` ever transitions a unit into `Validated`** — so nothing can pass a gate that is nonetheless enforced. The write-side contract is `procedural_arm` in §13.1; the implementation is W3.5.
 
 ### 4.3 Success vs failure differ in retrieval and decay
 
@@ -515,6 +521,8 @@ Implementation: the Rust decay kernel should wrap the **`fsrs-rs`** crate (`open
 
 **Worked update (fixed-prior).** A `project_facts` unit starts `stability_days = 7`, `difficulty = 5`. It is recalled-and-confirmed (a positive reinforcement) on days 3, 12, 30 — three *distinct* observations (§2.3 dedup ensures retries do not count). Each confirmation raises stability (less forgetting) per the FSRS stability-after-success update; by day 30 `stability_days ≈ 60`, so computed retrievability at day 45 is high and the fact stays in default recall. A contradicting higher-trust fact instead routes through §3.1 (supersede), not through decay — decay lowers *priority*, correction changes *truth*.
 
+> **Scope of decay, stated exactly (verified 2026-07-30).** Decay is a **recall-time score multiplier and nothing else**: `candidate.fused_score *= candidate.decay.retrievability` (`crates/memphant-core/src/lib.rs:7364`), plus a composite term at `lib.rs:9290`. It reorders candidates; **it changes no state, moves no tier, and demotes nothing.** The report-level phrase "episodic = decay-to-cold" therefore describes §13.3's tiering job, not this section — decay supplies one *input predicate* to that job and never performs the transition itself.
+
 ### 8.2 Reinforcement is Replayed from a Review Ledger, Never Incrementally Mutated (at-least-once correctness)
 
 `fsrs-rs` `next_states()` takes the **current** `MemoryState` *(stability, difficulty)* plus `days_elapsed` and returns the *next* `MemoryState` — by its signature `next_states(current_memory_state: Option<MemoryState>, desired_retention, days_elapsed)` it is a **read-modify-write on a continuous value**, not a pure function of an immutable event log. So an in-place `update_decay` that reads `stability_days`, calls `next_states`, and writes the new `stability_days` **double-applies a redelivered reinforcement** (pgmq vt expiry / Temporal activity retry, both at-least-once): the same recall-confirmation bumps stability twice, the fact looks more reinforced than the evidence warrants, and at 10M scale this is a systematic over-retention drift. This is the **same RMW hazard as confidence (§5.1a)** and gets the **same event-sourced fix** — and it is *why* `reinforcement_count` is already specified as "distinct observations, not raw re-arrivals" (§7 column comment): that invariant was unenforceable without the ledger below.
@@ -726,4 +734,403 @@ Rules:
 - **Trust-capped: the block is data.** It renders delimited as data (invariant #4), is never `high_risk_arg`-eligible, and **never counts as corroboration** (`§5` independence gate ignores it). Editing requires a `trusted_user`/`trusted_system`/admin actor.
 - **Append-only + audited.** Edits insert a new version and write a `trust_event`; history is inspectable (`19`). No in-place mutation (the §7.3a discipline, simplified: version-increment instead of bitemporal clocks — the block has no represented-world validity to model).
 - **Forget clears it.** Scope-`forget` deletes all versions under the same deletion generation; the file adapter projects the current block at `/memories/pinned.md` (`08` §5.1a), so file-agents edit it through the same gates.
-- **OP-Bench-gated.** Block content is in-scope for the over-personalization launch gate (`27`) — a pinned block is exactly where the §1.5 thin-pack harm concentrates, so the gate measures it rather than trusting it.
+- **Restraint-gated.** Block content is in-scope for the over-personalization launch gate (`27` §1) — a pinned block is exactly where the §1.5 thin-pack harm concentrates, so the gate measures it rather than trusting it. The gate's *instrument* is **MemSyco-Bench**, substituted for the unrunnable OP-Bench / unlicensed PS-Bench (`27` §1, `26` §3 D-2026-07-30c); the threshold and the in-scope rule here are unchanged by that substitution.
+
+## 13. Governance Core (typed write-router, memory planes, principal scoping)
+
+> **READ THIS FIRST — §13 IS SPECIFICATION, NOT DESCRIPTION.** Everything in
+> §13 is **SPECCED-UNBUILT** unless a row says otherwise. It was written
+> 2026-07-30 (W3.1) because the governance core previously existed only in a
+> campaign report (`docs/reports/2026-07-11-prosumer-memory-campaign-report.md`
+> §"five-plane architecture"), never in this suite — so "finish all substrates"
+> had no contract to finish against. Two false BUILT claims in `STATUS.md` in
+> the week before it was written came from exactly that confusion. **Nothing in
+> §13 may be cited as evidence that code exists.** The verified code state of
+> every claim is recorded inline with a file path, and consolidated in §13.6.
+
+### 13.0 Verified starting state (2026-07-30)
+
+Every row was re-verified against the working tree at the time of writing.
+
+| Intended mechanism | Verified code reality |
+|---|---|
+| typed write-router | **absent.** Admission is one linear loop with an if/else ladder on `candidate.admission_hint` (`crates/memphant-core/src/lib.rs:11500`, `:11575`, `:11699`); `kind` enters only as data |
+| knowledge = supersession | **half-built and hardcoded.** The supersession/invalidation target filter is the literal `unit.kind == MemoryKind::Semantic` (`lib.rs:11512`) / `existing.kind == MemoryKind::Semantic` (`lib.rs:11616`) — a constant inside one arm, not a dispatch |
+| episodic = decay-to-cold | **absent.** Decay is a recall-time score multiplier only: `candidate.fused_score *= candidate.decay.retrievability` (`lib.rs:7364`) plus a composite term (`lib.rs:9290`). It reorders; **nothing changes state** |
+| procedural = evidence-gated | **read-gate only.** `UnitState::Validated` is required at `lib.rs:8362` (and in the recall-eligibility predicates `lib.rs:3284-3285`, `store.rs:3724`, `:3765`); **no write path in `crates/*/src/` ever transitions a unit into `Validated`** — every non-test occurrence is a read or a serialization arm |
+| preference = chain-head → hot | **absent and inexpressible.** No `Preference` variant (`crates/memphant-types/src/lib.rs:968`); no `chain_head` anywhere in the tree |
+| hot plane | **absent.** `episode.retention_tier` (`hot\|warm\|cold`, `memphant_migrations/versions/20260703_001_wsa_bootstrap.sql:278`, partial index `:826`) has **0 readers and 0 writers** in `crates/` (`grep -rn retention_tier crates --include='*.rs'` → 0 hits). Every episode is `'hot'` forever. The `tier_episode` job named in §2.4, `14` §3, and `02` §6 **does not exist in code** |
+| cold plane / demotion | **absent.** `demote`/`demotion`/`cold` appear in **no** Rust file under `crates/`. What exists is the inverse — hard `forget` with tombstones (`crates/memphant-store-postgres/src/store.rs:1325`, `:1628`) |
+| `MemoryKind` | `Episodic \| Semantic \| Procedural \| Belief \| Resource` (`crates/memphant-types/src/lib.rs:968-974`, `ALL: [Self; 5]`). **No `Preference`, no `Knowledge`, no working-state kind** |
+
+### 13.1 The typed write-router
+
+The router is the admission stage of `reflect` (§9 stage 4), restructured. Today
+that stage is a single loop that branches on `admission_hint`; the contract
+below inverts the dispatch: **kind first, hint second.**
+
+```text
+router(candidate) =
+  match candidate.kind {                  // exhaustive, no wildcard arm
+    Episodic     => episodic_arm(...),    // capture + tier scheduling
+    Semantic     => knowledge_arm(...),   // supersession (§3, §7.3a)
+    Procedural   => procedural_arm(...),  // evidence gate (§4.2)
+    Belief       => belief_arm(...),      // corroboration gate (§5)
+    Resource     => resource_arm(...),    // extractor lifecycle (§6.1)
+    Preference   => preference_arm(...),  // chain-head -> hot   (§13.2a, kind unminted)
+    WorkingState => working_state_arm(..) // retain + compact    (§13.2b, kind unminted)
+  } -> WriteDecision { action, unit_deltas, edge_deltas, reason }
+```
+
+**Router invariants.** These are the testable part; an implementation that
+satisfies the arms but violates these is not the router.
+
+- **RW-1 Kind-totality.** The dispatch is an exhaustive `match` on `MemoryKind`
+  with **no `_` catch-all**. This is the enforcement mechanism for §13.2: minting
+  a new kind must fail to compile until its arm exists. A wildcard arm silently
+  reintroduces the "`kind` enters only as data" defect and is a contract
+  violation, not a style preference.
+- **RW-2 Arm purity.** An arm is a deterministic function of
+  `(candidate, in-scope existing units, now)`. **No LLM call, no network, no
+  clock read other than the passed `now`.** Extraction cost stays in `reflect`
+  stage 1 (§9); the router is the cheap decision layer. This is what preserves
+  deterministic writes and makes the golden write-compiler tests
+  (`crates/memphant-core/tests/write_compiler_golden.rs`) meaningful.
+- **RW-3 Own-kind writes only.** An arm mints, closes, or edges units of **its
+  own kind**. The single sanctioned cross-kind transition is belief → semantic
+  promotion, which is owned by `belief_arm` and gated by §5 independence; it is
+  named here so it stays the only one.
+- **RW-4 Append-only transaction time.** Every arm obeys §7.3a: close the open
+  generation and INSERT: never an in-place `UPDATE` of `valid_*`,
+  `transaction_from`, or `body`.
+- **RW-5 Idempotence.** Router output is keyed by
+  `(job_type, target_id, compiler_version)` (`14` §3); replaying a job produces
+  the same `WriteDecision` and no duplicate rows.
+- **RW-6 Traced decisions.** Every invocation appends `{arm, action, reason}` to
+  the `reflect` trace (§9 trace contract). A write outcome that cannot be
+  attributed to an arm and a reason is a defect — the write-side counterpart of
+  `27` §0's "no miss ends with unknown."
+- **RW-7 No widening, no trust escalation.** No arm may write outside the
+  candidate's scope (§11.1) or raise `trust_level` above what the source actor
+  supports. `high_risk_arg` eligibility is never granted by an arm.
+- **RW-8 Principal fidelity.** Every minted unit carries the *calling*
+  principal's `actor_id` (and `agent_node_id` when agent-authored). An arm may
+  never attribute a write to a different principal (§13.5).
+
+**Per-arm contract.**
+
+| Arm | Trigger | Primary operation | Must guarantee | Forbidden | Code state |
+|---|---|---|---|---|---|
+| `episodic_arm` | new raw episode admitted | append; near-dedup (§2.3); stamp tier-eligibility inputs (`last_recalled_at`, `observation_count`) | ground truth is never rewritten; the episode stays recoverable (invariant #1); it is **never superseded and never promoted away** | supersession, deletion, embedding drops (those are §13.3 and §10) | append BUILT; **tier scheduling ABSENT** (§13.0) |
+| `knowledge_arm` | candidate carries a `subject_key` (§3.3) | close-generation + INSERT (§7.3a) | at most **one** open generation per `(tenant_id, subject_key)`; the superseded generation stays citable; contradiction produces an edge, never an overwrite | in-place mutation; deleting the prior belief generation | half-BUILT, kind hardcoded (`lib.rs:11512`, `:11616`) |
+| `procedural_arm` | candidate strategy or failure pattern | mint at `procedure_candidate`; transition to `Validated` **only** on a recorded validation event | a unit reaches `Validated` **only** via `validation = {method ∈ replay\|deterministic, trials, wins}` meeting the §4.2 threshold **and** the adversarial high-risk-step assertion; the validation event is durable and replayable | promotion by corroboration count, by recall frequency, or by any LLM judgment | **write side ABSENT** — read gate at `lib.rs:8362` has nothing that can pass it |
+| `belief_arm` | low-trust observation | mint `belief`; evaluate §5 independence; promote to semantic when cleared | source-independent corroboration; confidence recomputed, never incrementally mutated (§5.1a) | promotion from K mutually-reinforcing same-origin observations | BUILT (§5) |
+| `resource_arm` | pointer/blob/chunk | extractor state machine (§6.1) | ACL narrowing is applied in-stage; chunk identity stays `kind='resource'` | a parallel chunk table or a second embedding grain | BUILT (§6.1) |
+| `preference_arm` | user-declared or correction-derived standing constraint | supersede the current chain head; the new head is hot-plane resident | exactly **one** chain head per `(tenant_id, data_subject_id, scope_id, preference_key)`; superseded preferences stay citable; the head is injected deterministically, not retrieved competitively | decay; corroboration gating; minting by an unprivileged principal (§13.5) | **ABSENT** — kind unminted |
+| `working_state_arm` | agent's own retained reasoning / plan state | append, then **compact-and-supersede** at the scope budget | never crosses `agent_node`; never promoted to any other kind; never counts as corroboration; TTL-bounded | truncation-by-discard; cross-principal read; `high_risk_arg` eligibility | **ABSENT** — kind unminted |
+
+**`chain_head` is derived, not a column.** The report's "chain-head" is exactly
+§7.3a's open generation:
+`chain_head(k) = the unique unit with kind='preference', payload->>'preference_key' = k,
+transaction_to IS NULL, state='active'`. The partial-unique index that already
+enforces "at most one open generation per subject" (§7) enforces the chain head
+for free. **Do not add a `chain_head` column** — it would be a denormalized
+cache of a uniqueness constraint we already hold, and the second source of truth
+is how the store-divergence class of bug enters.
+
+### 13.2 Extending `MemoryKind` (policy rows written here; minting is W3.2)
+
+The kind enum is **frozen-but-extensible** (`00` §2): a new kind is a governed
+additive migration (`25` §11c), and `00` §4 requires `04`, `05`, `06`, `08`, and
+`20` to be updated in the same change that mints one. **This section writes the
+policy rows and the admission test; it does not mint the kinds.** Until the
+migration lands, `MemoryKind` remains the five variants at
+`crates/memphant-types/src/lib.rs:968`, and anything below marked *unminted* is
+unrepresentable in code.
+
+Admission test for any new kind is unchanged (§0.1): it must fill a **distinct
+row on every policy column**, or it is rejected.
+
+#### 13.2a `preference` (PROPOSED — unminted)
+
+| Column | Value |
+|---|---|
+| Write path | user-declared constraint, or a constraint derived from an explicit user correction; `actor_id` must be the data subject or a `trusted_user` acting for them |
+| Promotion | **none.** A preference is declared, not promoted. It is superseded or revoked, never corroborated into existence |
+| Trust | actor-gated at write; the *content* is always data (never control flow, never `high_risk_arg`-eligible) |
+| Retrieval default | **deterministic hot-plane injection of the chain head** — not competitive retrieval. This is the one kind whose recall path is assembly, not ranking |
+| Decay | **none.** A preference does not fade with time; it ends by supersession or revocation. This is the column that most sharply separates it from `semantic` |
+| Main risk | over-personalization — which is precisely what the `27` §1 restraint launch gate measures |
+
+Distinct from `semantic` on promotion, retrieval, and decay; distinct from
+`belief` on trust and promotion. It passes §0.1.
+
+*Why it blocks work today:* Track U's 51 preference goldens
+(`docs/build-log/2026-07-30-phase1-golden-banks-and-retrieval-probe.md`) have no
+kind to be stored as, so the preference lane cannot be scored end-to-end.
+
+#### 13.2b `working_state` (PROPOSED — unminted)
+
+The agent's own retained reasoning and plan state — *why* it chose what it
+chose, not *what* happened. `episodic` records the latter; nothing records the
+former.
+
+*Evidence this is load-bearing.* OpenAI reports GPT-5.6 Sol moving **13.3% →
+38.3% RHAE on the ARC-AGI-3 public set with the model unchanged**, purely from
+two context-management settings: retaining the model's private reasoning across
+turns instead of discarding it, and **compacting rather than truncating** when
+the window fills. **Evidence handling is binding**: that number is
+OpenAI-self-run on their own harness and is not an ARC Prize leaderboard result.
+It is citable **only** as evidence about harnesses — the 13.3→38.3 delta — and
+**never** as a cross-model comparison (`27` §1's reproduced-baseline rule and
+the same-lattice rule both forbid it). What it establishes for us is narrow and
+sufficient: prior plan state is memory, and discarding it is a measurable loss.
+
+| Column | Value |
+|---|---|
+| Write path | agent-authored only; `agent_node_id` **required** (not nullable for this kind) |
+| Promotion | **never.** Working state does not become semantic fact. If a plan yields a durable conclusion, that conclusion is written as an episode and extracted normally — so it passes the corroboration gate like anything else |
+| Trust | floor trust, self-authored; **never counts as corroboration** (§5 independence gate ignores it, same rule as the pinned block §12); never `high_risk_arg`-eligible |
+| Retrieval default | same `(scope_id, agent_node_id)` only. **Never inherited, never granted** — it is a protected category (`06` §2.1), i.e. it carries no `scope_policy` `inherit` row, so isolation falls out of the schema rather than out of special-case code |
+| Decay | TTL-expire on session close, or compaction (below). Not DSR — there is no review signal on a plan |
+| Main risk | **self-reinforcing hallucination**: an agent that retains its own wrong plan re-reads it as evidence next turn. This is a new risk row, not a variant of poisoning, because the adversary is the principal itself |
+
+**Compaction, and the constraint it collides with.** At the per-scope
+working-state budget the arm must **summarize-and-supersede**, not discard the
+oldest — that is the substitution that paid in the ARC-AGI-3 harness, and it is
+structurally the same failure mode as our packer's hard drop under a cap. But
+summarization is an LLM call, and RW-2 forbids LLM calls in the router. The
+reconciliation available without breaking anything: compaction runs as a
+**`reflect` stage-1 extraction job** (where LLM cost already lives), and the
+router arm only consumes its output. Whether that is sufficient, or whether
+compaction belongs at compose time instead (where `05` places it, and where it
+becomes a latency line on every recall) is **OPEN-1** below.
+
+#### 13.2c `knowledge` — a name, not a new kind (with the open question stated)
+
+The campaign report's four router types are *knowledge / episodic / procedural /
+preference*. Two of those four were called unnameable. That is exactly right for
+`preference`. It is **not** right for `knowledge`, and this spec declines to
+invent a resolution that its own §0.1 forbids:
+
+- "knowledge = supersession" is a description of what `MemoryKind::Semantic`
+  already is (§3, §7.3a). Run it through the §0.1 admission test and it fills the
+  *same* row as `semantic` on write, promotion, trust, retrieval, decay, and
+  risk. A sixth variant with an identical policy row is precisely what §0.1
+  rejects, and it would fork the bitemporal supersession contract across two
+  kinds — the most expensive possible duplication.
+- Therefore, in this spec, **`knowledge` is the router-arm name for
+  `MemoryKind::Semantic`** (`knowledge_arm` in §13.1). No enum variant is added.
+- **OPEN-2** records the live alternative — renaming the variant — and its cost.
+
+*Correction to the W3.2 brief, stated plainly so no reader is misled:* W3.2 asks
+for `Preference` **and** `Knowledge`. This spec supplies the first as a real kind
+and the second as an arm name, on the §0.1 grounds above. If the owner wants the
+rename instead, it is OPEN-2, not a silent decision.
+
+### 13.3 Retention tier as state, with real transitions
+
+§2.4 froze the tier vocabulary and named a job. It never said **who writes the
+column, on what predicate, or what the reader does with it** — which is why the
+column has shipped with zero writers and zero readers since
+`20260703_001_wsa_bootstrap.sql:278`. This section supplies the missing half.
+
+**Tier is a property of an `episode`, never of a `memory_unit`.** Units have
+`state` (§7.1); episodes have `retention_tier`. Conflating them is the first
+implementation error to avoid.
+
+**Transition table.** `T_*` and `W_*` are tenant-configurable policy parameters,
+not constants in code.
+
+| From | To | Predicate | Writer | Physical effect | Reversible |
+|---|---|---|---|---|---|
+| `hot` | `warm` | `age ≥ T_warm` **and** DSR retrievability (§8) of every derived unit `< R_warm` **and** no citing recall within `W_warm` | `tier_episode` (`14` §3.3) | raw blob → object store; derived units **and** embeddings retained in Postgres | yes |
+| `warm` | `cold` | no citing recall within `W_cold` | `tier_episode` | blob compressed; **derived embeddings dropped, units kept as stubs** | yes |
+| `warm`/`cold` | `hot` | any recall that cites the episode | the recall path **enqueues** re-promotion; the job performs it | embeddings re-derived from the recoverable raw blob | — |
+| any | any | a `forget` | — | **not a tier transition.** Deletion is §10 / §13.4 and never moves this column | n/a |
+
+**Tier invariants.**
+
+- **RT-1 Recall never blocks on a tier.** Stages 1–6 run on Postgres rows only
+  (`02` §6). A cold blob is fetched at Stage 7 only when a citeable unit needs a
+  raw snippet, time-bounded; on miss or timeout the pack ships the unit and its
+  citation with **no snippet, labeled `evidence_cold`**, and enqueues
+  re-promotion. Degraded, never failed.
+- **RT-2 Nothing unrecoverable is dropped.** Every transition destroys only
+  material re-derivable from the raw episode. This is what invariant #1's word
+  "recoverable" was always carrying.
+- **RT-3 Exactly one writer.** `tier_episode` is the only code path that writes
+  `retention_tier`; the recall path may only *enqueue*. This is directly
+  falsifiable: any write to `retention_tier` outside that job is a defect, and
+  the test is a grep.
+- **RT-4 No silent transitions.** Every transition is recorded in the job trace
+  (`14` §3.1) with the predicate values that fired it.
+- **RT-5 Idempotence.** Two `tier_episode` runs over the same episode in the
+  same policy window produce one transition (`14` §3 job key).
+- **RT-6 Tier is not access control.** A cold episode is exactly as authorized
+  as a hot one. Tier changes latency and channel availability, never who may
+  read.
+
+**Conformance tests an implementer writes against this section.**
+
+1. An episode with no citing recall past `W_warm` is `warm` after one
+   `tier_episode` run, and `hot` again after one citing recall plus one run.
+2. A `cold` episode's citations still resolve (`06` deletion-completeness suite
+   must distinguish "cold" from "deleted" — they are different outcomes).
+3. Re-promotion re-derives embeddings that match a pinned embedding profile.
+4. Running `tier_episode` twice is a no-op the second time.
+5. `grep -rn 'retention_tier' crates --include='*.rs'` returns writers only in
+   the `tier_episode` implementation, and readers only in the Stage-7 cold-fetch
+   path. (Today it returns **zero** of either.)
+
+**Open:** what `hot` means for *units*, as opposed to episodes — the report's
+"hot plane (≤1k tokens, always injected)" is an assembly budget, not a storage
+tier. This spec places always-injected content in exactly two places: the pinned
+scope block (§12) and the preference chain heads (§13.2a). Whether a third
+hot-plane slot exists is **OPEN-3**.
+
+### 13.4 Demotion, not deletion — and how it differs from tombstoning
+
+These are two orthogonal mechanisms that the campaign report ran together and
+that the code has only one of.
+
+| | **Demotion** (specced here, unbuilt) | **Deletion** (§10, `06` §6 — built) |
+|---|---|---|
+| Motivation | cost and relevance | privacy and legal |
+| Trigger | staleness, interference, deep supersession | user or legal `forget` request |
+| Reversible | **yes, fully** | **no, by design** |
+| Content | retained and recoverable | removed or crypto-shredded; tombstone retained |
+| Default recall | absent | absent |
+| Exhaustive recall | **present** | absent |
+| Audit | job trace + a recall-trace drop label | `deletion_generation` + the release-blocking completeness check (`14` §4.1) |
+| Code today | nothing (`demote`/`demotion` → 0 hits in `crates/`) | `subject_tombstone` + forget path (`store.rs:1325`, `:1628`) |
+
+**The one-line difference:** deletion removes the content and keeps a marker;
+demotion keeps the content and removes it from the fast path. A demotion that
+cannot be undone by one sufficiently good recall is a deletion with extra steps,
+and is a contract violation.
+
+**Unit-level demotion contract** (episode-level demotion is §13.3's tiering):
+
+- **DM-1 Reversible by evidence.** One recall in which the unit scores above the
+  re-promotion threshold restores it to the default pool. No manual step.
+- **DM-2 Bitemporally inert.** Demotion does **not** close a generation, does
+  not set `transaction_to`, does not change `state`. What MemPhant believes is
+  unchanged; only what it *reaches first* changes. (This is the invariant that
+  keeps demotion out of the §7.3a audit chain, where it does not belong.)
+- **DM-3 Exemptions are structural.** A `preference` chain head (§13.2a) and the
+  pinned scope block (§12) are **never** demotable. These are the two
+  guaranteed-presence surfaces; demoting them silently breaks a promise the
+  product makes.
+- **DM-4 Visible in the trace.** A demoted unit that would otherwise have been a
+  candidate appears in the recall trace with a demotion drop reason and the
+  signal that demoted it. Otherwise `27` §0's "no miss ends with unknown" fails
+  on exactly the misses demotion causes.
+- **DM-5 Exhaustive mode reaches it.** `recall(..., exhaustive)` searches the
+  demoted pool. Non-negotiable — it is what makes DM-1 checkable.
+
+**The storage mechanism is OPEN-4.** Three candidates, deliberately not resolved
+here because the deciding evidence is a measurement we have not run:
+
+1. a new `recall_tier` column on `memory_unit` — the only option that makes
+   demotion an *auditable event* with a timestamp and a cause;
+2. a new `demoted` value in `UnitState` — cheapest to filter, but it collides
+   with §7.1's meaning of `state` (belief maturity) and with DM-2;
+3. a pure **recall-time predicate** over signals that already exist (DSR
+   retrievability §8 + supersession depth + last-citation age) — no migration,
+   no new state, and closest to what the code already computes at `lib.rs:7364`.
+
+(3) is the KISS default and is what this spec would ship first; (1) is the only
+one that satisfies DM-4 fully. Deciding between them on taste is the error. See
+OPEN-4.
+
+### 13.5 Principal-scoped multi-agent access (what CaaS needs)
+
+The substrate already has the isolation primitives: the scope tree and
+`scope_policy` (§11.0), `agent_node.level` (§11), per-kind isolation levels
+(§11.2), and API-key principal binding. What the governance core adds is the
+*attribution and sharing rules across kinds* for one user with many agents.
+
+**Principal.** A principal is the tuple
+`(tenant_id, data_subject_id, actor_id, agent_node_id?)`. `actor_id` is the
+provenance axis, `agent_node_id` the access-tree axis (`00` §2) — a human user
+has the former and not the latter; an agent has both.
+
+- **PS-1 Attribution is not optional.** RW-8: every unit records the writing
+  principal; no arm may attribute a write to another principal. Impersonation is
+  a write-path bug, not a policy question.
+- **PS-2 Preferences belong to the *subject*, not the agent.** A preference
+  written by agent A is a preference of the user, and is visible to agent B in
+  the same scope subtree subject to `scope_policy`. This is the whole "many
+  agents, one memory" promise; if preferences were per-agent, the product would
+  not exist.
+- **PS-3 Working state belongs to the *agent*, always.** Per §13.2b it is a
+  protected category with no `inherit` row and no grantable path. This is the
+  contamination guard, and it is structural (no policy row can express the
+  sharing) rather than enforced by a check that can be forgotten.
+- **PS-4 Contamination is measured, not asserted.** Cross-agent leak rate and
+  scope-leak rate are scored axes; the instrument is GateMem (`27` §1), which
+  gates nothing until it is reproduced in our own harness.
+- **PS-5 The database-level guarantee is currently absent, and this spec does
+  not pretend otherwise.** Isolation on the served path rests **entirely on
+  application predicates**: `SET ROLE` appears **0 times outside `tests/`**, no
+  login role is a member of `memphant_app`, the roles are `NOINHERIT`, and there
+  is no startup assertion that the connected role is non-superuser. Landing
+  `memphant_app` (W3.3) is a prerequisite for any claim that PS-1..PS-3 are
+  enforced in depth rather than in application code.
+
+### 13.6 Specced-but-unbuilt register (§13's honesty marker)
+
+Read this before citing anything above. `STATUS.md` records state; this table
+records the **spec-to-code gap** for the governance core specifically.
+
+| §13 contract | Code state | What it needs (workstream) |
+|---|---|---|
+| Typed write-router, RW-1..RW-8 | **UNBUILT** — if/else on `admission_hint` (`lib.rs:11500`) | restructure `reflect` stage 4 |
+| `knowledge_arm` dispatch (not a literal) | **PARTIAL** — behavior correct, dispatch hardcoded (`lib.rs:11512`, `:11616`) | fold into the router |
+| `preference` kind + `preference_arm` | **UNBUILT, unnameable** | W3.2 (+ `00` §4 five-doc migration) |
+| `working_state` kind + arm + compaction | **UNBUILT, unnameable** | W3.2; OPEN-1 first |
+| Procedural write-side promoter to `Validated` | **UNBUILT** — read gate has nothing to admit (`lib.rs:8362`) | W3.5 |
+| `retention_tier` writer + reader, `tier_episode` | **UNBUILT** — 0 readers, 0 writers | W3.4 |
+| Unit-level demotion | **UNBUILT** — 0 hits for `demote` in `crates/` | OPEN-4 first |
+| Exhaustive recall over demoted units | **UNBUILT** | follows demotion |
+| Principal attribution in depth (`memphant_app`) | **UNBUILT** — RLS decorative on the served path | W3.3 |
+| Episodic append, belief corroboration, resource extractor, bitemporal generations | **BUILT** | — |
+
+### 13.7 Open decisions (deliberately unresolved)
+
+Recorded as open rather than resolved by invention. Each names the evidence that
+would close it, so none of them closes on argument alone.
+
+- **OPEN-1 — where compaction runs.** `reflect` stage 1 (LLM cost already lives
+  there; keeps RW-2 intact; but compaction then lags the turn that needed it) vs
+  compose time (`05`; fresh, but adds an LLM call to the recall latency budget
+  and competes with our own retrieve-instead-of-summarize thesis). *Closes on:* a
+  paired measurement of compacted vs truncated working state on a lane where
+  retrieval is held constant.
+- **OPEN-2 — `knowledge` as a rename of `Semantic`.** §13.2c makes it an arm
+  name. The alternative is renaming the enum variant, which is a breaking schema
+  change (`25` §11c) touching `04`/`05`/`06`/`08`/`20`, every stored `kind`
+  string, and both SDKs, for a naming gain. *Closes on:* an owner decision that
+  the vocabulary gain is worth a breaking migration. Default if nobody decides:
+  keep `semantic`.
+- **OPEN-3 — whether a third always-injected hot slot exists** beyond the pinned
+  block (§12) and preference chain heads (§13.2a). The B1 observation-block
+  experiment already failed its gate at paired delta 0.000 and was deleted
+  (`STATUS.md`, 2026-07-22), which is evidence against, not for. *Closes on:* a
+  preregistered paired reader gate, same shape as B1's.
+- **OPEN-4 — the unit-demotion mechanism** (`recall_tier` column vs a `demoted`
+  `UnitState` vs a pure recall-time predicate; §13.4). *Closes on:* a ForgetEval
+  + restraint-gate run comparing the recall-time predicate against a stored tier
+  — specifically, whether demotion needs an auditable event or only an effect.
+- **OPEN-5 — whether cold episodes may lose the dense channel.** §13.3 drops
+  embeddings at `cold`, so a cold episode's units are reachable only by
+  exact/lexical/edge channels until re-promotion. *Closes on:* measuring recall
+  loss on a corpus with a realistic cold fraction. Until then, do not assume
+  RT-1's "degraded, never failed" covers dense-channel loss — it covers snippet
+  loss.
+- **OPEN-6 — whether a sub-agent may write a user preference at all**, or only
+  propose one for confirmation. PS-2 makes preferences subject-scoped, which
+  makes an agent-written preference immediately visible to every sibling agent.
+  *Closes on:* Track U scoring with both policies once the `preference` kind
+  exists.
