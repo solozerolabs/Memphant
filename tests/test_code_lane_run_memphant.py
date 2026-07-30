@@ -597,3 +597,45 @@ def test_deterministic_file_search_ranks_raw_matching_event_first():
     assert search.bm25_search(documents, "Which compiler error E0425 occurred?", 1) == [
         "compiler error E0425 missing value"
     ]
+
+
+def test_deterministic_scope_attempt_matches_memphant_recall_binding(clr):
+    """``--scope attempt`` must hand BM25 exactly the attempt MemPhant's recall
+    is bound to (``provenance[0].attempt_id``), and nothing else; ``--scope
+    corpus`` must keep the whole corpus."""
+    search = _load("code_lane_run_deterministic", "scripts/code_lane_run_deterministic.py")
+    corpus_rows = [
+        {
+            "attempt_id": "a1",
+            "run_id": "r1",
+            "events": [{"sequence": 0, "role": "user", "text": "attempt one event"}],
+        },
+        {
+            "attempt_id": "a2",
+            "run_id": "r1",
+            "events": [
+                {"sequence": 0, "role": "user", "text": "attempt two first"},
+                {"sequence": 1, "role": "assistant", "text": "attempt two second"},
+            ],
+        },
+    ]
+    documents = search.event_documents(corpus_rows)
+    golden = {"provenance": [{"attempt_id": "a2", "event_sequence": 1}]}
+
+    scoped = search.scoped_documents(documents, golden, "attempt")
+
+    assert {document["attempt_id"] for document in scoped} == {"a2"}
+    assert len(scoped) == 2
+    assert len(search.scoped_documents(documents, golden, "corpus")) == 3
+    # MemPhant binds one scope lane per attempt_id and recalls through the
+    # golden's provenance[0] attempt; the scoped haystack is that same attempt.
+    assert clr.bind_attempt_context(_RecordingBinder(), corpus_rows[1])["scope_ref"] == (
+        "code-lane:scope:a2"
+    )
+
+
+class _RecordingBinder:
+    """Minimal ``ApiClient.bind_context`` stand-in: echoes the bound refs."""
+
+    def bind_context(self, context_ref, **refs):
+        return {"context_ref": context_ref, **refs}

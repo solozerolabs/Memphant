@@ -45,6 +45,24 @@ def event_documents(corpus_rows: list[dict]) -> list[dict]:
     return documents
 
 
+def scoped_documents(documents: list[dict], golden: dict, scope: str) -> list[dict]:
+    """The haystack this arm ranks for one golden.
+
+    ``corpus`` ranks every corpus event (the original control). ``attempt``
+    restricts the haystack to the single coding attempt MemPhant's recall is
+    bound to: ``code_lane_run_memphant.bind_attempt_context`` binds one
+    scope/actor/agent lane per ``attempt_id`` and the evaluation recalls through
+    ``evaluation_contexts[golden["provenance"][0]["attempt_id"]]``, so its
+    candidate pool can never leave that attempt. Scoping BM25 the same way makes
+    the two arms rank comparable haystacks; the attempt's full event set is a
+    superset of MemPhant's pool, which is additionally lexically prefiltered.
+    """
+    if scope == "corpus":
+        return documents
+    attempt_id = golden["provenance"][0]["attempt_id"]
+    return [document for document in documents if document["attempt_id"] == attempt_id]
+
+
 def bm25_search(documents: list[dict], query: str, k: int) -> list[str]:
     query_terms = sorted(set(tokens(query)))
     if not documents or not query_terms or k <= 0:
@@ -86,6 +104,7 @@ def main() -> int:
     parser.add_argument("--out-evidence", required=True, type=Path)
     parser.add_argument("--out-provenance", required=True, type=Path)
     parser.add_argument("--k", type=int, default=10)
+    parser.add_argument("--scope", choices=("corpus", "attempt"), default="corpus")
     args = parser.parse_args()
     lock = json.loads(memphant_runner.golden_lock_path(args.golden).read_text())
     corpus_rows, goldens = memphant_runner.verify_input_contract(
@@ -95,12 +114,25 @@ def main() -> int:
     evidence_rows = []
     per_question = []
     for golden in goldens:
-        bodies = bm25_search(documents, golden["question"], args.k)
+        haystack = scoped_documents(documents, golden, args.scope)
+        # Identical query string to the MemPhant arm by construction.
+        query = memphant_runner.retrieval_query(golden)
+        bodies = bm25_search(haystack, query, args.k)
         evidence_rows.append(gc.evidence_row(golden, bodies, args.k))
         per_question.append(
             {
                 "question_id": golden["question_id"],
+                "question_type": golden["question_type"],
+                "documents_searched": len(haystack),
                 "returned_items": len(bodies),
+                "gold_rank": next(
+                    (
+                        rank
+                        for rank in range(1, len(bodies) + 1)
+                        if gc.provenance_hit(golden, bodies, rank)
+                    ),
+                    None,
+                ),
                 "hit_at_5": gc.provenance_hit(golden, bodies, min(5, args.k)),
                 "hit_at_10": gc.provenance_hit(golden, bodies, min(10, args.k)),
             }
@@ -118,6 +150,7 @@ def main() -> int:
         "document_count": len(documents),
         "golden_count": count,
         "k": args.k,
+        "scope": args.scope,
         "recall_at_5": sum(row["hit_at_5"] for row in per_question) / count,
         "recall_at_10": sum(row["hit_at_10"] for row in per_question) / count,
         "per_question": per_question,
