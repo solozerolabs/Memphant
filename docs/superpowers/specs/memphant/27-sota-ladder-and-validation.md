@@ -25,9 +25,50 @@ The `baseline status` column states whether the comparison target is **independe
 | LongMemEval-V2 | environment-specific long-term agent memory, five abilities, accuracy + latency | reproducible (open repo) | beat strongest *reproduced* baseline or publish a Pareto-frontier win at lower cost/latency |
 | BEAM | memory under 100K/1M/10M context pressure | **mostly vendor-reported** (board run by a competitor) | improve the accuracy-speed-context frontier vs a *reproduced* baseline; the leaderboard's top number is `vendor_reported` and cannot be the bar |
 | AgentDojo + corroboration-farming/poisoning suite | tool-using security; AgentDojo tests *tool-call* injection (near-saturated), our suite tests *persistent memory* poisoning | reproducible | no critical memory-poisoning bypass; the independent-source corroboration gate (`04` §5) holds; report ASR |
-| **OP-Bench / PS-Bench (restraint)** | over-personalization + intent-legitimation — over-retrieval is a *measured* harm (the axis most teams skip) | reproducible (open) | **launch gate:** must not drop >15% vs a memory-free baseline, else the `05` §1.5 relevance gate is mandatory; pinned-block content (`04` §12) is explicitly in-scope for this gate (R88) |
+| **MemSyco-Bench (restraint)** — *substituted for OP-Bench / PS-Bench, see below* | over-personalization + intent-legitimation — over-retrieval is a *measured* harm (the axis most teams skip) | reproducible (MIT, pinned: `benchmarks/manifests/memsyco.lock.json`) | **launch gate (thresholds unchanged):** must not drop >15% vs a memory-free baseline, else the `05` §1.5 relevance gate is mandatory; sample ≥ 50; the paired-delta CI upper bound must sit at or below the same 0.15; pinned-block content (`04` §12) is explicitly in-scope for this gate (R88) |
 | **GateMem (multi-principal governance)** | utility + access control + reliable forgetting in shared-memory agents — the wedge stated as an open problem ("no method simultaneously achieves" all three, arXiv:2606.18829) | reproduce-first (132★ repo; unproven harness) | **conditional launch gate (R90): gates NOTHING until first successful internal reproduction in MemPhant's harness** (the Zep-58.44% lesson); once reproduced, the bar is simultaneous pass on all three axes — the only public benchmark where the wedge IS the score |
 | Internal Syndai golden set | real L0/L1+, correction, forget, citation, project-scope contract cases | internal | meets or improves the internal golden baseline |
+
+**Restraint-instrument substitution (2026-07-30, `26` §3 D-2026-07-30c).** The
+restraint gate's *instrument identity* was self-contradictory and would have
+rejected its own passing run: this table and
+`docs/launch/restraint-launch-scorecard.json` named OP-Bench/PS-Bench, and
+`tests/test_restraint_launch_gate.py` asserted
+`scorecard["benchmark"] in {"op-bench","ps-bench"}` on `pass` — while the only
+instrument actually pinned, adapted, and executed is **MemSyco-Bench**. A
+passing MemSyco run would have failed the gate's own contract test. Resolved by
+substituting the instrument and recording why:
+
+- **OP-Bench (arXiv 2601.13722) is not runnable.** The paper specifies 1,700
+  reviewed instances and its irrelevance/sycophancy/repetition metrics but
+  exposes no official dataset, scorer, code repository, or immutable release
+  (`docs/build-log/2026-07-13-temporal-benchmark-adapter.md`). Per `26` §3, no
+  substitute dataset or locally reconstructed scorer may be *labeled* OP-Bench.
+- **PS-Bench (arXiv 2601.17887) is not licensable.** Code, data, and the native
+  Longformer classifier are public at `MuyuenLP/PS-Bench@210e72ea`, but the
+  repository declares **no license**, so its data and code cannot enter MemPhant.
+  The 2026-07-04 PS-Bench scorecard is additionally invalidated on its own terms
+  (`status: invalid_synthetic_fixture`, answer-seeded fixtures).
+- **MemSyco-Bench (arXiv 2607.01071) is runnable, MIT, and pinned.** Repo
+  `XMUDeepLIT/MemSyco-Bench@c31e2c85`, 1,550 samples across five tasks, native
+  scorer pinned by sha256 in `benchmarks/manifests/memsyco.lock.json`; runner
+  `scripts/run_restraint_bench.py`. Its five tasks measure the same construct
+  this gate exists for — objective-fact judgment under memory pressure,
+  contextual scope control, memory-vs-evidence conflict, valid-memory selection,
+  and personalized memory use — i.e. over-retrieval harm and memory
+  over-trust. A five-task smoke passed 5/5 at **$0.23557035**
+  (`docs/build-log/2026-07-15-memsyco-smoke.md`); that is a smoke, not the gate.
+
+**Scope of the substitution — binding.** Only the **instrument identity**
+changed. The substantive thresholds are untouched: relative drop vs a
+memory-free baseline **≤ 0.15**, sample **≥ 50**, paired-delta **CI upper bound
+≤ 0.15**, `05` §1.5 relevance gate mandatory on breach, pinned-block content
+in-scope. The canonical scorecard value is `"benchmark": "memsyco-bench"`.
+OP-Bench and PS-Bench remain admissible instruments for this gate and stay in
+the allowed set — they become *runnable* gates only if a complete, legally
+usable official release appears; until then they are cited as prior art, never
+run. This substitution does **not** flip the restraint checkbox: no full MemSyco
+gate run has been executed.
 
 **Promotion-provenance rule (2026-07-09):** Promotion evidence must be produced by the packaged Postgres-backed runtime against pinned real corpora with recorded hashes and an executed reader/scorer. Synthetic fixtures gate regressions, never promotions.
 
