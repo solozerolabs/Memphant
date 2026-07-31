@@ -507,6 +507,156 @@ def ingest_group_preference(client, group: dict) -> tuple[dict, dict, int]:
     return context, identity, episodes, deduped
 
 
+WORD = re.compile(r"[a-z0-9_]+")
+# Deliberately tiny: the discriminating vocabulary here is code-convention
+# nouns, and an aggressive stoplist would delete the very tokens ("names",
+# "variables") that separate one convention from another.
+STOPWORDS = frozenset(
+    "the a an and or of to in is are be for that this it you your we our with "
+    "on as at by from not but if then so do does did have has had will would "
+    "can could should i me my he she they them his her their there here what "
+    "when where which who how all any some no nor own same than too very just "
+    "was were been being into out up down over under again more most other "
+    "such only own s t don now".split()
+)
+
+
+def content_words(text: str) -> set:
+    return {w for w in WORD.findall(text.lower()) if len(w) > 2 and w not in STOPWORDS}
+
+
+def jaccard(left: set, right: set) -> float:
+    union = left | right
+    return len(left & right) / len(union) if union else 0.0
+
+
+def ingest_group_structured(client, group: dict, args) -> tuple:
+    """Arm S. THE B1 STRUCTURED-STATE EXTRACTOR.
+
+    Every session is retained as a **preference unit whose subject key is a
+    content hash of its own body** -- a self-identity, not a matching key. It
+    is derived with zero knowledge of any prior session and can therefore never
+    coincide with one, which is exactly the point: this arm does not produce a
+    key that has to match anything. Supersession is expressed by naming the
+    exact prior unit id instead.
+
+    The extractor is handed the candidate's RETRIEVAL CONTEXT and nothing else:
+    one `/v1/recall` against the scope the session is about to be written into,
+    using the session body as the query. It considers the single top-ranked
+    live preference unit, and names it as a supersession target iff the
+    content-word Jaccard between the two bodies clears ``--structured-threshold``.
+
+    WHY A THRESHOLD AND NOT PURE RANK. Rank alone always returns something, so
+    an unconditional top-1 rule closes one generation per session and collapses
+    a group to a single live unit -- every mid-group gold would then be retired
+    and unrecallable. The cutoff is the only free parameter, and it is chosen
+    on a DEV SLICE that the confirmatory analysis excludes; a threshold above
+    1.0 disables supersession entirely and is the arm's own no-op control.
+
+    GOLD-INDEPENDENT. Unlike ``ingest_group_preference`` this reads no
+    ``declarations`` field, no ``topic``, no probe. Its only inputs are session
+    bodies and MemPhant's own recall. It is therefore comparable to the lexical
+    control.
+
+    CEILING, stated rather than hidden: one unit per SESSION. Arm P mints one
+    per declaration, and a session that states several conventions cannot be
+    split by anything this arm can see. Upgrade path is a mutation-time hook
+    that segments a session before keying it (spec 04 §13, and the 92-93% band
+    in 2026-07-31-preference-writepath.md §7).
+    """
+    context = client.bind_context(
+        f"external-{group['group_id']}",
+        subject_ref=group["group_id"],
+        actor_ref=f"{group['group_id']}-runner",
+        scope_ref=group["group_id"],
+        agent_node_ref="external-instrument-adapter",
+    )
+    identity: dict[str, set] = {}
+    session_of: dict[str, str] = {}
+    ledger: list[dict] = []
+    proposed = 0
+    considered = 0
+    for index, unit in enumerate(group["units"]):
+        target = None
+        if index:
+            recalled = client.post(
+                "/v1/recall",
+                {
+                    **context,
+                    "query": unit["body"][: args.structured_query_chars],
+                    "limit": args.structured_pool,
+                    "budget_tokens": args.budget_tokens,
+                    "mode": args.mode,
+                },
+            )
+            for item in recalled.get("items", []):
+                if item.get("kind") != "preference":
+                    continue
+                considered += 1
+                similarity = jaccard(
+                    content_words(unit["body"]), content_words(item.get("body", ""))
+                )
+                if similarity >= args.structured_threshold:
+                    target = item["unit_id"]
+                # CALIBRATION LEDGER. Recorded on every arm including the
+                # threshold>1.0 no-op control, so the cutoff can be chosen on a
+                # dev slice from the extractor's OWN candidate distribution
+                # rather than from all-pairs statistics that the recall ranker
+                # never sees.
+                ledger.append(
+                    {
+                        "session": unit["unit_id"],
+                        "target_session": session_of.get(item["unit_id"]),
+                        "jaccard": round(similarity, 6),
+                        "named": target is not None,
+                    }
+                )
+                # Top-ranked live preference unit ONLY. Scanning further down
+                # the pool would let a weak match anywhere in the top-k retire
+                # a rule, which is a different (and much looser) rule than the
+                # one preregistered.
+                break
+        payload = {
+            "kind": "preference",
+            "fact_key": f"b1:{hashlib.sha256(unit['body'].encode()).hexdigest()[:32]}",
+            "predicate": "prefers",
+            "body": unit["body"],
+            "confidence": 1.0,
+        }
+        if target is not None:
+            payload["target_unit_ids"] = [target]
+            proposed += 1
+        response = client.post(
+            "/v1/episodes",
+            {
+                **context,
+                "source_ref": unit["unit_id"],
+                "observed_at": observed_at(index),
+                "payload": {"unit": payload},
+            },
+        )
+        minted = set(response.get("unit_ids") or [])
+        if not minted:
+            raise RuntimeError(
+                f"REFUSING TO SCORE: structured retain {unit['unit_id']} minted no "
+                "unit -- the session was silently dropped"
+            )
+        identity[unit["unit_id"]] = minted
+        for unit_id in minted:
+            # The remainder a supersede also mints carries the PRIOR body, and
+            # attributing it to this session would corrupt the ledger's join.
+            # It is never recallable (`remainders_recalled` proves that), so
+            # last-writer-wins on this map is safe; it is asserted, not assumed.
+            session_of.setdefault(unit_id, unit["unit_id"])
+    return (
+        context,
+        identity,
+        0,
+        0,
+        {"proposed": proposed, "considered": considered, "ledger": ledger},
+    )
+
+
 def score_group(client, context, episode_of: dict, group: dict, args) -> list[dict]:
     rows = []
     for probe in group["probes"]:
@@ -714,12 +864,35 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--arm",
         default="memphant",
-        choices=("memphant", "lexical", "preference"),
+        choices=("memphant", "lexical", "preference", "structured"),
         help="memphant = live recall; lexical = the repo's BM25 control over "
              "the same units and queries (no DB, no server, no network); "
              "preference = ORACLE-KEYED write-path mechanism arm, NOT "
              "comparable to either of the other two (see "
-             "ingest_group_preference)",
+             "ingest_group_preference); structured = B1, gold-independent "
+             "id-named supersession (see ingest_group_structured)",
+    )
+    parser.add_argument(
+        "--structured-threshold", type=float, default=0.35,
+        help="structured arm: content-word Jaccard a top-ranked prior unit must "
+             "clear before it is named as a supersession target. >1.0 disables "
+             "supersession entirely, which is this arm's own no-op control.",
+    )
+    parser.add_argument(
+        "--structured-pool", type=int, default=5,
+        help="structured arm: recall limit for the extractor's retrieval "
+             "context. Only the top-ranked preference unit is ever considered.",
+    )
+    parser.add_argument(
+        "--structured-query-chars", type=int, default=8000,
+        help="structured arm: cap on the session body used as the extractor's "
+             "recall query.",
+    )
+    parser.add_argument(
+        "--group-mod", default=None,
+        help="RESIDUE/MODULUS over sha256(group_id) -- e.g. 0/2 keeps the dev "
+             "half, 1/2 the confirmatory half. Applied after loading, before "
+             "any database exists.",
     )
     parser.add_argument(
         "--diagnostics",
@@ -765,6 +938,19 @@ def main() -> int:
         f"probes={sum(len(g['probes']) for g in groups)}",
         file=sys.stderr,
     )
+    if args.group_mod:
+        residue, modulus = (int(part) for part in args.group_mod.split("/"))
+        groups = [
+            group
+            for group in groups
+            if int(hashlib.sha256(group["group_id"].encode()).hexdigest(), 16) % modulus
+            == residue
+        ]
+        print(
+            f"[{args.instrument}] group-mod {args.group_mod} keeps groups={len(groups)} "
+            f"probes={sum(len(g['probes']) for g in groups)}",
+            file=sys.stderr,
+        )
     if args.limit_groups:
         groups = groups[: args.limit_groups]
     for group in groups:
@@ -822,8 +1008,17 @@ def main() -> int:
         ingested = 0
         deduped = 0
         episodes_retained = 0
+        structured_counts = {"proposed": 0, "considered": 0}
         for group in groups:
-            if args.arm == "preference":
+            if args.arm == "structured":
+                context, episode_of, group_episodes, group_deduped, counts = (
+                    ingest_group_structured(client, group, args)
+                )
+                episodes_retained += group_episodes
+                structured_counts["proposed"] += counts["proposed"]
+                structured_counts["considered"] += counts["considered"]
+                structured_counts.setdefault("ledger", []).extend(counts["ledger"])
+            elif args.arm == "preference":
                 context, episode_of, group_episodes, group_deduped = (
                     ingest_group_preference(client, group)
                 )
@@ -856,6 +1051,16 @@ def main() -> int:
             diagnostics["remainders_recalled"] = count_recalled_remainders(
                 args.database_url, rows
             )
+            if args.arm == "structured":
+                # MECHANISM LIVENESS. An inert arm and a neutral arm produce the
+                # same score; only these counts tell them apart.
+                diagnostics["structured_extractor"] = {
+                    "threshold": args.structured_threshold,
+                    "pool": args.structured_pool,
+                    "targets_proposed": structured_counts["proposed"],
+                    "top_ranked_prior_units_seen": structured_counts["considered"],
+                    "ledger": structured_counts.get("ledger", []),
+                }
     finally:
         server.stop()
 
@@ -881,7 +1086,7 @@ def write_report(args, lock, lock_path, source, rows, groups, ingested,
         "attribution": lock["attribution"],
         "recall": {"k": args.k, "mode": args.mode, "budget_tokens": args.budget_tokens,
                    "embed_model": args.embed_model}
-        if args.arm in ("memphant", "preference")
+        if args.arm in ("memphant", "preference", "structured")
         else {"k": args.k, "mechanism": "Okapi BM25 k1=1.2 b=0.75, instance-scoped, "
               "code_lane_run_deterministic.bm25_search"},
         "scale": {

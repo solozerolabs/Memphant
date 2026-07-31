@@ -574,14 +574,26 @@ def drain_worker(
             out = sh([worker_bin], env=env)
             if out.returncode != 0:
                 raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
+            # The worker-tick honesty change (accuracy-first d01affad) widened
+            # this line to carry failed/retried/deferred. Parse them rather than
+            # dropping them: a drain that "completes" while jobs fail is exactly
+            # the partially-compiled corpus this loop exists to refuse.
             match = re.fullmatch(
-                r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
+                r"memphant-worker: drain completed=(0|[1-9]\d*)"
+                r"(?: failed=(\d+) retried=(\d+) deferred=(\d+))?\n?",
+                out.stdout,
             )
             if match is None:
                 raise RuntimeError(
                     f"worker drain completion output is malformed: {out.stdout[:300]!r}"
                 )
             completed = int(match.group(1))
+            failed = int(match.group(2) or 0)
+            if failed:
+                raise RuntimeError(
+                    f"worker drain reported {failed} FAILED jobs -- the corpus is "
+                    f"only partially compiled: {out.stdout.strip()!r}"
+                )
             total += completed
             pending = sh([
                 "psql", "--no-psqlrc", "--tuples-only", "--no-align",
