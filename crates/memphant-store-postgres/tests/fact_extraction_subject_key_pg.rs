@@ -23,7 +23,7 @@ use memphant_core::{MemoryStore, StubEmbedding, SystemClock, derive_fact_key};
 use memphant_store_postgres::PgStore;
 use memphant_types::{
     ContextBindingAgentRef, ContextBindingEntityRef, ContextBindingRequest, ContextBindingScopeRef,
-    ResolvedMemoryContext, RetainEpisodeHttpRequest, TenantId,
+    ResolvedMemoryContext, RetainEpisodeHttpRequest, TenantId, TrustLevel,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -271,4 +271,200 @@ async fn capture_the_colliding_pair_with_the_constraint_dropped() {
     .expect("drop constraint");
     let (fact_key, stuck) = ingest_and_drain("fx-evidence", "agent").await;
     println!("key={fact_key}\nstuck={stuck:#?}\n{}", open_rows(&fact_key).await);
+}
+
+// ---------------------------------------------------------------------------
+// Sibling collision classes on the SAME key space, probed against the same
+// constraint. Both mint through paths that never consult the semantic
+// supersede scan.
+// ---------------------------------------------------------------------------
+
+/// CONDITION 1. Belief promotion (`lib.rs:11562`) mints a `Semantic` unit on
+/// the mined key INSTEAD of running the semantic supersede branch. If an open
+/// `Semantic` already holds that key, promotion adds a second one — and
+/// `semantic` stays inside the exclusion constraint after the belief
+/// narrowing, so this would be the same crash in a new place.
+///
+/// Mixed-trust lane over ONE context, which is exactly what `clamp_trust`
+/// produces: the assigned trust of a retain is
+/// `min(actor_trust, api_key.max_trust)`, so two API keys with different
+/// `max_trust` writing through one context binding yield both trust levels on
+/// one key space. (Two *actors* cannot share a lane — `context_binding` is
+/// unique per (tenant, subject, agent_node) — so the API key is the seam.)
+///   1. AgentOutput "…is chamomile"   ⇒ belief/candidate on K
+///   2. TrustedUser "…is rooibos now" ⇒ semantic/active  on K (no incumbent
+///                                       semantic, so it appends unbounded)
+///   3. TrustedUser "…is chamomile"   ⇒ body-matches the belief ⇒ PROMOTE ⇒
+///                                       a second unbounded semantic on K
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn belief_promotion_does_not_double_open_a_semantic_key() {
+    let (context, store) = bind("fx-promote", "user").await;
+    let tenant = context.tenant_id;
+    let app = MemoryService::new(
+        Arc::new(store),
+        Arc::new(SystemClock),
+        Arc::new(StubEmbedding::default()),
+    )
+    .with_fact_extraction_enabled(true);
+    let worker = MemoryService::new(
+        Arc::new(
+            PgStore::connect_worker(&db_url())
+                .await
+                .expect("connect worker store"),
+        ),
+        Arc::new(SystemClock),
+        Arc::new(StubEmbedding::default()),
+    )
+    .with_fact_extraction_enabled(true);
+
+    let steps = [
+        (
+            "a1",
+            TrustLevel::AgentOutput,
+            "[session a1]\nuser: My favorite tea is chamomile.\n",
+        ),
+        (
+            "u1",
+            TrustLevel::TrustedUser,
+            "[session u1]\nuser: My favorite tea is rooibos now.\n",
+        ),
+        (
+            "u2",
+            TrustLevel::TrustedUser,
+            "[session u2]\nuser: My favorite tea is chamomile.\n",
+        ),
+    ];
+    for (tag, trust, body) in steps {
+        let mut request = retain_request(&context, body);
+        request.source_ref = format!("test:{tag}");
+        app.retain(&context, &format!("test:{tag}"), trust, request)
+            .await
+            .expect("retain");
+        for _ in 0..8 {
+            let completed = worker.run_worker_tick(usize::MAX).await.expect("tick");
+            if worker.pending_worker_job_count().await.expect("pending") == 0 || completed == 0 {
+                break;
+            }
+        }
+    }
+
+    let fact_key = derive_fact_key(
+        context.scope_id.as_uuid(),
+        Some("preference"),
+        Some("favorite tea"),
+        "",
+    );
+    let pool = sqlx::PgPool::connect(&db_url()).await.expect("pool");
+    let stuck: Vec<(String, String)> = sqlx::query(
+        "select state::text as state, coalesce(last_error, '') as last_error
+           from memphant.job_state
+          where tenant_id = $1 and (state <> 'done' or last_error is not null)",
+    )
+    .bind(tenant.as_uuid())
+    .fetch_all(&pool)
+    .await
+    .expect("queue rows")
+    .into_iter()
+    .map(|row| {
+        (
+            row.get::<String, _>("state"),
+            row.get::<String, _>("last_error"),
+        )
+    })
+    .collect();
+    assert!(
+        stuck.is_empty(),
+        "promotion must not collide; stuck={stuck:#?}\nkey={fact_key}\n{}",
+        open_rows(&fact_key).await
+    );
+    let open_semantic: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.memory_unit
+          where fact_key = $1 and kind = 'semantic' and transaction_to is null",
+    )
+    .bind(&fact_key)
+    .fetch_one(&pool)
+    .await
+    .expect("count");
+    assert!(
+        open_semantic <= 1,
+        "at most one open semantic generation per key, found {open_semantic}\n{}",
+        open_rows(&fact_key).await
+    );
+}
+
+/// CONDITION 3. `compose_inferred_beliefs` dedups composed units by BODY but
+/// keys them by OBJECT (`{scope}:user_preference:{object}`). A third
+/// observation whose descriptor sorts ahead of the existing pair changes the
+/// composed body while the key stays put, so a second open belief lands on the
+/// same key — the same class as the low-trust projection collision, reached
+/// through a different door.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn recomposed_inferred_belief_does_not_double_open_its_object_key() {
+    let (context, store) = bind("fx-compose", "user").await;
+    let app = MemoryService::new(
+        Arc::new(store),
+        Arc::new(SystemClock),
+        Arc::new(StubEmbedding::default()),
+    )
+    .with_fact_extraction_enabled(true);
+
+    // Descriptors are ingested worst-sorting first, so the third one displaces
+    // a member of the composed pair and rewrites the composed body.
+    for (tag, descriptor) in [("d1", "dark"), ("d2", "quiet"), ("d3", "airy")] {
+        let request = RetainEpisodeHttpRequest {
+            subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            actor_id: context.actor_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            source_ref: format!("test:compose:{tag}"),
+            observed_at: "2026-07-09T00:00:00Z".to_string(),
+            payload: memphant_types::RetainPayload::Unit(memphant_types::RetainUnitPayload {
+                kind: memphant_types::MemoryKind::Semantic,
+                fact_key: format!("observation:{tag}"),
+                predicate: "coffee shops".to_string(),
+                body: format!("The user prefers {descriptor} coffee shops."),
+                confidence: 0.9,
+                valid_from: None,
+                valid_to: None,
+            }),
+        };
+        app.retain(
+            &context,
+            &format!("test:compose:{tag}"),
+            context.actor_trust,
+            request,
+        )
+        .await
+        .unwrap_or_else(|error| {
+            panic!("composed retain {tag} failed: {error}");
+        });
+    }
+
+    let composed_key = derive_fact_key(
+        context.scope_id.as_uuid(),
+        Some("user preference"),
+        Some("coffee shops"),
+        "",
+    );
+    let pool = sqlx::PgPool::connect(&db_url()).await.expect("pool");
+    let open: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.memory_unit
+          where fact_key = $1 and transaction_to is null",
+    )
+    .bind(&composed_key)
+    .fetch_one(&pool)
+    .await
+    .expect("count");
+    assert!(
+        open >= 1,
+        "the composition path must actually have fired\n{}",
+        open_rows(&composed_key).await
+    );
+    println!(
+        "composed key={composed_key} open={open}\n{}",
+        open_rows(&composed_key).await
+    );
 }
