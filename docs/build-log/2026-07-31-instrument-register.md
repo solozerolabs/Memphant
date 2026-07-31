@@ -249,3 +249,113 @@ all, so power is *zero for any effect size*. Consequences:
   difference. Do not cite them as "no difference".
 
 ---
+
+## 4. Verdicts — verified against shipped rows
+
+Verdict key: **SOUND** = usable as-is for a decision · **DEGRADED** = usable only with a
+named restriction · **BROKEN** = must not carry a decision · **ABSENT** = no instrument.
+
+### 4.1 Episodic / chat
+
+**LongMemEval-S (`xiaowu0162/longmemeval-cleaned`, rev `98d7416c…`) — DEGRADED.**
+
+- *Deprecation premise is false.* Both upstream pages were fetched fresh: no deprecation
+  notice, no archive banner, and V2 is presented as an additional benchmark rather than a
+  successor. The only "deprecated" strings anywhere are our own local filename
+  `~/.memphant-private/longmemeval-cleaned/longmemeval_s_original_deprecated.json` and one
+  sentence at `docs/build-log/2026-07-31-w2-reader-composition-prereg.md:51`. That sentence
+  is blocking W2.1 on a premise with no upstream basis. **Correct it and unblock.**
+- *What "cleaned" actually changed:* 454 of 500 questions differ from the original, and the
+  diff is **pure distractor deletion** — zero question, answer, or label edits. We are
+  pinned on the cleaned side, which is the defensible side. The change is real but benign.
+- *License: **UNVERIFIED**.* `benchmarks/manifests/longmemeval_s.lock.json` carries no
+  license field at all, unlike `longmemeval_v2.lock.json` and `memsyco.lock.json`, which
+  both pin the LICENSE blob's sha256. This is the one instrument we lean on hardest and the
+  one whose license we never checked.
+- *The @10 metric is dead on our slice.* Recomputed directly from the 178 `per_question`
+  rows in both arms: the maximum `first_answer_rank` ever observed is **5**, so `hit@10` is
+  identical to `hit@5` on all 166 scored rows in both arms. Any result we have ever reported
+  "at k=10" on this slice is the k=5 result relabelled.
+- *Saturated above k=16* on the 80q pool (base recall@16 = 0.986, recall@48 = 1.000). The
+  band where reranking can express anything is k ≤ 16.
+
+**The `_abs` sentinel that killed `pack_render_cap` — BROKEN, confirmed structurally.**
+Recomputed independently: n=12, b=0, c=2, exact two-sided p = 0.50. With n_d = 2 against a
+structural floor of 6, it could not have rejected at *any* effect size. The Phase 0
+rescission is now supported by the test's own arithmetic, not only by the trap-session
+argument.
+
+**Phase-2 paid reader QA — apparatus only, never run.**
+`authorization-request.v3.json` records `paid_calls_executed: 0`, `settled_cost_usd: "0"`,
+`authorization: null`. `scripts/derive_phase2_packet.py --check` reproduces the packet
+byte-identically, so the *ceiling* is sound; the *power note* inside it is not (§3.1).
+
+**LongMemEval-V2 state-aware — BROKEN as a going concern.** 9,405 lines of harness with
+`official_output_files: 0` and `settled_micros: 0`; manifest versions v1/v3/v4 are marked
+`ABANDONED_NEVER_RESUME`; all 11 `p1-t6` runs carry an `INVALIDATION-PROOF.json`. This is
+the largest single block of apparatus in the repo with no banked result. The plan already
+parks it (Phase 4); the register agrees and adds: **do not resume without first fixing the
+0/848 SWE-Explore dependency and re-deriving the packet.**
+
+### 4.2 Repo / code
+
+**Track R original bank — BROKEN for magnitude, usable for direction only.**
+`benchmarks/data/track_r_repo_memory_golden.lock.json` records `bar_passed: false`: 14 of
+15 checks pass but `with_distractors_ge_50pct` fails, because only 75 of 180 goldens
+(41.7%) have adjudicated distractors. Leakage is target 0.3960 / floor 0.1008 / **3.9286×
+exhaustive** (4.1905× sampled) against an achievable floor of 1.79×. Provenance class:
+agent-generated *from the target*, so the question can copy the answer's vocabulary. **All
+four banked paired arms sit on this bank.** Their direction is credible; their magnitude is
+not a memory effect.
+
+**Track R paraphrase bank — SOUND; the bar is what failed, not the bank. Certify it.**
+
+| check | original | paraphrase |
+|---|---:|---:|
+| adjudicated distractors | 75/180 (41.7%) | **180/180 (100%)** |
+| mean lexical overlap | 0.0517 | **0.0162** |
+| target coverage / floor / concentration | .3960 / .1008 / 3.93× | **.1346 / .0667 / 2.018×** |
+| mean withheld terms | — | 19.45 |
+| bar checks passed | 14/15 | **19/20** |
+
+Its single failing check is `leak_concentration_le_1_50` at 2.018×. That bar sits **below
+the measured achievable floor of 1.79×** and below the independent human band of
+1.76–2.03×; 2.018× is inside that band. The bank is as clean as this construct can be made.
+Two governance defects follow, both to be fixed in the prereg, not in the data:
+
+1. The bar was never calibrated against an achievable floor (§1).
+2. The bar is inconsistently cited: the paraphrase lock records failure against **1.50×**
+   while the GitHub-lane preregistration cites the same standard as **2.05×**. One number,
+   two values, both in force. Pick one, in writing.
+
+**`coding_events_golden` — BROKEN.** n=40 drawn from 8 attempts in a **single repo**; the
+held-out slice is 4 questions. Unpowerable at ψ ≤ 0.15 and 24.2pt MDE even at ψ=0.30. No
+conclusion on this bank is defensible, including the −0.05 BM25 comparison.
+
+**GitHub lane — DEGRADED, and its metric is mis-specified.** 416 goldens mined; three of
+five preregistered bars fail; the bar-clearing slice is 13 goldens against a ≥40 floor. The
+recorded mis-specification is correct and important: concentration detects **copying**,
+which requires the query to be writable from the target. S1's query is emitted by CI
+*before the fix exists* and P1's by a reviewer against the *pre-change* hunk — neither can
+copy. A high ratio there is causal specificity, not contamination. That a published human
+corpus (`swe-prbench`, CC-BY-4.0) fails our gate at 2.42× is the proof. There is also **no
+runner**: `scripts/github_lane_*.py` are fetch, extract, leakage and secrets only.
+
+**SWE-ContextBench tranche 1 — BROKEN (saturated).** 3 of 4 no-memory baselines resolve, so
+the maximum achievable gain is 1 against a required 2. The instrument arithmetically cannot
+express the effect. Terminal for this tranche.
+
+**SWE-Explore — BROKEN.** Of 848 shipped rows at pinned rev `bdb0ae4…`, `problem_statement`
+is populated on **0** and `base_commit` on **0**, despite the upstream README. The lock's
+own `observed_release_gaps.base_commit_rows: 0` already recorded this. Its MIT license is
+asserted in the lock without a pinned LICENSE blob — unverified.
+
+### 4.3 Semantic / docs
+
+**Syndai docs gate — SOUND, and the only lane whose decision its instrument could
+support.** n=60 paired. hit@10 Δ = −0.133, QA Δ = −0.167; **MemPhant loses to Syndai's own
+stack on both**. Both effects exceed their own MDEs (13.1pt, 14.7pt), so the C2 drop rests
+on adequately-powered evidence. Two restrictions: only `b − c` is recoverable because the
+artifact commits a bootstrap CI rather than the two discordant cells (so ψ is a lower
+bound — **commit b and c from now on**), and at n=60 the lane cannot resolve anything
+smaller than ~13pt in future.
