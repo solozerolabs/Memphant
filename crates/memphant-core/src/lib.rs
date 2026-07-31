@@ -558,21 +558,21 @@ pub const RERANK_CHARS_PER_TOKEN: usize = 3;
 /// bounds the batch at ~48·16 pairs.
 pub const RERANK_MAX_SUBCHUNKS_PER_CANDIDATE: usize = 16;
 
-/// W4 packing levers, threaded construction-time exactly like
-/// `recall_pool_depth` — no `RecallRequest`/wire/OpenAPI field (item 4). BOTH
-/// default OFF ([`PackLevers::default`]); with both off the packer is
-/// byte-identical to today. The service builders
-/// [`crate::service::MemoryService::with_sibling_gather_enabled`] and
-/// [`crate::service::MemoryService::with_session_quota`] set these, and the
-/// bench lane's `--sibling-gather` / `--session-quota <n>` flags thread them so
-/// the measurement campaign can toggle each independently.
+/// Packing levers, threaded construction-time exactly like `recall_pool_depth`
+/// — no `RecallRequest`/wire/OpenAPI field (item 4). All default OFF
+/// ([`PackLevers::default`]); with all off the packer is byte-identical to
+/// today. The service builders (e.g.
+/// [`crate::service::MemoryService::with_session_quota`]) set these, and the
+/// bench lane's flags thread them so the measurement campaign can toggle each
+/// independently.
+///
+/// The W4 sibling-gather lever was DELETED on 2026-07-30 once
+/// [`chunk_completion_pass`] landed — it could not show the reader a byte the
+/// completion pass misses, and its only distinct behaviour was refilling past a
+/// deliberate `pack_render_cap`. See
+/// `docs/build-log/2026-07-30-sibling-gather-deletion.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PackLevers {
-    /// Sibling-gather post-pass: after the greedy fill, spend the pack's leftover
-    /// budget expanding already chunk-rendered items with their own UNSELECTED
-    /// sibling chunks (same parent episode). Never evicts a packed item, never
-    /// exceeds budget, preserves document order. Off ⇒ the post-pass is skipped.
-    pub sibling_gather_enabled: bool,
     /// Per-`source_episode_id` admission cap during the greedy fill. `Some(cap)`
     /// admits at most `cap` items per episode until every distinct-episode
     /// candidate has had an admission opportunity, then fills the remaining
@@ -6695,8 +6695,8 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
 /// [`DEFAULT_RECALL_POOL_DEPTH`] so every existing call site keeps today's
 /// (post-R1.5-T0) behavior.
 ///
-/// `pack_levers` threads the W4 packing levers (sibling-gather + session
-/// diversity quota) construction-time, mirroring `recall_pool_depth`; the
+/// `pack_levers` threads the packing levers (session diversity quota, render
+/// cap, submodular ordering) construction-time, mirroring `recall_pool_depth`; the
 /// plain [`recall`] delegates with [`PackLevers::default`] (both off).
 ///
 /// `temporal_grounding_enabled` (W5, default off via the plain [`recall`]) gates
@@ -8741,13 +8741,12 @@ struct PackedRecallContext {
     abstention: bool,
 }
 
-/// A chunk-rendered packed item's sibling-gather state: the parent unit's full
-/// chunk vector and the mask of chunks the greedy fill already selected. Only
-/// stored (Some) for chunk-rendered items when the sibling-gather lever is on;
-/// whole-body items and every item when the lever is off carry `None`.
-struct ChunkSiblings {
+/// W1 render-loss completion state for one partially chunk-rendered item: every
+/// chunk of its parent unit plus the parent's whole body, so
+/// [`chunk_completion_pass`] can trade the partial render up to full coverage.
+struct ChunkCompletion {
     chunks: Vec<ContextualChunk>,
-    selected: Vec<bool>,
+    whole_body: String,
 }
 
 /// Read-only per-pack context shared by every candidate admission — bundled so
@@ -8757,7 +8756,6 @@ struct PackCtx<'a> {
     tenant_edges: &'a [StoredMemoryEdge],
     query_tokens: &'a [String],
     output_limit: usize,
-    sibling_gather_enabled: bool,
     /// W5: when on, each admitted item records its grounded date so the post-fill
     /// pass can prefix `[date YYYY-MM-DD]`. Off ⇒ no prefixes recorded or applied.
     temporal_grounding_enabled: bool,
@@ -8783,7 +8781,7 @@ struct Admission {
 }
 
 /// The growing pack: `items` and its parallel bookkeeping vectors (token cost,
-/// relevance score, source episode, sibling-gather state) plus the per-episode
+/// relevance score, source episode) plus the per-episode
 /// admission counts the session-diversity quota reads.
 #[derive(Default)]
 struct PackAccumulator {
@@ -8791,13 +8789,12 @@ struct PackAccumulator {
     token_counts: Vec<usize>,
     relevance_scores: Vec<f32>,
     episode_ids: Vec<Option<EpisodeId>>,
-    sibling_masks: Vec<Option<ChunkSiblings>>,
-    /// W1 render loss: parallel to `items` — the parent unit's WHOLE body, kept
-    /// only for items whose chunk render covers the unit partially (and only
-    /// when no `pack_render_cap` deliberately bounds them). `None` for whole-body
-    /// items, fully-covered chunk renders, and every item under a render cap.
-    /// Consumed by [`whole_body_completion_pass`].
-    whole_bodies: Vec<Option<String>>,
+    /// W1 render loss: parallel to `items` — the completion state of items whose
+    /// chunk render covers the unit partially (and only when no
+    /// `pack_render_cap` deliberately bounds them). `None` for whole-body items,
+    /// fully-covered chunk renders, and every item under a render cap. Consumed
+    /// by [`chunk_completion_pass`].
+    completions: Vec<Option<ChunkCompletion>>,
     /// W5: parallel to `items` — the `YYYY-MM-DD` a dated pack prefixes onto each
     /// item body, or `None` (item's unit had no grounded `valid_from`, or the
     /// temporal-grounding flag is off). Applied in one pass after the fill.
@@ -8815,8 +8812,7 @@ impl PackAccumulator {
         let tokens = self.token_counts.remove(index);
         self.relevance_scores.remove(index);
         let episode = self.episode_ids.remove(index);
-        self.sibling_masks.remove(index);
-        self.whole_bodies.remove(index);
+        self.completions.remove(index);
         self.date_prefixes.remove(index);
         if let Some(episode_id) = episode
             && let Some(count) = self.episode_counts.get_mut(&episode_id)
@@ -8955,7 +8951,6 @@ fn pack_recall_context(
         tenant_edges,
         query_tokens,
         output_limit: request.k.max(1),
-        sibling_gather_enabled: pack_levers.sibling_gather_enabled,
         temporal_grounding_enabled,
         live_candidate_ids,
         goal_companion_id,
@@ -8994,20 +8989,14 @@ fn pack_recall_context(
         );
     }
 
-    // Sibling-gather post-pass: expand already chunk-rendered items with their
-    // own unselected siblings while budget remains (skipped when the lever off).
-    if pack_levers.sibling_gather_enabled {
-        sibling_gather_pass(&mut acc, request.budget_tokens);
-    }
-
-    // W1 render loss: a partially chunk-rendered item takes the whole body when
-    // the leftover budget covers the difference. After sibling-gather, so the
-    // lever keeps first claim on the budget and its invariant is untouched.
-    whole_body_completion_pass(&mut acc, request.budget_tokens);
+    // W1 render loss: a partially chunk-rendered item completes itself — to full
+    // chunk coverage, or to the bare whole body when the per-window provenance
+    // headers do not fit — when the leftover budget covers the difference.
+    chunk_completion_pass(&mut acc, request.budget_tokens);
 
     // W5 dated packs: prefix each item body with `[date YYYY-MM-DD]` from the
-    // unit's grounded `valid_from`. Applied AFTER sibling-gather (which rewrites
-    // chunk-rendered bodies) so the prefix survives, and only for units that
+    // unit's grounded `valid_from`. Applied AFTER the completion pass (which
+    // rewrites chunk-rendered bodies) so the prefix survives, and only for units that
     // carry a grounded date (never invented). Off ⇒ `date_prefixes` is all
     // `None` and this loop is a no-op, keeping the pack bytes identical.
     if temporal_grounding_enabled {
@@ -9179,9 +9168,9 @@ fn is_authoritative_projection(unit: &StoredMemoryUnit) -> bool {
     )
 }
 
-/// Appends a newly admitted candidate to `acc`, capturing its sibling-gather
-/// state (only when the lever is on and the item was chunk-rendered) before the
-/// candidate is consumed into the context item.
+/// Appends a newly admitted candidate to `acc`, capturing its W1 completion
+/// state (only when the item was chunk-rendered but partially covered) before
+/// the candidate is consumed into the context item.
 fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
     let Admission {
         candidate,
@@ -9192,22 +9181,16 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
         episode_id,
     } = admission;
     // W1: a chunk render that covers the unit only partially is the render-loss
-    // defect's precondition — keep the whole body so the post-fill completion
-    // pass can trade it in when the leftover budget allows. Never under a
-    // deliberate `pack_render_cap`, whose whole point is to bound the item.
-    let whole_body = match (&chunk_mask, ctx.pack_render_cap) {
-        (Some(selected), None) if selected.iter().any(|picked| !picked) => {
-            Some(candidate.unit.body.clone())
-        }
-        _ => None,
-    };
-    let sibling = if ctx.sibling_gather_enabled {
-        chunk_mask.map(|selected| ChunkSiblings {
+    // defect's precondition — keep the unit's chunks and whole body so the
+    // post-fill completion pass can trade the partial render up when the
+    // leftover budget allows. Never under a deliberate `pack_render_cap`, whose
+    // whole point is to bound the item.
+    let completion = match (&chunk_mask, ctx.pack_render_cap) {
+        (Some(selected), None) if selected.iter().any(|picked| !picked) => Some(ChunkCompletion {
             chunks: candidate.unit.contextual_chunks.clone(),
-            selected,
-        })
-    } else {
-        None
+            whole_body: candidate.unit.body.clone(),
+        }),
+        _ => None,
     };
     // W5: capture the item's grounded date BEFORE `candidate` is consumed. `None`
     // when the flag is off or the unit has no date-leading `valid_from`.
@@ -9234,68 +9217,41 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
     acc.token_counts.push(unit_tokens);
     acc.relevance_scores.push(candidate_score);
     acc.episode_ids.push(episode_id);
-    acc.sibling_masks.push(sibling);
-    acc.whole_bodies.push(whole_body);
+    acc.completions.push(completion);
     acc.date_prefixes.push(date_prefix);
     acc.items.push(item);
 }
 
-/// Sibling-gather post-pass: for each already chunk-rendered item, spend the
-/// pack's leftover budget expanding it with its OWN unselected sibling chunks
-/// (same parent episode), preferring document-adjacent windows around the chunks
-/// the greedy fill already picked. Grows an item's selection only — never evicts
-/// another item and never pushes `token_estimate` past `budget_tokens` — and
-/// re-emits the body in document order via the shared chunk-block helpers.
-fn sibling_gather_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
-    let masks = std::mem::take(&mut acc.sibling_masks);
-    for (index, slot) in masks.iter().enumerate() {
-        let Some(sibling) = slot else { continue };
-        let remaining = budget_tokens.saturating_sub(acc.token_estimate);
-        if remaining == 0 {
-            continue;
-        }
-        let anchors: Vec<usize> = (0..sibling.chunks.len())
-            .filter(|&i| sibling.selected[i])
-            .collect();
-        if anchors.is_empty() {
-            continue;
-        }
-        let current_cost = acc.token_counts[index];
-        let mut selected = sibling.selected.clone();
-        let mut used = current_cost;
-        expand_siblings(
-            &sibling.chunks,
-            &mut selected,
-            &anchors,
-            &mut used,
-            current_cost + remaining,
-        );
-        if used > current_cost {
-            acc.items[index].body = emit_selected_chunks(&sibling.chunks, &selected);
-            acc.token_estimate += used - current_cost;
-            acc.token_counts[index] = used;
-        }
-        if selected.iter().all(|&picked| picked) {
-            // Gathered to full coverage — the whole-body completion pass below
-            // has nothing left to recover, and the chunk render carries the
-            // provenance headers the whole body does not.
-            acc.whole_bodies[index] = None;
-        }
-    }
-}
-
-/// W1 render-loss fix, the post-fill twin of [`sibling_gather_pass`]: an item
-/// rendered from a PARTIAL chunk selection is showing the reader a strict subset
+/// W1 render-loss fix: an item rendered
+/// from a PARTIAL chunk selection is showing the reader a strict subset
 /// of its own body, and it can never do better on its own — every chunk block is
 /// charged its provenance header on top of its body, so full chunk coverage
 /// always costs MORE than the whole body while the per-item render budget is the
 /// whole body. The item is therefore structurally unable to emit all of itself.
 ///
-/// Chunk bodies are byte slices of the unit body (`episode_contextual_chunks` /
-/// `resource_contextual_chunks` both slice `body[start..end]` and together cover
-/// it), so the whole body is a superset of any selection: swapping it in can only
-/// add content. It costs `whole_body − already_charged ≥ 0` extra tokens, so the
-/// swap happens ONLY when that difference fits in the pack's leftover budget.
+/// The completion is FULL CHUNK COVERAGE first — every chunk block, each with
+/// its own `[episode …] [kind …] [date …] [turns a-b]` provenance header — and
+/// only the bare whole body when the headers do not fit. Both are supersets of
+/// the partial render (chunk bodies are byte slices of the unit body:
+/// `episode_contextual_chunks` / `resource_contextual_chunks` both slice
+/// `body[start..end]`), so either trade can only add content, and each is taken
+/// ONLY when its extra cost fits the pack's leftover budget.
+///
+/// Chunk coverage is preferred because the chunk render carries the segment-level
+/// attribution the whole body does not — the one a bare whole-body swap silently
+/// drops from the packed context. Its extra cost over the whole body is exactly
+/// the per-window headers, so the whole body remains the fallback for a pack too
+/// tight to afford them.
+///
+/// This pass SUBSUMES the deleted W4 sibling-gather lever. Admission renders at
+/// `render_budget = min(whole_cost, request_budget)` and `expand_siblings`
+/// retries every unselected chunk, so on exit each unselected chunk costs more
+/// than `render_budget - charged`. When `whole_cost <= request_budget`, the
+/// leftover that would let an incremental gather move is therefore already
+/// enough for the whole-body branch below; when `whole_cost > request_budget`,
+/// no unselected chunk fits at all. An incremental sibling pass can never show
+/// a byte this one misses — measured in
+/// `docs/build-log/2026-07-30-sibling-gather-deletion.md`.
 ///
 /// Why this and not the admission-time fallback that was reverted on 2026-07-30
 /// (`docs/build-log/2026-07-30-packing-rank-order-fix.md` §6): that one raised
@@ -9305,19 +9261,28 @@ fn sibling_gather_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
 /// thing that can change is the text of an item that was already packed, and only
 /// when the budget genuinely has room. A budget-bound pack (leftover 0) is a
 /// no-op; a slot-bound pack recovers full coverage.
-fn whole_body_completion_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
+fn chunk_completion_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
     for index in 0..acc.items.len() {
-        let Some(body) = acc.whole_bodies[index].take() else {
+        let Some(state) = acc.completions[index].take() else {
             continue;
         };
-        let whole_cost = conservative_token_estimate(&body);
-        let extra = whole_cost.saturating_sub(acc.token_counts[index]);
-        if acc.token_estimate + extra > budget_tokens {
+        let charged = acc.token_counts[index];
+        let leftover = budget_tokens.saturating_sub(acc.token_estimate);
+        let full_coverage: usize = state.chunks.iter().map(chunk_block_token_cost).sum();
+        let whole_cost = conservative_token_estimate(&state.whole_body);
+        let (body, cost) = if full_coverage.saturating_sub(charged) <= leftover {
+            (
+                emit_selected_chunks(&state.chunks, &vec![true; state.chunks.len()]),
+                full_coverage,
+            )
+        } else if whole_cost.saturating_sub(charged) <= leftover {
+            (state.whole_body, whole_cost)
+        } else {
             continue;
-        }
+        };
         acc.items[index].body = body;
-        acc.token_estimate += extra;
-        acc.token_counts[index] = acc.token_counts[index].max(whole_cost);
+        acc.token_estimate += cost.saturating_sub(charged);
+        acc.token_counts[index] = charged.max(cost);
     }
 }
 
@@ -9716,9 +9681,9 @@ fn packed_body_and_cost(
     (rendered_body, charged_tokens)
 }
 
-/// [`packed_body_and_cost`] plus the chunk-selection mask the sibling-gather
-/// post-pass reuses. The mask is `Some` exactly when the item was chunk-rendered
-/// (so its still-unselected siblings can be gathered later); `None` for the
+/// [`packed_body_and_cost`] plus the chunk-selection mask the W1 completion
+/// pass reuses. The mask is `Some` exactly when the item was chunk-rendered
+/// (so a partial selection can be completed later); `None` for the
 /// whole-body path. Cost accounting is unchanged from `packed_body_and_cost`.
 fn packed_render(
     unit: &StoredMemoryUnit,
@@ -9797,7 +9762,7 @@ fn context_item_for(
 ///
 /// Retained as a `select_chunk_mask` + `emit_selected_chunks` wrapper for the
 /// chunk-render tests; production callers use those two directly (the mask feeds
-/// the sibling-gather post-pass).
+/// the W1 completion pass).
 #[cfg(test)]
 fn render_chunked_item_body(
     chunks: &[ContextualChunk],
@@ -9880,8 +9845,8 @@ fn select_chunk_mask(
 /// Expands `selected` outward from `anchors` to adjacent-sibling chunks (±1, then
 /// ±2, …), charging `chunk_block_token_cost` and stopping each step at
 /// `budget_tokens`. Only ever sets more chunks to selected (a superset), so the
-/// caller's already-chosen chunks are never dropped. Shared by the admission
-/// render (`select_chunk_mask`) and the sibling-gather post-pass.
+/// caller's already-chosen chunks are never dropped. Used by the admission
+/// render (`select_chunk_mask`).
 fn expand_siblings(
     chunks: &[ContextualChunk],
     selected: &mut [bool],
@@ -14840,7 +14805,7 @@ mod pack_cost_tests {
     }
 
     /// A unit stamped with an explicit `source_episode_id` so the packing tests
-    /// can exercise the per-session diversity quota and sibling-gather.
+    /// can exercise the per-session diversity quota.
     fn unit_ep(
         id: u128,
         episode: u128,
@@ -14939,20 +14904,21 @@ mod pack_cost_tests {
         );
     }
 
-    /// §5 sibling-gather: after the greedy fill, an already chunk-rendered item
-    /// spends the pack's leftover budget on its OWN unselected sibling chunks.
-    /// At admission the per-item whole-body cap admits the matched chunk plus
-    /// one neighbour; the trailing sibling is left out until
-    /// the post-pass pulls it in. It must never evict the co-packed plain item
-    /// nor push token_estimate past the budget.
+    /// A partially chunk-rendered item reaches FULL coverage on the pack's
+    /// leftover budget without disturbing anything else. At admission the
+    /// per-item whole-body cap admits the matched chunk plus one neighbour; the
+    /// trailing sibling is left out until the completion pass recovers it. It
+    /// must never evict the co-packed plain item nor push `token_estimate` past
+    /// the budget. This is what the deleted sibling-gather lever was for; the
+    /// completion pass covers it, and covers it with the window headers intact.
     #[test]
-    fn sibling_gather_expands_item_without_eviction_or_overbudget() {
+    fn partial_render_reaches_full_coverage_without_eviction_or_overbudget() {
         let query_tokens = tokenize("quantum");
         let chunks = || {
             vec![
                 chunk("1-2", "quantum alpha"), // matches the query
                 chunk("3-4", "beta gamma"),    // neighbour pulled at admission
-                chunk("5-6", "delta epsilon"), // trailing sibling, gathered later
+                chunk("5-6", "delta epsilon"), // trailing sibling, recovered later
             ]
         };
         let chunk_costs = chunks()
@@ -14961,17 +14927,12 @@ mod pack_cost_tests {
             .collect::<Vec<_>>();
         let admission_cost = chunk_costs[0] + chunk_costs[1];
         let expanded_cost: usize = chunk_costs.iter().sum();
-        let candidates = || {
+        let budget = 100;
+        let packed = pack_recall_context(
             vec![
                 candidate(unit(1, &body_of(admission_cost), chunks()), 5.0),
                 candidate(unit(2, &body_of(5), Vec::new()), 4.0),
-            ]
-        };
-        let budget = 100;
-
-        // Off: today's behaviour — A keeps only the two admission-time chunks.
-        let off = pack_recall_context(
-            candidates(),
+            ],
             &request(budget),
             &[],
             &query_tokens,
@@ -14980,54 +14941,32 @@ mod pack_cost_tests {
             PackLevers::default(),
             false,
         );
-        assert_eq!(off.items.len(), 2, "both items packed");
-        assert_eq!(off.token_estimate, admission_cost + 5);
-        assert!(
-            !off.items[0].body.contains("delta epsilon"),
-            "trailing sibling absent without the lever: {}",
-            off.items[0].body
-        );
 
-        // On: the post-pass pulls chunk[2] into A with leftover budget; B is
-        // untouched, and token_estimate stays within budget.
-        let on = pack_recall_context(
-            candidates(),
-            &request(budget),
-            &[],
-            &query_tokens,
-            Vec::new(),
-            2,
-            PackLevers {
-                sibling_gather_enabled: true,
-                session_quota: None,
-                pack_render_cap: None,
-                submodular_ordering_enabled: false,
-            },
-            false,
-        );
+        assert_eq!(packed.items.len(), 2, "the completion pass never evicts");
         assert_eq!(
-            on.items.len(),
-            2,
-            "sibling-gather never evicts a packed item"
-        );
-        assert_eq!(
-            on.items[1].unit_id,
+            packed.items[1].unit_id,
             UnitId::from_u128(2),
             "the co-packed plain item survives"
         );
-        assert_eq!(on.items[1].body, body_of(5), "plain item body unchanged");
-        assert!(
-            on.items[0].body.contains("[turns 5-6]") && on.items[0].body.contains("delta epsilon"),
-            "the trailing sibling is gathered: {}",
-            on.items[0].body
+        assert_eq!(
+            packed.items[1].body,
+            body_of(5),
+            "plain item body unchanged"
         );
         assert!(
-            on.items[0].body.contains("quantum alpha") && on.items[0].body.contains("beta gamma"),
+            packed.items[0].body.contains("[turns 5-6]")
+                && packed.items[0].body.contains("delta epsilon"),
+            "the trailing sibling is recovered, header intact: {}",
+            packed.items[0].body
+        );
+        assert!(
+            packed.items[0].body.contains("quantum alpha")
+                && packed.items[0].body.contains("beta gamma"),
             "the admission chunks are preserved in document order: {}",
-            on.items[0].body
+            packed.items[0].body
         );
-        assert_eq!(on.token_estimate, expanded_cost + 5);
-        assert!(on.token_estimate <= budget, "never exceeds budget");
+        assert_eq!(packed.token_estimate, expanded_cost + 5);
+        assert!(packed.token_estimate <= budget, "never exceeds budget");
     }
 
     /// W1 render loss. Every chunk block is charged its provenance header ON TOP
@@ -15036,14 +14975,16 @@ mod pack_cost_tests {
     /// chunked item can never emit all of itself. It drops chunks while charging
     /// nearly the whole-body price, and the span the reader needs goes with them.
     ///
-    /// The post-fill completion pass trades the partial render for the whole
-    /// body — a superset, since chunk bodies are byte slices of it — but ONLY
-    /// when the pack's leftover budget covers the difference. On a budget-bound
-    /// pack it is a no-op, which is the whole reason it is not the reverted
+    /// The post-fill completion pass trades the partial render up — a superset,
+    /// since chunk bodies are byte slices of the body — but ONLY when the pack's
+    /// leftover budget covers the difference. It prefers FULL CHUNK COVERAGE,
+    /// which keeps the per-window provenance headers, and falls back to the bare
+    /// whole body only when those headers do not fit. On a budget-bound pack it
+    /// is a no-op, which is the whole reason it is not the reverted
     /// admission-time fallback. A deliberate `pack_render_cap` also stays in
     /// force: bounding the item is that lever's entire purpose.
     #[test]
-    fn partial_chunk_render_takes_the_whole_body_only_when_leftover_budget_allows() {
+    fn partial_chunk_render_completes_itself_only_when_leftover_budget_allows() {
         let query_tokens = tokenize("quantum");
         let bodies = [
             "quantum alpha alpha alpha alpha",
@@ -15104,14 +15045,39 @@ mod pack_cost_tests {
             )
         };
 
-        // Slot-bound (budget to spare): the item emits all of itself, and the
-        // co-packed plain item is untouched.
+        // Slot-bound (budget to spare): the item emits all of itself AS CHUNK
+        // BLOCKS, so every window keeps its provenance header — the whole body
+        // carries none. The co-packed plain item is untouched.
         let roomy = pack(4096, PackLevers::default());
         assert_eq!(roomy.items.len(), 2, "nothing is displaced");
-        assert_eq!(roomy.items[0].body, whole, "the whole body is emitted");
+        assert_eq!(
+            roomy.items[0].body,
+            emit_selected_chunks(&chunks(), &vec![true; bodies.len()]),
+            "full chunk coverage is emitted, headers and all"
+        );
+        assert!(
+            roomy.items[0].body.contains("goldspan"),
+            "the dropped span is recovered: {}",
+            roomy.items[0].body
+        );
+        assert!(
+            roomy.items[0].body.contains("[turns 7-8]"),
+            "…carrying its window header: {}",
+            roomy.items[0].body
+        );
         assert_eq!(roomy.items[1].body, body_of(plain_cost));
-        assert_eq!(roomy.token_estimate, whole_cost + plain_cost);
+        assert_eq!(roomy.token_estimate, full_coverage_cost + plain_cost);
         assert!(roomy.token_estimate <= 4096, "never exceeds budget");
+
+        // Between the two: enough leftover for the whole body but not for the
+        // per-window headers on top of it. Content still wins — the bare whole
+        // body is the fallback, never a silent partial render.
+        let header_bound = pack(whole_cost + plain_cost, PackLevers::default());
+        assert_eq!(
+            header_bound.items[0].body, whole,
+            "the whole body is the fallback when the headers do not fit"
+        );
+        assert_eq!(header_bound.token_estimate, whole_cost + plain_cost);
 
         // Budget-bound (leftover zero): byte-identical to the old behaviour.
         let tight_budget = admission_cost + plain_cost;
@@ -15127,7 +15093,6 @@ mod pack_cost_tests {
         let capped = pack(
             4096,
             PackLevers {
-                sibling_gather_enabled: false,
                 session_quota: None,
                 pack_render_cap: Some(admission_cost),
                 submodular_ordering_enabled: false,
@@ -15192,7 +15157,6 @@ mod pack_cost_tests {
             Vec::new(),
             16,
             PackLevers {
-                sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15247,7 +15211,6 @@ mod pack_cost_tests {
             Vec::new(),
             5,
             PackLevers {
-                sibling_gather_enabled: false,
                 session_quota: Some(2),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15306,7 +15269,6 @@ mod pack_cost_tests {
             &req,
             candidate_count,
             PackLevers {
-                sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15338,7 +15300,6 @@ mod pack_cost_tests {
             &req,
             candidate_count,
             PackLevers {
-                sibling_gather_enabled: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15406,7 +15367,6 @@ mod pack_cost_tests {
         );
 
         let on_levers = PackLevers {
-            sibling_gather_enabled: false,
             session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
             pack_render_cap: None,
             submodular_ordering_enabled: false,

@@ -53,7 +53,10 @@ PINNED_SETTINGS = [
     "mode",
     "lexical_scorer",
     "cross_rerank",
-    "sibling_gather",
+    # `sibling_gather` was pinned here until the lever was deleted (2026-07-30).
+    # It must NOT be re-added: frozen reports carry `false`, post-deletion
+    # reports omit the field, and pinning it would fail every old-vs-new
+    # comparison on a difference that no longer means anything.
     "session_quota",
     "pack_render_cap",
     "temporal_grounding",

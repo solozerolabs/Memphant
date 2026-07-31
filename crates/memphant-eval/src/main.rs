@@ -451,9 +451,8 @@ fn bench_lme_command(args: Vec<String>) -> ExitCode {
     let mut turns_window = memphant_eval::bench_lme::DEFAULT_TURNS_WINDOW;
     let mut budget_tokens = memphant_eval::bench_lme::DEFAULT_BUDGET_TOKENS;
     let mut pool = memphant_core::DEFAULT_RECALL_POOL_DEPTH;
-    // W4 packing levers: both default off (the campaign toggles each). See
-    // `MemoryService::with_sibling_gather_enabled` / `with_session_quota`.
-    let mut sibling_gather = false;
+    // W4 packing levers: default off (the campaign toggles each). See
+    // `MemoryService::with_session_quota`.
     let mut session_quota: Option<usize> = None;
     let mut pack_render_cap: Option<usize> = None;
     let mut lexical_scorer = memphant_core::LexicalScorer::Overlap;
@@ -578,10 +577,6 @@ fn bench_lme_command(args: Vec<String>) -> ExitCode {
                     }
                 }
                 index += 2;
-            }
-            "--sibling-gather" => {
-                sibling_gather = true;
-                index += 1;
             }
             "--session-quota" => {
                 match take(index).and_then(|value| value.parse::<usize>().ok()) {
@@ -712,7 +707,6 @@ fn bench_lme_command(args: Vec<String>) -> ExitCode {
         turns_window,
         budget_tokens,
         pool,
-        sibling_gather,
         session_quota,
         pack_render_cap,
         lexical_scorer,
@@ -767,6 +761,6 @@ fn bench_lme_command(args: Vec<String>) -> ExitCode {
 
 fn usage() {
     eprintln!(
-        "usage: memphant-eval bench-lme --database-url <url> --data <longmemeval.json> --sample <n> --seed <s> [--k 10] [--disable vector|edge_expansion|procedure_recall|decay|packing|runtime_chunks] [--mode fast|deep] [--granularity turns|session (default: session)] [--turns-window <n> (default: 4)] [--budget-tokens <n> (default: 8192)] [--pool <n> (default: 64; recall-pool-depth — the ONE knob every internal channel/fusion limit in the recall path derives from, never k)] [--sibling-gather (default: off; W4 sibling-gather packing lever)] [--session-quota <n> (default: off; W4 per-session diversity cap)] [--pack-render-cap <n> (default: off; rung-7 per-item render-token cap)] [--lexical-scorer overlap|bm25-control|bm25-code (default: overlap; fusion's lexical family)] [--pack-submodular-ordering (default: off; relevance+coverage+representativeness+diversity)] [--temporal-grounding (default: off; W5 content-date grounding + windowed recall + dated packs)] [--fact-extraction (default: off; W6 deterministic preference/attribute fact mining at reflect)] [--runtime-chunks (default: on; --disable runtime_chunks for the control arm)] [--embed-model small|base|modernbert|gemma|qwen3|voyage-4|voyage-4-lite|voyage-4-large|voyage-code-3|voyage-context-4|gemini-embedding-001|openai-text-embedding-3-small (default: small; W8/R0 embedding arm; qwen3 requires --features qwen3; voyage/gemini/openai arms read the provider API key from env: VOYAGE_API_KEY/GEMINI_API_KEY/OPENAI_API_KEY)] [--cross-rerank (default: off; W8 cross-encoder rerank over the candidate pool, requires --features fastembed)] [--rerank-granularity body|chunk (default: body; cross-rerank doc granularity — chunk reranks contextual_chunks and max-pools per candidate; inert without --cross-rerank)] [--emit-qa <evidence.jsonl>] [--emit-trace-classification <classification.jsonl> (A1: FREE Fast-miss bucket per question from the retrieval trace)] [--baseline <report.json>] [--out <report.json>] | memphant-eval run <suite.yaml> [--archive-traces] [--archive-dir <dir>] [--disable-contextual-chunks] [--disable-temporal-validity] [--disable-edge-expansion] [--disable-context-packing-abstention] [--disable-procedure-recall] [--disable-decay] [--disable-l4-exhaustive] [--l4-runtime-provider (paid ignored rung only; reads strict Deep env)] [--filesystem-control] | memphant-eval verify-golden <suite.yaml> | memphant-eval security <suite.yaml> | memphant-eval ops <suite.yaml> | memphant-eval syndai-trace-compare <fixture.yaml> [--archive-traces] [--archive-dir <dir>] | memphant-eval profile <profile.yaml> --compare-to <baseline> [--archive <path>] | memphant-eval schema trace"
+        "usage: memphant-eval bench-lme --database-url <url> --data <longmemeval.json> --sample <n> --seed <s> [--k 10] [--disable vector|edge_expansion|procedure_recall|decay|packing|runtime_chunks] [--mode fast|deep] [--granularity turns|session (default: session)] [--turns-window <n> (default: 4)] [--budget-tokens <n> (default: 8192)] [--pool <n> (default: 64; recall-pool-depth — the ONE knob every internal channel/fusion limit in the recall path derives from, never k)] [--session-quota <n> (default: off; W4 per-session diversity cap)] [--pack-render-cap <n> (default: off; rung-7 per-item render-token cap)] [--lexical-scorer overlap|bm25-control|bm25-code (default: overlap; fusion's lexical family)] [--pack-submodular-ordering (default: off; relevance+coverage+representativeness+diversity)] [--temporal-grounding (default: off; W5 content-date grounding + windowed recall + dated packs)] [--fact-extraction (default: off; W6 deterministic preference/attribute fact mining at reflect)] [--runtime-chunks (default: on; --disable runtime_chunks for the control arm)] [--embed-model small|base|modernbert|gemma|qwen3|voyage-4|voyage-4-lite|voyage-4-large|voyage-code-3|voyage-context-4|gemini-embedding-001|openai-text-embedding-3-small (default: small; W8/R0 embedding arm; qwen3 requires --features qwen3; voyage/gemini/openai arms read the provider API key from env: VOYAGE_API_KEY/GEMINI_API_KEY/OPENAI_API_KEY)] [--cross-rerank (default: off; W8 cross-encoder rerank over the candidate pool, requires --features fastembed)] [--rerank-granularity body|chunk (default: body; cross-rerank doc granularity — chunk reranks contextual_chunks and max-pools per candidate; inert without --cross-rerank)] [--emit-qa <evidence.jsonl>] [--emit-trace-classification <classification.jsonl> (A1: FREE Fast-miss bucket per question from the retrieval trace)] [--baseline <report.json>] [--out <report.json>] | memphant-eval run <suite.yaml> [--archive-traces] [--archive-dir <dir>] [--disable-contextual-chunks] [--disable-temporal-validity] [--disable-edge-expansion] [--disable-context-packing-abstention] [--disable-procedure-recall] [--disable-decay] [--disable-l4-exhaustive] [--l4-runtime-provider (paid ignored rung only; reads strict Deep env)] [--filesystem-control] | memphant-eval verify-golden <suite.yaml> | memphant-eval security <suite.yaml> | memphant-eval ops <suite.yaml> | memphant-eval syndai-trace-compare <fixture.yaml> [--archive-traces] [--archive-dir <dir>] | memphant-eval profile <profile.yaml> --compare-to <baseline> [--archive <path>] | memphant-eval schema trace"
     );
 }

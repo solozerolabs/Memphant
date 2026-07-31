@@ -1,0 +1,87 @@
+{
+ "arms": {
+  "after": "sibling-gather ON",
+  "before": "sibling-gather OFF"
+ },
+ "harness": {
+  "budget_tokens": 8192,
+  "dataset_sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",
+  "embed_model": "small",
+  "k": 10,
+  "mode": "fast",
+  "pool": 64,
+  "reader": "none (retrieval-only)",
+  "sample_n": 178,
+  "sample_seed": 20260710
+ },
+ "lane": "LME-S dev cohort (frozen n=178)",
+ "packed_content": {
+  "interpretation": "the 2 ON gains are pack-level budget-contention artifacts (the gather spends leftover on one item, changing which other item the completion pass can afford), not residual-band hits",
+  "items_identical": 689,
+  "items_interleaved": 60,
+  "items_off_shows_content_on_lacks": 16,
+  "items_on_longer": 7,
+  "items_on_shorter": 82,
+  "items_on_shows_content_off_lacks": 2,
+  "items_total": 778,
+  "net_content_char_delta_on_minus_off": -52946,
+  "note": "episode UUIDs are minted fresh per scratch DB; all counts below are computed on id-normalized bodies",
+  "packed_context_identical": false
+ },
+ "production_surface": "none \u2014 with_sibling_gather_enabled had exactly one call site tree-wide (memphant-eval bench_lme.rs); no server/cli/worker/script reference",
+ "retrieval": {
+  "after": {
+   "abstention_correct": 7,
+   "abstention_n": 12,
+   "n": 178,
+   "n_scored": 166,
+   "question_type": "overall",
+   "recall_at_10": 0.6144578313253012,
+   "recall_at_5": 0.6144578313253012
+  },
+  "before": {
+   "abstention_correct": 7,
+   "abstention_n": 12,
+   "n": 178,
+   "n_scored": 166,
+   "question_type": "overall",
+   "recall_at_10": 0.6144578313253012,
+   "recall_at_5": 0.6144578313253012
+  },
+  "paired_at_10": {
+   "after_hits": 102,
+   "after_only": 0,
+   "before_hits": 102,
+   "before_only": 0,
+   "mcnemar_exact_p": 1.0,
+   "n": 166
+  },
+  "paired_at_5": {
+   "after_hits": 102,
+   "after_only": 0,
+   "before_hits": 102,
+   "before_only": 0,
+   "mcnemar_exact_p": 1.0,
+   "n": 166
+  },
+  "per_question_vector_identical": true
+ },
+ "unit_probe": {
+  "budget_sweep": "1..=260 over a 5-chunk unit plus a co-packed plain item",
+  "budgets_where_lever_added_coverage": 0,
+  "budgets_where_lever_changed_bytes_or_cost": 50,
+  "partial_render_budgets": 39,
+  "render_cap_interaction": {
+   "cap_only": {
+    "chunks": 1,
+    "tokens": 26
+   },
+   "cap_plus_gather": {
+    "chunks": 5,
+    "tokens": 124
+   },
+   "cap_tokens": 40
+  }
+ },
+ "verdict": "delete"
+}

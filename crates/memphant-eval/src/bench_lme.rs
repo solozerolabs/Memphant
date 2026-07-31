@@ -113,10 +113,6 @@ pub struct BenchLmeOptions {
     /// unified knob so there is one honest pool concept, not two. Default
     /// `DEFAULT_RECALL_POOL_DEPTH` (64).
     pub pool: usize,
-    /// W4 sibling-gather packing lever (`--sibling-gather`, default off) threaded
-    /// via `with_sibling_gather_enabled`. The measurement-campaign flag; off
-    /// reproduces today's packing.
-    pub sibling_gather: bool,
     /// W4 per-session diversity quota (`--session-quota <n>`, default off =
     /// `None`) threaded via `with_session_quota`.
     pub session_quota: Option<usize>,
@@ -317,11 +313,6 @@ pub struct BenchLmeReport {
     #[serde(alias = "candidate_pool_size")]
     #[serde(default = "default_recall_pool_depth_for_legacy_reports")]
     pub recall_pool_depth: usize,
-    /// Whether the W4 sibling-gather packing lever was on for this run. The serde
-    /// default is `false`: every report written before the lever existed was a
-    /// sibling-gather-off run, so an absent field ⇒ off.
-    #[serde(default)]
-    pub sibling_gather: bool,
     /// The W4 per-session diversity quota used for this run (`--session-quota`),
     /// or `None` when off. Serde default `None` for pre-flag reports.
     #[serde(default)]
@@ -900,9 +891,8 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
     // scan window, rerank rescoring cap). Recall-time only; ingestion is
     // unaffected.
     .with_recall_pool_depth(options.pool)
-    // W4 packing levers (`--sibling-gather` / `--session-quota`): recall-time
-    // only; both default off so the campaign measures each independently.
-    .with_sibling_gather_enabled(options.sibling_gather)
+    // W4 packing levers (`--session-quota`): recall-time only; default off so
+    // the campaign measures each independently.
     .with_session_quota(options.session_quota)
     .with_pack_render_cap(options.pack_render_cap)
     .with_lexical_scorer(options.lexical_scorer)
@@ -1423,7 +1413,6 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         turns_window: options.turns_window,
         budget_tokens: options.budget_tokens,
         recall_pool_depth: options.pool,
-        sibling_gather: options.sibling_gather,
         session_quota: options.session_quota,
         pack_render_cap: options.pack_render_cap,
         lexical_scorer: options.lexical_scorer,
@@ -1888,16 +1877,30 @@ mod tests {
             "absent runtime_chunks must parse false (pre-promotion runs were chunks-off)"
         );
         // W4: a report written before the packing levers existed must parse with
-        // both off — sibling_gather false, session_quota absent (None) — since
-        // every such report ran today's unrestricted packing.
-        assert!(
-            !report.sibling_gather,
-            "absent sibling_gather must parse false (pre-lever runs were sibling-gather-off)"
-        );
+        // the quota absent (None), since every such report ran today's
+        // unrestricted packing. (The sibling-gather lever was deleted on
+        // 2026-07-30; frozen reports still carrying its field parse fine —
+        // there is no `deny_unknown_fields` here.)
         assert_eq!(
             report.session_quota, None,
             "absent session_quota must parse None (pre-lever runs had no quota)"
         );
+        // The ~50 frozen artifacts written while the lever existed still carry
+        // `"sibling_gather": <bool>`. Deleting the struct field must not make
+        // them unparseable, so this asserts the absence of
+        // `deny_unknown_fields` rather than trusting it.
+        let with_deleted_field = json.replacen(
+            r#""sample_seed": 20260710,"#,
+            r#""sample_seed": 20260710, "sibling_gather": false,"#,
+            1,
+        );
+        assert!(
+            with_deleted_field.contains(r#""sibling_gather""#),
+            "fixture anchor moved — this backward-compat check would be vacuous"
+        );
+        let legacy: BenchLmeReport = serde_json::from_str(&with_deleted_field)
+            .expect("a frozen report carrying the deleted sibling_gather field still parses");
+        assert_eq!(legacy.sample_seed, 20260710);
         // W5: a report written before the temporal-grounding flag existed must
         // parse with it off — every such report ran without content-date
         // grounding, windowing, or dated packs.

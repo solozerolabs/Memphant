@@ -3373,10 +3373,11 @@ pub struct MemoryService<S: MemoryStore> {
     /// (also lets the W8 cross-encoder rerank arm rerank a widened pool — no
     /// wire change). See the pool-mapping note on `DEFAULT_RECALL_POOL_DEPTH`.
     recall_pool_depth: usize,
-    /// W4 packing levers (sibling-gather + session-diversity quota), threaded
-    /// construction-time like `recall_pool_depth`. BOTH DEFAULT OFF: they ship
-    /// default-on only after the accuracy-wave measurement campaign, so the bench
-    /// needs the flags. Set via `with_sibling_gather_enabled` / `with_session_quota`.
+    /// Packing levers (session-diversity quota, render cap, submodular
+    /// ordering), threaded construction-time like `recall_pool_depth`. ALL
+    /// DEFAULT OFF: they ship default-on only after the accuracy-wave
+    /// measurement campaign, so the bench needs the flags. Set via
+    /// `with_session_quota` and friends.
     pack_levers: PackLevers,
     /// Which lexical scorer the fusion's lexical family uses, threaded
     /// construction-time like `pack_levers`. `LexicalScorer::Overlap` is the
@@ -3501,17 +3502,6 @@ impl<S: MemoryStore> MemoryService<S> {
     /// `with_recall_pool_depth`: no recall-request or wire change.
     pub fn with_lexical_scorer(mut self, scorer: LexicalScorer) -> Self {
         self.lexical_scorer = scorer;
-        self
-    }
-
-    /// Enables the W4 sibling-gather packing post-pass (default OFF). When on,
-    /// after the greedy fill the packer spends leftover budget expanding already
-    /// chunk-rendered items with their own unselected sibling chunks — never
-    /// evicting a packed item nor exceeding budget. Construction-time only,
-    /// mirroring `with_recall_pool_depth`: no recall-request/wire change. The
-    /// bench lane's `--sibling-gather` threads its value here.
-    pub fn with_sibling_gather_enabled(mut self, enabled: bool) -> Self {
-        self.pack_levers.sibling_gather_enabled = enabled;
         self
     }
 
@@ -5832,7 +5822,7 @@ fn episode_contextual_chunks(
 // NON-overlapping (`spans.chunks(window_size)`). Per the mirror-the-twin rule
 // (consistency with the promoted machinery wins) these windows are
 // non-overlapping too: disjoint `source_span`s and the same ±1 sibling-adjacency
-// semantics the read path's sibling-gather assumes.
+// semantics the read path's chunk-render expansion assumes.
 // ===========================================================================
 
 /// Resource-chunk char budget. Windows aim for `TARGET_MIN..=TARGET_MAX` chars of
