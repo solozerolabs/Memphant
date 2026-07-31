@@ -365,3 +365,57 @@ remains gated on C1 replication and a reader-QA result. The honest statement is
 that the substrate beats a deterministic lexical control on repo-memory
 retrieval, on a bank whose construction an owner has reviewed — not that it is
 ready to own production tables.
+
+
+---
+
+## CORRECTION (coordinator, 2026-07-31, second pass) — two claims above are WRONG
+
+An adversarial review caught these; I verified both myself before writing this.
+
+### 1. There is no sign flip. The packed comparison was against a defect we had already fixed.
+
+`af-w0-instrument` — the branch these five arms were built from — contains **neither**
+`f67f2b2a` (render-loss completion pass) **nor** `3fc4eede` (exact-channel magnitude).
+Verified: `git merge-base --is-ancestor f67f2b2a af-w0-instrument` → **NO**, same for
+`3fc4eede`.
+
+The `survival_vs_original_bank.original_bank_reference` block records
+`packed_recall_at_10: 0.7722`. That is the **pre-render-fix** figure. Trunk on the same
+bank, same goldens, re-executed and reproduced to the digit, is **0.9333 (168/180)**.
+Against the same control (0.8944), the current original-bank packed margin is
+**+0.0389 — a win.**
+
+So the claim "the packed stage flipped sign from a 0.12 deficit to a 0.12 advantage" is
+**withdrawn**. MemPhant wins packed on *both* banks as of trunk. One table mixed two
+lineages — the fused reference (0.9611) is current, the packed reference is superseded —
+and the stale cell carried the headline.
+
+**The fused numbers are unaffected** (retrieval is upstream of both fixes), so the
+kill-gate clearance stands on the fused comparison. But the packed narrative was wrong.
+
+### 2. "Every margin here is a lower bound" is inverted.
+
+The bracketing argument assumed margin *decreases* with instrument difficulty. Our own two
+measurements say the opposite: as coverage falls 0.396 → 0.1346, the fused margin **rises**
++0.0667 → +0.2389. Under the only relation we have actually measured, the paraphrase
+margin is the **maximum** over the bracket, and production — at higher coverage — sits
+*below* it.
+
+**Paraphrase-bank margins are UPPER bounds, not lower bounds.** Stated backwards here, in
+the adjudication, and in STATUS.
+
+The frame is also internally inconsistent: the bracket needs the original bank to be a
+*valid* endpoint at coverage 0.396, while the instrument-bias thesis needs it to be
+*invalid*. Both cannot hold. If the original bank is invalid we have one point, not a
+bracket, and the margin at human coverage is simply **unmeasured**.
+
+### Required before any of these numbers are cited again
+
+1. **Re-run the four W0.2 arms on trunk.** $0, warm cache.
+2. **Mine a third bank landing inside the human band (0.175–0.287)** and measure the margin
+   there. If it exceeds the paraphrase margin, monotonicity is wrong and "lower bound" is
+   rescued. This is the cheapest decisive experiment in the program.
+3. **Record `git rev-parse HEAD` and a binary hash in the harness block of every run**, and
+   make lineage the field the evidence contract actually enforces. Nothing currently binds
+   an artifact to the commit its binaries were built from.
