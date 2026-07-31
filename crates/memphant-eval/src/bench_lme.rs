@@ -32,7 +32,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use memphant_core::service::MemoryService;
+use memphant_core::service::{MemoryService, drain_finished};
 use memphant_core::{EmbeddingProvider, LexicalScorer, MemoryStore, NoopEmbedding, SystemClock};
 use memphant_store_postgres::PgStore;
 use memphant_types::{
@@ -1085,12 +1085,46 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
 
         // Each question has a fresh tenant above; drain only this scratch
         // workload through the production worker surface.
-        while ingest_service
-            .run_worker_tick(usize::MAX)
+        //
+        // `while tick() > 0 {}` was WRONG here, for the same reason it was wrong
+        // in `gate_runtime.drain_worker`: a zero-completion tick is not proof of
+        // an empty queue. One failed embed/compile releases its job with
+        // `retry_backoff_seconds` (and blocks the rest of its scope lane), and
+        // `claim_reflect_jobs` excludes `run_after > now()` — so the very next
+        // tick completes nothing while the haystack is still partly compiled,
+        // and the question would be scored against a truncated corpus. Ask the
+        // DATABASE, through the SAME `drain_finished` gate `memphant-worker`'s
+        // drain mode uses, and fail closed rather than score silently.
+        let dead_letters_before = ingest_service
+            .worker_dead_letter_count()
             .await
-            .map_err(|error| format!("reflect: {error}"))?
-            > 0
-        {}
+            .map_err(|error| format!("reflect dead-letter baseline: {error}"))?;
+        loop {
+            let completed = ingest_service
+                .run_worker_tick(usize::MAX)
+                .await
+                .map_err(|error| format!("reflect: {error}"))?;
+            let pending = ingest_service
+                .pending_worker_job_count()
+                .await
+                .map_err(|error| format!("reflect pending count: {error}"))?;
+            let dead_letters_after = ingest_service
+                .worker_dead_letter_count()
+                .await
+                .map_err(|error| format!("reflect dead-letter count: {error}"))?;
+            if drain_finished(pending, dead_letters_before, dead_letters_after)
+                .map_err(|error| format!("reflect drain: {error}"))?
+            {
+                break;
+            }
+            if completed == 0 {
+                return Err(format!(
+                    "reflect drain made no progress with {pending} jobs still pending \
+                     for question {}",
+                    question.question_id
+                ));
+            }
+        }
 
         let response = recall_service
             .recall_internal(RecallRequest {
