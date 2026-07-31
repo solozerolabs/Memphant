@@ -5326,13 +5326,11 @@ impl MemoryStore for PgStore {
             enum_from_str(&row.try_get::<String, _>("trust_level").map_err(backend)?)?;
 
         let mut sources_by_kind = std::collections::BTreeMap::new();
-        for kind in [
-            MemoryKind::Episodic,
-            MemoryKind::Semantic,
-            MemoryKind::Procedural,
-            MemoryKind::Belief,
-            MemoryKind::Resource,
-        ] {
+        // `MemoryKind::ALL`, never a hand-written list: a kind omitted here
+        // resolves to no source, so `context.allows` denies it and the unit is
+        // invisible to the compiler snapshot AND to recall. That is how minting
+        // `preference` first failed — the write landed and nothing could see it.
+        for kind in MemoryKind::ALL {
             let exact_allowed = agent_level_allows_memory_kind(agent_level, kind);
             sources_by_kind.insert(
                 kind,

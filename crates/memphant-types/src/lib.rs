@@ -971,15 +971,25 @@ pub enum MemoryKind {
     Procedural,
     Belief,
     Resource,
+    // Spec 04 §13.2a. A user-declared standing constraint: declared, never
+    // promoted; superseded or revoked, never decayed. Minted by the
+    // `20260731_006_preference_memory_kind` migration (00 §4 / 25 §11c). Its
+    // router arm lives in `memphant_core::write_router_arm`, an exhaustive
+    // match (RW-1) — a further kind must not compile until it has an arm
+    // there. Kept as a `//` comment, not a doc comment: schemars turns a
+    // documented variant into a `oneOf` branch and forks the flat enum in
+    // `examples/evals/trace-schema.v1.json`.
+    Preference,
 }
 
 impl MemoryKind {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Episodic,
         Self::Semantic,
         Self::Procedural,
         Self::Belief,
         Self::Resource,
+        Self::Preference,
     ];
 }
 

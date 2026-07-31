@@ -5789,13 +5789,11 @@ impl MemoryStore for InMemoryStore {
             .ok_or(StoreError::NotFound("memory context"))?;
 
         let mut sources_by_kind = BTreeMap::new();
-        for kind in [
-            MemoryKind::Episodic,
-            MemoryKind::Semantic,
-            MemoryKind::Procedural,
-            MemoryKind::Belief,
-            MemoryKind::Resource,
-        ] {
+        // `MemoryKind::ALL`, never a hand-written list: a kind omitted here
+        // resolves to no source, so `context.allows` denies it and the unit is
+        // invisible to the compiler snapshot AND to recall. That is how minting
+        // `preference` first failed — the write landed and nothing could see it.
+        for kind in MemoryKind::ALL {
             let exact_allowed = agent_level_allows_memory_kind(response.agent_level, kind);
             sources_by_kind.insert(
                 kind,
@@ -11492,6 +11490,11 @@ async fn prepare_compiled_write_from_snapshot_inner(
             )
         });
         let structured_target_kind = candidate.kind.unwrap_or(MemoryKind::Semantic);
+        // Spec 04 §13.1: dispatch on kind FIRST. `supersedes_own_kind` is the
+        // whole router decision this admission stage needs — which kind, if
+        // any, this candidate's arm may close a generation of. `None` means the
+        // arm owns no supersession and the candidate can only append.
+        let supersedable_kind = supersedes_own_kind(structured_target_kind);
 
         let targeted_indices = if let Some(target_ids) = &candidate.target_unit_ids {
             let unique_targets = target_ids.iter().copied().collect::<HashSet<_>>();
@@ -11597,7 +11600,13 @@ async fn prepare_compiled_write_from_snapshot_inner(
                             unit.scope_id == input.scope_id
                                 && unit.fact_key.as_deref() == Some(fact_key.as_str())
                                 && unit.state == UnitState::Active
-                                && unit.kind == MemoryKind::Semantic
+                                // RW-3 (own-kind writes only). This was the
+                                // literal `MemoryKind::Semantic`, which let a
+                                // non-semantic candidate close a semantic
+                                // unit's generation; the targeted branch above
+                                // already filters on the candidate's own kind,
+                                // so the two paths disagreed.
+                                && unit.kind == structured_target_kind
                                 && candidate_targets_unit(&candidate, unit, &now)
                         })
                         .map(|(index, _)| index)
@@ -11689,7 +11698,23 @@ async fn prepare_compiled_write_from_snapshot_inner(
                 // AUTO-KEYS NEVER SUPERSEDE: content-hash subject keys only
                 // participate in exact-duplicate dedup above; subject-based
                 // supersedence requires an explicit subject/predicate.
-                if explicit_subject {
+                //
+                // Second gate, and it is the router's (spec 04 §13.1): only an
+                // arm that OWNS *implicit* subject-key close-generation may
+                // take this path — `knowledge_arm` for `semantic`,
+                // `preference_arm` for `preference`. Every other arm falls
+                // through to append, which is what makes "an episode is never
+                // superseded" structural rather than incidental.
+                //
+                // A candidate that names `target_unit_ids` is exempt: that is a
+                // caller-directed replacement, already own-kind-checked when
+                // `targeted_indices` was resolved (and already fail-closed if
+                // any named target does not match). The arm gate governs what
+                // the router may close *without being told*, which is where
+                // cross-kind widening would otherwise creep in.
+                if explicit_subject
+                    && (supersedable_kind.is_some() || candidate.target_unit_ids.is_some())
+                {
                     let bounded = candidate.valid_from.is_some() || candidate.valid_to.is_some();
                     let mut existing_indices = if candidate.target_unit_ids.is_some() {
                         targeted_indices.clone()
@@ -11701,7 +11726,7 @@ async fn prepare_compiled_write_from_snapshot_inner(
                                 existing.scope_id == input.scope_id
                                     && existing.fact_key.as_deref() == Some(fact_key.as_str())
                                     && existing.state == UnitState::Active
-                                    && existing.kind == MemoryKind::Semantic
+                                    && Some(existing.kind) == supersedable_kind
                                     && candidate_targets_unit(&candidate, existing, &now)
                             })
                             .map(|(index, _)| index)
@@ -11806,9 +11831,13 @@ async fn prepare_compiled_write_from_snapshot_inner(
             // promoted claims: keep them recallable while preserving their
             // low trust label so high-risk recall policy can still suppress
             // them.
+            // RW-7 / §13.2a: a `preference` is actor-gated at write — only the
+            // data subject or a trusted user may declare one. An untrusted
+            // caller's preference hint degrades to a belief exactly as a
+            // semantic hint does, rather than minting a standing constraint.
             let low_trust_kind = candidate
                 .kind
-                .filter(|kind| *kind != MemoryKind::Semantic)
+                .filter(|kind| !matches!(kind, MemoryKind::Semantic | MemoryKind::Preference))
                 .unwrap_or(MemoryKind::Belief);
             let unit = minted_unit(
                 new_id,
@@ -11944,6 +11973,54 @@ fn low_trust_projection_state(kind: MemoryKind) -> UnitState {
         UnitState::Active
     } else {
         UnitState::Candidate
+    }
+}
+
+/// The typed write-router arm a candidate dispatches to (spec 04 §13.1).
+///
+/// `Knowledge` is the arm name for `MemoryKind::Semantic` (§13.2c) — it is not
+/// a kind, and no enum variant exists for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WriteArm {
+    Episodic,
+    Knowledge,
+    Procedural,
+    Belief,
+    Resource,
+    Preference,
+}
+
+/// RW-1 (kind-totality). The dispatch is an exhaustive `match` on `MemoryKind`
+/// with **no `_` catch-all**, so minting a kind fails to compile until its arm
+/// exists here. A wildcard arm would silently reintroduce the "`kind` enters
+/// only as data" defect §13.0 records and is a contract violation, not a style
+/// preference.
+pub(crate) fn write_router_arm(kind: MemoryKind) -> WriteArm {
+    match kind {
+        MemoryKind::Episodic => WriteArm::Episodic,
+        MemoryKind::Semantic => WriteArm::Knowledge,
+        MemoryKind::Procedural => WriteArm::Procedural,
+        MemoryKind::Belief => WriteArm::Belief,
+        MemoryKind::Resource => WriteArm::Resource,
+        MemoryKind::Preference => WriteArm::Preference,
+    }
+}
+
+/// The kind an arm may close a generation of, or `None` when the arm owns no
+/// subject-keyed supersession at all.
+///
+/// This is the lift of the constant that §13.0 records as the "half-built and
+/// hardcoded" defect: the supersession target filter used to be the literal
+/// `unit.kind == MemoryKind::Semantic` inside one branch. Routing it through
+/// the arm makes RW-3 (own-kind writes only) structural — an arm can only ever
+/// name its own kind here, so no dispatch can widen supersession across kinds,
+/// and `episodic_arm` provably cannot supersede anything (§13.1: an episode is
+/// ground truth and is never superseded).
+pub(crate) fn supersedes_own_kind(kind: MemoryKind) -> Option<MemoryKind> {
+    match write_router_arm(kind) {
+        WriteArm::Knowledge => Some(MemoryKind::Semantic),
+        WriteArm::Preference => Some(MemoryKind::Preference),
+        WriteArm::Episodic | WriteArm::Procedural | WriteArm::Belief | WriteArm::Resource => None,
     }
 }
 
