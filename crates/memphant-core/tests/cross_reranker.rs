@@ -250,7 +250,16 @@ async fn seed(store: &InMemoryStore) -> (TenantId, ScopeId, ActorId) {
             .await
             .expect("retain");
     }
-    while ingest.run_worker_tick(usize::MAX).await.expect("reflect") > 0 {}
+    // Drain to idle, asserting cleanliness: a tick that failed every job also
+    // completes zero, so `> 0` exited the same way on total failure as on an
+    // empty queue.
+    loop {
+        let tick = ingest.run_worker_tick(usize::MAX).await.expect("reflect");
+        assert!(tick.is_clean(), "reflect drain hit errors: {tick:?}");
+        if tick.is_idle() {
+            break;
+        }
+    }
     (tenant, scope, actor)
 }
 
@@ -299,7 +308,16 @@ async fn vector_lexical_balance_preserves_a_vector_only_candidate_for_reranking(
             .expect("retain semantic candidate");
     }
     let target = "semantic candidate 9 contains hidden material";
-    while ingest.run_worker_tick(usize::MAX).await.expect("reflect") > 0 {}
+    // Drain to idle, asserting cleanliness: a tick that failed every job also
+    // completes zero, so `> 0` exited the same way on total failure as on an
+    // empty queue.
+    loop {
+        let tick = ingest.run_worker_tick(usize::MAX).await.expect("reflect");
+        assert!(tick.is_clean(), "reflect drain hit errors: {tick:?}");
+        if tick.is_idle() {
+            break;
+        }
+    }
 
     let baseline = MemoryService::new(
         Arc::new(store.clone()),

@@ -198,8 +198,12 @@ async fn seed_reference_corpus(service: &MemoryService<PgStore>, context: &Resol
     // Drain the reflect queue so recall reads compiled units, not degraded
     // read-your-own-writes episodes.
     loop {
-        let compiled = service.run_worker_tick(256).await.expect("worker tick");
-        if compiled == 0 {
+        let tick = service.run_worker_tick(256).await.expect("worker tick");
+        // Fail closed: if the queue did not compile, recall below would read
+        // degraded episodes and the SLO would be measured against the wrong
+        // path. `completed == 0` alone could not tell that from an empty queue.
+        assert!(tick.is_clean(), "reflect drain hit errors: {tick:?}");
+        if tick.is_idle() {
             break;
         }
     }

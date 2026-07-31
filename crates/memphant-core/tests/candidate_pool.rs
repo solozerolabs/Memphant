@@ -108,7 +108,16 @@ async fn larger_pool_admits_vector_candidate_default_pool_missed() {
             .await
             .expect("retain");
     }
-    while ingest.run_worker_tick(usize::MAX).await.expect("reflect") > 0 {}
+    // Drain to idle, asserting cleanliness: a tick that failed every job also
+    // completes zero, so `> 0` exited the same way on total failure as on an
+    // empty queue.
+    loop {
+        let tick = ingest.run_worker_tick(usize::MAX).await.expect("reflect");
+        assert!(tick.is_clean(), "reflect drain hit errors: {tick:?}");
+        if tick.is_idle() {
+            break;
+        }
+    }
 
     let context = memphant_store_testkit::resolved_context(tenant, scope, actor);
     let page = store

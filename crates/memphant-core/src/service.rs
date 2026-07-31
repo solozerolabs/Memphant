@@ -2612,6 +2612,72 @@ mod structured_provider_retry_tests {
         assert_eq!(traces[0].compiler_version, queued_compiler);
     }
 
+    /// A tick that failed every job must not look like a tick with nothing to
+    /// do. Both complete zero jobs, so the old bare-count return made them
+    /// indistinguishable and `while tick() > 0 {}` exited on total failure
+    /// exactly as it did on an empty queue — a harness could report a fully
+    /// drained corpus while nothing had compiled, silently understating every
+    /// recall number measured on it.
+    #[tokio::test]
+    async fn a_tick_that_failed_every_job_is_not_reported_as_an_idle_tick() {
+        let provider = Arc::new(RetryProvider {
+            identity: StructuredStateProviderIdentity {
+                model: "test/model".to_string(),
+                prompt_hash: "prompt".to_string(),
+                schema_hash: "schema".to_string(),
+            },
+            responses: Mutex::new(VecDeque::from([Err(
+                StructuredStateProviderError::InvalidOutput("schema mismatch".to_string()),
+            )])),
+        });
+        let store = InMemoryStore::default();
+        let tenant = TenantId::new();
+        let context = bind_test_context(&store, tenant, "tick-honesty").await;
+        let service = MemoryService::new(
+            Arc::new(store.clone()),
+            Arc::new(FixedClock("2026-07-13T00:00:00Z")),
+            Arc::new(NoopEmbedding),
+        )
+        .with_structured_state_provider(provider.clone());
+
+        // Baseline: an empty queue. This is what a failing tick must NOT match.
+        let idle = service.run_worker_tick(usize::MAX).await.unwrap();
+        assert!(idle.is_idle());
+        assert!(idle.is_clean());
+
+        service
+            .retain(
+                &context,
+                "structured:tick-honesty",
+                TrustLevel::TrustedUser,
+                episode_request(
+                    &context,
+                    "structured:tick-honesty",
+                    "user: My home city is Oslo.",
+                ),
+            )
+            .await
+            .unwrap();
+
+        let tick = service.run_worker_tick(usize::MAX).await.unwrap();
+
+        // The property under test, stated three ways.
+        assert_eq!(tick.completed, 0, "nothing compiled: {tick:?}");
+        assert!(
+            !tick.is_idle(),
+            "a tick that failed a job claimed work and must not read as idle: {tick:?}"
+        );
+        assert!(
+            !tick.is_clean(),
+            "a tick that failed a job must not read as clean: {tick:?}"
+        );
+        assert_ne!(
+            tick, idle,
+            "total failure must be distinguishable from an empty queue"
+        );
+        assert_eq!(tick.failed + tick.retried, 1, "one job errored: {tick:?}");
+    }
+
     #[tokio::test]
     async fn worker_terminally_fails_provider_errors_after_provider_owned_attempts() {
         for failure in [
@@ -2649,9 +2715,12 @@ mod structured_provider_retry_tests {
                 .await
                 .unwrap();
 
-            assert_eq!(service.run_worker_tick(1).await.unwrap(), 0);
+            let tick = service.run_worker_tick(1).await.unwrap();
+            assert_eq!(tick.completed, 0);
+            assert_eq!(tick.failed, 1, "expected a terminal failure: {tick:?}");
             assert_eq!(store.dead_letter_count().await.unwrap(), 1);
-            assert_eq!(service.run_worker_tick(1).await.unwrap(), 0);
+            // Dead-lettered, so the next tick must claim nothing at all.
+            assert!(service.run_worker_tick(1).await.unwrap().is_idle());
             assert_eq!(
                 provider.responses.lock().unwrap().len(),
                 1,
@@ -2704,7 +2773,7 @@ mod structured_provider_retry_tests {
                 .unwrap();
         }
 
-        assert_eq!(service.run_worker_tick(16).await.unwrap(), 2);
+        assert_eq!(service.run_worker_tick(16).await.unwrap().completed, 2);
         assert_eq!(calls.load(Ordering::SeqCst), 2);
         assert_eq!(max_in_flight.load(Ordering::SeqCst), 1);
         assert_eq!(
@@ -2756,7 +2825,7 @@ mod structured_provider_retry_tests {
                 .unwrap();
         }
 
-        assert_eq!(service.run_worker_tick(16).await.unwrap(), 6);
+        assert_eq!(service.run_worker_tick(16).await.unwrap().completed, 6);
         assert_eq!(service.pending_worker_job_count().await.unwrap(), 0);
     }
 
@@ -2811,7 +2880,7 @@ mod structured_provider_retry_tests {
                 .unwrap();
         }
 
-        assert_eq!(service.run_worker_tick(16).await.unwrap(), 6);
+        assert_eq!(service.run_worker_tick(16).await.unwrap().completed, 6);
         assert_eq!(calls.load(Ordering::SeqCst), 6);
         assert_eq!(max_in_flight.load(Ordering::SeqCst), 2);
     }
@@ -2870,9 +2939,9 @@ mod structured_provider_retry_tests {
                 .await
                 .unwrap();
         }
-        assert_eq!(service.run_worker_tick(16).await.unwrap(), 0);
+        assert_eq!(service.run_worker_tick(16).await.unwrap().completed, 0);
         assert_eq!(provider.responses.lock().unwrap().len(), 3);
-        assert_eq!(service.run_worker_tick(16).await.unwrap(), 2);
+        assert_eq!(service.run_worker_tick(16).await.unwrap().completed, 2);
         assert_eq!(provider.responses.lock().unwrap().len(), 1);
         assert_eq!(store.dead_letter_count().await.unwrap(), 1);
     }
@@ -2954,7 +3023,7 @@ mod structured_provider_retry_tests {
             Arc::new(NoopEmbedding),
         )
         .with_structured_state_provider(second_provider.clone());
-        assert_eq!(second.run_worker_tick(16).await.unwrap(), 0);
+        assert_eq!(second.run_worker_tick(16).await.unwrap().completed, 0);
         assert_eq!(
             second_provider.responses.lock().unwrap().len(),
             1,
@@ -3007,7 +3076,7 @@ mod structured_provider_retry_tests {
             )
             .await
             .unwrap();
-        assert_eq!(first.run_worker_tick(1).await.unwrap(), 1);
+        assert_eq!(first.run_worker_tick(1).await.unwrap().completed, 1);
         first
             .retain(
                 &context,
@@ -3086,7 +3155,7 @@ mod structured_provider_retry_tests {
             Arc::new(NoopEmbedding),
         )
         .with_structured_state_provider(replay_provider.clone());
-        assert_eq!(replay.run_worker_tick(1).await.unwrap(), 1);
+        assert_eq!(replay.run_worker_tick(1).await.unwrap().completed, 1);
         assert_eq!(replay_provider.responses.lock().unwrap().len(), 1);
         let current = store
             .memory_units(tenant)
@@ -3165,7 +3234,7 @@ mod structured_provider_retry_tests {
             Arc::new(NoopEmbedding),
         )
         .with_structured_state_provider(provider_b.clone());
-        assert_eq!(worker.run_worker_tick(1).await.unwrap(), 0);
+        assert_eq!(worker.run_worker_tick(1).await.unwrap().completed, 0);
         assert_eq!(provider_a.responses.lock().unwrap().len(), 1);
         assert_eq!(provider_b.responses.lock().unwrap().len(), 1);
         assert!(
@@ -3175,7 +3244,7 @@ mod structured_provider_retry_tests {
                 .all(|trace| trace.compiler_version != compiler_a)
         );
 
-        assert_eq!(worker.run_worker_tick(1).await.unwrap(), 1);
+        assert_eq!(worker.run_worker_tick(1).await.unwrap().completed, 1);
         assert!(provider_b.responses.lock().unwrap().is_empty());
         let compiler_b =
             service_structured_compiler_identity(COMPILER_VERSION, provider_b.as_ref());
@@ -5011,8 +5080,12 @@ impl<S: MemoryStore> MemoryService<S> {
     /// tenants) and compiles them. Infrastructure failures are requeued with bounded backoff;
     /// provider-invalid output and provider-unavailable-after-retries are terminally failed;
     /// later jobs in a failed scope lane are released for ordered redelivery.
-    /// Returns the number of jobs completed.
-    pub async fn run_worker_tick(&self, batch: usize) -> Result<usize, ServiceError> {
+    /// Returns a [`WorkerTickOutcome`] — completed, failed, retried and
+    /// deferred counts, not a bare completed-count. See that type for why.
+    pub async fn run_worker_tick(
+        &self,
+        batch: usize,
+    ) -> Result<crate::WorkerTickOutcome, ServiceError> {
         self.run_worker_tick_scoped(JobFilter::default(), batch)
             .await
     }
@@ -5037,7 +5110,7 @@ impl<S: MemoryStore> MemoryService<S> {
         &self,
         filter: JobFilter,
         batch: usize,
-    ) -> Result<usize, ServiceError> {
+    ) -> Result<crate::WorkerTickOutcome, ServiceError> {
         let jobs = self.store.claim_reflect_jobs(filter, batch).await?;
         let mut lanes: Vec<Vec<ReflectJobRow>> = Vec::new();
         for job in jobs {
@@ -5071,7 +5144,7 @@ impl<S: MemoryStore> MemoryService<S> {
         let outcomes = stream::iter(lanes.into_iter().map(|jobs| {
             let service = self.clone();
             async move {
-                let mut completed = 0;
+                let mut outcome = crate::WorkerTickOutcome::default();
                 let mut blocked = false;
                 for job in jobs {
                     if blocked {
@@ -5083,6 +5156,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                 "blocked by an earlier scope-lane job".to_string(),
                             )
                             .await?;
+                        outcome.deferred += 1;
                         continue;
                     }
                     if let Some(live_compiler_version) =
@@ -5093,6 +5167,7 @@ impl<S: MemoryStore> MemoryService<S> {
                             .store
                             .requeue_reflect_job_with_compiler(&job, &live_compiler_version)
                             .await?;
+                        outcome.deferred += 1;
                         blocked = true;
                         continue;
                     }
@@ -5110,6 +5185,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                     .store
                                     .fail_reflect_job(&job, error.to_string())
                                     .await?;
+                                outcome.failed += 1;
                             } else {
                                 service
                                     .store
@@ -5119,6 +5195,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                         error.to_string(),
                                     )
                                     .await?;
+                                outcome.retried += 1;
                             }
                             eprintln!(
                                 "memphant-worker: job {} preparation failed (attempt {}): {error}",
@@ -5137,6 +5214,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                     "structured-state preparation panicked".to_string(),
                                 )
                                 .await?;
+                            outcome.retried += 1;
                             eprintln!(
                                 "memphant-worker: job {} preparation panicked (attempt {})",
                                 job.job.id.as_uuid(),
@@ -5157,7 +5235,7 @@ impl<S: MemoryStore> MemoryService<S> {
                             if service.store.complete_reflect_job(&job).await?
                                 == ClaimMutationOutcome::Applied
                             {
-                                completed += 1;
+                                outcome.completed += 1;
                             }
                         }
                         Ok(Err(error)) => {
@@ -5167,6 +5245,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                     .store
                                     .fail_reflect_job(&job, error.to_string())
                                     .await?;
+                                outcome.failed += 1;
                             } else {
                                 service
                                     .store
@@ -5176,6 +5255,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                         error.to_string(),
                                     )
                                     .await?;
+                                outcome.retried += 1;
                             }
                             eprintln!(
                                 "memphant-worker: job {} failed (attempt {}): {error}",
@@ -5193,6 +5273,7 @@ impl<S: MemoryStore> MemoryService<S> {
                                     "reflect compilation panicked".to_string(),
                                 )
                                 .await?;
+                            outcome.retried += 1;
                             eprintln!(
                                 "memphant-worker: job {} panicked (attempt {})",
                                 job.job.id.as_uuid(),
@@ -5201,7 +5282,7 @@ impl<S: MemoryStore> MemoryService<S> {
                         }
                     }
                 }
-                Ok::<usize, ServiceError>(completed)
+                Ok::<crate::WorkerTickOutcome, ServiceError>(outcome)
             }
         }))
         .buffer_unordered(lane_concurrency)
@@ -5209,7 +5290,14 @@ impl<S: MemoryStore> MemoryService<S> {
         .await;
         outcomes
             .into_iter()
-            .try_fold(0, |total, outcome| outcome.map(|count| total + count))
+            .try_fold(crate::WorkerTickOutcome::default(), |mut total, outcome| {
+                let lane = outcome?;
+                total.completed += lane.completed;
+                total.failed += lane.failed;
+                total.retried += lane.retried;
+                total.deferred += lane.deferred;
+                Ok(total)
+            })
     }
 
     /// Compiles one claimed reflect job through `reflect_recorded` — the ONE

@@ -1191,7 +1191,11 @@ async fn rejects_wrong_spans_and_assistant_only_evidence() {
         )
         .await
         .unwrap();
-    assert_eq!(service.run_worker_tick(usize::MAX).await.unwrap(), 0);
+    let tick = service.run_worker_tick(usize::MAX).await.unwrap();
+    assert_eq!(tick.completed, 0);
+    // Assert the terminal failure directly rather than inferring it from the
+    // dead-letter count: `completed == 0` alone is also true of an empty queue.
+    assert_eq!(tick.failed, 1, "expected one terminal failure: {tick:?}");
     assert_eq!(store.dead_letter_count().await.unwrap(), 1);
     assert!(
         store
@@ -1415,7 +1419,11 @@ async fn provider_failure_returns_unavailable_without_compiling_raw_only() {
         )
         .await
         .unwrap();
-    assert_eq!(service.run_worker_tick(usize::MAX).await.unwrap(), 0);
+    let tick = service.run_worker_tick(usize::MAX).await.unwrap();
+    assert_eq!(tick.completed, 0);
+    // Assert the terminal failure directly rather than inferring it from the
+    // dead-letter count: `completed == 0` alone is also true of an empty queue.
+    assert_eq!(tick.failed, 1, "expected one terminal failure: {tick:?}");
     assert_eq!(store.dead_letter_count().await.unwrap(), 1);
     assert!(store.memory_units(tenant).is_empty());
     assert!(store.reflect_traces(tenant).is_empty());

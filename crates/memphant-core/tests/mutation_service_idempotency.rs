@@ -224,7 +224,7 @@ async fn reflect_acceptance_is_atomic_replayable_and_worker_owned() {
     assert_eq!(replay, first);
     assert_eq!(store.reflect_jobs(context.tenant_id).len(), 1);
 
-    assert_eq!(service.run_worker_tick(1).await.unwrap(), 1);
+    assert_eq!(service.run_worker_tick(1).await.unwrap().completed, 1);
     assert!(
         store
             .fetch_reflect_trace(&context, accepted.job_id, memphant_types::COMPILER_VERSION)
@@ -269,7 +269,7 @@ async fn worker_runs_source_before_the_scope_barrier() {
         .unwrap();
     let scope: ReflectAccepted = serde_json::from_slice(accepted.body()).unwrap();
 
-    assert_eq!(service.run_worker_tick(2).await.unwrap(), 2);
+    assert_eq!(service.run_worker_tick(2).await.unwrap().completed, 2);
     assert!(!store.memory_units(context.tenant_id).is_empty());
     assert!(
         store

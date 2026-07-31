@@ -1076,12 +1076,27 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
 
         // Each question has a fresh tenant above; drain only this scratch
         // workload through the production worker surface.
-        while ingest_service
-            .run_worker_tick(usize::MAX)
-            .await
-            .map_err(|error| format!("reflect: {error}"))?
-            > 0
-        {}
+        // Drain to idle and fail closed on any compile error. Looping on
+        // `completed > 0` exited identically on an empty queue and on a tick
+        // that failed every job, so a corpus that never compiled would be
+        // scored as if it had — silently understating recall for the whole
+        // question. Mechanism-liveness: prove the ingest happened before
+        // reading a number off it.
+        loop {
+            let tick = ingest_service
+                .run_worker_tick(usize::MAX)
+                .await
+                .map_err(|error| format!("reflect: {error}"))?;
+            if !tick.is_clean() {
+                return Err(format!(
+                    "reflect drain did not compile cleanly ({tick:?}); \
+                     recall on this question would be understated"
+                ));
+            }
+            if tick.is_idle() {
+                break;
+            }
+        }
 
         let response = recall_service
             .recall_internal(RecallRequest {

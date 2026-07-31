@@ -277,7 +277,10 @@ async fn resource_reflection_retains_raw_evidence_and_compiles_structured_units(
         )
     );
 
-    assert_eq!(service.run_worker_tick(1).await.expect("reflect"), 1);
+    assert_eq!(
+        service.run_worker_tick(1).await.expect("reflect").completed,
+        1
+    );
     {
         let calls = provider.calls.lock().unwrap();
         assert_eq!(calls.len(), 1, "short resource uses one full-body fallback");
@@ -339,7 +342,10 @@ async fn resource_observation_batches_fold_once_in_source_order() {
         serde_json::from_slice(retained.body()).expect("retain response");
     let resource_id = retained.resource_id.expect("resource retained");
 
-    assert_eq!(service.run_worker_tick(1).await.expect("reflect"), 1);
+    assert_eq!(
+        service.run_worker_tick(1).await.expect("reflect").completed,
+        1
+    );
     let expected_last = {
         let calls = provider.calls.lock().unwrap();
         assert!(calls.len() > 1, "oversized resources use multiple batches");
@@ -405,7 +411,10 @@ async fn procedural_resource_state_replaces_then_retires_across_jobs() {
                 )
                 .await
                 .expect("retain procedural state");
-            assert_eq!(service.run_worker_tick(1).await.expect("reflect"), 1);
+            assert_eq!(
+                service.run_worker_tick(1).await.expect("reflect").completed,
+                1
+            );
 
             let active = store
                 .scope_memory_page(&context, None, 100)
@@ -462,7 +471,10 @@ async fn identical_resource_extraction_mints_tenant_local_units_and_citations() 
             .await
             .expect("retain resource");
     }
-    assert_eq!(service.run_worker_tick(2).await.expect("reflect"), 2);
+    assert_eq!(
+        service.run_worker_tick(2).await.expect("reflect").completed,
+        2
+    );
 
     let left_response = service
         .recall(
