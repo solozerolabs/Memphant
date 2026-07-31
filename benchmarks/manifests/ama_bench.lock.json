@@ -1,0 +1,125 @@
+{
+  "benchmark": "AMA-Bench (Open-Ended QA)",
+  "track": "coding-lane external calibration",
+  "license": "MIT",
+  "license_provenance": "HF dataset card YAML frontmatter `license: mit` at the pinned revision, corroborated by the card's own License section (\"released under the MIT License\") and by a real MIT LICENSE file in the project's code repository (github.com/AMA-Bench/AMA-Hub, \"Copyright (c) 2026 AMA-Bench Team\"). Not a badge. The CC-BY-4.0 that appears on arXiv:2602.22769 is arXiv's submission licence for the PAPER, shown as a CC-BY-4.0 icon on the abstract page; it does not describe the dataset. No conflict: two artifacts, two licences.",
+  "attribution": {
+    "source": "https://huggingface.co/datasets/AMA-bench/AMA-bench",
+    "license": "MIT",
+    "revision": "a5777378066f53229a94557a7b192435cd027909",
+    "paper": "https://arxiv.org/abs/2602.22769",
+    "citation": "Zhao et al., AMA-Bench: Evaluating Long-Horizon Memory for Agentic Applications, arXiv:2602.22769, 2026"
+  },
+  "dataset": {
+    "revision": "a5777378066f53229a94557a7b192435cd027909",
+    "last_modified": "2026-06-08T05:40:25.000Z",
+    "mirror": "~/.memphant-private/w7-instruments/ama-bench",
+    "primary_file": "test/open_end_qa_set.jsonl",
+    "files": {
+      "test/open_end_qa_set.jsonl": {
+        "bytes": 50451919,
+        "sha256": "45c36052e1520d87ad9de4114f71c9df42d4aac9cf158c0c353e800b653d65ff"
+      },
+      "README.md": {
+        "bytes": 5484,
+        "sha256": "448fa0df4b773d184feccc66fe0ae11041fa61ef6babe0ceee13f2482119e717"
+      }
+    }
+  },
+  "verified_shape": {
+    "verified_on": "2026-07-30",
+    "method": "counted from the shipped JSONL at the pinned sha256; no card value trusted",
+    "episodes": 208,
+    "qa_pairs": 2496,
+    "question_uuids_unique": 2496,
+    "trajectory_turns": 14944,
+    "num_turns_equals_len_trajectory": true,
+    "domains": {
+      "TEXT2SQL": 51,
+      "SOFTWARE": 36,
+      "WEB": 31,
+      "Game": 30,
+      "EMBODIED_AI": 30,
+      "OPENWORLD_QA": 30
+    },
+    "task_types": {
+      "spider2": 51,
+      "swebench": 36,
+      "webarena": 31,
+      "alfworld": 30,
+      "gaia_level2": 15,
+      "gaia_level1": 10,
+      "babaisai": 6,
+      "crafter": 6,
+      "minihack": 6,
+      "2048": 6,
+      "candy_crush": 6,
+      "gaia_level3": 5
+    },
+    "qa_types_all": {"A_recall": 839, "C_state_updating": 647, "B_causal_inference": 596, "D_state_abstraction": 414},
+    "adopted_slice": {
+      "name": "SOFTWARE / swebench",
+      "episodes": 36,
+      "qa_pairs": 432,
+      "qa_pairs_per_episode": 12,
+      "qa_types": {"A_recall": 212, "B_causal_inference": 75, "C_state_updating": 73, "D_state_abstraction": 72},
+      "trajectory_turns": 3716,
+      "median_turns_per_episode": 94,
+      "task_success": {"true": 25, "false": 11},
+      "empty_question": 0,
+      "empty_answer": 0,
+      "null_or_empty_action": 0,
+      "null_or_empty_observation": 0,
+      "ingest_bytes_measured": 8884365
+    },
+    "defects_found": [
+      "The card documents a top-level `source` field; it is absent from every one of the 208 shipped records.",
+      "TEXT2SQL: 102 trajectory turns ship `action: null` AND `observation: null` (wholly empty turns). OPENWORLD_QA: 41 turns ship an empty-string observation; TEXT2SQL a further 27. The adopted SOFTWARE slice is clean (0/3716).",
+      "The card claims the field `type` values map A/B/C/D to recall / causal inference / state updating / state abstraction; verified present and exhaustive (no other values)."
+    ],
+    "label_provenance": {
+      "verdict": "expert-curated, NOT verified as graduate-annotator-with-cross-review",
+      "evidence": "arXiv:2602.22769 abstract: AMA-Bench \"combines real-world agent trajectories from representative applications with expert-curated QA, as well as synthetic trajectories that scale to arbitrary horizons with rule-based QA\". The 208 shipped episodes are the real-trajectory (expert-curated) half; the synthetic rule-based half is not in this repository. The HF card is silent on who authored the labels.",
+      "unverified": "The specific claim that annotators were graduate students with cross-review is not stated in the card or the abstract and was not confirmed from the shipped data."
+    }
+  },
+  "adapter": {
+    "entrypoint": "scripts/external_instrument_adapter.py --instrument ama_bench",
+    "mode": "retrieval-only, $0, no reader and no judge",
+    "unit": "one trajectory turn, ingested as a MemPhant episode (source_kind=agent)",
+    "probe": "a SOFTWARE QA pair whose question names an explicit `step N`",
+    "gold_rule": "gold unit = trajectory turn N named in the question text; deterministic regex, no model call",
+    "probe_count": 245,
+    "probe_count_note": "245 of 432 SOFTWARE questions are step-anchored (A:150, B:59, C:36, D:0). All 256 step references resolve in range (0 out-of-range). The remaining 187 need a reader and are out of scope for the $0 lane.",
+    "metric": "hit@1 / hit@k on the gold turn's `unit:` tag in the recalled bodies"
+  },
+  "power": {
+    "n": 245,
+    "n_note": "245 step-anchored retrieval probes over 36 episodes; the full instrument is 432 QA over the same 36 episodes if a reader is funded.",
+    "resolvable_effect_size": {
+      "paired_mcnemar_alpha_0.05_power_0.80": "a 6.4pp absolute shift in hit@k (discordant-pair basis, assuming ~30% discordance)",
+      "unpaired_two_proportion_alpha_0.05_power_0.80": "a ~12.5pp absolute difference between two independent arms at p~0.5",
+      "clustering_caveat": "probes cluster in 36 episodes (median 6.8 probes/episode); the effective n for episode-level effects is 36, so treat any cross-arm claim as needing a cluster bootstrap over episodes, not a flat binomial."
+    }
+  },
+  "cost": {
+    "basis": "measured bytes, not estimated",
+    "retrieval_only_full_run": {
+      "usd": 0.0,
+      "ingest_bytes": 8884365,
+      "ingest_units": 3716,
+      "recalls": 245,
+      "note": "local fastembed + local Postgres; no paid call on any path"
+    },
+    "reader_ceiling_if_ever_funded": {
+      "status": "NOT RUN, derived ceiling only",
+      "reader_input_bytes_upper_bound": 2007040,
+      "derivation": "432 QA x 8192-token budget x ~4 bytes/token = 14.2M bytes upper bound if every pack filled the budget; the 245-probe retrieval slice needs 0 paid calls. A judged full run also needs 432 judge calls. Not priced here because no provider is pinned for it."
+    }
+  },
+  "primary_sources": [
+    "https://huggingface.co/datasets/AMA-bench/AMA-bench/tree/a5777378066f53229a94557a7b192435cd027909",
+    "https://github.com/AMA-Bench/AMA-Hub/blob/main/LICENSE",
+    "https://arxiv.org/abs/2602.22769"
+  ]
+}
