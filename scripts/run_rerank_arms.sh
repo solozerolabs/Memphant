@@ -6,6 +6,13 @@
 # $0 spend: `fastembed` is the LOCAL bge-reranker-base ONNX model out of the
 # on-disk cache. No hosted reranker, no API key, no paid call.
 #
+# LIMIT_ATTEMPTS=1 keeps every gold-referenced attempt and drops the rest. It is
+# INERT for retrieval, not a sample: `bind_attempt_context` gives each attempt
+# its own subject/scope/actor/agent_node, and recall is bound to that context,
+# so a non-gold attempt's units can never enter any golden's candidate pool.
+# The proof is free and is checked rather than asserted — the rerank-OFF arm
+# must reproduce the full-corpus banked per-question vector exactly.
+#
 # MEMPHANT_FACT_EXTRACTION=0 is lineage, not a workaround: trunk's default-ON
 # fact extraction breaks full-corpus drain on the memory_unit exclusion
 # constraint (2026-07-31-w02-trunk-arms.md §6), and the arms this run must be
@@ -27,6 +34,7 @@ arm() {
     --out-evidence "$R/$name-evidence.jsonl" \
     --out-provenance "$R/$name-provenance.json" \
     --embed-model small --mode fast --k 10 --budget-tokens 8192 \
+    --limit-attempts "${LIMIT_ATTEMPTS:-1}" \
     --lexical-scorer bm25-code --label "$name" --port "$port" \
     --server-bin target/release/memphant-server \
     --worker-bin target/release/memphant-worker \
