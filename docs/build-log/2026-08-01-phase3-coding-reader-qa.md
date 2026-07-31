@@ -239,5 +239,33 @@ artifact: git head, git-dirty flag, worktree path, corpus sha256, golden sha256,
 binary sha256s, harness env, packer sha256, and each arm's evidence sha256
 before and after equalization.
 
+## 7. Amendment, recorded before the full run and before any endpoint value
+
+**`--prompt-version` moves from 1 to 3 for the headline.** Timing, stated
+exactly: this was decided after observing the saturation pilot's *abstention
+rate* and before observing any endpoint value on any arm — at the moment of the
+decision every judge call in that pilot had failed on the `minimum: 1` schema
+defect, so no `answer_correct` existed to be tempted by.
+
+Reasons:
+
+1. Phase 2 preregisters `prompt_version` 3, and Phase 3's stated design
+   principle is production-representativeness. Two lanes should not silently
+   read with different prompts.
+2. The program has already measured calibrated abstention as "a pure win, 6/6".
+   v1 ships the plain abstention line, a reader defect the program fixed.
+3. **v1 flatters us.** Its plain abstention line made the control abstain on
+   ~20–30% of rows, each scored incorrect with no judge call. Because better
+   packs produce fewer abstentions, a high-abstention prompt *amplifies* the
+   measured MemPhant margin. Choosing v1 after seeing that would be choosing
+   the instrument that favours our own arm.
+
+For these question types v3 routes to the terse prompt (no counting cue, not
+`temporal-reasoning`), so the change is precisely "plain abstention →
+calibrated abstention" and nothing else.
+
+The n=30 v1 pilot is retained and reported as a **prompt-robustness datapoint**,
+not as the headline.
+
 ---
 <!-- RESULTS APPENDED BELOW THIS LINE AFTER THE PAID RUN -->
