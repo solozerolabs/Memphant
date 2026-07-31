@@ -1022,15 +1022,22 @@ def install_openai_meter(
     return ledger
 
 
-def openrouter_generation_lookup(api_key: str):
-    """Return a bounded lookup callable for OpenRouter's authoritative stats API."""
+def openrouter_generation_lookup(api_key: str, base_url: str | None = None):
+    """Return a bounded lookup callable for OpenRouter's authoritative stats API.
+
+    ``base_url`` exists so a $0 loopback dry run can exercise the settled-cost
+    fallback instead of leaking it to the live host: without it, a stubbed
+    chat-completions call whose reported cost needs reconciling would still
+    reach openrouter.ai, and the "stub round trip" would not actually be one.
+    """
     if not isinstance(api_key, str) or not api_key:
         raise ValueError("OpenRouter generation lookup requires an API key")
+    endpoint = (base_url or "https://openrouter.ai/api/v1") + "/generation"
 
     def lookup(response_id: str) -> dict[str, Any]:
         query = urllib.parse.urlencode({"id": response_id})
         request = urllib.request.Request(
-            f"https://openrouter.ai/api/v1/generation?{query}",
+            f"{endpoint}?{query}",
             headers={"Authorization": f"Bearer {api_key}"},
         )
         for delay in (1, 2, 4, 8, 16, None):

@@ -72,6 +72,34 @@ from provider_attempts import (
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 ENGINES = ("claude", "codex", "openrouter")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# $0 dry-run target. Three external instruments in this program failed at first
+# contact on OUR side, two of them after money was already authorized, and the
+# instrument register's single highest-leverage governance recommendation is a
+# stub round trip against the current contract before any paid authorization.
+# MEMPHANT_OPENROUTER_STUB_URL points the whole paid path — manifest validation,
+# ledger, reservation, request body, response_format, parsing, judging, report —
+# at a local stub so that round trip costs nothing.
+#
+# It is deliberately loopback-only and deliberately runs WITHOUT the real API
+# key: a stub URL that could be any host, carrying a live bearer token, is an
+# exfiltration primitive, and a stub run that authenticates for real is one
+# typo away from being a paid run that nobody accounted for.
+OPENROUTER_STUB_ENV = "MEMPHANT_OPENROUTER_STUB_URL"
+STUB_API_KEY = "stub-no-credential"
+
+
+def openrouter_endpoint() -> tuple[str, bool]:
+    """Returns (url, is_stub). Refuses any stub target that is not loopback."""
+    stub = os.environ.get(OPENROUTER_STUB_ENV)
+    if not stub:
+        return OPENROUTER_URL, False
+    host = urllib.parse.urlsplit(stub).hostname
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        raise RuntimeError(
+            f"{OPENROUTER_STUB_ENV} must be a loopback URL; refusing to send "
+            f"reader traffic to {host!r}"
+        )
+    return stub, True
 
 
 def _file_sha256(path: Path) -> str:
@@ -112,7 +140,15 @@ def validate_paid_authorization(
     execution = manifest.get("execution", {}).get(arm)
     if not all(isinstance(value, dict) for value in (frozen, models, limits, execution)):
         raise ValueError("paid authorization manifest arm is missing")
-    arm_prefix = "baseline" if arm == "baseline" else "treatment"
+    # The chat lane's two historical arm names keep their historical frozen-input
+    # prefixes so every packet already on disk still validates byte-for-byte. Any
+    # other arm name is its own prefix, which is what lets a lane with more than
+    # two arms (the coding lane has three) freeze them in one packet instead of
+    # splitting into several manifests whose ledgers cannot see each other's spend.
+    arm_prefix = {
+        "baseline": "baseline",
+        "treatment_and_paired_adjudication": "treatment",
+    }.get(arm, arm)
     expected = {
         f"{arm_prefix}_evidence_sha256": _file_sha256(evidence_path),
         f"{arm_prefix}_retrieval_sha256": (
@@ -272,6 +308,38 @@ READER_SYSTEM_PROMPTS = {
     1: READER_SYSTEM_PROMPT,
     2: READER_SYSTEM_PROMPT_V2,
 }
+
+# --reader-profile closed-book: the no-memory baseline arm.
+#
+# A no-memory arm run under the evidence-grounded prompts above is INERT, not
+# neutral: every evidence-profile prompt orders the reader to answer from the
+# evidence only, and the calibrated-abstention line then tells it to abstain
+# when no item bears on the question — which, with an empty pack, is always. It
+# would abstain on every row, score 0 by construction, and answer nothing about
+# whether the reader already knew. The saturation question ("does the reader
+# resolve these without any memory at all?") requires a prompt that permits a
+# parametric answer, so the closed-book arm gets one, and the difference is
+# recorded in the report as `reader_profile` rather than hidden.
+#
+# This makes the closed-book arm NOT prompt-identical to the scored arms. That
+# is a property of the question it answers, not a defect: it is a saturation
+# probe, never the paired comparator for a memory claim.
+READER_CLOSED_BOOK_INSTRUCTION = (
+    "You answer from your own knowledge. No retrieved evidence is available "
+    "for this question."
+)
+READER_CLOSED_BOOK_ABSTENTION = (
+    "Abstain only if you genuinely cannot produce a specific answer; give your "
+    "best-supported answer otherwise."
+)
+READER_SYSTEM_PROMPT_CLOSED_BOOK = " ".join(
+    [
+        READER_CLOSED_BOOK_INSTRUCTION,
+        READER_TERSE_INSTRUCTION,
+        READER_CLOSED_BOOK_ABSTENTION,
+        READER_OUTPUT_CONTRACT,
+    ]
+)
 
 # v3 (--prompt-version 3): stratum-routed prompt. Evidence: v2's CoT +
 # calibrated abstention moved temporal-reasoning 0.52->0.78 but regressed
@@ -1046,7 +1114,8 @@ class ReaderCli:
             self.provider_attempts += 1
             attempt_started = time.monotonic()
             try:
-                api_key = os.environ.get("OPENROUTER_API_KEY")
+                endpoint, is_stub = openrouter_endpoint()
+                api_key = STUB_API_KEY if is_stub else os.environ.get("OPENROUTER_API_KEY")
                 if not api_key:
                     raise RuntimeError(
                         "--engine openrouter requires OPENROUTER_API_KEY in the "
@@ -1054,10 +1123,13 @@ class ReaderCli:
                     )
                 if self._openrouter_generation_lookup is None:
                     self._openrouter_generation_lookup = openrouter_generation_lookup(
-                        api_key
+                        api_key,
+                        base_url=(
+                            endpoint.rsplit("/chat/completions", 1)[0] if is_stub else None
+                        ),
                     )
                 request = urllib.request.Request(
-                    OPENROUTER_URL,
+                    endpoint,
                     data=body,
                     method="POST",
                     headers={
@@ -1664,6 +1736,17 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--reader-profile",
+        choices=("evidence", "closed-book"),
+        default="evidence",
+        help=(
+            "'evidence' (default) answers from the packed evidence only; "
+            "'closed-book' mints the no-memory saturation arm — it answers from "
+            "parametric knowledge, overrides --prompt-version's system prompt, "
+            "and is NOT prompt-identical to the evidence arms"
+        ),
+    )
+    parser.add_argument(
         "--judge-model",
         default=None,
         help="judge model id (defaults to --model; lets a stronger model judge)",
@@ -1721,8 +1804,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--authorization-arm",
-        choices=("baseline", "treatment_and_paired_adjudication"),
-        help="hard-limit arm in the paid authorization packet",
+        help=(
+            "hard-limit arm in the paid authorization packet. 'baseline' and "
+            "'treatment_and_paired_adjudication' keep their historical "
+            "frozen-input prefixes; any other name is its own prefix"
+        ),
     )
     parser.add_argument("--limit", type=int, help="only process the first N evidence rows (smoke)")
     parser.add_argument("--seed", type=int, default=20260710, help="bootstrap seed")
@@ -1841,7 +1927,12 @@ def main() -> int:
     if args.max_provider_attempts is not None:
         cli.set_provider_attempt_limit(args.max_provider_attempts)
     reader_system_prompt = READER_SYSTEM_PROMPTS.get(args.prompt_version)
-    routing_counts = {"cot": 0, "terse": 0} if args.prompt_version == 3 else None
+    closed_book = args.reader_profile == "closed-book"
+    if closed_book:
+        reader_system_prompt = READER_SYSTEM_PROMPT_CLOSED_BOOK
+    routing_counts = (
+        {"cot": 0, "terse": 0} if args.prompt_version == 3 and not closed_book else None
+    )
     per_question: list[dict] = []
     aborted_reason = None
     for index, row in enumerate(rows):
@@ -1863,7 +1954,7 @@ def main() -> int:
         }
         if args.judge_profile == RAG_SUPPORTED_SCHEMA_ID:
             record.update(_rag_audit_defaults())
-        if args.prompt_version == 3:
+        if args.prompt_version == 3 and not closed_book:
             route, system_prompt = route_v3(row["question_type"], row["question"])
             routing_counts[route] += 1
         else:
@@ -1965,12 +2056,13 @@ def main() -> int:
         "source_evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),
         "retrieval_report_sha256": retrieval_report_sha256,
         "prompt_version": args.prompt_version,
+        "reader_profile": args.reader_profile,
         "active_reader_prompt_sha256": (
             {
                 "cot": sha256_text(READER_SYSTEM_PROMPT_V2),
                 "terse": sha256_text(READER_SYSTEM_PROMPT_V3_TERSE),
             }
-            if args.prompt_version == 3
+            if args.prompt_version == 3 and not closed_book
             else sha256_text(reader_system_prompt)
         ),
         "judge_system_prompt_sha256": sha256_text(judge_system_prompt),
@@ -2012,6 +2104,7 @@ def main() -> int:
         "judge_model_id": judge_model,
         "judge_profile": args.judge_profile,
         "prompt_version": args.prompt_version,
+        "reader_profile": args.reader_profile,
         "routing": routing_counts,
         "reasoning_effort": args.reasoning_effort,
         "runtime": "postgres",
@@ -2025,8 +2118,16 @@ def main() -> int:
         "source_expected_n": len(source_rows),
         "evaluated_expected_n": len(rows),
         "smoke_only": smoke_only,
+        # A stub run must never be mistakable for a paid one, in either
+        # direction: the flag is recorded and it disqualifies promotion.
+        "openrouter_stub_url": os.environ.get(OPENROUTER_STUB_ENV),
         "complete": complete,
-        "promotion_ineligible": smoke_only or not complete or any(errors.values()),
+        "promotion_ineligible": (
+            smoke_only
+            or not complete
+            or any(errors.values())
+            or bool(os.environ.get(OPENROUTER_STUB_ENV))
+        ),
         "errors": errors,
         "evidence_sha256": hashlib.sha256(evaluated_evidence_bytes).hexdigest(),
         "source_evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),

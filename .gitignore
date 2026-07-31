@@ -200,6 +200,10 @@ benchmarks/data/github_lane_corpus.jsonl
 docs/build-log/artifacts/track-r-paraphrase/agent-cache/
 docs/build-log/artifacts/track-r-paraphrase/requests/
 docs/build-log/artifacts/track-r-paraphrase/run/
+# Reader-QA reports carry the golden bank's questions and gold answers
+# verbatim in per_question, so they are bodies, not results. The scored
+# comparison artifact (code_lane_reader_compare.py) is committed instead.
+docs/build-log/artifacts/track-r-paraphrase/reader/
 benchmarks/data/track_r_paraphrase_golden.jsonl
 benchmarks/data/track_r_paraphrase_spotcheck.jsonl
 !benchmarks/data/track_r_paraphrase_golden.lock.json
