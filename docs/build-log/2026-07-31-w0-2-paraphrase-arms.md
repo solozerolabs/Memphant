@@ -234,3 +234,84 @@ python3 scripts/track_r_paraphrase_arm_compare.py \
   --original docs/build-log/artifacts/track-r/track_r_phase1e_combined_fixes.json \
   --out docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json
 ```
+
+---
+
+## Adjudication (coordinator, 2026-07-31)
+
+Every p-value below was recomputed independently from the per-question vectors
+before being accepted: 6.81e-17, 1.54e-12, 6.98e-11 — all matching.
+
+### 1. The instrument-bias thesis is confirmed, by the control
+
+Removing the lexical give-away cost the **BM25 control 0.8944 → 0.2556** at r@10
+— 64 points. It lands near CLARC's third-party measurement of BM25 at ~18 on
+genuine NL→code queries. The original bank was measuring lexical give-away, not
+retrieval, exactly as §1 of the program spec argued. That is now demonstrated
+rather than inferred.
+
+### 2. Both predictions were tested. One was mine, and it was wrong.
+
+**Prediction (a) — FALSIFIED.** I predicted the `bm25-code` advantage would
+shrink toward null because code-aware tokenization wins by matching identifiers,
+and this bank withholds them. On a bank with **zero identifier surfaces**,
+`bm25-code` still beats `overlap` **+52/−3, p = 1.5e-12**. The gain is therefore
+**not** identifier matching — it is IDF and length normalisation, i.e. the two
+properties Jaccard token-set overlap structurally lacks. The defect we fixed was
+more fundamental than the mechanism I attributed it to.
+
+**Prediction (b) — CONFIRMED.** Dense flips from null to strongly positive
+(+46/−3 on overlap, +29/−5 on bm25-code). **"The best configuration uses no
+embeddings at all" was an artifact of the contaminated bank** — a bank that
+rewards lexical matching is the one place semantic retrieval cannot show value.
+This is a **false null** of exactly the class the held null-review exists to
+find, and it was nearly written into the architecture.
+
+### 3. The win grew, and the packed stage changed sign
+
+Fused@10 margin over the control: **+0.0667 → +0.2389**, ratio 3.58. The packed
+stage went from a **0.12 deficit to a 0.12 advantage** — a sign flip, not a
+shrinkage. Best arm `bm25-code + dense`: fused **0.6278** (+71/−4, p=6.8e-17),
+packed **0.4889** (+54/−12, p=1.7e-07).
+
+### 4. Ownership question (d): reversed in direction, NOT yet decidable
+
+On the instrument built to decide it, MemPhant beats the deterministic control at
+**both** stages with wide margins. The Phase 1 kill gate — which fired on the
+contaminated bank — is reversed in direction.
+
+It is **not** resolved, for one reason: **W0.5 is not done.** Both spot-checks
+remain `emitted_pending_owner_review`. No number here is publishable and no
+ownership decision may be taken until an owner reviews the goldens. The direction
+is recorded; the decision is not made.
+
+### 5. The two banks bracket reality — every margin is a lower bound
+
+The bank **overshot**: absolute q→target coverage **0.1346** sits *below* the
+human-authored range of 0.175–0.287, because it bans every identifier surface
+while real engineers do name files. So:
+
+    paraphrase 0.1346  <  human 0.175–0.287  <  original 0.396
+
+Reality is between our two instruments. Margins measured here are **lower
+bounds**; margins on the original bank are upper bounds. That bracketing is worth
+more than either bank alone, and it is the honest frame for every coding-lane
+number we quote.
+
+### 6. The bar was wrong, and two methods now agree it was
+
+`concentration ≤1.50` fails at 2.018 — but the empirical achievable floor is
+**1.79** (max-abstraction questions that still survive the uniqueness gate), and
+independent human corpora sit at **1.76–2.03×**. The bar was set below the floor
+any answerable question can reach. `bar_passed: false` stands as the mechanical
+fact; the interpretation is a mis-specified bar, not a bad bank. Standing rule
+added: **measure the achievable floor for the unit in question before
+preregistering a leakage bar.**
+
+### 7. W0.3 closes with a scope correction
+
+Cleaned vs deprecated split: **p = 1.0**, one discordant question of 100. The
+cleaning is de-padding — 1,230 of 1,243 removed sessions are empty, turns −0.07%,
+all 23,854 retained sessions byte-identical. And the rung-7/A1 dev cohort **was
+already on the cleaned split**, so the concern was doubly moot. My assertion that
+the split was deprecated upstream is withdrawn; see the W2.1 prereg correction.
