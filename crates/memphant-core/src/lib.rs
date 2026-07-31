@@ -8752,6 +8752,14 @@ struct ChunkSiblings {
     selected: Vec<bool>,
 }
 
+/// W1 render-loss completion state for one partially chunk-rendered item: every
+/// chunk of its parent unit plus the parent's whole body, so
+/// [`chunk_completion_pass`] can trade the partial render up to full coverage.
+struct ChunkCompletion {
+    chunks: Vec<ContextualChunk>,
+    whole_body: String,
+}
+
 /// Read-only per-pack context shared by every candidate admission — bundled so
 /// the admission helpers stay under the argument-count limit.
 struct PackCtx<'a> {
@@ -8794,12 +8802,12 @@ struct PackAccumulator {
     relevance_scores: Vec<f32>,
     episode_ids: Vec<Option<EpisodeId>>,
     sibling_masks: Vec<Option<ChunkSiblings>>,
-    /// W1 render loss: parallel to `items` — the parent unit's WHOLE body, kept
-    /// only for items whose chunk render covers the unit partially (and only
-    /// when no `pack_render_cap` deliberately bounds them). `None` for whole-body
-    /// items, fully-covered chunk renders, and every item under a render cap.
-    /// Consumed by [`whole_body_completion_pass`].
-    whole_bodies: Vec<Option<String>>,
+    /// W1 render loss: parallel to `items` — the completion state of items whose
+    /// chunk render covers the unit partially (and only when no
+    /// `pack_render_cap` deliberately bounds them). `None` for whole-body items,
+    /// fully-covered chunk renders, and every item under a render cap. Consumed
+    /// by [`chunk_completion_pass`].
+    completions: Vec<Option<ChunkCompletion>>,
     /// W5: parallel to `items` — the `YYYY-MM-DD` a dated pack prefixes onto each
     /// item body, or `None` (item's unit had no grounded `valid_from`, or the
     /// temporal-grounding flag is off). Applied in one pass after the fill.
@@ -8818,7 +8826,7 @@ impl PackAccumulator {
         self.relevance_scores.remove(index);
         let episode = self.episode_ids.remove(index);
         self.sibling_masks.remove(index);
-        self.whole_bodies.remove(index);
+        self.completions.remove(index);
         self.date_prefixes.remove(index);
         if let Some(episode_id) = episode
             && let Some(count) = self.episode_counts.get_mut(&episode_id)
@@ -9002,10 +9010,12 @@ fn pack_recall_context(
         sibling_gather_pass(&mut acc, request.budget_tokens);
     }
 
-    // W1 render loss: a partially chunk-rendered item takes the whole body when
-    // the leftover budget covers the difference. After sibling-gather, so the
-    // lever keeps first claim on the budget and its invariant is untouched.
-    whole_body_completion_pass(&mut acc, request.budget_tokens);
+    // W1 render loss: a partially chunk-rendered item completes itself — to full
+    // chunk coverage, or to the bare whole body when the per-window provenance
+    // headers do not fit — when the leftover budget covers the difference. After
+    // sibling-gather, so the lever keeps first claim on the budget and its
+    // invariant is untouched.
+    chunk_completion_pass(&mut acc, request.budget_tokens);
 
     // W5 dated packs: prefix each item body with `[date YYYY-MM-DD]` from the
     // unit's grounded `valid_from`. Applied AFTER sibling-gather (which rewrites
@@ -9194,13 +9204,15 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
         episode_id,
     } = admission;
     // W1: a chunk render that covers the unit only partially is the render-loss
-    // defect's precondition — keep the whole body so the post-fill completion
-    // pass can trade it in when the leftover budget allows. Never under a
-    // deliberate `pack_render_cap`, whose whole point is to bound the item.
-    let whole_body = match (&chunk_mask, ctx.pack_render_cap) {
-        (Some(selected), None) if selected.iter().any(|picked| !picked) => {
-            Some(candidate.unit.body.clone())
-        }
+    // defect's precondition — keep the unit's chunks and whole body so the
+    // post-fill completion pass can trade the partial render up when the
+    // leftover budget allows. Never under a deliberate `pack_render_cap`, whose
+    // whole point is to bound the item.
+    let completion = match (&chunk_mask, ctx.pack_render_cap) {
+        (Some(selected), None) if selected.iter().any(|picked| !picked) => Some(ChunkCompletion {
+            chunks: candidate.unit.contextual_chunks.clone(),
+            whole_body: candidate.unit.body.clone(),
+        }),
         _ => None,
     };
     let sibling = if ctx.sibling_gather_enabled {
@@ -9237,7 +9249,7 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
     acc.relevance_scores.push(candidate_score);
     acc.episode_ids.push(episode_id);
     acc.sibling_masks.push(sibling);
-    acc.whole_bodies.push(whole_body);
+    acc.completions.push(completion);
     acc.date_prefixes.push(date_prefix);
     acc.items.push(item);
 }
@@ -9278,10 +9290,9 @@ fn sibling_gather_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
             acc.token_counts[index] = used;
         }
         if selected.iter().all(|&picked| picked) {
-            // Gathered to full coverage — the whole-body completion pass below
-            // has nothing left to recover, and the chunk render carries the
-            // provenance headers the whole body does not.
-            acc.whole_bodies[index] = None;
+            // Gathered to full coverage — the completion pass below has nothing
+            // left to recover.
+            acc.completions[index] = None;
         }
     }
 }
@@ -9293,11 +9304,20 @@ fn sibling_gather_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
 /// always costs MORE than the whole body while the per-item render budget is the
 /// whole body. The item is therefore structurally unable to emit all of itself.
 ///
-/// Chunk bodies are byte slices of the unit body (`episode_contextual_chunks` /
-/// `resource_contextual_chunks` both slice `body[start..end]` and together cover
-/// it), so the whole body is a superset of any selection: swapping it in can only
-/// add content. It costs `whole_body − already_charged ≥ 0` extra tokens, so the
-/// swap happens ONLY when that difference fits in the pack's leftover budget.
+/// The completion is FULL CHUNK COVERAGE first — every chunk block, each with
+/// its own `[episode …] [kind …] [date …] [turns a-b]` provenance header — and
+/// only the bare whole body when the headers do not fit. Both are supersets of
+/// the partial render (chunk bodies are byte slices of the unit body:
+/// `episode_contextual_chunks` / `resource_contextual_chunks` both slice
+/// `body[start..end]`), so either trade can only add content, and each is taken
+/// ONLY when its extra cost fits the pack's leftover budget.
+///
+/// Chunk coverage is preferred because the chunk render carries the segment-level
+/// attribution the whole body does not — the property `sibling_gather_pass`
+/// protects when it reaches full coverage, and the one a bare whole-body swap
+/// silently drops from the packed context. Its extra cost over the whole body is
+/// exactly the per-window headers, so the whole body remains the fallback for a
+/// pack too tight to afford them.
 ///
 /// Why this and not the admission-time fallback that was reverted on 2026-07-30
 /// (`docs/build-log/2026-07-30-packing-rank-order-fix.md` §6): that one raised
@@ -9307,19 +9327,28 @@ fn sibling_gather_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
 /// thing that can change is the text of an item that was already packed, and only
 /// when the budget genuinely has room. A budget-bound pack (leftover 0) is a
 /// no-op; a slot-bound pack recovers full coverage.
-fn whole_body_completion_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
+fn chunk_completion_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
     for index in 0..acc.items.len() {
-        let Some(body) = acc.whole_bodies[index].take() else {
+        let Some(state) = acc.completions[index].take() else {
             continue;
         };
-        let whole_cost = conservative_token_estimate(&body);
-        let extra = whole_cost.saturating_sub(acc.token_counts[index]);
-        if acc.token_estimate + extra > budget_tokens {
+        let charged = acc.token_counts[index];
+        let leftover = budget_tokens.saturating_sub(acc.token_estimate);
+        let full_coverage: usize = state.chunks.iter().map(chunk_block_token_cost).sum();
+        let whole_cost = conservative_token_estimate(&state.whole_body);
+        let (body, cost) = if full_coverage.saturating_sub(charged) <= leftover {
+            (
+                emit_selected_chunks(&state.chunks, &vec![true; state.chunks.len()]),
+                full_coverage,
+            )
+        } else if whole_cost.saturating_sub(charged) <= leftover {
+            (state.whole_body, whole_cost)
+        } else {
             continue;
-        }
+        };
         acc.items[index].body = body;
-        acc.token_estimate += extra;
-        acc.token_counts[index] = acc.token_counts[index].max(whole_cost);
+        acc.token_estimate += cost.saturating_sub(charged);
+        acc.token_counts[index] = charged.max(cost);
     }
 }
 
@@ -14779,7 +14808,12 @@ mod pack_cost_tests {
         };
         let budget = 100;
 
-        // Off: today's behaviour — A keeps only the two admission-time chunks.
+        // Off: the W1 completion pass reaches the SAME full coverage on its own
+        // — with this much leftover budget the whole point of the fix is that a
+        // partially rendered item completes itself, lever or no lever. What the
+        // lever still owns is INCREMENTAL expansion: it adds siblings one at a
+        // time, so it can grow an item on a pack too tight for the completion
+        // pass's all-or-nothing full coverage.
         let off = pack_recall_context(
             candidates(),
             &request(budget),
@@ -14791,10 +14825,10 @@ mod pack_cost_tests {
             false,
         );
         assert_eq!(off.items.len(), 2, "both items packed");
-        assert_eq!(off.token_estimate, admission_cost + 5);
+        assert_eq!(off.token_estimate, expanded_cost + 5);
         assert!(
-            !off.items[0].body.contains("delta epsilon"),
-            "trailing sibling absent without the lever: {}",
+            off.items[0].body.contains("[turns 5-6]"),
+            "the completion pass keeps the window headers: {}",
             off.items[0].body
         );
 
@@ -14846,14 +14880,16 @@ mod pack_cost_tests {
     /// chunked item can never emit all of itself. It drops chunks while charging
     /// nearly the whole-body price, and the span the reader needs goes with them.
     ///
-    /// The post-fill completion pass trades the partial render for the whole
-    /// body — a superset, since chunk bodies are byte slices of it — but ONLY
-    /// when the pack's leftover budget covers the difference. On a budget-bound
-    /// pack it is a no-op, which is the whole reason it is not the reverted
+    /// The post-fill completion pass trades the partial render up — a superset,
+    /// since chunk bodies are byte slices of the body — but ONLY when the pack's
+    /// leftover budget covers the difference. It prefers FULL CHUNK COVERAGE,
+    /// which keeps the per-window provenance headers, and falls back to the bare
+    /// whole body only when those headers do not fit. On a budget-bound pack it
+    /// is a no-op, which is the whole reason it is not the reverted
     /// admission-time fallback. A deliberate `pack_render_cap` also stays in
     /// force: bounding the item is that lever's entire purpose.
     #[test]
-    fn partial_chunk_render_takes_the_whole_body_only_when_leftover_budget_allows() {
+    fn partial_chunk_render_completes_itself_only_when_leftover_budget_allows() {
         let query_tokens = tokenize("quantum");
         let bodies = [
             "quantum alpha alpha alpha alpha",
@@ -14914,14 +14950,39 @@ mod pack_cost_tests {
             )
         };
 
-        // Slot-bound (budget to spare): the item emits all of itself, and the
-        // co-packed plain item is untouched.
+        // Slot-bound (budget to spare): the item emits all of itself AS CHUNK
+        // BLOCKS, so every window keeps its provenance header — the whole body
+        // carries none. The co-packed plain item is untouched.
         let roomy = pack(4096, PackLevers::default());
         assert_eq!(roomy.items.len(), 2, "nothing is displaced");
-        assert_eq!(roomy.items[0].body, whole, "the whole body is emitted");
+        assert_eq!(
+            roomy.items[0].body,
+            emit_selected_chunks(&chunks(), &vec![true; bodies.len()]),
+            "full chunk coverage is emitted, headers and all"
+        );
+        assert!(
+            roomy.items[0].body.contains("goldspan"),
+            "the dropped span is recovered: {}",
+            roomy.items[0].body
+        );
+        assert!(
+            roomy.items[0].body.contains("[turns 7-8]"),
+            "…carrying its window header: {}",
+            roomy.items[0].body
+        );
         assert_eq!(roomy.items[1].body, body_of(plain_cost));
-        assert_eq!(roomy.token_estimate, whole_cost + plain_cost);
+        assert_eq!(roomy.token_estimate, full_coverage_cost + plain_cost);
         assert!(roomy.token_estimate <= 4096, "never exceeds budget");
+
+        // Between the two: enough leftover for the whole body but not for the
+        // per-window headers on top of it. Content still wins — the bare whole
+        // body is the fallback, never a silent partial render.
+        let header_bound = pack(whole_cost + plain_cost, PackLevers::default());
+        assert_eq!(
+            header_bound.items[0].body, whole,
+            "the whole body is the fallback when the headers do not fit"
+        );
+        assert_eq!(header_bound.token_estimate, whole_cost + plain_cost);
 
         // Budget-bound (leftover zero): byte-identical to the old behaviour.
         let tight_budget = admission_cost + plain_cost;

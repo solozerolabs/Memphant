@@ -280,9 +280,11 @@ user: The pomegranate molasses comes from a shop downtown.\n\
 assistant: A downtown shop for pomegranate molasses is handy.\n";
 
 /// End-to-end: retain → reflect (chunks on) → recall. The packed context text of
-/// the chunk-matched item is rendered from its chunks — the matched window's
-/// header + body and a neighbour window — NOT the full session body (the far,
-/// unmatched window is dropped).
+/// the chunk-matched item is rendered from its chunks — every window it shows
+/// carries its `[turns a-b]` provenance header, and it is never the raw session
+/// body. A pack with room completes the item to full chunk coverage; a
+/// budget-bound one keeps the partial render, and the far unmatched window stays
+/// dropped.
 #[tokio::test]
 async fn recall_chunk_renders_matched_window_plus_neighbour() {
     let store = InMemoryStore::default();
@@ -345,16 +347,48 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
         "neighbour window gathered: {}",
         item.body
     );
-    // The far, unmatched window (turns 9-12) is dropped — this is NOT the full
-    // session body.
+    // EVERY window the packed text shows carries its own header — the
+    // segment-level attribution is the point. A pack with budget to spare
+    // completes the item to full coverage (the far window comes back with
+    // `[turns 9-12]` on it, never as bare text), so what must never happen is a
+    // window appearing WITHOUT its provenance line.
     assert!(
-        !item.body.contains("pomegranate") && !item.body.contains("[turns 9-12]"),
-        "far unmatched window dropped: {}",
+        item.body.contains("[turns 9-12]") == item.body.contains("pomegranate"),
+        "no window is shown without its header: {}",
         item.body
     );
     assert_ne!(
         item.body, SESSION_BODY,
         "packed text is chunk-rendered, not the raw session body"
+    );
+
+    // …and when the pack CANNOT afford the completion, the far unmatched window
+    // stays dropped: the budget-bound render is the partial one, still headed.
+    // (204 tokens is the two-window admission render; 210 leaves too little for
+    // either the third block or the header-free whole body.)
+    let mut tight = recall_request(tenant, scope, actor, "quantum harmonica");
+    tight.budget_tokens = Some(210);
+    let response = service
+        .recall(
+            memphant_store_testkit::resolved_context(tenant, scope, actor),
+            tight,
+        )
+        .await
+        .expect("recall");
+    let item = response
+        .items
+        .iter()
+        .find(|item| item.citation_episode_id == Some(episode_id))
+        .expect("episode-derived item recalled");
+    assert!(
+        item.body.contains("[turns 5-8]") && item.body.contains("[turns 1-4]"),
+        "budget-bound render keeps its window headers: {}",
+        item.body
+    );
+    assert!(
+        !item.body.contains("pomegranate") && !item.body.contains("[turns 9-12]"),
+        "far unmatched window stays dropped when the pack cannot afford it: {}",
+        item.body
     );
 }
 
