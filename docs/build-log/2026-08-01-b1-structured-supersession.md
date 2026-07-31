@@ -137,3 +137,58 @@ and MDE are computed with `scripts/instrument_power.py`, never asserted.
 produce the same score. Supersession edges emitted, generations actually closed,
 and retired rows never recalled are all counted from the arm's own scratch
 database on the bench superuser credential, before it is dropped.
+
+## 3.1 The threshold, fixed on the dev slice before the confirmatory arm ran
+
+Committed before Arm S was launched. Dev slice = `--group-mod 0/4`, 54 instances
+/ 1,969 sessions / 253 probes, and **no confirmatory row was looked at**.
+
+The live extractor names the top-ranked *live* preference unit MemPhant's own
+recall returns; reproducing that ranking offline is not possible, so the dev
+candidate is approximated by the repo's own BM25 (`code_lane_run_deterministic`,
+the arm-B scorer) over the prior sessions of the same group. This is a dev-side
+proxy and nothing downstream depends on it being the true ranker.
+
+**First reading — the naive one, and it is misleading.** How often does the
+top-1 prior neighbour actually restate the same convention?
+
+| τ | sessions naming a target | shares a declaration key |
+|---:|---:|---:|
+| 0.00 | 1915 | 0.150 |
+| 0.20 | 887 | 0.222 |
+| 0.25 | 309 | 0.285 |
+| 0.30 | 83 | 0.337 |
+
+Precision never exceeds **0.34**. Read as "the extractor is wrong two times in
+three", which is what an extraction-quality framing says.
+
+**Second reading — the one that governs.** That framing is wrong for this
+endpoint, and the difference matters. Supersession always points *backwards in
+time*, and this instrument's distractors are *always earlier* declarations of
+the same key. So retiring a semantically-unrelated earlier session is not
+symmetric harm: it hurts only if that session is itself the gold (the most
+recent declarer) of some *other* probe. Classifying each named target:
+
+| τ | edges | retires a GOLD | retires a DISTRACTOR | neither | D − G |
+|---:|---:|---:|---:|---:|---:|
+| 0.00 | 1915 | 68 | 788 | 1059 | +720 |
+| 0.20 | 887 | 41 | 491 | 355 | +450 |
+| 0.25 | 309 | 16 | 204 | 89 | +188 |
+| 0.30 | 83 | 6 | 61 | 16 | +55 |
+
+Every operating point retires roughly **twelve distractors per gold**. A
+"wrong" edge is usually still a *useful* edge on this metric.
+
+**Why not τ = 0, then.** The proxy above ranks over *all* priors, including rows
+the live system has already retired and can no longer return. That flatters low
+thresholds precisely where it matters: at τ = 0 nearly every session closes a
+generation, the live pool collapses toward one unit per group, and golds are
+retired at a far higher rate than the removal-blind proxy shows. A removal-aware
+proxy was started and abandoned when the machine's load average passed 90 with
+four concurrent full-corpus benches on it; **that gap is a real limitation of
+this calibration and is carried into §7 rather than papered over.**
+
+**Chosen: τ = 0.25.** It is the best measured distractor-to-gold ratio (12.75:1)
+at non-trivial coverage, and at 16% of sessions firing the pool contracts by
+roughly a sixth rather than collapsing, which is the regime where the
+removal-blind proxy is least wrong. One threshold, fixed here, run once.
