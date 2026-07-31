@@ -211,3 +211,44 @@ distinction again.
 
 **Agents on sibling branches whose lane touches `drain_worker` are hitting this
 and should take the fix rather than rediscover it.** It is four lines.
+
+## 7. The one confound in the pairing, measured rather than waved away
+
+The two arms do not prune in the same place, and this is worth naming before any
+number is read because it runs *against* the control.
+
+`fetch_recall_candidates` (`crates/memphant-store-postgres/src/store.rs:2275`)
+filters `transaction_to` and `valid_to` **in SQL**:
+
+```sql
+and coalesce(transaction_from, '-infinity'::timestamptz) <= $8::timestamptz
+and $8::timestamptz < coalesce(transaction_to, 'infinity'::timestamptz)
+and coalesce(valid_from,  '-infinity'::timestamptz) <= $9::timestamptz
+and $9::timestamptz < coalesce(valid_to,  'infinity'::timestamptz)
+```
+
+So the **bitemporal arm never loads a retired row at all** — its candidate pool
+is spent entirely on live rows. The **A-recency arm loads every row** (all of
+them open, all unbounded) and prunes only after fusion, in
+`retain_most_recent_per_subject`. If a per-family cap bound, the control would
+spend pool slots on rows it is about to discard and could lose a live row that
+the bitemporal arm would have kept. That would be an artifact of *where the
+prune sits*, not of the recency rule.
+
+**The caps do not bind at this corpus's scale.** They are FTS top-200,
+most-recent-100 per scope, exact-subject top-200, then `truncate(limit.min(1000))`.
+This corpus is 8147 units over 257 scopes (~32 units/scope on the episodic path),
+and the oracle-keyed write mints 10,694 preference units over the same 257 scopes
+(~42/scope). Both are far below the tightest cap of 100. No family truncates, so
+the control's pool contains everything the bitemporal arm's pool contains plus
+the retired rows it then drops.
+
+**This caveat is scale-conditional, and that bounds where the finding
+transfers.** At ~32–42 units per scope the caps are slack. A production scope
+carrying 200+ units per subject would push the most-recent-100 family into
+truncation, and there the asymmetry becomes real: the control would be
+genuinely handicapped by pruning after the pool rather than inside the query,
+and this result would **not** carry. Anyone citing the number at production
+scope must either re-measure or move the collapse into the store query. The
+finding below is about the *rule*, at a scale where the rule is what is being
+compared.
