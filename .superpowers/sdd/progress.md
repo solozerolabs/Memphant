@@ -1539,3 +1539,95 @@ attributable to this change.** The parked v5 census skips on its own and was
 **not** re-pinned; the terminal SWE-ContextBench rehearsal was not touched.
 
 Full record: `docs/build-log/2026-07-30-exact-channel-magnitude.md`.
+## 2026-07-31 — W0 instrument validity (BLOCKING) — COMPLETE, $0
+
+Branch `af-w0-instrument`, worktree `/Users/sidsharma/Memphant-af-w0-instrument`.
+Nothing pushed. No checkbox, default, cutover or SOTA claim moves. Ownership
+question (d) is **not** decided here.
+
+### W0.1 — the paraphrase bank
+
+Preregistered first (`e5fda0de`), mined after. `scripts/track_r_leakage.py`
+reproduces the program spec's §1 reference to the digit on the original bank
+(0.3960 / 0.3880 target, 0.0945 sampled non-target, 4.19×, 105/180 narrowing to
+one) and adds a seed-free exhaustive floor of 0.1008 → 3.9286×.
+
+Bank `4aed8e99…`, 180 goldens, 60/60/60, accept rate 0.7895, `--verify-lock`
+byte-identical, 839 cached subscription-agent replies, $0.
+
+**`bar_passed: false` — 20 of 21 checks pass; the headline leakage criterion
+fails.** Unit = one content event, floor = same-attempt hard negatives.
+
+| measure | original | paraphrase | bar |
+|---|---:|---:|---|
+| q→target coverage mean | 0.3960 | 0.1346 | ≤0.25 PASS |
+| non-target exhaustive floor | 0.1008 | 0.0667 | — |
+| concentration | 3.9286 | **2.0180** | ≤1.50 **FAIL** |
+| excess over floor reduced | — | 77.0% | ≥0.75 PASS |
+
+The bar was **not** moved. Two independent lines say ≤1.50 was below the
+achievable floor: the floor probe (`23da53ac`) measures max-abstraction questions
+that survive the uniqueness gate at **1.790** (n=27), and owner-supplied
+human-corpus calibration puts human coding queries at **1.76–2.03×** on
+same-domain negatives. **Mis-specified bar, not a bad bank** — recorded as a
+finding, not a re-preregistration.
+
+Counter-evidence recorded too: absolute coverage 0.1346 sits **below** the
+0.175–0.287 human range, so the bank **overshot**. The withholding gate bans every
+identifier surface; engineers name files. The two banks bracket reality
+(0.1346 < human < 0.396), making every W0.2 margin a **lower bound**.
+
+**W0.4 resolved:** distractor-coverage floor raised 50% → **100%** (achieved
+180/180, 900 verdicts). The old floor was a concession to a rare-token selector
+that returned an empty non-target set 105/180 times, not a judgement about the
+construct.
+
+### W0.2 — five arms, two stages — DIAGNOSTIC, NOT PROMOTION-GRADE
+
+Control r@5 0.1167 / r@10 0.2556 (BM25 falls **0.8944 → 0.2556**, landing near
+third-party CLARC's R@10 ≈ 18.06 on genuine NL→code queries — the strongest
+evidence the confound was in the instrument).
+
+| arm | fused@10 | vs control | packed@10 |
+|---|---:|---|---:|
+| overlap / off | 0.2222 | +17/−23, p=0.43 | 0.1722 |
+| bm25-code / off | 0.4944 | +48/−5, **p=7.1e-10** | 0.3722 |
+| overlap / small | 0.4611 | +51/−14, **p=4.5e-06** | 0.3333 |
+| bm25-code / small | **0.6278** | +71/−4, **p=6.8e-17** | **0.4889** |
+
+**Survival: the win grew.** Margin over control at fused@10 +0.0667 → +0.2389,
+ratio **3.58**. At packed the sign flipped in our favour: −0.1222 → +0.1167 (the
+negative ratio is a sign flip, not a shrinkage).
+
+- **Prediction (a) FALSIFIED** — the bm25-code advantage did not shrink. It still
+  beats overlap +52/−3 (p=1.5e-12) on a bank whose questions carry no identifier
+  from their target, so the gain is not identifier matching.
+- **Prediction (b) CONFIRMED** — dense flips null → strongly positive (+46/−3 on
+  overlap, +29/−5 on bm25-code). **"The best configuration uses no embeddings at
+  all" was an artifact of the old bank.** No default moves; it must be re-decided.
+
+### W0.3 — LongMemEval cleaned split
+
+Pinned by revision with a `--verify-lock`. **Standing R@k does not move:** 0.6170
+cleaned vs 0.6277 deprecated on the identical 100 questions, exact McNemar
+**p = 1.0**, one question. Cause: the cleaning is **de-padding** — 1,243 sessions
+removed of which 1,230 are empty, total turns −0.07%, all 23,854 retained
+sessions byte-identical. Scope correction: the rung-7/A1 dev cohort was **already**
+on the cleaned split; only the 2026-07-10/11 wave was on the deprecated one.
+
+### W0.5 — NOT done
+
+The 15-golden spot-check on the original bank remains
+`emitted_pending_owner_review`, and so does the paraphrase bank's. **No number
+from either bank is publishable until the owner reviews them.**
+
+### Commits
+
+`e5fda0de` prereg bar · `57fba790` miner+tests · `c659574d` comparator ·
+`23da53ac` floor probe · `b3d6518a` cleaned-split pin · `98c2e8be` cleaned-split
+measurement · `cc712a86` bank lock + floor result · `2c8c1049` bar mis-specified
+· `742e2e6a` five-arm comparator · `3e2cc2ba` W0.2 result.
+
+Custody: bank, spot-check, caches, run outputs and authored brief mirrored to
+`~/.memphant-private/track-r-paraphrase/` with sha256s in
+`docs/build-log/2026-07-31-track-r-paraphrase-bar.md` §8.5.

@@ -10,7 +10,21 @@ from the `xiaowu0162/longmemeval-cleaned` dataset repo into `benchmarks/data/`
 The fetcher never changes pins. Existing files are verified and re-downloaded
 only on hash mismatch or absence; downloaded bytes are verified before replace.
 
-Usage: python3 scripts/fetch_longmemeval.py [--oracle-only]
+`--deprecated` additionally fetches the ORIGINAL (upstream-deprecated)
+`xiaowu0162/longmemeval` split, pinned by commit sha rather than the `main`
+branch the first pin used. It is not part of the standing lane; it exists so the
+cleaned-vs-deprecated retrieval comparison in
+`docs/build-log/2026-07-31-lme-cleaned-split.md` reproduces.
+
+`--verify-lock` runs no network I/O. It re-derives every figure the lock
+asserts — file sha256s and byte counts, row/session/turn counts, this
+materializer's own sha256, and the private mirror's copies — and exits non-zero
+on the first disagreement. Bodies stay gitignored, so the mirror check is what
+makes a single local copy not the only copy.
+
+Usage:
+  python3 scripts/fetch_longmemeval.py [--oracle-only] [--deprecated]
+  python3 scripts/fetch_longmemeval.py --verify-lock
 """
 
 from __future__ import annotations
@@ -37,11 +51,31 @@ REMOTE_FILES = {
     "longmemeval_oracle": "longmemeval_oracle.json",
 }
 
+# The upstream-deprecated original split. The first pin of this repo resolved
+# `main`, which is not a pin at all; this names the commit that `main` pointed
+# at, and its sha256 is byte-identical to the one every standing chat-lane
+# number was measured on.
+DEPRECATED_REPO = "xiaowu0162/longmemeval"
+DEPRECATED_REVISION = "2ec2a557f339b6c0369619b1ed5793734cc87533"
+DEPRECATED_REMOTE = "longmemeval_s"
+DEPRECATED_LOCAL = "longmemeval_s_original_deprecated"
+
+# Bodies are gitignored, so a single local copy is the whole corpus. The repo
+# has already lost one that way; every fetched body is mirrored here too.
+MIRROR_DIR = Path.home() / ".memphant-private" / "longmemeval-cleaned"
+
 
 def resolve_url(name: str) -> str:
     return (
         f"https://huggingface.co/datasets/{REPO}/resolve/{REVISION}/"
         f"{REMOTE_FILES[name]}"
+    )
+
+
+def deprecated_url() -> str:
+    return (
+        f"https://huggingface.co/datasets/{DEPRECATED_REPO}/resolve/"
+        f"{DEPRECATED_REVISION}/{DEPRECATED_REMOTE}"
     )
 
 
@@ -238,8 +272,91 @@ def build_split_manifest(dataset_path: Path) -> dict:
     }
 
 
-def download(name: str, expected_sha256: str) -> None:
-    url = resolve_url(name)
+def corpus_shape(path: Path) -> dict:
+    """Row/session/turn counts the lock asserts, re-derived from the bytes.
+
+    A sha256 pins the file; these pin what is *in* it, which is what a reader of
+    the comparison actually needs — the cleaning's whole effect is on session
+    counts, and 1230 of the sessions it dropped were empty.
+    """
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    sessions = [session for row in rows for session in row["haystack_sessions"]]
+    return {
+        "questions": len(rows),
+        "unique_question_ids": len({row["question_id"] for row in rows}),
+        "haystack_sessions": len(sessions),
+        "empty_haystack_sessions": sum(1 for session in sessions if not session),
+        "haystack_turns": sum(len(session) for session in sessions),
+        "answer_sessions": sum(len(row["answer_session_ids"]) for row in rows),
+    }
+
+
+def _check(failures: list[str], label: str, expected: object, actual: object) -> None:
+    if expected != actual:
+        failures.append(f"{label}: lock says {expected!r}, measured {actual!r}")
+
+
+def verify_lock() -> int:
+    """Re-derive every figure in the lock. No network I/O."""
+    if not MANIFEST.exists():
+        print(f"FAIL missing lock manifest: {MANIFEST}", file=sys.stderr)
+        return 1
+    lock = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    failures: list[str] = []
+
+    _check(failures, "repo", lock.get("repo"), REPO)
+    _check(failures, "revision", lock.get("revision"), REVISION)
+    _check(
+        failures,
+        "materializer.sha256",
+        (lock.get("materializer") or {}).get("sha256"),
+        sha256_of(Path(__file__).resolve()),
+    )
+
+    deprecated = lock.get("deprecated_split") or {}
+    _check(failures, "deprecated_split.repo", deprecated.get("repo"), DEPRECATED_REPO)
+    _check(
+        failures,
+        "deprecated_split.revision",
+        deprecated.get("revision"),
+        DEPRECATED_REVISION,
+    )
+
+    entries = dict(lock.get("files") or {})
+    if deprecated.get("file"):
+        entries[DEPRECATED_LOCAL] = deprecated["file"]
+
+    for name, pinned in sorted(entries.items()):
+        path = DATA_DIR / f"{name}.json"
+        if not path.exists():
+            failures.append(f"{name}: body absent at {path} (re-fetch to verify)")
+            continue
+        _check(failures, f"{name}.sha256", pinned.get("sha256"), sha256_of(path))
+        _check(failures, f"{name}.bytes", pinned.get("bytes"), path.stat().st_size)
+        if pinned.get("shape") is not None:
+            _check(failures, f"{name}.shape", pinned["shape"], corpus_shape(path))
+        mirrored = MIRROR_DIR / f"{name}.json"
+        if not mirrored.exists():
+            failures.append(f"{name}: mirror absent at {mirrored}")
+        else:
+            _check(
+                failures,
+                f"{name}.mirror.sha256",
+                pinned.get("sha256"),
+                sha256_of(mirrored),
+            )
+
+    if failures:
+        for failure in failures:
+            print(f"FAIL {failure}", file=sys.stderr)
+        return 1
+    print(f"OK lock verified: {MANIFEST}")
+    print(f"OK mirror verified: {MIRROR_DIR}")
+    return 0
+
+
+def download(name: str, expected_sha256: str, url: str | None = None) -> None:
+    url = url or resolve_url(name)
     dest = DATA_DIR / f"{name}.json"
     print(f"downloading {url} -> {dest}")
     request = urllib.request.Request(url, headers={"User-Agent": "memphant-fetch/1.0"})
@@ -264,12 +381,40 @@ def download(name: str, expected_sha256: str) -> None:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
     print(f"  sha256={expected_sha256} bytes={dest.stat().st_size}")
+    mirror(dest, expected_sha256)
+
+
+def mirror(source: Path, expected_sha256: str) -> None:
+    """Copy a verified body into the private mirror, verifying the copy."""
+    MIRROR_DIR.mkdir(parents=True, exist_ok=True)
+    destination = MIRROR_DIR / source.name
+    if destination.exists() and sha256_of(destination) == expected_sha256:
+        return
+    temp_path = destination.with_suffix(destination.suffix + ".partial")
+    temp_path.write_bytes(source.read_bytes())
+    if sha256_of(temp_path) != expected_sha256:
+        temp_path.unlink(missing_ok=True)
+        raise ValueError(f"mirror copy of {source.name} failed its sha256 check")
+    os.replace(temp_path, destination)
+    print(f"  mirrored -> {destination}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--oracle-only", action="store_true")
+    parser.add_argument(
+        "--deprecated",
+        action="store_true",
+        help="also fetch the upstream-deprecated original split (comparison only)",
+    )
+    parser.add_argument(
+        "--verify-lock",
+        action="store_true",
+        help="re-derive every figure in the lock, including the mirror; no network",
+    )
     args = parser.parse_args()
+    if args.verify_lock:
+        return verify_lock()
     names = ["longmemeval_oracle"] if args.oracle_only else FILES
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -293,8 +438,22 @@ def main() -> int:
             and sha256_of(dest) == pinned["sha256"]
         ):
             print(f"{dest} verified against pinned sha256, skipping download")
+            mirror(dest, pinned["sha256"])
             continue
         download(name, pinned["sha256"])
+
+    if args.deprecated:
+        pinned = (manifest.get("deprecated_split") or {}).get("file")
+        if not isinstance(pinned, dict) or not pinned.get("sha256"):
+            raise ValueError("dataset lock manifest has no deprecated_split pin")
+        if pinned.get("url") != deprecated_url():
+            raise ValueError("dataset lock manifest URL does not match deprecated split")
+        dest = DATA_DIR / f"{DEPRECATED_LOCAL}.json"
+        if dest.exists() and sha256_of(dest) == pinned["sha256"]:
+            print(f"{dest} verified against pinned sha256, skipping download")
+            mirror(dest, pinned["sha256"])
+        else:
+            download(DEPRECATED_LOCAL, pinned["sha256"], url=deprecated_url())
 
     print(f"verified against lock manifest: {MANIFEST}")
     if not args.oracle_only:

@@ -1,0 +1,193 @@
+{
+  "bar_checks": {
+    "accept_rate_ge_0_20": true,
+    "adjudicated_target_identified_100pct": true,
+    "adjudicated_unique_in_attempt_100pct": true,
+    "distinct_attempts_min_50": true,
+    "distinct_skeleton_ratio_ge_0_80": true,
+    "distractor_also_answers_zero": true,
+    "leak_concentration_le_1_50": false,
+    "leak_excess_reduction_ge_0_75": true,
+    "leak_max_target_coverage_le_0_60": true,
+    "leak_mean_target_coverage_le_0_25": true,
+    "max_overlap_le_0_60": true,
+    "max_skeleton_share_le_3pct": true,
+    "mean_overlap_le_0_25": true,
+    "per_attempt_cap_3": true,
+    "per_repo_cap_4": true,
+    "per_shape_min_40": true,
+    "size_150_200": true,
+    "spotcheck_15_emitted": true,
+    "with_distractors_100pct": true,
+    "withheld_terms_ge_2": true,
+    "withholding_zero_leaks": true
+  },
+  "bar_doc": "docs/build-log/2026-07-31-track-r-paraphrase-bar.md",
+  "bar_passed": false,
+  "bytes": 624173,
+  "corpus": {
+    "classification": "public_synthetic_agent_rollout_not_production_traffic",
+    "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+    "dataset": "nebius/SWE-rebench-openhands-trajectories",
+    "emitted_events": 64055,
+    "license": "CC-BY-4.0",
+    "materializer_sha256": "5fa836dd5e2843babda891a35e0c36e94c79cf34d90e730551fa934dba6e38ad",
+    "revision": "35455389ab51bf5e2306bfd436ef72d0f98bf882",
+    "sampled_attempts": 495,
+    "source_url": "https://huggingface.co/datasets/nebius/SWE-rebench-openhands-trajectories/tree/35455389ab51bf5e2306bfd436ef72d0f98bf882",
+    "transform": "openhands_trajectory_to_syndai_content_events_v2"
+  },
+  "count": 180,
+  "golden_path": "benchmarks/data/track_r_paraphrase_golden.jsonl",
+  "leakage": {
+    "by_shape": {
+      "file-symbol-grounding": {
+        "n": 60,
+        "non_target_exhaustive_mean": 0.0669,
+        "target_mean": 0.1379
+      },
+      "state-churn": {
+        "n": 60,
+        "non_target_exhaustive_mean": 0.0637,
+        "target_mean": 0.0983
+      },
+      "task-resumption": {
+        "n": 60,
+        "non_target_exhaustive_mean": 0.0695,
+        "target_mean": 0.1675
+      }
+    },
+    "concentration_vs_exhaustive": 2.018,
+    "concentration_vs_sampled": 2.0518,
+    "excess_over_floor": 0.0679,
+    "excess_over_floor_reduction_vs_original": 0.77,
+    "metric_script": "scripts/track_r_leakage.py",
+    "non_target_exhaustive": {
+      "max": 0.1106,
+      "mean": 0.0667,
+      "median": 0.0659,
+      "min": 0.0378,
+      "n": 180,
+      "p10": 0.0502,
+      "p90": 0.0851
+    },
+    "non_target_sampled": {
+      "max": 0.2667,
+      "mean": 0.0656,
+      "median": 0.0482,
+      "min": 0.0,
+      "n": 180,
+      "p10": 0.0,
+      "p90": 0.1579
+    },
+    "reference_original_bank": {
+      "artifact": "docs/build-log/artifacts/track-r/leakage-original.json",
+      "concentration_vs_exhaustive": 3.9286,
+      "concentration_vs_sampled": 4.1905,
+      "non_target_exhaustive_mean": 0.1008,
+      "target_mean": 0.396
+    },
+    "target": {
+      "max": 0.5,
+      "mean": 0.1346,
+      "median": 0.1286,
+      "min": 0.0,
+      "n": 180,
+      "p10": 0.0323,
+      "p90": 0.2558
+    }
+  },
+  "params": {
+    "adjudicator": "subscription_agent",
+    "candidates_per_shape": 420,
+    "df_max": 5,
+    "distractor_max": 5,
+    "distractor_selector": "bm25_control_top_k_same_attempt",
+    "event_min_chars": 200,
+    "generator": "subscription_agent",
+    "max_overlap": 0.6,
+    "max_span_chars": 200,
+    "min_span_chars": 8,
+    "min_withheld": 2,
+    "paid_api_spend_usd": 0,
+    "per_attempt_cap": 3,
+    "per_repo_cap": 4,
+    "sample_seed": 20260731,
+    "shape_target": 60,
+    "skeleton_cap": 2,
+    "target": 180,
+    "too_generic_threshold": 3
+  },
+  "schema": "memphant.eval.track-r-paraphrase-golden.v1",
+  "sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+  "spot_check": {
+    "gitignored": true,
+    "path": "benchmarks/data/track_r_paraphrase_spotcheck.jsonl",
+    "question_ids": [
+      "track_r_par_005",
+      "track_r_par_007",
+      "track_r_par_029",
+      "track_r_par_040",
+      "track_r_par_061",
+      "track_r_par_063",
+      "track_r_par_072",
+      "track_r_par_091",
+      "track_r_par_098",
+      "track_r_par_121",
+      "track_r_par_135",
+      "track_r_par_137",
+      "track_r_par_145",
+      "track_r_par_170",
+      "track_r_par_178"
+    ],
+    "sample_seed": 20260731,
+    "sample_size": 15,
+    "state": "emitted_pending_owner_review"
+  },
+  "stats": {
+    "accept_rate": 0.7895,
+    "accepted": 180,
+    "cache_hits": 447,
+    "distinct_attempts": 155,
+    "distinct_repositories": 134,
+    "distinct_skeletons": 180,
+    "distractors_adjudicated_total": 900,
+    "generation_calls_attempted": 228,
+    "goldens_with_adjudicated_distractors": 180,
+    "max_lexical_overlap": 0.1064,
+    "max_skeleton_count": 1,
+    "max_skeleton_share": 0.0056,
+    "mean_lexical_overlap": 0.0162,
+    "mean_withheld_terms": 19.45,
+    "reject_total": 76,
+    "rejects": {
+      "adjudication_not_unique_in_attempt": 25,
+      "adjudication_parse_failed": 0,
+      "adjudication_target_not_identified": 1,
+      "answer_run_leaked": 0,
+      "distractor_also_answers": 13,
+      "generic_skeleton": 0,
+      "identifier_leaked": 0,
+      "insufficient_withheld_terms": 1,
+      "no_distractors": 0,
+      "overlap_too_high": 0,
+      "parse_failed": 0,
+      "per_attempt_cap": 0,
+      "per_repo_cap": 3,
+      "shape_target_met": 25,
+      "span_length": 0,
+      "span_not_located": 0,
+      "too_generic_span": 8
+    }
+  },
+  "strata": {
+    "file-symbol-grounding": 60,
+    "state-churn": 60,
+    "task-resumption": 60
+  },
+  "variant_of": {
+    "bank": "benchmarks/data/track_r_repo_memory_golden.jsonl",
+    "bank_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d",
+    "relationship": "same pinned corpus, same three shapes, same candidate mechanism; identification moved from lexical tokens in the question to withheld terms plus adjudicated semantic uniqueness"
+  }
+}

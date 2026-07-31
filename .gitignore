@@ -187,3 +187,16 @@ docs/build-log/artifacts/rung7-packing-reader-gate/phase1w/*.log
 benchmarks/data/github_lane_golden.jsonl
 benchmarks/data/github_lane_corpus.jsonl
 !benchmarks/data/github_lane_golden.lock.json
+
+# W0.1 Track R PARAPHRASE variant. Same rule as the original bank: the reply
+# cache, request batches, run outputs and mined golden bodies carry third-party
+# event text; only the lock and the derived leakage report are committed.
+docs/build-log/artifacts/track-r-paraphrase/agent-cache/
+docs/build-log/artifacts/track-r-paraphrase/requests/
+docs/build-log/artifacts/track-r-paraphrase/run/
+benchmarks/data/track_r_paraphrase_golden.jsonl
+benchmarks/data/track_r_paraphrase_spotcheck.jsonl
+!benchmarks/data/track_r_paraphrase_golden.lock.json
+docs/build-log/artifacts/track-r-floor/agent-cache/
+docs/build-log/artifacts/track-r-floor/requests/
+docs/build-log/artifacts/track-r-paraphrase/leakage-paraphrase.json
