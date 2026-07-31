@@ -357,7 +357,7 @@ packaged runtime — the single binding accuracy criterion; (6) re-derive
 | TM2C2 fusion (TOIS 2023) | paper | **IMPLEMENT** |
 | BM25 formula (`Michael-JB/bm25`) | MIT | **IMPLEMENT** (~200 lines) |
 | Chain-of-Note prompting form | paper | **IMPLEMENT** (prompting only, not the fine-tuning) |
-| ClawArena | **UNRESOLVED — see §6a** | **HOLD** — dataset license unverified |
+| ClawArena | MIT — **owner-directed** (see §6c) | **ADOPT**, pending data verification |
 | `YujunZhou/TRACE_exp` | MIT | **EVALUATE** — corrections as executable gates |
 | tree-sitter + cAST chunking | MIT / paper | **ADOPT** for the code lane (costs a full re-chunk/re-embed) |
 | Zoekt ranking design | Apache-2.0 | **IMPLEMENT** (Go — patterns, not code) |
@@ -553,3 +553,29 @@ wrong shape.
 **Secrets:** 2 candidates dropped whole (`anthropic_key`,
 `generic_secret_assignment`) — never redacted-and-kept, and no matched value
 written to any artifact. All five source repos left at their original HEADs.
+
+## 6c. ClawArena — licence settled by owner decision (2026-07-31)
+
+**Decision (owner): treat ClawArena as MIT and proceed.** The §6a HOLD is lifted.
+Adoption now turns on **data quality only**.
+
+Recorded so the basis stays traceable rather than looking like an oversight: the
+GitHub *code* repo carries a real MIT LICENSE file; the HF dataset side carries a
+shields.io badge and no LICENSE file, and `aiming-lab/ClawArena` returns HTTP 401
+while the data is reachable at `Haonian/ClawArena`. The lock records
+`license: "MIT"` with `license_provenance` naming this decision and its date.
+
+Practical exposure is narrow: the risk attaches to **redistribution and published
+claims**, not to internal measurement. Mitigation adopted, and it costs nothing —
+**ClawArena content is pinned and mirrored locally, never committed and never
+redistributed; only the lock is committed.** That keeps the decision reversible if
+the upstream licence is ever clarified against us, and it is the same handling the
+private banks already get.
+
+Still required before it measures anything, on the same standard as every other
+instrument: verify the shipped rows — that the 337 evaluation rounds exist, that
+the executable checkers actually ship and run rather than being withheld (the
+Long-Horizon-Terminal-Bench failure mode), that the corrections are
+human-authored, and that the scored fields are populated. `TokenRhythm/Claw-SWE-Bench`
+is evaluated alongside on data quality alone, no longer as a licensing fallback.
+A data-quality rejection remains available; a licence rejection does not.
