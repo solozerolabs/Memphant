@@ -1,0 +1,74 @@
+{
+  "banks": {
+    "track_r_paraphrase": {
+      "bank": "track_r_paraphrase",
+      "bank_sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+      "lock_path": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+      "lock_recorded_state": "emitted_pending_owner_review",
+      "spot_check_mirror": "/Users/sidsharma/.memphant-private/track-r-paraphrase/track_r_paraphrase_spotcheck.jsonl",
+      "spot_check_question_ids": [
+        "track_r_par_005",
+        "track_r_par_007",
+        "track_r_par_029",
+        "track_r_par_040",
+        "track_r_par_061",
+        "track_r_par_063",
+        "track_r_par_072",
+        "track_r_par_091",
+        "track_r_par_098",
+        "track_r_par_121",
+        "track_r_par_135",
+        "track_r_par_137",
+        "track_r_par_145",
+        "track_r_par_170",
+        "track_r_par_178"
+      ],
+      "spot_check_sample_seed": 20260731,
+      "spot_check_sample_size": 15,
+      "spot_check_sha256": "5d71212efab98b54834b76790374b84c061a35d3991ec3610fd1bf0822440b33"
+    },
+    "track_r_repo_memory": {
+      "bank": "track_r_repo_memory",
+      "bank_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d",
+      "lock_path": "benchmarks/data/track_r_repo_memory_golden.lock.json",
+      "lock_recorded_state": "emitted_pending_owner_review",
+      "spot_check_mirror": "/Users/sidsharma/.memphant-private/track-r/track_r_repo_memory_spotcheck.jsonl",
+      "spot_check_question_ids": [
+        "track_r_009",
+        "track_r_016",
+        "track_r_044",
+        "track_r_045",
+        "track_r_066",
+        "track_r_085",
+        "track_r_103",
+        "track_r_137",
+        "track_r_139",
+        "track_r_144",
+        "track_r_145",
+        "track_r_146",
+        "track_r_152",
+        "track_r_154",
+        "track_r_180"
+      ],
+      "spot_check_sample_seed": 20260730,
+      "spot_check_sample_size": 15,
+      "spot_check_sha256": "1dd365aff389ab0df7f2b2f3abdcec64c7ba7cc50587ad587a3c65b073e085d0"
+    }
+  },
+  "effect": [
+    "Supersedes the `emitted_pending_owner_review` state recorded in each lock.",
+    "The locks are generated artifacts and are NOT hand-edited, so `--verify-lock` stays reproducible; this receipt is the authority for the review state.",
+    "Publication embargo on Track R numbers is lifted to the extent this review covers -- the banks' construction. Every other standing caveat is unaffected."
+  ],
+  "not_covered": [
+    "The paraphrase bank still records bar_passed=false on `leak_concentration_le_1_50`; that is a mis-specified bar, not a review finding.",
+    "Absolute coverage 0.1346 sits below the human 0.175-0.287 band, so paraphrase-bank margins remain LOWER BOUNDS.",
+    "Ownership question (d) additionally requires replication on the Syndai C1 slice."
+  ],
+  "reviewed_by": "owner",
+  "reviewed_on": "2026-07-31",
+  "schema": "memphant.eval.spot-check-receipt.v1",
+  "scope": "Owner review of the emitted 15-golden spot-check samples for both Track R banks.",
+  "verbatim": "Goldens look good.",
+  "verdict": "APPROVED"
+}

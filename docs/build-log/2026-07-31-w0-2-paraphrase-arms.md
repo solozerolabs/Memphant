@@ -315,3 +315,53 @@ cleaning is de-padding — 1,230 of 1,243 removed sessions are empty, turns −0
 all 23,854 retained sessions byte-identical. And the rung-7/A1 dev cohort **was
 already on the cleaned split**, so the concern was doubly moot. My assertion that
 the split was deprecated upstream is withdrawn; see the W2.1 prereg correction.
+
+---
+
+## W0.5 CLOSED — owner spot-check review, 2026-07-31
+
+**Owner verdict: APPROVED** ("Goldens look good"), covering the emitted 15-golden
+spot-check samples for **both** Track R banks. Receipt:
+`docs/build-log/artifacts/spot-check-receipts/2026-07-31-track-r-owner-review.json`,
+binding bank `6f549daa…` to spot-check `1dd365af…` and bank `4aed8e99…` to
+spot-check `5d71212e…`.
+
+The locks are **generated** artifacts and were deliberately **not hand-edited**,
+so `--verify-lock` stays byte-reproducible; the receipt is the authority for the
+review state that supersedes `emitted_pending_owner_review`.
+
+**Publication embargo lifted** to the extent the review covers — bank
+construction. Every other caveat is untouched, and three still bind:
+
+1. Paraphrase-bank margins are **lower bounds** (absolute coverage 0.1346 sits
+   below the human 0.175–0.287 band; the two banks bracket reality).
+2. `bar_passed: false` stands on the paraphrase lock — a mis-specified bar, not a
+   review finding.
+3. "SOTA" language stays banned until a protocol run.
+
+## Ownership question (d) — the retrieval kill gate is CLEARED, migration is not authorised
+
+The Phase 1 kill gate reads: *MemPhant does not beat BM25 on retrieval →
+ownership defaults to "Syndai keeps its tables" until the substrate wins.*
+
+On the instrument built to decide it, with owner-approved goldens, MemPhant beats
+the deterministic control at **both** stages — fused 0.6278 vs 0.2556
+(+71/−4, p=6.8e-17), packed 0.4889 vs 0.2556 (+54/−12, p=1.7e-07) — and these are
+lower bounds. **The gate does not fire. The substrate has won the retrieval
+comparison.**
+
+What that does **not** authorise, per the plan's own §6(d) conditions:
+
+| condition | state |
+|---|---|
+| paired retrieval win over the control | **MET** (this run, owner-approved goldens) |
+| replicated on the Syndai **C1 slice** | **NOT DONE** — the required replication |
+| `memphant_app` non-superuser served role | **MET** (landed 2026-07-30, negative test runs in CI) |
+| cutover read-path-by-read-path behind degraded fallback | **not started** |
+| Phase 3 paid **reader-QA** win | **not run** — this is a retrieval result, not answer quality |
+
+So: **zero table migration.** The direction is earned and recorded; the cutover
+remains gated on C1 replication and a reader-QA result. The honest statement is
+that the substrate beats a deterministic lexical control on repo-memory
+retrieval, on a bank whose construction an owner has reviewed — not that it is
+ready to own production tables.
