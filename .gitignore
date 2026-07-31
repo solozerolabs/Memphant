@@ -62,6 +62,15 @@ benchmarks/data/coding_events_golden.jsonl
 benchmarks/data/user_lane_probes.jsonl
 benchmarks/data/user_lane_golden.jsonl
 !benchmarks/data/user_lane_golden.lock.json
+
+# Convo lane (owner's own agent sessions). Bodies, corpus, spot-check and
+# adjudication artifacts are private; only the lock is committed. See
+# docs/build-log/2026-07-31-convo-lane-bar-and-privacy.md §6.
+benchmarks/data/convo_lane_golden.jsonl
+benchmarks/data/convo_lane_corpus.jsonl
+benchmarks/data/convo_lane_spotcheck.jsonl
+benchmarks/data/convo_lane_leakage.json
+!benchmarks/data/convo_lane_golden.lock.json
 .fastembed_cache/
 # Reader-lane evidence packs embed raw LongMemEval session text (the raw
 # dataset stays out of the repo); the scored reader-*.json reports are committed.

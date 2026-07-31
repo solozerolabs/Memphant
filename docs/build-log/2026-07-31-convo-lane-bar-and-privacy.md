@@ -134,6 +134,35 @@ chars**; 17 carry a paste/image marker. Steps 5–6 are expected to remove the
 bulk of the first group. **The achieved yield after every step is reported in
 the lock and in the final report, whatever it is.**
 
+### 3.7 Amendment A1 — three guards added after the first candidate pass, before any gate was run
+
+**Disclosed because the timing matters.** The first candidate pass (155→240
+candidates, no verdicts computed, **leakage never measured**) surfaced a failure
+mode the §3 rule does not catch, and three guards were added in response. All
+three are *strictly tightening*; none relaxes a threshold in §4; no gate result
+was known when they were written. Recording them here rather than silently is
+the point.
+
+The failure mode: the owner keeps standing "campaign handoff / paste this to
+resume" prompts and re-pastes them into session after session. They are
+human-typed (once) and human-*pasted* (thereafter), so they pass the §3
+provenance rule — but as a *query* they are not a spontaneous turn, and their
+nearest prior unit is a near-copy of themselves. Left in, they would have handed
+the leakage metric a target coverage near 1.0 that has nothing to do with the
+construct, in either direction.
+
+| guard | rule | effect |
+|---|---|---|
+| **A1.1 oversized prompt** | residual > **2,000 chars** is rejected (`oversized_prompt`) | a memory query, not a pasted spec dump. Cut at the surveyed p90 (2,222). |
+| **A1.2 re-pasted boilerplate** | a turn whose token Jaccard against a turn in a **different session** is ≥ **0.80** may not be a query (`boilerplate_repasted`). It stays in the haystack. | kills the standing-handoff class |
+| **A1.3 target is not a restatement** | a prior unit with token Jaccard ≥ **0.45** to the question cannot be the target; a unit below **0.06** is too unrelated to be one | the target must be *referred to*, not *copied* |
+
+A fourth change is a selection-*ordering* correction with the same motive: the
+first pass ranked candidate targets by raw lexical similarity, which
+systematically selects the leakiest available target. Targets are now ranked by
+**shared concrete artifacts** (paths, dotted/snake/Camel identifiers) first,
+lexical overlap only as a tiebreak.
+
 Condition 2 restricts the frame to sessions written since the harness began
 stamping origins (2026-06-26). That is accepted, and it is not only a cost: a
 33-day window over the owner's four active projects is *denser* in
