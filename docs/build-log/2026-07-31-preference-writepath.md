@@ -21,6 +21,17 @@ remaining gap to a single named thing, and it does so with an identity rather
 than an argument. **Supersession is now reachable in the substrate and still
 unreached on this corpus, because nothing at $0 can produce the subject key.**
 
+**And the size of the prize is now measured, not guessed.** An explicitly
+oracle-keyed arm — the instrument's own grouping rule handed to the write path,
+therefore *not* comparable to BM25 and marked `decisional: false` — takes
+latest-state-wins to **0.5795** and misapplication to **0.3405**
+(Δ +0.2672 / −0.3311 against the unchanged arm, cluster CI
+[+0.2375, +0.2985] / [−0.3647, −0.2984]). The machinery works: **7198
+`supersedes` edges** where the unchanged arm had zero, **0** retired rows ever
+recalled. So the missing 27 points of LSW sit behind **one** unbuilt thing: a
+producer of subject keys. §4 measures why free ones do not work; §7 names what
+does.
+
 ## 1. What was built (spec 04 §13)
 
 Three changes, commit `ffa640b8`, all in §13's terms.
@@ -205,19 +216,45 @@ labels are, so the grouping is handed to the system. It answers one mechanism
 question and no other: with a correct chain, does the machinery actually fire
 end-to-end through Postgres, and does recall then use the state?
 
-Measured (see §7 for the full-bank figures):
+Full bank, 1063 probes, 257 instances (`analysis-p-vs-a.json`,
+`decisional: false` — because the arms are not comparable, not because of
+power):
 
-- **The state machine fires.** `memory_edge`: `supersedes` and `contradicts`
-  rows minted, where the unchanged arm had **zero edges of any kind**.
-  `memory_unit_by_state`: real `superseded` rows, all with a non-null
-  `transaction_to` (`superseded_with_open_transaction` = 0).
-- **Recall uses the state.** The retired generation does not come back:
-  `remainders_recalled` = 0, i.e. no valid-time-closed row ever reached a
-  recall result.
+| endpoint | Arm P (oracle-keyed) | Arm A′ (unchanged) | Δ | cluster CI95 | perm p |
+|---|---|---|---|---|---|
+| **Appropriate Application** (= LSW) | **0.5795** | 0.3123 | **+0.2672** | [+0.2375, +0.2985] | 1.0e-4 |
+| **Misapplication** | **0.3405** | 0.6717 | **−0.3311** | [−0.3647, −0.2984] | 1.0e-4 |
+| Neither returned | 0.0734 | 0.0103 | +0.0630 | [+0.0466, +0.0791] | 1.0e-4 |
+
+hit@1 0.328 vs 0.231, hit@10 0.840 vs 0.786.
+
+**Both directions move, in the right direction, and they are not each other's
+mirror.** Misapplication nearly halves. That is the suppression working. But
++0.063 of the mass moved into **neither-returned**, so part of the
+misapplication drop is the retired rule being suppressed *without* the live one
+taking its place — which is exactly why the third bucket is reported.
+
+Three things this settles:
+
+- **The state machine fires, at scale, through Postgres.** `memory_edge`:
+  **7198 `supersedes` + 3599 `contradicts`** rows, where the unchanged arm had
+  **zero edges of any kind**. 3599 `superseded` units, **0 of them with an open
+  transaction**. 10,694 `preference` units across 257 scopes.
+- **Recall uses the state.** `remainders_recalled` = **0**: no valid-time-closed
+  row ever reached a recall result, so the bitemporal exclusion holds and the
+  scoring identity is exact.
 - **The ceiling is below 1.0 for a corpus reason, not a bug.** A session often
-  declares several conventions; retiring one of them leaves the *session* still
-  live under another key, and the scoring identity is the session. So a stale
-  session can still be returned legitimately.
+  declares several conventions; retiring one leaves the *session* live under
+  another key, and the scoring identity is the session. A stale session can
+  therefore still be returned legitimately.
+
+**So: which of state-machine vs ranking still fails?** The state machine does
+not. It transitions, edges, and is honoured on read. What remains is that even
+a perfect chain reaches **0.5795**, below the 63–68% deterministic band in §7 —
+and the residual 0.34 misapplication is not a supersession failure but the
+session-granularity of the identity plus ordinary retrieval error. **Ranking is
+the smaller remaining problem; producing the key is the larger one, and it is
+the one this arm cheats on.**
 
 ## 6. Two ranking defects verified, and one of them is not binding here
 
@@ -329,7 +366,14 @@ python3 scripts/check_evidence_contract.py --file $OUT/analysis-a-vs-b.json
 - **Binding constraint, named:** nothing on the served write path produces a
   subject key for a restated convention. Not the router (fixed), not
   `kind == Semantic` (lifted), not recall's supersession exclusion (correct and
-  now demonstrably live), not `temporal_score` (inert here, 0/1063 queries).
+  now demonstrably live — 0 retired rows recalled across 1063 probes), not
+  `temporal_score` (inert here, 0/1063 queries). The oracle arm prices the gap
+  at **+0.267 LSW / −0.331 misapplication**.
+- **The residual after a perfect key is a different, smaller problem.** Even
+  oracle-keyed, LSW is 0.5795 and 0.34 of probes still misapply — driven by the
+  session-level scoring identity (one session can declare several conventions,
+  so retiring one leaves it live under another) rather than by supersession.
+  Do not spend ranking effort there before the key exists.
 - The next lever is a **mutation-time control-plane hook** on the
   supersede/purge path (§7). The seam is open; the decision is not mine.
 - `retention_tier` remains inert (`hot` × 8147). This run gives **no** evidence

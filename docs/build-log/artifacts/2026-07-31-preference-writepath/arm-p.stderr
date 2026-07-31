@@ -1,2 +1,4 @@
 [memorycode] loaded groups=257 units=8147 probes=1063
 [memorycode] loaded groups=257 units=8147 probes=1063
+[corpus verified] {"episodes": 3394, "episodes_with_units": 3394, "expected_episodes": 3394, "failed_jobs": 0, "memory_units": 14088, "pending_jobs": 0}
+{"appropriate_application_rate": 0.5794920037629351, "degraded": 0, "hit_at_1": 0.32831608654750705, "hit_at_k": 0.8400752587017873, "instances": 257, "k": 10, "latest_state_wins": 0.5794920037629351, "misapplication_rate": 0.3405456255879586, "neither_returned_rate": 0.07337723424270931, "probes": 1063, "stale_outranks_current": 362, "with_any_unit_returned": 985}
