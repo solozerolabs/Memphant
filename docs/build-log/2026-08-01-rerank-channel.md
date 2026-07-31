@@ -195,5 +195,233 @@ and a partially compiled corpus silently inflates the absent-from-pool bucket of
 every retrieval measurement taken against it — which is exactly how a ranking
 problem gets misread as a retrieval problem.
 
-RESULTS_PLACEHOLDER
+---
+
+## 3. The result — the mechanism fired, and it made things worse
+
+Two arms, both `bm25-code + dense` (the best arm in the trunk ladder), differing
+in exactly one variable. `rerank_bge` installs `BAAI/bge-reranker-base` over the
+64-deep fused head; `rerank_off` is the same run with the stage absent.
+
+### 3.1 Mechanism liveness — proven, not assumed
+
+Read off the server's own traces (`cross_rerank_liveness` in the provenance
+report), never off the flag the harness passed. This matters more than usual
+here: the cross-rerank seam **fails open to the pre-rerank order**, so an arm
+whose reranker errored on every call is byte-identical to the control while
+still calling itself a reranked arm.
+
+| field | `rerank_bge` | `rerank_off` (negative control) |
+|---|---|---|
+| queries | 180 | 180 |
+| **queries carrying a `cross_rerank` trace** | **180 / 180** | **0 / 180** |
+| **failure histogram** | **`{none: 180}`** — zero fail-open events | `{}` |
+| provider / model | `fastembed` / `fastembed:bge-reranker-base` | `null` |
+| mean candidates in the scored head | 60.8 | — |
+| docs scored | 10,944 | 0 |
+
+The stage ran on every question and succeeded on every question, and the control
+shows the instrument reads zero when the stage is absent. This is a **live**
+pass, so its number means what it says.
+
+### 3.2 The restricted ingest is inert — checked, not asserted
+
+Both arms ingest the 155 gold-referenced attempts rather than all 495.
+`bind_attempt_context` gives each attempt its own subject/scope/actor/agent_node
+and recall binds to that context, so a non-gold attempt's units cannot enter any
+golden's pool. The prediction is that the fused stage is then **bit-identical**
+to the banked full-corpus arm. It is:
+
+> **`gold_fused_rank` mismatches between the banked 495-attempt
+> `bm25code_dense` arm and this 155-attempt arm: 0 of 180.**
+
+Fused@10 is **113** in both. And the `rerank_off` arm, run end-to-end at this
+branch's HEAD on 155 attempts, reproduces the banked 495-attempt arm **per
+question, not merely in aggregate**:
+
+| | mine (155 attempts, `af-rerank`) | banked (495 attempts, `4a39ce5f`) | per-question mismatches |
+|---|---:|---:|---:|
+| packed hit@5 | 73 | 73 | **0 / 180** |
+| packed hit@10 | **106** | **106** | **0 / 180** |
+| miss decomposition (absent / budget / `Rerank` / other) | 11 / 7 / 50 / 6 | 11 / 7 / 50 / 6 | — |
+
+That check simultaneously validates the ingest restriction *and* the retrieval
+lineage across two worktrees and two HEADs. It is stronger evidence than a
+commit-ancestry assertion, because it compares outputs rather than provenance.
+
+### 3.3 The decisive contrast — fused order vs cross-encoder order, within one arm
+
+This is the cleanest comparison available anywhere in the program: **the same
+recall, the same pool, the same 180 questions, one arm, two orderings**. No
+lineage, corpus, binary, or run-to-run confound can enter it, because both
+orderings come out of the same trace. `cross_rerank_rank` is what makes it
+computable.
+
+| | gold in top-10 |
+|---|---:|
+| existing weighted-RRF **fused** order | **113** |
+| **`bge-reranker-base`** order | **79** |
+
+| b (reranker only) | c (fusion only) | n_d | ψ | Δ | exact McNemar p | MDE@80% | power |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| **12** | **46** | **58** | 0.3222 | **−0.1889** | **8.22e-06** | 0.1215 | **0.996** |
+
+**`bge-reranker-base` is significantly worse than the ranking it replaces.** It
+promoted the gold into the top 10 on 12 questions and demoted it out on 46. The
+demoted golds land at a median rank of 21.5 (max 51). n_d = 58 is an order of
+magnitude above the n_d ≥ 6 structural floor and power against the realized
+effect is 0.996 — **this is a powered negative, not an n_d artifact.**
+
+### 3.4 The packed-stage endpoint
+
+Both arms at the same HEAD, same tree, same corpus, same bank.
+
+| arm | packed hits@10 | packed hits@5 |
+|---|---:|---:|
+| `rerank_off` | **106** (0.5889) | 73 (0.4056) |
+| `rerank_bge` | **95** (0.5278) | 71 (0.3944) |
+
+| stage | b (bge) | c (off) | n_d | ψ | Δ | exact p | MDE@80% | power |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| packed@10 | 16 | 27 | 43 | 0.2389 | −0.0611 | 0.126 | 0.1048 | 0.337 |
+| packed@5 | 26 | 28 | 54 | 0.3000 | −0.0111 | 0.892 | 0.1172 | 0.044 |
+
+The reranked arm's own miss decomposition shows where the damage lands:
+`gold_rank_within_k_unpacked` rises from **8 to 32** — i.e. on 32 questions the
+gold sat in the *fused* top-10 and still failed to be packed, because the
+reranker had moved it out. The `budget` bucket collapses 7 → 1 for the same
+reason: golds that used to reach the pack and lose on tokens no longer reach it
+at all.
+
+The endpoint is **directionally negative and underpowered** — n_d = 43 clears the
+structural floor so both rows are measurements, but at ψ = 0.24 this lane cannot
+resolve a 6-point effect (MDE 10.5pt). **The endpoint alone would be an honest
+"cannot tell".** What settles the question is §3.3, where the same mechanism is
+measured against the thing it replaces on identical inputs and loses at p = 8e-06.
+
+### 3.5 Latency — the fix is not deployable even if it had worked
+
+Measured from each recall's own trace, on this host, at the shipped
+`candidate_limit` of 64:
+
+| | `cross_rerank_ms` |
+|---|---:|
+| p50 | **22,166 ms** |
+| p95 | 34,399 ms |
+| max | 53,593 ms |
+
+**Contention caveat, stated rather than buried:** `loadavg1` sat near 120–140
+across this window, driven by four other worktrees' servers and concurrent
+rustc. These figures are an **upper bound**, not a clean measurement. The
+independent uncontended figure on this same host is **~1,460 ms median**
+(1140/1871/1448/1472 at 64×512, R6 lane) — which is itself **3.3× the 449 ms
+figure recorded in older docs, and breaches a 1.5 s ceiling on two of four
+samples.** The 449 ms number should not be cited again.
+
+Against the HTTP-boundary SLO of **p50 32.59 ms / p95 37.18 ms**
+(`artifacts/c1-episodic/slo-bar1-http-provenance.json`), the uncontended
+cross-encoder is **~45× the p50 budget** and the contended one ~680×. A local
+CPU cross-encoder at pool 64 cannot go on the hot path at any accuracy.
+
+### 3.6 Why it probably fails here, and what is *not* concluded
+
+One mechanical contributor is measurable: bge-reranker-base runs at
+`max_length = 512` tokens under `CrossRerankGranularity::UnitBody`, and **35.3%
+of the bodies it scores exceed the ~2,048-char wall** (median 1,466, p90 4,087,
+max 8,560). A third of every long candidate is truncated away before scoring,
+and on trajectory bodies the discriminating span is often not in the first 512
+tokens. Beyond that, this is a corpus of agent transcripts and tool output being
+scored by an encoder trained on natural-language web/QA passages, against
+paraphrased queries with identifiers withheld — while the order it is replacing
+is BM25-code + dense, both of which the trunk ladder already showed to be strong
+on exactly this material.
+
+**What is NOT concluded:** that reranking cannot help this lane. §1.3 shows the
+headroom is real and large (+58 questions from a perfect reordering of the head
+we already retrieve). What is concluded is narrower and firm: **`bge-reranker-base`
+is not the instrument that captures it, and it is not close.**
+
+---
+
+## 4. Verdict, and the owner's "turn it on" instruction
+
+The standing instruction is *"if things work, just turn them on and default
+them."* This did not work, so nothing is defaulted:
+
+- `MEMPHANT_CROSS_RERANK` **stays default-OFF**. The change here is that the
+  code lane can now select it, and that a reranked arm can now be told apart
+  from an inert one.
+- **`RecallDropReason::Rerank` should be renamed.** It names a mechanism that
+  does not run and has cost this program a wrong headline finding at least once.
+  `OutputLimit` (or `ScanCutoff`) is what it means. Not done here — it is a
+  public enum on three generated schema artifacts and belongs in its own change.
+- **Register item: "the reranker is the dominant loss channel" must be
+  reworded**, not deleted. The loss is real and it is the largest recoverable
+  pool on the coding lane; it is a **fusion-ranking** loss, and it lives at fused
+  ranks 11–63.
+
+### What could not be resolved
+
+1. **The endpoint contrast is underpowered.** At n = 180 and ψ = 0.24 the packed
+   stage resolves 10.5pt; the observed −6.1pt is inside that. The powered result
+   is the ordering contrast, which is one stage upstream of the endpoint.
+2. **One reranker, one corpus, one granularity.** `ContextualChunks` granularity
+   was not tried; on this episodic corpus it falls back to the body for
+   candidates with no chunks, so it is unlikely to be the answer, but it is
+   untested. A smaller/faster BYO model (ms-marco-MiniLM-L6-int8) is wired
+   (`MEMPHANT_RERANKER=byo`) and untested here.
+3. **Hosted rerankers were not tried, deliberately.** Voyage `rerank-2.5` and
+   Cohere v4-pro lead the chat-lane bench by a wide margin, but they are paid
+   and this lane is $0. That is a budget boundary, not a measurement.
+4. **No chat-lane (LME-S) non-regression was run.** Nothing regressed to check:
+   the default path is unchanged, and the only shipped behaviour change is an
+   added optional trace field.
+5. **No reader.** Everything here is retrieval and packing.
+
+## 5. Lineage
+
+| field | value |
+|---|---|
+| branch / worktree | `af-rerank` / `Memphant-af-rerank`, cut from `accuracy-first` @ `d01affad` |
+| **both arms' `runtime_identity.git_head`** | **`88b6e5f8`** — identical |
+| **both arms' `server_sha256`** | **`15d11d19fac42608…`** — byte-identical binary |
+| drain, both arms | `done_jobs=21630`, `pending_jobs=0`, `dead_jobs=0`, 13 dedups |
+| binaries | sha256 of server/worker/cli stamped in `run-rerank/binaries.sha256` |
+| golden bank | `4aed8e99…4326`, 180 goldens, lock verified by the runner |
+| corpus | `c008142e…9669` |
+| harness env | `MEMPHANT_FACT_EXTRACTION=0` (see §2 of the trunk-arms log — trunk's default-ON extraction breaks full-corpus drain) |
+| retrieval-lineage cross-check | **0/180 `gold_fused_rank` mismatches** against the banked `4a39ce5f` arm (§3.2) — the strongest lineage evidence in this document, because it compares outputs rather than commits |
+| paid spend | **$0** |
+
+**One lineage blemish, stated rather than buried.** `rerank_bge` recorded
+`tracked_dirty: false`; `rerank_off` recorded `tracked_dirty: true`, because
+this build log was being written while that arm ran. The **binary sha256s are
+byte-identical across both arms**, so no engine behaviour differed, and the
+empirical proof is stronger than the provenance argument: `rerank_off`
+reproduces the banked arm on **all 180 questions** at both k (§3.2). The dirty
+flag covers a markdown file no binary reads. It is recorded because the rule is
+to record it, not because it is load-bearing.
+
+**Also for the record: the first `rerank_off` attempt was destroyed at its final
+step** by `IsADirectoryError` in `repository_identity` — `.gitignore` carried
+`.fastembed_cache/` with a trailing slash, which does not match a *symlink* to a
+cache directory, so the link got tracked and the identity function tried to
+sha256 a directory. It fires **after** every recall has executed. Fixed in
+`88b6e5f8`; the arm was re-run from scratch.
+
+## 6. Artifacts
+
+Committed: `docs/build-log/artifacts/track-r-rerank/rerank-channel.json`, schema
+`memphant.eval.track-r-rerank-channel.v1` — every contrast as a full 2×2 with
+`b`/`c`/`n_d`/realized ψ/Δ/exact p/MDE/power and an explicit `is_a_measurement`
+flag against the n_d ≥ 6 floor, both arms' liveness blocks, the lineage block,
+the contention-flagged latency block, and the per-question `gold_fused_rank` /
+`gold_cross_rerank_rank` vectors. It carries ids, ranks and booleans only — no
+corpus body and no question text.
+
+Gitignored, at `~/.memphant-private/track-r-paraphrase/run-rerank/`: both arms'
+evidence JSONL and provenance reports (with `cross_rerank_liveness`,
+`gold_cross_rerank_rank` per question, and the full drain block), the server
+logs carrying the per-query `cross_rerank_ms` lines, and the binary hashes.
+
 
