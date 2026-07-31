@@ -359,3 +359,70 @@ on adequately-powered evidence. Two restrictions: only `b − c` is recoverable 
 artifact commits a bootstrap CI rather than the two discordant cells (so ψ is a lower
 bound — **commit b and c from now on**), and at n=60 the lane cannot resolve anything
 smaller than ~13pt in future.
+
+## 5. Serving substrates
+
+| substrate | instrument | valid? | correct as shipped? | n | ever run / banked | verdict |
+|---|---|---|---|---:|---|---|
+| Postgres runtime — latency | `crates/memphant-store-postgres/tests/hot_path_slo_pg.rs` | yes | yes, and CI runs it | 80 samples | continuous in CI | **SOUND** |
+| Postgres runtime — HTTP boundary | `scripts/episodic_lane_run_memphant.py --slo-samples` | yes | raises on breach | 200 samples | p50 **32.59ms** / p95 **37.18ms**, `artifacts/c1-episodic/slo-bar1-http-provenance.json`, 2026-07-22 | **DEGRADED** — not in CI |
+| Postgres runtime — RLS | `crates/memphant-store-postgres/tests/served_path_rls.rs` | yes | yes, incl. a negative control | 2 tests + 4 corroborating | continuous in CI | **SOUND** |
+| Store divergence (core trait) | `crates/memphant-store-testkit/src/lib.rs` via both contract suites | yes | 18 cases, byte-identical on both stores | 18 | continuous in CI | **SOUND** |
+| Store divergence (file plane) | — | — | — | — | — | **ABSENT** |
+| File plane B2/B3 | `crates/memphant-cli/tests/file_plane_n12.rs`, `crates/memphant-mcp/tests/distribution_wedge.rs` | yes | runs every push, 19 named properties | 12 + 8 | `artifacts/b2-file-plane/gate-summary.json`, `artifacts/b3-distribution-wedge/gate-summary.json`, 2026-07-23 | **DEGRADED** — InMemory only |
+| MCP surface | `crates/memphant-mcp/tests/mcp_schema_contract.rs` + `scripts/e2e_probe.sh` | yes | real drift test vs committed artifacts | 7 tools / 4 templates | continuous in CI | **SOUND** |
+| Hot/cold planes | — | — | — | — | — | **ABSENT — and the feature does not exist** |
+
+Cost per run for every substrate instrument: **$0**. No paid model call appears anywhere in
+`.github/workflows/ci.yml`.
+
+### 5.1 Two standing notes are stale — stop repeating them
+
+**"The server runs as superuser, so RLS is bypassed on the served path."** No longer true.
+`memphant_migrations/versions/20260730_004_served_login_roles.sql` ships the login roles,
+and `served_path_rls.rs` catches a regression from the outside: it mints a throwaway
+NOINHERIT login that is a member of `memphant_app` and nothing else, then asserts on the
+store's own pool that `current_user = memphant_app`, `NOT rolsuper`, `NOT rolbypassrls`,
+`row_security_active`, cross-tenant count **0 in both directions**, and own-tenant count
+**1** — so the zero is isolation, not blanket denial. It then runs a **negative control**: a
+bypassing credential must return 1, on the stated grounds that if it ever returns 0 the
+first assertion proves nothing. That control is the part most such tests omit. **SOUND.**
+
+**The `claim_reflect_jobs` lane-split race.** Fixed in shipped SQL. A **blocking**
+`pg_advisory_xact_lock` runs as its own statement inside the candidate loop *before* the
+claim, with lanes ordered deterministically and the lock held to transaction end
+(`memphant_migrations/versions/20260724_003_worker_claim_throughput.sql:128`). The comment
+at :82–104 documents why both insufficient designs were rejected. No `try`-based gate
+remains on the claim path; the residual `skip locked` uses are secondary row locks
+underneath the advisory lock. Pinned by `tests/test_wsa_migration_contract.py:819`.
+
+### 5.2 Substrate defects worth acting on
+
+1. **Hot/cold planes do not exist.** No `ColdTier`, `hot_tier`, or tiering module anywhere
+   in `crates/`; every `hot_*` symbol is `hot_path` latency. The only in-repo statement of
+   fact calls the tiering **dormant**
+   (`docs/build-log/2026-07-22-b5-b6-ci-honesty-deletions.md:121`). Any STATUS sentence
+   claiming a hot/cold plane is false. Delete the claim or build the feature; do not audit
+   it again.
+2. **The file-plane write path is InMemory-only**, so the store-divergence anti-pattern is
+   live and unguarded exactly where we have no differential. `file_sync` is not among the
+   18 shared testkit cases. Fix: add `file_sync` cases to `memphant-store-testkit`.
+3. **`b3-distribution-wedge/gate-summary.json` overclaims.** It records
+   `"real_mcp_stdio_and_postgres": true` for a suite that constructs only `InMemoryStore`;
+   that property is carried by the separate `scripts/e2e_probe.sh`, not by these tests. Its
+   `"tested_commit"` is also the literal unsubstituted placeholder `"containing_commit"`,
+   so the artifact is not commit-pinned the way B2's is.
+4. **The acceptance-grade SLO number is manual.** Only the store-layer proxy runs
+   continuously; the HTTP-boundary instrument that produced p50 32.59 / p95 37.18 is not
+   in CI.
+5. Both file-plane summaries self-report `repository_gate_status: unmet` (24 pytest
+   failures at bank time; private spec-drift parity unproven). The gates passed; the
+   repository gate did not. That honesty is correct and should stay.
+
+### 5.3 The `#[ignore]` sweep came back clean
+
+92 ignored Rust tests: 65 are the Postgres/worker suites that CI runs explicitly via
+`cargo test … -- --ignored` (`.github/workflows/ci.yml:134-138`), and the rest are gated on
+large model downloads or paid provider keys. No `#[should_panic]` misuse, no always-true
+assertions, and no test gated on an env var that CI silently never sets. All four B6
+honesty legs are present and green (latest run 2026-07-28, both jobs success).
