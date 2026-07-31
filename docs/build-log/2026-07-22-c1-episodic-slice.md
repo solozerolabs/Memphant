@@ -146,6 +146,48 @@ Data safety: bodies never leave the gitignored corpus; the committed provenance
 carries only counts/rates with `user_id`s redacted to prefixes — verified no body
 text present. Proof: `docs/build-log/artifacts/c1-episodic/real-prod-backfill-provenance.json`, commit `6d01789b`.
 
+## Drain audit (2026-07-30) — C1 CLEARED, and the runner now proves it itself
+
+`gate_runtime.drain_worker` was found reporting `drain completed=256` on 401
+queued jobs and exiting with 145 still `queued`. Root cause (fixed by a parallel
+session at `a47a4a40` + `20260730_005_pending_worker_job_count.sql`):
+`20260730_004_served_login_roles` made the worker pool assume `memphant_worker`,
+so FORCE RLS applied to the worker's queue-wide, tenant-unbound drain-exit
+count — it matched zero rows and answered 0 at any queue depth. Claiming was
+unaffected (`claim_reflect_jobs` is `security definer`), so the ceiling was
+exactly the batch size. A bench on that path could score a partially compiled
+corpus and never know. `episodic_lane_run_memphant.py` had no independent
+verification of any kind, so it was audited.
+
+**C1's banked numbers stand. Nothing moves.** Three independent lines:
+
+1. **Structurally immune by date.** The defect needs the worker pool to assume a
+   capability role. At `6d01789b` (2026-07-22, the commit that banked the real-prod
+   evidence) `PgStore::connect_worker` did no `SET ROLE` at all — no `PoolSpec`
+   existed and `after_connect` set only `search_path`. The role assumption arrived
+   with `20260730_004` on 2026-07-30, **eight days after** both C1 runs.
+2. **The banked counts are an exact identity.** One `reflect_episode` job per
+   POSTed episode; `forget` enqueues none, so the archive path's explicit
+   `/v1/reflect` adds exactly one. Synthetic: 227 retain + 10 forget + 1 = **238**,
+   and the artifact records `compiled_jobs: 238`. Real prod: 35 + 235 rolled-up + 1
+   = **271**, and the artifact records `compiled_jobs: 271`. An under-drain reports
+   a short count; these are not short. Pinned by
+   `tests/test_episodic_lane_run_memphant.py`.
+3. **Re-run, live, on the deterministic synthetic corpus** (2026-07-30, scratch DB,
+   $0): `compiled=238`, Bar 2 PASSES on both tenants with `correctly_excluded`
+   13 and 12 and 0 leaks, and both tenant ids identical to the banked artifact —
+   every correctness number reproduces exactly. The real-prod corpus is a
+   gitignored one-time extract and is no longer on disk, so that arm is covered by
+   (1) and (2) rather than by re-execution.
+
+The runner no longer relies on any of this being re-derived by hand. It now
+asserts both halves of the contract `code_lane_run_memphant.py` always had, before
+any bar is evaluated: `compiled == expected_compiled_jobs(...)`, and
+`gate_runtime.assert_worker_queue_empty` — a `psql` count of
+`queued|running|dead` on the **bench** credential, which is not subject to the
+worker pool's RLS and is exactly why `code_lane_run_memphant.py` was never
+exposed. The provenance now records `expected_jobs` and `queue_drained_verified`.
+
 ## Artifacts
 
 - `docs/build-log/artifacts/c1-episodic/real-prod-backfill-provenance.json` (real prod, redacted)
