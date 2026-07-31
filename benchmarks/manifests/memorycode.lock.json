@@ -1,0 +1,107 @@
+{
+  "benchmark": "MemoryCode",
+  "track": "preference / user-learning lane external instrument",
+  "license": "Apache-2.0",
+  "license_provenance": "HF dataset card YAML frontmatter `license: apache-2.0` at the pinned revision, corroborated by a real Apache License 2.0 LICENSE file in the project's code repository (github.com/Cohere-Labs-Community/MemoryCode, fetched and read: standard unmodified Apache-2.0 text). Not a badge. The card additionally names github.com/for-ai/MemoryCode as the project repo (the pre-rename org).",
+  "attribution": {
+    "source": "https://huggingface.co/datasets/CohereLabsCommunity/memorycode",
+    "license": "Apache-2.0",
+    "revision": "32d888b11c73c67be91414e571dfe98c5c20feac",
+    "paper": "https://arxiv.org/abs/2502.13791",
+    "citation": "From Tools to Teammates: Evaluating LLMs in Multi-Session Coding Interactions, arXiv:2502.13791"
+  },
+  "dataset": {
+    "revision": "32d888b11c73c67be91414e571dfe98c5c20feac",
+    "last_modified": "2025-02-24T22:03:45.000Z",
+    "mirror": "~/.memphant-private/w7-instruments/memorycode",
+    "primary_file": "data/test-00000-of-00001-a45d1855e46f30cb.parquet",
+    "files": {
+      "data/test-00000-of-00001-a45d1855e46f30cb.parquet": {
+        "bytes": 11666648,
+        "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733"
+      },
+      "README.md": {
+        "bytes": 13657,
+        "sha256": "c1bd648ff2057245248ffb358e60bd4cc2cca5430022d6743a9488a61b606dd2"
+      }
+    },
+    "splits": {"test": 360},
+    "splits_note": "one split only; there is no train/validation split to mis-select"
+  },
+  "verified_shape": {
+    "verified_on": "2026-07-30",
+    "method": "counted from the shipped parquet at the pinned sha256; no card value trusted",
+    "instances": 360,
+    "sessions": 8400,
+    "sessions_median_per_instance": 12.5,
+    "sessions_min": 1,
+    "sessions_max": 100,
+    "n_sessions_column_matches_payload": true,
+    "empty_session_text": 0,
+    "session_text_bytes_measured": 21079968,
+    "session_text_chars_median": 2318.5,
+    "event_type_counts": {
+      "instruction-add": 4426,
+      "filler-add": 2931,
+      "instruction-update": 2913,
+      "filler-instruction-update": 1605,
+      "filler-instruction-add": 1530,
+      "filler-update": 1523
+    },
+    "instruction_update_events": 2913,
+    "instances_with_at_least_one_instruction_update": 255,
+    "n_instruction_updates_column_sum": 2913,
+    "n_instruction_updates_nan": 0,
+    "sessions_with_nonempty_session_regex": 4908,
+    "sessions_with_nonempty_session_eval_query": 4908,
+    "session_regex_and_eval_query_same_length": "8400 / 8400",
+    "sessions_with_nonempty_history_regex": 360,
+    "history_regex_position": "the last session of every instance, 360/360",
+    "all_claimed_counts_reproduced": true,
+    "schema_finding": "`session_regex` / `session_eval_query` are NOT positionally parallel to `type` / `topic`: they align in only 811 of 8400 sessions. They are the cumulative ACTIVE-RULE set at that session (with one probe query per active rule), which is what the deterministic grader needs. `type` and `topic` do align 8400/8400. Anyone treating the four arrays as one parallel record will mis-pair rules to events.",
+    "label_provenance": {
+      "verdict": "synthetic-by-construction, and honestly described as such",
+      "evidence": "The card's own first line: MemoryCode \"is a synthetic multi-session dataset\". No human-label claim is made anywhere, so there is nothing overstated. The load-bearing labels are the `session_regex` graders, which are hand-written rule templates, not model output: they are literal regexes (`['variable','^n_.*']`) and boolean predicates, evaluated deterministically."
+    },
+    "grader": "deterministic regex + boolean predicates in `session_regex`; NO LLM judge is required on any path"
+  },
+  "adapter": {
+    "entrypoint": "scripts/external_instrument_adapter.py --instrument memorycode",
+    "mode": "retrieval-only, $0, no reader and no judge",
+    "unit": "one session's `text`, ingested as a MemPhant episode (source_kind=user)",
+    "probe": "a coding convention stated more than once across an instance's sessions",
+    "gold_rule": "supersession groups are formed by stripping quoted literals from `topic` (`always start function names with 'a_'` and `... with 'y_'` collapse to one group). Gold = the session that most recently states the convention; distractor = every earlier session that states the superseded form. Uses only shipped fields; no model call.",
+    "probe_count": 1063,
+    "probe_count_note": "1063 supersession groups across 257 instances, covering 3616 superseded (current, stale) pairs. 103 of 360 instances contribute no probe because no convention is restated in them.",
+    "metric": "hit@1 / hit@k on the current session, plus `stale_outranks_current` -- the direct correction-retention failure mode"
+  },
+  "power": {
+    "n": 1063,
+    "n_note": "1063 correction-retention probes over 257 instances; 3616 current-vs-stale pairs if scored pairwise.",
+    "resolvable_effect_size": {
+      "paired_mcnemar_alpha_0.05_power_0.80": "a 3.1pp absolute shift in hit@k (discordant-pair basis, assuming ~30% discordance)",
+      "unpaired_two_proportion_alpha_0.05_power_0.80": "a ~6.0pp absolute difference between two independent arms at p~0.5",
+      "clustering_caveat": "probes cluster in 257 instances (mean 4.1/instance); use a cluster bootstrap over instances. Cluster-adjusted, the resolvable paired effect is roughly 2x the flat figure, i.e. ~6pp."
+    },
+    "why_this_closes_the_gap": "The preference/user-learning lane currently has 51 never-scored goldens and no external instrument. This supplies 1063 externally-authored, deterministically-graded probes for exactly the construct that lane is about: a stated convention is later overwritten and the system must surface the current one, not the superseded one."
+  },
+  "cost": {
+    "basis": "measured bytes, not estimated",
+    "retrieval_only_full_run": {
+      "usd": 0.0,
+      "ingest_bytes": 20444840,
+      "ingest_units": 8147,
+      "recalls": 1063,
+      "note": "local fastembed + local Postgres; no paid call on any path. Ingest bytes cover only the 257 probe-bearing instances; all 360 would be 21079968 bytes / 8400 sessions."
+    },
+    "reader_ceiling_if_ever_funded": {
+      "status": "NOT NEEDED",
+      "note": "MemoryCode's native grade is regex. A reader would only be needed to generate code for the regex to grade, which is a separate experiment, not a cost of adopting the instrument."
+    }
+  },
+  "primary_sources": [
+    "https://huggingface.co/datasets/CohereLabsCommunity/memorycode/tree/32d888b11c73c67be91414e571dfe98c5c20feac",
+    "https://github.com/Cohere-Labs-Community/MemoryCode/blob/main/LICENSE",
+    "https://arxiv.org/abs/2502.13791"
+  ]
+}
