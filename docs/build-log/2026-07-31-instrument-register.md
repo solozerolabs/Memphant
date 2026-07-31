@@ -48,10 +48,14 @@ gitignored and live at `~/.memphant-private/`; they were read read-only.
    forgetting. Substrate coverage is thinner still (§5), and **hot/cold planes have neither
    an instrument nor a feature.**
 
-7. **Both temporal/state adapters failed at first contact on a contract mismatch**, and
-   neither failure was caught before money was authorized (§4.4). That is a systemic gap,
-   not two coincidences: we authorize spend against adapters that have never been exercised
-   against the strict contract.
+7. **Three external instruments have failed at first contact on our own side, never on
+   theirs** — STATE-Bench, STALE and MemSyco. In each case the upstream data and scorer were
+   fine and materialised; our adapter was not. Two of the three were discovered only after
+   money was authorized (§4.5). One $0 gate would have caught all three.
+
+8. **Memora's headline "flat 43/71 vs 44/71" is not flat** — it hides 25 discordant cells
+   out of 71 (§4.4). A one-cell net was reported for a change that moved a third of the
+   graded cells.
 
 ---
 
