@@ -1,0 +1,70 @@
+{
+  "engine": "memphant",
+  "lane": "episodic",
+  "runtime": "memphant-server episode ingest + /v1/recall (fast, budget 1200)",
+  "database_url_db": "memphant_scratch_50046_1785474074",
+  "corpus_rows": 321,
+  "tenants": 5,
+  "compiled_jobs": 322,
+  "expected_jobs": 322,
+  "queue_drained_verified": true,
+  "k": 10,
+  "budget_tokens": 1200,
+  "conversations_equivalence": "passed",
+  "per_tenant": {
+    "5f0721e7": {
+      "visible": 9,
+      "distinct_bodies": 7,
+      "distinct_reachable": 0,
+      "reachability_rate": 0.0,
+      "correctly_excluded": 0,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    },
+    "cd67a3b2": {
+      "visible": 6,
+      "distinct_bodies": 6,
+      "distinct_reachable": 6,
+      "reachability_rate": 1.0,
+      "correctly_excluded": 55,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    },
+    "d13f7632": {
+      "visible": 1,
+      "distinct_bodies": 1,
+      "distinct_reachable": 1,
+      "reachability_rate": 1.0,
+      "correctly_excluded": 0,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    },
+    "d6f83507": {
+      "visible": 24,
+      "distinct_bodies": 24,
+      "distinct_reachable": 19,
+      "reachability_rate": 0.792,
+      "correctly_excluded": 222,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    },
+    "eee527c5": {
+      "visible": 4,
+      "distinct_bodies": 4,
+      "distinct_reachable": 0,
+      "reachability_rate": 0.0,
+      "correctly_excluded": 0,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    }
+  },
+  "hot_path_slo": {
+    "p50_ms": 247.91804199958278,
+    "p95_ms": 792.5880336502814,
+    "samples": 200,
+    "passed": false,
+    "cpu_count": 12,
+    "loadavg_1m_before": 192.39,
+    "loadavg_1m_after": 206.64
+  }
+}
