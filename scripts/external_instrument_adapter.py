@@ -530,6 +530,17 @@ def jaccard(left: set, right: set) -> float:
     return len(left & right) / len(union) if union else 0.0
 
 
+def _fires(session_id: str, rate: float) -> bool:
+    """Deterministic per-session draw. Reproducible from the id alone, so a
+    rate-matched ablation is a re-run rather than a re-roll."""
+    if rate <= 0.0:
+        return False
+    if rate >= 1.0:
+        return True
+    draw = int(hashlib.sha256(f"fire:{session_id}".encode()).hexdigest(), 16) % 10**9
+    return draw < rate * 10**9
+
+
 def ingest_group_structured(client, group: dict, args) -> tuple:
     """Arm S. THE B1 STRUCTURED-STATE EXTRACTOR.
 
@@ -574,11 +585,35 @@ def ingest_group_structured(client, group: dict, args) -> tuple:
     identity: dict[str, set] = {}
     session_of: dict[str, str] = {}
     ledger: list[dict] = []
+    # The caller's own live units, in mint order. Only supersession removes a
+    # row from it, and the only supersessions in this scope are this arm's own,
+    # so it is an exact mirror of the live set without a database round trip.
+    live: list[str] = []
     proposed = 0
     considered = 0
     for index, unit in enumerate(group["units"]):
         target = None
-        if index:
+        if args.structured_ablation != "none":
+            # ABLATION. Same edge RATE, deliberately uninformative target: the
+            # semantic test is not consulted at all. `recency` names the most
+            # recent live prior unit, `random` a uniformly drawn one. Both are
+            # gated by a deterministic per-session draw so the firing rate can
+            # be matched to the measured rate of the arm under test.
+            if live and _fires(unit["unit_id"], args.structured_fire_rate):
+                target = (
+                    live[-1]
+                    if args.structured_ablation == "recency"
+                    else live[
+                        int(
+                            hashlib.sha256(
+                                f"pick:{unit['unit_id']}".encode()
+                            ).hexdigest(),
+                            16,
+                        )
+                        % len(live)
+                    ]
+                )
+        elif index:
             recalled = client.post(
                 "/v1/recall",
                 {
@@ -626,6 +661,7 @@ def ingest_group_structured(client, group: dict, args) -> tuple:
         if target is not None:
             payload["target_unit_ids"] = [target]
             proposed += 1
+            live.remove(target)
         response = client.post(
             "/v1/episodes",
             {
@@ -635,7 +671,22 @@ def ingest_group_structured(client, group: dict, args) -> tuple:
                 "payload": {"unit": payload},
             },
         )
-        minted = set(response.get("unit_ids") or [])
+        minted_ids = list(response.get("unit_ids") or [])
+        # A supersede also mints the historical remainder, which carries the
+        # PRIOR body and the PRIOR key. The compiler appends the caller's own
+        # unit last, so the tail is ours; the shape is asserted rather than
+        # assumed, because naming a remainder later would fail the write (its
+        # valid interval has already closed) and the failure would be remote
+        # from its cause.
+        expected = 2 if target is not None else 1
+        if len(minted_ids) > expected:
+            raise RuntimeError(
+                f"REFUSING TO SCORE: retain {unit['unit_id']} minted "
+                f"{len(minted_ids)} units, expected at most {expected}"
+            )
+        if minted_ids:
+            live.append(minted_ids[-1])
+        minted = set(minted_ids)
         if not minted:
             raise RuntimeError(
                 f"REFUSING TO SCORE: structured retain {unit['unit_id']} minted no "
@@ -879,6 +930,21 @@ def build_parser() -> argparse.ArgumentParser:
              "supersession entirely, which is this arm's own no-op control.",
     )
     parser.add_argument(
+        "--structured-ablation", default="none",
+        choices=("none", "recency", "random"),
+        help="structured arm: replace the semantic target choice with an "
+             "uninformative one at a matched firing rate. This instrument's "
+             "distractors are ALWAYS earlier declarations, so any policy that "
+             "retires older rows scores well on it; the ablation is what "
+             "separates B1's semantics from plain distractor retirement.",
+    )
+    parser.add_argument(
+        "--structured-fire-rate", type=float, default=0.0,
+        help="structured arm: per-session firing probability for the ablation, "
+             "drawn deterministically from the session id. Set to the measured "
+             "firing rate of the arm being ablated.",
+    )
+    parser.add_argument(
         "--structured-pool", type=int, default=5,
         help="structured arm: recall limit for the extractor's retrieval "
              "context. Only the top-ranked preference unit is ever considered.",
@@ -1056,6 +1122,8 @@ def main() -> int:
                 # same score; only these counts tell them apart.
                 diagnostics["structured_extractor"] = {
                     "threshold": args.structured_threshold,
+                    "ablation": args.structured_ablation,
+                    "fire_rate": args.structured_fire_rate,
                     "pool": args.structured_pool,
                     "targets_proposed": structured_counts["proposed"],
                     "top_ranked_prior_units_seen": structured_counts["considered"],
