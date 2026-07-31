@@ -286,6 +286,88 @@ def episode_hits(items: list[dict], unit_ids: list[str], episode_of: dict) -> li
     ]
 
 
+def lexical_rank(group: dict, query: str, k: int) -> list[str]:
+    """Unit ids ranked by the BM25 the repo already ships.
+
+    Reuses ``code_lane_run_deterministic.bm25_search`` verbatim (Okapi, k1=1.2,
+    b=0.75) rather than reimplementing the scorer, so the preference lane's
+    lexical control and the code lane's are literally the same function. That
+    helper ranks *documents* and returns their ``body``; here the body slot
+    carries the unit id, which is what a retrieval score needs. Ties break on
+    ascending session index -- a pure lexical baseline has no notion of time,
+    and breaking ties toward the newer session would hand it a recency prior it
+    has not earned.
+
+    The haystack is the group's own units, mirroring the per-instance bound
+    context MemPhant recalls through; the code lane scopes its BM25 to one
+    attempt for the same reason.
+    """
+    import code_lane_run_deterministic as det
+
+    documents = [
+        {
+            "attempt_id": "",
+            "sequence": index,
+            "body": unit["unit_id"],
+            "tokens": det.tokens(unit["body"]),
+        }
+        for index, unit in enumerate(group["units"])
+    ]
+    return det.bm25_search(documents, query, k)
+
+
+def score_group_lexical(group: dict, args) -> list[dict]:
+    """Arm B. No database, no server, no network -- $0 by construction."""
+    rows = []
+    for probe in group["probes"]:
+        ranked = lexical_rank(group, probe["query"], args.k)
+        identity = {unit_id: unit_id for unit_id in ranked}
+        items = [{"citation_episode_id": unit_id} for unit_id in ranked]
+        rows.append(
+            probe_row(group, probe, items, identity)
+        )
+    return rows
+
+
+def probe_row(group: dict, probe: dict, items: list[dict], episode_of: dict,
+              degraded: bool = False) -> dict:
+    """One scored probe, arm-agnostic.
+
+    The three outcome buckets are mutually exclusive and exhaustive by
+    construction, which is the point: an arm that returns nothing scores 0 on
+    BOTH ``appropriate_application`` and ``misapplication``, so a suppression
+    win cannot be read as an application win. ``neither_returned`` carries that
+    mass explicitly instead of letting it hide in one rate's complement.
+    """
+    gold = episode_hits(items, probe["gold_unit_ids"], episode_of)
+    stale = episode_hits(items, probe["distractor_unit_ids"], episode_of)
+    gold_rank = gold[0] if gold else None
+    stale_rank = stale[0] if stale else None
+    current_wins = gold_rank is not None and (
+        stale_rank is None or gold_rank < stale_rank
+    )
+    stale_wins = stale_rank is not None and (
+        gold_rank is None or stale_rank < gold_rank
+    )
+    return {
+        "group_id": group["group_id"],
+        "probe_id": probe["probe_id"],
+        "kind": probe["kind"],
+        "returned": len(items),
+        "degraded": degraded,
+        "gold_rank": gold_rank,
+        "stale_rank": stale_rank,
+        "hit_at_1": gold_rank == 0,
+        "hit_at_k": gold_rank is not None,
+        # Primary endpoint. Named for the direction it measures.
+        "appropriate_application": current_wins,
+        "misapplication": stale_wins,
+        "neither_returned": gold_rank is None and stale_rank is None,
+        # Retained under its adoption-pass name so the smoke is comparable.
+        "stale_outranks_current": stale_wins,
+    }
+
+
 def ingest_group(client, group: dict) -> tuple[dict, dict, int]:
     """Retain every unit. Returns (context, unit_id -> episode_id, deduped).
 
@@ -331,23 +413,14 @@ def score_group(client, context, episode_of: dict, group: dict, args) -> list[di
                 "mode": args.mode,
             },
         )
-        items = response.get("items", [])
-        gold = episode_hits(items, probe["gold_unit_ids"], episode_of)
-        stale = episode_hits(items, probe["distractor_unit_ids"], episode_of)
         rows.append(
-            {
-                "group_id": group["group_id"],
-                "probe_id": probe["probe_id"],
-                "kind": probe["kind"],
-                "returned": len(items),
-                "degraded": bool(response.get("degraded", False)),
-                "gold_rank": gold[0] if gold else None,
-                "stale_rank": stale[0] if stale else None,
-                "hit_at_1": bool(gold) and gold[0] == 0,
-                "hit_at_k": bool(gold),
-                "stale_outranks_current": bool(stale)
-                and (not gold or stale[0] < gold[0]),
-            }
+            probe_row(
+                group,
+                probe,
+                response.get("items", []),
+                episode_of,
+                degraded=bool(response.get("degraded", False)),
+            )
         )
     return rows
 
@@ -359,18 +432,165 @@ def summarise(rows: list[dict], k: int) -> dict:
     graded = [r for r in rows if r["stale_rank"] is not None or r["gold_rank"] is not None]
     return {
         "probes": n,
+        "instances": len({r["group_id"] for r in rows}),
         "k": k,
         "hit_at_1": sum(r["hit_at_1"] for r in rows) / n,
         "hit_at_k": sum(r["hit_at_k"] for r in rows) / n,
         "degraded": sum(r["degraded"] for r in rows),
         "with_any_unit_returned": len(graded),
+        # Both directions by name, plus the bucket that holds neither, so the
+        # three sum to 1 and a suppression win is visible as a suppression win.
+        "appropriate_application_rate": sum(r["appropriate_application"] for r in rows) / n,
+        "misapplication_rate": sum(r["misapplication"] for r in rows) / n,
+        "neither_returned_rate": sum(r["neither_returned"] for r in rows) / n,
+        "latest_state_wins": sum(r["appropriate_application"] for r in rows) / n,
         "stale_outranks_current": sum(r["stale_outranks_current"] for r in rows),
     }
+
+
+DIAGNOSTIC_QUERIES = {
+    # Does supersession mint edges at all on this corpus?
+    "memory_edge_by_kind":
+        "select kind, count(*) from memphant.memory_edge group by kind order by kind",
+    # Are retired units still live? A superseded unit with a NULL
+    # transaction_to would still pass bitemporal recall.
+    "memory_unit_by_state":
+        "select state, count(*) from memphant.memory_unit group by state order by state",
+    "memory_unit_by_kind":
+        "select kind, count(*) from memphant.memory_unit group by kind order by kind",
+    "superseded_with_open_transaction":
+        "select count(*) from memphant.memory_unit "
+        "where state = 'superseded' and transaction_to is null",
+    # Supersedence requires an EXPLICIT subject key; auto content-hash keys are
+    # documented never to supersede. This says which kind this corpus produced.
+    "units_with_predicate":
+        "select (predicate is not null) as has_predicate, count(*) "
+        "from memphant.memory_unit group by 1 order by 1",
+    "units_with_fact_key":
+        "select (fact_key is not null) as has_fact_key, count(*) "
+        "from memphant.memory_unit group by 1 order by 1",
+    # The absent hot/cold plane: expected 'hot' for every episode, forever.
+    "episode_by_retention_tier":
+        "select retention_tier, count(*) from memphant.episode "
+        "group by retention_tier order by retention_tier",
+    "episodes": "select count(*) from memphant.episode",
+    "jobs_remaining":
+        "select count(*) from memphant.job_state where state in ('queued','running')",
+}
+
+
+def psql_scalar(database_url: str, sql: str) -> int:
+    """One integer, read as the BENCH SUPERUSER credential on ``database_url``.
+
+    Deliberately not the worker's own connection. `20260730_004` made the
+    served pools assume `memphant_worker`, so FORCE RLS applies to them and a
+    queue-wide count with no tenant bound matched zero rows -- the worker then
+    reported a single batch as a completed drain (401 queued -> `completed=256`
+    with 145 still queued). `20260730_005` restores the worker's own count via
+    a security-definer function, but this bench never relies on that: it asks
+    the database itself, on the unrestricted bench credential, and fails closed.
+    """
+    result = gr.sh([
+        "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+        "--set", "ON_ERROR_STOP=1", database_url, "--command", sql,
+    ])
+    if result.returncode != 0:
+        raise RuntimeError(f"bench verification query failed: {result.stderr.strip()[:300]}")
+    return int(result.stdout.strip())
+
+
+def verify_corpus_compiled(database_url: str, expected_episodes: int) -> dict:
+    """Fail closed unless the DATABASE says the whole corpus is compiled.
+
+    A partially compiled corpus is the one failure that would manufacture this
+    lane's headline result -- a superseded session outranking the current one
+    because the current one was never compiled. So this asserts, as the bench
+    superuser and never from a self-report:
+
+    1. no job is ``queued`` or ``running``;
+    2. no job is ``failed`` or ``dead``;
+    3. the episode count matches what retain accepted;
+    4. EVERY episode produced at least one memory unit.
+
+    (4) is the real corpus-compiled assertion. A job-count alone cannot see an
+    episode whose job completed without minting anything.
+    """
+    counts = {
+        "pending_jobs": psql_scalar(
+            database_url,
+            "select count(*) from memphant.job_state "
+            "where state in ('queued','running')",
+        ),
+        "failed_jobs": psql_scalar(
+            database_url,
+            "select count(*) from memphant.job_state where state in ('failed','dead')",
+        ),
+        "episodes": psql_scalar(database_url, "select count(*) from memphant.episode"),
+        "episodes_with_units": psql_scalar(
+            database_url,
+            "select count(distinct source_episode_id) from memphant.memory_unit "
+            "where source_episode_id is not null",
+        ),
+        "memory_units": psql_scalar(database_url, "select count(*) from memphant.memory_unit"),
+        "expected_episodes": expected_episodes,
+    }
+    if counts["pending_jobs"]:
+        raise RuntimeError(
+            f"REFUSING TO SCORE: {counts['pending_jobs']} jobs still queued/running "
+            "after drain -- the corpus is only partially compiled"
+        )
+    if counts["failed_jobs"]:
+        raise RuntimeError(
+            f"REFUSING TO SCORE: {counts['failed_jobs']} failed/dead compile jobs"
+        )
+    if counts["episodes"] != expected_episodes:
+        raise RuntimeError(
+            f"REFUSING TO SCORE: {counts['episodes']} episodes in the database "
+            f"!= {expected_episodes} distinct units retained"
+        )
+    if counts["episodes_with_units"] != counts["episodes"]:
+        raise RuntimeError(
+            f"REFUSING TO SCORE: {counts['episodes'] - counts['episodes_with_units']} "
+            "episodes compiled to zero memory units -- partial corpus"
+        )
+    return counts
+
+
+def collect_diagnostics(database_url: str) -> dict:
+    """Trace evidence, read from the scratch DB before it is dropped.
+
+    Exploratory by prereg: mechanism, not a tested claim.
+    """
+    out = {}
+    for name, sql in DIAGNOSTIC_QUERIES.items():
+        result = gr.sh([
+            "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+            "--set", "ON_ERROR_STOP=1", database_url, "--command", sql,
+        ])
+        out[name] = (
+            result.stdout.strip().splitlines()
+            if result.returncode == 0
+            else f"query failed: {result.stderr.strip()[:300]}"
+        )
+    return out
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--instrument", required=True, choices=sorted(LOADERS))
+    parser.add_argument(
+        "--arm",
+        default="memphant",
+        choices=("memphant", "lexical"),
+        help="memphant = live recall; lexical = the repo's BM25 control over "
+             "the same units and queries (no DB, no server, no network)",
+    )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="memphant arm only: dump supersession/state/tier counts from the "
+             "scratch DB into the report BEFORE it is dropped",
+    )
     parser.add_argument("--source", required=True, help="pinned mirror file")
     parser.add_argument("--lock", default=None, help="manifest lock (default: derived)")
     parser.add_argument("--out", required=True)
@@ -427,6 +647,21 @@ def main() -> int:
         if missing:
             raise SystemExit(f"gold unit dropped by limiting: {sorted(missing)[:3]}")
 
+    started = time.time()
+    diagnostics = None
+    if args.arm == "lexical":
+        # Arm B short-circuits every runtime: no scratch DB, no server, no
+        # worker, no embedder, no network. Same probes, same queries, same k.
+        rows = [row for group in groups for row in score_group_lexical(group, args)]
+        ingested = sum(len(group["units"]) for group in groups)
+        compiled = 0
+        out_path = Path(args.out).resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        return write_report(
+            args, lock, lock_path, source, rows, groups, ingested, compiled,
+            started, out_path, diagnostics
+        )
+
     # Inputs verified against the lock before any database is minted.
     gr.reexec_through_scratch_db(args.database_url)
     args.database_url = os.environ["DATABASE_URL"]
@@ -444,7 +679,6 @@ def main() -> int:
         args.embed_model,
         log_path=out_path.parent / f"server-{args.instrument}.log",
     )
-    started = time.time()
     try:
         server.start()
         client = gr.ApiClient(args.port, api_key, tenant_id)
@@ -461,15 +695,31 @@ def main() -> int:
             raise RuntimeError(
                 f"compiled {compiled} != retained {ingested} - deduped {deduped}"
             )
+        # And then do not take even that on trust: ask the database.
+        compilation = verify_corpus_compiled(args.database_url, ingested - deduped)
+        print(f"[corpus verified] {json.dumps(compilation, sort_keys=True)}", file=sys.stderr)
         rows = []
         for group in groups:
             context, episode_of = bound[group["group_id"]]
             rows += score_group(client, context, episode_of, group, args)
+        # Read the trace while the scratch DB still exists.
+        if args.diagnostics:
+            diagnostics = collect_diagnostics(args.database_url)
+            diagnostics["compilation_verified"] = compilation
     finally:
         server.stop()
 
+    return write_report(
+        args, lock, lock_path, source, rows, groups, ingested, compiled,
+        started, out_path, diagnostics
+    )
+
+
+def write_report(args, lock, lock_path, source, rows, groups, ingested,
+                 compiled, started, out_path, diagnostics) -> int:
     report = {
         "instrument": args.instrument,
+        "arm": args.arm,
         "lock": {"path": lock_path.name, "sha256": sha256_file(lock_path)},
         "source": {
             "path": str(source),
@@ -480,7 +730,10 @@ def main() -> int:
         "license": lock["license"],
         "attribution": lock["attribution"],
         "recall": {"k": args.k, "mode": args.mode, "budget_tokens": args.budget_tokens,
-                   "embed_model": args.embed_model},
+                   "embed_model": args.embed_model}
+        if args.arm == "memphant"
+        else {"k": args.k, "mechanism": "Okapi BM25 k1=1.2 b=0.75, instance-scoped, "
+              "code_lane_run_deterministic.bm25_search"},
         "scale": {
             "groups": len(groups),
             "units_ingested": ingested,
@@ -489,6 +742,7 @@ def main() -> int:
         },
         "paid_model_calls": 0,
         "summary": summarise(rows, args.k),
+        "diagnostics": diagnostics,
         "rows": rows,
     }
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
