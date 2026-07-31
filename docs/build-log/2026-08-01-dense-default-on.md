@@ -279,3 +279,89 @@ Cost: 2 × ~13 min wall-clock, $0.
    is not measured.
 5. **Large-corpus ingest cost.** §3's 2.0× ratio is six episodes on one machine.
    The ratio reproduced twice, but throughput at corpus scale was not measured.
+
+---
+
+## 9. The docs plane, measured — chunk-only candidacy is structurally empty there
+
+§4 flagged the docs plane as the one place the flip could plausibly cost
+accuracy and admitted no number existed. This section supplies the number. $0:
+no reader, no judge, no paid model, no provider key present in the environment,
+`--mode fast` throughout, scratch DB per arm, Syndai touched read-only.
+
+### 9.1 Corpus lineage
+
+The pinned Syndai docs tree was extracted with `git archive` — Syndai was never
+checked out, modified, or re-pinned (its HEAD has since drifted to `7cbcd13e`
+and the gate correctly hard-fails on file-set mismatch, so re-pinning was not
+attempted).
+
+| field | value |
+|---|---|
+| archived commit | `96a26f1f` |
+| commit recorded in `benchmarks/manifests/syndai_docs_gate.lock.json` | `6fe7f78f` |
+| files | **114 / 114 verified** |
+| sections | **4920** |
+| `section_revision` | `sha256:82a1eeca…4035885` |
+| goldens | 120 (v1 60 + v2 60, disjoint sections) |
+
+Verification is `gate_common.verify_corpus_contract`, which checks the exact
+file set, **per-file sha256**, per-file and total byte counts, section count,
+total section chars, and the section revision — not a file count. All passed.
+
+**A lineage discrepancy worth recording rather than papering over:** the lock's
+`git_commit` field says `6fe7f78f`, the C2 build log says the re-pin was against
+`96a26f1f`. I archived **both** and ran the contract against each: **both pass,
+byte-identical on the docs subset.** The intervening commits did not touch
+`docs/`, so the pin is content-stable and the two commit ids name the same
+corpus. Neither document is wrong; the lock records a later commit with an
+identical docs tree.
+
+### 9.2 Mechanism liveness: the chunk-only population is EMPTY, and here is why
+
+The coordinator's instruction was explicit: prove chunk-only-matching units
+exist and count them; if the population is empty or tiny, report the count, not
+a p-value. **It is empty, and the reason is mechanical, not statistical.**
+
+Artifact: `docs/build-log/artifacts/dense-default-on/docs-chunk-only-census.json`
+
+| quantity | count |
+|---|---:|
+| corpus sections | 4920 |
+| sections whose chunk header is a heading line **already in the body** | **4918** |
+| sections whose chunk header comes from the URI stem (text not in body) | **2** |
+| goldens whose every required span resolves in the pinned corpus | **120 / 120** |
+| **gold-bearing sections that could carry chunk text beyond their body** | **0** |
+
+Two independent reasons chunk-only candidacy cannot arise on the docs plane:
+
+1. **Resource chunk bodies are verbatim slices of the unit body.**
+   `resource_contextual_chunks` (`service.rs:6100-6133`) builds each chunk as
+   `body.get(start..end)` — the same byte range it records in `source_span`. A
+   chunk's body text is therefore a **subset** of the unit body text, so any
+   term BM25-over-body can miss, the chunk pass would also miss. The only text
+   a chunk can add is its **header**, and `resource_chunk_header`
+   (`service.rs:6066-6082`) returns the body's own first `#`-prefixed line
+   whenever one exists — which it does for 4918/4920 sections, because the
+   sectionizer splits on headings. Header ⊆ body ⇒ chunk ⊆ body.
+2. **Resource chunks are OFF by default anyway.**
+   `resource_chunks_write_enabled` defaults to `false` (`service.rs:3519`;
+   `MEMPHANT_RESOURCE_CHUNKS` unset). Episode chunks default ON
+   (`service.rs:3518`) — resource chunks do not. On the shipped docs path the
+   units carry **no `contextual_chunks` at all**, so there is nothing for the
+   chunk-aware pass to see that BM25 cannot.
+
+**This narrows §4's caveat substantially, and I was wrong to frame it as a docs
+risk.** The `~80% of prod chunks exceed 512 tokens` figure is real, but it is a
+*rerank-window* fact about chunk **size**; it says nothing about chunk text
+lying outside the body, which is the only thing that produces chunk-only
+candidacy. The §4 gap is real and remains real for **episode** chunks — where
+`episode_contextual_chunks` composes text that is not a verbatim slice of the
+unit body — which is exactly where all five failing tests lived. It does not
+transfer to the docs plane.
+
+`--limit-haystack` was considered as a way to cut wall-clock and rejected —
+correctly refused by the harness itself (`gate_run_memphant.py:945`,
+"violates the full common-corpus contract"). Shrinking the haystack would also
+have compressed both arms toward the ceiling and destroyed the power the
+comparison exists to have.
