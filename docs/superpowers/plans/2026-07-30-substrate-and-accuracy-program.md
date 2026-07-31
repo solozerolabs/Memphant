@@ -479,3 +479,77 @@ construction, the exact bias we are escaping. Long-Horizon-Terminal-Bench
 
 **One genuine open slot remains:** no public CLAUDE.md/AGENTS.md
 convention-adherence benchmark exists. That search came back clean.
+
+## 6b. GitHub lane — no bank certified, and the leakage metric is mis-specified
+
+**Verdict: three preregistered bars FAIL; no GitHub-lane bank ships.** The
+bar-clearing slice is 13 goldens (S2 revert/supersession + S3 fix-of-a-fix)
+against a ≥40 floor, and Syndai holds 90.4% of private non-S4 goldens against a
+≤60% cap. Recorded in `benchmarks/data/github_lane_golden.lock.json`
+(`composition_bars_all_pass: false`). No threshold was moved.
+
+**The human stratum is not thin — it is empty.** All 15 "human" review comments
+in Syndai are the owner replying to CodeRabbit, 11 of them
+`Addressed in <sha>: …` — the actor describing his own change, which is the Track
+R defect arriving through a different door. The 16 RecMe issues are open,
+zero-comment backlog tickets in a repo with no CI. **S5 yield: 0.** The private
+repos cannot supply human-authored queries at any scale.
+
+### The metric conflates two different properties
+
+The miner found a mis-specification in its own bar and **deliberately did not
+apply the fix**, logging it as bar-shopping to fix after seeing an inconvenient
+number. That was the right call, and the finding is correct:
+
+**Concentration detects *copying*, which requires the query to be writable from
+the target.** A CI runner emits failure text before the fix exists; a reviewer
+writes against the pre-change hunk. Neither *can* have copied from its target, so
+S1's 3.31× and P1's 2.42× are not contamination.
+
+So the metric is measuring two distinct things under one number:
+
+| property | meaning | discriminator |
+|---|---|---|
+| **Contamination** | the query was authored *from* the target — the number is **fake** | **provenance**: was the query authored before the target existed? |
+| **Lexical tractability** | the query naturally shares tokens — the number is **real but narrow** | the statistic itself |
+
+Provenance is a fact, not a statistic, and it settles contamination outright.
+Track R fails on provenance (an LLM read the target and wrote the question).
+CI-failure and reviewer queries pass on provenance regardless of their
+concentration — a real user pasting a stack trace does name the failing file.
+
+But lexical tractability still matters and is **not** dismissed: a high-
+concentration bank, however honestly built, measures only the lexical regime and
+cannot separate lexical from semantic retrieval quality. That is precisely how
+Track R made dense embeddings look worthless. Both properties get reported; only
+contamination is disqualifying.
+
+**Action:** a separately preregistered instrument that reports provenance class
+and concentration as two fields, never one gate. Not applied retroactively here.
+
+**Separately, a genuine construction bug to fix (not bar-shopping):** S1 targets
+repeat each filename three times (file list, `--stat`, diff header), inflating
+concentration artificially. P1 targets are whole file-level diff sections rather
+than the reviewed hunk. Both are target-rendering defects, fixable on their own
+merits.
+
+### The pattern: our leakage gates keep coming in stricter than reality
+
+Second instance today. The Track R paraphrase bar was set at ≤1.50 when
+human-authored queries occupy 1.76–2.03×. Now a **published, human-authored
+corpus** — `foundry-ai/swe-prbench` — **fails our gate at 2.42×**. When a human
+corpus fails a gate, that is evidence about the gate. Calibrate leakage bars
+against measured human baselines before preregistering them, not against the
+intuition that lower is better.
+
+**Public corpora, independently re-verified:** swe-prbench 350 PRs / 3,093
+comments, with **102 bot-authored (3.30%) across 37 PRs despite
+`ai_comments_removed: 0`** — filtered by author, exactly as the sweep warned.
+Microsoft CodeReviewer **deferred**: license verified CC-BY-4.0, but the corpus
+predates 2022 and carries uncontrollable contamination risk. CORE-Bench
+**blocked** on its null license — nothing vendored. CodeSearchNet deferred as the
+wrong shape.
+
+**Secrets:** 2 candidates dropped whole (`anthropic_key`,
+`generic_secret_assignment`) — never redacted-and-kept, and no matched value
+written to any artifact. All five source repos left at their original HEADs.
