@@ -4,10 +4,11 @@
   "ratchet": "scripts/check_evidence_contract.py scans every tracked JSON under docs/build-log/artifacts/ for a decision key at depth <= 4. A match in neither list is a hard failure. To clear debt, write a contract and move the path from `pending` to `contracted` -- never by deleting the entry.",
   "contracted": [
     "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-a-vs-b.json",
-    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-b.json",
     "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-a.json",
+    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-b.json",
     "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-p-vs-a.json",
-    "docs/build-log/artifacts/null-review-ledger.json"
+    "docs/build-log/artifacts/null-review-ledger.json",
+    "docs/build-log/artifacts/r6-docs-decision/packet.json"
   ],
   "pending": [
     {
