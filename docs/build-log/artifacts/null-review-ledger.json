@@ -1,0 +1,1343 @@
+{
+  "schema": "memphant.audit.null-review.v1",
+  "generated_by": "scripts/audit_null_review.py --write",
+  "build_log": "docs/build-log/2026-07-31-null-review.md",
+  "test": "two-sided exact (conditional binomial) McNemar, alpha=0.05",
+  "min_decisional_n_d": 6,
+  "d_min": 0.07,
+  "power_engine": "scripts/instrument_power.py (unconditional; psi realized per result)",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "Re-derivation of 27 conclusions recorded as null/flat/parity in the 2026-07 window; per-result cells live in `entries`, not in this block.",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": "unverified",
+      "b": "unverified",
+      "c": "unverified",
+      "n_d": "unverified",
+      "computed_by": "scripts/instrument_power.py",
+      "source": "per-entry; see entries[].artifact"
+    },
+    "harness": {
+      "embed_model": "unverified",
+      "scorer": "unverified",
+      "k": "unverified",
+      "budget": "unverified",
+      "flags": "unverified",
+      "command": "python3 scripts/audit_null_review.py --write"
+    },
+    "corpus": {
+      "sha256": "unverified",
+      "snapshot_id": "unverified",
+      "n_items": "unverified"
+    }
+  },
+  "paid_api_spend_usd": 0,
+  "read_roots": {
+    "worktree": "/Users/sidsharma/Memphant-accuracy-first",
+    "canonical_main": "/Users/sidsharma/Memphant"
+  },
+  "max_first_answer_rank_probe": {
+    "docs/build-log/artifacts/lme-cleaned-split/cleaned-n100-seed20260710.json": 2,
+    "docs/build-log/artifacts/lme-cleaned-split/deprecated-n100-seed20260710.json": 2,
+    "docs/build-log/artifacts/rung7-packing-reader-gate/baseline-retrieval.json": 2,
+    "docs/build-log/artifacts/rung7-packing-reader-gate/rendercap1200-retrieval.json": 5
+  },
+  "counts_excluding_duplicates": {
+    "VALID NULL": 1,
+    "UNDERPOWERED": 9,
+    "VALID NULL (psi-fragile)": 2,
+    "NON-MEASUREMENT": 12,
+    "FALSE NULL": 3,
+    "CONTROL (FALSE NULL)": 2
+  },
+  "artifact_provenance": {
+    "docs/build-log/artifacts/track-r/track_r_phase1r_retrieval_arms.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/track-r/track_r_phase1c_scoped_bm25_comparison.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/lme-cleaned-split/cleaned-n100-seed20260710.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/lme-cleaned-split/deprecated-n100-seed20260710.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/modernbert+bc/v1/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/modernbert+bc/v2/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/modernbert/v1/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/modernbert/v2/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/chunks-k10/v1/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/chunks-k10/v2/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/diag-k25b16/v1/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/diag-k25b16/v2/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/syndai-gate/reader-syndai.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r1-docs/syndai/v2/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r15-docs/L1XC/v1/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r15-docs/L1XC/v2/reader.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/wave-20260711/reader-wave-quota.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/wave-20260711/reader-wave-base-v1.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/wave-20260711/reader-wave-sibling.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/wave-20260711/reader-wave-base-v3.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r0-embedder/chat/reader-r0-chat-small-20260710.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/r0-embedder/chat/reader-r0-chat-base-20260710.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/unified-sota-20260714/task4-memora-luna/full.fama.json": {
+      "tree": "main",
+      "git_tracked": false
+    },
+    "docs/build-log/artifacts/unified-sota-20260713/task4-memora/weekly-software-engineer.fama.json": {
+      "tree": "main",
+      "git_tracked": false
+    },
+    "docs/build-log/artifacts/rung7-packing-reader-gate/rendercap1200-retrieval.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/rung7-packing-reader-gate/baseline-retrieval.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-lineage-complete.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-baseline-instrumented.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    },
+    "docs/build-log/artifacts/syndai-gate/reader-memphant.json": {
+      "tree": "accuracy-first",
+      "git_tracked": true
+    }
+  },
+  "entries": [
+    {
+      "id": "phase1r-armB-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-phase1r-retrieval-bm25.md:23",
+      "recorded_as": "5/3, p = 0.727 -- null",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_phase1r_retrieval_arms.json (armB_bm25_control vs scoped BM25, k=10)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 158,
+      "after_only": 5,
+      "before_only": 3,
+      "neither": 14,
+      "n_d": 8,
+      "psi": 0.044444,
+      "delta": 0.011111,
+      "p_exact": 0.726562,
+      "power_at_dmin": null,
+      "mde_at_80": 0.043984,
+      "psi_ci95": [
+        0.01938,
+        0.085693
+      ],
+      "mde_at_psi_upper": 0.062121,
+      "delta_ci95": [
+        -0.0227,
+        0.0369
+      ],
+      "abandoned_win_ceiling": 0.0369,
+      "classification": "VALID NULL",
+      "why": "true MDE 4.4pt at the realized psi = 0.0444, at or below the preregistered 7pt; it rules out |delta| >= 4.4pt",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- this null is the entire justification for the A' code-aware tokenizer increment ('only the tokenizer change makes k=10 significant').",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "control vector taken from the committed Phase 1c comparison; the re-derived cells reproduce the committed 2x2 exactly, which independently confirms the log's claim that the re-run control is byte-identical.",
+      "cost_if_wrong": "plain BM25 may already beat the lexical control at k=10, which would make the code-aware tokenizer a smaller increment than credited."
+    },
+    {
+      "id": "phase1r-armC-at5",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-phase1r-retrieval-bm25.md:25,116",
+      "recorded_as": "15/24, p = 0.200 -- null; 'only up to a null vs BM25'",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_phase1r_retrieval_arms.json (armC_dense_overlap vs scoped BM25, k=5)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 125,
+      "after_only": 15,
+      "before_only": 24,
+      "neither": 16,
+      "n_d": 39,
+      "psi": 0.216667,
+      "delta": -0.05,
+      "p_exact": 0.199591,
+      "power_at_dmin": 0.4666,
+      "mde_at_80": 0.10007,
+      "psi_ci95": [
+        0.158839,
+        0.28407
+      ],
+      "mde_at_psi_upper": 0.114035,
+      "delta_ci95": [
+        -0.1154,
+        0.0233
+      ],
+      "abandoned_win_ceiling": 0.0233,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 39 clears the floor, but the true MDE is 10.0pt against a preregistered 7pt; power at 7pt is 0.467",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- one of the two cells behind 'dense embeddings did not work on this lane' (2026-07-30-coding-lane-first-win.md:60).",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "point estimate is NEGATIVE (-5.0pt) and was reported as 'null'.",
+      "cost_if_wrong": "dense retired on the coding lane on a contaminated bank."
+    },
+    {
+      "id": "phase1r-armC-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-phase1r-retrieval-bm25.md:25,117",
+      "recorded_as": "16/15, p = 1.000 -- null",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_phase1r_retrieval_arms.json (armC_dense_overlap vs scoped BM25, k=10)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 146,
+      "after_only": 16,
+      "before_only": 15,
+      "neither": 3,
+      "n_d": 31,
+      "psi": 0.172222,
+      "delta": 0.005556,
+      "p_exact": 1.0,
+      "power_at_dmin": 0.5562,
+      "mde_at_80": 0.089693,
+      "psi_ci95": [
+        0.120118,
+        0.235458
+      ],
+      "mde_at_psi_upper": 0.104057,
+      "delta_ci95": [
+        -0.0583,
+        0.0684
+      ],
+      "abandoned_win_ceiling": 0.0684,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 31 clears the floor, but the true MDE is 9.0pt against a preregistered 7pt; power at 7pt is 0.556",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- the other cell behind 'dense did not work'.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "MEMORA MODE, and the clearest instance in the window: marginals 0.9000 vs 0.8944, one question apart, over 31 discordant cells. Dense and BM25 are not one system agreeing with itself; they are two systems disagreeing on 17% of the bank and netting to nothing.",
+      "cost_if_wrong": "the two channels are complementary on a sixth of the bank. A fusion keeping both could exceed either, and the recorded reading was 'dense adds nothing'."
+    },
+    {
+      "id": "phase1r-densebm25code-at5",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-phase1r-retrieval-bm25.md:122",
+      "recorded_as": "-10/+3 at k=5 (p = 0.092) ... neither loss is significant",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_phase1r_retrieval_arms.json (armABC vs armAB, k=5 -- re-derived, never published as a 2x2)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 161,
+      "after_only": 3,
+      "before_only": 10,
+      "neither": 6,
+      "n_d": 13,
+      "psi": 0.072222,
+      "delta": -0.038889,
+      "p_exact": 0.092285,
+      "power_at_dmin": 0.9794,
+      "mde_at_80": 0.056761,
+      "psi_ci95": [
+        0.039014,
+        0.120336
+      ],
+      "mde_at_psi_upper": 0.074259,
+      "delta_ci95": [
+        -0.0649,
+        0.0055
+      ],
+      "abandoned_win_ceiling": 0.0055,
+      "classification": "VALID NULL (psi-fragile)",
+      "why": "true MDE 5.7pt at the realized psi = 0.0722, at or below the preregistered 7pt; it rules out |delta| >= 5.7pt. FRAGILE: psi is estimated from 13 discordant pairs (95% CI 0.0390-0.1203); at the upper bound the MDE is 7.4pt, above 7pt. The adequacy holds only at the point estimate.",
+      "recorded_as_null": true,
+      "load_bearing": "partly -- supports 'hybrid fusion is not recommended on this lane'.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "direction is negative, so the risk runs the other way: 'not significant' kept the hybrid alive as an option it may not deserve."
+    },
+    {
+      "id": "phase1r-densebm25code-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-phase1r-retrieval-bm25.md:122",
+      "recorded_as": "-3/+2 at k=10 (p = 1.000)",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_phase1r_retrieval_arms.json (armABC vs armAB, k=10 -- re-derived)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 170,
+      "after_only": 2,
+      "before_only": 3,
+      "neither": 5,
+      "n_d": 5,
+      "psi": 0.027778,
+      "delta": -0.005556,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.00908,
+        0.063631
+      ],
+      "mde_at_psi_upper": 0.052991,
+      "delta_ci95": [
+        -0.0248,
+        0.0196
+      ],
+      "abandoned_win_ceiling": 0.0196,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 5 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "partly -- as above.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "low: both arms sit at 0.95+, so the headroom is 4 questions."
+    },
+    {
+      "id": "phase1r-lme-n30",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-30-phase1r-retrieval-bm25.md:180",
+      "recorded_as": "+2/-1 ... exact p = 1.000",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_phase1r_lme_s_nonregression.json (lme_s_n30_seed1, k=5)",
+      "artifact_provenance": {},
+      "rows_recovered": false,
+      "n": 28,
+      "both": 16,
+      "after_only": 2,
+      "before_only": 1,
+      "neither": 11,
+      "n_d": 3,
+      "psi": 0.107143,
+      "delta": 0.035714,
+      "p_exact": 1.0,
+      "power_at_dmin": 0.0219,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.022665,
+        0.282264
+      ],
+      "mde_at_psi_upper": 0.274654,
+      "delta_ci95": [
+        -0.0869,
+        0.1053
+      ],
+      "abandoned_win_ceiling": 0.1053,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 3 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "NO -- superseded in the same table by the n=120 arm, which rejects (+10/-1, p = 0.0117).",
+      "register_status": "register flags the p1r-small arm; this entry supplies its cells",
+      "duplicate_of": null,
+      "note": "cells committed; the per-arm reports under track-r/phase1r/ are gitignored, so the rows are NOT recoverable. Classified from committed cells, not re-derived.",
+      "cost_if_wrong": "none."
+    },
+    {
+      "id": "packadj-exact-at5",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-exact-channel-magnitude.md:252",
+      "recorded_as": "exact p = 1.0 at both k ... Zero flips in either direction",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_packadj_exact_magnitude.json (paired_at_5)",
+      "artifact_provenance": {},
+      "rows_recovered": false,
+      "n": 180,
+      "both": 166,
+      "after_only": 0,
+      "before_only": 0,
+      "neither": 14,
+      "n_d": 0,
+      "psi": 0.0,
+      "delta": 0.0,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.0,
+        0.020285
+      ],
+      "mde_at_psi_upper": null,
+      "delta_ci95": [
+        -0.0167,
+        0.0167
+      ],
+      "abandoned_win_ceiling": 0.0167,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 0 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "NO for the statistic; YES for the identity claim beside it.",
+      "register_status": "register: 'valid as non-regression, invalid as evidence of equivalence' -- confirmed",
+      "duplicate_of": null,
+      "note": "n_d = 0. The document is RIGHT that the real evidence is byte-identity of the packed context ('packed_context_identical: true', and it says so explicitly). The p = 1.0 printed beside it is vacuous and must never be cited on its own.",
+      "cost_if_wrong": "none -- identity is not a statistical claim."
+    },
+    {
+      "id": "packadj-exact-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-30-exact-channel-magnitude.md:252",
+      "recorded_as": "exact p = 1.0 at both k",
+      "artifact": "docs/build-log/artifacts/track-r/track_r_packadj_exact_magnitude.json (paired_at_10)",
+      "artifact_provenance": {},
+      "rows_recovered": false,
+      "n": 180,
+      "both": 168,
+      "after_only": 0,
+      "before_only": 0,
+      "neither": 12,
+      "n_d": 0,
+      "psi": 0.0,
+      "delta": 0.0,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.0,
+        0.020285
+      ],
+      "mde_at_psi_upper": null,
+      "delta_ci95": [
+        -0.0167,
+        0.0167
+      ],
+      "abandoned_win_ceiling": 0.0167,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 0 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "NO for the statistic.",
+      "register_status": "as above",
+      "duplicate_of": null,
+      "note": "as above.",
+      "cost_if_wrong": "none."
+    },
+    {
+      "id": "w03-cleaned-split-at5",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-31-lme-cleaned-split.md:16",
+      "recorded_as": "exact two-sided McNemar p = 1.0 (0 arm-only wins, 1 baseline-only win)",
+      "artifact": "docs/build-log/artifacts/lme-cleaned-split/{cleaned,deprecated}-n100-seed20260710.json (k=5)",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 94,
+      "both": 58,
+      "after_only": 0,
+      "before_only": 1,
+      "neither": 35,
+      "n_d": 1,
+      "psi": 0.010638,
+      "delta": -0.010638,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.000269,
+        0.057851
+      ],
+      "mde_at_psi_upper": null,
+      "delta_ci95": [
+        -0.0106,
+        0.0101
+      ],
+      "abandoned_win_ceiling": 0.0101,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 1 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- cited in 2026-07-31-w2-reader-composition-prereg.md:166 to release a W2.1 blocker ('W0.3 reported p=1.0, no movement').",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "the CONCLUSION nevertheless stands on separate, non-statistical evidence: 23,854 of 23,854 retained sessions are byte-identical and the cleaning removes 0.07% of turns. That corpus diff is the proof; the McNemar is not.",
+      "cost_if_wrong": "low -- a corpus identical on 99.93% of its turns cannot host a 7pt effect. The defect is that the p-value was cited as the evidence."
+    },
+    {
+      "id": "w03-cleaned-split-at10",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-31-lme-cleaned-split.md:137",
+      "recorded_as": "exact two-sided McNemar p | 1.0 -- null",
+      "artifact": "docs/build-log/artifacts/lme-cleaned-split/{cleaned,deprecated}-n100-seed20260710.json (k=10)",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 94,
+      "both": 58,
+      "after_only": 0,
+      "before_only": 1,
+      "neither": 35,
+      "n_d": 1,
+      "psi": 0.010638,
+      "delta": -0.010638,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.000269,
+        0.057851
+      ],
+      "mde_at_psi_upper": null,
+      "delta_ci95": [
+        -0.0106,
+        0.0101
+      ],
+      "abandoned_win_ceiling": 0.0101,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 1 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "NO -- see duplicate_of.",
+      "register_status": "register \u00a74.1: hit@10 is hit@5 relabelled on this slice; this entry tests that",
+      "duplicate_of": "w03-cleaned-split-at5",
+      "note": "NOT an independent result. Verified at runtime: the k=5 and k=10 hit vectors are identical on every scored row in both arms. Reported as a second null in the same table; it is the same measurement printed twice.",
+      "cost_if_wrong": "none -- it is the same cell."
+    },
+    {
+      "id": "w02-dense-paraphrase-at5",
+      "lane": "repo/code",
+      "source_doc": "2026-07-31-w0-2-paraphrase-arms.md:263",
+      "recorded_as": "Dense flips from null to strongly positive -- 'a false null of exactly the class the held null-review exists to catch'",
+      "artifact": "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json (paired_vs_baseline_arm.overlap_dense.fused_at_5 -- committed cells)",
+      "artifact_provenance": {},
+      "rows_recovered": false,
+      "n": 180,
+      "both": 14,
+      "after_only": 38,
+      "before_only": 1,
+      "neither": 127,
+      "n_d": 39,
+      "psi": 0.216667,
+      "delta": 0.205556,
+      "p_exact": 0.0,
+      "power_at_dmin": 0.4666,
+      "mde_at_80": 0.10007,
+      "psi_ci95": [
+        0.158839,
+        0.28407
+      ],
+      "mde_at_psi_upper": 0.114035,
+      "delta_ci95": [
+        0.1583,
+        0.2164
+      ],
+      "abandoned_win_ceiling": 0.2164,
+      "classification": "FALSE NULL",
+      "why": "exact two-sided p = 1.455e-10 < 0.05 on the re-derived cells -- recorded as a null, but it rejects",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- ANCHOR. This is the win the program nearly abandoned.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "LINEAGE CAVEAT: the W0.2 arms were built from `af-w0-instrument`, which contains neither f67f2b2a nor 3fc4eede; the log's own 2026-07-31 correction requires a re-run on trunk before the numbers are cited again. That correction states the FUSED figures are unaffected (retrieval is upstream of both fixes), and every paraphrase entry in this ledger uses fused hits, not packed. Confirms the standing finding from rows: the original bank's lexical give-away masked the dense channel. Same lever, leak-free bank, opposite verdict.",
+      "cost_if_wrong": "already realized."
+    },
+    {
+      "id": "w02-dense-paraphrase-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-31-w0-2-paraphrase-arms.md:263",
+      "recorded_as": "Dense flips from null to strongly positive (k=10)",
+      "artifact": "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json (overlap_dense vs overlap_off, fused hit@10)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 37,
+      "after_only": 46,
+      "before_only": 3,
+      "neither": 94,
+      "n_d": 49,
+      "psi": 0.272222,
+      "delta": 0.238889,
+      "p_exact": 0.0,
+      "power_at_dmin": 0.3883,
+      "mde_at_80": 0.111639,
+      "psi_ci95": [
+        0.208673,
+        0.343438
+      ],
+      "mde_at_psi_upper": 0.125405,
+      "delta_ci95": [
+        0.1804,
+        0.2652
+      ],
+      "abandoned_win_ceiling": 0.2652,
+      "classification": "FALSE NULL",
+      "why": "exact two-sided p = 6.981e-11 < 0.05 on the re-derived cells -- recorded as a null, but it rejects",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- ANCHOR.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "already realized."
+    },
+    {
+      "id": "w02-dense-vs-bm25code-para-at5",
+      "lane": "repo/code",
+      "source_doc": "2026-07-31-w0-2-paraphrase-arms.md",
+      "recorded_as": "(leak-free restatement of phase1r-armC: does dense still lose to BM25 once the give-away is removed)",
+      "artifact": "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json (overlap_dense vs bm25code_off at k=5)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": false,
+      "n": null,
+      "both": null,
+      "after_only": null,
+      "before_only": null,
+      "neither": null,
+      "n_d": null,
+      "psi": null,
+      "delta": null,
+      "p_exact": null,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "delta_ci95": null,
+      "abandoned_win_ceiling": null,
+      "psi_ci95": null,
+      "mde_at_psi_upper": null,
+      "classification": "NON-MEASUREMENT",
+      "why": "the paraphrase artifact's per_question rows carry ONLY *_hit_at_10; the k=5 cells are committed only against the BASELINE arm (overlap_off), not arm-vs-arm. This arm-vs-arm k=5 contrast is not recoverable without a re-run.",
+      "recorded_as_null": true,
+      "load_bearing": "this is the decontaminated version of the load-bearing comparison.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "decides whether the coding lane's default should be lexical-only at all."
+    },
+    {
+      "id": "w02-dense-vs-bm25code-para-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-31-w0-2-paraphrase-arms.md",
+      "recorded_as": "(as above, k=10)",
+      "artifact": "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json (overlap_dense vs bm25code_off, fused hit@10)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 61,
+      "after_only": 22,
+      "before_only": 28,
+      "neither": 69,
+      "n_d": 50,
+      "psi": 0.277778,
+      "delta": -0.033333,
+      "p_exact": 0.479888,
+      "power_at_dmin": 0.3816,
+      "mde_at_80": 0.112766,
+      "psi_ci95": [
+        0.213731,
+        0.349302
+      ],
+      "mde_at_psi_upper": 0.126453,
+      "delta_ci95": [
+        -0.1112,
+        0.0486
+      ],
+      "abandoned_win_ceiling": 0.0486,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 50 clears the floor, but the true MDE is 11.3pt against a preregistered 7pt; power at 7pt is 0.382",
+      "recorded_as_null": true,
+      "load_bearing": "as above.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "as above."
+    },
+    {
+      "id": "w02-hybrid-vs-bm25code-para-at5",
+      "lane": "repo/code",
+      "source_doc": "2026-07-31-w0-2-paraphrase-arms.md",
+      "recorded_as": "(leak-free restatement of 'dense adds nothing on top of BM25')",
+      "artifact": "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json (bm25code_dense vs bm25code_off at k=5)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": false,
+      "n": null,
+      "both": null,
+      "after_only": null,
+      "before_only": null,
+      "neither": null,
+      "n_d": null,
+      "psi": null,
+      "delta": null,
+      "p_exact": null,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "delta_ci95": null,
+      "abandoned_win_ceiling": null,
+      "psi_ci95": null,
+      "mde_at_psi_upper": null,
+      "classification": "NON-MEASUREMENT",
+      "why": "as above -- per_question rows are k=10 only, and the committed k=5 cells are against the baseline arm, not this pair.",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- the hybrid was dropped on the contaminated bank's evidence.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "if the hybrid wins on the clean bank, 'hybrid fusion is not recommended' is backwards and the lane's default is wrong."
+    },
+    {
+      "id": "w02-hybrid-vs-bm25code-para-at10",
+      "lane": "repo/code",
+      "source_doc": "2026-07-31-w0-2-paraphrase-arms.md",
+      "recorded_as": "(as above, k=10)",
+      "artifact": "docs/build-log/artifacts/track-r-paraphrase/w0-2-five-arm.json (bm25code_dense vs bm25code_off, fused hit@10)",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 180,
+      "both": 84,
+      "after_only": 29,
+      "before_only": 5,
+      "neither": 62,
+      "n_d": 34,
+      "psi": 0.188889,
+      "delta": 0.133333,
+      "p_exact": 3.9e-05,
+      "power_at_dmin": 0.5177,
+      "mde_at_80": 0.093823,
+      "psi_ci95": [
+        0.1345,
+        0.253821
+      ],
+      "mde_at_psi_upper": 0.107871,
+      "delta_ci95": [
+        0.0716,
+        0.1702
+      ],
+      "abandoned_win_ceiling": 0.1702,
+      "classification": "FALSE NULL",
+      "why": "exact two-sided p = 3.856e-05 < 0.05 on the re-derived cells -- recorded as a null, but it rejects",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- as above.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "as above."
+    },
+    {
+      "id": "r1-a1-breadcrumb-null",
+      "lane": "semantic/docs",
+      "source_doc": "2026-07-12-r1-docs-gate.md:32",
+      "recorded_as": "Lever NULL (attr -0.017 [-0.067,+0.033])",
+      "artifact": "docs/build-log/artifacts/r1-docs/modernbert+bc vs docs/build-log/artifacts/r1-docs/modernbert, reader QA, v1+v2 pooled",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 120,
+      "both": 14,
+      "after_only": 3,
+      "before_only": 5,
+      "neither": 98,
+      "n_d": 8,
+      "psi": 0.066667,
+      "delta": -0.016667,
+      "p_exact": 0.726562,
+      "power_at_dmin": null,
+      "mde_at_80": 0.065837,
+      "psi_ci95": [
+        0.029219,
+        0.127137
+      ],
+      "mde_at_psi_upper": 0.092524,
+      "delta_ci95": [
+        -0.0553,
+        0.034
+      ],
+      "abandoned_win_ceiling": 0.034,
+      "classification": "VALID NULL (psi-fragile)",
+      "why": "true MDE 6.6pt at the realized psi = 0.0667, at or below the preregistered 7pt; it rules out |delta| >= 6.6pt. FRAGILE: psi is estimated from 8 discordant pairs (95% CI 0.0292-0.1271); at the upper bound the MDE is 9.3pt, above 7pt. The adequacy holds only at the point estimate.",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- the breadcrumb lever was dropped on this, and it is cheap and would apply to every docs-lane chunk.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "pooled over the two corpus versions, matching how the log reports the attribution CI. Adjudicated at the time on a bootstrap CI; the exact paired test was never run.",
+      "cost_if_wrong": "a free structural lever abandoned."
+    },
+    {
+      "id": "r1-a4-chunks-null",
+      "lane": "semantic/docs",
+      "source_doc": "2026-07-12-r1-docs-gate.md:36",
+      "recorded_as": "Chunks null at shallow k (attr -0.017 ns)",
+      "artifact": "docs/build-log/artifacts/r1-docs/chunks-k10 vs docs/build-log/artifacts/r1-docs/modernbert, reader QA, v1+v2 pooled",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 120,
+      "both": 15,
+      "after_only": 2,
+      "before_only": 4,
+      "neither": 99,
+      "n_d": 6,
+      "psi": 0.05,
+      "delta": -0.016667,
+      "p_exact": 0.6875,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.018568,
+        0.105654
+      ],
+      "mde_at_psi_upper": 0.083878,
+      "delta_ci95": [
+        -0.0457,
+        0.0277
+      ],
+      "abandoned_win_ceiling": 0.0277,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 6 clears the floor, but at n = 120 and psi = 0.0500 even a unanimous discordant split misses 80% power -- UNPOWERABLE at any effect size",
+      "recorded_as_null": true,
+      "load_bearing": "partly -- stopped the chunk-granularity investigation at shallow k.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "chunk granularity is structural; a wrong null here closed a whole axis."
+    },
+    {
+      "id": "r1-d2-parity",
+      "lane": "semantic/docs",
+      "source_doc": "2026-07-12-r1-docs-gate.md:34",
+      "recorded_as": "Parity at 7x volume",
+      "artifact": "docs/build-log/artifacts/r1-docs/diag-k25b16 vs Syndai, reader QA, v1+v2 pooled",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 120,
+      "both": 18,
+      "after_only": 12,
+      "before_only": 11,
+      "neither": 79,
+      "n_d": 23,
+      "psi": 0.191667,
+      "delta": 0.008333,
+      "p_exact": 1.0,
+      "power_at_dmin": 0.3389,
+      "mde_at_80": 0.114954,
+      "psi_ci95": [
+        0.125552,
+        0.273582
+      ],
+      "mde_at_psi_upper": 0.138215,
+      "delta_ci95": [
+        -0.0744,
+        0.0889
+      ],
+      "abandoned_win_ceiling": 0.0889,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 23 clears the floor, but the true MDE is 11.5pt against a preregistered 7pt; power at 7pt is 0.339",
+      "recorded_as_null": true,
+      "load_bearing": "partly -- 'parity at 7x volume' was read as 'volume is free'.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "the Syndai v1 arm is `syndai-gate/reader-syndai.json` (reused from W10 per r1-verdict-cis.json's `v1_reused_from_w10`; 60/60 question ids join the r1 v1 set and its QA 0.2167 is the .217 in the table). Not obvious from the r1-docs/ layout, which holds only the v2 arm.",
+      "cost_if_wrong": "if volume is really a win or a loss, the budget policy is set on a coin flip."
+    },
+    {
+      "id": "r15-r6-parity",
+      "lane": "semantic/docs",
+      "source_doc": "2026-07-12-r15-rank-compression.md:16",
+      "recorded_as": "+0.083 [+0.000,+0.167] -- floor exactly 0.000 -- NOT unlocked. 'Parity-to-better at comparable volume is real; proof is not'",
+      "artifact": "docs/build-log/artifacts/r15-docs/L1XC vs Syndai (v1 = docs/build-log/artifacts/syndai-gate/reader-syndai.json, v2 = docs/build-log/artifacts/r1-docs/syndai/v2), pooled",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 120,
+      "both": 21,
+      "after_only": 18,
+      "before_only": 8,
+      "neither": 73,
+      "n_d": 26,
+      "psi": 0.216667,
+      "delta": 0.083333,
+      "p_exact": 0.075519,
+      "power_at_dmin": 0.3014,
+      "mde_at_80": 0.122782,
+      "psi_ci95": [
+        0.146681,
+        0.301129
+      ],
+      "mde_at_psi_upper": 0.144645,
+      "delta_ci95": [
+        -0.0078,
+        0.1546
+      ],
+      "abandoned_win_ceiling": 0.1546,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 26 clears the floor, but the true MDE is 12.3pt against a preregistered 7pt; power at 7pt is 0.301",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- this is the docs-lane R6 unlock decision.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "adjudicated on a bootstrap CI whose floor touched exactly zero. The exact paired test was never run on these rows.",
+      "cost_if_wrong": "a docs-lane unlock deferred. The single most consequential 'not proven' in the window if the exact test rejects."
+    },
+    {
+      "id": "wave-session-quota-qa-null",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-11-accuracy-wave.md:28",
+      "recorded_as": "mechanism proven in tests; QA null (-0.010 [-0.050,+0.020])",
+      "artifact": "docs/build-log/artifacts/wave-20260711/reader-wave-quota.json vs docs/build-log/artifacts/wave-20260711/reader-wave-base-v1.json",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 100,
+      "both": 57,
+      "after_only": 1,
+      "before_only": 2,
+      "neither": 40,
+      "n_d": 3,
+      "psi": 0.03,
+      "delta": -0.01,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.00623,
+        0.085176
+      ],
+      "mde_at_psi_upper": 0.081374,
+      "delta_ci95": [
+        -0.0295,
+        0.0243
+      ],
+      "abandoned_win_ceiling": 0.0243,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 3 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- session_quota is still default-off on the chat lane on this.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "a shipped-but-disabled mechanism."
+    },
+    {
+      "id": "wave-sibling-qa",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-11-accuracy-wave.md (sibling_gather arm)",
+      "recorded_as": "(later declared measured-dead; deletion proposed)",
+      "artifact": "docs/build-log/artifacts/wave-20260711/reader-wave-sibling.json vs docs/build-log/artifacts/wave-20260711/reader-wave-base-v1.json",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 100,
+      "both": 52,
+      "after_only": 4,
+      "before_only": 7,
+      "neither": 37,
+      "n_d": 11,
+      "psi": 0.11,
+      "delta": -0.03,
+      "p_exact": 0.548828,
+      "power_at_dmin": 0.4645,
+      "mde_at_80": 0.093076,
+      "psi_ci95": [
+        0.056207,
+        0.188301
+      ],
+      "mde_at_psi_upper": 0.123673,
+      "delta_ci95": [
+        -0.086,
+        0.0423
+      ],
+      "abandoned_win_ceiling": 0.0423,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 11 clears the floor, but the true MDE is 9.3pt against a preregistered 7pt; power at 7pt is 0.465",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- a deletion is pending on the measured-dead verdict.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "the deletion ALSO rests on a separate band-emptiness argument, which does hold independently of this statistic.",
+      "cost_if_wrong": "deleting a mechanism on a non-measurement. Recoverable from git, so the cost is the re-derivation, not the code."
+    },
+    {
+      "id": "wave-cleanup-neutral",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-11-accuracy-wave.md:20",
+      "recorded_as": "+0.030 [-0.030, +0.090] ns -- honest label: cleanup-neutral-to-mildly-up",
+      "artifact": "docs/build-log/artifacts/wave-20260711/reader-wave-base-v3.json vs docs/build-log/artifacts/wave-20260711/reader-wave-base-v1.json",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 100,
+      "both": 54,
+      "after_only": 6,
+      "before_only": 5,
+      "neither": 35,
+      "n_d": 11,
+      "psi": 0.11,
+      "delta": 0.01,
+      "p_exact": 1.0,
+      "power_at_dmin": 0.4645,
+      "mde_at_80": 0.093076,
+      "psi_ci95": [
+        0.056207,
+        0.188301
+      ],
+      "mde_at_psi_upper": 0.123673,
+      "delta_ci95": [
+        -0.0586,
+        0.0732
+      ],
+      "abandoned_win_ceiling": 0.0732,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 11 clears the floor, but the true MDE is 9.3pt against a preregistered 7pt; power at 7pt is 0.465",
+      "recorded_as_null": true,
+      "load_bearing": "partly -- licensed a prompt/harness cleanup as non-harmful.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "low; the direction claimed is already 'mildly up'."
+    },
+    {
+      "id": "r0-small-vs-base-parity",
+      "lane": "episodic/chat",
+      "source_doc": "2026-07-11-r0-embedder-bakeoff.md:32",
+      "recorded_as": "text-embedding-3-small@1536 (Syndai-parity control) | .167 | .083",
+      "artifact": "docs/build-log/artifacts/r0-embedder/chat/reader-r0-chat-small-20260710.json vs docs/build-log/artifacts/r0-embedder/chat/reader-r0-chat-base-20260710.json",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 100,
+      "both": 54,
+      "after_only": 2,
+      "before_only": 1,
+      "neither": 43,
+      "n_d": 3,
+      "psi": 0.03,
+      "delta": 0.01,
+      "p_exact": 1.0,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.00623,
+        0.085176
+      ],
+      "mde_at_psi_upper": 0.081374,
+      "delta_ci95": [
+        -0.0243,
+        0.0295
+      ],
+      "abandoned_win_ceiling": 0.0295,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 3 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- the embedder default for the whole chat lane.",
+      "register_status": "not covered by the 2026-07-31 instrument register",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "the wrong embedder as a program-wide default."
+    },
+    {
+      "id": "memora-flat-4371",
+      "lane": "temporal/state",
+      "source_doc": "STATUS via 2026-07-31-instrument-register.md:465",
+      "recorded_as": "raw unweighted accuracy stayed flat at 43/71 vs the pilot's 44/71",
+      "artifact": "docs/build-log/artifacts/unified-sota-20260713/task4-memora/weekly-software-engineer.fama.json vs docs/build-log/artifacts/unified-sota-20260714/task4-memora-luna/full.fama.json",
+      "artifact_provenance": {
+        "tree": "main",
+        "git_tracked": false
+      },
+      "rows_recovered": true,
+      "n": 71,
+      "both": 31,
+      "after_only": 12,
+      "before_only": 13,
+      "neither": 15,
+      "n_d": 25,
+      "psi": 0.352113,
+      "delta": -0.014085,
+      "p_exact": 1.0,
+      "power_at_dmin": 0.1179,
+      "mde_at_80": 0.202788,
+      "psi_ci95": [
+        0.242412,
+        0.474575
+      ],
+      "mde_at_psi_upper": 0.235937,
+      "delta_ci95": [
+        -0.1564,
+        0.1316
+      ],
+      "abandoned_win_ceiling": 0.1316,
+      "classification": "UNDERPOWERED",
+      "why": "n_d = 25 clears the floor, but the true MDE is 20.3pt against a preregistered 7pt; power at 7pt is 0.118",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- ANCHOR, and the register already reversed the reading.",
+      "register_status": "register claims b=13, c=12, psi=0.352, 25 discordant of 71 -- SPOT-CHECKED HERE",
+      "duplicate_of": null,
+      "note": "CARRY THE NESTING: the 71 subquestions sit inside 15 parent questions (mean 4.7), so exact McNemar at n=71 is ANTICONSERVATIVE and the MDE printed here is a FLOOR on the true MDE, not the MDE. The effective n is nearer 15.",
+      "cost_if_wrong": "the replay changed a third of the graded cells; treating it as a one-cell delta mis-sizes every downstream power estimate on this lane."
+    },
+    {
+      "id": "abs-sentinel-packrendercap",
+      "lane": "episodic/chat",
+      "source_doc": "register \u00a74.1 / plan :96-97 (the screen that killed pack_render_cap)",
+      "recorded_as": "the 2-discordant-pair abstention screen, exact p = 0.50",
+      "artifact": "docs/build-log/artifacts/rung7-packing-reader-gate/{baseline,rendercap1200}-retrieval.json (abstention_correct over is_abstention rows)",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 12,
+      "both": 5,
+      "after_only": 0,
+      "before_only": 2,
+      "neither": 5,
+      "n_d": 2,
+      "psi": 0.166667,
+      "delta": -0.166667,
+      "p_exact": 0.5,
+      "power_at_dmin": 0.001,
+      "mde_at_80": null,
+      "psi_ci95": [
+        0.020863,
+        0.484138
+      ],
+      "mde_at_psi_upper": null,
+      "delta_ci95": [
+        -0.1667,
+        0.114
+      ],
+      "abandoned_win_ceiling": 0.114,
+      "classification": "NON-MEASUREMENT",
+      "why": "n_d = 2 < 6: the two-sided exact test has no rejection region at this discordance, so it could not have rejected at ANY effect size",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- it killed a lever worth +0.235 retrieval; already rescinded in Phase 0.",
+      "register_status": "register: n=12, b=0, c=2, p=0.50 -- SPOT-CHECKED HERE",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "already paid and already reversed."
+    },
+    {
+      "id": "forgeteval-lineage-complete",
+      "lane": "forgetting/lifecycle",
+      "source_doc": "register \u00a74.4 / 2026-07-24-forgeteval-next-evidence.md",
+      "recorded_as": "(positive control for this audit: 111 paired gains, zero baseline regressions)",
+      "artifact": "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-{baseline-instrumented,lineage-complete}.json",
+      "artifact_provenance": {},
+      "rows_recovered": true,
+      "n": 259,
+      "both": 133,
+      "after_only": 111,
+      "before_only": 0,
+      "neither": 15,
+      "n_d": 111,
+      "psi": 0.428571,
+      "delta": 0.428571,
+      "p_exact": 0.0,
+      "power_at_dmin": 0.3697,
+      "mde_at_80": 0.116723,
+      "psi_ci95": [
+        0.367498,
+        0.491298
+      ],
+      "mde_at_psi_upper": 0.124772,
+      "delta_ci95": [
+        0.4006,
+        0.4286
+      ],
+      "abandoned_win_ceiling": 0.4286,
+      "classification": "CONTROL (FALSE NULL)",
+      "why": "exact two-sided p = 7.704e-34 < 0.05 on the re-derived cells -- recorded as a null, but it rejects",
+      "recorded_as_null": false,
+      "load_bearing": "not a null -- included as the audit's positive control.",
+      "register_status": "register claims b=111, c=0, n=259 -- SPOT-CHECKED HERE",
+      "duplicate_of": null,
+      "note": "a rejection this method must reproduce; if it does not, the method is wrong.",
+      "cost_if_wrong": "n/a."
+    },
+    {
+      "id": "syndai-docs-qa",
+      "lane": "semantic/docs",
+      "source_doc": "2026-07-11-syndai-gate.md / register 2B row 11",
+      "recorded_as": "(the one negative result the register says clears its own MDE; psi recorded as a LOWER BOUND because b and c were never committed)",
+      "artifact": "docs/build-log/artifacts/syndai-gate/reader-memphant.json vs docs/build-log/artifacts/syndai-gate/reader-syndai.json",
+      "artifact_provenance": {
+        "tree": "accuracy-first",
+        "git_tracked": true
+      },
+      "rows_recovered": true,
+      "n": 60,
+      "both": 3,
+      "after_only": 0,
+      "before_only": 10,
+      "neither": 47,
+      "n_d": 10,
+      "psi": 0.166667,
+      "delta": -0.166667,
+      "p_exact": 0.001953,
+      "power_at_dmin": 0.1659,
+      "mde_at_80": 0.146746,
+      "psi_ci95": [
+        0.082929,
+        0.285219
+      ],
+      "mde_at_psi_upper": 0.195369,
+      "delta_ci95": [
+        -0.1667,
+        -0.0638
+      ],
+      "abandoned_win_ceiling": -0.0638,
+      "classification": "CONTROL (FALSE NULL)",
+      "why": "exact two-sided p = 0.001953 < 0.05 on the re-derived cells -- recorded as a null, but it rejects",
+      "recorded_as_null": false,
+      "load_bearing": "YES -- the C2 docs-slice drop rests on it.",
+      "register_status": "REGISTER CORRECTION: it records psi >= 0.1667 as unrecoverable from gate_compare.json's bootstrap CI. The per-question rows DO survive in reader-memphant.json / reader-syndai.json, so the true psi is computed here.",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "n/a for the decision (it is a loss, not a null), but the register's MDE for this lane was computed from a lower-bound psi and needs the exact value."
+    },
+    {
+      "id": "syndai-docs-hit10",
+      "lane": "semantic/docs",
+      "source_doc": "2026-07-11-syndai-gate.md / register 2B row 11",
+      "recorded_as": "delta_hit_at_10 = -0.1333, CI [-0.25, -0.0333]",
+      "artifact": "docs/build-log/artifacts/syndai-gate/gate_compare.json (bootstrap CI only)",
+      "artifact_provenance": {},
+      "rows_recovered": false,
+      "n": null,
+      "both": null,
+      "after_only": null,
+      "before_only": null,
+      "neither": null,
+      "n_d": null,
+      "psi": null,
+      "delta": null,
+      "p_exact": null,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "delta_ci95": null,
+      "abandoned_win_ceiling": null,
+      "psi_ci95": null,
+      "mde_at_psi_upper": null,
+      "classification": "NON-MEASUREMENT",
+      "why": "gate_compare.json commits only the bootstrap CI on the retrieval delta; b and c were never written down and no per-question RETRIEVAL vector is banked (only the reader vectors are). psi is a lower bound of 0.1333 forever. This is governance item Z6, and it is unrecoverable without a re-run.",
+      "recorded_as_null": true,
+      "load_bearing": "YES -- half the C2 drop rationale.",
+      "register_status": "register agrees psi is a lower bound; this entry classifies it as NON-MEASUREMENT-by-unrecoverability rather than leaving it as a bounded number",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "the decision direction is negative and the QA leg is recoverable, so the drop survives; what is lost is the ability to state the resolution."
+    },
+    {
+      "id": "coding-events-golden-bm25",
+      "lane": "repo/code",
+      "source_doc": "benchmarks/manifests/code_lane_controls.2026-07-13.json",
+      "recorded_as": "paired_delta_recall_at_10 = -0.05",
+      "artifact": "benchmarks/manifests/code_lane_controls.2026-07-13.json (delta only)",
+      "artifact_provenance": {},
+      "rows_recovered": false,
+      "n": null,
+      "both": null,
+      "after_only": null,
+      "before_only": null,
+      "neither": null,
+      "n_d": null,
+      "psi": null,
+      "delta": null,
+      "p_exact": null,
+      "power_at_dmin": null,
+      "mde_at_80": null,
+      "delta_ci95": null,
+      "abandoned_win_ceiling": null,
+      "psi_ci95": null,
+      "mde_at_psi_upper": null,
+      "classification": "NON-MEASUREMENT",
+      "why": "only the paired delta was published; b and c were never committed and no per-question vector is banked. psi >= 0.05 is a bound, not a value. Also n=40 in ONE repo with a 4-question held-out slice.",
+      "recorded_as_null": true,
+      "load_bearing": "partly -- cited as early evidence the coding lane was not working.",
+      "register_status": "register: 'UNPOWERABLE at n=40; no conclusion on this bank at any k is defensible' -- CONFIRMED, and sharpened to unrecoverable",
+      "duplicate_of": null,
+      "note": "",
+      "cost_if_wrong": "low on its own, but it contributed to the mood that the coding lane was dead before the paraphrase bank existed."
+    }
+  ]
+}
