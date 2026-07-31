@@ -181,5 +181,19 @@ provenance report, read off the server's own traces rather than off the flag the
 harness passed — the seam fails *open* to the pre-rerank order, so an all-`error`
 arm is byte-identical to the control while claiming to be a reranked arm.
 
+### 2.2 A base defect that had to be fixed before any arm could run
+
+`accuracy-first` @ `d01affad` carries the worker tick-honesty change, which made
+the drain line print `drain completed=N failed=N retried=N deferred=N`
+(`crates/memphant-worker/src/main.rs:124`). `gate_runtime.drain_worker` matched
+only the bare `completed=N` form and raised *"worker drain completion output is
+malformed"* before any probe ran. Fixed on this branch (`0ef2e464`), with the
+three counts parsed as an optional group so an older binary still parses, and
+with **`failed` asserted rather than discarded**: the worker prints that count
+precisely so "drained nothing" stays distinguishable from "failed everything",
+and a partially compiled corpus silently inflates the absent-from-pool bucket of
+every retrieval measurement taken against it — which is exactly how a ranking
+problem gets misread as a retrieval problem.
+
 RESULTS_PLACEHOLDER
 
