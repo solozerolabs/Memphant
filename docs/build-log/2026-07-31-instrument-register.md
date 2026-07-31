@@ -426,3 +426,67 @@ underneath the advisory lock. Pinned by `tests/test_wsa_migration_contract.py:81
 large model downloads or paid provider keys. No `#[should_panic]` misuse, no always-true
 assertions, and no test gated on an env var that CI silently never sets. All four B6
 honesty legs are present and green (latest run 2026-07-28, both jobs success).
+
+## 6. The spend plan
+
+Ranked by **decision-value per dollar**. Ceilings follow the `derive_phase2_packet.py`
+convention: one-byte-per-prompt-token liability at the **widest measured** row, 1024
+completion tokens, priced at the recorded provider maxima, times an enumerated call
+budget. Where an input has never been measured, the ceiling is marked **not derivable**
+and the $0 measurement that would unlock it is named. No figure here is estimated.
+
+### 6.0 Spend nothing until these $0 items are done
+
+They are prerequisites, not preliminaries — each one changes what a paid run would buy.
+
+| # | $0 action | what it unblocks |
+|---|---|---|
+| Z1 | **Run the Track R paraphrase bank** through `scripts/track_r_retrieval_arm_compare.py` | The entire repo/code ladder currently rests on a 3.93× contaminated bank. This is free, and it is the single highest-value action in the program. Preconditions verified: 180 rows, sha matches the lock, exactly one provenance span per golden (the runner's hard requirement at `:85-87`), zero blank spans, zero abstentions. Not executed — verified as runnable. |
+| Z2 | **Re-run the code-lane retrieval arm with `--emit-qa`** | Banks the packed evidence rows. Without them the Phase 3 ceiling is **not derivable** (§6.1). The chat lane already did this; the code lane did not, and its per-question outputs were gitignored. |
+| Z3 | **Fix the STATE-Bench adapter payload** | One payload block. Without it a paid run bills three times per task and writes zero trajectories (§6.2). |
+| Z4 | **Re-preregister the chat lane's `d_min`** at its true MDE, or restructure the pool | Phase 2 as written cannot deliver 7pt (§3.1). This is a governance edit, not a run. |
+| Z5 | **Calibrate the leakage bar** against the measured achievable floor and reconcile 1.50× vs 2.05× | Two values of one bar are currently in force (§4.2). |
+| Z6 | **Commit `b` and `c`, not just a bootstrap CI**, in every paired analyzer | Four lanes have only lower-bound ψ because the discordant cells were never written down. Cheap now, uncomputable later. |
+| Z7 | **Correct the LongMemEval deprecation sentence** at `docs/build-log/2026-07-31-w2-reader-composition-prereg.md:51` | It blocks W2.1 on a premise with no upstream basis (§4.1). |
+| Z8 | **Add `file_sync` cases to `memphant-store-testkit`** | Closes the one live store-divergence gap (§5.2). |
+| Z9 | **Delete the hot/cold plane claim** wherever it appears | The feature does not exist (§5.2). |
+
+### 6.1 Must spend to know anything — lanes with zero measurement
+
+| rank | lane | ceiling | what it buys | what it decides |
+|---|---|---|---|---|
+| 1 | **Coding-lane paired reader QA (Phase 3)** on the *paraphrase* bank | **not derivable** — 1,440 logical calls is derived (3 arms × 180 goldens + judge + 2 paired rechecks), but the per-call bound needs Z2. For scale only, at the chat lane's measured 26,000-byte bound the ceiling would be $127.29; that width belongs to a different corpus and a different reader, so it is **not this lane's ceiling** | The first measured answer to *does MemPhant memory help a coding agent* | The whole coding lane. Kill gate: no paired win over BM25 → the substrate has not earned it |
+| 2 | **STATE-Bench first run** | see §6.2 | The only temporal/state instrument with an upstream-endorsed split and a native scorer | Whether we have any external validity on state memory at all |
+| 3 | Track R paraphrase reader QA | not derivable (needs Z2) | Conditional on Z1 showing the retrieval effect survives decontamination | Whether the retrieval gain is a reader gain |
+
+The reader for Phase 3 is `claude-opus-5`. **No opus-5 price is recorded anywhere in this
+repo** — the only pinned maxima are terra's 2.75/16.5 per million in the v3 packet. That
+price must be pinned at authorization time, exactly as the packet already requires for the
+robustness arm.
+
+### 6.2 Do not spend — a purchase that would buy nothing
+
+**STATE-Bench as it stands would be a void run.** The shipped adapter fails on *every*
+retrieval call (§4.4), and the failure mode is maximally expensive: `--retry-attempts`
+defaults to 3, so each task is paid for three times; `traj.save()` is never reached, so no
+trajectory file is written for any task; and `verify_results` then refuses to aggregate.
+The bill would be 150 test tasks × 5 runs × 3 retries of agent-model, user-simulator and
+inline-judge calls, for **zero scored rows**. Ceiling is deferred to §4.4 pending a measured
+derivation; the decision does not depend on it, because the correct spend today is $0 and
+one payload fix (Z3).
+
+### 6.3 Spend only to refine a number we already have
+
+| lane | ceiling | honest assessment |
+|---|---|---|
+| **Chat-lane Phase 2** (`pack_render_cap`) | **$142.32** — 1,610 calls at $0.088396, derived and reproducing byte-identically via `derive_phase2_packet.py --check` | The *ceiling* is sound; the *design* is not. At n=221 it resolves 7.3–9.2pt, not the preregistered 7pt. Three honest options: **(a)** relaunch with `d_min = 9pt` and no extra spend; **(b)** grow the pool to ~390 scored rows, which is only reachable by consuming the sealed-259 confirmation *inside* the screen — that buys 7pt and destroys the confirmation; **(c)** do not run it. Note what is already known for free: the retrieval effect is +22.9pt, unanimous, b=38/c=0. The paid run does not ask whether the cap helps retrieval; it asks whether that survives to the reader. |
+| Chat-lane confirmation + robustness arm | not derivable — priced at authorization time by design | Conditional on a Phase 2 pass |
+| LongMemEval-V2 (Phase 4) | retained maximum $15.18, **not recoverable by resuming** | Correctly parked. Blocked behind SWE-Explore's 0/848 defect |
+
+### 6.4 Ranked verdict
+
+1. **Z1–Z9 first. All $0.** Several of them change what the paid runs are worth.
+2. **Phase 3 on a decontaminated bank is the only paid run with a clean decision behind
+   it** — and it is not yet priceable. Z2 makes it priceable.
+3. **Phase 2 is priceable but under-resolved.** Do not launch it at 7pt.
+4. **STATE-Bench must not be purchased today at any price.**
