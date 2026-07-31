@@ -33,8 +33,23 @@ So "rerank is the dominant recoverable loss channel, 4× the next largest" is a
 true statement about a **mislabelled bucket**. Read correctly it says: *on 50 of
 180 questions the gold unit was retrieved into the candidate pool but the fusion
 stage ranked it below the top 10.* That is a ranking-quality deficit in
-retrieval, not a defect in a rerank stage — and it is the right thing to attack,
-because a real reranker is precisely the instrument that fixes it.
+retrieval, not a defect in a rerank stage.
+
+Three results follow, in the order they cost the bank of standing claims:
+
+1. **The obvious fix makes it worse.** A local `bge-reranker-base` over the
+   64-deep head is *significantly* worse than the fusion it replaces — gold in
+   the top 10 goes 113 → 79, b=12/c=46, exact p=8.2e-06, **power 0.996**. A
+   powered negative. `MEMPHANT_CROSS_RERANK` stays default-OFF (§3).
+2. **The real target is the fusion ordering, and its constants were never fit.**
+   Two live channels combined by weighted RRF at `K = 60` — a constant chosen for
+   TREC-scale pools — which compresses a 124-candidate pool into a 3× score band
+   (§6).
+3. **This bank cannot see two ranking defects that are live in production.**
+   `exact_score` and `temporal_score` are both broken and both structurally
+   inert on an episodic corpus with fact extraction off. Every ranking number
+   the program has taken on Track R was measured with two of six channels
+   switched off (§7).
 
 ---
 
@@ -130,17 +145,22 @@ on misses vs 0.06156 on hits — a continuum, not a cliff.
 The program has twice found a ranking component scoring on noise. Checked, and
 neither is the cause here:
 
-- **`exact_score`** (`lib.rs:10726`) has already been repaired by `3fc4eede` —
-  it now divides by the token count of the unit's `fact_key`, not by anything
-  carrying a scope UUID. Independently, these arms run with
-  `MEMPHANT_FACT_EXTRACTION=0`, so episodic units carry no `fact_key` at all and
-  the function returns `0.0` on the first line for every candidate. **The Exact
+- **`exact_score`** (`lib.rs:10744`) — these arms run with
+  `MEMPHANT_FACT_EXTRACTION=0`, so episodic units carry no `fact_key` and the
+  function returns `0.0` on its first line for every candidate. **The Exact
   channel is inert on this lane.**
-- **`temporal_score`** (`lib.rs:10920`) returns `1.0` only for an *active
+- **`temporal_score`** (`lib.rs:10938`) returns `1.0` only for an *active
   semantic* unit under a `current`/`latest`/`now` query, or for a unit inside an
-  explicit query date window. This corpus is 100% **episodic** units and the
+  explicit query date window. This corpus is 100% **episodic** and the
   temporal-grounding flag is off, so both branches are unreachable. **The
   Temporal channel is inert on this lane.**
+
+> **Inert here is not fixed, and not inert in production.** My first pass on this
+> section claimed `exact_score` "has already been repaired by `3fc4eede`". That
+> is **wrong and is withdrawn** — `3fc4eede` changed the fusion *magnitude*, not
+> the denominator. Both components are broken, both are live under the shipped
+> configuration, and this bank structurally cannot see either. That is a finding
+> about the instrument and it is §7.
 
 What is actually ranking is the Lexical channel (`bm25-code`) and the Vector
 channel (`bge-small-en-v1.5`), combined by weighted RRF and then scaled by
@@ -181,7 +201,30 @@ provenance report, read off the server's own traces rather than off the flag the
 harness passed — the seam fails *open* to the pre-rerank order, so an all-`error`
 arm is byte-identical to the control while claiming to be a reranked arm.
 
-### 2.2 A base defect that had to be fixed before any arm could run
+### 2.2 Two harness defects that each silently destroy a completed run
+
+Both are recorded here rather than only in a report, because each one reads as a
+flaky harness rather than as a bug, and one of them threw away ~2 hours of
+completed work at its final step.
+
+**(a) `.gitignore` matched the cache DIRECTORY, not a SYMLINK to one.** The entry
+was `.fastembed_cache/`. Pointing the model cache at an existing one — the
+obvious way to avoid re-downloading 1.1 GB into a nineteenth worktree — creates a
+*symlink* of that name, which the trailing slash does not match. The link was
+therefore tracked, and `gate_runtime.repository_identity`, which sha256s every
+tracked file to bind an artifact to its tree, tried to read a directory:
+
+```
+IsADirectoryError: [Errno 21] Is a directory: '.../.fastembed_cache'
+```
+
+It fires inside the provenance block, **after every recall has already been
+executed**. The arm had completed all 180 questions; the evidence JSONL was on
+disk; the provenance report — the only file carrying the per-question diagnosis —
+was never written. Nothing in the failure points at `.gitignore`. Fixed in
+`88b6e5f8` by ignoring the bare name, and the arm was re-run from scratch.
+
+**(b) The drain-line parser, below.**
 
 `accuracy-first` @ `d01affad` carries the worker tick-honesty change, which made
 the drain line print `drain completed=N failed=N retried=N deferred=N`
@@ -351,10 +394,13 @@ them."* This did not work, so nothing is defaulted:
 - `MEMPHANT_CROSS_RERANK` **stays default-OFF**. The change here is that the
   code lane can now select it, and that a reranked arm can now be told apart
   from an inert one.
-- **`RecallDropReason::Rerank` should be renamed.** It names a mechanism that
-  does not run and has cost this program a wrong headline finding at least once.
-  `OutputLimit` (or `ScanCutoff`) is what it means. Not done here — it is a
-  public enum on three generated schema artifacts and belongs in its own change.
+- **`RecallDropReason::Rerank` is renamed to `OutputLimit`** (`498d4a5f`, its
+  own commit, no behaviour change). `#[serde(alias = "rerank")]` keeps banked
+  traces readable and two tests pin that the alias is read-only. The rationale
+  is a `//` and not a `///` comment on purpose: schemars renders a documented
+  variant as a `oneOf` branch, so a doc comment would have changed the shape of
+  the enum in three public schemas. The regenerated schemas differ by exactly
+  one line each.
 - **Register item: "the reranker is the dominant loss channel" must be
   reworded**, not deleted. The loss is real and it is the largest recoverable
   pool on the coding lane; it is a **fusion-ranking** loss, and it lives at fused
@@ -409,7 +455,171 @@ cache directory, so the link got tracked and the identity function tried to
 sha256 a directory. It fires **after** every recall has executed. Fixed in
 `88b6e5f8`; the arm was re-run from scratch.
 
-## 6. Artifacts
+## 6. The real target: the fusion ordering
+
+The channel is not a reranker and the obvious reranker makes it worse, so the
+defect is where §1.2 put it — **the order fusion hands to packing**. Characterising
+that order is $0 and was done from the source.
+
+### 6.1 What the fuser actually is on this lane
+
+Weighted RRF, rank-only, with one exception:
+
+```
+contribution = magnitude × weight[channel] / (60 + channel_rank)
+magnitude    = score for the Exact channel, 1.0 for every other channel
+fused_score  = Σ contributions,  then  ×= decay.retrievability
+```
+
+`channel_candidates` drops any unit scoring `0.0`, so a channel that is inert on
+a corpus contributes **nothing at all** rather than a noise vote — that part of
+the design is correct and I checked it specifically. On this lane that leaves
+**exactly two live channels**: `Bm25` (weight 3.0, standing in for Lexical 1.0 +
+Semantic 2.0) and `Vector` (weight 2.0). Exact, Temporal and Edge are all-zero
+and are filtered out whole.
+
+### 6.2 The constants were never fit, and the code says so
+
+`EXACT 1.0 / LEXICAL 1.0 / SEMANTIC 2.0 / TEMPORAL 0.5 / TEMPORAL_RECENCY 2.5 /
+EDGE 0.5 / VECTOR 2.0`, carrying this comment at the definition:
+
+> *"MEASURED-TUNABLE, NOT SACRED: these are the pre-W3 base weights, carried
+> over verbatim… Retune them from benchmark evidence, never from query-shape
+> intuition."*
+
+They never were. **The 3.0 : 2.0 ratio that decides this lane's entire ranking is
+an unfitted inheritance**, and so is `K = 60`.
+
+### 6.3 K = 60 is the wrong constant for a 124-candidate pool
+
+`K = 60` is the Cormack et al. default, chosen for TREC-scale fusion of many
+systems over pools of thousands. Here it is fusing two channels over ~124
+candidates, and it flattens them:
+
+| | rank 1 | rank 64 | rank 124 | spread |
+|---|---:|---:|---:|---:|
+| Bm25 (w 3.0) | 0.04918 | 0.02419 | 0.01630 | **3.02×** |
+| Vector (w 2.0) | 0.03279 | 0.01613 | 0.01087 | **3.02×** |
+
+The whole 124-deep pool is compressed into a 3× score band, which makes fusion
+overwhelmingly **consensus-biased**. Concretely — and this is the shape of the
+50 misses:
+
+> A gold that BM25 ranks **#1** loses to a distractor both channels rank ~10th
+> **unless the vector channel also puts that gold in its top 29.**
+
+| distractor at rank D in both channels | gold at BM25 rank 1 survives while vector rank ≤ |
+|---|---|
+| 10 | 29 |
+| 15 | 54 |
+| 20 | 90 |
+
+At `K ≤ 20` a rank-1 BM25 hit beats a rank-15/15 consensus distractor at **any**
+vector rank. One unfitted constant is currently able to bury a channel's
+top-ranked answer under mutual mediocrity. This is the first lever to measure —
+it is a one-line change with no model, no latency, and no spend.
+
+### 6.4 Levers, in the order they should be measured
+
+1. **`K`** (60 → 5/10/20). Sharpens rank-1 dominance. §6.3.
+2. **Channel weights** (the unfitted 3.0 : 2.0).
+3. **Score-normalised convex fusion** instead of rank-only RRF. The P1 bench
+   found tuned convex fusion beat RRF (0.847 vs 0.833) and correctly refused to
+   generalise it, because the *production* fuser is six heterogeneous channels.
+   **On this lane there are only two live channels**, which is exactly the
+   2-channel setting P1 measured — so P1's objection does not apply here, and
+   its finding becomes directly testable.
+4. **`decay.retrievability` as a post-hoc multiplier** on the fused score.
+
+`scripts/code_lane_run_memphant.py` now records the full per-candidate
+`(channel, rank, score)` vote table, which makes all four sweepable **offline
+from one instrumented run** rather than one ~2h ingest+compile arm per
+configuration. **Precondition on reading any of it: the offline simulator must
+first reproduce the shipped fused ranking exactly from those rows.** A sweep
+that cannot reproduce the baseline is measuring its own reimplementation.
+
+## 7. The bank is flattering us: two broken scorers that are inert here and live in prod
+
+The two known-broken components are inert on this corpus. **Inert here is not
+inert in production**, and the difference is a finding about the instrument.
+Pinned by four characterisation tests in
+`memphant-core::inert_on_the_bank_live_in_prod_tests`, which assert today's
+wrong behaviour **on purpose, so they fail loudly when it is fixed**.
+
+### 7.1 `exact_score` — the scope UUID really is in the denominator
+
+`derive_fact_key` prefixes every key with the scope UUID
+(`{scope}:{subject}:{predicate}`, or `{scope}:auto:{sha256[..16]}`), and
+`tokenize` splits that UUID into **five** alphanumeric runs that land in the
+denominator and that no query can ever match.
+
+| fact key | tokens | best achievable `exact_score` |
+|---|---:|---:|
+| `{uuid}:deploy_target:is` | 8 (5 are UUID runs) | **0.375** |
+| `{uuid}:auto:{sha256[..16]}` | 7 (5 UUID + `auto` + hex) | **0.000** |
+
+The function's own doc calls it "a calibrated 0..1 — the fraction of the unit's
+curated `fact_key` tokens the query covers". It is neither calibrated nor
+reaching 1. Two consequences:
+
+- Since `3fc4eede` the Exact channel's fusion contribution is **scaled by this
+  score** (`magnitude = score`), so the deflation attenuates the whole channel
+  by ~2.7×. The fix that made Exact score-scaled inadvertently made this
+  denominator bug load-bearing.
+- **Auto-keyed units score exactly 0.0 and are dropped from the Exact channel
+  entirely** by the `score > 0.0` filter, at any relevance. Which units get an
+  Exact vote is decided by key *formatting* — whether the extractor happened to
+  emit an explicit subject and predicate — not by relevance.
+
+`3fc4eede` ("scale the Exact channel by its own subject-key coverage") changed
+the fusion *magnitude*. It did not touch the denominator. **The defect described
+in the brief is still live.**
+
+### 7.2 `temporal_score` — not a recency function, and it votes alphabetically
+
+On any query containing `current`, `latest` or `now`, `temporal_score` returns a
+flat `1.0` for **every** active semantic unit. It reads no timestamp. The channel
+then sorts by that constant, and its tie-break is `body` ascending — so the vote
+order is **alphabetical by body text**. That vote carries
+`TEMPORAL_RECENCY_CHANNEL_WEIGHT = 2.5`, more than the Vector channel's 2.0, on
+the single most common shape of memory query.
+
+### 7.3 Why the bank cannot see either
+
+The Track R corpus is 100% **episodic** and runs with `MEMPHANT_FACT_EXTRACTION=0`.
+`exact_score` returns on its first line (no `fact_key`); `temporal_score`'s only
+reachable branch requires `MemoryKind::Semantic`. Both channels are then dropped
+whole by the `score > 0.0` filter. Under the shipped configuration — extraction
+default-ON since `40ba26cf`, a mixed-kind store — **both are live and both feed
+the fuser.**
+
+**This is a standing limitation of the coding lane, not a one-off.** Every
+ranking number this program has taken on Track R was measured with two of the
+six channels switched off. Those numbers are not wrong, but they are **not
+transferable to production ranking**, and no fix to either component can be
+validated on this bank. Validating them needs a lane whose corpus carries
+semantic units with real fact keys — the C1 episodic slice or Track U, not
+Track R.
+
+### 7.4 The 512-token wall is NOT the cause of the bge failure — retracted
+
+I flagged truncation as a partial cause in §3.6. Quantified against the actual
+gold bodies, it is not:
+
+| bge outcome for the gold | n | median gold-body chars | over the ~2,048-char wall |
+|---|---:|---:|---:|
+| promoted into the top 10 | 12 | 2,058 | **50.0%** |
+| demoted out of the top 10 | 46 | 1,300 | **30.4%** |
+| unchanged | 111 | 1,256 | 28.8% |
+
+Demoted golds are **not** longer than baseline (30.4% vs 28.8%), and the golds
+the reranker *promoted* are the longest of the three groups. Truncation does not
+explain the demotions. The 35.3% figure is a true property of the corpus and a
+false explanation of the result; **the failure is model quality on this
+material.** Recorded because a caveat that survives quantification is a finding
+and one that does not is a retraction.
+
+## 8. Artifacts
 
 Committed: `docs/build-log/artifacts/track-r-rerank/rerank-channel.json`, schema
 `memphant.eval.track-r-rerank-channel.v1` — every contrast as a full 2×2 with
