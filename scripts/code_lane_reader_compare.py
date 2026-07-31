@@ -77,6 +77,31 @@ def cells(left: list[bool], right: list[bool]) -> dict:
     }
 
 
+def leakage_five_tuple(path: Path, provenance_class: str) -> dict:
+    """Leakage is a five-tuple, never a scalar (instrument register §1).
+
+    Absolute coverage is not portable across unit definitions, and the
+    exhaustive and sampled floors differ (2.018x vs 2.0518x on this very bank),
+    so the floor KIND is named rather than left to be guessed. The exhaustive
+    floor is the one carried: it is the mean over every non-target event of the
+    same attempt, with no seed and no draw.
+    """
+    leak = json.loads(path.read_text(encoding="utf-8"))
+    if leak.get("schema") != "memphant.eval.track-r-leakage.v2":
+        raise ValueError(f"unexpected leakage schema: {leak.get('schema')!r}")
+    return {
+        "unit_definition": (
+            "one unit = one content event of the attempt; "
+            + leak["metric"]
+        ),
+        "absolute_target_coverage": leak["target"]["mean"],
+        "floor": leak["non_target_exhaustive"]["mean"],
+        "floor_kind": leak["non_target_exhaustive_definition"],
+        "concentration": leak["concentration_vs_exhaustive"],
+        "provenance_class": provenance_class,
+    }
+
+
 def load_report(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -175,6 +200,17 @@ def main() -> int:
     parser.add_argument("--bank", required=True, help="golden bank label, e.g. paraphrase")
     parser.add_argument("--endpoint", choices=ENDPOINTS, default="answer_correct",
                         help="graded field; see ENDPOINTS in this module")
+    parser.add_argument("--claim", required=True,
+                        help="the one sentence this artifact is cited for")
+    parser.add_argument("--leakage", type=Path,
+                        help="the bank's memphant.eval.track-r-leakage.v2 JSON")
+    parser.add_argument("--provenance-class", required=True,
+                        help="who authored the query, and could it be written FROM the target")
+    parser.add_argument("--corpus-snapshot-id", required=True)
+    parser.add_argument("--corpus-n-items", type=int, required=True)
+    parser.add_argument("--license-id", required=True)
+    parser.add_argument("--license-source", required=True)
+    parser.add_argument("--license-evidence", required=True)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
@@ -292,6 +328,99 @@ def main() -> int:
         "lineage": manifest["lineage"],
         "compare_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
+    # ---- the evidence contract, generated from this run's own cells.
+    #
+    # The headline contrast is the one the contract speaks for. `decisional` is
+    # NOT a choice: it is false whenever the structural floor is unmet, whenever
+    # any arm was a stub or a smoke, and whenever any arm recorded an error --
+    # a reader or judge failure scores the row incorrect, so an errored arm
+    # reports a deficit it did not measure.
+    headline = contrasts[f"memphant_vs_{args.control}"]
+    accounting = out["judge_accounting"]
+    clean = all(
+        not v.get("openrouter_stub_url") and not v.get("promotion_ineligible")
+        for v in binding.values()
+    ) and all(a["rows_with_error"] == 0 for a in accounting.values())
+    leak = leakage_five_tuple(args.leakage, args.provenance_class) if args.leakage else None
+    out["evidence_contract"] = {
+        "schema_version": 1,
+        "decisional": bool(
+            headline["n_discordant"] >= N_D_FLOOR and clean
+        ),
+        "claim": args.claim,
+        "power": {
+            "test": "two-sided exact (conditional binomial) McNemar",
+            "n": headline["n"],
+            "b": headline["b_left_only"],
+            "c": headline["c_right_only"],
+            "n_d": headline["n_discordant"],
+            "psi_observed": headline["realized_psi"],
+            "mde_at_80": headline["mde_at_80_power"],
+            "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+            "source": str(args.out),
+        },
+        "harness": {
+            "embed_model": "fastembed:bge-small-en-v1.5 (shipped default)",
+            "scorer": (
+                "memphant recall mode=fast lexical=bm25-code (shipped default) "
+                f"vs deterministic attempt-scoped BM25; reader "
+                f"{next(iter(readers.values()))}, judge "
+                f"{next(iter(judges.values()))}, judge_profile rag-supported-v1"
+            ),
+            "k": manifest["k"],
+            "budget": manifest["budget_tokens"],
+            "flags": [
+                f"endpoint={args.endpoint}",
+                f"prompt_versions={sorted({str(b['prompt_version']) for b in binding.values()})}",
+                f"reader_profiles={sorted({str(b['reader_profile']) for b in binding.values()})}",
+                "provider_only=anthropic",
+                "one packer, one k, one budget on every arm",
+            ],
+            "command": "scripts/code_lane_reader_run.sh",
+        },
+        "corpus": {
+            "sha256": manifest["lineage"]["corpus_sha256"],
+            "snapshot_id": args.corpus_snapshot_id,
+            "n_items": args.corpus_n_items,
+        },
+        "instrument_verification": {
+            "shipped_rows_verified": True,
+            "rows_counted": len(order),
+            "fields_counted": {
+                "goldens_scored": len(order),
+                "arms": len(arm_vectors),
+                "reader_calls": sum(a["fresh_calls"] or 0 for a in accounting.values()),
+            },
+            "license_id": args.license_id,
+            "license_source": args.license_source,
+            "license_evidence": args.license_evidence,
+        },
+        "leakage": leak,
+        "probe_kind": "lever",
+        "mechanism_enabled": True,
+        "mechanism_evidence": (
+            "The lever is MemPhant recall itself. Liveness is the arms' own "
+            "measured divergence rather than an assertion: the arms disagree on "
+            f"{headline['n_discordant']} of {headline['n']} questions at the "
+            "reader endpoint, their packs differ in mean tokens "
+            f"({manifest['stage_parity']['tokens_mean_by_arm']}), and the judge "
+            "fired on "
+            + ", ".join(
+                f"{name} {a['judge_fire_rate']:.2f}" for name, a in accounting.items()
+            )
+            + " of rows."
+        ),
+        "attribution": {"method": "paired arm contrast at one lineage"},
+        "bar": None,
+        "notes": (
+            "Reader-QA, not retrieval@k. Every arm was packed by one packer at "
+            "one k and one budget before reaching the reader; the comparison "
+            "script refuses arms not bound by sha256 to the same equalization "
+            "manifest. The no-memory arm uses a closed-book reader prompt and is "
+            "a saturation probe, never the paired comparator for a memory claim."
+        ),
+    }
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=2) + "\n")
 

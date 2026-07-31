@@ -25,6 +25,11 @@ CTL_PR="${6:?control provenance}"
 CORPUS_SHA="${7:?corpus sha256}"
 GOLDEN_SHA="${8:?golden sha256}"
 PROMPT_VERSION="${9:-3}"
+LEAKAGE="${10:?bank leakage json}"
+PROVENANCE="${11:?provenance class}"
+CLAIM="${12:?the one sentence this artifact is cited for}"
+SNAPSHOT="nebius/SWE-rebench-openhands-trajectories@35455389ab51bf5e2306bfd436ef72d0f98bf882"
+N_ITEMS=64055
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -97,6 +102,10 @@ for endpoint in answer_correct correct; do
     --arm nomemory="$OUT/reader-nomemory.json" \
     --control bm25scoped --stage-manifest "$EQ/stage-equalization.json" \
     --bank "$BANK" --endpoint "$endpoint" \
+    --claim "$CLAIM" --leakage "$LEAKAGE" --provenance-class "$PROVENANCE" \
+    --corpus-snapshot-id "$SNAPSHOT" --corpus-n-items "$N_ITEMS" \
+    --license-id CC-BY-4.0 --license-source HF_DATASET_CARD \
+    --license-evidence "nebius/SWE-rebench-openhands-trajectories dataset card, pinned in benchmarks/data/track_r_paraphrase_golden.lock.json corpus block" \
     --out "docs/build-log/artifacts/code-lane-reader/phase3-reader-qa-$BANK-$endpoint.json"
 done
 echo "=== $BANK COMPLETE $(date -u +%FT%TZ) ==="
