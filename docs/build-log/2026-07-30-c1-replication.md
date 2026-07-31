@@ -101,7 +101,7 @@ under `scripts/with_scratch_db.sh`: 1 passed. The 2026-07-22 standing note still
 holds — the packaged server connects as a superuser login, so on the served HTTP
 path RLS is bypassed and isolation rests on the app + tenant-GUC filter.
 
-### Bar 1 — hot-path SLO. Breached under load; the breach is contention.
+### Bar 1 — hot-path SLO. RESOLVED-BY-CONTROL: the breach is contention.
 
 The drain audit measured p50 81.8 / p95 108.6 against a banked 32.6 / 37.2 at
 load average 72 and called it confounded. It was right, and the confound is
@@ -129,10 +129,16 @@ now, with the two prod readings themselves differing by 15% at similar load.
 
 **What this does and does not establish.** It rules out a 2.5×–8× real
 regression: no such regression could leave the synthetic control equally
-inflated. It does **not** produce a clean absolute number. A quiet-window
-re-measurement was scripted (quiet := 1-minute load < 6 on three consecutive 30 s
-samples, 4-hour budget) and its result belongs in this table when it lands; the
-machine did not fall below load 190 during this session.
+inflated. It does **not** produce a clean absolute number.
+
+**Status: resolved-by-control.** The open question the drain audit raised — is the
+81.8 / 108.6 reading drift or contention? — is answered: contention. The control
+is the stronger form of that answer, because it isolates the cause rather than
+merely producing a smaller number. A quiet-window re-measurement was scripted
+(quiet := 1-minute load < 6 on three consecutive 30 s samples) and abandoned: the
+host never fell below load 180 in three hours of watching, with three other
+sessions mid-run. It is **deferred, to be scheduled when the box is idle**, and
+it is a nice-to-have absolute figure, not a blocker on any bar.
 
 The runner was changed so this is never ambiguous again: `measure_recall_slo`
 records `loadavg_1m_before/after` and `cpu_count` into the provenance and returns
@@ -213,6 +219,48 @@ What would actually settle (d), in ascending cost:
 Option 1 is the only one that answers the question this quarter. **Recommendation:
 amend the plan's condition (d) to name the convo lane, and record C1 as
 correctness-only — permanently, not pending.**
+
+## 6. The zero-FK finding is a product observation, not just an eval obstacle
+
+Production conversations are not linked to the memories they produced. That is
+worth stating on its own terms, because it decides whether the convo lane can be
+linked later. Three distinct things are going on, and only one is a bug.
+
+**6.1 `episodic_memories.run_message_id` is dead schema, not a write-path gap.**
+In `backend/src/features/memory/models.py:402` it is declared
+`Mapped[UUID | None] = mapped_column(nullable=True)` — a bare nullable UUID with
+**no `ForeignKey`**, unlike its neighbours `project_id` and `mission_id`, which
+both carry real FK constraints. The sole construction site,
+`EpisodicMemoryService` at `backend/src/features/memory/episodic_service.py:131`,
+passes `user_id`, `l0_agent_id`, `project_id`, `mission_id`, `content`,
+`summary`, `metadata_`, `trust_level`, `source_kind`, `importance_score` and
+`idempotency_key` — and not `run_message_id`. There is no writer to fix. The
+column was declared and never wired, which is why prod shows 0/321.
+
+**6.2 `memory_references` is the real provenance table, and it is empty in
+production.** This one *is* a write-path gap, and it is the interesting one.
+`MemoryReference` (`models.py:640`) is properly built: `run_message_id` is a
+NOT NULL FK to `run_messages` with `ON DELETE CASCADE`, `memory_type` is
+CHECK-constrained to include `'episodic'`, and there is a unique index on
+`(run_message_id, memory_type, memory_id)`. Its docstring describes exactly the
+edge the eval wants: "which memory an agent referenced in a response". Measured
+in production by read-only `SELECT`: **0 rows, 0 episodic references, 0 distinct
+messages**. The plumbing is correct, complete, and has never been written to.
+
+**6.3 `run_messages.agent_run_id` at 0/191 is by design, not a gap.** It carries a
+*partial* index (`postgresql_where=text("agent_run_id IS NOT NULL")`,
+`run_message_models.py:99`) because it identifies child-agent messages. NULL on a
+top-level turn is correct. It supplies no join, but it is not missing anything.
+
+**Bearing on the convo lane, with one caveat that matters.** Populating
+`memory_references` on the write path is a small, well-scoped change — the agent
+already knows which memories it injected — and it would create a real, FK-backed
+human-turn → memory edge. But it would record what the *incumbent retriever
+surfaced*, not what is actually relevant. Using it directly as retrieval ground
+truth is circular: the bank would be scored against the system's own output and
+would flatter any arm that resembles the incumbent. It is a legitimate
+**candidate generator** feeding human or adjudicated relevance labels; it is not
+an oracle, and it should never be treated as one.
 
 ## Verification
 

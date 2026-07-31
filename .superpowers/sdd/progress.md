@@ -1686,3 +1686,30 @@ not installed). $0 spend; production read-only throughout.
 
 `f126286c` privacy prereg · `03aec3ce` extract mechanism + lock ·
 `bf23c3bd` Bars 1–3 + loadavg-recording runner + redaction test.
+
+### W9 addendum — Bar 1 closed by control; the zero-FK finding is a product gap
+
+Bar 1 is recorded **resolved-by-control**, not pending: the synthetic corpus,
+unchanged since it banked p50 = 32.6 ms, reads **213.2 ms** on the same 12-CPU
+host at loadavg ~150. Prod reads 284.9 ms at loadavg 134 and 247.9 ms at loadavg
+192. That isolates the cause rather than just shrinking the number, which is the
+stronger answer. The quiet-machine absolute figure is **deferred** — the host
+never fell below load 180 in three hours with three other sessions mid-run.
+
+The zero-FK result is a product observation, not only an eval obstacle
+(`docs/build-log/2026-07-30-c1-replication.md` §6):
+
+- `episodic_memories.run_message_id` is **dead schema** — a bare nullable UUID
+  with no ForeignKey (its neighbours `project_id`/`mission_id` have real ones),
+  and `EpisodicMemoryService`'s sole construction site never passes it. No
+  writer exists to fix.
+- `memory_references` is **the real provenance table and it is empty in prod: 0
+  rows**. It is properly built (NOT NULL FK to `run_messages`, `memory_type`
+  CHECK includes `'episodic'`, unique on run_message+memory) and its docstring
+  describes exactly the wanted edge. This is a genuine write-path gap.
+- `run_messages.agent_run_id` at 0/191 is **by design** — a partial index for
+  child-agent messages; NULL on a top-level turn is correct.
+
+Caveat for any later convo-lane linking: `memory_references` records what the
+**incumbent retriever surfaced**, so using it as retrieval ground truth is
+circular. It is a candidate generator for adjudicated labels, never an oracle.
