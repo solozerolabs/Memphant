@@ -86,23 +86,61 @@ exposure to reach n≈390, or (c) accept a lower confidence level and preregiste
 it explicitly. Silently running at 54% power is the failure this whole program
 exists to prevent.
 
-## Endpoints and analysis, fixed now
+## Endpoints and analysis — RE-TARGETED 2026-08-01, fixed before any run
 
-- **Primary:** paired McNemar exact on answer correctness, arm vs control,
-  **d_min = 7 points** — the same resolution bar as the standing chat-lane
-  design. Pre-commit: **|Δ| < 7pt is recorded as no flip**, not as a trend.
-- **Secondary:** abstention scored as reader-judged (`abstain=true ∧
-  answer=null`). A net abstention regression **blocks promotion regardless of the
-  primary result** — the same fail-closed guardrail the Phase 0 amendment
-  installed after the free proxy was rescinded.
-- **Two-sided naming:** Misapplication Rate and Appropriate Application Rate
-  reported separately, so a suppression win cannot masquerade as an application
-  win.
-- **Cost/latency:** reader-token delta recorded beside the accuracy endpoint, and
-  the $0 SLO harness re-run before any default flip. Chain-of-Note lengthens
-  output; "zero extra calls" is not "zero extra tokens", and the distinction is
-  preregistered rather than discovered afterwards.
+**Primary endpoint: paired exact McNemar on answer correctness, arm vs control,
+`d_min = 9pt`.** Re-targeted from 7pt to the effect this instrument can actually
+resolve. Power recomputed on n=221 at the discordance rate **observed on this
+lane** (ψ = 0.229), and independently reproduced:
+
+| d_min | power at n=221, ψ=0.229 |
+|---:|---:|
+| 7pt (old) | 0.541 |
+| 8pt | 0.666 |
+| **9pt (adopted)** | **0.776** |
+| 9.5pt | 0.823 |
+| 10pt | 0.864 |
+
+**Stated honestly: 9pt gives 77.6%, not 80%.** It is below the conventional
+threshold and is adopted anyway, deliberately — 9.5pt would reach 0.823, but the
+extra half-point of resolution is not worth narrowing what we can detect when the
+literature effect we are chasing is "up to +10pt" (which sits at 0.864 here). We
+are not going to round 0.776 up to "~80%"; that rounding is the exact failure this
+program is built to prevent, and the evidence-contract checker would reject the
+claim.
+
+**Pre-commitments, binding:**
+
+- **|Δ| < 9pt is recorded as NO FLIP**, not as a trend, a signal, or a direction.
+- **ψ is an assumption, not a constant.** The run reports its *realized* ψ. If
+  realized ψ > 0.25, power at 9pt falls below 0.72 and **the result is reported as
+  underpowered regardless of its p-value** — a significant result at unplanned-low
+  power is not promotable. Sensitivity, computed: ψ=0.18 → 0.873, ψ=0.229 → 0.776,
+  ψ=0.28 → 0.684.
+- **The sealed-259 is not touched.** Reaching 7pt would have needed n≈390, which
+  is only available by consuming the confirmation set inside the screen. That
+  trade is refused: the lane's one held-out asset is worth more than 1.5 points of
+  resolution.
 - Analysis code committed before unblinding.
+
+**Secondary — abstention**, reader-judged (`abstain=true ∧ answer=null`). A net
+abstention regression **blocks promotion regardless of the primary result** — the
+fail-closed guardrail installed when the free proxy was rescinded in Phase 0.
+
+**Two-sided naming:** Misapplication Rate and Appropriate Application Rate
+reported separately, so a suppression win cannot masquerade as an application win.
+
+**Cost/latency:** reader-token delta recorded beside the accuracy endpoint, and
+the $0 SLO harness re-run before any default flip. Chain-of-Note lengthens output;
+**"zero extra calls" is not "zero extra tokens"**, and that distinction is
+preregistered rather than discovered afterwards. Note the harness must record
+`loadavg`/`cpu_count` — a 6.5× apparent SLO regression on this host turned out to
+be contention.
+
+**Evidence contract:** the result artifact must carry a valid `evidence_contract`
+block (`scripts/check_evidence_contract.py`) — computed MDE from the run's own
+cells, harness settings, corpus snapshot, provenance class. It will fail closed
+otherwise, and that is intended.
 
 ## Models — recorded lattice choice
 
