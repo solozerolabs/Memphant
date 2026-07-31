@@ -526,17 +526,47 @@ def drain_worker(
         env["MEMPHANT_WORKER_COMPILE_CONCURRENCY"] = "64"
         env["MEMPHANT_WORKER_BATCH_SIZE"] = "256"
         env["MEMPHANT_WORKER_DATABASE_MAX_CONNECTIONS"] = "32"
-        out = sh([worker_bin], env=env)
-        if out.returncode != 0:
-            raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
-        match = re.fullmatch(
-            r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
-        )
-        if match is None:
-            raise RuntimeError(
-                f"worker drain completion output is malformed: {out.stdout[:300]!r}"
+        # A single drain invocation is NOT proof the queue is empty. Measured
+        # 2026-07-30 on 401 queued reflect_episode jobs: the worker printed
+        # `drain completed=256` and exited with 145 still `queued`; a second
+        # invocation completed them and a third reported 0. The tick path
+        # below already refuses to trust a self-report and asks the database;
+        # the drain path did not, so every bench on this path could score
+        # against a partially compiled corpus and never know. Same contract
+        # now: re-invoke until the DATABASE says the queue is empty, and fail
+        # closed if an invocation makes no progress while work remains.
+        total = 0
+        for _invocation in range(max_ticks):
+            out = sh([worker_bin], env=env)
+            if out.returncode != 0:
+                raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
+            match = re.fullmatch(
+                r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
             )
-        return int(match.group(1))
+            if match is None:
+                raise RuntimeError(
+                    f"worker drain completion output is malformed: {out.stdout[:300]!r}"
+                )
+            completed = int(match.group(1))
+            total += completed
+            pending = sh([
+                "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+                "--set", "ON_ERROR_STOP=1", database_url, "--command",
+                "select count(*) from memphant.job_state "
+                "where state in ('queued', 'running')",
+            ])
+            if pending.returncode != 0:
+                raise RuntimeError(
+                    f"could not verify worker queue was drained: {pending.stderr.strip()[:300]}"
+                )
+            if not int(pending.stdout.strip()):
+                return total
+            if completed == 0:
+                raise RuntimeError(
+                    f"worker drain made no progress with {pending.stdout.strip()} "
+                    f"jobs still pending: {out.stderr.strip()[:300]}"
+                )
+        raise RuntimeError(f"worker did not drain within {max_ticks} invocations")
 
     env["MEMPHANT_WORKER_ONCE"] = "1"
     total = 0
