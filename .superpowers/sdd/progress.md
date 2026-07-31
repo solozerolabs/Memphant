@@ -933,3 +933,94 @@ corrected instrument needs its own preregistration.
 (`anthropic_key`, `generic_secret_assignment`); no matched value written
 anywhere. Read-only throughout (`gh api -X GET`, `git show`; no fetch, no push).
 $0 spend, no model call. `--check` reproduces the lock byte-for-byte.
+
+## W6 — convo lane: a golden bank from the owner's own agent sessions (2026-07-30, branch `af-w6-convo`)
+
+Cost **$0**. Adjudication on subscription-model agent calls, cached by packet
+`content_sha256`; no OpenRouter, no paid call, no network call on the derive
+path. Nothing pushed.
+
+**Why.** Track R's mined questions carry 0.3960 of their tokens into the target
+against a 0.1008 non-target floor — 3.93× — because an LLM asked for "causally
+identifying" questions satisfied it by copying identifiers out of the target. A
+human's turn in a real session cannot do that: it was typed before the answer
+existed. This slice tests whether the owner's own Claude Code transcripts can
+supply such queries.
+
+**The human-turn rule is provenance, not shape.** `type=user` **and**
+`origin.kind=human` **and** non-sidechain **and** no `toolUseResult` **and** not
+`isMeta`, then wrapper-stripped, ≥40 chars, paste-guarded. A 60-session survey
+(seed 11) showed the trap: 44 of 2,718 `user` records are plain-string subagent
+dispatch prompts with no origin stamp — model-authored, and admitted by any
+content heuristic.
+
+**Two defects the rule did not catch, both found by adjudication, not by survey.**
+
+1. **A2 — the harness stamp is necessary but not sufficient.** A cross-session
+   agent-to-agent message arrives as `type=user`, `origin.kind=human`,
+   `promptSource=sdk`, non-sidechain, no `toolUseResult`, not `isMeta`. It
+   satisfies **every** condition. 34 turns in the snapshot. Now rejected whole.
+2. **The regex secret scan is not sufficient on its own.** It caught 12 turns by
+   family; adjudicators flagged 16 more packets carrying pasted browser cookies,
+   an account password in prose, a serialized session record with a client IP,
+   and live API-key material in at least four distinct source sessions. A flag
+   now quarantines every unit visible in that packet out of the bank, the
+   corpus, and every shipped haystack.
+
+> **Owner action, outside this lane:** live credential material is present in
+> plaintext in transcripts under `~/.claude/projects/`. Those keys should be
+> rotated. No value was written into any artifact, lock, log, or report.
+
+**Yield.** 4,843 sessions prefiltered → 412 scanned in full (1.45 GB, frozen
+snapshot `a95351ad…`) → 2,655 stamped human turns → 1,200 admitted (45.2%) →
+204 candidates → **43 goldens** (21.1% of candidates), 32 sessions, 9 projects.
+Dominant reject is `question_self_contained` (85): this owner writes fully
+specified briefs — file, line, root cause, remedy, gate command inline — and
+such a turn needs no recalled context however human-authored it is.
+
+**Leakage, `scripts/track_r_leakage.py` unmodified (`1dd9435e…`), n=43.**
+
+| | this bank | Track R orig | Track R para | human band |
+|---|---:|---:|---:|---|
+| target mean | 0.3367 | 0.3960 | 0.135 | 0.175–0.287 |
+| exhaustive floor | 0.2246 | 0.1008 | 0.067 | — |
+| concentration | **1.4991** | 3.93 | 2.05 | 1.76–2.03 |
+
+**Verdict: `prereg_bar_pass: false`, and it is NOT a contamination finding.**
+Per the coordinator's A3 split, provenance and lexical tractability are reported
+as two fields and never collapsed: `provenance.class = human_authored_pre_answer`,
+43/43, `contamination_possible: false`. Five preregistered rows fail —
+target mean ≤0.25, target max ≤0.60, construct prediction ≤1.30, ≥6 per shape
+(`file_symbol_grounding` 0, `state_churn` 3), skeleton ratio ≥0.90 (0.8605).
+
+**A construction defect, found by looking where the band said to look.** The
+bank sits *below* the human band on ratio but *above* it on absolute — only
+possible if the floor is high. A shipped memory unit is `user turn + agent
+reply`, and the reply restates the user's vocabulary on both sides of the
+metric. Same pinned script, unit reduced to the user turn alone: target
+**0.3367 → 0.1871**, floor 0.2246 → 0.1370, concentration 1.4991 → **1.3657** —
+*inside* the human band. **Absolute-coverage bars are not portable between banks
+with different unit definitions.** The shipped corpus is deliberately left as-is;
+narrowing it to hit a number would be bar-fitting.
+
+Corroborating: cross-project floor 0.1986 ≈ in-project floor 0.2246 (a question
+covers ~20% of anything this owner ever wrote, in any project — house dialect,
+not pointing); and concentration is length-driven (shortest third 1.766, longest
+1.393), the 0.875 worst golden being a 56-char follow-up.
+
+**Recommendation, not an action taken here:** the ≤1.50 bar in
+`docs/build-log/2026-07-31-track-r-paraphrase-bar.md` §4.1 sits below the measured
+human floor, and `foundry-ai/swe-prbench` — a published *human* corpus — fails it
+at 2.42. It should be recalibrated by whoever owns that document.
+
+**Strategic note.** The sibling GitHub lane's human stratum came back empty (all
+15 "human" review comments are the owner replying to CodeRabbit, 11 of them
+`Addressed in <sha>`). This conversation corpus is the only in-house source of
+genuinely human-authored coding queries, which is why the posture here is
+aggressive rejection rather than generous inclusion.
+
+**Custody.** Bodies, corpus, spot-check, leakage report and verdict ledger are
+gitignored and mirrored to `~/.memphant-private/convo-lane/` with sha256 in
+§10 of the prereg. One committed lock, counts and hashes only. All three
+committed artifacts re-scanned by the §5 detector: clean. Determinism:
+`--check` exit 0, `bd08c93f…` reproduced. Tests: 20 passed.
