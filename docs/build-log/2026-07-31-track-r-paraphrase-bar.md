@@ -65,6 +65,16 @@ T(s) = set(re.findall(r"[a-z0-9_]{3,}", s.lower()))
 The `{3,}` lowercase tokenizer is the one that reproduces §1 exactly; it is
 pinned rather than chosen.
 
+**Unit definition — state it beside every coverage figure.** Absolute coverage is
+**not portable across banks with different unit definitions**, so the unit is
+part of the number. Here **one unit = one content event of the attempt**: the
+event `text` produced by `openhands_trajectory_to_syndai_content_events_v2` at a
+4000-char clip, which is also exactly the document the retrieval haystack ranks.
+The conversation lane demonstrates why this matters — the same bank measured with
+unit `user turn + agent reply` scores 0.3367 / 1.4991× and with unit `user turn
+only` scores 0.1871 / 1.3657×. Comparing a coverage figure across two banks
+without matching units compares nothing.
+
 Two floors are reported. The **exhaustive** floor — per golden, the mean coverage
 over *every* non-target event of the bound attempt — is the primary one: it takes
 no seed, so it cannot be moved by a lucky draw. The **sampled** floor (one
