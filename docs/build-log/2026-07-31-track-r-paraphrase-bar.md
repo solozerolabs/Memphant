@@ -295,4 +295,174 @@ python3 scripts/track_r_paraphrase_mine.py --verify-lock
 
 ## 8. Achieved figures and custody hashes
 
-*(Filled in on completion, from executed runs only. Empty until then.)*
+Filled in on completion, from executed runs only.
+
+### 8.1 The bank
+
+Mined `2026-07-30`, 180 goldens, 60 / 60 / 60 across the three shapes, accept
+rate **0.7895** (180 accepted of 228 generation calls attempted). Warm-cache
+re-mine reproduces **byte-identical** (`--verify-lock`: recorded `4aed8e99dbf1`,
+remined `4aed8e99dbf1`, 180/180, OK). **$0 paid API spend**; 839 cached
+subscription-agent replies.
+
+**`bar_passed: false`.** Twenty of the twenty-one mechanical checks pass. The one
+failure is the headline leakage criterion, and §8.2 is the interpretation.
+
+| check | result |
+|---|---|
+| `leak_concentration_le_1_50` | **FAIL** — achieved **2.0180** |
+| every other check (20) | PASS |
+
+Notable passes: zero identifier leaks; **180/180** goldens carry ≥1 adjudicated
+distractor (900 distractor verdicts total, zero `also_answers` shipped); **180
+distinct skeletons for 180 goldens** (max single-skeleton share 0.0056); mean
+question↔answer overlap 0.0162; 155 distinct attempts, 134 distinct repositories;
+mean 19.45 withheld terms per golden.
+
+Rejections, in order of size: `adjudication_not_unique_in_attempt` 25,
+`distractor_also_answers` 13, `too_generic_span` 8, `per_repo_cap` 3,
+`adjudication_target_not_identified` 1, `insufficient_withheld_terms` 1. Zero
+`identifier_leaked`, zero `answer_run_leaked`, zero `generic_skeleton`, zero
+parse failures. **The semantic-uniqueness gate did the work the withheld
+identifier tokens used to do** — it is the single largest rejection reason, which
+is what a working replacement gate should look like.
+
+### 8.2 Leakage achieved, against the reference and against the bar
+
+Both banks measured by the same pinned `scripts/track_r_leakage.py` on the same
+pinned corpus. The non-target floor is **same-attempt** — i.e. hard negatives
+from the same domain, not random corpus events.
+
+| measure | original bank | **paraphrase bank** | bar |
+|---|---:|---:|---|
+| question→target coverage, mean | 0.3960 | **0.1346** | ≤0.25 **PASS** |
+| question→target coverage, median | 0.3880 | 0.1286 | — |
+| question→target coverage, max | 0.6667 | 0.5000 | ≤0.60 **PASS** |
+| non-target exhaustive floor, mean | 0.1008 | 0.0667 | — |
+| concentration vs exhaustive floor | 3.9286 | **2.0180** | ≤1.50 **FAIL** |
+| concentration vs sampled floor | 4.1905 | 2.0518 | — |
+| excess over floor, reduced | — | **77.0%** | ≥0.75 **PASS** |
+
+By shape (target mean / floor mean / concentration): `state-churn` 0.0983 /
+0.0637 / 1.54, `file-symbol-grounding` 0.1379 / 0.0669 / 2.06, `task-resumption`
+0.1675 / 0.0695 / 2.41.
+
+**The concentration criterion is recorded as failed and the bar is not moved.**
+`bar_passed: false` stands as the mechanical fact against the preregistered
+number. What follows is interpretation placed beside that fact, not a revision of
+it.
+
+### 8.3 Why 1.50 was the wrong number — and where 2.018 actually sits
+
+Two independent lines of evidence, one produced here and one supplied by the
+owner, say the same thing: **≤1.50 was specified below the floor the construct
+can reach.**
+
+**(a) Measured here — the floor probe.** `scripts/track_r_floor_probe.py`
+(artifact `docs/build-log/artifacts/track-r-floor/floor-probe.json`) asked the
+agent, on a seeded shape-stratified sample of 36 targets from this bank's own
+candidate stream, for the *most aggressively abstracted* question it could write
+that a competent reader could still answer and still tie to one event — then put
+those questions through the same uniqueness adjudication and the same
+BM25-nearest distractors the bank uses.
+
+| | n | target mean | floor mean | concentration |
+|---|---:|---:|---:|---:|
+| max abstraction, **unconstrained** | 36 | 0.1470 | 0.0721 | 2.038 |
+| max abstraction, **answerable + unique** | 27 | 0.1310 | 0.0732 | **1.790** |
+| same 36 targets, the bank's normal questions | 36 | 0.1398 | 0.0640 | 2.186 |
+
+Uniqueness survival under maximum abstraction: **75%** (27/36). So pushing
+abstraction as hard as the generator can and keeping only what survives
+identification lands at **1.790**, not 1.50. The bank's 2.018 is roughly 13%
+above a *measured* floor, not 35% above a real one.
+
+The adjudicator's calibration note is the mechanism, and it is worth keeping:
+abstraction itself was rarely what broke identification. What broke it was (i)
+purely indexical anchoring with no content ("that edit", "here") and (ii)
+choosing a span that is duplicated across events or is harness boilerplate. **The
+ceiling on abstraction is set by span choice more than by word-borrowing.**
+
+**(b) Supplied by the owner — human-authored calibration.** A sweep of the same
+token-coverage statistic against four independent human-authored coding query
+sets, using same-domain hard negatives:
+
+| instrument | q→target | q→hard-neg | ratio |
+|---|---:|---:|---:|
+| our original mined bank | 0.396 | 0.094 | 4.21× |
+| AMA-Bench software QA (human annotators) | 0.287 | 0.148 | 1.94× |
+| SWE-rebench issues (GitHub authors) | 0.269 | 0.143 | 1.88× |
+| SWE-PRBench review comments (human reviewers) | 0.197 | 0.112 | 1.76× |
+| SWE-bench-Live issues (GitHub authors) | 0.175 | 0.086 | 2.03× |
+
+**Provenance, binding:** these four rows were supplied by the owner and are **not
+reproduced by this repo**. They are cited as calibration, never as a MemPhant
+measurement, and nothing here should be re-reported as our own number.
+
+Humans cluster at **1.76–2.03×**. This bank's **2.0180 (exhaustive) / 2.0518
+(sampled)** sits at the top edge of, and effectively inside, that band. A ≤1.50
+bar was asking the bank to be *less* lexically pointed than real human queries
+are, which no answerable question set can be.
+
+**Metric-robustness caveat, and it matters for which number leads.** The ratio is
+sensitive to the negative set: against random-corpus negatives rather than
+same-domain ones, the same human sets score ~3.70×. Our floor is same-attempt —
+same-domain hard negatives — so 2.0180 is directly comparable to the 1.76–2.03
+band and not to the 3.70. But because the ratio moves that much with negative
+selection, **absolute question→target coverage is the more robust headline**, and
+the ratio belongs beside it with its negative-selection stated. On the absolute
+metric the original bank's 0.396 against a 0.175–0.287 human range is the durable
+evidence of over-copying.
+
+### 8.4 The bank probably overshot — stated plainly
+
+On the absolute metric this bank reads **0.1346**, and the human range is
+**0.175–0.287**. It is **below** the human floor by about 23% of the low end.
+
+So the two banks bracket reality rather than either one hitting it:
+
+```
+paraphrase 0.1346  <  [ human 0.175 .. 0.287 ]  <  original 0.396
+```
+
+**My assessment: yes, it overshot, and the mechanism is identifiable.** §4.2 bans
+*every* identifier surface — file paths, dotted names, snake_case, CamelCase, and
+any corpus-rare token — from the question. Real engineers do not query that way;
+they routinely name the file or the function they are asking about. The
+withholding gate was designed to eliminate leakage, not to reproduce the human
+query distribution, and it succeeded at the thing it was pointed at.
+
+The consequence is directional and should be carried into every number measured
+on this bank: **this instrument is harder than production, so results on it
+understate real performance, and any survival ratio computed from it is a lower
+bound rather than a point estimate.** It is an adversarial floor, the original
+bank is an optimistic ceiling, and the truth is between them.
+
+### 8.5 Custody
+
+Bank bodies, spot-check, reply caches and corpus are gitignored; the lock and the
+derived leakage/floor artifacts are committed. Everything gitignored is mirrored
+to `~/.memphant-private/track-r-paraphrase/`.
+
+| artifact | sha256 |
+|---|---|
+| `benchmarks/data/track_r_paraphrase_golden.jsonl` (180 rows) | `4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326` |
+| `benchmarks/data/track_r_paraphrase_spotcheck.jsonl` (15) | `5d71212efab98b54834b76790374b84c061a35d3991ec3610fd1bf0822440b33` |
+| `benchmarks/data/track_r_paraphrase_golden.lock.json` (committed) | `02750ea17582fe224d1043da208b97164c46f026c882d9450d89fec0ba66ab3b` |
+| `scripts/track_r_paraphrase_mine.py` | `5db8b4b7ed0b178fa2f1c365bd24cd2f0f283d595194d8cdf584e5524d624425` |
+| `scripts/track_r_floor_probe.py` | `0e4ac183735a052fc642b3ccb69b1c11e2a260b3189c8fdbaadb6ae3cf13abc3` |
+| `scripts/track_r_leakage.py` | `1dd9435e13dc2a6cc893923dd8ef8aeed201309d4548026527988976121395f5` |
+| bank reply cache, 839 files (rolled hash of `sha256(sorted file hashes)`) | `491f6182c319069afe681cca73a76fe9d61a12347fd346e6a4e5cc8962f88034` |
+| floor-probe reply cache, 72 files (same rolled form) | `aa8cf03d3ea56332a7ff795ecd31658275c57a22ffa1c688e51e1b8bbc4e8ee0` |
+| authored generator/adjudicator brief (`fulfil-brief.md`) | `16d253a595dc467704d65bfc86bc32d233f7d82a7ec417b4a7be940decaf7124` |
+| pinned corpus (unchanged) | `c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669` |
+
+Mirror layout: `~/.memphant-private/track-r-paraphrase/{track_r_paraphrase_golden.jsonl,
+track_r_paraphrase_spotcheck.jsonl, track_r_paraphrase_golden.lock.json,
+fulfil-brief.md, agent-cache/, floor/{agent-cache/,floor-probe.json}}`.
+
+### 8.6 Spot-check state
+
+`emitted_pending_owner_review`, 15 goldens, gitignored and mirrored. Unchanged
+from the original bank's rule: **no number measured on this bank is publishable**
+until the owner has reviewed the sample and the state is advanced.
