@@ -1414,3 +1414,128 @@ untouched. Nine days of recall-path change sit between the two runs; nobody has
 looked, and this audit did not.
 
 Commits `eda37a7b` `96115a76` `7be37945` `cb95502d` on `af-w8-drain`. Not pushed.
+## Ranking — the Exact channel carries its own magnitude (2026-07-30, branch `af-packadj`)
+
+**Adjudicates a regression we introduced.** `03fa1266` (the packing rank-order
+fix, merged `e99b912d`) broke
+`cargo test -p memphant-eval --test syndai_trace_compare`. Verified by checkout,
+not inference: at `a96c289c` the full Rust workspace is **664 passed, 0 failed**
+and `syndai_coding_continuity_fixture_families_pass` is `ok`. A prior agent
+called it pre-existing; that was true only relative to a base that already
+contained `03fa1266`.
+
+**(a) It is a ranking defect, not a packing one.** Instrumented inside
+`pack_recall_context`. Fused order was `chatter_0` 0.0550276, `chatter_1`
+0.0541468, `task_state` 0.0539235, `error_budget` 0.0535178 — both real answers
+last, by 0.4% and 0.8%. Mechanism: weighted RRF is rank-only, so the Exact
+channel's decisive 1.000-vs-0.333 subject-key margin collapses to one rank
+position (~0.0005), while the lexical family (`Lexical` 1.0 + `Semantic` 2.0 —
+the latter is `token_set_overlap_score`, a body scorer despite the name) votes
+with 3× Exact's weight off exactly the text keyword stuffing inflates. Proof it
+is ranking: `packing_relevance_score − exact_score` reproduces the fused order
+exactly (1.92052 / 1.91964 / 1.91942 / 1.37376). **`exact_score` was the entire
+content of the eviction contest `03fa1266` deleted** — one channel's magnitude
+re-applied late, at pack time, by a formula nobody opted into. That commit was
+right about the mechanism and wrong that nothing was being defended.
+
+**(b) Better lexical scoring does not dissolve it — confirmed, as predicted.**
+Under `bm25-control` the real answer and both distractors tie **bit-for-bit** at
+2.64491128921508789 and the order comes off the alphabetical body tie-break;
+under `bm25-code` the real answer scores marginally *lower* (2.69619059 vs
+2.69619083). Under `Overlap` both passes are exact three-way ties. Fused scores
+are **bit-identical across all three scorers**. IDF and length normalisation
+cannot discriminate here.
+
+**(c) Resolution — `3fc4eede`, one expression.** The Exact contribution is
+scaled by its own score: `exact_score` is a calibrated 0..1 coverage fraction of
+a curated `fact_key`, unlike the other channels' incommensurable scores. Fused
+becomes 0.0539235 / 0.0535178 / 0.0460765 / 0.0453355 — both answers first by
+16% instead of 0.4%. Within-channel order provably unchanged; `03fa1266`'s
+contract untouched (the pack still fills k in rank order). Two alternatives were
+**executed and rejected**, not argued away: `EXACT_CHANNEL_WEIGHT` 1.0→3.0 leaves
+`missing=["mem_rollout_task_state"]`; an `exact_score` channel tie-break leaves
+`missing=["mem_error_budget_constraint"]`. Each recovers a different single
+answer; only the magnitude recovers both.
+
+**(d) Both measurements, against current trunk.** Rebaselined onto the
+render-loss completion pass; measurement base `f67f2b2a`, the commit that
+produced 168/180, both arms differing only in the one expression.
+
+- **Track R (bm25-code, embeddings off, k=10):** base **168/180** (r@5 0.9222,
+  r@10 0.9333) — reproducing the committed render-loss run to the digit — and
+  fix **168/180**. Paired exact McNemar **0 gains / 0 losses, p = 1.0** at both
+  k. Fused top-10 ceiling 173 in both. Every statistic identical, including
+  `packed_item_chars_total` 3,491,737. Worker fully drained in both arms
+  (`done_jobs=64056`, `pending_jobs=0`, `dead_jobs=0`).
+- **LME-S (n=178, seed 20260710):** 0.6144578313253012 in both arms, 0 flips on
+  166 scored, p = 1.0, and `packed_context_identical: true` — byte-identical
+  packed context on all 178 questions.
+- `syndai_trace_compare`: **2 passed, 0 failed.** New ranking-stage guard
+  `keyword_stuffed_body_does_not_outrank_a_fully_covered_subject_key` verified
+  red at `3fc4eede^`, green after.
+
+**The nulls are mechanism, not luck.** Both banks ingest raw episodes, whose
+units reach `derive_fact_key` with no subject or predicate and get
+`{scope_uuid}:auto:{hash}`. No query token matches a UUID fragment, so
+`exact_score == 0`, so no candidate on either bank ever enters the Exact channel
+and the changed expression is never evaluated. **Corollary worth stating: both
+instruments are blind to this channel, so neither could have detected a
+regression in it either.** This is a correctness repair with a proven-null blast
+radius — *not* an accuracy win, and it must not be counted as one. A
+`retain`-shaped corpus with real `fact_key`s is not measured by anything this
+program owns.
+
+**(e) Coverage-gap audit — the deliverable.** The packing fix recorded
+`cargo test -p memphant-core --lib`, which runs one crate's *unit* tests and
+excludes all 30 files in `crates/memphant-core/tests/`, all of
+`crates/memphant-eval/tests/`, and every other crate. The fixture lives in
+`memphant-eval/tests/syndai_trace_compare.rs` and was never executed. The W3.3
+work did run `--workspace`, saw the failure, and dismissed it as "pre-existing"
+against a base that already contained the defect. Suites exercising
+packing/ranking that neither ran, all free and database-free:
+`syndai_trace_compare.rs`; `eval_contract.rs` (the 12 oracle goldens, two of
+them packing-abstention, plus the rung4/5/6/7/10/11/12/15 lever deltas —
+rung7 is a packing delta); `profile_contract.rs`; `recall_trace_golden.rs` (14
+end-to-end recall tests, three of them packing); `candidate_pool.rs`;
+`recall_pool_depth.rs`; `cross_reranker.rs`; `quantity_rollup.rs`;
+`contextual_chunk_write.rs`; `chunk_span_invariant_repro.rs`;
+`temporal_grounding.rs`; `embedding_channel.rs`; `bitemporal_recall.rs`.
+**Standard from now on:** (1) `cargo test --workspace --no-fail-fast` is the
+floor, and any narrower invocation must be justified in the build log; (2)
+attribute every failure to the commit that introduced it via bisect against
+trunk — never write "pre-existing" without naming a revision predating the
+program's own work; (3) packing/ranking changes additionally run Track R and
+LME-S; (4) the Postgres `--ignored` leg for store/roles/worker changes.
+
+**The audit found two more red tests nobody caught, on two other branches.**
+`recall_chunk_renders_matched_window_plus_neighbour` is red on `accuracy-first`
+tip; bisected by checkout to `f67f2b2a` (the render-loss fix) — `ok` at
+`ccaa9e1c`. And `test_wsa_migration_contract` ×2 plus
+`test_gate_runtime::test_drain_worker_uses_one_binary_drain_without_structured_provider`
+are red at `1bddcda6`, from migration `005`. So `syndai_trace_compare` was not
+"the only red test on the integration branch" — same shape of miss, three
+independent branches. None is fixed here; each belongs to its owner.
+
+**Independently found and since fixed upstream:** the W3.3 `SET ROLE` made
+`pending_worker_job_count`'s unscoped `select count(*) from memphant.job_state`
+return 0 under FORCE RLS (`current_tenant_id()` is NULL on a pool session),
+while `claim_reflect_jobs` is `SECURITY DEFINER` and still claimed — so
+`MEMPHANT_WORKER_DRAIN=1` exited after exactly one batch. Reproduced here as
+`compiled job count mismatch: 256 != 21370`, proven by direct catalog query, and
+fixed upstream by `20260730_005` (merged in). The drain test only ever drained an
+**empty** queue, which is why it passed throughout. Standing consequence:
+`ccaa9e1c → f67f2b2a` and this work both measured Track R from a pre-W3.3
+lineage, so **the coding lane has never been measured on a W3.3-containing
+build**; 168/180 included.
+
+**Verification.** `cargo fmt --all --check` clean; `cargo clippy --workspace
+--all-targets` clean; `cargo test --workspace --no-fail-fast` 676 passed, 1
+failed, 95 ignored; `python3 -m pytest tests/ -q` 1045 passed, 4 failed, 15
+skipped. The single Rust failure is `f67f2b2a`'s, and all four Python failures
+are a strict subset of the six on `accuracy-first` tip measured in the same
+session — one of them (`test_public_launch_gate`, `playwright: command not
+found`) fails identically at `a96c289c`. **No failure on this branch is
+attributable to this change.** The parked v5 census skips on its own and was
+**not** re-pinned; the terminal SWE-ContextBench rehearsal was not touched.
+
+Full record: `docs/build-log/2026-07-30-exact-channel-magnitude.md`.

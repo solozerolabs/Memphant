@@ -7268,7 +7268,29 @@ where
         for (rank, (unit, score)) in ranked.into_iter().enumerate() {
             let channel_rank = rank + 1;
             let decay = decay_score_for(&unit, &tenant_review_events, request.decay_enabled);
-            let contribution = channel_weight(pass, &request.query, temporal_window.as_ref())
+            // Weighted RRF is rank-only: it keeps a channel's ORDER and discards
+            // its score magnitude. For every channel but Exact that is the
+            // point — a BM25 score and a cosine similarity are not on a shared
+            // scale, so only their ranks are comparable. `exact_score` IS on a
+            // shared scale: it is the fraction of the unit's curated
+            // `fact_key` tokens the query covers, a calibrated 0..1. Flattening
+            // it to a rank means a subject key the query covers COMPLETELY
+            // (1.0) outranks one it covers by a third (0.333) by exactly one
+            // rank position — worth ~0.0005 here — while the lexical family
+            // (Lexical + Semantic, or Bm25 standing in for both) votes with
+            // three times Exact's weight off the raw body, which is precisely
+            // what keyword stuffing inflates. Scaling the Exact contribution by
+            // its own score restores the magnitude the channel measured.
+            // Within-channel order is unchanged (score is non-increasing in
+            // rank, so `score / (60 + rank)` is strictly decreasing); only the
+            // cross-channel magnitude moves.
+            let magnitude = if pass == ChannelPass::Exact {
+                score
+            } else {
+                1.0
+            };
+            let contribution = magnitude
+                * channel_weight(pass, &request.query, temporal_window.as_ref())
                 / (60.0 + channel_rank as f32);
             candidates_by_unit
                 .entry(unit.id)

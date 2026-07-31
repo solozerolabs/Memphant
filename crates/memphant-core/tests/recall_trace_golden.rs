@@ -1189,6 +1189,118 @@ async fn edge_expansion_can_be_disabled_and_traces_related_candidates() {
     }));
 }
 
+/// Weighted RRF is rank-only, so before 2026-07-30 a body stuffed with query
+/// terms outranked the unit whose curated `fact_key` the query covered
+/// COMPLETELY: the lexical family (Lexical + Semantic) votes with three times
+/// Exact's weight off the raw body, while Exact's 1.0-vs-0.333 subject-key
+/// margin was flattened to a single rank position. The Exact contribution is
+/// now scaled by its own score, which is a calibrated 0..1 coverage fraction.
+/// `examples/syndai/task-plus-semantic-composite-trace-compare.yaml` is the
+/// end-to-end form of this; this is the ranking-stage unit of it.
+#[tokio::test]
+async fn keyword_stuffed_body_does_not_outrank_a_fully_covered_subject_key() {
+    let store = InMemoryStore::default();
+    let tenant_id = tenant(76_300);
+    let scope_id = scope(76_301);
+    let actor_id = actor(76_302);
+    store.seed_context_binding(&memphant_store_testkit::resolved_context(
+        tenant_id, scope_id, actor_id,
+    ));
+
+    let mut tx = store
+        .begin(&memphant_store_testkit::resolved_context(
+            tenant_id, scope_id, actor_id,
+        ))
+        .await
+        .expect("begin transaction");
+    let mut seed = async |fact_key: &str, body: &str| {
+        store
+            .stage_memory_unit(
+                &mut tx,
+                NewMemoryUnit {
+                    tenant_id,
+                    data_subject_id: memphant_types::SubjectId::from_u128(
+                        tenant_id.as_uuid().as_u128(),
+                    ),
+                    scope_id,
+                    agent_node_id: memphant_types::AgentNodeId::from_u128(
+                        scope_id.as_uuid().as_u128(),
+                    ),
+                    subject_generation: 0,
+                    kind: MemoryKind::Semantic,
+                    state: UnitState::Active,
+                    fact_key: Some(fact_key.to_string()),
+                    predicate: None,
+                    body: body.to_string(),
+                    confidence: Some(1.0),
+                    trust_level: TrustLevel::TrustedSystem,
+                    churn_class: None,
+                    freshness_due_at: None,
+                    actor_id: Some(actor_id),
+                    source_kind: Some("fixture".to_string()),
+                    source_ref: "test:fixture".to_string(),
+                    observed_at: "2026-07-09T00:00:00Z".to_string(),
+                    source_episode_id: None,
+                    source_resource_id: None,
+                    deletion_generation: None,
+                    contextual_chunks: Vec::new(),
+                    valid_from: None,
+                    valid_to: None,
+                    transaction_from: None,
+                    transaction_to: None,
+                },
+            )
+            .await
+            .expect("unit seeded")
+    };
+    let answer_id = seed(
+        "checkout retry rollout task",
+        "The checkout retry rollout is paused at 50 percent.",
+    )
+    .await;
+    // Carries nearly every query term and answers nothing; its subject key is
+    // covered by one token of three.
+    let stuffed_id = seed(
+        "rollout chatter 0",
+        "Checkout retry rollout paused constraint resuming noisy status 0.",
+    )
+    .await;
+    store.commit(tx).await.expect("seed committed");
+
+    let response = recall(
+        &store,
+        RecallRequest {
+            context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
+            query: "Which task is the checkout retry rollout paused on and which \
+                 constraint gates resuming it?"
+                .to_string(),
+            k: 1,
+            budget_tokens: 96,
+            mode: RecallMode::Fast,
+            include_beliefs: false,
+            edge_expansion_enabled: true,
+            context_packing_abstention_enabled: true,
+            procedure_recall_enabled: true,
+            decay_enabled: true,
+            engine_version: "engine-exact-magnitude-test".to_string(),
+            transaction_as_of: None,
+            valid_at: None,
+            aggregation_window: None,
+        },
+        None,
+        &CLOCK,
+    )
+    .await
+    .expect("recall succeeds");
+
+    assert_eq!(
+        response.candidate_whitelist,
+        vec![answer_id],
+        "the single packed slot must go to the fully covered subject key, not \
+         the keyword-stuffed body (stuffed unit {stuffed_id:?})",
+    );
+}
+
 #[tokio::test]
 async fn packing_collapses_duplicate_decoys_and_preserves_answer_under_budget() {
     let store = InMemoryStore::default();
