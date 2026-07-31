@@ -579,3 +579,63 @@ Long-Horizon-Terminal-Bench failure mode), that the corrections are
 human-authored, and that the scored fields are populated. `TokenRhythm/Claw-SWE-Bench`
 is evaluated alongside on data quality alone, no longer as a licensing fallback.
 A data-quality rejection remains available; a licence rejection does not.
+
+
+## 6d. Ownership condition (d) amended — C1 cannot carry it (2026-07-31)
+
+**The plan's requirement that a paired win be "replicated on the C1 slice" is
+withdrawn. C1 is marked CORRECTNESS-ONLY, permanently — not pending.**
+
+C1 was never an accuracy instrument and **cannot be converted into one**. Measured
+on a fresh read-only prod re-extract (321 rows, 5 tenants, snapshot
+`ddc0bc77…`, 0 secret hits, 887-needle leak check clean, production never
+written):
+
+- **44 recall-visible episodes**, tenant pools of 24/7/6/4/1 distinct bodies —
+  four smaller than `k`, so r@10 is identically 1.0 for both arms there.
+- Maximum discriminating bank: **24 items in one tenant**, against a
+  6-discordant-pair exact-McNemar floor. A probe on that would be theatre, and it
+  was correctly **not run**.
+- Decisively, **every candidate join column between a human turn and a memory is
+  empty**: `episodic_memories.run_message_id` **0/321**,
+  `run_messages.agent_run_id` **0/191**, the mission join **0 rows**,
+  `memory_references` **0 rows**. The leak-free human-turn anchoring rule has
+  nothing to anchor to.
+
+**Condition (d) is re-scoped to the convo lane**, which already implements the
+human-turn rule against a corpus with real provenance stamps and real volume, and
+answers the same claim. Note C1's prod `run_messages` could not support that rule
+anyway: all 191 `user` rows carry an identical stamp (`source_kind` NULL,
+`message_kind` `user_input`, no agent origin), so canary and dogfood automation
+are **indistinguishable from a human** there — and only 63 of 191 bodies are
+distinct.
+
+**What C1 still is, and it passed:** Bar 2 state-filter exactness — **0 leaks
+across all 5 tenants, reproduced digit-for-digit on two independent scratch DBs**
+— and Bar 3 RLS, unchanged. Drain verified from the database on the bench
+credential (`compiled=322 == enqueued=322`). It remains our only correctness
+instrument running on real production rows, and that is worth keeping.
+
+**Bar 1 resolved as contention, not drift.** The *synthetic* control moved
+32.6 ms → **213.2 ms p50** at load 157 on an unchanged corpus; an unchanged corpus
+cannot drift 6.5×. The runner now records `loadavg`/`cpu_count` into provenance
+and writes artifacts before asserting the bar. A quiet-machine absolute is
+deferred — the host never fell below load 180 in three hours.
+
+### The product finding: three things, one of them a real gap
+
+1. **`episodic_memories.run_message_id` is dead schema** — a bare nullable UUID
+   with **no ForeignKey** (`models.py:402`), while its neighbours `project_id` and
+   `mission_id` carry real ones, and the sole construction site never populates
+   it. No writer exists.
+2. **`memory_references` is the real provenance table and it is empty in prod (0
+   rows)** — a genuine **write-path gap**. It is properly built: NOT NULL FK to
+   `run_messages` with cascade, a `memory_type` CHECK including `'episodic'`, a
+   unique on `(run_message_id, memory_type, memory_id)`, and a docstring
+   describing exactly the edge we want. Nothing writes it.
+3. **`run_messages.agent_run_id` at 0/191 is by design** — a partial index for
+   child-agent messages; NULL on a top-level turn is correct.
+
+**Standing caveat if that gap is ever closed:** `memory_references` records what
+the *incumbent retriever surfaced*, so it is **circular as retrieval ground
+truth**. It is a candidate generator for adjudicated labels, never an oracle.
