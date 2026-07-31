@@ -64,6 +64,7 @@ import gate_common as gc  # noqa: E402
 from gate_runtime import (  # noqa: E402, F401
     API_KEY_ENV_BY_ARM,
     ApiClient,
+    assert_worker_queue_empty,
     check_embed_model_key,
     provision_tenant,
     reexec_through_scratch_db,
@@ -371,6 +372,12 @@ def drain_worker(
     match = re.fullmatch(r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout)
     if match is None:
         raise RuntimeError(f"worker drain completion output is malformed: {out.stdout[:300]!r}")
+    # This runner keeps its own copy of the drain (only `gate_runtime`'s lacks
+    # the `resource_chunks` env), and the copy has NO caller-side count check —
+    # so it needs the same independent, bench-credential queue-empty gate the
+    # shared one grew. The worker's own exit check runs on the `memphant_worker`
+    # pool, which FORCE RLS blinded until 20260730_005; this one does not.
+    assert_worker_queue_empty(database_url)
     return int(match.group(1))
 
 

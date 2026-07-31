@@ -10,6 +10,7 @@ Conversations-tab surface), and the equivalence assertion.
 
 from __future__ import annotations
 
+import collections
 import sys
 from pathlib import Path
 
@@ -240,3 +241,36 @@ def test_probe_equivalence_fails_when_archived_episode_leaks_into_recall():
 
     with pytest.raises(RuntimeError):
         runner.probe_conversations_equivalence(leaking_recall, rows, user_id)
+
+
+def test_expected_compiled_jobs_counts_retains_forgets_and_the_archive_reflect():
+    """The count half of the drain contract this runner was missing.
+
+    One `reflect_episode` job per POSTed episode (retain + forget dispositions;
+    `skip` rows are never posted), plus exactly one `reflect_scope` job for the
+    explicit `/v1/reflect` the archive path issues — `forget` itself enqueues
+    nothing. An under-drain reports fewer completions than this, so comparing
+    against it is what turns a silent partial corpus into a raised error.
+    """
+    counts = {"retain": 227, "forget": 10, "skip": 15}
+    assert runner.expected_compiled_jobs(counts, True) == 238
+    assert runner.expected_compiled_jobs(counts, False) == 237
+    assert runner.expected_compiled_jobs({"retain": 0, "forget": 0, "skip": 3}, False) == 0
+
+
+def test_expected_compiled_jobs_matches_the_banked_c1_provenance():
+    """The banked C1 artifacts record `compiled_jobs` 238 (synthetic 252-row) and
+    271 (real prod, 270 rows / 0 corrections). Both equal the number of jobs the
+    backfill enqueues EXACTLY, which is only possible if the queue fully drained:
+    an under-drain reports a short count. This pins that arithmetic so the audit
+    verdict cannot silently rot.
+    """
+    synthetic = collections.Counter(
+        runner.backfill_disposition(row) for row in corpus.build_corpus(252, 20260721)
+    )
+    assert runner.expected_compiled_jobs(synthetic, True) == 238
+
+    # Real prod (2026-07-22): 270 rows, no `user_correction`, so nothing skipped.
+    real_prod = {"retain": 35, "forget": 235, "skip": 0}
+    assert sum(real_prod.values()) == 270
+    assert runner.expected_compiled_jobs(real_prod, True) == 271

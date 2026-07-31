@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import sys
 from pathlib import Path
 
 import pytest
@@ -143,7 +144,15 @@ def test_server_env_pins_requested_config_and_worker_clears_inherited_reranker(g
 
     worker_envs = []
 
+    psql_commands = []
+
     def fake_sh(command, **kwargs):
+        if command[0] == "psql":
+            # The independent, bench-credential queue-empty gate.
+            psql_commands.append(command)
+            return type(
+                "Result", (), {"returncode": 0, "stdout": "0|0\n", "stderr": ""}
+            )()
         worker_envs.append(kwargs["env"])
         return type(
             "Result", (),
@@ -151,7 +160,11 @@ def test_server_env_pins_requested_config_and_worker_clears_inherited_reranker(g
         )()
 
     monkeypatch.setattr(gr, "sh", fake_sh)
+    # `assert_worker_queue_empty` is gate_runtime's, so it shells out through
+    # gate_runtime's `sh`, not this module's copy.
+    monkeypatch.setattr(sys.modules[gr.assert_worker_queue_empty.__module__], "sh", fake_sh)
     assert gr.drain_worker("worker", "db") == 0
+    assert len(psql_commands) == 1 and "job_state" in psql_commands[0][-1]
     assert "MEMPHANT_CROSS_RERANK" not in worker_envs[0]
     assert "MEMPHANT_RERANKER" not in worker_envs[0]
     assert worker_envs[0]["MEMPHANT_WORKER_DRAIN"] == "1"

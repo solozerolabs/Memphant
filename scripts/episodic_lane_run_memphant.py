@@ -229,6 +229,23 @@ def probe_conversations_equivalence(recall_fn, rows: list[dict], user_id: str) -
     }
 
 
+def expected_compiled_jobs(counts: dict[str, int], reflected: bool) -> int:
+    """Exactly how many reflect jobs this backfill enqueues.
+
+    ``retain_episode`` enqueues one ``reflect_episode`` job per retained episode
+    (memphant-core/src/lib.rs); ``skip``ped rows are never posted; ``forget``
+    enqueues NOTHING (service.rs `forget` stages the deletion and commits, no
+    `enqueue_reflect`), which is exactly why the archived rows need the explicit
+    ``/v1/reflect`` — one extra ``reflect_scope`` job.
+
+    Asserting the drain against THIS number is the count half of the drain
+    contract ``code_lane_run_memphant.py`` already had and this runner did not:
+    an under-drain reports fewer completions than it enqueued, so the mismatch
+    raises instead of silently scoring a partially compiled corpus.
+    """
+    return counts["retain"] + counts["forget"] + (1 if reflected else 0)
+
+
 def measure_recall_slo(
     client: "gr.ApiClient",
     ctx: dict,
@@ -378,6 +395,24 @@ def main() -> int:
             )
             print(f"archived {len(to_forget)} episodes (forget); re-drained", file=sys.stderr)
 
+        # The drain contract, both halves, BEFORE any bar is asserted (a bar
+        # proven on a partially compiled corpus is worse than no bar at all).
+        # (1) the count: as many jobs completed as were enqueued; (2) the
+        # database, asked on the bench credential rather than the worker's own
+        # RLS-constrained pool.
+        expected_jobs = expected_compiled_jobs(counts, bool(to_forget))
+        if compiled != expected_jobs:
+            raise RuntimeError(
+                f"compiled job count mismatch: {compiled} != {expected_jobs} enqueued "
+                "(retain + forget episodes + the archive reflect)"
+            )
+        gr.assert_worker_queue_empty(args.database_url)
+        print(
+            f"compilation verified: compiled={compiled} == enqueued={expected_jobs}, "
+            "queue empty per the database",
+            file=sys.stderr,
+        )
+
         # Bar 2, per tenant: recall is a bounded ranked retrieval, not a full
         # listing, so equivalence is proven per-episode — (a) every visible
         # episode is retrievable by a query for its body, (b) no archived/
@@ -434,6 +469,8 @@ def main() -> int:
             "corpus_rows": len(rows),
             "tenants": len(user_ids),
             "compiled_jobs": compiled,
+            "expected_jobs": expected_jobs,
+            "queue_drained_verified": True,
             "k": args.k,
             "budget_tokens": args.budget_tokens,
             "conversations_equivalence": "passed",

@@ -5659,6 +5659,26 @@ fn retry_backoff_seconds(attempts: u32) -> u64 {
     1_u64 << attempts.saturating_sub(1).min(6)
 }
 
+/// The ONE drain-exit decision, shared by every caller that drains the reflect
+/// queue (`memphant-worker`'s drain mode, `bench_lme`'s in-process drain).
+///
+/// A zero-completion tick is NOT proof of an empty queue. `run_worker_tick_scoped`
+/// releases a failed job with `retry_backoff_seconds` (`run_after` in the future)
+/// and blocks the rest of its scope lane; `claim_reflect_jobs` excludes
+/// `run_after > now()`, so the next tick claims nothing while the work is still
+/// `queued`. Only the DATABASE can say the queue is empty, and a job the queue
+/// dead-lettered is silently-dropped work, not a drained queue.
+pub fn drain_finished(
+    pending: usize,
+    dead_letters_before: u64,
+    dead_letters_after: u64,
+) -> Result<bool, &'static str> {
+    if dead_letters_after > dead_letters_before {
+        return Err("drain produced dead-lettered jobs");
+    }
+    Ok(pending == 0)
+}
+
 /// Turns (or fallback segments) per contextual-chunk window. This is the
 /// turn-window granularity promoted on real evidence (LME-S n=100, 2026-07-10
 /// scaled-reader campaign: ≤4-turn episodes lifted ΔR@5/ΔR@10/ΔQA with CIs

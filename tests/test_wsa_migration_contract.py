@@ -272,7 +272,7 @@ def test_apply_runner_dry_run_reports_ordered_migrations() -> None:
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "migration_plan=4" in result.stdout
+    assert "migration_plan=5" in result.stdout
     assert result.stdout.index("20260703_001_wsa_bootstrap.sql") < result.stdout.index(
         "20260723_002_file_sync_mutation_verb.sql"
     )
@@ -281,6 +281,9 @@ def test_apply_runner_dry_run_reports_ordered_migrations() -> None:
     )
     assert result.stdout.index("20260724_003_worker_claim_throughput.sql") < result.stdout.index(
         "20260730_004_served_login_roles.sql"
+    )
+    assert result.stdout.index("20260730_004_served_login_roles.sql") < result.stdout.index(
+        "20260730_005_pending_worker_job_count.sql"
     )
 
 
@@ -319,14 +322,14 @@ def test_apply_runner_executes_migration_and_ledger_in_one_transaction(
     assert result.returncode == 0, result.stdout + result.stderr
     calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     mutation_calls = [call for call in calls if "--file" in call]
-    assert len(mutation_calls) == 4
+    assert len(mutation_calls) == 5
     for call in mutation_calls:
         assert "ON_ERROR_STOP=1" in call
         assert "--single-transaction" in call
         assert "--file" in call
         assert "--command" in call
         assert "insert into memphant.schema_migrations" in call[call.index("--command") + 1]
-    assert len(calls) == 5, "ledger must not execute in a second psql process"
+    assert len(calls) == 6, "ledger must not execute in a second psql process"
 
 
 def test_apply_runner_failure_keeps_migration_and_ledger_in_same_failed_transaction(

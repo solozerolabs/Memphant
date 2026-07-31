@@ -16,16 +16,9 @@ enum WorkerMode {
     Drain,
 }
 
-fn drain_finished(
-    pending: usize,
-    dead_letters_before: u64,
-    dead_letters_after: u64,
-) -> Result<bool, &'static str> {
-    if dead_letters_after > dead_letters_before {
-        return Err("drain produced dead-lettered jobs");
-    }
-    Ok(pending == 0)
-}
+// The drain-exit decision lives in `memphant-core` so this binary and the
+// in-process bench drain (`memphant-eval::bench_lme`) share ONE mechanism.
+use memphant_core::service::drain_finished;
 
 fn worker_mode(once: bool, drain: bool) -> Result<WorkerMode, &'static str> {
     match (once, drain) {
