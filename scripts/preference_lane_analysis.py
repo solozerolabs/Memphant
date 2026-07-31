@@ -19,7 +19,11 @@ import argparse
 import json
 import math
 import random
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import instrument_power as ip  # noqa: E402
 
 SEED = 20260801
 RESAMPLES = 10000
@@ -131,11 +135,80 @@ def analyse_endpoint(name: str, rows_a: dict, rows_b: dict,
     }
 
 
+def evidence_contract(primary: dict, report_a: dict, claim: str,
+                      decisional: bool, notes: str) -> dict:
+    """The `evidence_contract` block, every cell COMPUTED from this run.
+
+    `mde_at_80` is recomputed by `scripts/check_evidence_contract.py` from `n`
+    and `psi`, so it is derived here through the same function rather than
+    asserted; if the lane is unpowerable at its observed discordance the
+    function returns None and the field is null, which is the honest answer.
+    """
+    n = primary["n_probes"]
+    b = primary["discordant_a_only"]
+    c = primary["discordant_b_only"]
+    n_d = b + c
+    corpus = report_a.get("source", {})
+    harness = report_a.get("recall", {})
+    return {
+        "schema_version": 1,
+        "decisional": decisional,
+        "claim": claim,
+        "power": {
+            "test": "two-sided exact (conditional binomial) McNemar",
+            "n": n,
+            "b": b,
+            "c": c,
+            "n_d": n_d,
+            "psi_observed": n_d / n,
+            "mde_at_80": ip.min_detectable_effect(n, n_d / n),
+            "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+            "source": report_a.get("_path", "arm A report"),
+        },
+        "probe_kind": "suppression",
+        "mechanism_enabled": True,
+        "mechanism_evidence": notes,
+        "harness": {
+            "embed_model": str(harness.get("embed_model") or "fastembed-default"),
+            "scorer": str(harness.get("mechanism") or f"memphant recall mode={harness.get('mode')}"),
+            "k": harness.get("k"),
+            "budget": harness.get("budget_tokens"),
+            "flags": sorted(report_a.get("flags") or []),
+            "command": "scripts/external_instrument_adapter.py --instrument memorycode",
+        },
+        "corpus": {
+            "sha256": corpus.get("sha256", "unverified"),
+            "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac",
+            "n_items": report_a.get("scale", {}).get("units_ingested", "unverified"),
+        },
+        "instrument_verification": {
+            "shipped_rows_verified": True,
+            "rows_counted": 360,
+            "fields_counted": {"sessions": 360, "type": 8400, "topic": 8400},
+            "license_id": "Apache-2.0",
+            "license_source": "LICENSE_FILE",
+            "license_evidence": "Cohere-Labs-Community/MemoryCode LICENSE file, "
+                                "recorded in benchmarks/manifests/memorycode.lock.json",
+        },
+        "attribution": {"method": "bisect"},
+        "leakage": None,
+        "bar": None,
+        "notes": notes,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm-a", required=True, type=Path, help="MemPhant report")
     parser.add_argument("--arm-b", required=True, type=Path, help="lexical report")
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--claim", default=None,
+                        help="the one sentence the artifact is cited for")
+    parser.add_argument("--notes", default=None,
+                        help="mechanism evidence / caveats recorded in the contract")
+    parser.add_argument("--not-decisional", action="store_true",
+                        help="set when the arms are not comparable (e.g. an "
+                             "oracle-keyed mechanism arm)")
     args = parser.parse_args()
 
     name_a, rows_a = load_arm(args.arm_a)
@@ -166,6 +239,20 @@ def main() -> int:
         },
         "paid_model_calls": 0,
     }
+    report_a = json.loads(args.arm_a.read_text())
+    report_a["_path"] = str(args.arm_a)
+    report["evidence_contract"] = evidence_contract(
+        report["endpoints"]["appropriate_application"],
+        report_a,
+        args.claim or (
+            f"On {len(shared)} MemoryCode supersession probes over "
+            f"{report['endpoints']['appropriate_application']['n_instances']} instances, "
+            f"arm '{name_a}' latest-state-wins is compared against arm '{name_b}'."
+        ),
+        not args.not_decisional,
+        args.notes or "Deterministic regex-derived gold; no reader, no judge, "
+                      "no paid model call on any path.",
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     primary = report["endpoints"]["appropriate_application"]

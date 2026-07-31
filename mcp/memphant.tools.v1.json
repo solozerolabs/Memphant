@@ -1010,7 +1010,8 @@
             "semantic",
             "procedural",
             "belief",
-            "resource"
+            "resource",
+            "preference"
           ],
           "type": "string"
         },
@@ -1363,7 +1364,8 @@
             "semantic",
             "procedural",
             "belief",
-            "resource"
+            "resource",
+            "preference"
           ],
           "type": "string"
         },
@@ -2258,7 +2260,8 @@
             "semantic",
             "procedural",
             "belief",
-            "resource"
+            "resource",
+            "preference"
           ],
           "type": "string"
         },

@@ -2,7 +2,12 @@
   "schema_version": 1,
   "purpose": "The enforcement surface of scripts/check_evidence_contract.py. `contracted` artifacts MUST carry a valid `evidence_contract` block. `pending` is the retrofit debt ledger: promotion-capable artifacts that predate the contract and whose missing fields were NOT backfilled, because they cannot be verified. The ratchet is the point: any NEW decisional artifact that appears in neither list fails CI.",
   "ratchet": "scripts/check_evidence_contract.py scans every tracked JSON under docs/build-log/artifacts/ for a decision key at depth <= 4. A match in neither list is a hard failure. To clear debt, write a contract and move the path from `pending` to `contracted` -- never by deleting the entry.",
-  "contracted": [],
+  "contracted": [
+    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-a-vs-b.json",
+    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-b.json",
+    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-a.json",
+    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-p-vs-a.json"
+  ],
   "pending": [
     {
       "path": "docs/build-log/artifacts/b4-verified-receipts/gate-summary.json",

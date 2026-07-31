@@ -1,0 +1,166 @@
+{
+  "arm_a": {
+    "name": "preference",
+    "report": "docs/build-log/artifacts/2026-07-31-preference-writepath/arm-p-preference.json"
+  },
+  "arm_b": {
+    "name": "memphant",
+    "report": "docs/build-log/artifacts/2026-07-31-preference-writepath/arm-a-memphant.json"
+  },
+  "endpoints": {
+    "appropriate_application": {
+      "arm_a_rate": 0.5794920037629351,
+      "arm_b_rate": 0.3123236124176858,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.5480868665977249,
+          0.6116207951070336
+        ],
+        "arm_b_ci95": [
+          0.2845927379784102,
+          0.3413953488372093
+        ],
+        "clusters": 257,
+        "delta_ci95": [
+          0.23751095530236632,
+          0.29849340866290025
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 9.999000099990002e-05,
+      "delta_a_minus_b": 0.2671683913452493,
+      "discordant_a_only": 313,
+      "discordant_b_only": 29,
+      "endpoint": "appropriate_application",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 2.5141539385573136e-61,
+      "n_instances": 257,
+      "n_probes": 1063
+    },
+    "misapplication": {
+      "arm_a_rate": 0.3405456255879586,
+      "arm_b_rate": 0.6716839134524929,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.31197771587743733,
+          0.3693877551020408
+        ],
+        "arm_b_ci95": [
+          0.6422613531047267,
+          0.6994163424124513
+        ],
+        "clusters": 257,
+        "delta_ci95": [
+          -0.36467236467236475,
+          -0.29842446709916587
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 9.999000099990002e-05,
+      "delta_a_minus_b": -0.3311382878645343,
+      "discordant_a_only": 26,
+      "discordant_b_only": 378,
+      "endpoint": "misapplication",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 3.303806244736811e-81,
+      "n_instances": 257,
+      "n_probes": 1063
+    },
+    "neither_returned": {
+      "arm_a_rate": 0.07337723424270931,
+      "arm_b_rate": 0.010348071495766699,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.05616740088105727,
+          0.0898876404494382
+        ],
+        "arm_b_ci95": [
+          0.004048582995951417,
+          0.017357762777242044
+        ],
+        "clusters": 257,
+        "delta_ci95": [
+          0.04658721560130011,
+          0.07905138339920949
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 9.999000099990002e-05,
+      "delta_a_minus_b": 0.06302916274694262,
+      "discordant_a_only": 72,
+      "discordant_b_only": 5,
+      "endpoint": "neither_returned",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 2.8041083952368736e-16,
+      "n_instances": 257,
+      "n_probes": 1063
+    }
+  },
+  "evidence_contract": {
+    "attribution": {
+      "method": "bisect"
+    },
+    "bar": null,
+    "claim": "ORACLE-KEYED mechanism arm: with the instrument's own supersession group key supplied as the subject, MemPhant's latest-state-wins is compared against the identical run with no subject. NOT a retrieval-quality comparison and NOT comparable to the lexical control.",
+    "corpus": {
+      "n_items": 8147,
+      "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 8192,
+      "command": "scripts/external_instrument_adapter.py --instrument memorycode",
+      "embed_model": "fastembed-default",
+      "flags": [],
+      "k": 10,
+      "scorer": "memphant recall mode=fast"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "sessions": 360,
+        "topic": 8400,
+        "type": 8400
+      },
+      "license_evidence": "Cohere-Labs-Community/MemoryCode LICENSE file, recorded in benchmarks/manifests/memorycode.lock.json",
+      "license_id": "Apache-2.0",
+      "license_source": "LICENSE_FILE",
+      "rows_counted": 360,
+      "shipped_rows_verified": true
+    },
+    "leakage": null,
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Arm P's subject key is derived from the SAME topic field the gold labels are built from, so the grouping is handed to the system. decisional=false for that reason, not for a power reason. It answers one mechanism question: with a correct chain, does the state machine fire end-to-end and does recall use the state? Diagnostics: supersedes 7198 / contradicts 3599 edges where the unchanged arm had zero; 3599 superseded units, 0 with an open transaction; remainders_recalled 0.",
+    "notes": "Arm P's subject key is derived from the SAME topic field the gold labels are built from, so the grouping is handed to the system. decisional=false for that reason, not for a power reason. It answers one mechanism question: with a correct chain, does the state machine fire end-to-end and does recall use the state? Diagnostics: supersedes 7198 / contradicts 3599 edges where the unchanged arm had zero; 3599 superseded units, 0 with an open transaction; remainders_recalled 0.",
+    "power": {
+      "b": 313,
+      "c": 29,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "mde_at_80": 0.04951756937257887,
+      "n": 1063,
+      "n_d": 342,
+      "psi_observed": 0.3217309501411101,
+      "source": "docs/build-log/artifacts/2026-07-31-preference-writepath/arm-p-preference.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "suppression",
+    "schema_version": 1
+  },
+  "paid_model_calls": 0,
+  "prereg": "docs/build-log/2026-08-01-preference-lane-prereg.md",
+  "primary_endpoint": "appropriate_application (latest-state-wins)",
+  "probes": 1063,
+  "secondary_descriptive": {
+    "hit_at_1": {
+      "arm_a": 0.32831608654750705,
+      "arm_b": 0.23142050799623706
+    },
+    "hit_at_k": {
+      "arm_a": 0.8400752587017873,
+      "arm_b": 0.7855126999059266
+    }
+  }
+}

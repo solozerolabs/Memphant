@@ -477,7 +477,8 @@
         "semantic",
         "procedural",
         "belief",
-        "resource"
+        "resource",
+        "preference"
       ],
       "type": "string"
     },

@@ -89,7 +89,7 @@ Stable error catalog (HTTP status × retryable × MCP mapping). The same `code` 
   "scope": {"type": "project", "external_ref": "project:checkout-redesign"},
   "agent_node": {"id": "agent_...", "level": 0},
   "query": "What did we learn from the failed checkout integration?",
-  "memory_kinds": ["episodic", "semantic", "procedural", "resource"],
+  "memory_kinds": ["episodic", "semantic", "procedural", "resource", "preference"],
   "trust_policy": "default",
   "mode": "fast",
   "limit": 8
@@ -107,7 +107,7 @@ Tenant/subject may come from auth context in hosted mode. They are explicit in e
 | `query` | string | — required | NL or verbatim; redact/hash by tenant policy |
 | `scope` | `{type, external_ref}` | — required | composes `scope ∪ admitted ancestors` (`04` §11.1); never widens |
 | `agent_node` | `{id, level}` | auth identity | **server-derived from the key; a client-supplied `id`/`level` is advisory and validated against the key's binding — a mismatch is `scope_denied`, never honored** (so a child cannot claim `level:0`; L1+ inherits no protected categories) |
-| `kinds` | string[] | `[episodic,semantic,procedural,resource]` | **`belief` excluded unless listed** (`05` §1.3) |
+| `kinds` | string[] | `[episodic,semantic,procedural,resource,preference]` | **`belief` excluded unless listed** (`05` §1.3). `preference` minted 2026-07-31 (`04` §13.2a); it is accepted on the `unit` retain payload, where an explicit `fact_key` is already mandatory — which is what makes its supersession reachable |
 | `mode` | `fast`\|`balanced`\|`deep` | `fast` | `fast` may auto-escalate; `deep` never auto |
 | `arg_risk` | `none`\|`high` | `none` | `high` ⇒ server hard-excludes `high_risk_arg:false` (`06` §4.2) |
 | `transaction_as_of` | RFC3339 | request evaluation time | what the system knew at the task snapshot; future values are rejected (§3.1) |
