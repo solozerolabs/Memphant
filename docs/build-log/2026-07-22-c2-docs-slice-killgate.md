@@ -1,5 +1,25 @@
 # 2026-07-22 — C2 docs-slice pre-check: the free kill-gate fires DROP
 
+> **AMENDED 2026-08-01 — kill-gate (b) has now been run. Two corrections to this
+> document, neither of which disturbs the DROP.**
+>
+> 1. **The "~450 ms" premise below is retracted.** Re-measured on 2026-08-01:
+>    median ~1460 ms at 64 × 512 body granularity, 2 of 4 samples over the
+>    1500 ms ceiling. See the banner on
+>    `docs/build-log/2026-07-22-reranker-latency-spike.md`. The latency story was
+>    not "killed"; it was reduced from 9× over to roughly *at* the ceiling.
+> 2. **`docs/build-log/artifacts/p1-c2-killgate/score_killgate_b.py` is
+>    superseded and disarmed.** It silently substitutes a hardcoded
+>    `SYNDAI_HIT10=0.200` from a *different* corpus pin whenever the live
+>    incumbent arm is absent, then reports a difference of two aggregates. It
+>    never ran to completion and produced **no banked number** — no `verdict.json`
+>    exists here and none was ever committed — so nothing downstream needs
+>    retracting. Use `scripts/score_killgate_b.py`, which refuses to mix pins and
+>    reports a paired exact McNemar.
+>
+> Results: `docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json`;
+> discussion in `docs/build-log/2026-08-01-r6-docs-decision.md` §K.
+
 ## Verdict
 
 **DROP C2 from the roadmap.** The free pre-check registered in the tri-domain

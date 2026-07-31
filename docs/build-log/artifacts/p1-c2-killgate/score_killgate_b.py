@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
-"""Kill-gate (b) scorer: does the MiniLM chunk-rerank arm close >=half the
+"""SUPERSEDED 2026-08-01 — DO NOT RUN. Use scripts/score_killgate_b.py.
+
+This scorer was never run to completion and produced no banked number (no
+`verdict.json` exists here, and none was ever committed), so nothing downstream
+needs retracting. It is kept as the C2 wave's artifact and disarmed here.
+
+Why it must not be used: when a live Syndai incumbent arm is absent it silently
+falls back to a HARDCODED `SYNDAI_HIT10=0.200` taken from the 2026-07-11 gate on
+a DIFFERENT corpus pin, and then reports a difference of two aggregates as a
+gap-closure fraction. A scorer that substitutes a constant from another pin when
+its comparison arm is missing is a machine for manufacturing false findings: it
+cannot fail closed, and the resulting number carries no lineage. The replacement
+refuses to mix pins and reports a PAIRED exact McNemar on per-question vectors,
+with mechanism-liveness and latency gates beside the effect.
+
+--- original docstring below ---
+
+Kill-gate (b) scorer: does the MiniLM chunk-rerank arm close >=half the
 (syndai - memphant_base) hit@10 gap on the re-pinned corpus?
 
 Reads provenance reports (per_question hit_at_10) for the three arms, pooled

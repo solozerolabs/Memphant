@@ -259,6 +259,122 @@ So the ordering is:
    actually delivers. Do not repeat Phase 2's error of preregistering a
    resolution the n cannot reach.
 
+## K. Kill-gate (b) — the $0 pre-check, now run
+
+§5 said this had to happen before anything was priced. It has. Full method,
+lineage handling, and the process failures caught along the way are recorded
+here; the result and the revised recommendation follow in §K.5 and §7.
+
+### K.1 What (b) asks, and why it was worth running
+
+Kill-gate (a) (2026-07-22) established that the r15 cross-encoder's QA win lives
+at candidate ranks **17–64** — 23 of 26 winning flips sit there — and is
+therefore unreachable by the top-16 rank compression that was the only shape
+affordable under the 1.5 s ceiling with the 13 s bge model. (b) asks the
+complementary question that C2 set up and then abandoned as
+"corroborating-only": now that a small int8 cross-encoder can rerank the **full
+64-candidate pool**, is that band affordable in practice — and does reaching it
+actually move retrieval?
+
+Arms, differing in exactly one variable, on the currently pinned 120-golden bank
+(v1 + v2), scored on the **retrieval** endpoint with `gate_common.provenance_hit`
+span containment. No reader, no judge, **$0**:
+
+- **base** — modernbert, deep mode, `--resource-chunks`, k=10, budget 8192, pool 64
+- **rerank** — identical, plus `--cross-rerank --reranker byo
+  --rerank-granularity chunk --rerank-candidate-limit 64 --rerank-max-length 512`
+  with `MEMPHANT_RERANK_BYO_DIR` on the ms-marco-MiniLM-L6-v2 int8 ONNX
+
+### K.2 The latency premise did not survive contact — retracted, not merely unreproduced
+
+This is the finding that matters most, because it is the premise (b) rests on.
+Same `#[ignore]`d matrix test the spike used, same model dir, same `--release`
+profile, four consecutive samples at 64 × 512 on this host:
+
+| sample | 1 | 2 | 3 | 4 | median |
+|---|---:|---:|---:|---:|---:|
+| `elapsed_ms` | 1140 | 1871 | 1448 | 1472 | **~1460** |
+
+Against the pre-registered **1500 ms** ceiling that is **0.97× headroom, not the
+recorded 3×**, and **two of four samples breach it**. The 449 ms figure is now
+carried as **RETRACTED** at the top of
+`docs/build-log/2026-07-22-reranker-latency-spike.md` and in the C2 log that
+inherited it. What survives is the *model-swap* conclusion — bge-base is the
+wrong model and MiniLM-L6-int8 is roughly an order of magnitude faster. What does
+not survive is the margin.
+
+Two caveats, kept because they cut both ways: the host carried concurrent load
+from sibling worktrees, and four samples is a small matrix. Neither rescues a 3×
+claim that measures 0.97×. The point of the retraction is that the margin was
+never measured carefully enough to carry a spend decision. And note this matrix
+is **body granularity on synthetic ~1.5 KB documents** — the cheapest case. The
+arm below runs **chunk** granularity on real sections, where each candidate
+flattens into several scored docs, so its own `cross_rerank_ms` is the
+authoritative number and can only be worse.
+
+### K.3 Two lineage hazards, one of them a machine for manufacturing findings
+
+**The corpus pin has drifted again.** Syndai HEAD is now `7cbcd13e` and the gate
+hard-failed `corpus file set mismatch` on the first attempt — the same failure
+that opened the C2 wave. The C2 response was to re-pin. **That was not available
+here**: re-pinning re-mines the goldens, which destroys the bank the whole
+comparison rests on and costs paid generator calls. Instead the pinned tree
+`96a26f1f` was `git archive`d into a scratch directory — the Syndai checkout was
+read only, nothing written to it — and **114/114 files verified byte-identical to
+`benchmarks/manifests/syndai_docs_gate.lock.json`** before ingest, yielding 4,920
+sections exactly as the lock records. The pin is preserved without a re-mine.
+
+**The abandoned (b) artifacts are mostly unusable, and one is dangerous.**
+
+| artifact | lineage | reusable? |
+|---|---|---|
+| `verdict-a.json`, `flips-source.json` | derived from r15 reader rows on the **retired** golden bank (`c424b08f`/`30b354c5`), reproduced on the **old** `fb650da` corpus archive | internally consistent, but about a bank that no longer exists — usable only as the qualitative claim "the win sits at ranks 17–64" |
+| `repro-prov-v{1,2}.json` | **no `corpus_revision`, no `golden_sha256`, no label** | **no** — unstampable, therefore unverifiable |
+| `score_killgate_b.py` (archived) | see below | **no — superseded and disarmed** |
+
+The archived scorer silently falls back to a hardcoded `SYNDAI_HIT10=0.200`,
+taken from the 2026-07-11 gate on a **different corpus pin**, whenever the live
+incumbent arm is absent — and then reports a difference of two aggregates as a
+"gap-closure fraction". A scorer that substitutes a constant from another pin
+when its comparison arm is missing cannot fail closed, and the number it emits
+carries no lineage at all.
+
+**Exposure audit: nothing banked came through that path.** The scorer never ran
+to completion; no `verdict.json` exists in `p1-c2-killgate/` and none was ever
+committed (`git log --all --diff-filter=A` → 0 commits). The only surviving trace
+is *prose* in `STATUS.md:88` and the C2 log describing the intended comparison
+against "the incumbent's committed 0.200 hit@10" — a plan, not a result. So
+there is **nothing to retract downstream**, and the trap has been disarmed with a
+`SUPERSEDED — DO NOT RUN` banner rather than deleted, since it is a committed
+artifact of that wave. Its replacement, `scripts/score_killgate_b.py`, refuses to
+mix pins and reports a paired exact McNemar on per-question vectors.
+
+### K.4 A near-miss worth recording: the first arm ran on a debug binary
+
+The first base-arm launch used `target/debug/memphant-server`, the runner's
+default. It was killed mid-ingest and both arms were rebuilt and re-run on
+`--release`. **A latency claim measured on a debug binary is worthless**, and
+this one was a single command away from being banked beside a 1.5 s ceiling. The
+accuracy half of the arm would have been unaffected — retrieval output does not
+depend on the optimization level — which is exactly what makes the failure mode
+dangerous: the run would have looked entirely successful and produced one number
+that was silently meaningless.
+
+The generalizable fix is the same shape as the register's adapter gate: **a
+harness that can emit a latency figure should refuse to run against a debug
+build, or stamp the profile into the artifact so the reader can see it.**
+`gate_run_memphant.py` currently stamps neither the binary path nor its hash; the
+scorer added here stamps `server_bin_sha256` and `worker_bin_sha256` itself, but
+that is a patch at the wrong layer.
+
+Scratch-DB hygiene held throughout: the killed run's ephemeral database was
+dropped by `with_scratch_db.sh`'s own trap, and no sibling worktree, shared
+database, or Syndai file was touched.
+
+### K.5 Result
+
+*Pending — the arms are running. Filled in on completion.*
+
 ## 6. What must stop being said
 
 Per the null review's own instruction: the 2026-07-12 refusal

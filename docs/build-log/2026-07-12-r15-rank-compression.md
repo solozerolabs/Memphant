@@ -1,5 +1,26 @@
 # R1.5 — Rank compression — 2026-07-12
 
+> **RETRACTION, 2026-08-01 — the R6 row below is a NON-MEASUREMENT, not a null.**
+> The "NOT unlocked" verdict on the R6 unlock rule rests on a bootstrap CI whose
+> floor touched exactly 0.000. The exact paired test was never run on those rows.
+> It has now been run: **n=120, b=18, c=8, ψ=0.2167, δ=+0.0833, exact two-sided
+> McNemar p = 0.0755**, against a true **MDE of 12.3pt**. An 8.3pt effect measured
+> on a 12.3pt instrument could not have been proven at this n — "proof is not"
+> was a foregone conclusion of the sample size, not a finding about the lever.
+> **Stop citing this row as evidence that the docs lane has no effect.** It is
+> evidence of nothing either way. Deciding it needs n = 370 (500 at the upper end
+> of ψ's own interval) and costs $57.72–$121.39; see
+> `docs/build-log/2026-08-01-r6-docs-decision.md` for the derivation, the
+> corpus-lineage break that makes these 120 rows unpoolable with any new set, and
+> the $0 pre-check that must run first.
+>
+> The **L2 latency retirement** in the same table has also been superseded twice
+> and should not be quoted bare either: `2026-07-22-reranker-latency-spike.md`
+> cut 64×512 to a measured 449 ms with MiniLM-L6-int8, and a re-measurement on
+> 2026-08-01 put the same matrix at **1140–1871 ms on this host** — inside the
+> 1.5 s ceiling at the median, breaching it at the tail. See
+> `2026-08-01-r6-docs-decision.md` §K.
+
 Owner-authorized order insert before R2. Pre-registration `.superpowers/sdd/r15-plan.md` (rules
 frozen before runs). Base `8481e1b`; commits `baf7144`+`10ca6f7` (pool-depth decoupling + fix),
 `800ac41` (server-side cross-encoder, flag-gated). Lattice unchanged; binaries from a clean
