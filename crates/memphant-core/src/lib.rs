@@ -9186,7 +9186,7 @@ fn admit_or_drop(
         // when a candidate would not fit as a fresh addition regardless of rank.
         dropped_items.push(RecallDroppedItem {
             unit_id: candidate_id,
-            reason: RecallDropReason::Rerank,
+            reason: RecallDropReason::OutputLimit,
         });
         return;
     }
@@ -14955,7 +14955,7 @@ mod pack_cost_tests {
                 .dropped_items
                 .iter()
                 .any(|dropped| dropped.unit_id == UnitId::from_u128(3)
-                    && dropped.reason == RecallDropReason::Rerank),
+                    && dropped.reason == RecallDropReason::OutputLimit),
             "the late candidate is the one dropped: {:?}",
             packed.dropped_items,
         );

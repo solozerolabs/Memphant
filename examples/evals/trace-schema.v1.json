@@ -784,7 +784,7 @@
         "stale",
         "budget",
         "duplicate",
-        "rerank",
+        "output_limit",
         "deleted",
         "invalidated",
         "unknown",

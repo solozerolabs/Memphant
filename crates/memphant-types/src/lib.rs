@@ -433,7 +433,24 @@ pub enum RecallDropReason {
     Stale,
     Budget,
     Duplicate,
-    Rerank,
+    // The pack already held `output_limit` items when this candidate was
+    // reached, so it was never considered. Named `Rerank` until 2026-08-01,
+    // which was wrong in a way that cost a real conclusion: it has ONE emitter,
+    // that emitter sits under `items.len() >= output_limit`, and it fires
+    // whether or not a reranker is installed — on the coding lane no arm had
+    // one. `dropped_items` is then pinned at `scan_depth - k` on EVERY query
+    // (54 on all 180 Track R goldens), so the bucket is scan-window
+    // arithmetic, not a scoring event. Read as a reranker verdict it made a
+    // fusion-ranking deficit look like a rerank defect and set a lane's
+    // priority on that basis. See docs/build-log/2026-08-01-rerank-channel.md.
+    //
+    // Deliberately a `//` comment, not a `///` doc comment: schemars renders a
+    // documented variant as a `oneOf` branch, which would change the shape of
+    // this enum in three public schema artifacts for a rationale that belongs
+    // in the build log. The `rerank` alias keeps traces banked under the old
+    // name deserializable.
+    #[serde(alias = "rerank")]
+    OutputLimit,
     Deleted,
     Invalidated,
     Unknown,
@@ -2163,4 +2180,31 @@ pub struct McpToolSpec {
     pub input_schema: serde_json::Value,
     pub output_schema: serde_json::Value,
     pub annotations: McpToolAnnotations,
+}
+
+#[cfg(test)]
+mod recall_drop_reason_tests {
+    use super::RecallDropReason;
+
+    /// `Rerank` was renamed to `OutputLimit` on 2026-08-01. Traces banked under
+    /// the old wire name must keep deserializing, or every artifact recorded
+    /// before the rename becomes unreadable.
+    #[test]
+    fn the_retired_rerank_wire_name_still_deserializes() {
+        assert_eq!(
+            serde_json::from_str::<RecallDropReason>("\"rerank\"").unwrap(),
+            RecallDropReason::OutputLimit
+        );
+    }
+
+    /// The alias is read-only: new traces must be written under the new name,
+    /// otherwise the rename buys nothing and the misleading label persists in
+    /// every artifact produced from here on.
+    #[test]
+    fn output_limit_serializes_under_the_new_name_only() {
+        assert_eq!(
+            serde_json::to_string(&RecallDropReason::OutputLimit).unwrap(),
+            "\"output_limit\""
+        );
+    }
 }
