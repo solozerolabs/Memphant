@@ -157,6 +157,12 @@ docs/build-log/artifacts/track-r/phase1d/
 # retrieved event text and the provenance reports are large per-question dumps.
 # Only the derived `track_r_phase1r_retrieval_arms.json` alongside is committed.
 docs/build-log/artifacts/track-r/phase1r/
+
+# Exact-channel magnitude re-measurement (2026-07-30). Per-question outputs and
+# server logs carry third-party event bodies; only the derived
+# `track_r_packadj_exact_magnitude.json` alongside is committed.
+docs/build-log/artifacts/track-r/packadj2/
+docs/build-log/artifacts/rung7-packing-reader-gate/packadj2/chat-*-evidence.jsonl
 # Phase 1e combined-build (retrieval + packing) run outputs, same rule.
 # Only the derived `track_r_phase1e_combined_fixes.json` alongside is committed.
 docs/build-log/artifacts/track-r/phase1e/
