@@ -64,6 +64,20 @@ assumption for the coding lane and should be re-tested on the W0 paraphrase
 variant before being generalised — a lexically biased bank is exactly where
 dense would be expected to underperform.
 
+> **RETRACTED 2026-07-31.** The re-test this paragraph asks for was run, and it
+> **reverses the finding**. On the paraphrase bank, `dense + bm25-code` vs
+> `bm25-code` alone is **b=29 / c=5 fused@10, p = 3.86e-05** (fused 89 → 113);
+> dense also lifts the weak overlap scorer **40 → 83**. "The best configuration
+> uses no embeddings at all" is **withdrawn**, and the hybrid-fusion assumption
+> is not killed. Source: W0.2 arms at `3e2cc2ba`,
+> `docs/build-log/2026-07-31-null-review.md`.
+>
+> **Read the last sentence above as the lesson.** The correct caveat was written
+> here, on the day, in the same paragraph as the claim — and the claim is what
+> propagated into `2026-07-30-phase1r-retrieval-bm25.md:128` as a flat
+> recommendation and into downstream configuration. A hedge that does not gate
+> the recommendation does not survive contact with the next reader.
+
 ## The interaction — super-additive, and why
 
 Packed hits of 180, full 2×2:
