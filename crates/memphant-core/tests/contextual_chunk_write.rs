@@ -283,6 +283,16 @@ assistant: A downtown shop for pomegranate molasses is handy.\n";
 /// the chunk-matched item is rendered from its chunks — the matched window's
 /// header + body and a neighbour window — NOT the full session body (the far,
 /// unmatched window is dropped).
+///
+/// The dropped far window is a BUDGET-BOUND outcome, not a redaction contract:
+/// since f67f2b2a the post-fill whole-body completion pass trades a partial
+/// chunk render for the unit's whole body — a superset — whenever the pack's
+/// leftover budget covers the difference. So the chunk render is only observable
+/// when the budget cannot afford the whole body, and this test pins an explicit
+/// `budget_tokens` to sit in that band (the whole body costs 248; 240 admits the
+/// item and gathers the neighbour with no room left to complete). The tail of the
+/// test recalls again on the default roomy budget and asserts the superseding
+/// behavior.
 #[tokio::test]
 async fn recall_chunk_renders_matched_window_plus_neighbour() {
     let store = InMemoryStore::default();
@@ -315,10 +325,12 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
     let episode_id = retained.episode_id.expect("episode retained");
     service.run_worker_tick(usize::MAX).await.expect("reflect");
 
+    let mut tight = recall_request(tenant, scope, actor, "quantum harmonica");
+    tight.budget_tokens = Some(240);
     let response = service
         .recall(
             memphant_store_testkit::resolved_context(tenant, scope, actor),
-            recall_request(tenant, scope, actor, "quantum harmonica"),
+            tight,
         )
         .await
         .expect("recall");
@@ -355,6 +367,26 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
     assert_ne!(
         item.body, SESSION_BODY,
         "packed text is chunk-rendered, not the raw session body"
+    );
+
+    // Roomy budget: the completion pass supersedes the partial render and the
+    // item emits all of itself, far window included. Dropping content the budget
+    // can afford was the render loss f67f2b2a fixed, never a contract.
+    let response = service
+        .recall(
+            memphant_store_testkit::resolved_context(tenant, scope, actor),
+            recall_request(tenant, scope, actor, "quantum harmonica"),
+        )
+        .await
+        .expect("recall");
+    let item = response
+        .items
+        .iter()
+        .find(|item| item.citation_episode_id == Some(episode_id))
+        .expect("episode-derived item recalled");
+    assert_eq!(
+        item.body, SESSION_BODY,
+        "leftover budget covers the whole body, so the partial render completes"
     );
 }
 
