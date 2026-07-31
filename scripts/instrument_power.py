@@ -281,6 +281,19 @@ add_lane(
 )
 
 
+# --- forgetting / lifecycle ------------------------------------------------
+add_lane(
+    "forgetting/lifecycle", "ForgetEval adversarial-385", 259, 111, 0,
+    f"{A}/next-evidence/forgeteval/adversarial-385-{{baseline-instrumented,lineage-complete}}.json",
+    D_MIN,
+    "Recomputed from the 385 shipped case rows: baseline 133 pass / 126 fail / 126 N/A, "
+    "lineage 244 / 15 / 126, the SAME 126 N/A rows in both arms (na agreement 385/385). "
+    "b=111, c=0 -- the STATUS claim of '111 paired gains and zero baseline regressions' "
+    "checks out exactly against the artifact. Deterministic mechanism comparison, no model "
+    "call in the contrast. Highest discordance of any lane we own.",
+)
+
+
 def compute(lane: dict) -> dict:
     out = dict(lane)
     n, b, c = lane["n"], lane["b"], lane["c"]

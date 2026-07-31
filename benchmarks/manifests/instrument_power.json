@@ -246,6 +246,21 @@
       "mde_at_80": 0.146746,
       "required_n": 285,
       "verdict": "INADEQUATE: MDE 14.7pt vs target 7.0pt; need n>=285"
+    },
+    {
+      "lane": "forgetting/lifecycle",
+      "instrument": "ForgetEval adversarial-385",
+      "n": 259,
+      "b": 111,
+      "c": 0,
+      "psi_source": "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-{baseline-instrumented,lineage-complete}.json",
+      "effect_we_care_about": 0.07,
+      "note": "Recomputed from the 385 shipped case rows: baseline 133 pass / 126 fail / 126 N/A, lineage 244 / 15 / 126, the SAME 126 N/A rows in both arms (na agreement 385/385). b=111, c=0 -- the STATUS claim of '111 paired gains and zero baseline regressions' checks out exactly against the artifact. Deterministic mechanism comparison, no model call in the contrast. Highest discordance of any lane we own.",
+      "psi_observed": 0.428571,
+      "delta_observed": 0.428571,
+      "mde_at_80": 0.116723,
+      "required_n": 710,
+      "verdict": "INADEQUATE: MDE 11.7pt vs target 7.0pt; need n>=710"
     }
   ]
 }
