@@ -129,6 +129,27 @@ worker drain per 64k events on this machine) for a result that is at best flat.
 standard RRF were treated as baselines to beat, per the brief, and the
 lexical-only arm is the one that beats them.
 
+> **RETRACTED 2026-07-31 — do not act on the paragraph above.** Every dense
+> comparison on this page was measured on the **original** Track R bank, which
+> leaks lexically at **3.93×** (target 0.3960 / floor 0.1008, exhaustive) against
+> a measured achievable floor of 1.79×. A bank that hands the query's vocabulary
+> to the target is precisely the regime in which a dense channel has nothing left
+> to add, so this null is an artifact of the instrument, not a property of the
+> lane.
+>
+> On the **paraphrase** bank (leakage 2.018×, 180/180 adjudicated distractors,
+> 19.45 mean withheld terms) the verdict inverts. `dense + bm25-code` vs
+> `bm25-code` alone, fused@10: **b=29 / c=5, p = 3.86e-05**, fused hits
+> **89 → 113**. Dense also carries the weak lexical scorer **40 → 83**, so it is
+> doing real work in both lexical regimes rather than rescuing one bad
+> configuration. See `docs/build-log/2026-07-31-null-review.md`
+> (`w02-dense-paraphrase-at10`, `w02-hybrid-vs-bm25code-para-at10`) and the W0.2
+> arms at `3e2cc2ba`.
+>
+> The wall-clock objection survives and is unchanged: dense roughly triples
+> ingest. That is now a **cost/benefit** question against a measured +23.9pt, not
+> a reason to skip a channel that was believed to buy nothing.
+
 ## 4. Lever A as briefed — the Postgres text config — is measured inert, and it is not free
 
 The brief proposed swapping the lexical prefilter's
