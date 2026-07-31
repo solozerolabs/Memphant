@@ -1122,11 +1122,16 @@ class ReaderCli:
                         "environment; run via Doppler"
                     )
                 if self._openrouter_generation_lookup is None:
-                    self._openrouter_generation_lookup = openrouter_generation_lookup(
-                        api_key,
-                        base_url=(
-                            endpoint.rsplit("/chat/completions", 1)[0] if is_stub else None
-                        ),
+                    # base_url is passed ONLY when stubbing, so the live call
+                    # signature is unchanged and test doubles that replace this
+                    # function keep working.
+                    self._openrouter_generation_lookup = (
+                        openrouter_generation_lookup(
+                            api_key,
+                            base_url=endpoint.rsplit("/chat/completions", 1)[0],
+                        )
+                        if is_stub
+                        else openrouter_generation_lookup(api_key)
                     )
                 request = urllib.request.Request(
                     endpoint,
