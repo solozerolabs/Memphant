@@ -22,9 +22,9 @@ gitignored and live at `~/.memphant-private/`; they were read read-only.
    Phase 2 preregisters `d_min = 7pt` on 221 scored rows, "powered ~80% at ψ≈0.15"
    (`docs/superpowers/plans/2026-07-27-accuracy-first-program.md:256`). That ψ is an
    assumption no run supports. Under the exact test the packet itself names, n=221 gives
-   **72.8% power at ψ=0.15**, 76.4% at the most favourable ψ we have ever observed
-   (0.139), and **54.2% at the ψ actually observed on this very lane** (0.229). True MDE
-   is 7.3–9.2pt; reaching 7pt needs n = 240–390. **Do not launch Phase 2 as specified.**
+   **72.8% power at ψ=0.15**, 68.0% at the median ψ of the 80q arm pool (0.167), and
+   **54.2% at the ψ actually observed on this very lane** (0.229). True MDE is 7.6–9.2pt;
+   reaching 7pt needs n = 260–390. **Do not launch Phase 2 as specified.**
 
 2. **A run with fewer than 6 discordant pairs cannot reject, at any effect size.** The
    two-sided exact binomial at α=0.05 has no rejection region until n_d ≥ 6
@@ -171,7 +171,7 @@ numbers in a committed artifact).
 |---|---|---|---|---:|---|---|
 | 1 | LongMemEval-S retrieval | **yes** | hit@5 baseline .614 → cap-1200 .843 (b=0, c=38, n=166) | 0.2289 | **10.7pt** — need n≥390 | $0 |
 | 2 | LME-S 80q pool | **yes**, 21 arms | median arm b=4/c=8 | 0.1667 | **13.5pt** — need n≥285 | $0 |
-| 3 | Phase-2 paid reader QA | **NO** — `paid_calls_executed: 0`, `authorization: null` | none | **unmeasured** | 7.3–9.2pt under proxy ψ | §7 |
+| 3 | Phase-2 paid reader QA | **NO** — `paid_calls_executed: 0`, `authorization: null` | none | **unmeasured** | 7.6–9.2pt under proxy ψ | §7 |
 | 4 | LongMemEval-V2 | **NO** — 9,405 harness lines, `official_output_files: 0` | none | unmeasured | — | §7 |
 | 5 | Track R original | **yes**, 4 paired arms | fused vs scoped-BM25 @10: b=15, c=3 | 0.1000 | **6.7pt** (adequate) | $0 |
 | 6 | Track R paraphrase | **NO** — zero scored arms | none | unmeasured | — | $0 to run |
@@ -206,13 +206,15 @@ conservative, as it must be), and it reproduces the packet's own arithmetic.
 
 | ψ | source | power at 7pt | true MDE | n needed for 7pt |
 |---:|---|---:|---:|---:|
-| 0.139 | best observed (80q pool median) | 0.764 | 7.28pt | 240 |
 | 0.150 | **the packet's assumption** | 0.728 | 7.55pt | 260 |
 | 0.229 | observed on this very lane (rung-7) | 0.542 | 9.24pt | 390 |
 
 The preregistered claim of ~80% power is wrong at every ψ we have. The gap is not the
 arithmetic — it is that **ψ for the reader endpoint has never been measured**. Retrieval
-discordance is the only proxy we own, and the two candidates differ by 65%.
+discordance is the only proxy we own, and its two candidates differ by 37%. Note the
+direction of the risk: reader discordance is often *lower* than retrieval discordance,
+which would help — but "often" is not a measurement, and the packet's ψ=0.15 sits below
+both observed proxies, so the assumption errs in the one direction that matters.
 
 **Reachability.** The scored pool is 221 now, 259 sealed, ≈480 maximum. n=390 is therefore
 reachable *only by spending the sealed confirmation set inside the screening run*, which
@@ -225,10 +227,22 @@ destroys the confirmation. That is a design decision, not a budget line.
 | Track R fused vs BM25 @10 | 180 | 0.1000 | 6.73pt | **ADEQUATE** for 7pt — the only lane that is |
 | Track R rank-order @10 | 180 | 0.1222 | 7.49pt | inadequate; need n≥210 |
 | Track R render-loss @5 | 180 | 0.1944 | 9.51pt | inadequate; need n≥330 |
+| ForgetEval cross-rerank | 259 | 0.3127 | 10.02pt | inadequate for 7pt; need n≥525 |
+| ForgetEval lineage-complete | 259 | 0.4286 | 11.67pt | inadequate for 7pt; need n≥710 |
+| ForgetEval transition-safe *(retracted)* | 259 | 0.6371 | 14.18pt | inadequate; need n≥1045 |
 | Syndai docs hit@10 | 60 | ≥0.1333 | 13.08pt | inadequate; need n≥230 |
-| Syndai docs QA | 60 | ≥0.1667 | 14.68pt | inadequate; need n≥285 |
+| Syndai docs QA | 60 | ≥0.1667 | 14.67pt | inadequate; need n≥285 |
+| Memora pilot vs replay | 71 | 0.3521 | ≥20.3pt | inadequate; **MDE is a floor** (nesting) |
+| Track U | 51 | unmeasured | 17.4pt at ψ=0.20 | **UNPOWERABLE** below ψ=0.20 |
 | `coding_events_golden` @10 | 40 | ≥0.05 | — | **UNPOWERABLE** |
 | LME-S non-regression | 166 | 0.0000 | — | **UNPOWERABLE** (b=c=0 by construction) |
+| LME-S `_abs` sentinel | 12 | 0.1667 | — | **UNPOWERABLE** (n_d=2) |
+| MemSyco (all 5 splits) | 12–14 | unmeasured | — | **UNPOWERABLE** (below the n_d≥6 floor) |
+| procedural rung10 | 1 | — | — | not a measurement |
+
+**Higher discordance costs power.** ForgetEval has the largest effect we own (+42.9pt) *and*
+the worst resolution (11.7pt), because ψ=0.43 puts noise in 43% of pairs. Lanes are not
+ranked by how big their wins look.
 
 Two results worth stating plainly:
 
@@ -681,7 +695,7 @@ moves to §6.1 rank 2.
 
 | lane | ceiling | honest assessment |
 |---|---|---|
-| **Chat-lane Phase 2** (`pack_render_cap`) | **$142.32** — 1,610 calls at $0.088396, derived and reproducing byte-identically via `derive_phase2_packet.py --check` | The *ceiling* is sound; the *design* is not. At n=221 it resolves 7.3–9.2pt, not the preregistered 7pt. Three honest options: **(a)** relaunch with `d_min = 9pt` and no extra spend; **(b)** grow the pool to ~390 scored rows, which is only reachable by consuming the sealed-259 confirmation *inside* the screen — that buys 7pt and destroys the confirmation; **(c)** do not run it. Note what is already known for free: the retrieval effect is +22.9pt, unanimous, b=38/c=0. The paid run does not ask whether the cap helps retrieval; it asks whether that survives to the reader. |
+| **Chat-lane Phase 2** (`pack_render_cap`) | **$142.32** — 1,610 calls at $0.088396, derived and reproducing byte-identically via `derive_phase2_packet.py --check` | The *ceiling* is sound; the *design* is not. At n=221 it resolves 7.6–9.2pt, not the preregistered 7pt. Three honest options: **(a)** relaunch with `d_min = 9pt` and no extra spend; **(b)** grow the pool to 260–390 scored rows, which is only reachable by consuming the sealed-259 confirmation *inside* the screen — that buys 7pt and destroys the confirmation; **(c)** do not run it. Note what is already known for free: the retrieval effect is +22.9pt, unanimous, b=38/c=0. The paid run does not ask whether the cap helps retrieval; it asks whether that survives to the reader. |
 | Chat-lane confirmation + robustness arm | not derivable — priced at authorization time by design | Conditional on a Phase 2 pass |
 | LongMemEval-V2 (Phase 4) | retained maximum $15.18, **not recoverable by resuming** | Correctly parked. Blocked behind SWE-Explore's 0/848 defect |
 
