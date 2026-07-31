@@ -15883,3 +15883,146 @@ mod deep_call_routing_tests {
         );
     }
 }
+
+/// Characterisation tests for two ranking components that are provably INERT on
+/// the Track R coding bank (episodic-only corpus, `MEMPHANT_FACT_EXTRACTION=0`)
+/// and LIVE under the shipped production configuration (fact extraction
+/// default-ON since `40ba26cf`, mixed-kind store). A bank that cannot express a
+/// defect systematically flatters the system it measures, so these are pinned
+/// here rather than left as prose.
+///
+/// **These tests assert the CURRENT, WRONG behaviour on purpose.** They exist to
+/// fail loudly when someone fixes it. See
+/// `docs/build-log/2026-08-01-rerank-channel.md` §7.
+#[cfg(test)]
+mod inert_on_the_bank_live_in_prod_tests {
+    use super::*;
+
+    fn semantic_unit(id: u128, body: &str, fact_key: Option<&str>) -> StoredMemoryUnit {
+        StoredMemoryUnit {
+            id: UnitId::from_u128(id),
+            tenant_id: TenantId::from_u128(1),
+            data_subject_id: SubjectId::from_u128(1),
+            scope_id: ScopeId::from_u128(1),
+            agent_node_id: memphant_types::AgentNodeId::from_u128(
+                ScopeId::from_u128(1).as_uuid().as_u128(),
+            ),
+            subject_generation: 0,
+            kind: MemoryKind::Semantic,
+            state: UnitState::Active,
+            fact_key: fact_key.map(ToString::to_string),
+            predicate: None,
+            body: body.to_string(),
+            confidence: None,
+            trust_level: TrustLevel::TrustedUser,
+            churn_class: None,
+            freshness_due_at: None,
+            actor_id: None,
+            source_kind: None,
+            source_ref: "test:ranking".to_string(),
+            observed_at: "2026-07-15T00:00:00Z".to_string(),
+            source_episode_id: None,
+            source_resource_id: None,
+            deletion_generation: None,
+            contextual_chunks: Vec::new(),
+            valid_from: None,
+            valid_to: None,
+            transaction_from: None,
+            transaction_to: None,
+            difficulty: None,
+            stability_days: None,
+            last_reinforced_at: None,
+            reinforcement_count: 0,
+        }
+    }
+
+    /// `exact_score`'s own doc calls it "a calibrated 0..1 -- the fraction of
+    /// the unit's curated `fact_key` tokens the query covers". It is not.
+    /// `derive_fact_key` prefixes every key with the scope UUID, and `tokenize`
+    /// splits that UUID into five alphanumeric runs that land in the
+    /// DENOMINATOR and that no query can ever match.
+    ///
+    /// Since `3fc4eede` the Exact channel's fusion contribution is scaled by
+    /// this very score (`magnitude = score`), so the deflation is not cosmetic:
+    /// it attenuates the whole channel.
+    #[test]
+    fn exact_score_can_never_reach_one_because_the_scope_uuid_is_in_the_denominator() {
+        let scope = "550e8400-e29b-41d4-a716-446655440000";
+        let unit = semantic_unit(1, "deploy target is fly.io", Some(&format!(
+            "{scope}:deploy_target:is"
+        )));
+        // A query covering EVERY semantic component of the key.
+        let query = tokenize("deploy target is");
+        let score = exact_score(&unit, &query);
+        // Three matched tokens over eight, five of which are UUID runs.
+        assert!(
+            (score - 0.375).abs() < 1e-6,
+            "full semantic coverage scores {score}, not 1.0"
+        );
+    }
+
+    /// Worse than attenuation: an AUTO-derived key (the branch
+    /// `derive_fact_key` takes whenever the extractor supplies no explicit
+    /// subject AND predicate) contains nothing a query can match -- five UUID
+    /// runs, the literal "auto", and a sha256 prefix. `channel_candidates`
+    /// keeps a unit only when `score > 0.0`, so these units are EXCLUDED from
+    /// the Exact channel entirely, however relevant they are. Which units get
+    /// an Exact vote is therefore decided by key FORMATTING, not relevance.
+    #[test]
+    fn auto_derived_fact_keys_score_zero_and_are_dropped_from_the_exact_channel() {
+        let scope = "550e8400-e29b-41d4-a716-446655440000";
+        let key = derive_fact_key(
+            scope.parse().unwrap(),
+            None,
+            None,
+            "the deploy target is fly.io",
+        );
+        assert!(key.contains(":auto:"), "expected the auto branch, got {key}");
+        let unit = semantic_unit(1, "the deploy target is fly.io", Some(&key));
+        let query = tokenize("the deploy target is fly.io");
+        assert_eq!(
+            exact_score(&unit, &query),
+            0.0,
+            "an auto-keyed unit cannot earn an Exact vote at any relevance"
+        );
+    }
+
+    /// `temporal_score` returns a flat `1.0` for EVERY active semantic unit
+    /// under a `current`/`latest`/`now` query -- it reads no timestamp at all.
+    /// The channel then sorts by that constant and breaks the universal tie on
+    /// `body`, so the vote order is ALPHABETICAL BY BODY TEXT. That vote
+    /// carries `TEMPORAL_RECENCY_CHANNEL_WEIGHT = 2.5`, more than the Vector
+    /// channel's 2.0, on the single most common shape of memory query.
+    #[test]
+    fn temporal_score_is_a_constant_so_the_recency_channel_votes_alphabetically() {
+        let newest = semantic_unit(1, "zebra: set in 2026", None);
+        let oldest = semantic_unit(2, "apple: set in 1999", None);
+        let query = "what is my current setting";
+        assert_eq!(temporal_score(&newest, query, None), 1.0);
+        assert_eq!(
+            temporal_score(&oldest, query, None),
+            1.0,
+            "the 27-year-older unit scores identically -- no clock is read"
+        );
+        // The channel's own tie-break is `body` ascending, so "apple..." leads
+        // "zebra..." purely on spelling.
+        assert!("apple: set in 1999" < "zebra: set in 2026");
+    }
+
+    /// The bank cannot see either defect: the Track R corpus is 100% episodic
+    /// and runs with fact extraction off, so `exact_score` returns on its first
+    /// line and `temporal_score`'s only reachable branch requires a SEMANTIC
+    /// unit. Both channels are then dropped whole by the `score > 0.0` filter.
+    #[test]
+    fn both_components_are_structurally_inert_on_an_episodic_corpus() {
+        let mut episodic = semantic_unit(1, "user: what is the current build target", None);
+        episodic.kind = MemoryKind::Episodic;
+        let query = tokenize("what is the current build target");
+        assert_eq!(exact_score(&episodic, &query), 0.0, "no fact_key");
+        assert_eq!(
+            temporal_score(&episodic, "what is the current build target", None),
+            0.0,
+            "the recency branch requires MemoryKind::Semantic"
+        );
+    }
+}

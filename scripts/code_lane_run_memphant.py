@@ -305,6 +305,37 @@ def gold_bearing_units(golden: dict, unit_bodies: dict[str, str]) -> set[str]:
     }
 
 
+def channel_table(trace: dict, gold_ids: set[str]) -> list[dict]:
+    """Every candidate's per-channel `(channel, rank, score)` votes, plus the
+    decay multiplier and the gold flag.
+
+    This is what makes the fuser's constants auditable OFFLINE. Weighted RRF is
+    a pure function of these rows -- `sum(weight[c] / (K + rank))` scaled by
+    `decay_retrievability` -- so one instrumented run lets every candidate
+    weighting, every `K`, and score-normalised alternatives be swept and paired
+    against the shipped fusion without re-ingesting a corpus per arm. The
+    simulator is only trustworthy if it reproduces the shipped ranking exactly
+    from these rows, which is checkable and must be checked."""
+    rows: dict[str, dict] = {}
+    for candidate in trace.get("candidates") or []:
+        unit_id = candidate["unit_id"]
+        row = rows.setdefault(
+            unit_id,
+            {
+                "unit_id": unit_id,
+                "is_gold": unit_id in gold_ids,
+                "fused_rank": candidate.get("fused_rank"),
+                "fused_score": candidate.get("fused_score"),
+                "decay_retrievability": candidate.get("decay_retrievability"),
+                "channels": [],
+            },
+        )
+        row["channels"].append(
+            [candidate["channel"], candidate["channel_rank"], candidate["channel_score"]]
+        )
+    return sorted(rows.values(), key=lambda row: row["fused_rank"] or 10**9)
+
+
 def pack_drop_diagnosis(
     golden: dict,
     trace: dict,
@@ -388,6 +419,7 @@ def pack_drop_diagnosis(
         # W8 cross-encoder liveness, read off the server's own trace.
         "cross_rerank_ms": trace.get("cross_rerank_ms"),
         "cross_rerank": trace.get("cross_rerank"),
+        "channel_table": channel_table(trace, gold_ids),
     }
 
 
