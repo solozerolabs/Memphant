@@ -1713,3 +1713,118 @@ The zero-FK result is a product observation, not only an eval obstacle
 Caveat for any later convo-lane linking: `memory_references` records what the
 **incumbent retriever surfaced**, so using it as retrieval ground truth is
 circular. It is a candidate generator for adjudicated labels, never an oracle.
+
+---
+
+## 2026-07-31 — Preference write path: the substrate is fixed, and the score did not move ($0)
+
+**Headline.** The typed write-router landed and **latest-state-wins is
+0.3123236124176858 — bit-identical to 2026-08-01** — against BM25's
+**0.3198494825964252**. ΔLSW −0.0075, cluster-bootstrap 95% CI
+**[−0.0370, +0.0228]** over the **257 instances** (10,000 resamples, seed
+20260801); misapplication **0.6717** vs 0.6736; neither-returned 0.0103 vs
+0.0019. Cluster-permutation p = 0.657, exact McNemar p = 0.674 on 276
+discordant probes, computed MDE 0.0445. **We still lose to a lexical baseline
+at telling a live rule from a dead one, and it is the same loss.**
+
+**Built (04 §13, `ffa640b8`).** `MemoryKind::Preference` minted (§13.2a) via
+`20260731_006_preference_memory_kind`, classified **breaking** by the
+classifier — widening a TEXT+CHECK enum is additive only under `25` §11c's
+fallback read rule and the frozen kind enum is that rule's closed-Rust-reader
+exception, so `schema_compat_revision` moved. `knowledge` deliberately NOT
+minted (§13.2c: it is the arm name for `semantic`). `write_router_arm` is an
+exhaustive match with no `_` arm (RW-1); `supersedes_own_kind` lifts the
+hardcoded `existing.kind == MemoryKind::Semantic` into the dispatch, which
+makes **RW-3 structural** — an arm can only name its own kind, so `episodic_arm`
+provably supersedes nothing. RW-7: an untrusted preference hint degrades to a
+belief.
+
+**A real cross-kind bug fell out of the lift, attributed by bisect.** Before
+it, an **Episodic** candidate with an explicit subject could close an open
+**Semantic** generation. The regression test was run in a detached worktree at
+`ffa640b8^` (`c666e459`) and **FAILED** there (`left: Supersede, right:
+Append`); green at `ffa640b8`. Not base-relative.
+
+**The migration's real cost was invisible, not syntactic.** The enum is 2 lines
+and no exhaustive `match` on `MemoryKind` existed in `crates/*/src`. But **two
+hardcoded five-kind lists** resolved the scope policy (`lib.rs`, `store.rs`); a
+kind absent there gets no source, `context.allows` denies it, and the unit is
+**invisible to both the compiler snapshot and recall** — the write lands and
+nothing sees it. That is how minting first failed, silently, in a green test.
+Both now iterate `MemoryKind::ALL`. **Lesson: RW-1's exhaustive match protects
+the dispatch, not the enumerations elsewhere.**
+
+**The flag arm (Arm F): the producer exists, the plumb is right, it mines
+almost nothing here.** Verified all three claims — `extract_fact_candidates`
+supplies subject/predicate → the stable `{scope}:{family}:{phrase}` key, no LLM;
+gated on `fact_extraction_enabled` default `false`; **sole caller in the whole
+tree was `bench_lme.rs:885`**, zero server wiring. Wired as
+`MEMPHANT_FACT_EXTRACTION`, **default ON** (`40ba26cf`). Full arm, measured on
+its own scratch DB: **2 semantic units from 8147 episodes**, zero edges, nothing
+superseded, and the score **bit-identical** to the flag-off arm —
+`ΔLSW = 0.0`, CI `[0.0, 0.0]`, **0 discordant probes**. Why: `extract_facts`
+skips every line whose role is not `user` and MemoryCode is `Name: …` dialogue,
+and every pattern is first-person self-report ("my favorite X is", "I switched
+to") while MemoryCode's instructions are second-person directives.
+
+**Why the key cannot be produced at $0 — measured, not argued.** A
+gold-independent key derived from the **session body** recovers **8 / 1063**
+gold groups (0.008); the best variant tried (single content word before the
+quoted literal) reaches **221 / 1063** (0.208). Sessions restate a convention in
+paraphrase. Deriving a preference key is an extraction problem, and extraction
+is a `reflect` stage-1 LLM job that this lane's budget forbids.
+
+**The size of the prize, priced by an ORACLE arm (Arm P, `decisional: false`,
+NOT comparable to BM25).** Handing the instrument's own grouping key to the
+write path: LSW **0.5795**, misapplication **0.3405** — Δ **+0.2672**
+[+0.2375, +0.2985] and **−0.3311** [−0.3647, −0.2984] against the unchanged
+arm. **The state machine fires at scale through Postgres**: 7198 `supersedes`
++ 3599 `contradicts` edges where the unchanged arm had **zero edges of any
+kind**, 3599 superseded units with **0** open transactions, and
+`remainders_recalled` = **0** so no valid-time-closed row ever reached a recall
+result. **So state-machine is not what fails.** The residual 0.34
+misapplication and the +0.063 that moved into neither-returned are the
+session-level scoring identity (one session declares several conventions), not
+supersession.
+
+**Two ranking defects verified; one is NOT binding here.** `temporal_score`
+(`lib.rs:10916`) is binary and its fusion tie-break (`lib.rs:7264`) is
+**alphabetical on the body** — real, but **0 of 1063 MemoryCode probe queries
+contain `current`/`latest`/`now`** (counted from the parquet) and every unchanged
+unit is `Episodic`, not `Semantic`, so it scores 0.0 everywhere on this lane and
+cannot be the binding constraint. `exact_score` (`lib.rs:10722`) tokenizes the
+whole `fact_key`, which `derive_fact_key` prefixes with `{scope_id}:` — a
+hyphenated UUID adds five constant tokens to every denominator, capping the
+Exact channel. Real, not fixed here, flagged so a weak Exact signal is not
+misattributed.
+
+**The ceiling, recorded.** arXiv:2606.15903 (relayed by the coordinating
+session, **not independently verified in this worktree**) puts deterministic
+primitives at **63.4–68.3%** and a **mutation-time** LLM hook at 91.7–93.2%
+(+22.6–24.1pt, ~$0.17/385 mutations, recall hot path untouched), because
+identifier variants and intent-aware deletion are **not recoverable by any
+keying scheme**. Our oracle-keyed 0.5795 sits just under that band. This work
+reaches the deterministic baseline; it is not the frontier. The hook was **not
+built**; `supersedes_own_kind` returns the *kind* an arm may close and never the
+unit set, so target selection stays a separate step the hook can attach to.
+arXiv:2607.21962 (same caveat) corroborates the write-path thesis: weak writes
+fail downstream QA 24.2% vs 1.6%, OR 19.6.
+
+**Verification.** `cargo test --workspace` green before and after the merge of
+`accuracy-first` (`853a710d`). Migration class/boundary checks clean,
+`check_spec_drift.py` clean after rsync to Syndai, `check_evidence_contract.py`
+passes on all four analysis artifacts with a **computed** MDE. Scratch DBs only;
+queue emptiness asserted from the database on the bench superuser credential
+(8147/8147/8147, 0 pending, 0 failed) — never a worker self-report.
+
+**`00` §4 five-doc migration done** (`5e85b641`): `04` (§13.0/§13.1/§13.2a/§13.6
+re-scored honestly — the router is **PARTIAL**, not BUILT; hot-plane chain-head
+injection still absent), `05` (per-kind retrieval row), `06` (actor gating),
+`08` (`kinds` default + capability list), `20` (`memory.superseded`).
+
+Report: `docs/build-log/2026-07-31-preference-writepath.md`. Artifacts:
+`docs/build-log/artifacts/2026-07-31-preference-writepath/`. Commits
+`ffa640b8`, `40ba26cf`, `880f7a81`, `853a710d`, `5e85b641`, `2babd08a` on
+`af-w11-writepath`, **none pushed**. `paid_model_calls: 0`. **No checkbox,
+default, cutover or SOTA claim moves** except `MEMPHANT_FACT_EXTRACTION`, which
+is measured at exactly zero effect on this instrument.
