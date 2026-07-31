@@ -18,6 +18,7 @@
 //! `#[ignore]`d like every live-PG contract; run under the AGENTS.md §37
 //! scratch-DB leg.
 
+use memphant_core::MemoryStore;
 use memphant_store_postgres::PgStore;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{AssertSqlSafe, Row};
@@ -62,7 +63,15 @@ async fn mint_login(root: &sqlx::PgPool, capability: &str, suffix: &str) -> Stri
 /// Seed one tenant-owned episode with the owner credential (which holds the
 /// `using(true)` owner policy), so the seeding path is independent of the
 /// served path under test.
-async fn seed_episode(root: &sqlx::PgPool, tenant: Uuid) -> Uuid {
+struct Seed {
+    subject: Uuid,
+    scope: Uuid,
+    actor: Uuid,
+    agent_node: Uuid,
+    episode: Uuid,
+}
+
+async fn seed_episode(root: &sqlx::PgPool, tenant: Uuid) -> Seed {
     let subject = Uuid::now_v7();
     let scope = Uuid::now_v7();
     let actor = Uuid::now_v7();
@@ -130,7 +139,13 @@ async fn seed_episode(root: &sqlx::PgPool, tenant: Uuid) -> Uuid {
     .execute(root)
     .await
     .expect("episode write");
-    episode
+    Seed {
+        subject,
+        scope,
+        actor,
+        agent_node,
+        episode,
+    }
 }
 
 /// Bind `tenant` on a pool the STORE built and run a bare, unfiltered count of
@@ -307,5 +322,64 @@ async fn the_shipped_login_roles_are_members_and_carry_no_bypass() {
             "{login} must be NOINHERIT so the served pool has to SET ROLE explicitly"
         );
     }
+    root.close().await;
+}
+
+/// The worker pool assumes `memphant_worker`, so FORCE RLS applies to it —
+/// including to the QUEUE-WIDE pending count the drain-exit check reads. That
+/// count has no tenant bound, so under the tenant-isolation policy a bare
+/// `select count(*) from memphant.job_state` answers 0 no matter how deep the
+/// queue is, and `MEMPHANT_WORKER_DRAIN=1` stops after one tick and calls the
+/// partial number a completed drain (measured: 401 queued jobs -> `drain
+/// completed=256`, 145 left `queued`). Seed a job the worker cannot see under
+/// the policy and require the store to count it anyway.
+#[tokio::test]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn the_worker_pool_counts_queued_jobs_across_every_tenant() {
+    let root = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&db_url())
+        .await
+        .expect("connect root");
+    let suffix = Uuid::new_v4().simple().to_string();
+    let worker_login = mint_login(&root, "memphant_worker", &suffix).await;
+
+    let provisioner = PgStore::connect_provisioner(&db_url())
+        .await
+        .expect("connect provisioner");
+    let tenant = provisioner
+        .create_tenant(&format!("served-rls-worker-{suffix}"))
+        .await
+        .expect("provision tenant");
+    let seed = seed_episode(&root, tenant).await;
+    sqlx::query(
+        "insert into memphant.job_state
+           (id, tenant_id, data_subject_id, actor_id, agent_node_id, subject_generation,
+            job_type, target_id, compiler_version, state, scope_id)
+         values ($1, $2, $3, $4, $5, 0, 'reflect_episode', $6, 'test', 'queued', $7)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(tenant)
+    .bind(seed.subject)
+    .bind(seed.actor)
+    .bind(seed.agent_node)
+    .bind(seed.episode)
+    .bind(seed.scope)
+    .execute(&root)
+    .await
+    .expect("job_state write");
+
+    let worker = PgStore::connect_worker(&login_url(&db_url(), &worker_login))
+        .await
+        .expect("connect served worker store");
+    let pending = worker
+        .pending_worker_job_count()
+        .await
+        .expect("pending worker job count");
+    assert!(
+        pending >= 1,
+        "the worker pool must see queued jobs it does not have a tenant bound for; \
+         a 0 here means the drain-exit check is a rubber stamp"
+    );
     root.close().await;
 }

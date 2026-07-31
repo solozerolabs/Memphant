@@ -1,0 +1,843 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-07-31",
+  "doc": "docs/build-log/2026-07-31-instrument-register.md",
+  "power_manifest": "benchmarks/manifests/instrument_power.json",
+  "audit_spend_usd": "0",
+  "method": "Every count is taken from the shipped rows on disk or a fresh fetch of the pinned revision. Nothing is taken from a README, an HF card badge, a lock-file assertion, or a STATUS sentence. Unverifiable values are the string 'unverified', never an estimate.",
+  "verdict_key": {
+    "SOUND": "usable as-is for a decision",
+    "DEGRADED": "usable only with a named restriction",
+    "BROKEN": "must not carry a decision",
+    "ABSENT": "no instrument exists"
+  },
+  "leakage_policy": "Leakage is a five-tuple (unit definition, absolute target coverage, floor, concentration, provenance class) and is never collapsed to a scalar or compared across banks whose memory unit differs. Floors are labelled exhaustive or sampled. Provenance settles contamination; concentration settles lexical tractability; they are independent axes.",
+  "achievable_floor": {
+    "question": "the lowest question->target concentration compatible with the question remaining answerable and uniquely identifying",
+    "w0_probe_concentration": 1.79,
+    "w0_probe_n": 27,
+    "w0_probe_target_mean": 0.131,
+    "w0_probe_floor_mean": 0.0732,
+    "w0_probe_artifact": "~/.memphant-private/track-r-paraphrase/floor/floor-probe.json",
+    "independent_human_corpora_band": "1.76-2.03",
+    "shape_dependence": "state-churn 0.9134, file-symbol-grounding 2.1717, task-resumption 1.965 -- a shape-uniform bar is itself a defect",
+    "recorded_roughness": "small sample, single generator model, agent-judged uniqueness; treat as an order-of-magnitude floor, not a constant",
+    "consequence": "bars must be calibrated against a measured achievable floor BEFORE preregistration; three of our bars have been set below what reality achieves"
+  },
+  "lanes": [
+    {
+      "id": "episodic-chat-lme-s",
+      "memory_type": "episodic/chat",
+      "instrument": "LongMemEval-S (xiaowu0162/longmemeval-cleaned)",
+      "license": {
+        "claim": null,
+        "verified": false,
+        "evidence": "benchmarks/manifests/longmemeval_s.lock.json carries no license field at all, unlike longmemeval_v2.lock.json and memsyco.lock.json which pin the LICENSE blob sha256"
+      },
+      "pinned": {
+        "pinned": true,
+        "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f"
+      },
+      "n": {
+        "dataset_questions": 500,
+        "dev_cohort_frozen": 178,
+        "current_exposure": 238,
+        "sealed_confirmation": 259,
+        "scored_rows_frozen": 166
+      },
+      "provenance_class": "human-authored upstream benchmark; haystack constructed upstream",
+      "leakage": "not applicable - upstream haystack construction",
+      "ever_run": true,
+      "last_result": "retrieval hit@5 baseline 0.6145 -> cap-1200 0.8434 (b=38, c=0, n=166), docs/build-log/artifacts/rung7-packing-reader-gate/",
+      "mde_at_80_power": "10.7pt",
+      "cost_per_run": "0 (deterministic retrieval)",
+      "verdict": "DEGRADED",
+      "evidence": [
+        "Upstream deprecation claim is FALSE: both upstream pages fetched fresh show no deprecation notice and no archive banner; V2 is presented as an additional benchmark, not a successor. The only 'deprecated' strings are our own local filename and docs/build-log/2026-07-31-w2-reader-composition-prereg.md:51, which is blocking W2.1 on that false premise.",
+        "The cleaned split differs from the original on 454/500 questions, and the diff is pure distractor deletion - zero question, answer or label edits. We are pinned on the defensible side.",
+        "hit@10 is a DEAD metric on our slice: recomputed from all 178 per_question rows in both arms, the maximum first_answer_rank ever observed is 5, so hit@10 is identical to hit@5 on all 166 scored rows. Every result reported 'at k=10' on this slice is the k=5 result relabelled.",
+        "Saturated above k=16 on the 80q pool: base recall@16 0.986, recall@48 1.000."
+      ]
+    },
+    {
+      "id": "episodic-chat-abs-sentinel",
+      "memory_type": "episodic/chat",
+      "instrument": "LME-S _abs abstention sentinel (the gate that killed pack_render_cap)",
+      "license": {
+        "claim": null,
+        "verified": false,
+        "evidence": "inherits longmemeval_s.lock.json"
+      },
+      "pinned": {
+        "pinned": true,
+        "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f"
+      },
+      "n": {
+        "rows": 12
+      },
+      "provenance_class": "upstream _abs construction",
+      "leakage": "not applicable",
+      "ever_run": true,
+      "last_result": "baseline 7/12 correct, cap-1200 5/12; paired b=0, c=2",
+      "mde_at_80_power": "UNPOWERABLE",
+      "cost_per_run": "0",
+      "verdict": "BROKEN",
+      "evidence": [
+        "Recomputed independently: n=12, b=0, c=2, two-sided exact p=0.50.",
+        "n_d=2 against the structural floor of 6, so it could not have rejected at ANY effect size. The Phase 0 rescission is confirmed by the test's own arithmetic, not only by the trap-session argument."
+      ]
+    },
+    {
+      "id": "episodic-chat-phase2-reader",
+      "memory_type": "episodic/chat",
+      "instrument": "Phase 2 paid reader QA (pack_render_cap)",
+      "license": {
+        "claim": null,
+        "verified": false,
+        "evidence": "inherits longmemeval_s.lock.json"
+      },
+      "pinned": {
+        "pinned": true,
+        "packet": "docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.v3.json"
+      },
+      "n": {
+        "scored_rows_planned": 221
+      },
+      "provenance_class": "model reader (openai/gpt-5.6-terra), model judge (anthropic/claude-sonnet-5)",
+      "leakage": "not applicable",
+      "ever_run": false,
+      "last_result": "none - paid_calls_executed 0, settled_cost_usd 0, authorization null",
+      "mde_at_80_power": "7.28pt at the best observed proxy psi=0.139; 9.24pt at the psi observed on this lane (0.229). Reader-endpoint psi has NEVER been measured.",
+      "cost_per_run": {
+        "ceiling_usd": "142.32",
+        "logical_calls": 1610,
+        "max_usd_per_call": "0.08839600",
+        "prompt_token_bound": 26000,
+        "derivation": "scripts/derive_phase2_packet.py --check reproduces byte-identically"
+      },
+      "verdict": "DEGRADED",
+      "evidence": [
+        "The ceiling is sound and reproduces. The POWER NOTE is not: the packet preregisters d_min=7pt as 'powered ~80% at psi~=0.15', but under the exact test it names, n=221 gives 72.8% power at psi=0.15, 76.4% at the best observed psi, and 54.2% at the psi observed on this very lane.",
+        "Reaching 7pt needs n=240-390. n=390 is only reachable by consuming the sealed-259 confirmation inside the screening run, which destroys the confirmation."
+      ]
+    },
+    {
+      "id": "episodic-chat-lme-v2",
+      "memory_type": "episodic/chat",
+      "instrument": "LongMemEval-V2 state-aware",
+      "license": {
+        "claim": "Apache-2.0",
+        "verified": true,
+        "evidence": "longmemeval_v2.lock.json pins code.files.LICENSE sha256 c71d239df917..."
+      },
+      "pinned": {
+        "pinned": true,
+        "code_commit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+        "dataset_revision": "f152293e235517d504809563c833d7190b8c713b"
+      },
+      "n": {
+        "materialized_results": 0
+      },
+      "provenance_class": "upstream web-agent trajectories (WebArena/WorkArena)",
+      "leakage": "not applicable",
+      "ever_run": false,
+      "last_result": "none - official_output_files 0, settled_micros 0; manifests v1/v3/v4 marked ABANDONED_NEVER_RESUME; all 11 p1-t6 runs carry an INVALIDATION-PROOF.json",
+      "mde_at_80_power": "uncomputable - no paired run",
+      "cost_per_run": {
+        "retained_maximum_usd": "15.18",
+        "note": "not recoverable by resuming"
+      },
+      "verdict": "BROKEN",
+      "evidence": [
+        "9,405 lines of harness with zero official outputs - the largest single block of apparatus in the repo with no banked result.",
+        "Blocked behind the SWE-Explore 0/848 defect."
+      ]
+    },
+    {
+      "id": "repo-code-track-r-original",
+      "memory_type": "repo/code",
+      "instrument": "Track R repo-memory golden bank (original)",
+      "license": {
+        "claim": "CC-BY-4.0",
+        "verified": true,
+        "evidence": "corpus nebius/SWE-rebench-openhands-trajectories rev 35455389..., recorded in benchmarks/data/track_r_repo_memory_golden.lock.json"
+      },
+      "pinned": {
+        "pinned": true,
+        "corpus_revision": "35455389ab51bf5e2306bfd436ef72d0f98bf882",
+        "golden_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d"
+      },
+      "n": {
+        "goldens": 180,
+        "distinct_repositories": 129
+      },
+      "provenance_class": "agent-generated FROM THE TARGET - the question can copy the answer's vocabulary",
+      "leakage": {
+        "unit": "trajectory event",
+        "target_coverage": 0.396,
+        "floor": 0.1008,
+        "floor_kind": "exhaustive",
+        "concentration": 3.9286,
+        "concentration_vs_sampled": 4.1905
+      },
+      "ever_run": true,
+      "last_result": "fused vs scoped-BM25 @10: b=15, c=3, n=180 (docs/build-log/artifacts/track-r/track_r_phase1e_combined_fixes.json)",
+      "mde_at_80_power": "6.73pt - the only lane adequate for 7pt",
+      "cost_per_run": "0 (paid_api_spend_usd 0 in every phase artifact)",
+      "verdict": "BROKEN for magnitude, usable for direction only",
+      "evidence": [
+        "lock records bar_passed=false: 14/15 checks pass but with_distractors_ge_50pct fails - only 75/180 (41.7%) goldens have adjudicated distractors.",
+        "Concentration 3.93x against an achievable floor of 1.79x, with provenance that permits copying. All four banked paired arms sit on this bank."
+      ]
+    },
+    {
+      "id": "repo-code-track-r-paraphrase",
+      "memory_type": "repo/code",
+      "instrument": "Track R PARAPHRASE golden bank",
+      "license": {
+        "claim": "CC-BY-4.0",
+        "verified": true,
+        "evidence": "same pinned corpus as the original bank"
+      },
+      "pinned": {
+        "pinned": true,
+        "golden_sha256": "4aed8e99dbf13d94...",
+        "sha_matches_lock": true
+      },
+      "n": {
+        "goldens": 180,
+        "by_shape": {
+          "state-churn": 60,
+          "file-symbol-grounding": 60,
+          "task-resumption": 60
+        }
+      },
+      "provenance_class": "agent-generated with target terms WITHHELD (mean 19.45 withheld terms/golden)",
+      "leakage": {
+        "unit": "trajectory event",
+        "target_coverage": 0.1346,
+        "floor": 0.0667,
+        "floor_kind": "exhaustive",
+        "concentration": 2.018,
+        "concentration_vs_sampled": 2.0518
+      },
+      "ever_run": false,
+      "last_result": "none - zero scored arms reference this bank",
+      "mde_at_80_power": "uncomputable - no paired run",
+      "cost_per_run": "0 to run the retrieval arms",
+      "verdict": "SOUND - certify it; the BAR failed, not the bank",
+      "evidence": [
+        "19/20 bar checks pass. The single failure is leak_concentration_le_1_50 at 2.018x, and that bar sits BELOW the measured achievable floor of 1.79x and inside the independent human band of 1.76-2.03x.",
+        "Strictly dominates the bank we actually ran: adjudicated distractors 180/180 vs 75/180; mean lexical overlap 0.0162 vs 0.0517.",
+        "GOVERNANCE DEFECT: the same standard is cited as 1.50x in this lock and as 2.05x in the GitHub-lane preregistration. Two values of one bar are in force.",
+        "Runnability verified (not executed): 180 rows, sha matches lock, exactly one provenance span per golden - the runner's hard requirement at scripts/track_r_retrieval_arm_compare.py:85-87 - zero blank spans, zero abstentions."
+      ]
+    },
+    {
+      "id": "repo-code-coding-events-golden",
+      "memory_type": "repo/code",
+      "instrument": "coding_events_golden",
+      "license": {
+        "claim": "private (Syndai)",
+        "verified": true,
+        "evidence": "benchmarks/data/coding_events_golden.lock.json, source_table coding_execution_attempt_events"
+      },
+      "pinned": {
+        "pinned": true,
+        "sha256": "b7bf9b34959c7c751502dee6bfecb8a794f9fdf87418b69a397e50611c5429e7"
+      },
+      "n": {
+        "goldens": 40,
+        "held_out": 4,
+        "distinct_attempts": 8,
+        "distinct_repos": 1
+      },
+      "provenance_class": "mined from production attempt events",
+      "leakage": "unverified",
+      "ever_run": true,
+      "last_result": "BM25 vs MemPhant @10 delta -0.05 (benchmarks/manifests/code_lane_controls.2026-07-13.json)",
+      "mde_at_80_power": "UNPOWERABLE",
+      "cost_per_run": "0",
+      "verdict": "BROKEN",
+      "evidence": [
+        "n=40 from 8 attempts in a SINGLE repo; held-out slice is 4 questions.",
+        "Unpowerable at psi<=0.15 and 24.2pt MDE even at psi=0.30. No conclusion on this bank is defensible, including the -0.05 comparison.",
+        "Only the delta was published, never b and c, so psi is a lower bound."
+      ]
+    },
+    {
+      "id": "repo-code-github-lane",
+      "memory_type": "repo/code",
+      "instrument": "GitHub lane golden bank",
+      "license": {
+        "claim": "CC-BY-4.0 public sources + private repos",
+        "verified": true,
+        "evidence": "benchmarks/data/github_lane_golden.lock.json public_sources[0].license"
+      },
+      "pinned": {
+        "pinned": true,
+        "golden_sha256": "d3387a4128f5a23b87c764c53e3e43812f0b437b01b1cae79f1b72e907ab3550"
+      },
+      "n": {
+        "goldens_mined": 416,
+        "bar_clearing": 13,
+        "bar_floor": 40
+      },
+      "provenance_class": "MIXED and this is the point - S1 machine-emitted CI logs, P1 human reviewer comments against the pre-change hunk, S4 bot comments (quarantined)",
+      "leakage": {
+        "unit": "PR comment / CI log",
+        "S1_concentration": 3.31,
+        "P1_concentration": 2.42,
+        "S2_concentration": 1.78,
+        "S3_concentration": 1.61,
+        "S4_concentration": 2.11,
+        "bar": 2.05
+      },
+      "ever_run": false,
+      "last_result": "none - no runner exists; github_lane_*.py are fetch, extract, leakage and secrets only",
+      "mde_at_80_power": "uncomputable - no paired run",
+      "cost_per_run": "0 to mine; run cost unverified",
+      "verdict": "DEGRADED - and the metric is mis-specified",
+      "evidence": [
+        "Three of five preregistered bars fail; bar-clearing slice is 13 goldens against a >=40 floor.",
+        "METRIC DEFECT: concentration detects COPYING, which requires the query to be writable from the target. S1's query is emitted by CI before the fix exists and P1's by a reviewer against the pre-change hunk - neither can copy. A high ratio there is causal specificity, not contamination.",
+        "Proof of the mis-specification: swe-prbench, a PUBLISHED HUMAN CORPUS, fails our gate at 2.42x."
+      ]
+    },
+    {
+      "id": "repo-code-swe-contextbench",
+      "memory_type": "repo/code",
+      "instrument": "SWE-ContextBench tranche 1",
+      "license": {
+        "claim": "unverified",
+        "verified": false,
+        "evidence": "no LICENSE blob pinned"
+      },
+      "pinned": {
+        "pinned": true
+      },
+      "n": {
+        "targets": 12,
+        "baselines_resolved": 3,
+        "baselines_attempted": 4
+      },
+      "provenance_class": "upstream",
+      "leakage": "not applicable",
+      "ever_run": true,
+      "last_result": "3/4 no-memory baselines resolve; maximum achievable gain 1 against a required 2",
+      "mde_at_80_power": "cannot express the effect at any n",
+      "cost_per_run": "sunk",
+      "verdict": "BROKEN (baseline-saturated)",
+      "evidence": [
+        "Arithmetically incapable of expressing the required effect. Terminal for this tranche."
+      ]
+    },
+    {
+      "id": "repo-code-swe-explore",
+      "memory_type": "repo/code",
+      "instrument": "SWE-Explore",
+      "license": {
+        "claim": "MIT",
+        "verified": false,
+        "evidence": "swe_explore.lock.json asserts code.license MIT as a bare string with no LICENSE blob sha256"
+      },
+      "pinned": {
+        "pinned": true,
+        "dataset_revision": "bdb0ae45d7c337d9e1dc3ebfe2a0af6bc7c1fbd9"
+      },
+      "n": {
+        "shipped_rows": 848,
+        "rows_with_problem_statement": 0,
+        "rows_with_base_commit": 0
+      },
+      "provenance_class": "upstream",
+      "leakage": "not applicable",
+      "ever_run": false,
+      "last_result": "none",
+      "mde_at_80_power": "uncomputable",
+      "cost_per_run": "blocked",
+      "verdict": "BROKEN",
+      "evidence": [
+        "Of 848 shipped rows, problem_statement is populated on 0 and base_commit on 0, despite the upstream README claiming issue text is included.",
+        "The lock's own observed_release_gaps.base_commit_rows 0 already recorded this."
+      ]
+    },
+    {
+      "id": "semantic-docs-syndai-gate",
+      "memory_type": "semantic/docs",
+      "instrument": "Syndai docs gate",
+      "license": {
+        "claim": "private (Syndai)",
+        "verified": true,
+        "evidence": "benchmarks/manifests/syndai_docs_gate.lock.json, per-file sha256 for every doc"
+      },
+      "pinned": {
+        "pinned": true,
+        "corpus_git_commit": "6fe7f78f59278c71ee00ee976799b17fa242a438"
+      },
+      "n": {
+        "paired_rows": 60,
+        "v2_rows": 60
+      },
+      "provenance_class": "mined from the docs themselves",
+      "leakage": "unverified",
+      "ever_run": true,
+      "last_result": "hit@10 delta -0.133, QA delta -0.167 - MemPhant LOSES to Syndai's own stack (docs/build-log/artifacts/syndai-gate/gate_compare.json)",
+      "mde_at_80_power": "13.08pt (hit@10), 14.68pt (QA)",
+      "cost_per_run": "0",
+      "verdict": "SOUND",
+      "evidence": [
+        "The only lane whose DECISION its instrument could actually support: both effects exceed their own MDE, so the C2 drop rests on adequately-powered evidence.",
+        "RESTRICTION: the artifact commits a bootstrap CI rather than the two discordant cells, so psi is a lower bound. Commit b and c from now on.",
+        "RESTRICTION: at n=60 the lane cannot resolve anything smaller than ~13pt."
+      ]
+    },
+    {
+      "id": "temporal-state-state-bench",
+      "memory_type": "temporal/state",
+      "instrument": "STATE-Bench v0.8.0 (microsoft)",
+      "license": {
+        "claim": "MIT",
+        "verified": true,
+        "verified_by_this_audit": true,
+        "evidence": "fresh clone at tag v0.8.0 has a real LICENSE, sha256 2e969379b1a7eaeeefe741c576aa64e29099b9629b645e0e938bf2c88e7b5f0b, first line 'MIT License'",
+        "caveat": "state_bench.lock.json asserts it as a bare string with NO LICENSE blob hash - the claim is true but the lock does not make it checkable"
+      },
+      "pinned": {
+        "pinned": true,
+        "revision": "e2c8d7af51ef48fbbea51bb2ce1fb859af36b423",
+        "tag": "v0.8.0",
+        "revision_confirmed_by_fresh_clone": true
+      },
+      "n": {
+        "tasks": 450,
+        "test": 150,
+        "train_trajectories": 300,
+        "verified_by": "the repo's own auditor returned audit-ok-no-model-calls with 50 test tasks per domain, which transitively verifies all four native-scorer sha256s and the aggregate inventory hash"
+      },
+      "provenance_class": "upstream, split upstream-endorsed (splits/train_test.json exactly partitions tasks)",
+      "leakage": "not applicable",
+      "ever_run": false,
+      "last_result": "none - zero banked results, no artifact anywhere",
+      "mde_at_80_power": "uncomputable - no paired run",
+      "cost_per_run": "unverified - with no tasks, envs or trajectories ever materialized locally, the byte-measured derivation had no input. Any dollar figure quoted before this audit was a guess.",
+      "verdict": "BROKEN",
+      "evidence": [
+        "NOTHING was ever materialized locally: benchmarks/state_bench/ is 4.0K holding one 90-line file, the upstream cache dir does not exist, and a filesystem-wide search for the pinned revision or any trajectory file returned zero hits. Every task-count figure in the lock was unbacked transcription until this audit.",
+        "IT WOULD FAIL ON EVERY RETRIEVAL CALL: memphant_memory_agent.py:31-38 POSTs tenant_id and omits subject_id, agent_node_id and subject_generation, against crates/memphant-types/src/lib.rs:1778-1794 which is serde deny_unknown_fields and requires all three. The adapter predates the C0 strict-contract migration and was never re-exercised.",
+        "REPRODUCED LIVE AT $0 through the official load_root_agent_class loader and the official tool entry point: RuntimeError: MemPhant recall failed: HTTP 400. Control: patching only that payload block returns a correct learning.",
+        "BLAST RADIUS: --retry-attempts defaults to 3 so every task bills three times; traj.save() is never reached so no trajectory is written; verify_results then refuses to aggregate. 150 tasks x 5 runs x 3 retries purchased, ZERO scored rows."
+      ]
+    },
+    {
+      "id": "forgetting-lifecycle-forgeteval",
+      "memory_type": "forgetting/lifecycle",
+      "instrument": "ForgetEval adversarial-385",
+      "license": {
+        "claim": "MIT",
+        "verified": true,
+        "evidence": "license_sha256 cdf599e8... pinned inside the RESULT artifact rather than a lock manifest - unusual, but bound"
+      },
+      "pinned": {
+        "pinned": true,
+        "case_count": 385
+      },
+      "n": {
+        "cases": 385,
+        "paired_scorable": 259,
+        "not_applicable": 126,
+        "families": {
+          "amnesia": 53,
+          "decay": 21,
+          "drift": 61,
+          "purge": 125,
+          "supersession": 125
+        }
+      },
+      "provenance_class": "upstream adversarial case families",
+      "leakage": "not applicable",
+      "ever_run": true,
+      "last_result": "lineage-complete 244 pass / 15 fail / 126 N/A vs baseline 133 / 126 / 126; paired b=111, c=0, n=259 (docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-*.json)",
+      "mde_at_80_power": "11.67pt",
+      "cost_per_run": "0 for the contrast itself - the lineage consolidation is deterministic and required zero new model calls; the earlier proposal campaign settled $0.4150225 across 293 calls",
+      "verdict": "SOUND",
+      "evidence": [
+        "Recomputed from the 385 shipped case rows rather than the STATUS sentence, and the sentence CHECKS OUT: the same 126 N/A rows appear in both arms (na agreement 385/385), giving a paired base of 259 with 111 gains and zero regressions.",
+        "The observed +42.9pt sits far above the lane's 11.67pt MDE, so the banked result is comfortably powered.",
+        "RESTRICTION: psi=0.43 is the highest of any lane we own, so this instrument needs n>=710 to resolve 7pt. It is sound for large effects and unusable for fine tuning.",
+        "Not SOTA: the raw score ties Lethe v1 and trails Mem0 and the published LLM-assisted arms.",
+        "SCOPE CAVEAT: all 126 N/A rows are error_kind 'not_supported' - 125 of them the ENTIRE purge family - because MemPhant has no selective hard purge-by-query primitive. 32.5% of a forgetting benchmark is permanently unscorable for us.",
+        "SATURATION: in the lineage arm amnesia is 53/53 and decay is 21/21, both fully saturated. Only drift and supersession remain scorable and unsaturated.",
+        "Cross-validated: forgeteval.next-evidence.n12.json independently states the cross-rerank arm 'repaired 65 failures but regressed 16 baseline passes', matching the recomputed cells exactly.",
+        "The RETRACTED 188/71/126 arm is a real shipped artifact and was retracted for a reason the prose never gave: it carries 55 baseline regressions that the lineage arm eliminates.",
+        "The official corpus is NOT on disk; re-running requires re-cloning."
+      ]
+    },
+    {
+      "id": "temporal-state-memora-fama",
+      "memory_type": "temporal/state",
+      "instrument": "Memora / FAMA",
+      "license": {
+        "claim": "Apache-2.0",
+        "verified": true,
+        "evidence": "memora.lock.json pins license.file LICENSE + sha256 c71d239d..."
+      },
+      "pinned": {
+        "pinned": true,
+        "revision": "a6493188efc836d6511ed5e4163fe3ba87da30ff"
+      },
+      "n": {
+        "eval_subquestions": 71,
+        "parent_questions": 15,
+        "note": "the 71 subquestions NEST inside 15 parent questions (mean 4.7 each) and are NOT independent"
+      },
+      "provenance_class": "upstream labels; grading is a strict 3-LLM-judge consensus (claude-haiku-4.5 / gemini-2.5-flash / gpt-4.1), and the judges disagree: per-judge overall on the pilot is 44 / 46 / 44",
+      "leakage": "development-exposed: a single sealed persona (weekly/software_engineer), 15 questions, with repeated targeted prompt and extractor iteration against those same questions recorded across 2026-07-14. Not a holdout.",
+      "ever_run": true,
+      "last_result": "official FAMA 32.96 (44/71) pilot -> 53.49 (43/71) after reader-only replay; Flash arm 19.54 (31/71). Artifacts live only in /Users/sidsharma/Memphant/docs/build-log/artifacts/unified-sota-2026071{3,4}/",
+      "paired_discordance": {
+        "n": 71,
+        "b_pilot_only": 13,
+        "c_replay_only": 12,
+        "psi": 0.3521,
+        "finding": "the reported 'flat 43/71 vs 44/71' hides 25 discordant cells out of 71 - the replay changed a third of the graded cells"
+      },
+      "mde_at_80_power": "20.3pt nominal, and that is a FLOOR on the true MDE because the nesting makes exact McNemar at n=71 anticonservative (effective n nearer 15)",
+      "cost_per_run": "prior runs settled ~$1.5-2 in total across extractor and reader",
+      "verdict": "SOUND as an instrument, DEGRADED as evidence",
+      "evidence": [
+        "Every STATUS number reproduces exactly from the native scorer outputs.",
+        "A FOURTH, newer result exists that STATUS does not carry - FAMA 61.67, 56/71, in docs/build-log/2026-07-15-memora-causal-split.md - and no .fama.json was located for it. UNVERIFIED."
+      ]
+    },
+    {
+      "id": "temporal-state-stale",
+      "memory_type": "temporal/state",
+      "instrument": "STALE",
+      "license": {
+        "claim": "MIT code; CC-BY-4.0 dataset",
+        "verified": false,
+        "evidence": "stale.lock.json asserts upstream_license as a bare string with no LICENSE blob sha256"
+      },
+      "pinned": {
+        "pinned": true,
+        "dataset_revision": "617c51dc200b5ab09970834144c7e51c77959af0"
+      },
+      "n": {
+        "upstream_records": 400,
+        "pilot_reached": 4,
+        "probe_dimensions": 12
+      },
+      "provenance_class": "upstream",
+      "leakage": "not applicable",
+      "ever_run": "apparatus ran; NO scored result",
+      "last_result": "run-2/current/proof.json: 12/12 dimensions evidence_disposition.status 'insufficient', answer_policy 'abstain_unknown', promotion_ineligible true. The candidate arm never reached recall.",
+      "paired_discordance": null,
+      "mde_at_80_power": "uncomputable - no scored run",
+      "cost_per_run": "$0.4245304 already settled across two authorizations, for zero official numbers; deep_cost_status UNRECONCILED",
+      "verdict": "BROKEN",
+      "evidence": [
+        "AUTHORIZATION-1-CLOSURE.json: CLOSED_PREPAID_OPERATIONAL_FAILURE - the adapter passed an upstream timezone-naive timestamp and the first episode was rejected.",
+        "AUTHORIZATION-2-CLOSURE.json: CONSUMED_REJECTED_STOP_NO_BROADENING, native_judge NOT_RUN_KILL_GATE, full_400_scenario_run FORBIDDEN_NO_BROADENING.",
+        "The upstream 400-record dataset and native scorer are materialized and pinned. The MemPhant side is what fails."
+      ]
+    },
+    {
+      "id": "temporal-state-memsyco",
+      "memory_type": "temporal/state",
+      "instrument": "MemSyco",
+      "license": {
+        "claim": "MIT",
+        "verified": true,
+        "evidence": "memsyco.lock.json pins LICENSE f607254f..., recomputed against the materialized upstream and matching"
+      },
+      "pinned": {
+        "pinned": true,
+        "revision": "c31e2c85ee8cc3c6f643587b8a6f4b5ad5eb3bf6"
+      },
+      "n": {
+        "upstream_samples": 1550,
+        "upstream_verified_by": "line count: objective_fact_judgment 300, contextual_scope_control 300, memory_evidence_conflict 300, valid_memory_selection 350, personalized_memory_use 300 - exactly matching the lock",
+        "our_calibration_splits": "12-14 per split"
+      },
+      "provenance_class": "upstream",
+      "leakage": "not applicable",
+      "ever_run": false,
+      "last_result": "none - two official tracks explicitly retired with ZERO completed samples",
+      "paired_discordance": null,
+      "mde_at_80_power": "every calibration split is n=12-14, below the n_d>=6 structural floor - unpowerable",
+      "cost_per_run": "$0.001545554 sunk on the first fail-closed rejection",
+      "verdict": "DEGRADED",
+      "evidence": [
+        "objective/OFFICIAL-RETIREMENT.json: memphant_completed_samples 0, failure_class structured_extractor_evidence_grounding.",
+        "scope/OFFICIAL-RETIREMENT.json: memphant_answers 0, memphant_judges 0, memphant_report_exists false.",
+        "SAME failure class as STALE: the structured extractor rejects on evidence grounding before any answer exists.",
+        "The committed 3.9M under benchmarks/memsyco/ is NOT upstream data - it is MemPhant-generated calibration packets.",
+        "Predeclared SOTA gates and a 10,000-resample bootstrap protocol are sealed and ready. Best-prepared instrument in the set; zero numbers produced."
+      ]
+    },
+    {
+      "id": "preference-user-track-u",
+      "memory_type": "preference/user",
+      "instrument": "Track U golden bank",
+      "license": {
+        "claim": "private (owner's own files)",
+        "verified": true,
+        "evidence": "self-authored from private Syndai/repo feedback files; pinned source snapshot 94 files"
+      },
+      "pinned": {
+        "pinned": true,
+        "sha256": "e29821b24aff753a3bd5f58653f65044851485d1a7690d1081dedcb1a5200b87",
+        "sha_recomputed_and_matching": true
+      },
+      "n": {
+        "goldens": 51,
+        "probes": 60,
+        "candidates": 60,
+        "source_files": 91,
+        "strata_by_axis": {
+          "correction_retention": 27,
+          "staleness": 12,
+          "scope_contradiction": 12
+        },
+        "strata_by_category": {
+          "procedural": 34,
+          "semantic": 10,
+          "guardrail_exception": 5,
+          "identity": 2
+        },
+        "strata_by_authority": {
+          "user_correction": 32,
+          "agent_learned": 19
+        }
+      },
+      "provenance_class": "owner-authored feedback files; labels human-curated with observable_correct_behavior / forbidden_behavior per row",
+      "leakage": "unverified",
+      "ever_run": false,
+      "last_result": "none - the only script is user_lane_extract.py; there is NO runner and no artifact references the lane",
+      "paired_discordance": null,
+      "mde_at_80_power": "UNPOWERABLE below psi=0.20; 17.4pt at psi=0.20",
+      "cost_per_run": "$0 to run once a runner exists",
+      "verdict": "SOUND but UNRUN - and a STOP CONDITION",
+      "evidence": [
+        "Bank quality is high: zero nulls across all 13 fields, sha recomputed and matching, category weights within 1.7pp of the measured power-user distribution.",
+        "STOP CONDITION: deciding 7pt needs n=340 (psi=0.20) to 665 (psi=0.40) against a pinned source snapshot of 94 files. That n is unreachable on the available corpus.",
+        "Honestly sized for a ~15pt effect (n=72 at psi=0.20) and nothing finer."
+      ]
+    },
+    {
+      "id": "procedural-rung10",
+      "memory_type": "procedural",
+      "instrument": "rung10 state-style procedure replay",
+      "license": {
+        "claim": null,
+        "verified": false,
+        "evidence": "self-authored, no upstream"
+      },
+      "pinned": {
+        "pinned": false
+      },
+      "n": {
+        "total_cases": 1
+      },
+      "provenance_class": "self-authored (source_status 'sampled_public_style')",
+      "leakage": "not applicable",
+      "ever_run": "nominally",
+      "last_result": "score 1.0 vs baseline 0.0, CI [1.0, 1.0], n=1 (rung10-state-style-sampled-traces.json: total_cases 1, passed_cases 1)",
+      "paired_discordance": null,
+      "mde_at_80_power": "not a measurement",
+      "cost_per_run": "0",
+      "verdict": "ABSENT",
+      "evidence": [
+        "One self-authored case, id procedural_memory_replay_validation. A CI of [1.0,1.0] on n=1 is not a measurement.",
+        "Its embedding_selection axis is source_status 'not_run'.",
+        "STATUS.md:172 already reopened rung 10 because its promotion evidence was synthetic fixtures.",
+        "The only real procedural instrument in the register is STATE-Bench's retrieve_learnings axis, and STATE-Bench is BROKEN. Track U's 34 procedural rows are the nearest usable substitute and have never been run."
+      ]
+    }
+  ],
+  "absent": [
+    {
+      "lane": "hot/cold planes",
+      "finding": "ABSENT - and the feature does not exist. No ColdTier, hot_tier or tiering module anywhere in crates/; every hot_* symbol is hot_path latency. The only in-repo statement of fact calls the tiering dormant (docs/build-log/2026-07-22-b5-b6-ci-honesty-deletions.md:121). Any STATUS sentence claiming a hot/cold plane is false."
+    },
+    {
+      "lane": "store divergence on the file plane",
+      "finding": "ABSENT - file_sync is not among the 18 shared memphant-store-testkit cases, and both file-plane suites construct only InMemoryStore. The store-divergence anti-pattern is live and unguarded exactly there."
+    },
+    {
+      "lane": "procedural memory",
+      "finding": "ABSENT - n=1, self-authored, saturated at 1.0 with a CI of [1.0,1.0]. No external procedural instrument exists; STATE-Bench is the only candidate and it is BROKEN."
+    }
+  ],
+  "substrates": [
+    {
+      "substrate": "Postgres runtime - latency",
+      "instrument": "crates/memphant-store-postgres/tests/hot_path_slo_pg.rs",
+      "n": 80,
+      "in_ci": true,
+      "banked": "continuous",
+      "verdict": "SOUND",
+      "cost_per_run": "0"
+    },
+    {
+      "substrate": "Postgres runtime - HTTP boundary",
+      "instrument": "scripts/episodic_lane_run_memphant.py --slo-samples",
+      "n": 200,
+      "in_ci": false,
+      "banked": "p50 32.59ms / p95 37.18ms, docs/build-log/artifacts/c1-episodic/slo-bar1-http-provenance.json, 2026-07-22",
+      "verdict": "DEGRADED",
+      "cost_per_run": "0",
+      "note": "this is the acceptance-grade number and it is manual; only the store-layer proxy runs continuously"
+    },
+    {
+      "substrate": "Postgres runtime - RLS",
+      "instrument": "crates/memphant-store-postgres/tests/served_path_rls.rs",
+      "n": "2 tests + 4 corroborating suites",
+      "in_ci": true,
+      "banked": "continuous",
+      "verdict": "SOUND",
+      "cost_per_run": "0",
+      "note": "the standing 'server runs as superuser so RLS is bypassed' caveat is STALE. 20260730_004_served_login_roles.sql ships the login roles and the test includes a negative control: a bypassing credential must return 1, on the stated grounds that otherwise the isolation assertion proves nothing."
+    },
+    {
+      "substrate": "store divergence - core trait",
+      "instrument": "crates/memphant-store-testkit/src/lib.rs via both contract suites",
+      "n": 18,
+      "in_ci": true,
+      "banked": "continuous",
+      "verdict": "SOUND",
+      "cost_per_run": "0",
+      "note": "18 cases byte-identical on InMemory and Postgres, zero divergence; covers semantic_update_supersedes_unit_aged_past_recall_window, the exact anti-pattern shape"
+    },
+    {
+      "substrate": "file plane B2/B3",
+      "instrument": "crates/memphant-cli/tests/file_plane_n12.rs, crates/memphant-mcp/tests/distribution_wedge.rs",
+      "n": "12 + 8",
+      "in_ci": true,
+      "banked": "docs/build-log/artifacts/b2-file-plane/gate-summary.json and b3-distribution-wedge/gate-summary.json, 2026-07-23",
+      "verdict": "DEGRADED",
+      "cost_per_run": "0",
+      "note": "both suites construct only InMemoryStore, yet b3's summary records real_mcp_stdio_and_postgres true; that property is carried by scripts/e2e_probe.sh, not by these tests. b3's tested_commit is the unsubstituted placeholder 'containing_commit'. Both summaries honestly self-report repository_gate_status unmet."
+    },
+    {
+      "substrate": "MCP surface",
+      "instrument": "crates/memphant-mcp/tests/mcp_schema_contract.rs + scripts/e2e_probe.sh",
+      "n": "7 tools / 4 resource templates",
+      "in_ci": true,
+      "banked": "continuous",
+      "verdict": "SOUND",
+      "cost_per_run": "0"
+    },
+    {
+      "substrate": "hot/cold planes",
+      "instrument": null,
+      "n": null,
+      "in_ci": false,
+      "banked": null,
+      "verdict": "ABSENT",
+      "cost_per_run": null
+    }
+  ],
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "b6_honesty_legs": {
+      "postgres_service_job": true,
+      "fastembed_off": true,
+      "ops": true,
+      "lme_s_n5_smoke": true
+    },
+    "latest_run": {
+      "date": "2026-07-28",
+      "result": "success",
+      "both_jobs_executed": true
+    },
+    "paid_model_calls": 0,
+    "ignored_test_sweep": "92 ignored Rust tests: 65 are the Postgres/worker suites CI runs explicitly via `cargo test -- --ignored`; the rest are gated on large model downloads or paid provider keys. No should_panic misuse, no always-true assertions, no env-gated test that CI silently never sets.",
+    "claim_reflect_jobs_race": "FIXED in shipped SQL - a BLOCKING pg_advisory_xact_lock runs as its own statement inside the candidate loop before the claim, lanes ordered deterministically, held to transaction end (memphant_migrations/versions/20260724_003_worker_claim_throughput.sql:128). Pinned by tests/test_wsa_migration_contract.py:819."
+  },
+  "cross_cutting_findings": [
+    {
+      "id": "F1",
+      "finding": "The Phase 2 paid run is underpowered at its own preregistered resolution. d_min=7pt on n=221 delivers 72.8% power at the assumed psi=0.15 and 54.2% at the psi observed on that lane. Do not launch it as specified.",
+      "severity": "blocks spend"
+    },
+    {
+      "id": "F2",
+      "finding": "Two-sided exact McNemar at alpha=0.05 has no rejection region below n_d=6, so any run yielding fewer than six discordant pairs has zero power at any effect size. This generalises the n<=12 tripwire reclassification.",
+      "severity": "governance"
+    },
+    {
+      "id": "F3",
+      "finding": "Licenses asserted as bare strings with no LICENSE-blob sha256: state_bench.lock.json (MIT - true, verified independently by this audit, but unbound), stale.lock.json (MIT code / CC-BY-4.0 data), swe_explore.lock.json (MIT). longmemeval_s.lock.json carries NO license field at all. By contrast memsyco, longmemeval_v2 and memora all pin the blob.",
+      "severity": "integrity"
+    },
+    {
+      "id": "F4",
+      "finding": "Four lanes publish only a delta or a bootstrap CI, never the two discordant cells, so their psi is only a lower bound and their power is uncomputable after the fact. Commit b and c in every paired analyzer.",
+      "severity": "governance"
+    },
+    {
+      "id": "F5",
+      "finding": "One leakage bar has two values in force: 1.50x in the paraphrase lock and 2.05x in the GitHub-lane preregistration.",
+      "severity": "governance"
+    },
+    {
+      "id": "F6",
+      "finding": "The 'LongMemEval split is deprecated upstream' premise is false and is currently blocking W2.1 at docs/build-log/2026-07-31-w2-reader-composition-prereg.md:51.",
+      "severity": "unblocks work"
+    },
+    {
+      "id": "F7",
+      "finding": "Three external instruments failed at first contact on OUR side, never theirs: STATE-Bench (tenant_id vs deny_unknown_fields), STALE (timezone-naive timestamp), MemSyco (structured extractor rejects on evidence grounding). Two were discovered only after money was authorized. RECOMMENDED GATE: no paid authorization for any lane whose adapter has not completed a $0 stub-server round trip against the current strict contract since the last contract change.",
+      "severity": "blocks spend"
+    },
+    {
+      "id": "F8",
+      "finding": "Memora's reported 'raw accuracy stayed flat at 43/71 vs 44/71' hides 25 discordant cells out of 71. A one-cell net was reported for a change that moved a third of the graded cells.",
+      "severity": "misreading of banked evidence"
+    },
+    {
+      "id": "F9",
+      "finding": "87 of the 88 entries in docs/build-log/artifacts/canonical-artifact-allowlist.txt are absent from the af-w7-register worktree; all Memora and MemSyco evidence survives only in /Users/sidsharma/Memphant. An audit run inside a worktree will wrongly conclude 'never run' for lanes that did run.",
+      "severity": "audit hazard"
+    }
+  ],
+  "stop_conditions": [
+    {
+      "lane": "Track U",
+      "ceiling": "n=51; unpowerable below psi=0.20, 17.4pt at psi=0.20",
+      "why": "deciding 7pt needs n=340-665 against a pinned source snapshot of 94 files"
+    },
+    {
+      "lane": "coding_events_golden",
+      "ceiling": "n=40, held-out 4, one repo",
+      "why": "unpowerable at psi<=0.15; superseded by the Track R paraphrase bank"
+    },
+    {
+      "lane": "MemSyco as calibrated",
+      "ceiling": "five splits at n=12-14",
+      "why": "below the n_d>=6 floor; the upstream 1550 samples are not the constraint, our calibration slices are"
+    },
+    {
+      "lane": "SWE-ContextBench tranche 1",
+      "ceiling": "max gain 1 vs required 2",
+      "why": "arithmetically saturated"
+    },
+    {
+      "lane": "SWE-Explore",
+      "ceiling": "0/848 usable rows",
+      "why": "no spend fixes absent upstream fields"
+    },
+    {
+      "lane": "ForgetEval purge family",
+      "ceiling": "125 of 385 cases permanently N/A",
+      "why": "no selective hard purge primitive - a product gap, not a measurement gap"
+    },
+    {
+      "lane": "procedural",
+      "ceiling": "n=1",
+      "why": "not a measurement"
+    }
+  ]
+}

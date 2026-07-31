@@ -3047,12 +3047,15 @@ impl MemoryStore for PgStore {
     }
 
     async fn pending_worker_job_count(&self) -> Result<usize, StoreError> {
-        let count: i64 = sqlx::query_scalar(
-            "select count(*) from memphant.job_state where state in ('queued', 'running')",
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(backend)?;
+        // `security definer`, like `dead_letter_count()`. A bare count here is
+        // filtered to nothing by the job_state tenant-isolation policy now that
+        // the worker pool assumes `memphant_worker`, and a queue-wide count
+        // that silently answers 0 turns the drain-exit check into a rubber
+        // stamp (see 20260730_005_pending_worker_job_count.sql).
+        let count: i64 = sqlx::query_scalar("select memphant.pending_worker_job_count()")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(backend)?;
         Ok(count as usize)
     }
 
