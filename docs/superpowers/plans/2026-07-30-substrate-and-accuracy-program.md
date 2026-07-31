@@ -357,7 +357,7 @@ packaged runtime — the single binding accuracy criterion; (6) re-derive
 | TM2C2 fusion (TOIS 2023) | paper | **IMPLEMENT** |
 | BM25 formula (`Michael-JB/bm25`) | MIT | **IMPLEMENT** (~200 lines) |
 | Chain-of-Note prompting form | paper | **IMPLEMENT** (prompting only, not the fine-tuning) |
-| `aiming-lab/ClawArena` | MIT | **ADOPT** as Track U's external instrument |
+| ClawArena | **UNRESOLVED — see §6a** | **HOLD** — dataset license unverified |
 | `YujunZhou/TRACE_exp` | MIT | **EVALUATE** — corrections as executable gates |
 | tree-sitter + cAST chunking | MIT / paper | **ADOPT** for the code lane (costs a full re-chunk/re-embed) |
 | Zoekt ranking design | Apache-2.0 | **IMPLEMENT** (Go — patterns, not code) |
@@ -405,3 +405,77 @@ preregistered same-lattice evidence, scratch DBs, $0 gates before paid spend,
 never fabricate a number, and **"SOTA" stays banned until a protocol run**.
 Adopted code earns its default through the same bar as code we wrote; a
 technique's published gain is never our number.
+
+## 6a. Dataset sweep corrections (2026-07-31) — three beliefs in this plan were wrong
+
+A public-dataset sweep (HF, Kaggle, GitHub, Zenodo, lab sites), verifying licenses
+from LICENSE files and record metadata and **shipped rows rather than READMEs**,
+overturned three things asserted above.
+
+**(1) The "no public coding-memory instrument" premise fails — three exist.**
+
+| instrument | license (verified) | what it carries |
+|---|---|---|
+| `AMA-bench/AMA-bench` | **MIT** (card metadata; the paper text says CC-BY-4.0 — a real disagreement to resolve) | 208 episodes / 2,496 QA; **36 episodes are SWE-bench run through OpenHands, with 432 human-annotated QA pairs** typed recall / causal / state-update / state-abstraction, turn-anchored |
+| `CohereLabsCommunity/memorycode` | **Apache-2.0** (card + GitHub) | 8,400 sessions, **2,913 `instruction-update` events**, and **4,908 sessions ship deterministic regex graders** — correction retention scored programmatically, no LLM judge |
+| `yifannnwu/SWE-Together` | **Apache-2.0** | 109 tasks from 11,260 real user-agent sessions; 804 typed `oracle_intents` including **103 real corrections** with `source_turn` and verbatim excerpts |
+
+**AMA-Bench is the closest public analogue of Track R** — same corpus family
+(SWE-bench via OpenHands), human-annotated memory QA, MIT, free. Running it first
+would have given a human-authored calibration baseline **before** we generated a
+single question, and the bias would have been visible immediately. Adoption cost
+is a schema adapter plus accepting n=36 episodes.
+
+**(2) ClawArena's MIT is a badge, not a verified license — and we had already
+adopted it.** `aiming-lab/ClawArena` returns **HTTP 401** and is not a public HF
+dataset. The data is at `Haonian/ClawArena`, whose `cardData.license` is **null**
+with **no LICENSE file**; the MIT claim is a shields.io badge pointing at a
+relative `LICENSE` that does not exist there. MIT is confirmed only on the GitHub
+*code* repo. This is exactly the failure mode our own rules warn about, and it
+landed on the instrument this plan adopted for Track U. **Status: HOLD.** Better-
+governed sibling to evaluate: `TokenRhythm/Claw-SWE-Bench` (350 tasks, real MIT
+LICENSE file, DATASHEET.md). Also recorded: `SWE-bench_Verified` declares **no
+license at all** on either org.
+
+**(3) Our leakage bar was set below the human floor.** Measured against
+human-authored coding query sets with same-domain hard negatives:
+
+| set | q→target | q→hard-neg | ratio |
+|---|---:|---:|---:|
+| **our mined bank** | **0.396** | 0.094 | **4.21×** |
+| AMA-Bench software QA | 0.287 | 0.148 | 1.94× |
+| SWE-rebench issues | 0.269 | 0.143 | 1.88× |
+| SWE-PRBench review comments | 0.197 | 0.112 | 1.76× |
+| SWE-bench-Live issues | 0.175 | 0.086 | 2.03× |
+
+Humans occupy **1.76–2.03×**, so the preregistered **≤1.50 concentration bar was
+unachievable by construction**. The paraphrase re-mine's 2.05 sits *inside* the
+human band: a mis-specified bar, not a bad bank.
+
+Two consequences. First, **prefer absolute target coverage as the headline
+metric** — against *random-corpus* negatives human sets also score ~3.70×, so the
+ratio is sensitive to negative selection while the absolute (0.396 vs a human
+0.175–0.287) is robust. Second, the paraphrase bank's **0.135 is below the human
+range**, so it may be **harder than reality** and W0.2's survival ratio should be
+read as a lower bound. Related: real human issues name the gold file path only
+**22.2%** of the time (111/500).
+
+**Human-review corpora at volume** (the owner's repos hold only ~15 human review
+comments): `foundry-ai/swe-prbench` CC-BY-4.0, 3,093 human review comments with
+path/line/diffHunk — **3.3% are bot-authored despite the card claiming otherwise,
+filter by author**; Microsoft CodeReviewer (Zenodo 6900648, CC-BY-4.0) ~120k+
+human review→change triples; `zhangfw123/CORE-Bench` Level-2, 5,061 queries /
+52,712 qrels derived **mechanically from merged patches** — but `license` is
+**null**, so unresolved, and the `Rewrite-*` configs are LLM-rewritten and
+excluded; CodeSearchNet `annotationStore.csv` (MIT), 4,006 pooled human judgments.
+
+**Verified rejections:** `Tomo-Melb/CodeReviewQA` gated (401);
+`JetBrains-Research/agent-trajectories-swe-bench` ships `resolved` null in 300/300
+rows; `THUIR/MemoryBench` ships 4 blank columns; `CodeReviewSE` ships scripts and
+no data; `yoonholee/terminalbench-trajectories` has unresolved `$N` placeholders;
+CoIR's CodeSearchNet subsets are docstring↔code pairs — maximal lexical overlap by
+construction, the exact bias we are escaping. Long-Horizon-Terminal-Bench
+(Apache-2.0) withholds its verifiers (`tests/` ships 0 files) — a harness, not data.
+
+**One genuine open slot remains:** no public CLAUDE.md/AGENTS.md
+convention-adherence benchmark exists. That search came back clean.
