@@ -1,0 +1,14 @@
+{
+  "counted_on": "2026-08-01",
+  "current_stale_pairs": 3616,
+  "ingest_units": 8147,
+  "instances_with_probes": 257,
+  "note": "counted before any arm was executed; committed with the prereg",
+  "probes": 1063,
+  "revision": "32d888b11c73c67be91414e571dfe98c5c20feac",
+  "rows": 360,
+  "session_regex_positionally_aligned_with_type": 811,
+  "sessions_total": 8400,
+  "source": "/Users/sidsharma/.memphant-private/w7-instruments/memorycode/data/test-00000-of-00001-a45d1855e46f30cb.parquet",
+  "source_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733"
+}

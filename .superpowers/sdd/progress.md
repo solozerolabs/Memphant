@@ -1241,3 +1241,77 @@ run for money. Commits `7a3faa68`…`d1c11bec` on `af-w7-register`, none pushed.
 **Audit hazard recorded:** 87 of 88 entries in `canonical-artifact-allowlist.txt` are absent
 from this worktree; Memora and MemSyco evidence survives only in `/Users/sidsharma/Memphant`.
 An audit run inside a worktree will wrongly report "never run" for lanes that did run.
+
+---
+
+## 2026-08-01 — Preference lane scored for the first time. Negative, and diagnosed. ($0)
+
+The preference / user-learning lane had **never had a number**. It has one now:
+on **1063 MemoryCode supersession probes over 257 instances**, MemPhant's
+**latest-state-wins rate is 0.3123** [0.2846, 0.3414] against a BM25 lexical
+control's **0.3198** [0.2901, 0.3502]. **ΔLSW = −0.0075, cluster-bootstrap 95%
+CI [−0.0370, +0.0228]** (10,000 resamples over instances, seed 20260801);
+cluster-permutation p = 0.657, exact McNemar p = 0.674 (134 / 142 discordant).
+**By the preregistered rule this is a NEGATIVE: MemPhant does not beat a lexical
+baseline at telling a live rule from a dead one.**
+
+Both directions, by name, with the third bucket so suppression cannot pass as
+application: **Misapplication Rate 0.6717 vs 0.6736** (Δ −0.0019, CI [−0.0318,
++0.0288]); Appropriate Application = LSW above; neither-returned 0.0103 vs
+0.0019 — the **only** significant difference, and it runs *against* MemPhant
+(Δ +0.85pp, perm p = 0.029). Descriptively MemPhant is also worse at surfacing
+the current rule at all: **hit@10 0.786 vs 0.933**. The adoption smoke's
+MR = 15/26 = 0.577 **understated** the failure; at n = 1063 it is 0.672.
+
+**Diagnosis, from the run's own DB before it was dropped.** `memory_edge` by
+kind: **empty — zero edges of any kind**. `memory_unit` by state:
+**`active` = 8147, all of them**. By kind: **`episodic` = 8147**. Units with a
+`predicate`: **0**. `retention_tier`: **`hot` = 8147**.
+
+**Supersession is not broken — it is unreachable.** The retain payload carries no
+subject/predicate (correctly; they are compiler hints); `compile_job`
+(`service.rs:5305`) emits one `Episodic` candidate with `fact_key: None` and no
+subject, fact extraction being default-OFF and no structured provider at $0;
+`has_explicit_subject` (`lib.rs:12222`) is therefore false; and the whole
+supersession branch (`lib.rs:11670`) is gated on it under its own comment
+"AUTO-KEYS NEVER SUPERSEDE". Second lock: that branch also requires
+`kind == Semantic`, and these are `Episodic`. So the `UnitState::Superseded`
+recall exclusion is **correct and dead** — nothing ever reaches that state.
+
+**And no fallback recency signal exists.** `temporal_score` (`lib.rs:10896`)
+fires only on a literal `current`/`latest`/`now` query token AND a
+`Semantic`+`Active` unit → **0.0 on all 8147 units for all 1063 probes**.
+`days_since_last_review` (`lib.rs:11062`) returns a **constant 14.0** with zero
+review events, so decay is an order-preserving global scalar and contributes
+**exactly nothing** — decay keys on review events, never on wall-clock age, even
+though `observed_at` was stored correctly in true chronological order. The modal
+failure is the stale session at rank 0 with the current one at rank 1: both
+retrieved, wrong one first. Not a recall failure — the total absence of a
+live/dead distinction.
+
+**Implications.** The bottleneck is the **write path**, not the read path: until
+something mints an explicit subject key for a restated convention, no reranker,
+budget, or pool depth can separate the two, because the units are the same kind,
+state, tier and decay and differ only in text. This is direct evidence for
+`04` §13.2a's own call that a `preference`'s recall path is **assembly, not
+ranking** — competitive retrieval on this construct is statistically
+indistinguishable from BM25. On the hot/cold plane, `retention_tier` is
+confirmed inert (`hot` × 8147), but scoped honestly: demotion moves storage, it
+does not retire a rule, so **this run gives no evidence that tiering would move
+latest-state-wins**. It is a cost story here, not an accuracy story.
+
+**Instrumentation.** Merged `accuracy-first` mid-task after finding this worktree
+had `20260730_004` (worker pool under FORCE RLS → queue-wide count matched zero
+rows → drain reported one batch as complete) **without** the `005`
+security-definer fix. A partial Arm A was **killed and its artifacts deleted**,
+not reconciled; both arms re-ran from scratch. Added `verify_corpus_compiled` to
+the adapter: asserts on the bench superuser credential — never a worker
+self-report — 0 pending, 0 failed/dead, episode count matches retain, and **every
+episode minted at least one unit**. It passed 8147/8147/8147.
+
+**Prereg `968d7fba` committed before any measurement.** Report:
+`docs/build-log/2026-08-01-preference-lane-first-measurement.md`. Artifacts under
+`docs/build-log/artifacts/2026-08-01-preference-lane/`. Commits `968d7fba`,
+`3eedb5c5`, `bdeeb834` on `af-w8-memcode`, **none pushed**. Track U's 51 goldens
+remain unmeasured. `paid_model_calls: 0`. No checkbox, default, cutover or SOTA
+claim moves.
