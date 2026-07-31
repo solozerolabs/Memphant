@@ -2292,6 +2292,7 @@ pub async fn semantic_update_supersedes_unit_aged_past_recall_window<H: StoreHar
                     confidence: 1.0,
                     valid_from: None,
                     valid_to: None,
+                    target_unit_ids: None,
                 }),
             },
         )

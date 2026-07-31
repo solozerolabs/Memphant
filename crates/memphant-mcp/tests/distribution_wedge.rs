@@ -521,6 +521,7 @@ async fn canonical_projection_rejects_native_reserved_and_prefix_collisions() {
                         confidence: 1.0,
                         valid_from: None,
                         valid_to: None,
+                        target_unit_ids: None,
                     }),
                 },
             )
@@ -591,6 +592,7 @@ async fn canonical_projection_rejects_native_reserved_and_prefix_collisions() {
                     confidence: 1.0,
                     valid_from: None,
                     valid_to: None,
+                    target_unit_ids: None,
                 }),
             },
         )

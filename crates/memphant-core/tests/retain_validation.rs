@@ -26,6 +26,7 @@ fn unit_request(context: &ResolvedMemoryContext) -> RetainEpisodeHttpRequest {
             confidence: 0.9,
             valid_from: Some("2029-01-01T00:00:00Z".to_string()),
             valid_to: Some("2031-01-01T00:00:00Z".to_string()),
+            target_unit_ids: None,
         }),
     }
 }

@@ -3887,7 +3887,7 @@ impl<S: MemoryStore> MemoryService<S> {
                             confidence: Some(unit.confidence),
                             churn_class: None,
                             admission_hint: None,
-                            target_unit_ids: None,
+                            target_unit_ids: unit.target_unit_ids.clone(),
                             contextual_chunks: Vec::new(),
                             valid_from: unit.valid_from.clone(),
                             valid_to: unit.valid_to.clone(),

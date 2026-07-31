@@ -446,6 +446,7 @@ async fn recomposed_inferred_belief_does_not_double_open_its_object_key() {
                 confidence: 0.9,
                 valid_from: None,
                 valid_to: None,
+                target_unit_ids: None,
             }),
         };
         app.retain(

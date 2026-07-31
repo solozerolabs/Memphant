@@ -3340,6 +3340,7 @@ async fn direct_unit_retain_returns_unit_id_past_scope_page_clamp() {
                     confidence: 1.0,
                     valid_from: None,
                     valid_to: None,
+                    target_unit_ids: None,
                 }),
             },
         )
