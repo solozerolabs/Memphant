@@ -125,7 +125,7 @@ one-byte-per-token, provider maxima — never estimated.
 
 ## Kill gates
 
-- W0.3 has not reported → **do not launch.**
+- ~~W0.3 has not reported → do not launch.~~ **SATISFIED 2026-07-31**: W0.3 reported p=1.0, no movement, and the deprecation premise is withdrawn. The remaining blocker is power, not the corpus.
 - B and C both null at d_min → the composition thesis is wrong for our lane;
   record it and stop. Do not escalate to bigger prompts or more arms.
 - Net abstention regression → no promotion, whatever the primary says.
