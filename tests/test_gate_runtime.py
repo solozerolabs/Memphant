@@ -686,6 +686,43 @@ def test_drain_worker_uses_one_binary_drain_without_structured_provider(grt, mon
     assert "MEMPHANT_WORKER_ONCE" not in environments[0]
 
 
+def test_drain_worker_accepts_the_tick_honesty_line_and_raises_on_failed_jobs(
+    grt, monkeypatch
+):
+    """The worker's tick-honesty change appends `failed/retried/deferred` to the
+    drain line. Both forms must parse, and a non-zero `failed=` must RAISE:
+    the counts exist so "drained nothing" is distinguishable from "failed
+    everything", and swallowing them would score a bench against a corpus that
+    never finished compiling."""
+
+    def drain_returning(stdout):
+        def fake_sh(command, **kwargs):
+            if command == ["worker"]:
+                return grt.subprocess.CompletedProcess(command, 0, stdout, "")
+            return grt.subprocess.CompletedProcess(command, 0, "0\n", "")
+
+        return fake_sh
+
+    monkeypatch.setattr(
+        grt,
+        "sh",
+        drain_returning("memphant-worker: drain completed=6 failed=0 retried=0 deferred=0\n"),
+    )
+    assert grt.drain_worker("worker", "postgres://fixture") == 6
+
+    monkeypatch.setattr(
+        grt,
+        "sh",
+        drain_returning("memphant-worker: drain completed=4 failed=2 retried=0 deferred=0\n"),
+    )
+    with pytest.raises(RuntimeError, match="2 FAILED jobs"):
+        grt.drain_worker("worker", "postgres://fixture")
+
+    monkeypatch.setattr(grt, "sh", drain_returning("memphant-worker: drain done\n"))
+    with pytest.raises(RuntimeError, match="malformed"):
+        grt.drain_worker("worker", "postgres://fixture")
+
+
 def test_drain_worker_stops_on_zero_execution_before_next_tick(grt, monkeypatch, tmp_path):
     model = "google/gemini-3.5-flash"
     path = tmp_path / "extractor.jsonl"

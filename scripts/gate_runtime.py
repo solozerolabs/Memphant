@@ -574,14 +574,28 @@ def drain_worker(
             out = sh([worker_bin], env=env)
             if out.returncode != 0:
                 raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
+            # The worker's tick-honesty change added `failed/retried/deferred`
+            # counts to the drain line. Accept BOTH forms (the bare one is still
+            # emitted by older binaries), and parse the failure count rather
+            # than discarding it: the counts exist precisely so "drained
+            # nothing" is distinguishable from "failed everything", and
+            # swallowing them here would re-collapse that distinction one layer
+            # up — a silently partial compile scored as a clean corpus.
             match = re.fullmatch(
-                r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
+                r"memphant-worker: drain completed=(0|[1-9]\d*)"
+                r"(?: failed=(0|[1-9]\d*) retried=(0|[1-9]\d*) deferred=(0|[1-9]\d*))?\n?",
+                out.stdout,
             )
             if match is None:
                 raise RuntimeError(
                     f"worker drain completion output is malformed: {out.stdout[:300]!r}"
                 )
             completed = int(match.group(1))
+            if match.group(2) is not None and int(match.group(2)):
+                raise RuntimeError(
+                    f"worker drain reported {match.group(2)} FAILED jobs -- the "
+                    f"corpus is only partially compiled: {out.stdout.strip()!r}"
+                )
             total += completed
             pending = sh([
                 "psql", "--no-psqlrc", "--tuples-only", "--no-align",
