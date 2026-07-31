@@ -799,3 +799,228 @@ not.
   full `up --build`.
 - The CLI two-runtime pool bug and the admin CLI's superuser dependency are
   reported, not fixed.
+## Phase 1w — the render-loss fix (2026-07-30, branch `af-w1-render`)
+
+Cost **$0**, deterministic retrieval only, no reader/judge/paid call. Full
+record: `docs/build-log/2026-07-30-packing-render-loss-fix.md`.
+
+Closes the last large packing loss on the coding lane, the one
+`2026-07-30-packing-rank-order-fix.md` §6 quantified and deliberately reverted.
+
+**Mechanism.** `packed_render` charges each chunk block its provenance header on
+top of its body while the per-item render budget is the whole body, so full
+chunk coverage always costs MORE than the whole body: an uncapped chunked item
+can never emit all of itself. Trace, `track_r_021`: gold at fused rank 1, gold
+unit in packed slot 0, and the slot rendered 578 chars of one chunk block
+(`[episode …] [segments 1-4]`) instead of the 696-char body that carries the
+span. 30 of the baseline's 41 misses were this.
+
+**Fix (`f67f2b2a`).** A post-fill pass, the twin of `sibling_gather_pass`: an
+item rendered from a PARTIAL chunk selection takes its whole body — a superset,
+since chunk bodies are byte slices of it — when the pack's LEFTOVER budget
+covers the difference. Not the reverted admission-time fallback: admission is
+untouched, so the packed item set and every drop record are byte-identical, a
+budget-bound pack is a no-op, and `sibling_gather` keeps first claim on the
+leftover (its invariant test is unchanged and passing). `pack_render_cap`
+suppresses the pass entirely, so that lever stays `undecided` and unentangled.
+
+**Coding lane** — 180 Track R goldens (`6f549daa…`), corpus `c008142e…`,
+attempt-scoped, `--lexical-scorer bm25-code --embed-model off`, k=10,
+budget 8192, cap off, worker drained (`done_jobs=64056`, `pending_jobs=0`,
+`dead_jobs=0`) identically in both arms. Baseline re-executed, not remembered,
+and reproduces the committed combined build to the digit (139 packed, 30 render
+losses).
+
+| arm | r@5 | r@10 | packed |
+|---|---:|---:|---:|
+| before `ccaa9e1c` | 0.7278 | 0.7722 | 139/180 |
+| **after `f67f2b2a`** | **0.9222** | **0.9333** | **168/180** |
+| fused ceiling | — | 0.9611 | 173/180 |
+
+Paired exact McNemar: **@10 29 gains / 0 losses, p = 3.73e-09**; @5 35/0,
+p = 5.82e-11. **29 of the 30 render losses recovered** — the holdout
+`track_r_049` is genuine budget pressure (pack already at ~8.1k of 8192 tokens)
+and correctly not upgraded. Misses 41 → 12 (render 30→1, budget 4, rerank 3 all
+at fused rank ≥ 11, absent-from-pool 4). `fused_top10_ceiling` 173 in BOTH arms
+— no retrieval or ranking behaviour moved.
+
+**Chat lane — the gate, and it passes.** Two `bench-lme` arms, dev split
+`e4667bed…`, `--sample 178 --seed 20260710 --k 10 --budget-tokens 8192 --pool 64
+--embed-model small`, product-default `overlap` scorer.
+
+- r@5 and r@10 **0.6145 in both arms**, reproducing the committed rung-7
+  baseline exactly; 102/166 hits both; **0 flips in either direction**,
+  McNemar p = 1.0; per-question hit vectors identical.
+- **The packed context is NOT byte-identical** (`packed_context_identical:
+  false`). Unlike the rank-order fix, this change genuinely runs on the chat
+  lane — and still costs nothing.
+
+**Packed-item counts and per-item render sizes, all four arms.** The pack size
+distribution is IDENTICAL arm-for-arm on both lanes — nothing was displaced
+anywhere, which is the property the reverted patch could not have:
+
+| lane | packed items (total / mean / p50 / max) | per-item chars mean | p50 | max |
+|---|---|---:|---:|---:|
+| coding before | 1760 / 9.778 / 10 / 10 | 1891.6 | 1575 | 7362 |
+| coding after | 1760 / 9.778 / 10 / 10 | 1983.9 (+4.9%) | 1670 | 7395 |
+| chat before | 778 / 4.371 / 4 / 9 | 5214.7 | 3504 | 23078 |
+| chat after | 778 / 4.371 / 4 / 9 | 5465.2 (+4.8%) | 3626 | 23906 |
+
+**Recommendation: default, not flag-gated.** It repairs a defect rather than
+trading behaviours; its safety is structural (cannot evict, reorder, or exceed
+budget, and cannot fire when the leftover is short, so the worst case is exactly
+the old behaviour); the measurement agrees on both lanes; and the two cases
+where bounding an item IS wanted — `pack_render_cap` and a budget-bound pack —
+are already respected in the code. A flag would leave the defect on by default.
+
+**Not a claim.** Track R's magnitude is inflated by a lexically biased bank
+(question→target token coverage 0.396 vs 0.094 to a random non-target). The
+DEFECT is corroborated off-bank — the pass fires on LongMemEval and costs
+nothing there — the 29-question MAGNITUDE is not. No checkbox, default, cutover,
+deployment, or SOTA claim moves. The parked v5-census and SWE-ContextBench pins
+were NOT re-stamped and no new pin collides (`-k census`: 5 passed, 1 skipped).
+
+Suites: `cargo test -p memphant-core --lib` 137 passed; clippy
+`--all-targets --all-features -D warnings` clean; `cargo fmt --check` clean;
+pytest 1027 passed / 15 skipped / 2 failed, both pre-existing at base
+(`test_public_sota_claim_policy_…`, `test_spec_drift_check_…`).
+
+Commits, none pushed: `f67f2b2a` (fix) → `d40091cc` (paired analyzers report the
+render-loss target and the render-size distribution) → `91d486b4` (gitignore).
+Artifacts: `docs/build-log/artifacts/track-r/track_r_phase1w_render_loss.json`
+and `…/rung7-packing-reader-gate/phase1w/chat-lane-nonregression.json`
+(committed, derived); per-question outputs gitignored.
+
+## 2026-07-31 — GitHub lane coding-memory golden bank (af-w6-github)
+
+**Preregistration first.** `docs/build-log/2026-07-31-github-lane-bar-and-privacy.md`
+committed at `a7cdb876` before any extraction, per the binding gate.
+
+**Survey verified.** All five of the owner's repo figures reproduce exactly:
+Syndai 117 PRs / 0 issues / 194 review comments (179 `coderabbitai[bot]`, 15
+human), Finn 194/0/0, yurivan 39/0/0, RecMe 7/16/0, eternex 1/0/0. Savida is a
+subtree of Finn, not a repo.
+
+**Verdict: three preregistered bars FAIL; no bank ships as a certified bank.**
+
+- S1 `ci_failure_fix` (machine-authored queries, n=39): leakage **3.31×** vs the
+  ≤2.05× bar — FAIL.
+- P1 `public_human_review` (swe-prbench, CC-BY-4.0, n=325): **2.42×** — FAIL.
+- Repo concentration: Syndai holds **90.4%** of private non-S4 goldens vs a
+  ≤60% bar — FAIL.
+- S2 `revert_supersession` (n=6) 1.78× PASS, S3 `fix_of_a_fix` (n=7) 1.61× PASS.
+  S4 CodeRabbit (n=39) 2.11×, quarantined and never gated or blended.
+- Bar-clearing slice is therefore **13 goldens**, under the ≥40 floor. The bars
+  were not moved.
+
+**S5 (private human queries) is empty, and that is the finding.** All 15 "human"
+review comments are the owner replying to CodeRabbit; 11 open with
+`Addressed in <sha>: …` — the actor describing his own change, the exact Track R
+defect. The other 4 are rebuttals with no following change. All 16 RecMe issues
+are open zero-comment backlog tickets in a repo with no CI history.
+
+**Mis-specification recorded, not applied.** The concentration metric detects
+copying, which requires the query to be writable from the target. S1's query is
+emitted by CI before the fix exists and P1's by a reviewer against the pre-change
+hunk, so a high ratio there is causal specificity, not contamination. Gating them
+on a copying metric was a prereg error. Reported as FAIL and left standing; a
+corrected instrument needs its own preregistration.
+
+**Artifacts.** Lock `benchmarks/data/github_lane_golden.lock.json`
+(`be9965cc…`), leakage `docs/build-log/artifacts/github-lane/leakage.json`
+(`db2fbb4a…`). 416 goldens / 492 corpus docs, bodies gitignored and mirrored to
+`~/.memphant-private/github-lane/`. 2 candidates dropped whole for secrets
+(`anthropic_key`, `generic_secret_assignment`); no matched value written
+anywhere. Read-only throughout (`gh api -X GET`, `git show`; no fetch, no push).
+$0 spend, no model call. `--check` reproduces the lock byte-for-byte.
+
+## W6 — convo lane: a golden bank from the owner's own agent sessions (2026-07-30, branch `af-w6-convo`)
+
+Cost **$0**. Adjudication on subscription-model agent calls, cached by packet
+`content_sha256`; no OpenRouter, no paid call, no network call on the derive
+path. Nothing pushed.
+
+**Why.** Track R's mined questions carry 0.3960 of their tokens into the target
+against a 0.1008 non-target floor — 3.93× — because an LLM asked for "causally
+identifying" questions satisfied it by copying identifiers out of the target. A
+human's turn in a real session cannot do that: it was typed before the answer
+existed. This slice tests whether the owner's own Claude Code transcripts can
+supply such queries.
+
+**The human-turn rule is provenance, not shape.** `type=user` **and**
+`origin.kind=human` **and** non-sidechain **and** no `toolUseResult` **and** not
+`isMeta`, then wrapper-stripped, ≥40 chars, paste-guarded. A 60-session survey
+(seed 11) showed the trap: 44 of 2,718 `user` records are plain-string subagent
+dispatch prompts with no origin stamp — model-authored, and admitted by any
+content heuristic.
+
+**Two defects the rule did not catch, both found by adjudication, not by survey.**
+
+1. **A2 — the harness stamp is necessary but not sufficient.** A cross-session
+   agent-to-agent message arrives as `type=user`, `origin.kind=human`,
+   `promptSource=sdk`, non-sidechain, no `toolUseResult`, not `isMeta`. It
+   satisfies **every** condition. 34 turns in the snapshot. Now rejected whole.
+2. **The regex secret scan is not sufficient on its own.** It caught 12 turns by
+   family; adjudicators flagged 16 more packets carrying pasted browser cookies,
+   an account password in prose, a serialized session record with a client IP,
+   and live API-key material in at least four distinct source sessions. A flag
+   now quarantines every unit visible in that packet out of the bank, the
+   corpus, and every shipped haystack.
+
+> **Owner action, outside this lane:** live credential material is present in
+> plaintext in transcripts under `~/.claude/projects/`. Those keys should be
+> rotated. No value was written into any artifact, lock, log, or report.
+
+**Yield.** 4,843 sessions prefiltered → 412 scanned in full (1.45 GB, frozen
+snapshot `a95351ad…`) → 2,655 stamped human turns → 1,200 admitted (45.2%) →
+204 candidates → **43 goldens** (21.1% of candidates), 32 sessions, 9 projects.
+Dominant reject is `question_self_contained` (85): this owner writes fully
+specified briefs — file, line, root cause, remedy, gate command inline — and
+such a turn needs no recalled context however human-authored it is.
+
+**Leakage, `scripts/track_r_leakage.py` unmodified (`1dd9435e…`), n=43.**
+
+| | this bank | Track R orig | Track R para | human band |
+|---|---:|---:|---:|---|
+| target mean | 0.3367 | 0.3960 | 0.135 | 0.175–0.287 |
+| exhaustive floor | 0.2246 | 0.1008 | 0.067 | — |
+| concentration | **1.4991** | 3.93 | 2.05 | 1.76–2.03 |
+
+**Verdict: `prereg_bar_pass: false`, and it is NOT a contamination finding.**
+Per the coordinator's A3 split, provenance and lexical tractability are reported
+as two fields and never collapsed: `provenance.class = human_authored_pre_answer`,
+43/43, `contamination_possible: false`. Five preregistered rows fail —
+target mean ≤0.25, target max ≤0.60, construct prediction ≤1.30, ≥6 per shape
+(`file_symbol_grounding` 0, `state_churn` 3), skeleton ratio ≥0.90 (0.8605).
+
+**A construction defect, found by looking where the band said to look.** The
+bank sits *below* the human band on ratio but *above* it on absolute — only
+possible if the floor is high. A shipped memory unit is `user turn + agent
+reply`, and the reply restates the user's vocabulary on both sides of the
+metric. Same pinned script, unit reduced to the user turn alone: target
+**0.3367 → 0.1871**, floor 0.2246 → 0.1370, concentration 1.4991 → **1.3657** —
+*inside* the human band. **Absolute-coverage bars are not portable between banks
+with different unit definitions.** The shipped corpus is deliberately left as-is;
+narrowing it to hit a number would be bar-fitting.
+
+Corroborating: cross-project floor 0.1986 ≈ in-project floor 0.2246 (a question
+covers ~20% of anything this owner ever wrote, in any project — house dialect,
+not pointing); and concentration is length-driven (shortest third 1.766, longest
+1.393), the 0.875 worst golden being a 56-char follow-up.
+
+**Recommendation, not an action taken here:** the ≤1.50 bar in
+`docs/build-log/2026-07-31-track-r-paraphrase-bar.md` §4.1 sits below the measured
+human floor, and `foundry-ai/swe-prbench` — a published *human* corpus — fails it
+at 2.42. It should be recalibrated by whoever owns that document.
+
+**Strategic note.** The sibling GitHub lane's human stratum came back empty (all
+15 "human" review comments are the owner replying to CodeRabbit, 11 of them
+`Addressed in <sha>`). This conversation corpus is the only in-house source of
+genuinely human-authored coding queries, which is why the posture here is
+aggressive rejection rather than generous inclusion.
+
+**Custody.** Bodies, corpus, spot-check, leakage report and verdict ledger are
+gitignored and mirrored to `~/.memphant-private/convo-lane/` with sha256 in
+§10 of the prereg. One committed lock, counts and hashes only. All three
+committed artifacts re-scanned by the §5 detector: clean. Determinism:
+`--check` exit 0, `bd08c93f…` reproduced. Tests: 20 passed.

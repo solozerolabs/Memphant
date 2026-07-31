@@ -48,6 +48,35 @@ def paired(before: dict[str, dict], after: dict[str, dict], key: str) -> dict:
     }
 
 
+def percentiles(values: list[int]) -> dict:
+    """Nearest-rank percentiles — no interpolation, so every figure reported is
+    an observed value."""
+    if not values:
+        return {}
+    ordered = sorted(values)
+    at = lambda q: ordered[min(len(ordered) - 1, int(q * len(ordered)))]  # noqa: E731
+    return {
+        "n": len(ordered),
+        "min": ordered[0],
+        "p50": at(0.50),
+        "p90": at(0.90),
+        "p99": at(0.99),
+        "max": ordered[-1],
+        "mean": sum(ordered) / len(ordered),
+    }
+
+
+def render_size_distribution(rows: dict[str, dict]) -> dict:
+    """Packed-item count and per-item rendered size (chars), the two witnesses a
+    render change has to move before any recall delta is read."""
+    return {
+        "packed_items": percentiles([row["packed_size"] for row in rows.values()]),
+        "item_chars": percentiles(
+            [chars for row in rows.values() for chars in row.get("packed_body_chars", [])]
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--before", required=True)
@@ -75,6 +104,17 @@ def main() -> int:
     )
     recovered = sorted(q for q in target if after[q]["hit_at_10"])
 
+    # W1 render-loss target: the gold unit DID take a packed slot in the
+    # baseline, so nothing was displaced — the item's rendered span was. A
+    # strictly different set from `target` above, and the one the render fix is
+    # accountable for.
+    render_loss = sorted(
+        q
+        for q, row in before.items()
+        if row["bucket"] == "in_pool_unpacked" and row.get("gold_units_packed")
+    )
+    render_loss_recovered = sorted(q for q in render_loss if after[q]["hit_at_10"])
+
     summary = {
         "golden_sha256": before_report["golden_sha256"],
         "corpus_sha256": before_report["corpus_sha256"],
@@ -92,6 +132,18 @@ def main() -> int:
         },
         "paired_at_5": paired(before, after, "hit_at_5"),
         "paired_at_10": paired(before, after, "hit_at_10"),
+        "render_loss_target": {
+            "n": len(render_loss),
+            "recovered": len(render_loss_recovered),
+            "recovered_question_ids": render_loss_recovered,
+            "still_missing_question_ids": [
+                q for q in render_loss if q not in set(render_loss_recovered)
+            ],
+        },
+        "render_size_distribution": {
+            arm: render_size_distribution(rows)
+            for arm, rows in (("before", before), ("after", after))
+        },
         "displacement_target": {
             "n": len(target),
             "recovered": len(recovered),

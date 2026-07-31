@@ -1,0 +1,196 @@
+{
+  "after": {
+    "label": "track-r-w1-after",
+    "pack_drop_summary": {
+      "buckets": {
+        "absent_from_pool": 4,
+        "hit": 168,
+        "in_pool_unpacked": 8
+      },
+      "budget_share_of_in_pool_unpacked": 0.5,
+      "gold_rank_within_k_unpacked": 5,
+      "in_pool_unpacked": 8,
+      "in_pool_unpacked_gold_drop_reasons": {
+        "budget": 4,
+        "not_in_dropped_items": 1,
+        "rerank": 3
+      },
+      "in_pool_unpacked_with_gold_unit_packed": 1,
+      "packed_item_chars_max": 7395,
+      "packed_item_chars_mean": 1983.9414772727273,
+      "packed_item_chars_total": 3491737,
+      "packed_items_mean": 9.777777777777779,
+      "packed_items_total": 1760
+    },
+    "recall_at_10": 0.9333333333333333,
+    "recall_at_5": 0.9222222222222223
+  },
+  "before": {
+    "label": "track-r-w1-before",
+    "pack_drop_summary": {
+      "buckets": {
+        "absent_from_pool": 4,
+        "hit": 139,
+        "in_pool_unpacked": 37
+      },
+      "budget_share_of_in_pool_unpacked": 0.10810810810810811,
+      "gold_rank_within_k_unpacked": 34,
+      "in_pool_unpacked": 37,
+      "in_pool_unpacked_gold_drop_reasons": {
+        "budget": 4,
+        "not_in_dropped_items": 30,
+        "rerank": 3
+      },
+      "in_pool_unpacked_with_gold_unit_packed": 30,
+      "packed_item_chars_max": 7362,
+      "packed_item_chars_mean": 1891.6147727272728,
+      "packed_item_chars_total": 3329242,
+      "packed_items_mean": 9.777777777777779,
+      "packed_items_total": 1760
+    },
+    "recall_at_10": 0.7722222222222223,
+    "recall_at_5": 0.7277777777777777
+  },
+  "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+  "displacement_target": {
+    "n": 34,
+    "recovered": 29,
+    "recovered_question_ids": [
+      "track_r_021",
+      "track_r_029",
+      "track_r_043",
+      "track_r_057",
+      "track_r_060",
+      "track_r_063",
+      "track_r_067",
+      "track_r_068",
+      "track_r_083",
+      "track_r_088",
+      "track_r_095",
+      "track_r_097",
+      "track_r_098",
+      "track_r_099",
+      "track_r_104",
+      "track_r_114",
+      "track_r_115",
+      "track_r_118",
+      "track_r_127",
+      "track_r_137",
+      "track_r_139",
+      "track_r_143",
+      "track_r_145",
+      "track_r_149",
+      "track_r_154",
+      "track_r_164",
+      "track_r_168",
+      "track_r_171",
+      "track_r_174"
+    ],
+    "still_missing_question_ids": [
+      "track_r_011",
+      "track_r_041",
+      "track_r_049",
+      "track_r_142",
+      "track_r_178"
+    ]
+  },
+  "fused_top10_ceiling_after": 173,
+  "fused_top10_ceiling_before": 173,
+  "golden_sha256": "6f549daaa3cc5be6dae095d044a50d17a8fd4ab82a23f2e973901cbb52a89b6d",
+  "paired_at_10": {
+    "after_only": 29,
+    "before_only": 0,
+    "both": 139,
+    "mcnemar_exact_p": 3.725290298461914e-09,
+    "n": 180,
+    "neither": 12
+  },
+  "paired_at_5": {
+    "after_only": 35,
+    "before_only": 0,
+    "both": 131,
+    "mcnemar_exact_p": 5.820766091346741e-11,
+    "n": 180,
+    "neither": 14
+  },
+  "render_loss_target": {
+    "n": 30,
+    "recovered": 29,
+    "recovered_question_ids": [
+      "track_r_021",
+      "track_r_029",
+      "track_r_043",
+      "track_r_057",
+      "track_r_060",
+      "track_r_063",
+      "track_r_067",
+      "track_r_068",
+      "track_r_083",
+      "track_r_088",
+      "track_r_095",
+      "track_r_097",
+      "track_r_098",
+      "track_r_099",
+      "track_r_104",
+      "track_r_114",
+      "track_r_115",
+      "track_r_118",
+      "track_r_127",
+      "track_r_137",
+      "track_r_139",
+      "track_r_143",
+      "track_r_145",
+      "track_r_149",
+      "track_r_154",
+      "track_r_164",
+      "track_r_168",
+      "track_r_171",
+      "track_r_174"
+    ],
+    "still_missing_question_ids": [
+      "track_r_049"
+    ]
+  },
+  "render_size_distribution": {
+    "after": {
+      "item_chars": {
+        "max": 7395,
+        "mean": 1983.9414772727273,
+        "min": 86,
+        "n": 1760,
+        "p50": 1670,
+        "p90": 4011,
+        "p99": 4959
+      },
+      "packed_items": {
+        "max": 10,
+        "mean": 9.777777777777779,
+        "min": 0,
+        "n": 180,
+        "p50": 10,
+        "p90": 10,
+        "p99": 10
+      }
+    },
+    "before": {
+      "item_chars": {
+        "max": 7362,
+        "mean": 1891.6147727272728,
+        "min": 80,
+        "n": 1760,
+        "p50": 1575,
+        "p90": 3938,
+        "p99": 4856
+      },
+      "packed_items": {
+        "max": 10,
+        "mean": 9.777777777777779,
+        "min": 0,
+        "n": 180,
+        "p50": 10,
+        "p90": 10,
+        "p99": 10
+      }
+    }
+  }
+}

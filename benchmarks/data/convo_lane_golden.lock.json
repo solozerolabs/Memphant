@@ -1,0 +1,215 @@
+{
+  "bar": {
+    "distinct_sessions_min_20": true,
+    "end_behavior_100pct": true,
+    "insufficient_below_24": false,
+    "leakage_concentration_max_1_50": true,
+    "leakage_meets_construct_prediction_1_30": false,
+    "leakage_target_max_0_60": false,
+    "leakage_target_mean_max_0_25": false,
+    "per_shape_min_6": false,
+    "question_verbatim_100pct": true,
+    "size_40_to_80": true,
+    "skeleton_ratio_min_0_90": false,
+    "skeleton_share_max_3": true,
+    "track_u_no_duplicate": true
+  },
+  "corpus_bytes": 4594245,
+  "corpus_events": 3912,
+  "corpus_path": "benchmarks/data/convo_lane_corpus.jsonl",
+  "corpus_scopes": 43,
+  "corpus_sha256": "d0bca83452acf42229de913714901d3dc2eff186cf7de68ca70e1f123eeefc51",
+  "diagnostics": {
+    "cross_project_floor": {
+      "definition": "mean coverage against 200 seeded units drawn from OTHER projects",
+      "mean": 0.1986,
+      "median": 0.1845,
+      "n": 43
+    },
+    "distinct_projects": 9,
+    "distinct_sessions": 32,
+    "haystack_size_mean": 90.98,
+    "per_project": {
+      "-Users-sidsharma--codex-worktrees-Memphant-p1-deep-mode": 2,
+      "-Users-sidsharma-Memphant": 9,
+      "-Users-sidsharma-Syndai": 25,
+      "-Users-sidsharma-Syndai--claude-worktrees-determined-poitras-1dabe6": 1,
+      "-Users-sidsharma-Syndai--claude-worktrees-epic-mclaren-42905c": 1,
+      "-Users-sidsharma-Syndai--claude-worktrees-loving-greider-8dc65d": 1,
+      "-Users-sidsharma-Syndai--claude-worktrees-recursing-gagarin-709204": 2,
+      "-Users-sidsharma-Syndai--claude-worktrees-trusting-kalam-25480d": 1,
+      "-Users-sidsharma-evalrank": 1
+    },
+    "per_shape": {
+      "correction_retention": 9,
+      "state_churn": 3,
+      "task_resumption": 31
+    },
+    "skeleton_distinct": 37,
+    "skeleton_max_share": 2,
+    "skeleton_ratio": 0.8605,
+    "track_u_max_jaccard": 0.1913,
+    "track_u_mean_jaccard": 0.0773,
+    "unit_granularity_sensitivity": {
+      "concentration_vs_exhaustive": 1.3657,
+      "definition": "same metric with each memory unit reduced to the user turn alone (agent reply removed)",
+      "non_target_exhaustive_mean": 0.137,
+      "target_mean": 0.1871
+    }
+  },
+  "extractor_sha256": "c1f89a313d747180d3248040ffc9d1a49090070a5c9f7f735b580b34b3ee404e",
+  "failed_bars": [
+    "leakage_meets_construct_prediction_1_30",
+    "leakage_target_max_0_60",
+    "leakage_target_mean_max_0_25",
+    "per_shape_min_6",
+    "skeleton_ratio_min_0_90"
+  ],
+  "golden_bytes": 79189,
+  "golden_path": "benchmarks/data/convo_lane_golden.jsonl",
+  "golden_sha256": "bd08c93fa262bb548be82db0808807119463b0dda1c91ebc354fef028be14389",
+  "goldens": 43,
+  "human_turn_rule": {
+    "marker": "type=user AND origin.kind=human AND isSidechain=false AND no toolUseResult AND not isMeta",
+    "min_residual_chars": 40,
+    "paste_run_lines": 20
+  },
+  "leakage": {
+    "by_shape": {
+      "correction_retention": {
+        "n": 9,
+        "non_target_exhaustive_mean": 0.2372,
+        "target_mean": 0.3516
+      },
+      "state_churn": {
+        "n": 3,
+        "non_target_exhaustive_mean": 0.2594,
+        "target_mean": 0.3038
+      },
+      "task_resumption": {
+        "n": 31,
+        "non_target_exhaustive_mean": 0.2176,
+        "target_mean": 0.3355
+      }
+    },
+    "concentration_vs_exhaustive": 1.4991,
+    "concentration_vs_sampled": 1.5466,
+    "human_band_position": {
+      "concentration": "below_human_band",
+      "concentration_band": [
+        1.76,
+        2.03
+      ],
+      "target_mean": "above_human_band",
+      "target_mean_band": [
+        0.175,
+        0.287
+      ]
+    },
+    "leakage_script_modified": false,
+    "leakage_script_sha256": "1dd9435e13dc2a6cc893923dd8ef8aeed201309d4548026527988976121395f5",
+    "metric": "coverage(question, event) = |T(question) & T(event)| / |T(question)|, T(s) = set(re.findall(r'[a-z0-9_]{3,}', s.lower()))",
+    "n": 43,
+    "non_target_exhaustive": {
+      "max": 0.3527,
+      "mean": 0.2246,
+      "median": 0.219,
+      "min": 0.0833,
+      "n": 43,
+      "p10": 0.1627,
+      "p90": 0.2848
+    },
+    "non_target_sampled": {
+      "max": 0.5,
+      "mean": 0.2177,
+      "median": 0.2,
+      "min": 0.0,
+      "n": 43,
+      "p10": 0.12,
+      "p90": 0.3333
+    },
+    "references": {
+      "track_r_original": {
+        "concentration": 3.93,
+        "floor_mean": 0.1008,
+        "target_mean": 0.396
+      },
+      "track_r_paraphrase": {
+        "concentration": 2.05,
+        "floor_mean": 0.067,
+        "target_mean": 0.135
+      }
+    },
+    "target": {
+      "max": 0.875,
+      "mean": 0.3367,
+      "median": 0.3158,
+      "min": 0.1356,
+      "n": 43,
+      "p10": 0.1524,
+      "p90": 0.4756
+    },
+    "verdict": "ships_but_weaker_than_predicted"
+  },
+  "mirror_sha256": {
+    "adjudication_verdicts.jsonl": "89f7597c518b023ecc1228d01c2b0a0d4d3764c79fd015dba24f563ac55a1142",
+    "convo_lane_corpus.jsonl": "d0bca83452acf42229de913714901d3dc2eff186cf7de68ca70e1f123eeefc51",
+    "convo_lane_golden.jsonl": "bd08c93fa262bb548be82db0808807119463b0dda1c91ebc354fef028be14389",
+    "convo_lane_leakage.json": "f815787cdb2c79f8881715580eb3f4aa82eee563c75b079bdac523b130a739cf",
+    "convo_lane_spotcheck.jsonl": "3d6375f96c5a7850eecf2e8a453a8b7caf51c7fd6f6f91a8ed772224ccbcebcd"
+  },
+  "prereg": "docs/build-log/2026-07-31-convo-lane-bar-and-privacy.md",
+  "prereg_bar_pass": false,
+  "provenance": {
+    "basis": "question is byte-identical to a harness-stamped interactive human turn (origin.kind=human, non-sidechain), typed before the agent did the work; agent-to-agent turns wearing the same stamp are rejected",
+    "class": "human_authored_pre_answer",
+    "contamination_possible": false,
+    "fraction": 1.0,
+    "goldens_in_class": 43,
+    "per_shape": {
+      "correction_retention": "human_authored_pre_answer",
+      "state_churn": "human_authored_pre_answer",
+      "task_resumption": "human_authored_pre_answer"
+    },
+    "verified_mechanically": true
+  },
+  "reject_counts_by_reason": {
+    "adjudication_rejected": 136,
+    "adjudication_rejected:ambiguous": 17,
+    "adjudication_rejected:content_sensitive": 16,
+    "adjudication_rejected:question_self_contained": 85,
+    "adjudication_rejected:shape_not_supported": 6,
+    "adjudication_rejected:target_unrelated": 12,
+    "agent_to_agent_message": 34,
+    "boilerplate_repasted": 564,
+    "content_sensitive_excluded": 325,
+    "content_sensitive_quarantine": 4,
+    "oversized_prompt": 197,
+    "paste_guard": 45,
+    "per_project_cap": 19,
+    "per_session_cap": 2,
+    "secret_detected": 12,
+    "secret_detected:bearer_header": 4,
+    "secret_detected:github_pat": 1,
+    "secret_detected:high_entropy_blob": 7,
+    "secret_detected:uri_credentials": 4,
+    "too_short": 842
+  },
+  "schema": "memphant.eval.convo-lane-golden.v1",
+  "seed": 7,
+  "source_snapshot": {
+    "file_count": 412,
+    "files_scanned": 4843,
+    "pinned": true,
+    "snapshot_sha256": "a95351adb957865b3c787bb770edf2185ecbd37afaa4f23000f1deaf64fd7b9f",
+    "total_bytes": 1448986878
+  },
+  "spend_usd": 0.0,
+  "spotcheck_state": "emitted_pending_owner_review",
+  "yield": {
+    "accepted": 43,
+    "candidates_selected": 204,
+    "human_turns_admitted": 1200,
+    "human_turns_stamped": 2655
+  }
+}
