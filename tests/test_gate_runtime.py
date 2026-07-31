@@ -661,15 +661,23 @@ def test_drain_worker_uses_one_binary_drain_without_structured_provider(grt, mon
 
     def fake_sh(command, **kwargs):
         calls.append(command)
-        environments.append(kwargs["env"])
-        return grt.subprocess.CompletedProcess(
-            command, 0, "memphant-worker: drain completed=0\n", ""
-        )
+        if command == ["worker"]:
+            environments.append(kwargs["env"])
+            return grt.subprocess.CompletedProcess(
+                command, 0, "memphant-worker: drain completed=0\n", ""
+            )
+        # The queue-empty verification `psql`, which runs on the BENCH
+        # credential and takes no worker env.
+        return grt.subprocess.CompletedProcess(command, 0, "0\n", "")
 
     monkeypatch.setattr(grt, "sh", fake_sh)
 
     assert grt.drain_worker("worker", "postgres://fixture") == 0
-    assert calls == [["worker"]]
+    # One drain invocation, then the database is asked whether it is really
+    # empty — a self-reported `completed=0` is never trusted on its own.
+    assert calls[0] == ["worker"]
+    assert len(calls) == 2 and calls[1][0] == "psql"
+    assert "job_state" in calls[1][-1]
     assert environments[0]["MEMPHANT_WORKER_DRAIN"] == "1"
     assert environments[0]["MEMPHANT_WORKER_COMPILE_CONCURRENCY"] == "64"
     assert environments[0]["MEMPHANT_WORKER_BATCH_SIZE"] == "256"
@@ -846,3 +854,43 @@ def test_portable_runtime_identity_never_records_machine_absolute_paths(grt) -> 
     assert command.startswith("python3 scripts/run_forgeteval.py")
     assert str(ROOT) not in command
     assert "/private/tmp" not in command
+
+
+def test_assert_worker_queue_empty_raises_on_pending_or_dead_jobs(grt, monkeypatch):
+    """The harness-side half of the drain contract. It exists because the
+    worker's OWN exit check runs on the worker pool, which assumes the
+    `memphant_worker` capability role and was blinded by FORCE RLS until
+    20260730_005. This check runs on the bench credential, so it sees the truth
+    even when the worker's bookkeeping does not."""
+    seen = {}
+
+    def fake_sh(command, **_kwargs):
+        seen["sql"] = command[-1]
+        return grt.subprocess.CompletedProcess(command, 0, f"{seen['answer']}\n", "")
+
+    monkeypatch.setattr(grt, "sh", fake_sh)
+
+    seen["answer"] = "0|0"
+    grt.assert_worker_queue_empty("postgres://fixture")
+    assert "job_state" in seen["sql"]
+
+    seen["answer"] = "145|0"
+    with pytest.raises(RuntimeError, match="NOT drained: pending=145 dead=0"):
+        grt.assert_worker_queue_empty("postgres://fixture")
+
+    # A dead-lettered job is silently dropped work, not a drained queue.
+    seen["answer"] = "0|2"
+    with pytest.raises(RuntimeError, match="NOT drained: pending=0 dead=2"):
+        grt.assert_worker_queue_empty("postgres://fixture")
+
+
+def test_assert_worker_queue_empty_raises_when_the_count_itself_fails(grt, monkeypatch):
+    monkeypatch.setattr(
+        grt,
+        "sh",
+        lambda command, **_kwargs: grt.subprocess.CompletedProcess(
+            command, 1, "", "function memphant.pending_worker_job_count() does not exist"
+        ),
+    )
+    with pytest.raises(RuntimeError, match="could not verify the worker queue"):
+        grt.assert_worker_queue_empty("postgres://fixture")
