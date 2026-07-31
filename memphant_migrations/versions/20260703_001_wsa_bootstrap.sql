@@ -830,16 +830,25 @@ create index if not exists memphant_resource_tenant_actor_idx on memphant.resour
 create index if not exists memphant_memory_unit_tenant_live_idx on memphant.memory_unit (tenant_id, data_subject_id, scope_id, agent_node_id, kind, valid_to) where state = 'active' and transaction_to is null;
 create index if not exists memphant_memory_unit_tenant_source_ref_idx on memphant.memory_unit (tenant_id, data_subject_id, subject_generation, source_ref);
 create index if not exists memphant_memory_unit_tenant_subject_idx on memphant.memory_unit (tenant_id, data_subject_id, scope_id, agent_node_id, fact_key) where state = 'active' and transaction_to is null;
+-- The `kind` predicate is EXACTLY the set of kinds for which
+-- `supersedes_own_kind(kind) == Some(kind)` — the arms that own
+-- close-generation supersession and so actually maintain
+-- at-most-one-open-per-subject-key. `belief` is deliberately OUT (its arm owns
+-- no supersession, so multiple open beliefs on one key are the intended state);
+-- `preference` is deliberately IN. See
+-- 20260731_007_semantic_only_subject_exclusion.sql, which forward-applies this
+-- same definition to already-migrated databases, and carries the full rule.
 alter table memphant.memory_unit add constraint memphant_memory_unit_subject_valid_excl
   exclude using gist (
     tenant_id with =,
     data_subject_id with =,
     scope_id with =,
     agent_node_id with =,
+    subject_generation with =,
     fact_key with =,
     kind with =,
     tstzrange(valid_from, valid_to, '[)') with &&
-  ) where (transaction_to is null and kind in ('semantic', 'belief'));
+  ) where (transaction_to is null and kind in ('semantic', 'preference'));
 create index if not exists memphant_memory_unit_history_idx on memphant.memory_unit
   (tenant_id, data_subject_id, scope_id, agent_node_id, transaction_from);
 create index if not exists memphant_memory_unit_tenant_source_episode_idx on memphant.memory_unit (tenant_id, source_episode_id);

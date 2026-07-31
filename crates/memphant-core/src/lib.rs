@@ -11562,7 +11562,7 @@ async fn prepare_compiled_write_from_snapshot_inner(
             if can_promote_belief(&working[existing_index], &candidate) {
                 let belief_id = working[existing_index].id;
                 let semantic_id = UnitId::new();
-                let unit = minted_unit(
+                let mut unit = minted_unit(
                     semantic_id,
                     &input,
                     MemoryKind::Semantic,
@@ -11571,6 +11571,54 @@ async fn prepare_compiled_write_from_snapshot_inner(
                     &candidate,
                     &now,
                 );
+                // A promoted belief mints a SEMANTIC unit, so it is subject to
+                // the knowledge arm's close-generation rule like any other
+                // semantic mint: close whatever generation it replaces on this
+                // key, or the promotion opens a second one. It previously
+                // skipped this entirely — the one Semantic mint in the compiler
+                // that never asked whether the key was already open.
+                //
+                // The gates are the same two the ordinary branch applies:
+                // AUTO-KEYS NEVER SUPERSEDE (`explicit_subject`), and the arm
+                // must own the kind it closes (`supersedes_own_kind`, asked of
+                // Semantic here because Semantic is what is being minted — NOT
+                // of the candidate's own kind, which is how a promotion would
+                // otherwise widen across kinds). The incumbent BELIEF is never
+                // a target: the scan filters on the semantic kind, so promotion
+                // semantics are unchanged and the belief stays open, linked by
+                // the `DerivedFrom` edge below.
+                if explicit_subject
+                    && supersedes_own_kind(MemoryKind::Semantic).is_some()
+                    && close_open_generation(
+                        &mut working,
+                        &mut new_ids,
+                        &mut new_edges,
+                        &input,
+                        &candidate,
+                        &fact_key,
+                        supersedes_own_kind(MemoryKind::Semantic),
+                        &targeted_indices,
+                        &mut unit,
+                        &now,
+                    )?
+                {
+                    // The promotion still happened; it simply closed what it
+                    // replaced. `Supersede` is the honest action label.
+                    working.push(unit);
+                    new_ids.insert(semantic_id);
+                    new_edges.push(StoredMemoryEdge {
+                        id: EdgeId::new(),
+                        tenant_id: input.tenant_id,
+                        scope_id: input.scope_id,
+                        src_id: semantic_id,
+                        dst_id: belief_id,
+                        kind: MemoryEdgeKind::DerivedFrom,
+                        transaction_from: Some(now.clone()),
+                        transaction_to: None,
+                    });
+                    actions.push(AdmissionAction::Supersede);
+                    continue;
+                }
                 working.push(unit);
                 new_ids.insert(semantic_id);
                 new_edges.push(StoredMemoryEdge {
@@ -11714,96 +11762,20 @@ async fn prepare_compiled_write_from_snapshot_inner(
                 // cross-kind widening would otherwise creep in.
                 if explicit_subject
                     && (supersedable_kind.is_some() || candidate.target_unit_ids.is_some())
+                    && close_open_generation(
+                        &mut working,
+                        &mut new_ids,
+                        &mut new_edges,
+                        &input,
+                        &candidate,
+                        &fact_key,
+                        supersedable_kind,
+                        &targeted_indices,
+                        &mut unit,
+                        &now,
+                    )?
                 {
-                    let bounded = candidate.valid_from.is_some() || candidate.valid_to.is_some();
-                    let mut existing_indices = if candidate.target_unit_ids.is_some() {
-                        targeted_indices.clone()
-                    } else {
-                        working
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, existing)| {
-                                existing.scope_id == input.scope_id
-                                    && existing.fact_key.as_deref() == Some(fact_key.as_str())
-                                    && existing.state == UnitState::Active
-                                    && Some(existing.kind) == supersedable_kind
-                                    && candidate_targets_unit(&candidate, existing, &now)
-                            })
-                            .map(|(index, _)| index)
-                            .collect::<Vec<_>>()
-                    };
-                    if !bounded && candidate.target_unit_ids.is_none() {
-                        existing_indices.truncate(1);
-                    }
-                    if !existing_indices.is_empty() {
-                        action = AdmissionAction::Supersede;
-                        for existing_index in existing_indices {
-                            let old = working[existing_index].clone();
-                            let old_id = old.id;
-                            working[existing_index].state = UnitState::Superseded;
-                            working[existing_index].transaction_to = Some(now.clone());
-                            let (valid_from, valid_to) = if bounded {
-                                interval_intersection(
-                                    old.valid_from.as_deref(),
-                                    old.valid_to.as_deref(),
-                                    candidate.valid_from.as_deref(),
-                                    candidate.valid_to.as_deref(),
-                                )
-                            } else {
-                                (unit.valid_from.clone(), unit.valid_to.clone())
-                            };
-                            let payload = CorrectionPayload {
-                                value: unit.body.clone(),
-                                reason: "reflect_supersedence".to_string(),
-                                source_ref: input.source_ref.clone(),
-                                observed_at: input.observed_at.clone(),
-                                valid_from,
-                                valid_to,
-                            };
-                            let (replacement, remainders) = correction_rectangles(
-                                &old,
-                                &payload,
-                                &input.source_ref,
-                                &input.observed_at,
-                                input.actor_id,
-                                &now,
-                            )?;
-                            if !bounded {
-                                unit.valid_from = replacement.valid_from;
-                                unit.valid_to = replacement.valid_to;
-                            }
-                            for remainder in remainders {
-                                let remainder_id = remainder.id;
-                                working.push(remainder);
-                                new_ids.insert(remainder_id);
-                                new_edges.push(StoredMemoryEdge {
-                                    id: EdgeId::new(),
-                                    tenant_id: input.tenant_id,
-                                    scope_id: input.scope_id,
-                                    src_id: remainder_id,
-                                    dst_id: old_id,
-                                    kind: MemoryEdgeKind::Supersedes,
-                                    transaction_from: Some(now.clone()),
-                                    transaction_to: None,
-                                });
-                            }
-                            for (src_id, dst_id, kind) in [
-                                (old_id, new_id, MemoryEdgeKind::Contradicts),
-                                (new_id, old_id, MemoryEdgeKind::Supersedes),
-                            ] {
-                                new_edges.push(StoredMemoryEdge {
-                                    id: EdgeId::new(),
-                                    tenant_id: input.tenant_id,
-                                    scope_id: input.scope_id,
-                                    src_id,
-                                    dst_id,
-                                    kind,
-                                    transaction_from: Some(now.clone()),
-                                    transaction_to: None,
-                                });
-                            }
-                        }
-                    }
+                    action = AdmissionAction::Supersede;
                 }
                 working.push(unit);
                 new_ids.insert(new_id);
@@ -12029,7 +12001,15 @@ pub(crate) fn write_router_arm(kind: MemoryKind) -> WriteArm {
 /// this function returns the *kind* an arm may close, never the set of units —
 /// choosing the units stays a separate step, which is what keeps that hook
 /// addable without reshaping the dispatch.
-pub(crate) fn supersedes_own_kind(kind: MemoryKind) -> Option<MemoryKind> {
+///
+/// **Public because the schema depends on it.** The `kind` predicate of
+/// `memphant_memory_unit_subject_valid_excl` must be exactly the set of kinds
+/// for which this returns `Some(kind)` — the arms that actually maintain
+/// at-most-one-open-per-subject-key. That pairing is asserted, not restated, by
+/// `exclusion_predicate_matches_the_supersedes_own_kind_set` in
+/// `memphant-store-postgres/tests/fact_extraction_subject_key_pg.rs`, so adding
+/// a kind here fails loudly until the constraint agrees.
+pub fn supersedes_own_kind(kind: MemoryKind) -> Option<MemoryKind> {
     match write_router_arm(kind) {
         WriteArm::Knowledge => Some(MemoryKind::Semantic),
         WriteArm::Preference => Some(MemoryKind::Preference),
@@ -12283,6 +12263,126 @@ mod compiled_citation_tests {
             Some(format!("sha256:{:x}", Sha256::digest(body.as_bytes())).as_str())
         );
     }
+}
+
+/// Closes the open generation `unit` replaces on its OWN kind, in place: marks
+/// the incumbent superseded, mints the bitemporal remainder rectangles and the
+/// `Supersedes`/`Contradicts` edges, and — for an unbounded candidate — narrows
+/// `unit`'s own valid interval to the replacement rectangle. Returns whether a
+/// generation was closed.
+///
+/// Extracted so the two Semantic mints in the compiler run the SAME scan. They
+/// did not: belief promotion minted a `Semantic` on the mined key without ever
+/// asking whether that key was already open, so an incumbent open semantic plus
+/// a promotion produced two open generations on one subject key — wrong on the
+/// bitemporal model on its own terms, and observed as an exclusion-constraint
+/// violation on Postgres. Caller-side gating (`has_explicit_subject`, the arm's
+/// `supersedes_own_kind`) stays with the callers; this function assumes it has
+/// already been asked.
+#[allow(clippy::too_many_arguments)]
+fn close_open_generation(
+    working: &mut Vec<StoredMemoryUnit>,
+    new_ids: &mut HashSet<UnitId>,
+    new_edges: &mut Vec<StoredMemoryEdge>,
+    input: &ReflectInput,
+    candidate: &memphant_types::ReflectCandidate,
+    fact_key: &str,
+    supersedable_kind: Option<MemoryKind>,
+    targeted_indices: &[usize],
+    unit: &mut StoredMemoryUnit,
+    now: &str,
+) -> Result<bool, CoreError> {
+    let mut closed = false;
+    let bounded = candidate.valid_from.is_some() || candidate.valid_to.is_some();
+    let mut existing_indices = if candidate.target_unit_ids.is_some() {
+        targeted_indices.to_vec()
+    } else {
+        working
+            .iter()
+            .enumerate()
+            .filter(|(_, existing)| {
+                existing.scope_id == input.scope_id
+                    && existing.fact_key.as_deref() == Some(fact_key)
+                    && existing.state == UnitState::Active
+                    && Some(existing.kind) == supersedable_kind
+                    && candidate_targets_unit(candidate, existing, now)
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>()
+    };
+    if !bounded && candidate.target_unit_ids.is_none() {
+        existing_indices.truncate(1);
+    }
+    if !existing_indices.is_empty() {
+        closed = true;
+        for existing_index in existing_indices {
+            let old = working[existing_index].clone();
+            let old_id = old.id;
+            working[existing_index].state = UnitState::Superseded;
+            working[existing_index].transaction_to = Some(now.to_string());
+            let (valid_from, valid_to) = if bounded {
+                interval_intersection(
+                    old.valid_from.as_deref(),
+                    old.valid_to.as_deref(),
+                    candidate.valid_from.as_deref(),
+                    candidate.valid_to.as_deref(),
+                )
+            } else {
+                (unit.valid_from.clone(), unit.valid_to.clone())
+            };
+            let payload = CorrectionPayload {
+                value: unit.body.clone(),
+                reason: "reflect_supersedence".to_string(),
+                source_ref: input.source_ref.clone(),
+                observed_at: input.observed_at.clone(),
+                valid_from,
+                valid_to,
+            };
+            let (replacement, remainders) = correction_rectangles(
+                &old,
+                &payload,
+                &input.source_ref,
+                &input.observed_at,
+                input.actor_id,
+                now,
+            )?;
+            if !bounded {
+                unit.valid_from = replacement.valid_from;
+                unit.valid_to = replacement.valid_to;
+            }
+            for remainder in remainders {
+                let remainder_id = remainder.id;
+                working.push(remainder);
+                new_ids.insert(remainder_id);
+                new_edges.push(StoredMemoryEdge {
+                    id: EdgeId::new(),
+                    tenant_id: input.tenant_id,
+                    scope_id: input.scope_id,
+                    src_id: remainder_id,
+                    dst_id: old_id,
+                    kind: MemoryEdgeKind::Supersedes,
+                    transaction_from: Some(now.to_string()),
+                    transaction_to: None,
+                });
+            }
+            for (src_id, dst_id, kind) in [
+                (old_id, unit.id, MemoryEdgeKind::Contradicts),
+                (unit.id, old_id, MemoryEdgeKind::Supersedes),
+            ] {
+                new_edges.push(StoredMemoryEdge {
+                    id: EdgeId::new(),
+                    tenant_id: input.tenant_id,
+                    scope_id: input.scope_id,
+                    src_id,
+                    dst_id,
+                    kind,
+                    transaction_from: Some(now.to_string()),
+                    transaction_to: None,
+                });
+            }
+        }
+    }
+    Ok(closed)
 }
 
 fn candidate_targets_unit(

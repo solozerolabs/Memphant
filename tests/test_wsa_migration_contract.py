@@ -15,6 +15,11 @@ MIGRATIONS = ROOT / "memphant_migrations" / "versions"
 BOOTSTRAP = MIGRATIONS / "20260703_001_wsa_bootstrap.sql"
 FILE_SYNC_FORWARD = MIGRATIONS / "20260723_002_file_sync_mutation_verb.sql"
 WORKER_CLAIM_FORWARD = MIGRATIONS / "20260724_003_worker_claim_throughput.sql"
+# Derived, not pinned: a literal count here went stale the moment a migration
+# landed without touching this file, and the staleness read as a red suite
+# rather than as the drift it was. The ORDER assertions below are the contract;
+# the count only has to agree with the directory.
+MIGRATION_COUNT = len(list(MIGRATIONS.glob("*.sql")))
 
 
 def _load_script(name: str):
@@ -272,7 +277,7 @@ def test_apply_runner_dry_run_reports_ordered_migrations() -> None:
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "migration_plan=5" in result.stdout
+    assert f"migration_plan={MIGRATION_COUNT}" in result.stdout
     assert result.stdout.index("20260703_001_wsa_bootstrap.sql") < result.stdout.index(
         "20260723_002_file_sync_mutation_verb.sql"
     )
@@ -284,6 +289,12 @@ def test_apply_runner_dry_run_reports_ordered_migrations() -> None:
     )
     assert result.stdout.index("20260730_004_served_login_roles.sql") < result.stdout.index(
         "20260730_005_pending_worker_job_count.sql"
+    )
+    assert result.stdout.index("20260730_005_pending_worker_job_count.sql") < result.stdout.index(
+        "20260731_006_preference_memory_kind.sql"
+    )
+    assert result.stdout.index("20260731_006_preference_memory_kind.sql") < result.stdout.index(
+        "20260731_007_semantic_only_subject_exclusion.sql"
     )
 
 
@@ -322,14 +333,16 @@ def test_apply_runner_executes_migration_and_ledger_in_one_transaction(
     assert result.returncode == 0, result.stdout + result.stderr
     calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     mutation_calls = [call for call in calls if "--file" in call]
-    assert len(mutation_calls) == 5
+    assert len(mutation_calls) == MIGRATION_COUNT
     for call in mutation_calls:
         assert "ON_ERROR_STOP=1" in call
         assert "--single-transaction" in call
         assert "--file" in call
         assert "--command" in call
         assert "insert into memphant.schema_migrations" in call[call.index("--command") + 1]
-    assert len(calls) == 6, "ledger must not execute in a second psql process"
+    assert len(calls) == MIGRATION_COUNT + 1, (
+        "ledger must not execute in a second psql process"
+    )
 
 
 def test_apply_runner_failure_keeps_migration_and_ledger_in_same_failed_transaction(
@@ -617,7 +630,15 @@ def test_bootstrap_has_scope_bound_bitemporal_subject_exclusion() -> None:
     start = sql.index("add constraint memphant_memory_unit_subject_valid_excl")
     stanza = sql[start : sql.index(";", start)]
     assert "scope_id" in stanza
-    assert "kind in ('semantic', 'belief')" in stanza
+    # The predicate is exactly the set of kinds whose write-router arm owns
+    # close-generation supersession (`supersedes_own_kind(kind) == Some(kind)`).
+    # `belief` is deliberately OUT — its arm owns no supersession, so multiple
+    # open beliefs on one subject key are the intended state. The Rust side of
+    # this rule is derived, not restated, by
+    # `exclusion_predicate_matches_the_supersedes_own_kind_set`.
+    assert "kind in ('semantic', 'preference')" in stanza
+    assert "belief" not in stanza
+    assert "subject_generation with =" in stanza
     assert "transaction_to is null" in stanza
     assert "tstzrange(valid_from, valid_to, '[)') with &&" in stanza
     assert "memphant_memory_unit_history_idx" in sql
@@ -861,6 +882,7 @@ def test_subject_and_agent_lead_memory_hot_path_indexes() -> None:
     exclusion = sql.split("memphant_memory_unit_subject_valid_excl", 1)[1].split("create index", 1)[0]
     assert "data_subject_id with =" in exclusion
     assert "agent_node_id with =" in exclusion
+    assert "subject_generation with =" in exclusion
 
 
 def test_bootstrap_declares_capability_roles_force_rls_and_default_deny() -> None:

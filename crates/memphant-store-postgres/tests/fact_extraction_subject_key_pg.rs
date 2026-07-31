@@ -249,28 +249,11 @@ async fn user_trust_episodes_sharing_a_mined_key_supersede() {
     .await
     .expect("count");
     assert_eq!(
-        superseded, 1,
+        superseded,
+        1,
         "the later value supersedes the earlier one\n{}",
         open_rows(&fact_key).await
     );
-}
-
-/// EVIDENCE, not an assertion: with the exclusion constraint dropped, both
-/// rows commit, so the pair that Postgres refuses can be read directly. Run
-/// with `--nocapture`.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "evidence capture; requires MEMPHANT_TEST_DATABASE_URL"]
-async fn capture_the_colliding_pair_with_the_constraint_dropped() {
-    let pool = sqlx::PgPool::connect(&db_url()).await.expect("pool");
-    sqlx::query(
-        "alter table memphant.memory_unit
-           drop constraint if exists memphant_memory_unit_subject_valid_excl",
-    )
-    .execute(&pool)
-    .await
-    .expect("drop constraint");
-    let (fact_key, stuck) = ingest_and_drain("fx-evidence", "agent").await;
-    println!("key={fact_key}\nstuck={stuck:#?}\n{}", open_rows(&fact_key).await);
 }
 
 // ---------------------------------------------------------------------------
@@ -378,17 +361,47 @@ async fn belief_promotion_does_not_double_open_a_semantic_key() {
         "promotion must not collide; stuck={stuck:#?}\nkey={fact_key}\n{}",
         open_rows(&fact_key).await
     );
-    let open_semantic: i64 = sqlx::query_scalar(
-        "select count(*) from memphant.memory_unit
-          where fact_key = $1 and kind = 'semantic' and transaction_to is null",
+    // The invariant is NOT "one open semantic row" — the bitemporal model
+    // deliberately leaves the historical remainder open alongside the current
+    // generation, and they tile the valid axis. The invariant is that no two
+    // open rows on the key OVERLAP in valid time, which is exactly what the
+    // exclusion constraint enforces and what promotion was violating.
+    let overlaps: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.memory_unit a
+           join memphant.memory_unit b
+             on b.fact_key = a.fact_key and b.kind = a.kind and b.id > a.id
+            and b.scope_id = a.scope_id and b.agent_node_id = a.agent_node_id
+            and b.transaction_to is null
+            and tstzrange(a.valid_from, a.valid_to, '[)')
+                && tstzrange(b.valid_from, b.valid_to, '[)')
+          where a.fact_key = $1 and a.kind = 'semantic' and a.transaction_to is null",
     )
     .bind(&fact_key)
     .fetch_one(&pool)
     .await
-    .expect("count");
-    assert!(
-        open_semantic <= 1,
-        "at most one open semantic generation per key, found {open_semantic}\n{}",
+    .expect("overlap count");
+    assert_eq!(
+        overlaps,
+        0,
+        "open semantic generations must tile the valid axis, not overlap\n{}",
+        open_rows(&fact_key).await
+    );
+    // And the promotion must still have HAPPENED: the belief stays open and a
+    // semantic carrying the promoted body is the current generation.
+    let promoted: i64 = sqlx::query_scalar(
+        "select count(*) from memphant.memory_unit
+          where fact_key = $1 and kind = 'semantic' and state = 'active'
+            and transaction_to is null and valid_to is null
+            and body = 'My favorite tea is chamomile'",
+    )
+    .bind(&fact_key)
+    .fetch_one(&pool)
+    .await
+    .expect("promoted count");
+    assert_eq!(
+        promoted,
+        1,
+        "the belief is still promoted; it just closes what it replaced\n{}",
         open_rows(&fact_key).await
     );
 }
@@ -466,5 +479,68 @@ async fn recomposed_inferred_belief_does_not_double_open_its_object_key() {
     println!(
         "composed key={composed_key} open={open}\n{}",
         open_rows(&composed_key).await
+    );
+}
+
+/// THE RULE, pinned rather than restated: the exclusion constraint's `kind`
+/// predicate must be exactly the set of kinds whose write-router arm owns
+/// close-generation supersession. Both sides are derived — the Rust set from
+/// `supersedes_own_kind` over `MemoryKind::ALL`, the SQL set from the LIVE
+/// constraint definition in the migrated database (not the shipped file, so a
+/// migration that fails to apply is caught too).
+///
+/// This exists because the two halves of this invariant have drifted twice in
+/// opposite directions: `belief` was asserted by the schema and never
+/// maintained by the router, and `preference` was maintained by the router and
+/// never asserted by the schema. A hand-maintained kind list is what let both
+/// happen, so neither side is written down here.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn exclusion_predicate_matches_the_supersedes_own_kind_set() {
+    let mut expected: Vec<String> = memphant_types::MemoryKind::ALL
+        .into_iter()
+        .filter(|kind| memphant_core::supersedes_own_kind(*kind) == Some(*kind))
+        .map(|kind| {
+            // The wire name is the storage name; deriving it keeps this test
+            // from carrying its own copy of the kind spelling.
+            serde_json::to_value(kind)
+                .expect("kind serializes")
+                .as_str()
+                .expect("kind is a string")
+                .to_string()
+        })
+        .collect();
+    expected.sort();
+    assert!(
+        !expected.is_empty(),
+        "at least one arm must own supersession, or the constraint is vacuous"
+    );
+
+    let pool = sqlx::PgPool::connect(&db_url()).await.expect("pool");
+    let definition: String = sqlx::query_scalar(
+        "select pg_get_constraintdef(oid) from pg_constraint
+          where conname = 'memphant_memory_unit_subject_valid_excl'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("the exclusion constraint must exist");
+
+    let mut found: Vec<String> = memphant_types::MemoryKind::ALL
+        .into_iter()
+        .map(|kind| {
+            serde_json::to_value(kind)
+                .expect("kind serializes")
+                .as_str()
+                .expect("kind is a string")
+                .to_string()
+        })
+        .filter(|name| definition.contains(&format!("'{name}'")))
+        .collect();
+    found.sort();
+
+    assert_eq!(
+        found, expected,
+        "the exclusion constraint's kind predicate must equal the \
+         supersedes_own_kind set; constraint was:\n{definition}"
     );
 }
