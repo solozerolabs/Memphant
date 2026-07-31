@@ -139,6 +139,18 @@ def load_memorycode(source: Path) -> list[dict]:
                 "unit_id": f"{gid}-s{i}",
                 "source_kind": "user",
                 "body": session["text"],
+                # ORACLE FIELD. Read by the `preference` arm ONLY, never by the
+                # `memphant` or `lexical` arms. These are the supersession group
+                # keys the GOLD RULE itself is built from, so an arm that
+                # consumes them is not comparable to the lexical control -- see
+                # `ingest_group_preference`.
+                "declarations": sorted(
+                    {
+                        QUOTED.sub("<X>", topic).strip()
+                        for kind, topic in zip(session["type"], session["topic"])
+                        if kind in ("instruction-add", "instruction-update")
+                    }
+                ),
             }
             for i, session in enumerate(sessions)
         ]
@@ -274,15 +286,23 @@ def verify_source(instrument: str, source: Path, lock_path: Path) -> dict:
 def episode_hits(items: list[dict], unit_ids: list[str], episode_of: dict) -> list[int]:
     """Ranks (0-based) at which any of ``unit_ids`` is cited.
 
-    Matched on ``citation_episode_id``, the id ``POST /v1/episodes`` returned
-    for that unit -- exact, and unaffected by where a citation window happens
-    to start inside a long body.
+    Matched on the ids ``POST /v1/episodes`` returned for that unit -- exact,
+    and unaffected by where a citation window happens to start inside a long
+    body. An episode retain yields a ``citation_episode_id``; a direct-unit
+    retain (the `preference` arm) yields ``unit_id``s and no episode at all, so
+    both fields are checked. `episode_of` maps one instrument unit id to the
+    SET of server ids that stand for it.
     """
-    wanted = {episode_of[uid] for uid in unit_ids if uid in episode_of}
+    wanted: set = set()
+    for uid in unit_ids:
+        value = episode_of.get(uid)
+        if value is None:
+            continue
+        wanted |= set(value) if isinstance(value, (set, list, tuple)) else {value}
     return [
         rank
         for rank, item in enumerate(items)
-        if item.get("citation_episode_id") in wanted
+        if item.get("citation_episode_id") in wanted or item.get("unit_id") in wanted
     ]
 
 
@@ -354,6 +374,13 @@ def probe_row(group: dict, probe: dict, items: list[dict], episode_of: dict,
         "probe_id": probe["probe_id"],
         "kind": probe["kind"],
         "returned": len(items),
+        # Kept so a scoring hazard can be CHECKED rather than assumed. A
+        # close-generation mints a valid-time-closed "remainder" carrying the
+        # PRIOR body but attributed to the superseding retain's response, so if
+        # any remainder ever reached a recall result the preference arm's
+        # identity map would be wrong. `remainders_recalled` in the report
+        # intersects these ids with the database's valid-closed set.
+        "returned_unit_ids": [item.get("unit_id") for item in items if item.get("unit_id")],
         "degraded": degraded,
         "gold_rank": gold_rank,
         "stale_rank": stale_rank,
@@ -398,6 +425,86 @@ def ingest_group(client, group: dict) -> tuple[dict, dict, int]:
         episode_of[unit["unit_id"]] = response["episode_id"]
         deduped += bool((response.get("dedup") or {}).get("matched"))
     return context, episode_of, deduped
+
+
+def ingest_group_preference(client, group: dict) -> tuple[dict, dict, int]:
+    """Arm P. Every instruction-bearing session is retained as a **preference
+    unit** with an explicit subject key; every other session stays an episode.
+
+    READ THIS BEFORE READING ANY NUMBER THIS ARM PRODUCES. The subject key is
+    the instrument's own supersession group key -- the SAME rule the gold labels
+    are built from. This arm is therefore **oracle-keyed**, and its score is
+    NOT comparable to the lexical control and is not evidence of retrieval
+    quality. It exists to answer one mechanism question the 2026-08-01 run could
+    not: with a correct chain, does the state machine actually fire end-to-end
+    through Postgres, and does recall then use the state?
+
+    It is oracle-keyed because the honest alternative was measured and failed.
+    A deterministic body-derived key needs no gold and no model, and on this
+    corpus it does not work: over the 1063 gold groups, a shared key derived
+    from the session text is recovered by 0.008 of groups (quoted-literal-
+    stripped content-word set) and at best 0.208 (the single content word
+    preceding the quoted literal). Sessions restate a convention in paraphrase
+    ("Remember when I mentioned that we use a specific naming convention...").
+    Deriving the key is an extraction problem, and extraction is a `reflect`
+    stage-1 LLM job, which this lane's $0 budget forbids.
+    """
+    context = client.bind_context(
+        f"external-{group['group_id']}",
+        subject_ref=group["group_id"],
+        actor_ref=f"{group['group_id']}-runner",
+        scope_ref=group["group_id"],
+        agent_node_ref="external-instrument-adapter",
+    )
+    identity: dict[str, set] = {}
+    episodes = 0
+    deduped = 0
+    for index, unit in enumerate(group["units"]):
+        declarations = unit.get("declarations") or []
+        if not declarations:
+            response = client.post(
+                "/v1/episodes",
+                gr.episode_retain_payload(
+                    context,
+                    source_ref=unit["unit_id"],
+                    observed_at=observed_at(index),
+                    source_kind=unit["source_kind"],
+                    body=unit["body"],
+                ),
+            )
+            identity[unit["unit_id"]] = {response["episode_id"]}
+            episodes += 1
+            deduped += bool((response.get("dedup") or {}).get("matched"))
+            continue
+        ids: set = set()
+        for declaration in sorted(declarations):
+            key = hashlib.sha256(declaration.encode()).hexdigest()[:16]
+            response = client.post(
+                "/v1/episodes",
+                {
+                    **context,
+                    "source_ref": f"{unit['unit_id']}#{key}",
+                    "observed_at": observed_at(index),
+                    "payload": {
+                        "unit": {
+                            "kind": "preference",
+                            "fact_key": f"preference:{key}",
+                            "predicate": "prefers",
+                            "body": unit["body"],
+                            "confidence": 1.0,
+                        }
+                    },
+                },
+            )
+            minted = set(response.get("unit_ids") or [])
+            if not minted:
+                raise RuntimeError(
+                    f"REFUSING TO SCORE: preference retain {unit['unit_id']}#{key} "
+                    "minted no unit -- the declaration was silently dropped"
+                )
+            ids |= minted
+        identity[unit["unit_id"]] = ids
+    return context, identity, episodes, deduped
 
 
 def score_group(client, context, episode_of: dict, group: dict, args) -> list[dict]:
@@ -556,6 +663,32 @@ def verify_corpus_compiled(database_url: str, expected_episodes: int) -> dict:
     return counts
 
 
+def count_recalled_remainders(database_url: str, rows: list[dict]) -> int:
+    """How many recalled items were valid-time-closed rows.
+
+    A close-generation re-INSERTs the prior body as a valid-closed rectangle
+    (§7.3a), and that row is returned in the SUPERSEDING retain's `unit_ids`.
+    If such a row ever reached a recall result, the preference arm's identity
+    map would credit the wrong session. Expected 0 -- `bitemporally_recallable`
+    closes a valid-closed row for a live `valid_at` -- but expected is not
+    measured, so this counts it from the database.
+    """
+    result = gr.sh([
+        "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+        "--set", "ON_ERROR_STOP=1", database_url, "--command",
+        "select id from memphant.memory_unit where valid_to is not null",
+    ])
+    if result.returncode != 0:
+        raise RuntimeError(f"remainder query failed: {result.stderr.strip()[:300]}")
+    closed = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    return sum(
+        1
+        for row in rows
+        for unit_id in row.get("returned_unit_ids", [])
+        if unit_id in closed
+    )
+
+
 def collect_diagnostics(database_url: str) -> dict:
     """Trace evidence, read from the scratch DB before it is dropped.
 
@@ -581,9 +714,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--arm",
         default="memphant",
-        choices=("memphant", "lexical"),
+        choices=("memphant", "lexical", "preference"),
         help="memphant = live recall; lexical = the repo's BM25 control over "
-             "the same units and queries (no DB, no server, no network)",
+             "the same units and queries (no DB, no server, no network); "
+             "preference = ORACLE-KEYED write-path mechanism arm, NOT "
+             "comparable to either of the other two (see "
+             "ingest_group_preference)",
     )
     parser.add_argument(
         "--diagnostics",
@@ -685,18 +821,29 @@ def main() -> int:
         bound = {}
         ingested = 0
         deduped = 0
+        episodes_retained = 0
         for group in groups:
-            context, episode_of, group_deduped = ingest_group(client, group)
+            if args.arm == "preference":
+                context, episode_of, group_episodes, group_deduped = (
+                    ingest_group_preference(client, group)
+                )
+                episodes_retained += group_episodes
+            else:
+                context, episode_of, group_deduped = ingest_group(client, group)
+                episodes_retained += len(group["units"])
             bound[group["group_id"]] = (context, episode_of)
             ingested += len(group["units"])
             deduped += group_deduped
         compiled = gr.drain_worker(args.worker_bin, args.database_url, args.embed_model)
-        if compiled != ingested - deduped:
+        # Only EPISODE retains enqueue a reflect job. A direct-unit retain (the
+        # preference arm) compiles inline inside the retain transaction, so it
+        # is never part of the queue accounting.
+        if compiled != episodes_retained - deduped:
             raise RuntimeError(
-                f"compiled {compiled} != retained {ingested} - deduped {deduped}"
+                f"compiled {compiled} != episodes {episodes_retained} - deduped {deduped}"
             )
         # And then do not take even that on trust: ask the database.
-        compilation = verify_corpus_compiled(args.database_url, ingested - deduped)
+        compilation = verify_corpus_compiled(args.database_url, episodes_retained - deduped)
         print(f"[corpus verified] {json.dumps(compilation, sort_keys=True)}", file=sys.stderr)
         rows = []
         for group in groups:
@@ -706,6 +853,9 @@ def main() -> int:
         if args.diagnostics:
             diagnostics = collect_diagnostics(args.database_url)
             diagnostics["compilation_verified"] = compilation
+            diagnostics["remainders_recalled"] = count_recalled_remainders(
+                args.database_url, rows
+            )
     finally:
         server.stop()
 
@@ -731,7 +881,7 @@ def write_report(args, lock, lock_path, source, rows, groups, ingested,
         "attribution": lock["attribution"],
         "recall": {"k": args.k, "mode": args.mode, "budget_tokens": args.budget_tokens,
                    "embed_model": args.embed_model}
-        if args.arm == "memphant"
+        if args.arm in ("memphant", "preference")
         else {"k": args.k, "mechanism": "Okapi BM25 k1=1.2 b=0.75, instance-scoped, "
               "code_lane_run_deterministic.bm25_search"},
         "scale": {

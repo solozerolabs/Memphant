@@ -12016,6 +12016,19 @@ pub(crate) fn write_router_arm(kind: MemoryKind) -> WriteArm {
 /// name its own kind here, so no dispatch can widen supersession across kinds,
 /// and `episodic_arm` provably cannot supersede anything (§13.1: an episode is
 /// ground truth and is never superseded).
+///
+/// **This is also the seam a control-plane hook would attach to, and it is
+/// deliberately left open.** RW-2 forbids an LLM call *in the router*, which
+/// rules out an ingest-time extractor here — but it does not rule out a
+/// mutation-time hook that refines TARGET SELECTION within the kind this
+/// function names, on the supersede/purge path only, off the recall hot path.
+/// Third-party measurement (arXiv:2606.15903, relayed by the coordinating
+/// session and not re-verified here) puts deterministic keying at roughly
+/// 63-68% and a mutation-time hook at 92-93%, because identifier variants and
+/// intent-aware deletion are not recoverable by any hash or keying scheme. So
+/// this function returns the *kind* an arm may close, never the set of units —
+/// choosing the units stays a separate step, which is what keeps that hook
+/// addable without reshaping the dispatch.
 pub(crate) fn supersedes_own_kind(kind: MemoryKind) -> Option<MemoryKind> {
     match write_router_arm(kind) {
         WriteArm::Knowledge => Some(MemoryKind::Semantic),

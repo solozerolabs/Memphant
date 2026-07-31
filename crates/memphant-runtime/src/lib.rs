@@ -442,6 +442,7 @@ pub fn build_worker_service(store: AnyStore) -> MemoryService<AnyStore> {
 
 fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
     let service = MemoryService::new(Arc::new(store), Arc::new(SystemClock), build_embedder())
+        .with_fact_extraction_enabled(fact_extraction_from_env())
         .with_resource_chunks_write_enabled(resource_chunks_write_from_env())
         .with_recall_pool_depth(recall_pool_depth_from_env())
         .with_lexical_scorer(
@@ -575,6 +576,34 @@ fn lexical_scorer_from_value(value: Option<&str>) -> Result<LexicalScorer, Strin
             "must be one of overlap, bm25-control, bm25-code, got {other:?}"
         )),
     }
+}
+
+/// `MEMPHANT_FACT_EXTRACTION` → bool, **default ON**.
+///
+/// W6 lexical fact extraction is the only deterministic producer of an
+/// explicit subject/predicate on the served write path: `extract_fact_candidates`
+/// turns a mined `(family, subject_phrase)` into the stable subject key
+/// `{scope}:{family}:{phrase}`, which is what `has_explicit_subject` needs
+/// before the supersedence branch will run at all. It costs no LLM call and no
+/// network — it is hand-rolled token scans in `service.rs`.
+///
+/// It shipped default-OFF with **no server or config wiring whatsoever**: the
+/// sole caller of `with_fact_extraction_enabled` in the tree was
+/// `memphant-eval/src/bench_lme.rs`. So every served write minted a content-hash
+/// auto key, and "AUTO-KEYS NEVER SUPERSEDE" closed the branch. This is the
+/// plumb. Default-on because a memory substrate whose supersession is
+/// unreachable by default is not a memory substrate; set the variable to
+/// `0`/`false`/`off` to restore the old behaviour for a reproduction.
+fn fact_extraction_from_env() -> bool {
+    !matches!(
+        std::env::var("MEMPHANT_FACT_EXTRACTION")
+            .ok()
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("0") | Some("false") | Some("off")
+    )
 }
 
 fn resource_chunks_write_from_env() -> bool {
