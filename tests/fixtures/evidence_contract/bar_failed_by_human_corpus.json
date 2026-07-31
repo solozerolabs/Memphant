@@ -1,0 +1,44 @@
+{
+  "__fixture__": "Failure 4. The GitHub lane preregistered concentration <= 2.05x. That bar clears the 1.76 low end of the human band, so a floor check alone passes it -- but swe-prbench, a PUBLISHED HUMAN CORPUS, measures 2.42x through our own pipeline and fails it. docs/build-log/2026-07-31-github-lane-bar-and-privacy.md:347,384.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "the GitHub P1 human-review bank must reach concentration <= 2.05x",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 325,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "leakage": {
+      "unit_definition": "one merged-PR review comment as the memory unit",
+      "absolute_target_coverage": 0.303,
+      "floor": 0.1251,
+      "floor_kind": "exhaustive",
+      "concentration": 2.42,
+      "provenance_class": "human_published",
+      "negative_selection": "same-domain hard negatives"
+    },
+    "bar": {
+      "metric": "leakage_concentration",
+      "threshold": 2.05,
+      "direction": "le",
+      "floor_reference": "human-coding-queries-2026-07-31"
+    }
+  }
+}

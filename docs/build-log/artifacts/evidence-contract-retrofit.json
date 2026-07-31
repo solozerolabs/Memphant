@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/check_evidence_contract.py --report",
+  "method": "Every tracked JSON under docs/build-log/artifacts/ carrying a decision key at depth <= 4 is a promotion-capable candidate. NOTHING here is backfilled: a field that cannot be verified from a banked artifact is left absent and reported as a violation rather than invented.",
+  "candidates": 45,
+  "contracted": 0,
+  "pending_retrofit": 45,
+  "failing": 45,
+  "unverified_fields_total": 0,
+  "artifacts": [
+    {
+      "artifact": "docs/build-log/artifacts/b4-verified-receipts/gate-summary.json",
+      "state": "pending",
+      "decision_keys": [
+        "verdict"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/b5-recall-stage-retirement/gate-summary.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/github-lane/leakage.json",
+      "state": "pending",
+      "decision_keys": [
+        "bar",
+        "verdict"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/lme-cleaned-split/paired-comparison-n100-seed20260710.json",
+      "state": "pending",
+      "decision_keys": [
+        "delta"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/next-evidence/authorization-request.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/next-evidence/packing/sufficiency-authorization-request.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/BUILD-ONCE-EXECUTION-AUTHORIZATION.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/CONTEXT-PREFLIGHT-REUSE-AUTHORIZATION.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-129928d8.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-65981e4f.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-d2f4fcb3.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-e511c817.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/PRE-DISPATCH-EFFICIENCY-CHECKPOINT-12.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/STREAM-DIAGNOSTIC-2-AUTHORIZATION-1a847f94.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/STREAM-DIAGNOSTIC-AUTHORIZATION-63be29d1.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/live-deep-route-diagnostic-3ae5833f/PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-3ae5833f/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-408363c9/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-9a0ef780/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-b3bc244d/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-b8dbf0a7/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-d10ee907/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-ee1575a6/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/p1-t6/run-f7c6c0f7/INVALIDATION-PROOF.json",
+      "state": "pending",
+      "decision_keys": [
+        "conclusion"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung10-procedural-memory-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung11-dsr-decay-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung12-l4-exhaustive-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung13-learned-rerank-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung14-external-engine-retirement-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung15-inferred-belief-composition-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung4-contextual-chunks-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung5-temporal-validity-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung6-edge-expansion-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung7-packing-abstention-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.v3.json",
+      "state": "pending",
+      "decision_keys": [
+        "bar"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung8-bounded-rerank-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/rung9-query-decomposition-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/spot-check-receipts/2026-07-31-track-r-owner-review.json",
+      "state": "pending",
+      "decision_keys": [
+        "verdict"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-MANIFEST.qwen-construction-luna-deep.json",
+      "state": "pending",
+      "decision_keys": [
+        "mcnemar"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/FEASIBILITY.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/state-memory-sota/stale-pilot/AUTHORIZATION-2-CLOSURE.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/syndai-gate/gate_compare.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision",
+        "verdict"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/ws0-two-language-spike.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/wsi-local-sota-profile.json",
+      "state": "pending",
+      "decision_keys": [
+        "decision"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    }
+  ]
+}

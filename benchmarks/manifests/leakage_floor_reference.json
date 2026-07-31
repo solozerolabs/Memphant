@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "purpose": "Committed reference floors for the bar-calibration guard in scripts/check_evidence_contract.py. A preregistered leakage bar must cite one of these ids and must not sit below the floor it cites. Three bars have already failed by being set below what reality achieves; this file exists so the fourth cannot be written without the checker seeing the floor.",
+  "metric_definition": {
+    "coverage": "|tokens(question) & tokens(unit)| / |tokens(question)|, tokens(s) = set(re.findall(r'[a-z0-9_]{3,}', s.lower())) -- scripts/track_r_leakage.py",
+    "concentration": "target coverage / non-target floor coverage",
+    "negative_selection_caveat": "Concentration moves with the negative set: same-domain hard negatives give ~1.76-2.03x on human corpora, random-corpus negatives ~3.70x on the SAME sets. Absolute target coverage is the more robust headline; a concentration bar is only comparable to a floor measured with the same negative selection."
+  },
+  "floors": [
+    {
+      "id": "w0-probe-2026-07-31",
+      "kind": "measured_probe",
+      "unit_definition": "one repo-memory event (a single mined coding-attempt event body) as the memory unit; question authored to be maximally abstracted while remaining answerable and uniquely identifying",
+      "negative_selection": "same-attempt exhaustive non-target events",
+      "concentration": 1.79,
+      "absolute_target_coverage": 0.131,
+      "floor_coverage": 0.0732,
+      "n": 27,
+      "provenance_class": "self_authored_abstracted",
+      "evidence": "~/.memphant-private/track-r-paraphrase/floor/floor-probe.json (out-of-repo, private); recorded in benchmarks/manifests/instrument_register.json achievable_floor and docs/build-log/2026-07-31-instrument-register.md:112",
+      "recorded_roughness": "small sample, single generator model wrote every probe question, uniqueness agent-judged; an order-of-magnitude floor, not a constant",
+      "shape_dependence": {
+        "state-churn": 0.9134,
+        "task-resumption": 1.965,
+        "file-symbol-grounding": 2.1717,
+        "consequence": "a shape-uniform bar is itself a defect"
+      }
+    },
+    {
+      "id": "human-coding-queries-2026-07-31",
+      "kind": "independent_human_corpora",
+      "unit_definition": "human-authored coding query against a single code/issue/review unit; same-domain hard negatives",
+      "negative_selection": "same-domain hard negatives",
+      "concentration_band": [1.76, 2.03],
+      "absolute_target_coverage_band": [0.175, 0.287],
+      "concentration": 1.76,
+      "absolute_target_coverage": 0.175,
+      "provenance_class": "human_published",
+      "applies_only_to": "human-authored coding queries; this band must NOT be reused across unit definitions",
+      "rows": [
+        {"instrument": "AMA-Bench software QA (human annotators)", "target": 0.287, "hard_negative": 0.148, "concentration": 1.94},
+        {"instrument": "SWE-rebench issues (GitHub authors)", "target": 0.269, "hard_negative": 0.143, "concentration": 1.88},
+        {"instrument": "SWE-PRBench review comments (human reviewers)", "target": 0.197, "hard_negative": 0.112, "concentration": 1.76},
+        {"instrument": "SWE-bench-Live issues (GitHub authors)", "target": 0.175, "hard_negative": 0.086, "concentration": 2.03},
+        {
+          "instrument": "swe-prbench public_human_review, put through OUR pipeline",
+          "target": 0.303,
+          "hard_negative": 0.1251,
+          "concentration": 2.42,
+          "n": 325,
+          "measured_by": "this repo (scripts/github_lane_leakage.py)",
+          "note": "A published human corpus, measured with our own tokenizer and same-domain hard negatives, FAILED our preregistered <= 2.05x gate. This row is the reason the bar guard rejects any `le` bar that a recorded human corpus cannot pass.",
+          "evidence": "docs/build-log/2026-07-31-github-lane-bar-and-privacy.md:347,384; docs/build-log/artifacts/github-lane/leakage.json"
+        }
+      ],
+      "provenance_binding": "Supplied by the owner and NOT reproduced by this repo. Cited as calibration only, never re-reported as a MemPhant measurement. Recorded at docs/build-log/2026-07-31-track-r-paraphrase-bar.md:399-406.",
+      "evidence": "docs/build-log/2026-07-31-track-r-paraphrase-bar.md:399-412"
+    }
+  ],
+  "historical_bar_failures": [
+    {
+      "bar": "leak_concentration_le_1_50",
+      "threshold": 1.5,
+      "floor_at_the_time": 1.79,
+      "outcome": "preregistered below the measured floor; the paraphrase bank recorded bar_passed=false at 2.018x while sitting inside the human band"
+    },
+    {
+      "bar": "github-lane P1 leakage concentration <= 2.05x",
+      "threshold": 2.05,
+      "outcome": "swe-prbench, a PUBLISHED HUMAN CORPUS (public_human_review, n=325), failed our gate at 2.42x -- the bar was measuring our metric, not our data",
+      "evidence": "docs/build-log/2026-07-31-github-lane-bar-and-privacy.md:347,384"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "__fixture__": "The shape that passes. Cells are the real ForgetEval adversarial-385 lineage arm (n=259, b=111, c=0) recomputed in scripts/instrument_power.py; the harness and corpus strings are fixture scaffolding, not a MemPhant measurement.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "lineage-complete repairs 111 adversarial failures with zero baseline regressions",
+    "probe_kind": "lever",
+    "mechanism_enabled": true,
+    "mechanism_evidence": "lineage_repair_active=true in the arm config; the baseline arm has it false",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 259,
+      "b": 111,
+      "c": 0,
+      "n_d": 111,
+      "psi_observed": 0.42857142857142855,
+      "mde_at_80": 0.11672339026882739,
+      "computed_by": "scripts/instrument_power.py",
+      "source": "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-{baseline-instrumented,lineage-complete}.json"
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "attribution": {
+      "method": "bisect",
+      "first_bad_commit": "0000000000000000000000000000000000000000"
+    }
+  }
+}

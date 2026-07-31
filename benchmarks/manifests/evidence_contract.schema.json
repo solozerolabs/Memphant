@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memphant.dev/schemas/evidence_contract.v1.json",
+  "title": "MemPhant evidence contract",
+  "description": "The single schema for the `evidence_contract` block that every promotion-capable result artifact must carry. Each required field traces to a measurement failure we actually committed. Validated by scripts/check_evidence_contract.py, which reads THIS FILE for the required/type/enum rules and adds the cross-field guards that a JSON Schema cannot express. Fail closed: a missing field is a violation, never a pass-by-default. Any field whose value cannot be verified from a banked artifact must be the literal string \"unverified\" -- never an invented number -- and an artifact carrying any \"unverified\" value must have decisional=false.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "decisional",
+    "claim",
+    "power",
+    "harness",
+    "corpus"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+
+    "decisional": {
+      "type": "boolean",
+      "description": "May this artifact carry a promotion/kill decision? Guards downgrade it; nothing upgrades it automatically."
+    },
+    "claim": {
+      "type": "string",
+      "minLength": 8,
+      "description": "The one sentence this artifact is cited for."
+    },
+
+    "power": {
+      "type": "object",
+      "description": "Failures 1 and 2: underpowered runs reported as nulls, and power asserted rather than computed. Two-sided exact McNemar has NO rejection region below n_d = 6.",
+      "required": ["test", "n", "b", "c", "n_d"],
+      "additionalProperties": false,
+      "properties": {
+        "test": {
+          "type": "string",
+          "enum": [
+            "two-sided exact (conditional binomial) McNemar",
+            "one-sided exact (conditional binomial) McNemar",
+            "bootstrap paired difference",
+            "descriptive-only (no test)",
+            "unverified"
+          ]
+        },
+        "n": {"type": ["integer", "string"], "minimum": 0},
+        "b": {"type": ["integer", "string"], "minimum": 0},
+        "c": {"type": ["integer", "string"], "minimum": 0},
+        "n_d": {
+          "type": ["integer", "string"],
+          "minimum": 0,
+          "description": "Observed discordant pairs, b + c. THE gate: n_d < 6 forces decisional=false."
+        },
+        "psi_observed": {"type": ["number", "string", "null"]},
+        "mde_at_80": {
+          "type": ["number", "string", "null"],
+          "description": "Minimum detectable effect at 80% power. Must be COMPUTED by scripts/instrument_power.py from n and psi -- the checker recomputes it and rejects a mismatch. A prose claim (\"~80% power at psi~=0.15\") is not a value."
+        },
+        "computed_by": {"type": "string"},
+        "source": {
+          "type": "string",
+          "minLength": 4,
+          "description": "The banked artifact the cells were counted from."
+        }
+      }
+    },
+
+    "mechanism_enabled": {
+      "type": ["boolean", "string"],
+      "description": "Failure 5: a probe that ran with the mechanism switched off. Required whenever probe_kind is set. A null result with mechanism_enabled=false is a hard failure -- it is the failure that most looks like a result."
+    },
+    "probe_kind": {
+      "type": ["string", "null"],
+      "enum": ["suppression", "gate", "lever", "abstention", null],
+      "description": "Set this whenever the artifact tests whether a mechanism does something."
+    },
+    "mechanism_evidence": {
+      "type": "string",
+      "description": "The configuration key/flag and its observed value proving the mechanism was on (or off)."
+    },
+
+    "harness": {
+      "type": "object",
+      "description": "Failure 6: harness settings not recorded beside scores. A default is not evidence merely because it was the default -- the whole code lane ran --embed-model off and 'dense is useless' became a near-architectural conclusion from it.",
+      "required": ["embed_model", "scorer", "k", "budget", "flags"],
+      "additionalProperties": true,
+      "properties": {
+        "embed_model": {"type": "string", "minLength": 1},
+        "scorer": {"type": "string", "minLength": 1},
+        "k": {"type": ["integer", "string"]},
+        "budget": {"type": ["integer", "number", "string", "null"]},
+        "flags": {"type": ["array", "string"], "items": {"type": "string"}},
+        "command": {"type": "string"}
+      }
+    },
+
+    "corpus": {
+      "type": "object",
+      "description": "Failure 7: corpora that mutate under their own lock (Track U broke mid-run when a concurrent session wrote a feedback_* file, 90 -> 91). A live path is not an identity.",
+      "required": ["sha256", "snapshot_id", "n_items"],
+      "additionalProperties": true,
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^([0-9a-f]{64}|unverified)$"},
+        "snapshot_id": {"type": "string", "minLength": 1},
+        "n_items": {"type": ["integer", "string"], "minimum": 0},
+        "path": {"type": "string", "description": "Optional; if it names a tracked in-repo file the checker recomputes sha256 against it."}
+      }
+    },
+
+    "leakage": {
+      "type": ["object", "null"],
+      "description": "Failure 3: leakage collapsed to one number. It is a five-tuple and is never comparable across differing unit definitions (same bank: 'user turn + agent reply' 0.3367/1.4991x vs 'user turn only' 0.1871/1.3657x).",
+      "required": [
+        "unit_definition",
+        "absolute_target_coverage",
+        "floor",
+        "floor_kind",
+        "concentration",
+        "provenance_class"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "unit_definition": {
+          "type": "string",
+          "minLength": 8,
+          "description": "Free text, required. What one memory unit IS. Absolute coverage is not portable across unit definitions."
+        },
+        "absolute_target_coverage": {"type": ["number", "string"]},
+        "floor": {"type": ["number", "string"]},
+        "floor_kind": {"type": "string", "enum": ["exhaustive", "sampled", "unverified"]},
+        "concentration": {"type": ["number", "string"]},
+        "provenance_class": {
+          "type": "string",
+          "enum": [
+            "authored_from_target",
+            "authored_independently",
+            "human_published",
+            "self_authored_abstracted",
+            "machine_generated",
+            "unverified"
+          ],
+          "description": "Failure 3, second half: contamination (the query was authored FROM the target -- a fact, settled by provenance) is not lexical tractability (real, but then the bank only measures the lexical regime). ONLY contamination disqualifies."
+        },
+        "negative_selection": {"type": "string"}
+      }
+    },
+
+    "leakage_comparisons": {
+      "type": "array",
+      "description": "Absolute coverages being compared against each other. Every entry must share one unit_definition or the comparison is void.",
+      "items": {
+        "type": "object",
+        "required": ["label", "unit_definition", "absolute_target_coverage"],
+        "properties": {
+          "label": {"type": "string"},
+          "unit_definition": {"type": "string", "minLength": 8},
+          "absolute_target_coverage": {"type": ["number", "string"]}
+        }
+      }
+    },
+
+    "bar": {
+      "type": ["object", "null"],
+      "description": "Failure 4: bars preregistered below the achievable floor, three times. A bar must cite a recorded floor and may not sit below it.",
+      "required": ["metric", "threshold", "direction", "floor_reference"],
+      "additionalProperties": true,
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": ["leakage_concentration", "leakage_absolute_target_coverage"]
+        },
+        "threshold": {"type": "number"},
+        "direction": {"type": "string", "enum": ["le", "ge"]},
+        "floor_reference": {
+          "type": "string",
+          "description": "An `id` in benchmarks/manifests/leakage_floor_reference.json."
+        },
+        "rationale": {"type": "string"}
+      }
+    },
+
+    "instrument_verification": {
+      "type": ["object", "null"],
+      "description": "Failure 8: instruments trusted from cards and READMEs. SWE-Explore ships 0/848 issue texts; ClawArena's MIT is a shields.io badge; swe-prbench ships 3.3% bot comments while claiming zero; STATE-Bench's adapter 400s on every call and would have billed $211-634 for zero rows.",
+      "required": ["shipped_rows_verified", "rows_counted", "fields_counted", "license_id", "license_source"],
+      "additionalProperties": true,
+      "properties": {
+        "shipped_rows_verified": {"type": "boolean"},
+        "rows_counted": {"type": ["integer", "string"], "minimum": 0},
+        "fields_counted": {
+          "type": "object",
+          "description": "field name -> rows on which the field is actually populated. This is what catches 0/848.",
+          "additionalProperties": {"type": ["integer", "string"]}
+        },
+        "license_id": {"type": "string", "minLength": 1},
+        "license_source": {
+          "type": "string",
+          "enum": ["LICENSE_FILE", "RECORD_METADATA", "unverified"],
+          "description": "A badge is not a licence. \"badge\", \"README\", and \"card\" are rejected by the enum."
+        },
+        "license_evidence": {"type": "string"}
+      }
+    },
+
+    "attribution": {
+      "type": ["object", "null"],
+      "description": "Failure 9, second half: 'pre-existing at my base' hid the same regression twice, because the base already contained it.",
+      "required": ["method"],
+      "properties": {
+        "method": {"type": "string", "enum": ["bisect", "unverified"]},
+        "first_bad_commit": {"type": "string"}
+      }
+    },
+
+    "notes": {"type": "string"}
+  }
+}

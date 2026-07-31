@@ -1,0 +1,44 @@
+{
+  "__fixture__": "Failure 8. SWE-Explore's card describes 848 issues. The shipped rows carry problem_statement on 0 of them and base_commit on 0 of them. benchmarks/manifests/swe_explore.lock.json.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "SWE-Explore is a usable exploration instrument at n=848",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 848,
+      "b": 30,
+      "c": 10,
+      "n_d": 40,
+      "psi_observed": 0.04716981132075472,
+      "mde_at_80": 0.021546827745396676,
+      "computed_by": "scripts/instrument_power.py",
+      "source": "benchmarks/manifests/swe_explore.lock.json"
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "instrument_verification": {
+      "shipped_rows_verified": true,
+      "rows_counted": 848,
+      "fields_counted": {
+        "problem_statement": 0,
+        "base_commit": 0,
+        "instance_id": 848
+      },
+      "license_id": "cc-by-4.0",
+      "license_source": "RECORD_METADATA"
+    }
+  }
+}
