@@ -151,6 +151,9 @@ docs/build-log/artifacts/track-r/phase1r/
 # Phase 1e combined-build (retrieval + packing) run outputs, same rule.
 # Only the derived `track_r_phase1e_combined_fixes.json` alongside is committed.
 docs/build-log/artifacts/track-r/phase1e/
+# W1 render-loss run outputs, same rule. Only the derived
+# `track_r_phase1w_render_loss.json` alongside is committed.
+docs/build-log/artifacts/track-r/phase1w/
 benchmarks/data/track_r_repo_memory_golden.jsonl
 benchmarks/data/track_r_repo_memory_spotcheck.jsonl
 !benchmarks/data/track_r_repo_memory_golden.lock.json
@@ -160,3 +163,5 @@ benchmarks/data/track_r_repo_memory_spotcheck.jsonl
 # including the packed-context identity check computed from them.
 docs/build-log/artifacts/rung7-packing-reader-gate/phase1d/*-evidence.jsonl
 docs/build-log/artifacts/rung7-packing-reader-gate/phase1d/*.log
+docs/build-log/artifacts/rung7-packing-reader-gate/phase1w/*-evidence.jsonl
+docs/build-log/artifacts/rung7-packing-reader-gate/phase1w/*.log

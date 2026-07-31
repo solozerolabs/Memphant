@@ -15,7 +15,7 @@ import json
 import re
 from pathlib import Path
 
-from analyze_pack_displacement import mcnemar_exact_p
+from analyze_pack_displacement import mcnemar_exact_p, percentiles
 
 # Episode ids are UUIDv7s minted per ingest, so they differ between two runs of
 # the same arm. Everything else in a packed body is content.
@@ -81,6 +81,24 @@ def main() -> int:
         "packed_context_identical": (
             packed_bodies(Path(args.before_evidence))
             == packed_bodies(Path(args.after_evidence))
+            if args.before_evidence and args.after_evidence
+            else None
+        ),
+        # A render change that claims to be inert here must show it in the
+        # packed-item count and per-item rendered sizes, not only in the score.
+        "render_size_distribution": (
+            {
+                arm: {
+                    "packed_items": percentiles([len(bodies) for bodies in packed.values()]),
+                    "item_chars": percentiles(
+                        [len(body) for bodies in packed.values() for body in bodies]
+                    ),
+                }
+                for arm, packed in (
+                    ("before", packed_bodies(Path(args.before_evidence))),
+                    ("after", packed_bodies(Path(args.after_evidence))),
+                )
+            }
             if args.before_evidence and args.after_evidence
             else None
         ),
