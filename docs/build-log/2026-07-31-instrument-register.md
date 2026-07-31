@@ -419,16 +419,52 @@ Recomputed from the 385 shipped case rows rather than the sentence: baseline 133
 arms (agreement 385/385). Paired base n=259, **b=111, c=0** — precisely the claimed "111
 paired gains and zero baseline regressions". The +42.9pt effect sits far above the lane's
 11.67pt MDE, so the banked result is comfortably powered.
-*Restriction:* ψ = 0.43 is the highest of any lane we own, so ForgetEval needs n ≥ 710 to
-resolve 7pt. **Sound for large effects, unusable for fine tuning.** Not SOTA: the raw score
-ties Lethe v1 and trails Mem0 and the published LLM-assisted arms.
+Cross-validated independently: `forgeteval.next-evidence.n12.json` states the cross-rerank
+arm "repaired 65 failures but regressed 16 baseline passes", matching the recomputed cells
+(b=65, c=16) exactly. And the **retracted** 188/71/126 arm was retracted for a good reason
+the prose never gave: it carries **55 baseline regressions** that the lineage arm
+eliminates entirely.
 
-**Memora / FAMA — DEGRADED (valid, but too small to decide).** Apache-2.0 verified against
-a pinned LICENSE blob, official code, data and native scorer. Banked result is a real and
-honestly-reported **negative**: official FAMA 32.96 → 53.49 after reader-only replay while
-raw unweighted accuracy stayed flat at 43–44/71. The inventory records the current state as
-"negative pilot retained; no new model run". At n=71 subquestions this lane cannot resolve
-small effects, and **b/c were never published**, so its ψ is unrecoverable.
+*Restrictions, both material:*
+- ψ = 0.43 is the highest of any lane we own, so ForgetEval needs n ≥ 710 to resolve 7pt.
+  **Sound for large effects, unusable for fine tuning.**
+- **32.5% of a forgetting benchmark is permanently unscorable for us.** All 126 N/A rows
+  are `error_kind: not_supported` — 125 of them the *entire purge family* — because
+  MemPhant has no selective hard purge-by-query primitive. And in the lineage arm amnesia
+  (53/53) and decay (21/21) are **fully saturated**. What remains scorable and unsaturated
+  is drift and supersession.
+- The official corpus is **not on disk**; re-running requires re-cloning. Labels are
+  upstream template-generated with a deterministic literal substring scorer — no judge
+  model, hence $0.
+- Not SOTA: the raw score ties Lethe v1 and trails Mem0 and the published LLM-assisted arms.
+
+**Memora / FAMA — SOUND as an instrument, DEGRADED as evidence. And "flat" was not flat.**
+
+Apache-2.0 verified against a pinned LICENSE blob; official code, data and native scorer;
+every STATUS number reproduces exactly from the scorer outputs.
+
+**The most consequential misreading in the ledger.** STATUS reports that after the
+reader-only replay "raw unweighted accuracy stayed flat at 43/71 vs the pilot's 44/71".
+Matched by `evaluation_question_id`, that one-cell net hides **25 discordant cells out of
+71** — b=13 the pilot alone got right, c=12 the replay alone did (ψ = 0.352). The replay is
+not a near-identical run with one extra miss; **it is a different system that changed a
+third of the graded cells.** Any power estimate treating the 32.96 → 53.49 move as a
+one-cell delta is wrong by more than an order of magnitude.
+
+*Carry this caveat with the number:* the 71 subquestions nest inside **15 parent questions**
+(mean 4.7 each) and are not independent, so an exact McNemar at n=71 is **anticonservative**
+— the effective n is nearer 15. The 20.3pt MDE in §3.2 is therefore a *floor* on the true
+MDE, not the MDE.
+
+Two further degradations:
+- **Development-exposed, not a holdout.** The run is a single sealed persona
+  (weekly/software_engineer), 15 questions, against which the build log records repeated
+  targeted prompt and extractor iteration across 2026-07-14.
+- **The judges disagree.** Grading is a strict three-LLM consensus, and per-judge overall on
+  the pilot is 44 / 46 / 44.
+- A **fourth, newer result** exists — FAMA 61.67, 56/71, in
+  `docs/build-log/2026-07-15-memora-causal-split.md` — that the STATUS 53.49 sentence does
+  not carry, and no `.fama.json` was located for it. **Unverified.**
 
 **STALE — BROKEN. Two authorizations consumed, $0.42 settled, zero official score.**
 - `AUTHORIZATION-1-CLOSURE.json`: `CLOSED_PREPAID_OPERATIONAL_FAILURE` — the adapter passed
@@ -436,21 +472,40 @@ small effects, and **b/c were never published**, so its ψ is unrecoverable.
 - `AUTHORIZATION-2-CLOSURE.json`: `CONSUMED_REJECTED_STOP_NO_BROADENING`, with
   `native_judge: NOT_RUN_KILL_GATE` and `full_400_scenario_run: FORBIDDEN_NO_BROADENING`.
   Settled $0.4245304, and `deep_cost_status` is `UNRECONCILED`.
-No official STALE number exists. The lock also asserts its licenses as a bare string with
-no LICENSE blob.
+The pilot reached n=4 records / 12 probe dimensions and
+`run-2/current/proof.json` records **12/12 dimensions `insufficient`** with
+`answer_policy: abstain_unknown` and `promotion_ineligible: true`; the candidate arm never
+reached recall at all. The upstream 400-record dataset and native scorer are materialised
+and pinned — **the MemPhant side is what fails.** No official STALE number exists. The lock
+also asserts its licenses as a bare string with no LICENSE blob.
 
-**MemSyco — DEGRADED, and entirely tripwires.** MIT verified against a pinned LICENSE blob,
-and it is the only benchmark with real data committed (3.9M). But **every one of the five
-calibration splits is n = 12–14** (development 14/12/12/12/12, confirmation 12 × 5). By
-§3.3's structural floor, not one of them can reject at any effect size. Only one of the
-five tasks has any run artifact, and that artifact is a shell script, not a result. As
-instrumented, MemSyco cannot carry a decision.
+**MemSyco — DEGRADED: the best-prepared instrument in the set, and it has never produced a
+number.** MIT verified end to end (the lock pins LICENSE `f607254f…`, recomputed against
+the materialised upstream and matching). Upstream is 1,550 samples, verified by line count
+and exactly matching the lock. Predeclared SOTA gates and a 10,000-resample bootstrap
+protocol are sealed and ready.
 
-**Procedural — no external instrument exists.** The only apparatus is
-`rung10-procedural-memory-profile.json`, which is self-authored
-(`sampled_public_style`, `benchmark_version: state-style-procedural-memory-2026-07-03`) and
-already **saturated at score 1.0 against baseline 0.0**, so it cannot express a further
-gain. Its `embedding_selection` axis is `source_status: not_run`. **ABSENT.**
+But two official tracks are explicitly retired with **zero completed samples**:
+`objective/OFFICIAL-RETIREMENT.json` records `memphant_completed_samples: 0` with
+`failure_class: structured_extractor_evidence_grounding`, and `scope/OFFICIAL-RETIREMENT.json`
+records `memphant_answers: 0, memphant_judges: 0, memphant_report_exists: false`, retired on
+the first fail-closed rejection for $0.0015. **Same failure class as STALE**: MemPhant's
+structured extractor rejects on evidence grounding before any answer exists.
+
+Two further cautions. The committed 3.9M under `benchmarks/memsyco/` is **not upstream
+data** — it is MemPhant-generated calibration packets. And **every one of the five
+calibration splits is n = 12–14**, so by §3.3's structural floor not one of them can reject
+at any effect size. As instrumented, MemSyco is entirely tripwires.
+
+**Procedural — ABSENT. n = 1.** The only apparatus is
+`rung10-procedural-memory-profile.json`, self-authored (`sampled_public_style`), saturated
+at score 1.0 against baseline 0.0 with a CI of **[1.0, 1.0]** — and its trace
+(`rung10-state-style-sampled-traces.json`) contains `total_cases: 1`. One self-authored
+case. A CI of [1.0, 1.0] on n=1 is not a measurement, and STATUS:172 has already reopened
+rung 10 on the grounds that its promotion evidence was synthetic fixtures. The only real
+procedural instrument in the register is STATE-Bench's `retrieve_learnings` axis — and
+STATE-Bench is BROKEN. Track U's 34 procedural rows are the nearest usable substitute, and
+they have never been run.
 
 **Track U (preference/user-learning) — apparatus without a runner, and a stop condition.**
 The bank is real and well-constructed: 51 goldens accepted from 60 candidates over 91
@@ -465,20 +520,26 @@ request.
 
 ### 4.5 The systemic finding: adapters are not exercised before money is authorized
 
-Both temporal/state adapters failed at first contact on a contract mismatch, and in both
-cases the failure was discovered *after* authorization:
+**Three** external instruments have now failed at first contact on our own side, never on
+theirs. In every case the upstream data and scorer were fine and materialised:
 
-| adapter | defect | discovered |
-|---|---|---|
-| STATE-Bench | POSTs `tenant_id`, omits three required fields, against a `deny_unknown_fields` contract | by this audit, before spend |
-| STALE | passed an upstream timezone-naive timestamp; first episode rejected | after a prepaid authorization was consumed |
+| adapter | defect | discovered | cost of discovery |
+|---|---|---|---|
+| STATE-Bench | POSTs `tenant_id`, omits three required fields, against a `deny_unknown_fields` contract | by this audit | $0 — before spend |
+| STALE | passed an upstream timezone-naive timestamp; first episode rejected | after authorization | a consumed prepaid authorization |
+| MemSyco | structured extractor rejects on evidence grounding before any answer exists | after authorization | two official tracks retired at 0 samples |
 
-Both are one-block fixes. Neither is subtle. The common cause is that an adapter is written
-against the contract of the day, the contract then moves (C0 killed `tenant_id`), and
-nothing re-exercises the adapter until money is on the table. **Recommended gate: no paid
-authorization for any lane whose adapter has not completed a $0 stub-server round trip
-against the current strict contract since the last contract change.** That check costs
-minutes and would have caught both.
+STALE and MemSyco share a failure class. STATE-Bench's is a stale contract: the adapter was
+written against the contract of the day, C0 then killed `tenant_id`, and nothing
+re-exercised the adapter until money was on the table. Its remediation is **one line out,
+three lines in** at `benchmarks/state_bench/memphant_memory_agent.py:33` — the builder
+already writes all five correct ids into the runtime config via `gate.bind_context`, so no
+builder change is needed.
+
+**Recommended gate — no paid authorization for any lane whose adapter has not completed a
+$0 stub-server round trip against the current strict contract since the last contract
+change.** That check takes minutes. It would have caught all three, and it is the single
+highest-leverage governance change in this register.
 
 ## 5. Serving substrates
 
