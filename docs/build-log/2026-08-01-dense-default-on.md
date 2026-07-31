@@ -44,6 +44,22 @@ The full measured 2×2 from `docs/build-log/artifacts/track-r-paraphrase/w0-2-fi
 Packed 67 → 88 (r@10 0.4889), p = 1.69e-07 against the deterministic BM25
 control. The flip moves the shipped default from cell (83) to cell (113).
 
+> **The product shipped two cells below the measured winner for four weeks and
+> nobody noticed.** The winning arm was identified, banked, and written up — and
+> the default was never moved to it. Worse, the harness that measures the code
+> lane defaulted to the *worst* of the four cells (40), so the instrument we
+> would have used to notice was itself pointed at the wrong configuration. The
+> `bm25-code` win was banked on 2026-07-30 and the dense reversal on 2026-07-31;
+> neither changed a default. **A measured win that does not move a default is
+> not a win, it is a note** — and an arm default that does not track the shipped
+> default cannot detect the gap. This is the same propagation failure the
+> coding-lane retraction called out at
+> `2026-07-30-coding-lane-first-win.md:80-85`, one level up: there a hedge
+> failed to gate a recommendation; here a result failed to gate a default.
+> Every future measured win should carry an explicit "does this move a default?"
+> line, and every harness default should be the shipped default unless a control
+> arm explicitly overrides it.
+
 No gate, no flag-behind-experiment, no opt-in was added. The only escape hatches
 are the two env vars that already existed, and they exist because the eval
 harness needs deterministic control arms.
