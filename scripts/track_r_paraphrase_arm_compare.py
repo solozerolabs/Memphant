@@ -5,9 +5,13 @@ Same machinery, same haystack, same query string, same graders as the original
 bank's Phase 1c/1e comparison — only the instrument changes. Three arms:
 
 * ``bm25_control`` — ``code_lane_run_deterministic.py --scope attempt``.
-* ``memphant_before`` — ``code_lane_run_memphant.py --lexical-scorer overlap``.
-* ``memphant_after`` — ``... --lexical-scorer bm25-code`` (embeddings off;
-  dense was measured null-to-negative on this lane).
+* ``overlap_off`` / ``bm25code_off`` — ``code_lane_run_memphant.py
+  --lexical-scorer {overlap,bm25-code} --embed-model off``.
+* ``overlap_dense`` / ``bm25code_dense`` — the same two lexical scorers with
+  ``--embed-model small``. Dense measured null-to-negative on the ORIGINAL bank,
+  but that bank's questions carried their targets' identifiers; this one withholds
+  them, which is the regime where semantic matching should be able to show a gain
+  if it has one. Running it here is what makes that falsifiable.
 
 Two stages are reported for every MemPhant arm, because the original bank's
 result was two-stage and reporting only one understates or overstates it:
@@ -90,8 +94,19 @@ def main() -> int:
     parser.add_argument("--golden", required=True, type=Path)
     parser.add_argument("--corpus", required=True, type=Path)
     parser.add_argument("--control", required=True, type=Path)
-    parser.add_argument("--before", required=True, type=Path)
-    parser.add_argument("--after", required=True, type=Path)
+    parser.add_argument(
+        "--arm", action="append", required=True, metavar="NAME=PATH",
+        help="a code_lane_run_memphant.py provenance report, repeatable",
+    )
+    parser.add_argument(
+        "--baseline-arm", default="overlap_off",
+        help="the arm every other arm is additionally paired against",
+    )
+    parser.add_argument(
+        "--survival-arm", default="bm25code_off",
+        help="the arm whose margin over the control is compared to the original bank",
+    )
+    parser.add_argument("--leakage", type=Path, default=None)
     parser.add_argument("--original", type=Path, default=None)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
@@ -109,8 +124,11 @@ def main() -> int:
     control_rows = {row["question_id"]: row for row in control["per_question"]}
     control_hits = {k: [bool(control_rows[q][f"hit_at_{k}"]) for q in order] for k in (5, 10)}
 
-    reports = {"memphant_before": json.loads(args.before.read_text()),
-               "memphant_after": json.loads(args.after.read_text())}
+    arm_paths = {}
+    for entry in args.arm:
+        name, _, path = entry.partition("=")
+        arm_paths[name] = Path(path)
+    reports = {name: json.loads(path.read_text()) for name, path in arm_paths.items()}
     for name, report in reports.items():
         if report["golden_sha256"] != lock["sha256"]:
             raise RuntimeError(f"arm {name} ran on a different golden bank")
@@ -133,7 +151,7 @@ def main() -> int:
             bucket["fused"].append(fused10)
             bucket["packed"].append(packed10)
         arms[name] = {
-            "provenance_path": str(args.before if name == "memphant_before" else args.after),
+            "provenance_path": str(arm_paths[name]),
             "harness": {
                 "lexical_scorer": report.get("lexical_scorer"),
                 "embed_model": report.get("embed_model"),
@@ -160,12 +178,15 @@ def main() -> int:
             },
         }
 
-    after_vs_before = {
-        f"{stage}_at_{k}": paired(
-            hits["memphant_after"][stage][k], hits["memphant_before"][stage][k]
-        )
-        for stage in ("fused", "packed")
-        for k in (5, 10)
+    baseline = args.baseline_arm
+    paired_vs_baseline = {
+        name: {
+            f"{stage}_at_{k}": paired(hits[name][stage][k], hits[baseline][stage][k])
+            for stage in ("fused", "packed")
+            for k in (5, 10)
+        }
+        for name in reports
+        if name != baseline
     }
 
     survival = None
@@ -185,7 +206,7 @@ def main() -> int:
                     f"recall_at_{k}"
                 ]
                 new_margin = (
-                    arms["memphant_after"][f"{stage}_recall_at_{k}"]
+                    arms[args.survival_arm][f"{stage}_recall_at_{k}"]
                     - control[f"recall_at_{k}"]
                 )
                 margins[f"{stage}_at_{k}"] = {
@@ -196,6 +217,7 @@ def main() -> int:
                     else None,
                 }
         survival = {
+            "arm": args.survival_arm,
             "definition": (
                 "margin = MemPhant(after) recall - scoped BM25 control recall, on that "
                 "bank's own questions; survival_ratio = paraphrase margin / original "
@@ -251,20 +273,40 @@ def main() -> int:
             "hits_at_10": sum(control_hits[10]),
         },
         "arms": arms,
-        "paired_after_vs_before": after_vs_before,
+        "baseline_arm": baseline,
+        "paired_vs_baseline_arm": paired_vs_baseline,
         "survival_vs_original_bank": survival,
         "per_question": [
             {
                 "question_id": question_id,
                 "shape": shapes[question_id],
                 "control_hit_at_10": control_hits[10][index],
-                "before_fused_hit_at_10": hits["memphant_before"]["fused"][10][index],
-                "before_packed_hit_at_10": hits["memphant_before"]["packed"][10][index],
-                "after_fused_hit_at_10": hits["memphant_after"]["fused"][10][index],
-                "after_packed_hit_at_10": hits["memphant_after"]["packed"][10][index],
+                **{
+                    f"{name}_{stage}_hit_at_10": hits[name][stage][10][index]
+                    for name in reports
+                    for stage in ("fused", "packed")
+                },
             }
             for index, question_id in enumerate(order)
         ],
+        "grade": "DIAGNOSTIC -- NOT PROMOTION-GRADE",
+        "why_diagnostic": (
+            "the bank this runs on FAILED its own preregistered headline leakage "
+            "criterion (concentration 2.0180 against a bar of <= 1.50) and is used "
+            "here deliberately and with that failure declared, because it is still a "
+            "far less lexically confounded instrument than the original bank at "
+            "3.9286. No number here may be promoted, published or cited as a "
+            "standing measurement."
+        ),
+        "bank_leakage": (
+            {
+                key: value
+                for key, value in json.loads(args.leakage.read_text()).items()
+                if key != "per_question"
+            }
+            if args.leakage
+            else None
+        ),
         "note": (
             "measurement only; ownership question (d) is the owner's to decide and no "
             "default, checkbox or promotion moves here"
@@ -287,6 +329,7 @@ def main() -> int:
                     f"p={block['mcnemar_exact_p']:.5g})"
                 )
             print(f"{name:18s} {stage:7s} " + "  ".join(cells))
+    print(f"  [bank concentration 2.0180 vs bar 1.50 -- DIAGNOSTIC, NOT PROMOTION-GRADE]")
     if survival:
         for key, block in survival["margins"].items():
             print(
