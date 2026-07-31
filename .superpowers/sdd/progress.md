@@ -1241,3 +1241,103 @@ run for money. Commits `7a3faa68`…`d1c11bec` on `af-w7-register`, none pushed.
 **Audit hazard recorded:** 87 of 88 entries in `canonical-artifact-allowlist.txt` are absent
 from this worktree; Memora and MemSyco evidence survives only in `/Users/sidsharma/Memphant`.
 An audit run inside a worktree will wrongly report "never run" for lanes that did run.
+
+## W8 — silent worker under-drain: the two remaining exposed paths (2026-07-30, `af-w8-drain`)
+
+**Headline: no banked number moves.** Both audited results survive, and both now
+carry live re-run evidence rather than an argument. The one thing that did move
+is a latency number nobody asked about, flagged at the bottom and NOT attributed
+to this bug.
+
+**Root cause is the sibling session's, not Python's.** `20260730_004` made the
+worker pool assume `memphant_worker`, so FORCE RLS applied to the worker's
+queue-wide, tenant-unbound drain-exit count; it answered 0 at any queue depth and
+`MEMPHANT_WORKER_DRAIN=1` exited after one tick. Fixed at `a47a4a40` +
+`20260730_005_pending_worker_job_count.sql`. This branch merged that first
+(`1bddcda6`) and everything below runs on top of it.
+
+**Caller reading re-verified against the real mechanism.** Exposure needs a pool
+under a capability role AND no independent bench-credential check. `psql`-based
+verification runs as the scratch-DB superuser, so it is never blinded.
+- SAFE, independent DB check: `code_lane_run_memphant.py` (`compilation_summary`
+  asserts `pending_jobs=0`, `dead_jobs=0`, `done_jobs=expected`);
+  `generate_memora_memphant_answers.py` (structured ledger ⇒ the tick path, which
+  always asked `psql`).
+- SAFE, count-gated — **owner's reading was conservative here**: an under-drain
+  reports a short `completed=`, so `run_swe_contextbench_memphant.py`
+  (`completed == 24`), `generate_stale_memphant_answers.py` (`>= sum(ingested)`)
+  and `external_instrument_adapter.py` (`compiled == ingested - deduped`) all fail
+  closed already.
+- GENUINELY EXPOSED, both now fixed: `episodic_lane_run_memphant.py` (no check of
+  any kind) and `gate_run_memphant.py`, which keeps a **private copy** of
+  `drain_worker` that `06b0a44b` never touched and whose caller only prints the
+  count. Both gained `gate_runtime.assert_worker_queue_empty`.
+
+**C1 episodic slice — CLEARED, on three independent lines.** (1) Immune by
+construction at the time: at `6d01789b` (2026-07-22) `PgStore::connect_worker`
+issued no `SET ROLE` — no `PoolSpec` existed — so the RLS-blinded count could not
+reach it; `004` landed 2026-07-30 16:09, eight days later. (2) The banked
+`compiled_jobs` are exact identities with the enqueued job count (synthetic
+227+10+1 = **238**; real prod 35+235+1 = **271**), which an under-drain cannot
+produce; now pinned by test. (3) **Live re-run** of the deterministic synthetic
+corpus: `compiled=238`, Bar 2 passes on both tenants, `correctly_excluded` 13 and
+12, 0 leaks, tenant ids identical to the artifact — every correctness number
+reproduces exactly. The real-prod corpus is a gitignored one-time extract, no
+longer on disk, so that arm rests on (1) and (2).
+
+**`bench_lme` chat lane — never exposed to the root cause, but vulnerable to a
+second mechanism, now proven and fixed.** It connects via `PgStore::connect`
+(`connect_with_capabilities` ⇒ `PoolSpec::unrestricted`, no `SET ROLE`) and always
+has — one commit ever touched that line — and the banked baseline's own recorded
+command runs against `postgres://memphant:memphant@…`, the scratch superuser. RLS
+never applied. **But** `while run_worker_tick(usize::MAX) > 0 {}` is unsound for a
+different reason: a failed job is released with `retry_backoff_seconds` and
+`claim_reflect_jobs` excludes `run_after > now()`, so the next tick completes zero
+with the haystack still partly compiled. Proven live, not argued:
+`crates/memphant-store-postgres/tests/drain_backoff_hides_pending_work.rs` claims a
+real job, releases it with backoff, and shows the next claim empty while
+`pending_worker_job_count() >= 1`. It has to be a Postgres test —
+`InMemoryStore::release_reflect_job` ignores `retry_after_seconds` outright, so the
+in-memory store cannot express the bug (the store-divergence anti-pattern again).
+
+**The chat lane's load-bearing number re-derived from scratch.** The 0.6145 rung-7
+baseline was re-run end to end on the fixed, DB-verified drain (178 questions,
+seed 20260713, bge-small, fresh scratch DB, $0): **r@5 = r@10 = 0.6144578313253012,
+n_scored 166 — byte-identical to `dev-fast-retrieval.json`, with ZERO
+per-question differences across all 178** and no degraded reads. The banked
+`--disable rerank` arm no longer exists (retired at `33586946`), which is why the
+re-run drops the flag: that arm is now the only behaviour.
+
+**Fix shape.** One mechanism, not two: `drain_finished` moved from the worker
+binary into `memphant-core::service`, and `memphant-worker`'s drain mode and
+`bench_lme` now exit on the same database-confirmed condition; the bench also fails
+closed when a tick makes no progress with work pending. Python side, one shared
+`gate_runtime.assert_worker_queue_empty` counting `queued|running|dead` on the
+bench credential.
+
+**Suites.** pytest 1052 passed / 15 skipped, 1 failed: `test_public_launch_gate`
+(`playwright: command not found`, environmental, red at base). Rust
+`--all-targets --all-features --no-fail-fast`: 2 failed —
+`contextual_chunk_write::recall_chunk_renders_matched_window_plus_neighbour`
+(red at `06b0a44b`, verified by checkout) and `syndai_trace_compare` (expected,
+sibling-owned). `cargo fmt --check`, `clippy -D warnings`, `cargo test --doc`
+clean. Live-PG `--ignored` leg: the new drain test passes; the combined
+`-p memphant-store-postgres -p memphant-worker` invocation shows 3 failures
+(`retain_resource_registers_and_enqueues`, `the_worker_pool_counts_queued_jobs_
+across_every_tenant`, `worker_drain_exits_zero_and_prints_exactly_one_summary_line`)
+that reproduce identically at `1bddcda6` and pass when each binary gets its own
+scratch DB — shared-scratch-DB cross-contamination between test binaries, not a
+code fault. `hot_path_slo_pg` failed only under bench contention and passes alone.
+Also repaired three fixtures already red on trunk: the `06b0a44b` drain test's
+`kwargs["env"]` KeyError and two `apply_memphant_migrations` counts stale at four
+migrations since `005`.
+
+**One number DID move, and it is not this bug.** C1 Bar 1 (HTTP-boundary recall
+SLO, 200 calls, same script, same corpus) measured **p50 81.8 ms / p95 108.6 ms**
+today against the banked **32.6 / 37.2**. It still passes the 200/500 ms bar, and
+three measurements under falling machine load (149/221 → 116/166 → 82/109) say
+part of the gap is contention — but not obviously all of it. Correctness is
+untouched. Nine days of recall-path change sit between the two runs; nobody has
+looked, and this audit did not.
+
+Commits `eda37a7b` `96115a76` `7be37945` `cb95502d` on `af-w8-drain`. Not pushed.
