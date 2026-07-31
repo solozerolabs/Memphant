@@ -160,3 +160,10 @@ benchmarks/data/track_r_repo_memory_spotcheck.jsonl
 # including the packed-context identity check computed from them.
 docs/build-log/artifacts/rung7-packing-reader-gate/phase1d/*-evidence.jsonl
 docs/build-log/artifacts/rung7-packing-reader-gate/phase1d/*.log
+
+# GitHub lane (docs/build-log/2026-07-31-github-lane-bar-and-privacy.md §5.1).
+# Bodies stay out of the repo: four of the five source repositories are private.
+# Only the lock is committed.
+benchmarks/data/github_lane_golden.jsonl
+benchmarks/data/github_lane_corpus.jsonl
+!benchmarks/data/github_lane_golden.lock.json

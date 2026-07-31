@@ -1,0 +1,121 @@
+{
+  "by_privacy_class": {
+    "private_repo": 91,
+    "public_cc_by_4_0": 325
+  },
+  "by_query_author": {
+    "human": 325,
+    "machine": 39,
+    "model": 39,
+    "template": 13
+  },
+  "by_stratum": {
+    "P1": 325,
+    "S1": 39,
+    "S2": 6,
+    "S3": 7,
+    "S4": 39
+  },
+  "by_stratum_name": {
+    "ci_failure_fix": 39,
+    "coderabbit_review": 39,
+    "fix_of_a_fix": 7,
+    "public_human_review": 325,
+    "revert_supersession": 6
+  },
+  "composition_bars": {
+    "distinct_private_source_commits_ge_30": {
+      "bar": 30,
+      "observed": 50,
+      "verdict": "PASS"
+    },
+    "max_repo_share_of_private_le_0_60": {
+      "bar": 0.6,
+      "observed": 0.9038,
+      "verdict": "FAIL"
+    },
+    "p1_ge_100": {
+      "bar": 100,
+      "observed": 325,
+      "verdict": "PASS"
+    },
+    "private_non_s4_ge_40": {
+      "bar": 40,
+      "observed": 52,
+      "verdict": "PASS"
+    }
+  },
+  "composition_bars_all_pass": false,
+  "corpus_bytes": 1427533,
+  "corpus_path": "benchmarks/data/github_lane_corpus.jsonl",
+  "corpus_sha256": "2a869b8ab270f3b732a7006867b634a730bc89122c5b0fab81b72176e3aef7be",
+  "distinct_source_commits_private": 50,
+  "golden_bytes": 764019,
+  "golden_path": "benchmarks/data/github_lane_golden.jsonl",
+  "golden_sha256": "d3387a4128f5a23b87c764c53e3e43812f0b437b01b1cae79f1b72e907ab3550",
+  "leakage_gate_artifact": "docs/build-log/artifacts/github-lane/leakage.json",
+  "n_corpus_docs": 492,
+  "n_goldens": 416,
+  "p1_audit": {
+    "bot_comments_excluded": 102,
+    "bot_prs": 37,
+    "human_comments": 2991,
+    "source_comments": 3093,
+    "source_prs": 350
+  },
+  "parameters": {
+    "doc_clip": 4000,
+    "fix_of_fix_window_days": 30,
+    "max_per_source_p1": 1,
+    "max_per_source_private": 2,
+    "query_clip": 2000
+  },
+  "preregistration": "docs/build-log/2026-07-31-github-lane-bar-and-privacy.md",
+  "private_by_repo": {
+    "solozerolabs/Syndai": 47,
+    "solozerolabs/yurivan": 5
+  },
+  "private_non_s4_total": 52,
+  "public_sources": [
+    {
+      "attribution": "SWE-PRBench (foundry-ai), CC BY 4.0",
+      "dataset": "foundry-ai/swe-prbench",
+      "file": "dataset/prs.jsonl",
+      "license": "CC-BY-4.0",
+      "sha256": "a58e1f713533f6bc260a93f6e234b85acd16a77f55a756893694b96495eb43cd"
+    }
+  ],
+  "reject_by_reason": {
+    "no_identifying_failure_text": 51,
+    "over_per_source_cap": 114,
+    "p1_no_usable_human_comment": 25,
+    "revert_target_not_named": 1,
+    "s4_no_merge_commit_or_path": 24,
+    "s5_issue_open_backlog_no_fix": 16,
+    "s5_query_describes_own_change": 11,
+    "s5_rebuttal_no_following_change": 4,
+    "secret_excluded:anthropic_key": 1,
+    "secret_excluded:generic_secret_assignment": 1
+  },
+  "s5_audit": {
+    "human_comments_rebuttal_no_change": 4,
+    "human_comments_self_describing_the_change": 11,
+    "human_review_comments": 15,
+    "issues_open_never_closed_no_comments": 16,
+    "issues_total": 16,
+    "s5_admitted": 0
+  },
+  "schema": "memphant.eval.github-lane-bank.v1",
+  "secret_excluded": {
+    "anthropic_key": 1,
+    "generic_secret_assignment": 1
+  },
+  "secret_excluded_total": 2,
+  "source_head_shas": {
+    "solozerolabs/Finn": "296411da094ced26195e1bec4eb70212dc4c9b00",
+    "solozerolabs/RecMe": "93fe0c3040e9ad2bc1c973d165fe3a6255948855",
+    "solozerolabs/Syndai": "c9c1cf908424dbca208d8a6d02af5627c5bddbce",
+    "solozerolabs/eternex": "dea0d54111b90fb9a660927883c92ef78543b521",
+    "solozerolabs/yurivan": "2de0284d4d25c4b95d88f8b53cae2e84d131b7b2"
+  }
+}

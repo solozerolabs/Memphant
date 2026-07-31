@@ -799,3 +799,46 @@ not.
   full `up --build`.
 - The CLI two-runtime pool bug and the admin CLI's superuser dependency are
   reported, not fixed.
+
+## 2026-07-31 — GitHub lane coding-memory golden bank (af-w6-github)
+
+**Preregistration first.** `docs/build-log/2026-07-31-github-lane-bar-and-privacy.md`
+committed at `a7cdb876` before any extraction, per the binding gate.
+
+**Survey verified.** All five of the owner's repo figures reproduce exactly:
+Syndai 117 PRs / 0 issues / 194 review comments (179 `coderabbitai[bot]`, 15
+human), Finn 194/0/0, yurivan 39/0/0, RecMe 7/16/0, eternex 1/0/0. Savida is a
+subtree of Finn, not a repo.
+
+**Verdict: three preregistered bars FAIL; no bank ships as a certified bank.**
+
+- S1 `ci_failure_fix` (machine-authored queries, n=39): leakage **3.31×** vs the
+  ≤2.05× bar — FAIL.
+- P1 `public_human_review` (swe-prbench, CC-BY-4.0, n=325): **2.42×** — FAIL.
+- Repo concentration: Syndai holds **90.4%** of private non-S4 goldens vs a
+  ≤60% bar — FAIL.
+- S2 `revert_supersession` (n=6) 1.78× PASS, S3 `fix_of_a_fix` (n=7) 1.61× PASS.
+  S4 CodeRabbit (n=39) 2.11×, quarantined and never gated or blended.
+- Bar-clearing slice is therefore **13 goldens**, under the ≥40 floor. The bars
+  were not moved.
+
+**S5 (private human queries) is empty, and that is the finding.** All 15 "human"
+review comments are the owner replying to CodeRabbit; 11 open with
+`Addressed in <sha>: …` — the actor describing his own change, the exact Track R
+defect. The other 4 are rebuttals with no following change. All 16 RecMe issues
+are open zero-comment backlog tickets in a repo with no CI history.
+
+**Mis-specification recorded, not applied.** The concentration metric detects
+copying, which requires the query to be writable from the target. S1's query is
+emitted by CI before the fix exists and P1's by a reviewer against the pre-change
+hunk, so a high ratio there is causal specificity, not contamination. Gating them
+on a copying metric was a prereg error. Reported as FAIL and left standing; a
+corrected instrument needs its own preregistration.
+
+**Artifacts.** Lock `benchmarks/data/github_lane_golden.lock.json`
+(`be9965cc…`), leakage `docs/build-log/artifacts/github-lane/leakage.json`
+(`db2fbb4a…`). 416 goldens / 492 corpus docs, bodies gitignored and mirrored to
+`~/.memphant-private/github-lane/`. 2 candidates dropped whole for secrets
+(`anthropic_key`, `generic_secret_assignment`); no matched value written
+anywhere. Read-only throughout (`gh api -X GET`, `git show`; no fetch, no push).
+$0 spend, no model call. `--check` reproduces the lock byte-for-byte.

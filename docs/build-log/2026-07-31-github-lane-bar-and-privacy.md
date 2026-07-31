@@ -334,4 +334,200 @@ python3 scripts/github_lane_leakage.py \
 
 ## 8. Completion record
 
-*(filled in after the extraction run; empty at preregistration time)*
+Run date 2026-07-31. Preregistration committed at `a7cdb876` **before** the
+first extraction. Nothing below was written before that commit.
+
+### 8.1 Verdict, stated first
+
+**Three preregistered bars FAIL. No bank ships as a certified bank.**
+
+| bar | § | observed | verdict |
+|---|---|---:|---|
+| S1 leakage concentration ≤ 2.05× | 4.1 | **3.31×** | **FAIL** |
+| P1 leakage concentration ≤ 2.05× | 4.1 | **2.42×** | **FAIL** |
+| max single repo ≤ 60% of private non-S4 | 4.2 | **90.4%** (Syndai 47/52) | **FAIL** |
+| S2 leakage concentration ≤ 2.05× | 4.1 | 1.78× | PASS |
+| S3 leakage concentration ≤ 2.05× | 4.1 | 1.61× | PASS |
+| private non-S4 goldens ≥ 40 | 4.2 | 52 | PASS |
+| P1 goldens ≥ 100 | 4.2 | 325 | PASS |
+| distinct private source commits ≥ 30 | 4.2 | 50 | PASS |
+| `--check` byte-identical re-cut | 4.4 | reproduces | PASS |
+
+§4.1 says a stratum above the bar is **dropped from the bank, not
+renegotiated**. Applying that literally, the bar-clearing bank is **S2 + S3 = 13
+goldens**, which is below the ≥ 40 private floor. So the honest disposition is:
+
+> **The GitHub lane does not yield a certified coding-memory bank at the
+> preregistered bar.** What ships is the measurement, the 13 bar-clearing
+> state-churn goldens, and the full 416-golden artifact with every stratum
+> carrying its own verdict. Nothing here may be used as a headline number.
+
+The bars are not moved. §8.4 records a *mis-specification* found in the bar
+itself; it is recorded as a finding for a future, separately-preregistered
+instrument, and is **not** applied retroactively to rescue this run.
+
+### 8.2 Yield and leakage per stratum
+
+Primary scoping is the preregistered one (§4.1): non-targets are the other
+target documents of the **same repository**. Full distribution, including
+median/p10/p90 and the seeded single-draw floor, is in
+`docs/build-log/artifacts/github-lane/leakage.json`
+(sha256 `db2fbb4aab2f5ac82f05d03ba57bf7b85d13c2b7b37f2231f93e0706da2eedf4`).
+
+| stratum | query author | shipped | scored | target mean | target median | non-target (exhaustive) | ratio | gate | absolute band |
+|---|---|---:|---:|---:|---:|---:|---:|---|---|
+| S1 `ci_failure_fix` | machine | 39 | 39 | 0.4315 | 0.4348 | 0.1305 | **3.31×** | **FAIL** | above |
+| S2 `revert_supersession` | template | 6 | 6 | 0.3523 | 0.3585 | 0.1982 | 1.78× | PASS | above |
+| S3 `fix_of_a_fix` | template | 7 | 7 | 0.3732 | 0.3571 | 0.2318 | 1.61× | PASS | above |
+| S4 `coderabbit_review` | **model** | 39 | 39 | 0.2518 | 0.2246 | 0.1194 | 2.11× | not gated | within |
+| S5 `human_issue_review` | human | **0** | — | — | — | — | — | — | — |
+| P1 `public_human_review` | human | 325 | 305 | 0.3030 | 0.2500 | 0.1251 | **2.42×** | **FAIL** | above |
+
+*scored* < *shipped* for P1 because 20 goldens are the only golden from their
+source repository and so have no in-scope negative. They are excluded from the
+distribution rather than scored against a zero floor, which would have flattered
+every ratio they entered.
+
+Reference points, same arithmetic: Track R original **4.19×** (failed), Track R
+paraphrase **2.05×** (accepted, and the bar). Human-authored band **0.175–0.287**.
+
+Secondary scoping, published so the choice of scope is auditable and cannot be
+mistaken for after-the-fact bar-shopping: with P1 non-targets scoped by
+**language** instead of repository, P1 reads 0.2986 / 0.0990 = **3.02×**. The
+preregistered repository scoping is the *stricter* denominator and the one the
+gate used; the looser one fails harder. Neither passes.
+
+### 8.3 S5 is empty, and that is the finding
+
+The private human stratum yields **zero** goldens. Both sub-sources are
+disqualified by measurement, not by taste:
+
+- **All 15 Syndai "human" review comments are the repo owner replying to
+  CodeRabbit.** 11 of 15 open with `Addressed in <sha>: …` / `Fixed in <sha>: …`
+  — the person who made the change, describing that change. That is precisely
+  the Track R defect §1 bars, arriving through a different door. The remaining 4
+  are rebuttals (`Not applicable`, `False positive`, `Intentional and within
+  policy`) with no following change and therefore no target.
+- **All 16 RecMe issues are open, zero-comment, never-closed feature-planning
+  tickets** authored by the same owner, in a repo with 0 CI runs and no fix to
+  attribute. A backlog, not a bug report.
+
+The owner's survey said this well was nearly dry. Measured, it is **completely**
+dry. This is the single strongest argument for the public corpora of §2b.
+
+### 8.4 A mis-specification in the bar, recorded not applied
+
+The concentration metric detects **copying**: it asks how much of the query's
+vocabulary is literally present in the target. Copying requires that the query
+could have been written by someone looking at the target. For S1 that is
+impossible by construction — the CI runner emitted the failure text before the
+fix existed, and no human touched it. For P1 the reviewer wrote the comment
+against the pre-change hunk. In both strata a high ratio therefore measures
+**causal specificity**, not contamination: a real user pasting a stack trace
+names the failing file too.
+
+Gating those strata on a copying metric was a mis-specification made at
+preregistration time. The disciplined response is to report the FAIL, record the
+mis-specification, and change nothing in this run — overriding a bar because the
+number came back inconvenient is the exact failure the preregistration exists to
+prevent. A leakage instrument that distinguishes *copied* from *causally
+specific* is a separate deliverable requiring its own prereg.
+
+Two contributing construction choices are noted for that future instrument, and
+deliberately **not** changed here: the S1 target document repeats every touched
+filename three times (file list, `--stat`, and diff header), and the P1 target is
+a whole file-level diff section up to 3,500 characters rather than the reviewed
+hunk. Both inflate coverage. Trimming them after seeing 3.31× would be
+bar-shopping.
+
+### 8.5 Repo concentration
+
+Private non-S4 goldens: **Syndai 47, yurivan 5, Finn 0, RecMe 0, eternex 0** —
+90.4% in one repository against a ≤ 60% bar. This is a property of the corpus,
+not of the extractor: Syndai holds 80 of the 90 viable CI failure→fix
+transitions. Enforcing the cap would leave ≤ 12.5 private goldens, far under the
+40 floor. Recorded as **FAIL**; the private slice must never be described as
+evidence spanning the owner's repositories. It is a Syndai slice with a yurivan
+tail.
+
+### 8.6 Extraction yield, by construct
+
+| construct | candidates | admitted | principal loss |
+|---|---:|---:|---|
+| CI failure→green transitions (post-2026-05-01, non-deploy) | 122 | — | 17 unresolvable range, 13 range > 3 commits, 1 no failed job, 1 log expired |
+| ↳ with retrievable logs | 90 | **39** | 51 `no_identifying_failure_text` |
+| `This reverts commit` chains | 7 | **6** | 1 revert did not name its target |
+| fix-of-a-fix (both ends CI-attested, ≤ 30 days, path overlap) | 7 | **7** | — |
+| CodeRabbit review comments | 179 | **39** | 24 no merge commit/path, 114 over the ≤ 2-per-PR cap |
+| private human review comments | 15 | **0** | 11 self-describing, 4 rebuttals |
+| private issues | 16 | **0** | 16 open backlog, no fix |
+| P1 swe-prbench PRs | 350 | **325** | 25 no usable human comment |
+
+P1 comment accounting: 3,093 total → **102 bot comments excluded by author**
+(`gemini-code-assist` 85, `cursor` 17) across **37 of 350 PRs**, despite
+`ai_comments_removed: 0` on those rows → 2,991 human comments available, one
+golden per PR.
+
+### 8.7 Secrets and exclusions
+
+Scanned every query and every target before it was written anywhere.
+
+| reason | count |
+|---|---:|
+| `secret_excluded:anthropic_key` | 1 |
+| `secret_excluded:generic_secret_assignment` | 1 |
+| **total dropped for secrets** | **2** |
+
+Both candidates were **dropped whole**, not redacted. No matched value was
+written to the bank, the corpus, the lock, this document, the cache index, or
+stdout — `scripts/github_lane_secrets.py` returns only the pattern name.
+
+Full reject accounting is in `reject_by_reason` in the committed lock.
+
+### 8.8 Artifacts and hashes
+
+Committed:
+
+| file | sha256 |
+|---|---|
+| `benchmarks/data/github_lane_golden.lock.json` | `be9965cc4868303ceabee2167259471aad564016549515c0d15a6551e1d6e584` |
+| `docs/build-log/artifacts/github-lane/leakage.json` | `db2fbb4aab2f5ac82f05d03ba57bf7b85d13c2b7b37f2231f93e0706da2eedf4` |
+
+Gitignored bodies, mirrored to `~/.memphant-private/github-lane/` (§5.5):
+
+| file | sha256 | bytes |
+|---|---|---:|
+| `github_lane_golden.jsonl` | `d3387a4128f5a23b87c764c53e3e43812f0b437b01b1cae79f1b72e907ab3550` | 764,019 |
+| `github_lane_corpus.jsonl` | `2a869b8ab270f3b732a7006867b634a730bc89122c5b0fab81b72176e3aef7be` | 1,427,533 |
+
+416 goldens, 492 corpus documents. The mirror hashes match the committed lock,
+so drift is detectable from the repository without exposing any content.
+
+Source pins — clone HEADs at extraction time, since §5.4 forbids fetching:
+
+| repo | HEAD |
+|---|---|
+| `solozerolabs/Syndai` | `c9c1cf908424dbca208d8a6d02af5627c5bddbce` |
+| `solozerolabs/Finn` | `296411da094ced26195e1bec4eb70212dc4c9b00` |
+| `solozerolabs/yurivan` | `2de0284d4d25c4b95d88f8b53cae2e84d131b7b2` |
+| `solozerolabs/RecMe` | `93fe0c3040e9ad2bc1c973d165fe3a6255948855` |
+| `solozerolabs/eternex` | `dea0d54111b90fb9a660927883c92ef78543b521` |
+
+Every per-golden provenance record pins its own run ids, failing and green head
+SHAs, fix SHA, PR number, review-comment id, or `swe-prbench` task id, base and
+head commit. Public source pin: `foundry-ai/swe-prbench` `dataset/prs.jsonl`
+sha256 `a58e1f713533f6bc260a93f6e234b85acd16a77f55a756893694b96495eb43cd`,
+CC BY 4.0, attributed in the lock and on every P1 golden.
+
+### 8.9 Compliance
+
+- **$0 paid spend.** No OpenRouter call, no paid provider call, no model call of
+  any kind. The extractor is local parsing over a disk cache.
+- **Read-only.** Only `gh api -X GET` and `git log`/`git show`/`git rev-parse`.
+  No push, no PR, no comment, no fetch, no checkout, no ref write. GitHub rate
+  limit was never approached and every response is cached, so a re-run costs
+  zero requests.
+- **Determinism.** `--check` re-cuts and reproduces the lock byte-for-byte.
+- **No fabricated numbers.** Every figure in this section is emitted by
+  `github_lane_extract.py` or `github_lane_leakage.py` and is reproducible with
+  the §7 commands.
