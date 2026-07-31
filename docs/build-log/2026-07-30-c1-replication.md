@@ -234,6 +234,11 @@ correctness-only — permanently, not pending.**
   kind.
 - Production was read and never written: every statement ran under
   `default_transaction_read_only = on`, and the only verb issued was `SELECT`.
+- Leak check: 887 needles (every distinct body prefix and every `id`, `user_id`,
+  `l0_agent_id`, `project_id`, `mission_id` and `idempotency_key` in the private
+  corpus) searched across every `git ls-files` path — **0 tracked files match**.
+  `tests/test_episodic_lane_run_memphant.py` additionally asserts, without the
+  private corpus, that no committed C1 real-prod artifact contains a UUID.
 
 ## Artifacts
 
