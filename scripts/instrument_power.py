@@ -185,16 +185,26 @@ A = "docs/build-log/artifacts"
 
 # --- episodic / chat -------------------------------------------------------
 add_lane(
-    "episodic/chat", "LME-S rung7 retrieval hit@5", 166, 0, 38,
+    "episodic/chat", "LME-S rung7 retrieval hit@5", 166, 38, 0,
     f"{A}/rung7-packing-reader-gate/{{baseline,rendercap1200}}-retrieval.json", D_MIN,
-    "baseline vs cap-1200. 12 _abs rows excluded (hit_at_5 null). RETRIEVAL endpoint, "
-    "not the reader endpoint the paid run scores. Also: recall@5 == recall@10 in every "
-    "artifact -- no answer ever lands at rank 6-10 -- so @10 is a dead metric here.",
+    "baseline vs cap-1200, recomputed from per_question rows: b=38 favours cap-1200, "
+    "c=0, unanimous. 12 _abs rows excluded. RETRIEVAL endpoint, NOT the reader endpoint "
+    "the paid run scores. Also verified: max first_answer_rank across both arms is 5, so "
+    "hit@5 and hit@10 are identical on all 166 rows -- @10 is a dead metric on this slice.",
 )
 add_lane(
     "episodic/chat", "LME-S rung7 non-regression", 166, 0, 0,
     f"{A}/rung7-packing-reader-gate/phase1{{d,w}}/chat-*-retrieval.json", None,
     "phase1d and phase1w both. b=c=0 by construction; cite only as non-regression, never as effect evidence.",
+)
+add_lane(
+    "episodic/chat", "LME-S _abs sentinel (the killed gate)", 12, 0, 2,
+    f"{A}/rung7-packing-reader-gate/{{baseline,rendercap1200}}-retrieval.json"
+    " (abstention_correct over the 12 is_abstention rows)", None,
+    "Independently recomputed: this IS the 2-discordant-pair screen that rejected "
+    "pack_render_cap. Exact two-sided p = 0.50. n_d = 2 < the structural floor of 6, so "
+    "it could not have rejected at ANY effect size. The Phase 0 rescission is confirmed "
+    "structurally, not merely on the trap-session argument.",
 )
 add_lane(
     "episodic/chat", "LME-S 80q pool, median arm", 72, 4, 8,
