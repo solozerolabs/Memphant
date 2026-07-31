@@ -9,6 +9,24 @@ const DEFAULT_BATCH: usize = 64;
 const MAX_BATCH: usize = 1024;
 const TICK: Duration = Duration::from_millis(500);
 
+/// Running totals across the ticks of one drain.
+#[derive(Default)]
+struct TickTotals {
+    completed: usize,
+    failed: usize,
+    retried: usize,
+    deferred: usize,
+}
+
+impl TickTotals {
+    fn add(&mut self, tick: &memphant_core::WorkerTickOutcome) {
+        self.completed += tick.completed;
+        self.failed += tick.failed;
+        self.retried += tick.retried;
+        self.deferred += tick.deferred;
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkerMode {
     Daemon,
@@ -60,25 +78,28 @@ async fn main() {
     let service = memphant_runtime::build_worker_service(store);
 
     if mode == WorkerMode::Once {
-        let completed = service
+        let tick = service
             .run_worker_tick(batch)
             .await
             .expect("memphant-worker: tick failed");
-        println!("memphant-worker: once completed={completed}");
+        println!(
+            "memphant-worker: once completed={} failed={} retried={} deferred={}",
+            tick.completed, tick.failed, tick.retried, tick.deferred
+        );
         return;
     }
     if mode == WorkerMode::Drain {
-        let mut total = 0;
+        let mut total = crate::TickTotals::default();
         let dead_letters_before = service
             .worker_dead_letter_count()
             .await
             .expect("memphant-worker: dead-letter baseline failed");
         loop {
-            let completed = service
+            let tick = service
                 .run_worker_tick(batch)
                 .await
                 .expect("memphant-worker: drain tick failed");
-            total += completed;
+            total.add(&tick);
             let pending = service
                 .pending_worker_job_count()
                 .await
@@ -92,11 +113,17 @@ async fn main() {
             {
                 break;
             }
-            if completed == 0 {
+            if tick.is_idle() {
                 tokio::time::sleep(TICK).await;
             }
         }
-        println!("memphant-worker: drain completed={total}");
+        // Failure counts are printed on the drain line, not just logged per
+        // job: a drain that completed zero and failed everything used to be
+        // indistinguishable here from a drain with nothing to do.
+        println!(
+            "memphant-worker: drain completed={} failed={} retried={} deferred={}",
+            total.completed, total.failed, total.retried, total.deferred
+        );
         return;
     }
 
@@ -114,8 +141,11 @@ async fn main() {
             }
             _ = tokio::time::sleep(TICK) => {
                 match service.run_worker_tick(batch).await {
-                    Ok(0) => {}
-                    Ok(completed) => eprintln!("memphant-worker: completed={completed}"),
+                    Ok(tick) if tick.is_idle() => {}
+                    Ok(tick) => eprintln!(
+                        "memphant-worker: completed={} failed={} retried={} deferred={}",
+                        tick.completed, tick.failed, tick.retried, tick.deferred
+                    ),
                     Err(error) => eprintln!("memphant-worker: tick error: {error}"),
                 }
             }

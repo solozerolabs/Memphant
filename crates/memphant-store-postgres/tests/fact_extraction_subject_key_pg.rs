@@ -187,7 +187,9 @@ async fn ingest_and_drain(label: &str, actor_kind: &str) -> (String, Vec<(String
     }
     for _ in 0..16 {
         let completed = worker.run_worker_tick(usize::MAX).await.expect("tick");
-        if worker.pending_worker_job_count().await.expect("pending") == 0 || completed == 0 {
+        if worker.pending_worker_job_count().await.expect("pending") == 0
+            || completed.completed == 0
+        {
             break;
         }
     }
@@ -326,7 +328,9 @@ async fn belief_promotion_does_not_double_open_a_semantic_key() {
             .expect("retain");
         for _ in 0..8 {
             let completed = worker.run_worker_tick(usize::MAX).await.expect("tick");
-            if worker.pending_worker_job_count().await.expect("pending") == 0 || completed == 0 {
+            if worker.pending_worker_job_count().await.expect("pending") == 0
+                || completed.completed == 0
+            {
                 break;
             }
         }

@@ -551,7 +551,12 @@ async fn failed_embedding_commits_nothing_from_reflect() {
         )
         .await
         .expect("retain");
-    assert_eq!(service.run_worker_tick(usize::MAX).await.unwrap(), 0);
+    let tick = service.run_worker_tick(usize::MAX).await.unwrap();
+    assert_eq!(tick.completed, 0);
+    // The job was released for retry, not completed and not dead-lettered.
+    // Asserting `retried` states that directly; the old `== 0` would also have
+    // held if the tick had claimed nothing at all.
+    assert_eq!(tick.retried, 1, "expected one retry release: {tick:?}");
     assert_eq!(store.pending_job_count(&context).await.unwrap(), 1);
 
     // Nothing from the compile committed: no units, hence no embeddings and no

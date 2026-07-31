@@ -232,5 +232,8 @@ async fn worker_completed_count_excludes_a_stale_claim_noop() {
     assert_eq!(reclaimed[0].attempts, 2);
 
     release.store(true, Ordering::SeqCst);
-    assert_eq!(tick.await.unwrap().unwrap(), 0);
+    // The racing tick must have touched no job at all — `is_idle` says that,
+    // where the old `== 0` would also have passed had it claimed jobs and
+    // failed every one of them.
+    assert!(tick.await.unwrap().unwrap().is_idle());
 }

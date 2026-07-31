@@ -1046,13 +1046,17 @@ async fn scope_memory_cursor_pagination_yields_two_disjoint_pages() {
     )
     .await
     .1;
-    while state
-        .service()
-        .run_worker_tick(usize::MAX)
-        .await
-        .expect("worker reflects paginated episodes")
-        > 0
-    {}
+    loop {
+        let tick = state
+            .service()
+            .run_worker_tick(usize::MAX)
+            .await
+            .expect("worker reflects paginated episodes");
+        assert!(tick.is_clean(), "reflect drain hit errors: {tick:?}");
+        if tick.is_idle() {
+            break;
+        }
+    }
 
     let context_query = format!(
         "subject_id={}&actor_id={}&agent_node_id={}&subject_generation={}",

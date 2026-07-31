@@ -1718,7 +1718,7 @@ async fn retain_persists_subject_context_and_rejects_mixed_bindings() {
         )
         .await
         .expect("reflect subject-bound episode");
-    assert_eq!(reflected, 1);
+    assert_eq!(reflected.completed, 1);
     let page = store
         .scope_memory_page(&first_context, None, 10)
         .await

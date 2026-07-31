@@ -1090,10 +1090,20 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
             .await
             .map_err(|error| format!("reflect dead-letter baseline: {error}"))?;
         loop {
-            let completed = ingest_service
+            let tick = ingest_service
                 .run_worker_tick(usize::MAX)
                 .await
                 .map_err(|error| format!("reflect: {error}"))?;
+            // Belt and braces with the database gate below: `is_clean` catches
+            // an error on the tick that produced it, before a retry has had
+            // time to become a dead letter the gate can see.
+            if !tick.is_clean() {
+                return Err(format!(
+                    "reflect drain did not compile cleanly ({tick:?}) for question {}; \
+                     recall here would be understated",
+                    question.question_id
+                ));
+            }
             let pending = ingest_service
                 .pending_worker_job_count()
                 .await
@@ -1107,7 +1117,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
             {
                 break;
             }
-            if completed == 0 {
+            if tick.is_idle() {
                 return Err(format!(
                     "reflect drain made no progress with {pending} jobs still pending \
                      for question {}",

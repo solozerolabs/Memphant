@@ -2378,12 +2378,24 @@ pub async fn scope_memory_page_paginates_without_overlap<H: StoreHarness>(h: &H)
     }
     // Tenant-scoped so a concurrently running harness sharing the database
     // cannot claim (or be robbed of) this tenant's reflect jobs.
-    while svc
-        .run_worker_tick_scoped(tenant_filter(&context), usize::MAX)
-        .await
-        .expect("reflect")
-        > 0
-    {}
+    // Drain to idle, not to `completed == 0`: a tick that failed every job
+    // also completes zero, so the old condition exited on total failure exactly
+    // as it did on an empty queue. Assert the drain was clean afterwards —
+    // otherwise this fixture would hand the assertions below a corpus that
+    // never compiled.
+    loop {
+        let tick = svc
+            .run_worker_tick_scoped(tenant_filter(&context), usize::MAX)
+            .await
+            .expect("reflect");
+        assert!(
+            tick.is_clean(),
+            "reflect drain hit errors: {tick:?} — the fixture corpus did not compile"
+        );
+        if tick.is_idle() {
+            break;
+        }
+    }
 
     let page_one = store
         .scope_memory_page(&context, None, 3)

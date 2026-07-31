@@ -871,6 +871,46 @@ pub enum ClaimMutationOutcome {
     Stale,
 }
 
+/// What one worker tick actually did.
+///
+/// A tick used to return a bare completed-count, which made two very
+/// different outcomes indistinguishable: **an empty queue and a tick in which
+/// every job failed both return zero.** Drain loops written as
+/// `while tick() > 0 {}` therefore exited cleanly on total failure, and a
+/// harness reading only that value would report a fully-drained corpus while
+/// nothing had compiled. Recall measured on such a corpus is silently
+/// understated. Counts are reported so the caller can tell the cases apart;
+/// retry and dead-letter behaviour is unchanged.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WorkerTickOutcome {
+    /// Jobs compiled and marked complete.
+    pub completed: usize,
+    /// Jobs terminally failed (dead-lettered) — provider-invalid output, or
+    /// provider-unavailable after retries.
+    pub failed: usize,
+    /// Jobs released with backoff after an error, to be retried later.
+    pub retried: usize,
+    /// Jobs released or requeued for reasons that are not failures: ordered
+    /// redelivery behind an earlier job in the same scope lane, or a compiler
+    /// version bump.
+    pub deferred: usize,
+}
+
+impl WorkerTickOutcome {
+    /// True when the tick touched no job at all — the queue was empty for this
+    /// filter. This is the honest drain-loop terminator: unlike
+    /// `completed == 0`, it is not also true of a tick that failed everything.
+    pub fn is_idle(&self) -> bool {
+        self.completed == 0 && self.failed == 0 && self.retried == 0 && self.deferred == 0
+    }
+
+    /// True when no job hit an error. Ordered-redelivery deferrals are not
+    /// errors and do not clear this flag.
+    pub fn is_clean(&self) -> bool {
+        self.failed == 0 && self.retried == 0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ReflectJobResult {
