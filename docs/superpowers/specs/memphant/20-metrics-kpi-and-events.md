@@ -73,6 +73,8 @@ memphant.delete_check_failed
 ```text
 memory.promoted                 # belief -> semantic promotion committed
 memory.superseded               # a correction/supersession generation applied
+                                # (emitted for `semantic` AND `preference`; the
+                                #  arm that closed the generation is on the row)
 memory.contradiction_detected   # write-path contradiction contract fired
 memory.quarantined              # write- or read-time quarantine entry
 reflect.completed               # a reflect cycle finished for a subject

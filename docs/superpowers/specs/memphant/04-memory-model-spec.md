@@ -50,7 +50,7 @@ The analogs justify separation of policy. They do not justify claims of scientif
 
 If a memory cannot name its policy row, it should not be stored.
 
-**Two further kinds are PROPOSED and not yet minted** — `preference` (§13.2a) and `working_state` (§13.2b). Their policy rows are written there and pass the §0.1 admission test; the enum in code remains the five variants at `crates/memphant-types/src/lib.rs:968` until the `00` §4 / `25` §11c additive migration lands (W3.2). `knowledge` is **not** a proposed kind — it is the router-arm name for `semantic` (§13.2c), because it fills no distinct policy row.
+**`preference` (§13.2a) is MINTED** (2026-07-31, `20260731_006_preference_memory_kind`, classified **breaking** because the frozen kind enum is `25` §11c's closed-Rust-reader exception, so `schema_compat_revision` moved). The enum is now the **six** variants at `crates/memphant-types/src/lib.rs:968`. **`working_state` (§13.2b) remains PROPOSED and unminted** — its policy row is written there and passes the §0.1 admission test, but no enum variant exists. `knowledge` is **not** a proposed kind — it is the router-arm name for `semantic` (§13.2c), because it fills no distinct policy row.
 
 ## 2. Episodic Memory
 
@@ -339,7 +339,7 @@ memory_unit (
   id              uuid NOT NULL,
   tenant_id       uuid NOT NULL,
   scope_id        uuid NOT NULL,
-  kind            text NOT NULL CHECK (kind IN ('episodic','semantic','procedural','belief','resource')),
+  kind            text NOT NULL CHECK (kind IN ('episodic','semantic','procedural','belief','resource','preference')),
   state           text NOT NULL CHECK (state IN
                     ('captured','extracted','candidate','active','superseded',
                      'invalidated','deleted','quarantined','expired','validated','retired')),
@@ -408,7 +408,7 @@ embedding (
 ) PARTITION BY HASH (tenant_id)
 ```
 
-`memory_unit.kind` is exactly one of `episodic`, `semantic`, `procedural`, `belief`, `resource` — **frozen-but-extensible.** What is frozen is the *contract that every unit has exactly one kind*, not the cardinality of the set: adding a 6th kind is a **governed additive migration** (an RFC + the `25` §11c add-enum-value path read as TEXT-with-fallback), never a forbidden rewrite. So the field's drift toward graph/temporal-KG memory (where "plain memory can be regarded as a degenerate graph", arXiv:2602.05665, and contradiction-handling is edge-invalidation over temporal validity — Graphiti/Zep, which MemPhant already expresses as `contradicts`/`supersedes` edges + the §7.3a bitemporal layer) is absorbed by adding a kind or a typed edge, not by a re-architecture — closing the "freeze a 5-value enum too early = schema regret" risk.
+`memory_unit.kind` is exactly one of `episodic`, `semantic`, `procedural`, `belief`, `resource`, `preference` — **frozen-but-extensible.** The sixth was added on 2026-07-31 by exactly the governed path this paragraph describes, so the extensibility claim is now demonstrated rather than asserted. What is frozen is the *contract that every unit has exactly one kind*, not the cardinality of the set: adding a 6th kind is a **governed additive migration** (an RFC + the `25` §11c add-enum-value path read as TEXT-with-fallback), never a forbidden rewrite. So the field's drift toward graph/temporal-KG memory (where "plain memory can be regarded as a degenerate graph", arXiv:2602.05665, and contradiction-handling is edge-invalidation over temporal validity — Graphiti/Zep, which MemPhant already expresses as `contradicts`/`supersedes` edges + the §7.3a bitemporal layer) is absorbed by adding a kind or a typed edge, not by a re-architecture — closing the "freeze a 5-value enum too early = schema regret" risk.
 
 **Kind-specific payload (no per-kind columns).** `memory_unit` is the *shared* lifecycle/trust/bitemporal/DSR row for all five kinds — frozen, and it must not grow `procedure_*`/`resource_*` columns. Kind-specific structure lives in one `payload jsonb` on the unit (validated by a per-kind JSON schema in the Rust core), e.g. the procedure body (§4.1) and resource-chunk refs (§6.1). Recall/contradiction/decay paths use only the typed columns; `payload` is read at assembly time, so its shape can evolve behind a versioned schema without touching the frozen table.
 
@@ -675,7 +675,7 @@ scope (
 scope_policy (
   id uuid NOT NULL, tenant_id uuid NOT NULL,
   scope_id uuid NOT NULL,                       -- the scope whose memory is shared
-  kind text NOT NULL CHECK (kind IN ('episodic','semantic','procedural','belief','resource')),
+  kind text NOT NULL CHECK (kind IN ('episodic','semantic','procedural','belief','resource','preference')),
   direction text NOT NULL CHECK (direction IN ('inherit','grant')),  -- inherit=downward; grant=explicit cross-scope
   min_level smallint NOT NULL CHECK (min_level BETWEEN 0 AND 64),     -- admit actors at this agent_node level OR lower
   grantee_scope_id uuid,                        -- NULL for inherit; the target scope for grant
@@ -755,13 +755,13 @@ Every row was re-verified against the working tree at the time of writing.
 | Intended mechanism | Verified code reality |
 |---|---|
 | typed write-router | **absent.** Admission is one linear loop with an if/else ladder on `candidate.admission_hint` (`crates/memphant-core/src/lib.rs:11500`, `:11575`, `:11699`); `kind` enters only as data |
-| knowledge = supersession | **half-built and hardcoded.** The supersession/invalidation target filter is the literal `unit.kind == MemoryKind::Semantic` (`lib.rs:11512`) / `existing.kind == MemoryKind::Semantic` (`lib.rs:11616`) — a constant inside one arm, not a dispatch |
+| knowledge = supersession | **BUILT 2026-07-31** (`ffa640b8`). The hardcoded literal is gone: the target filter now comes from `supersedes_own_kind`, which dispatches through the exhaustive `write_router_arm`. Because an arm may only name its own kind there, RW-3 is structural and `episodic_arm` provably supersedes nothing — a cross-kind bug the constant permitted (an Episodic candidate closing a Semantic generation) is fixed and regression-tested |
 | episodic = decay-to-cold | **absent.** Decay is a recall-time score multiplier only: `candidate.fused_score *= candidate.decay.retrievability` (`lib.rs:7364`) plus a composite term (`lib.rs:9290`). It reorders; **nothing changes state** |
 | procedural = evidence-gated | **read-gate only.** `UnitState::Validated` is required at `lib.rs:8362` (and in the recall-eligibility predicates `lib.rs:3284-3285`, `store.rs:3724`, `:3765`); **no write path in `crates/*/src/` ever transitions a unit into `Validated`** — every non-test occurrence is a read or a serialization arm |
 | preference = chain-head → hot | **absent and inexpressible.** No `Preference` variant (`crates/memphant-types/src/lib.rs:968`); no `chain_head` anywhere in the tree |
 | hot plane | **absent.** `episode.retention_tier` (`hot\|warm\|cold`, `memphant_migrations/versions/20260703_001_wsa_bootstrap.sql:278`, partial index `:826`) has **0 readers and 0 writers** in `crates/` (`grep -rn retention_tier crates --include='*.rs'` → 0 hits). Every episode is `'hot'` forever. The `tier_episode` job named in §2.4, `14` §3, and `02` §6 **does not exist in code** |
 | cold plane / demotion | **absent.** `demote`/`demotion`/`cold` appear in **no** Rust file under `crates/`. What exists is the inverse — hard `forget` with tombstones (`crates/memphant-store-postgres/src/store.rs:1325`, `:1628`) |
-| `MemoryKind` | `Episodic \| Semantic \| Procedural \| Belief \| Resource` (`crates/memphant-types/src/lib.rs:968-974`, `ALL: [Self; 5]`). **No `Preference`, no `Knowledge`, no working-state kind** |
+| `MemoryKind` | **`Episodic \| Semantic \| Procedural \| Belief \| Resource \| Preference`** (`crates/memphant-types/src/lib.rs:968`, `ALL: [Self; 6]`) since 2026-07-31. No `Knowledge` (§13.2c) and no working-state kind. **Row kept, not deleted:** the five-kind reading above is what §13.0 verified on 2026-07-30, and the delta is the point |
 
 ### 13.1 The typed write-router
 
@@ -826,7 +826,7 @@ satisfies the arms but violates these is not the router.
 | `procedural_arm` | candidate strategy or failure pattern | mint at `procedure_candidate`; transition to `Validated` **only** on a recorded validation event | a unit reaches `Validated` **only** via `validation = {method ∈ replay\|deterministic, trials, wins}` meeting the §4.2 threshold **and** the adversarial high-risk-step assertion; the validation event is durable and replayable | promotion by corroboration count, by recall frequency, or by any LLM judgment | **write side ABSENT** — read gate at `lib.rs:8362` has nothing that can pass it |
 | `belief_arm` | low-trust observation | mint `belief`; evaluate §5 independence; promote to semantic when cleared | source-independent corroboration; confidence recomputed, never incrementally mutated (§5.1a) | promotion from K mutually-reinforcing same-origin observations | BUILT (§5) |
 | `resource_arm` | pointer/blob/chunk | extractor state machine (§6.1) | ACL narrowing is applied in-stage; chunk identity stays `kind='resource'` | a parallel chunk table or a second embedding grain | BUILT (§6.1) |
-| `preference_arm` | user-declared or correction-derived standing constraint | supersede the current chain head; the new head is hot-plane resident | exactly **one** chain head per `(tenant_id, data_subject_id, scope_id, preference_key)`; superseded preferences stay citable; the head is injected deterministically, not retrieved competitively | decay; corroboration gating; minting by an unprivileged principal (§13.5) | **ABSENT** — kind unminted |
+| `preference_arm` | user-declared or correction-derived standing constraint | supersede the current chain head; the new head is hot-plane resident | exactly **one** chain head per `(tenant_id, data_subject_id, scope_id, preference_key)`; superseded preferences stay citable; the head is injected deterministically, not retrieved competitively | decay; corroboration gating; minting by an unprivileged principal (§13.5) | **supersession BUILT** (`ffa640b8`, regression-tested end-to-end through Postgres: `supersedes`/`contradicts` edges minted, retired generation closed and excluded from recall). RW-7 actor gating BUILT. **Hot-plane injection still ABSENT** — the head is still retrieved competitively, because §13.3 tiering does not exist |
 | `working_state_arm` | agent's own retained reasoning / plan state | append, then **compact-and-supersede** at the scope budget | never crosses `agent_node`; never promoted to any other kind; never counts as corroboration; TTL-bounded | truncation-by-discard; cross-principal read; `high_risk_arg` eligibility | **ABSENT** — kind unminted |
 
 **`chain_head` is derived, not a column.** The report's "chain-head" is exactly
@@ -851,7 +851,7 @@ unrepresentable in code.
 Admission test for any new kind is unchanged (§0.1): it must fill a **distinct
 row on every policy column**, or it is rejected.
 
-#### 13.2a `preference` (PROPOSED — unminted)
+#### 13.2a `preference` (MINTED 2026-07-31)
 
 | Column | Value |
 |---|---|
@@ -865,9 +865,17 @@ row on every policy column**, or it is rejected.
 Distinct from `semantic` on promotion, retrieval, and decay; distinct from
 `belief` on trust and promotion. It passes §0.1.
 
-*Why it blocks work today:* Track U's 51 preference goldens
-(`docs/build-log/2026-07-30-phase1-golden-banks-and-retrieval-probe.md`) have no
-kind to be stored as, so the preference lane cannot be scored end-to-end.
+*Why it blocked work, and what unblocking it did NOT buy.* Track U's 51
+preference goldens
+(`docs/build-log/2026-07-30-phase1-golden-banks-and-retrieval-probe.md`) had no
+kind to be stored as. They do now. But minting the kind moved **no score**:
+on MemoryCode, with the router landed and the harness unchanged,
+latest-state-wins is 0.3123 — bit-identical to the pre-router measurement —
+because the *first* gate is an explicit subject, and nothing on the served
+write path produces one for a restated convention at $0
+(`docs/build-log/2026-07-31-preference-writepath.md`). A body-derived key was
+measured and recovers 8 of 1063 gold groups. Making a mechanism reachable is
+not the same as making it fire.
 
 #### 13.2b `working_state` (PROPOSED — unminted)
 
@@ -1086,9 +1094,9 @@ records the **spec-to-code gap** for the governance core specifically.
 
 | §13 contract | Code state | What it needs (workstream) |
 |---|---|---|
-| Typed write-router, RW-1..RW-8 | **UNBUILT** — if/else on `admission_hint` (`lib.rs:11500`) | restructure `reflect` stage 4 |
-| `knowledge_arm` dispatch (not a literal) | **PARTIAL** — behavior correct, dispatch hardcoded (`lib.rs:11512`, `:11616`) | fold into the router |
-| `preference` kind + `preference_arm` | **UNBUILT, unnameable** | W3.2 (+ `00` §4 five-doc migration) |
+| Typed write-router, RW-1..RW-8 | **PARTIAL (2026-07-31, `ffa640b8`).** RW-1 kind-totality, RW-3 own-kind, RW-4 append-only and RW-7 no-escalation hold via `write_router_arm`/`supersedes_own_kind`. The stage is still one loop with an `admission_hint` ladder inside the arm-gated branch, so the full `WriteDecision` restructure is NOT done | finish `reflect` stage 4 |
+| `knowledge_arm` dispatch (not a literal) | **BUILT** — the literal is gone; the filter comes from the arm | — |
+| `preference` kind + `preference_arm` | **kind MINTED, supersession BUILT** (`20260731_006`, `ffa640b8`). Hot-plane chain-head injection ABSENT (needs §13.3). **And reachability is not the constraint that binds**: nothing on the served write path produces a subject key for a restated convention at $0 (`docs/build-log/2026-07-31-preference-writepath.md`) | a mutation-time control-plane hook on the supersede path; the `supersedes_own_kind` seam is left open for it |
 | `working_state` kind + arm + compaction | **UNBUILT, unnameable** | W3.2; OPEN-1 first |
 | Procedural write-side promoter to `Validated` | **UNBUILT** — read gate has nothing to admit (`lib.rs:8362`) | W3.5 |
 | `retention_tier` writer + reader, `tier_episode` | **UNBUILT** — 0 readers, 0 writers | W3.4 |

@@ -112,7 +112,15 @@ store provenance
 write raw episode/resource
 quarantine suspicious memory units
 require corroboration for semantic promotion
+refuse to mint a preference below trusted_user/trusted_system
 ```
+
+**`preference` is actor-gated at write** (`04` §13.2a, minted 2026-07-31). A
+standing user constraint may only be declared by the data subject or a
+`trusted_user` acting for them; a lower-trust caller's preference hint degrades
+to a `belief` exactly as a `semantic` hint already does (`RW-7`). Its *content*
+is always data — never control flow, never `high_risk_arg`-eligible — so a
+preference cannot be used to widen scope or escalate trust.
 
 No parser or LLM extractor is trusted enough to bypass provenance.
 
