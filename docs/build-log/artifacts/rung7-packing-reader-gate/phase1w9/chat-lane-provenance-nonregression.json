@@ -1,0 +1,83 @@
+{
+  "after_overall": {
+    "abstention_correct": 7,
+    "abstention_n": 12,
+    "n": 178,
+    "n_scored": 166,
+    "question_type": "overall",
+    "recall_at_10": 0.6144578313253012,
+    "recall_at_5": 0.6144578313253012
+  },
+  "before_overall": {
+    "abstention_correct": 7,
+    "abstention_n": 12,
+    "n": 178,
+    "n_scored": 166,
+    "question_type": "overall",
+    "recall_at_10": 0.6144578313253012,
+    "recall_at_5": 0.6144578313253012
+  },
+  "dataset_sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",
+  "packed_context_identical": false,
+  "paired_at_10": {
+    "after_hits": 102,
+    "after_only": 0,
+    "before_hits": 102,
+    "before_only": 0,
+    "mcnemar_exact_p": 1.0,
+    "n": 166
+  },
+  "paired_at_5": {
+    "after_hits": 102,
+    "after_only": 0,
+    "before_hits": 102,
+    "before_only": 0,
+    "mcnemar_exact_p": 1.0,
+    "n": 166
+  },
+  "per_question_vector_identical": true,
+  "render_size_distribution": {
+    "after": {
+      "item_chars": {
+        "max": 23906,
+        "mean": 5467.408740359897,
+        "min": 113,
+        "n": 778,
+        "p50": 3590,
+        "p90": 13331,
+        "p99": 17477
+      },
+      "packed_items": {
+        "max": 9,
+        "mean": 4.370786516853933,
+        "min": 2,
+        "n": 178,
+        "p50": 4,
+        "p90": 7,
+        "p99": 9
+      }
+    },
+    "before": {
+      "item_chars": {
+        "max": 23906,
+        "mean": 5478.644329896907,
+        "min": 113,
+        "n": 776,
+        "p50": 3672,
+        "p90": 13331,
+        "p99": 17477
+      },
+      "packed_items": {
+        "max": 9,
+        "mean": 4.359550561797753,
+        "min": 2,
+        "n": 178,
+        "p50": 4,
+        "p90": 7,
+        "p99": 9
+      }
+    }
+  },
+  "sample_n": 178,
+  "sample_seed": 20260710
+}
