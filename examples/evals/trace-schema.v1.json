@@ -519,6 +519,16 @@
           "format": "float",
           "type": "number"
         },
+        "cross_rerank_rank": {
+          "default": null,
+          "description": "1-based rank of this candidate AFTER the W8 cross-encoder rerank stage,\nor `None` when no reranker ran or the candidate sat outside the scored\nhead. Recorded because `fused_rank` alone cannot separate the two\npost-rerank miss classes that need different fixes: \"the reranker never\nsaw the gold\" (raise `candidate_limit`) and \"the reranker saw it and\nstill ranked it below the cut\" (a model-quality problem).",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "decay_retrievability": {
           "default": 0.0,
           "format": "float",
