@@ -294,6 +294,30 @@ add_lane(
 )
 
 
+
+# --- preference / user-learning --------------------------------------------
+add_lane(
+    "preference/user", "Track U golden bank", None, None, None,
+    "NO RUN: benchmarks/data/user_lane_golden.lock.json exists but the only script is "
+    "user_lane_extract.py -- there is no runner, and no artifact under "
+    "docs/build-log/artifacts references the lane", D_MIN,
+    "n=51 accepted from 60 candidates over 91 feedback files. STOP CONDITION: at n=51 the "
+    "lane is UNPOWERABLE below psi=0.20 and resolves only 17.4pt at psi=0.20. Deciding 7pt "
+    "would need n=340 (psi=0.20) to 665 (psi=0.40); the pinned source snapshot is 94 files "
+    "total, so that n is unreachable on the available corpus. Sized for 15pt at best.",
+)
+
+# --- procedural ------------------------------------------------------------
+add_lane(
+    "procedural", "rung10 state-style procedure replay", None, None, None,
+    f"NOT A NEUTRAL INSTRUMENT: {A}/rung10-procedural-memory-profile.json", None,
+    "Self-authored ('sampled_public_style', benchmark_version state-style-procedural-"
+    "memory-2026-07-03) and saturated: score 1.0 against baseline 0.0. Its "
+    "embedding_selection axis is source_status=not_run. There is no external procedural "
+    "instrument, and this one cannot express a further gain.",
+)
+
+
 def compute(lane: dict) -> dict:
     out = dict(lane)
     n, b, c = lane["n"], lane["b"], lane["c"]

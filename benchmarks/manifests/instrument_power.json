@@ -261,6 +261,36 @@
       "mde_at_80": 0.116723,
       "required_n": 710,
       "verdict": "INADEQUATE: MDE 11.7pt vs target 7.0pt; need n>=710"
+    },
+    {
+      "lane": "preference/user",
+      "instrument": "Track U golden bank",
+      "n": null,
+      "b": null,
+      "c": null,
+      "psi_source": "NO RUN: benchmarks/data/user_lane_golden.lock.json exists but the only script is user_lane_extract.py -- there is no runner, and no artifact under docs/build-log/artifacts references the lane",
+      "effect_we_care_about": 0.07,
+      "note": "n=51 accepted from 60 candidates over 91 feedback files. STOP CONDITION: at n=51 the lane is UNPOWERABLE below psi=0.20 and resolves only 17.4pt at psi=0.20. Deciding 7pt would need n=340 (psi=0.20) to 665 (psi=0.40); the pinned source snapshot is 94 files total, so that n is unreachable on the available corpus. Sized for 15pt at best.",
+      "psi_observed": null,
+      "delta_observed": null,
+      "mde_at_80": null,
+      "required_n": null,
+      "verdict": "NO PAIRED RUN -- psi unmeasured, MDE uncomputable"
+    },
+    {
+      "lane": "procedural",
+      "instrument": "rung10 state-style procedure replay",
+      "n": null,
+      "b": null,
+      "c": null,
+      "psi_source": "NOT A NEUTRAL INSTRUMENT: docs/build-log/artifacts/rung10-procedural-memory-profile.json",
+      "effect_we_care_about": null,
+      "note": "Self-authored ('sampled_public_style', benchmark_version state-style-procedural-memory-2026-07-03) and saturated: score 1.0 against baseline 0.0. Its embedding_selection axis is source_status=not_run. There is no external procedural instrument, and this one cannot express a further gain.",
+      "psi_observed": null,
+      "delta_observed": null,
+      "mde_at_80": null,
+      "required_n": null,
+      "verdict": "NO PAIRED RUN -- psi unmeasured, MDE uncomputable"
     }
   ]
 }
