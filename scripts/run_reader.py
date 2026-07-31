@@ -395,9 +395,15 @@ RAG_SUPPORTED_JUDGE_JSON_SCHEMA = {
     "properties": {
         "answer_correct": {"type": "boolean"},
         "fully_supported": {"type": "boolean"},
+        # No `minimum` here: Anthropic's structured-output validator rejects it
+        # outright ("For 'integer' type, property 'minimum' is not supported"),
+        # which failed every judge call on the coding lane's first paid pilot.
+        # Nothing is lost — `parse_rag_supported_judge_output` already requires
+        # every cited rank to be one of the ranks actually present in that row's
+        # pack, which is a strictly stronger check than `>= 1`.
         "supporting_evidence_ranks": {
             "type": "array",
-            "items": {"type": "integer", "minimum": 1},
+            "items": {"type": "integer"},
         },
     },
     "required": [
@@ -726,13 +732,49 @@ def response_contract(engine: str, kind: str, model: str | None = None) -> dict:
 def openrouter_provider_preferences(
     model: str,
     max_price_per_million: dict[str, Decimal] | None = None,
+    provider_only: list[str] | None = None,
 ) -> dict:
+    """Provider routing for one request.
+
+    ``provider_only`` pins the serving provider and turns fallbacks OFF.
+    ``require_parameters`` is not sufficient on its own: OpenRouter's endpoint
+    catalogue advertises ``structured_outputs`` for *every*
+    ``anthropic/claude-opus-5`` endpoint, but the Azure workspace actually
+    rejects it — ``structured_outputs not supported in your workspace`` — so a
+    run routed there loses every row to HTTP 400. Routing is decided per
+    request, so without a pin a campaign can clear a pilot and then lose rows
+    mid-run to a provider it never touched before. When provider identity
+    decides whether a row scores at all it is evidence, and evidence is pinned
+    rather than renegotiated on every call.
+    """
     preferences = {"require_parameters": True}
     if max_price_per_million is not None:
         preferences["max_price"] = {
             key: float(value) for key, value in max_price_per_million.items()
         }
-    if model == FLASH_MODEL:
+    if provider_only:
+        # `require_parameters` is dropped WITH a pin, and only with a pin.
+        # It filters on OpenRouter's advertised parameter list, which for
+        # `anthropic/claude-opus-5` omits `temperature` on the Anthropic
+        # endpoint even though the Anthropic API accepts it. Keeping the filter
+        # therefore leaves exactly one "eligible" endpoint — Azure — which then
+        # rejects `structured_outputs` outright. The three ways out were
+        # measured against the live API, one call each:
+        #
+        #   only=anthropic + require_parameters + temperature=0  -> 404, no endpoint
+        #   only=anthropic + temperature=0                       -> OK, schema honoured
+        #   only=anthropic + require_parameters, no temperature  -> OK, but decoding
+        #                                                           falls to the
+        #                                                           provider default
+        #
+        # The middle row is the only one that keeps deterministic decoding AND
+        # structured outputs, so it is what we ship. What `require_parameters`
+        # was buying — a guarantee that response_format is honoured — is carried
+        # instead by the explicit pin, by the strict fail-closed parsers, and by
+        # that probe. `max_price` is a separate filter and still applies.
+        preferences |= {"only": list(provider_only), "allow_fallbacks": False}
+        preferences.pop("require_parameters", None)
+    elif model == FLASH_MODEL:
         preferences |= {
             "only": [FLASH_PROVIDER],
             "allow_fallbacks": True,
@@ -787,6 +829,9 @@ class ReaderCli:
         self.reported_spend_usd = Decimal("0")
         self.unsettled_liability_usd = Decimal("0")
         self._active_cache_key: str | None = None
+        # Set by main() after construction; None preserves today's routing for
+        # every other caller of ReaderCli.
+        self.provider_only: list[str] | None = None
         self.last_call_metadata: dict | None = None
         self._openrouter_generation_lookup = None
 
@@ -822,7 +867,7 @@ class ReaderCli:
             )
         if self.engine == "openrouter":
             contract_identity["provider"] = openrouter_provider_preferences(
-                self.model_for(kind), self.max_price_per_million
+                self.model_for(kind), self.max_price_per_million, self.provider_only
             )
         contract = json.dumps(contract_identity, sort_keys=True, separators=(",", ":"))
         key = hashlib.sha256(
@@ -1078,7 +1123,7 @@ class ReaderCli:
             **decoding,
             "response_format": self.response_contract_for(kind)["response_format"],
             "provider": openrouter_provider_preferences(
-                self.model_for(kind), self.max_price_per_million
+                self.model_for(kind), self.max_price_per_million, self.provider_only
             ),
         }
         if self.reasoning_effort is not None:
@@ -1741,6 +1786,18 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--provider-only",
+        action="append",
+        default=[],
+        metavar="PROVIDER",
+        help=(
+            "pin the OpenRouter serving provider (repeatable) and disable "
+            "fallbacks. require_parameters alone is not enough: every "
+            "anthropic/claude-opus-5 endpoint advertises structured_outputs and "
+            "the Azure workspace rejects it, losing every row to HTTP 400"
+        ),
+    )
+    parser.add_argument(
         "--reader-profile",
         choices=("evidence", "closed-book"),
         default="evidence",
@@ -1931,6 +1988,9 @@ def main() -> int:
         cli.set_provider_attempt_ledger(attempt_ledger)
     if args.max_provider_attempts is not None:
         cli.set_provider_attempt_limit(args.max_provider_attempts)
+    # Before any call, and part of the cache key, so a reply produced by a
+    # different provider can never be reused under a new pin.
+    cli.provider_only = list(args.provider_only) or None
     reader_system_prompt = READER_SYSTEM_PROMPTS.get(args.prompt_version)
     closed_book = args.reader_profile == "closed-book"
     if closed_book:
@@ -2110,6 +2170,7 @@ def main() -> int:
         "judge_profile": args.judge_profile,
         "prompt_version": args.prompt_version,
         "reader_profile": args.reader_profile,
+        "provider_only": list(args.provider_only) or None,
         "routing": routing_counts,
         "reasoning_effort": args.reasoning_effort,
         "runtime": "postgres",
