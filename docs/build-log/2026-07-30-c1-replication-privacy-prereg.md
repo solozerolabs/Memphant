@@ -91,6 +91,16 @@ The corpus is mirrored to `~/.memphant-private/c1/` (outside every worktree and
 every git repository) with its sha256 recorded in this document after the run, so
 the 2026-07-22 loss — a gitignored single copy that vanished — is not repeated.
 
+Recorded after the run (2026-07-30):
+
+| file | sha256 |
+|---|---|
+| `~/.memphant-private/c1/sources/episodic_memories.json` (snapshot) | `ddc0bc77d273c2da0ba4a7f95da4487a577e61fef861c7700fdfbc41dccf85c2` |
+| `~/.memphant-private/c1/c1_prod_episodic.jsonl` (corpus) | `04233ddff58d5322d02ce88b9c74057ed1340f645767641a4992392bc84d22ac` |
+
+Both match `benchmarks/data/c1_prod_episodic.lock.json`, so the mirror is
+verifiable against the committed lock without exposing any content.
+
 ## External-claim rule (binding)
 
 Any external claim derived from this slice requires a synthetic or
