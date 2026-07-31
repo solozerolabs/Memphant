@@ -360,6 +360,52 @@ artifact commits a bootstrap CI rather than the two discordant cells (so ψ is a
 bound — **commit b and c from now on**), and at n=60 the lane cannot resolve anything
 smaller than ~13pt in future.
 
+### 4.4 Temporal / state, forgetting, procedural, preference
+
+**STATE-Bench v0.8.0 — BROKEN. Do not authorize a paid run.**
+
+This is the instrument the owner specifically asked us to confirm before paying for it. It
+would not have worked, and the failure was reproduced live at $0.
+
+- *Nothing was ever materialised here.* `benchmarks/state_bench/` is 4.0K holding one
+  90-line file. The upstream cache dir does not exist, and a filesystem-wide search for the
+  pinned revision, `compute_metrics.py`, or any trajectory file returned zero hits. Until
+  this audit, **every "450 tasks / 300 train trajectories" figure in the lock was an
+  unbacked transcription.**
+- *Now verified.* A fresh $0 clone at tag `v0.8.0` has HEAD `e2c8d7af…` — exactly the
+  pinned revision — and the repo's own auditor
+  (`scripts/run_state_bench.py --dry-run`) returns `audit-ok-no-model-calls` with 50 test
+  tasks per domain. That transitively verifies all four native-scorer sha256s, the
+  aggregate inventory hash, and 450 tasks / 150 test / 300 train trajectories. **n is
+  real, and the split is upstream-endorsed.**
+- *License: true but unbound.* The checkout has a real MIT `LICENSE`
+  (sha256 `2e969379…`). The claim is correct — but `state_bench.lock.json` asserts it as a
+  bare string with no blob hash, unlike `memsyco`, `longmemeval_v2` and `memora`, which all
+  pin the LICENSE file. `stale.lock.json` has the same weakness. It happened to be true
+  this time; the lock does not make it checkable.
+- *It would fail on every single retrieval call.* `memphant_memory_agent.py:31-38` POSTs
+  `tenant_id` to `/v1/recall` and omits `subject_id`, `agent_node_id` and
+  `subject_generation`. The landed strict contract
+  (`crates/memphant-types/src/lib.rs:1778-1794`) is `#[serde(deny_unknown_fields)]` and
+  requires all three. The adapter predates the C0 strict-contract migration that killed
+  `tenant_id` and was never re-exercised. `build_state_bench_memphant_arm.py:398-402`
+  already writes the correct ids into the runtime config; the agent reads the wrong keys
+  out of a config that contains the right ones.
+- *Reproduced, not inferred.* Loaded through the official
+  `load_root_agent_class` loader and called at the official tool entry point against a stub
+  enforcing the real serde semantics: `RuntimeError: MemPhant recall failed: HTTP 400`.
+  Control: patching only that payload block returns a correct learning. The rest of the
+  adapter — degraded check, top-3 guard, body extraction, proof append — is sound.
+- *Blast radius if purchased.* The exception propagates to `run_batch.py:168`.
+  `--retry-attempts` defaults to 3, so every task is billed three times; `traj.save()` is
+  never reached, so no trajectory is written for any task; `verify_results` then refuses to
+  aggregate. **150 test tasks × 5 runs × 3 retries, purchased, zero scored rows.**
+- *Ever run?* No. Zero banked results, no artifact anywhere. STATUS.md:196 is honest on
+  this one.
+- *Cost per run:* **unverified** — with no tasks, envs or trajectories ever materialised
+  here, the byte-measured derivation had no input. Any dollar figure quoted for STATE-Bench
+  before now was a guess.
+
 ## 5. Serving substrates
 
 | substrate | instrument | valid? | correct as shipped? | n | ever run / banked | verdict |
