@@ -579,12 +579,27 @@ def drain_worker(
             out = sh([worker_bin], env=env)
             if out.returncode != 0:
                 raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
+            # The worker's tick-honesty change made the three outcome counts
+            # unconditional (`memphant-worker/src/main.rs:124`); the bare
+            # `completed=N` form is kept optional so an older binary still
+            # parses. The FAILED count is asserted rather than discarded — the
+            # worker prints it precisely so "drained nothing" stays
+            # distinguishable from "failed everything", and a partially
+            # compiled corpus silently inflates the absent-from-pool bucket of
+            # every retrieval measurement taken against it.
             match = re.fullmatch(
-                r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
+                r"memphant-worker: drain completed=(0|[1-9]\d*)"
+                r"(?: failed=(0|[1-9]\d*) retried=(0|[1-9]\d*) deferred=(0|[1-9]\d*))?\n?",
+                out.stdout,
             )
             if match is None:
                 raise RuntimeError(
                     f"worker drain completion output is malformed: {out.stdout[:300]!r}"
+                )
+            if match.group(2) is not None and int(match.group(2)):
+                raise RuntimeError(
+                    f"worker drain reported {match.group(2)} FAILED jobs -- the "
+                    f"corpus is only partially compiled: {out.stdout.strip()!r}"
                 )
             completed = int(match.group(1))
             total += completed
