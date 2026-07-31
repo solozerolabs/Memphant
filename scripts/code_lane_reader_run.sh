@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Drive one coding-lane reader-QA bank end to end: stage-equalize every arm,
-# mint the frozen packet, then run each arm through run_reader.py and emit the
-# paired comparison.
+# mint a frozen packet per arm, run the arms, emit the paired comparison.
 #
-# The ledger takes an exclusive flock per journal, so arms run SEQUENTIALLY on
-# purpose -- one campaign, one spend ledger, one resumable journal.
+# One packet and one ledger PER ARM, not per bank. The campaign ledger takes an
+# exclusive flock on its journal, so arms sharing a journal are forced to run
+# one after another; at ~30s per question that is ~90 minutes of avoidable
+# serialisation per arm. Separate journals let the arms run concurrently, and
+# nothing is lost: spend is summed across the ledgers, and the cache key already
+# includes each packet's authorization_sha256, so no arm can read another's
+# replies.
 #
 # Usage:
 #   bash scripts/code_lane_reader_run.sh <bank> <run-dir> <memphant-evidence> \
 #        <memphant-provenance> <control-evidence> <control-provenance> \
-#        <corpus-sha> <golden-sha> <prompt-version>
+#        <corpus-sha> <golden-sha> [prompt-version]
 set -euo pipefail
 
 BANK="${1:?bank label}"
@@ -24,7 +28,7 @@ PROMPT_VERSION="${9:-3}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-OUT="docs/build-log/artifacts/track-r-paraphrase/reader/$BANK"
+OUT="docs/build-log/artifacts/code-lane-reader/$BANK"
 EQ="$RUN/equalized-$BANK"
 mkdir -p "$OUT"
 
@@ -37,29 +41,28 @@ python3 scripts/code_lane_reader_prepare.py \
   --binary worker=target/release/memphant-worker \
   --binary cli=target/release/memphant-cli \
   --harness-env "MEMPHANT_FACT_EXTRACTION=shipped-default" \
+  --harness-env "reader_prompt_version=$PROMPT_VERSION" \
   --harness-env "bank=$BANK"
 
-echo "[2/4] minting the frozen authorization packet"
-rm -f "$OUT/attempts.jsonl" "$OUT/attempts.jsonl.lock"
-rm -rf "$OUT/cache"
-python3 scripts/code_lane_reader_packet.py \
-  --arm memphant="$EQ/memphant-equalized-evidence.jsonl:$MEM_PR:$ROOT/$OUT/reader-memphant.json" \
-  --arm bm25scoped="$EQ/bm25scoped-equalized-evidence.jsonl:$CTL_PR:$ROOT/$OUT/reader-bm25scoped.json" \
-  --arm nomemory="$EQ/nomemory-equalized-evidence.jsonl:$EQ/stage-equalization.json:$ROOT/$OUT/reader-nomemory.json" \
-  --out "$ROOT/$OUT/authorization.json" --cache-dir "$ROOT/$OUT/cache" \
-  --reader-model anthropic/claude-opus-5 --judge-model anthropic/claude-opus-5 \
-  --prompt-version "$PROMPT_VERSION" --price-prompt 5 --price-completion 25 \
-  --authorized-by "owner 2026-07-31: no ceiling, necessity established" \
-  --authorized-at "2026-07-31T16:00:00-07:00" | tee "$OUT/packet-derivation.json"
+mint_arm() {  # arm retrieval
+  local arm="$1" retrieval="$2"
+  rm -f "$OUT/attempts-$arm.jsonl" "$OUT/attempts-$arm.jsonl.lock"
+  rm -rf "$OUT/cache-$arm"
+  python3 scripts/code_lane_reader_packet.py \
+    --arm "$arm=$EQ/$arm-equalized-evidence.jsonl:$retrieval:$ROOT/$OUT/reader-$arm.json" \
+    --out "$ROOT/$OUT/authorization-$arm.json" --ledger-name "attempts-$arm.jsonl" \
+    --cache-dir "$ROOT/$OUT/cache-$arm" \
+    --reader-model anthropic/claude-opus-5 --judge-model anthropic/claude-opus-5 \
+    --prompt-version "$PROMPT_VERSION" --price-prompt 5 --price-completion 25 \
+    --authorized-by "owner 2026-07-31: no ceiling, necessity established" \
+    --authorized-at "2026-07-31T16:00:00-07:00" > "$OUT/packet-$arm.json"
+}
 
-CALLS=$(python3 -c "import json;print(json.load(open('$OUT/authorization.json'))['hard_limits']['memphant']['max_logical_calls'])")
-ATTEMPTS=$((CALLS * 4))
-
-run_arm() {
-  local arm="$1" profile="$2" retrieval="$3"
-  local spend
-  spend=$(python3 -c "import json;print(json.load(open('$OUT/authorization.json'))['hard_limits']['$arm']['max_spend_usd'])")
-  echo "[3/4] arm=$arm profile=$profile spend_cap=$spend $(date -u +%FT%TZ)"
+run_arm() {  # arm profile retrieval
+  local arm="$1" profile="$2" retrieval="$3" calls spend
+  calls=$(python3 -c "import json;print(json.load(open('$OUT/authorization-$arm.json'))['hard_limits']['$arm']['max_logical_calls'])")
+  spend=$(python3 -c "import json;print(json.load(open('$OUT/authorization-$arm.json'))['hard_limits']['$arm']['max_spend_usd'])")
+  echo "LAUNCH $BANK/$arm profile=$profile calls=$calls cap=\$$spend $(date -u +%FT%TZ)"
   doppler run --project syndai --config dev -- python3 scripts/run_reader.py \
     --engine openrouter --model anthropic/claude-opus-5 \
     --judge-model anthropic/claude-opus-5 --judge-profile rag-supported-v1 \
@@ -67,16 +70,24 @@ run_arm() {
     --provider-only anthropic \
     --evidence "$EQ/$arm-equalized-evidence.jsonl" --retrieval-report "$retrieval" \
     --out "$OUT/reader-$arm.json" --label "$BANK-$arm" \
-    --cache-dir "$OUT/cache" --attempt-ledger "$OUT/attempts.jsonl" \
-    --authorization-manifest "$OUT/authorization.json" --authorization-arm "$arm" \
-    --max-calls "$CALLS" --max-provider-attempts "$ATTEMPTS" --max-spend-usd "$spend" \
+    --cache-dir "$OUT/cache-$arm" --attempt-ledger "$OUT/attempts-$arm.jsonl" \
+    --authorization-manifest "$OUT/authorization-$arm.json" --authorization-arm "$arm" \
+    --max-calls "$calls" --max-provider-attempts $((calls * 4)) --max-spend-usd "$spend" \
     --max-price-prompt-per-million 5 --max-price-completion-per-million 25 \
-    --max-output-tokens 1024
+    --max-output-tokens 1024 > "$OUT/$arm.log" 2>&1
+  echo "DONE $BANK/$arm rc=$? $(date -u +%FT%TZ)"
 }
 
-run_arm memphant   evidence    "$MEM_PR"
-run_arm bm25scoped evidence    "$CTL_PR"
-run_arm nomemory   closed-book "$EQ/stage-equalization.json"
+echo "[2/4] minting one frozen packet per arm"
+mint_arm memphant   "$MEM_PR"
+mint_arm bm25scoped "$CTL_PR"
+mint_arm nomemory   "$EQ/stage-equalization.json"
+
+echo "[3/4] running arms concurrently"
+run_arm memphant   evidence    "$MEM_PR" &
+run_arm bm25scoped evidence    "$CTL_PR" &
+run_arm nomemory   closed-book "$EQ/stage-equalization.json" &
+wait
 
 echo "[4/4] paired comparison"
 for endpoint in answer_correct correct; do
@@ -86,6 +97,6 @@ for endpoint in answer_correct correct; do
     --arm nomemory="$OUT/reader-nomemory.json" \
     --control bm25scoped --stage-manifest "$EQ/stage-equalization.json" \
     --bank "$BANK" --endpoint "$endpoint" \
-    --out "docs/build-log/artifacts/track-r-paraphrase/phase3-reader-qa-$BANK-$endpoint.json"
+    --out "docs/build-log/artifacts/code-lane-reader/phase3-reader-qa-$BANK-$endpoint.json"
 done
 echo "=== $BANK COMPLETE $(date -u +%FT%TZ) ==="
