@@ -100,6 +100,7 @@ for endpoint in answer_correct correct; do
     --arm memphant="$OUT/reader-memphant.json" \
     --arm bm25scoped="$OUT/reader-bm25scoped.json" \
     --arm nomemory="$OUT/reader-nomemory.json" \
+    --retrieval memphant="$MEM_PR" --retrieval bm25scoped="$CTL_PR" \
     --control bm25scoped --stage-manifest "$EQ/stage-equalization.json" \
     --bank "$BANK" --endpoint "$endpoint" \
     --claim "$CLAIM" --leakage "$LEAKAGE" --provenance-class "$PROVENANCE" \

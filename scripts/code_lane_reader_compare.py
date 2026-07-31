@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -99,6 +100,111 @@ def leakage_five_tuple(path: Path, provenance_class: str) -> dict:
         "floor_kind": leak["non_target_exhaustive_definition"],
         "concentration": leak["concentration_vs_exhaustive"],
         "provenance_class": provenance_class,
+    }
+
+
+_WORD = re.compile(r"[a-z0-9_./-]+")
+
+
+def _norm(text: str) -> str:
+    return " ".join(_WORD.findall(str(text).lower()))
+
+
+def gold_span_decomposition(
+    reader_report: dict,
+    retrieval_report: Path | None,
+    equalized_evidence: Path,
+    order: list[str],
+    endpoint: str,
+) -> dict:
+    """Does answer correctness track gold-span retrieval@k at all?
+
+    This is the question the coding lane never asked. Every banked coding-lane
+    number is `hit_at_k` against ONE adjudicated provenance span, and the reader
+    pilot answered correctly far more often than that metric allows -- so the
+    span is not the only sufficient evidence, and retrieval@k may not track the
+    outcome it is used as a proxy for.
+
+    Three buckets, not two, because "correct without the gold span" has two very
+    different causes and conflating them would hide the interesting one:
+
+      * `correct_gold_present`     -- the adjudicated span was packed.
+      * `correct_span_absent_text_present` -- the span was NOT packed, but the
+        gold ANSWER STRING appears in the pack. The bank's single-span
+        provenance is incomplete: other events in the same attempt carry the
+        same fact, and retrieval@k scores those as misses. This inflates every
+        measured deficit and understates every arm.
+      * `correct_span_absent_text_absent` -- neither. The answer came from the
+        reader's priors or from inference over the pack. This is the bucket the
+        no-memory arm calibrates.
+
+    The text check is deliberately crude (normalized substring, lowercase,
+    punctuation-folded). It over-counts short gold answers that appear
+    incidentally, so it is a LOWER bound on bucket 3 and an UPPER bound on
+    bucket 2, and is reported as such rather than as a partition.
+    """
+    rows = {r["question_id"]: r for r in reader_report["per_question"]}
+    evidence = {}
+    for line in equalized_evidence.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            row = json.loads(line)
+            evidence[row["question_id"]] = row
+    hits: dict[str, bool | None] = {}
+    if retrieval_report is not None:
+        report = json.loads(retrieval_report.read_text(encoding="utf-8"))
+        for row in report.get("per_question", []):
+            hits[row["question_id"]] = bool(row.get("hit_at_10"))
+
+    tally = {
+        "n": 0,
+        "gold_span_in_pack": 0,
+        "correct": 0,
+        "correct_gold_present": 0,
+        "correct_span_absent_text_present": 0,
+        "correct_span_absent_text_absent": 0,
+        "incorrect_gold_present": 0,
+        "abstained_gold_present": 0,
+    }
+    for qid in order:
+        row, ev = rows[qid], evidence.get(qid)
+        if ev is None:
+            continue
+        tally["n"] += 1
+        hit = hits.get(qid)
+        correct = bool(row.get(endpoint))
+        pack = _norm(" ".join(item["body"] for item in ev["evidence"]))
+        text_present = _norm(ev["gold_answer"]) in pack if ev["gold_answer"] else False
+        tally["gold_span_in_pack"] += int(bool(hit))
+        tally["correct"] += int(correct)
+        if correct and hit:
+            tally["correct_gold_present"] += 1
+        elif correct and text_present:
+            tally["correct_span_absent_text_present"] += 1
+        elif correct:
+            tally["correct_span_absent_text_absent"] += 1
+        if hit and not correct:
+            tally["incorrect_gold_present"] += 1
+        if hit and row.get("abstain"):
+            tally["abstained_gold_present"] += 1
+
+    n, hit_n = tally["n"], tally["gold_span_in_pack"]
+    miss_n = n - hit_n
+    return tally | {
+        "retrieval_hit_at_10": hit_n / n if n else None,
+        "answer_accuracy": tally["correct"] / n if n else None,
+        # The two conditional rates are the whole point: if they are close, the
+        # gold span is not what carries the answer.
+        "p_correct_given_gold_present": (
+            tally["correct_gold_present"] / hit_n if hit_n else None
+        ),
+        "p_correct_given_gold_absent": (
+            (tally["correct"] - tally["correct_gold_present"]) / miss_n if miss_n else None
+        ),
+        "correct_without_gold_span": tally["correct"] - tally["correct_gold_present"],
+        "text_check": (
+            "normalized substring of the gold answer in the packed bodies; crude, "
+            "so text_present is an UPPER bound and text_absent a LOWER bound"
+        ),
     }
 
 
@@ -194,6 +300,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--arm", action="append", required=True, metavar="NAME=REPORT.json")
+    parser.add_argument("--retrieval", action="append", default=[],
+                        metavar="NAME=PROVENANCE.json",
+                        help="that arm's retrieval provenance, for the gold-span decomposition")
     parser.add_argument("--control", required=True, help="arm name used as the reference")
     parser.add_argument("--stage-manifest", required=True, type=Path,
                         help="stage-equalization.json from code_lane_reader_prepare.py")
@@ -275,6 +384,11 @@ def main() -> int:
     if len(set(judges.values())) != 1:
         raise ValueError(f"arms do not share one judge model: {judges}")
 
+    retrievals: dict[str, Path] = {}
+    for spec in args.retrieval:
+        name, _, path = spec.partition("=")
+        retrievals[name] = Path(path)
+
     arm_vectors = {name: vectors(report, order, args.endpoint)
                    for name, report in reports.items()}
     accuracies = {name: sum(v) / len(v) if v else 0.0 for name, v in arm_vectors.items()}
@@ -309,6 +423,16 @@ def main() -> int:
         "arm_correct_counts": {name: sum(v) for name, v in arm_vectors.items()},
         "contrasts": contrasts,
         "judge_accounting": {name: judge_accounting(r, order) for name, r in reports.items()},
+        "gold_span_decomposition": {
+            name: gold_span_decomposition(
+                report,
+                retrievals.get(name),
+                Path(manifest["arms"][name]["equalized_path"]),
+                order,
+                args.endpoint,
+            )
+            for name, report in reports.items()
+        },
         "arm_binding": binding,
         "questions_dropped_from_pairing": dropped,
         "per_question_vectors": {
