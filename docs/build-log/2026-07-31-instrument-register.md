@@ -153,13 +153,13 @@ numbers in a committed artifact).
 | 9 | repo/code | SWE-ContextBench tranche 1 | unverified | yes | 12 targets | upstream | n/a |
 | 10 | repo/code | SWE-Explore | MIT (lock), LICENSE blob **not** pinned | yes, `bdb0ae4…` | 848 rows, **0 usable** | upstream | n/a |
 | 11 | semantic/docs | Syndai docs gate | private (Syndai) | yes, commit `6fe7f78f…` | 60 (+60 v2) | mined from the docs themselves | unverified |
-| 12 | preference/user | Track U golden bank | private (owner's own files) | yes | see §5 | owner-authored feedback files | see §5 |
-| 13 | procedural | — | — | — | — | — | — |
-| 14 | forgetting/lifecycle | ForgetEval | see §5 | yes | see §5 | see §5 | n/a |
-| 15 | temporal/state | STATE-Bench v0.8.0 | MIT asserted, **no LICENSE blob pinned** | yes, `e2c8d7af…` / v0.8.0 | 450 claimed | upstream | n/a |
-| 16 | temporal/state | Memora / FAMA | Apache-2.0, LICENSE blob pinned | yes, `a6493188…` | 71 subquestions | upstream | n/a |
-| 17 | temporal/state | STALE | MIT code / CC-BY-4.0 data (lock assertion) | yes, `617c51dc…` | see §5 | upstream | n/a |
-| 18 | temporal/state | MemSyco | MIT, LICENSE blob pinned | yes, `c31e2c85…` | 5 task files | upstream | n/a |
+| 12 | preference/user | Track U golden bank | private (owner's own files) | yes, sha recomputed & matching | 51 goldens (+60 probes) | owner-authored feedback files, human-curated | unverified |
+| 13 | procedural | rung10 state-style replay | n/a — self-authored | n/a | **1** | self-authored | n/a |
+| 14 | forgetting/lifecycle | ForgetEval adversarial-385 | MIT, blob `cdf599e8…` pinned inside the result artifact | yes, `b6053b7` | 385 cases, **259 scorable** | upstream template-generated | n/a |
+| 15 | temporal/state | STATE-Bench v0.8.0 | MIT — true, verified by this audit; **lock does not bind it** | yes, `e2c8d7af…` / v0.8.0 | 450 tasks / 150 test / 300 train traj. (now verified) | upstream, split endorsed | n/a |
+| 16 | temporal/state | Memora / FAMA | Apache-2.0, LICENSE blob pinned | yes, `a6493188…` | 71 subquestions in **15 parent questions** | upstream; 3-LLM-judge consensus | development-exposed persona |
+| 17 | temporal/state | STALE | MIT / CC-BY-4.0 asserted as a bare string | yes, `617c51dc…` | upstream 400; pilot reached **4** | upstream | n/a |
+| 18 | temporal/state | MemSyco | MIT, LICENSE blob pinned and recomputed | yes, `c31e2c85…` | upstream 1,550; our calibration splits **12–14** | upstream | n/a |
 
 ### 2B — evidence, power, cost
 
@@ -176,7 +176,13 @@ numbers in a committed artifact).
 | 9 | SWE-ContextBench | ran, **unpairable** | 3/4 no-memory baselines resolve; max gain 1 < required 2 | n/a | cannot express the effect | sunk |
 | 10 | SWE-Explore | **NO** | none | unmeasured | — | blocked |
 | 11 | Syndai docs gate | **yes** | hit@10 Δ = −0.133; QA Δ = −0.167 (MemPhant **loses**) | ≥0.133 (bound) | **13.1pt** — need n≥230 | $0 |
-| 12–18 | see §5 | | | | | |
+| 12 | Track U | **NO** — no runner exists | none | unmeasured | unpowerable below ψ=0.20; 17.4pt at ψ=0.20 | $0 to run |
+| 13 | rung10 procedural | nominally | 1.0 vs 0.0, CI [1.0, 1.0], n=1 | n/a | not a measurement | $0 |
+| 14 | ForgetEval | **yes** | 244/15/126 vs baseline 133/126/126; b=111, c=0, n=259 | 0.4286 | **11.7pt** — need n≥710 | $0 (deterministic scorer) |
+| 15 | STATE-Bench | **NO** | none | unmeasured | — | §6.2 — $2,254–$10,704 working; **$211–634 broken** |
+| 16 | Memora / FAMA | **yes**, 3 runs | FAMA 32.96 → 53.49; raw 44/71 → 43/71 but **b=13, c=12** | 0.3521 | **20.3pt**, and that is a floor (nesting) | prior runs settled ~$1.5–2 |
+| 17 | STALE | apparatus ran, **no score** | 12/12 dimensions `insufficient`, `promotion_ineligible: true` | none | — | $0.42 already sunk, no result |
+| 18 | MemSyco | **NO** — 2 official tracks retired at 0 samples | none | none | all splits n=12–14: unpowerable | $0.0015 sunk |
 
 ---
 
@@ -637,13 +643,23 @@ They are prerequisites, not preliminaries — each one changes what a paid run w
 | rank | lane | ceiling | what it buys | what it decides |
 |---|---|---|---|---|
 | 1 | **Coding-lane paired reader QA (Phase 3)** on the *paraphrase* bank | **not derivable** — 1,440 logical calls is derived (3 arms × 180 goldens + judge + 2 paired rechecks), but the per-call bound needs Z2. For scale only, at the chat lane's measured 26,000-byte bound the ceiling would be $127.29; that width belongs to a different corpus and a different reader, so it is **not this lane's ceiling** | The first measured answer to *does MemPhant memory help a coding agent* | The whole coding lane. Kill gate: no paired win over BM25 → the substrate has not earned it |
-| 2 | **STATE-Bench first run** | see §6.2 | The only temporal/state instrument with an upstream-endorsed split and a native scorer | Whether we have any external validity on state memory at all |
+| 2 | **STATE-Bench first run**, *after* the one-line fix | **$2,253.50 floor / $10,704.14 ceiling** — derived: widest measured row 27,281 B → 28,000 prompt-token bound, 1024 completion, $0.0938960/call, 24,000–114,000 calls (150 test tasks × 5 runs × 15 max agent turns × agent + user-sim + 2 judges). See the caveats below | The only temporal/state instrument with an upstream-endorsed split and a native scorer | Whether we have any external validity on state memory at all |
 | 3 | Track R paraphrase reader QA | not derivable (needs Z2) | Conditional on Z1 showing the retrieval effect survives decontamination | Whether the retrieval gain is a reader gain |
 
-The reader for Phase 3 is `claude-opus-5`. **No opus-5 price is recorded anywhere in this
-repo** — the only pinned maxima are terra's 2.75/16.5 per million in the v3 packet. That
-price must be pinned at authorization time, exactly as the packet already requires for the
-robustness arm.
+Two pricing caveats that must be resolved before either row is authorized:
+
+- The reader for Phase 3 is `claude-opus-5`. **No opus-5 price is recorded anywhere in this
+  repo** — the only pinned maxima are terra's 2.75/16.5 per million in the v3 packet.
+- STATE-Bench's protocol pins **gpt-5.4**, and **no gpt-5.4 price is recorded either**. The
+  figures above use the terra maxima so the lane is comparable to the others; the gpt-5.4
+  amount itself is **unverified**.
+- STATE-Bench's per-turn tool-round count is **unverified**: `StateBenchAgent.act` loops
+  while tool calls exist with no explicit cap, and the mean is unmeasurable without a run.
+  The 15 in the derivation is the configured *maximum* agent turns, not a mean — which is
+  why the range spans 4.75×.
+
+Both prices must be pinned at authorization time, exactly as the v3 packet already requires
+for its robustness arm.
 
 ### 6.2 Do not spend — a purchase that would buy nothing
 
@@ -651,10 +667,11 @@ robustness arm.
 retrieval call (§4.4), and the failure mode is maximally expensive: `--retry-attempts`
 defaults to 3, so each task is paid for three times; `traj.save()` is never reached, so no
 trajectory file is written for any task; and `verify_results` then refuses to aggregate.
-The bill would be 150 test tasks × 5 runs × 3 retries of agent-model, user-simulator and
-inline-judge calls, for **zero scored rows**. Ceiling is deferred to §4.4 pending a measured
-derivation; the decision does not depend on it, because the correct spend today is $0 and
-one payload fix (Z3).
+Because the failure lands on the *first* `retrieve_learnings` call, the bill is not the full
+run — it is roughly 1–3 agent calls per attempt × 3 retries × 750 task-runs = 2,250–6,750
+calls: **$211.27 to $633.80, for zero scored rows.** That is the number to put in front of
+the owner. The correct spend today is **$0 and one payload fix** (Z3), after which the lane
+moves to §6.1 rank 2.
 
 ### 6.3 Spend only to refine a number we already have
 
@@ -671,3 +688,49 @@ one payload fix (Z3).
    it** — and it is not yet priceable. Z2 makes it priceable.
 3. **Phase 2 is priceable but under-resolved.** Do not launch it at 7pt.
 4. **STATE-Bench must not be purchased today at any price.**
+
+---
+
+## 7. Stop conditions
+
+Lanes whose n can **never** reach adequacy on the available corpus. These are stop
+conditions, not budget requests.
+
+| lane | ceiling | why it cannot be fixed by spending |
+|---|---|---|
+| **Track U** | n=51; unpowerable below ψ=0.20, 17.4pt at ψ=0.20 | Deciding 7pt needs n = 340–665. The pinned source snapshot is **94 files total**. The corpus cannot produce that n. Track U is honestly sized for a **~15pt** effect (n=72 at ψ=0.20) and nothing finer — preregister it that way or not at all. |
+| **`coding_events_golden`** | n=40, held-out 4, one repo | Unpowerable at ψ≤0.15. Retire it; the Track R paraphrase bank supersedes it. |
+| **MemSyco as calibrated** | five splits at n=12–14 | Below the n_d≥6 floor. The *upstream* 1,550 samples are not the constraint — our calibration slices are. Re-slice or do not cite. |
+| **SWE-ContextBench tranche 1** | max gain 1 vs required 2 | Arithmetically saturated. Terminal for this tranche. |
+| **SWE-Explore** | 0/848 usable rows | No spend fixes absent upstream fields. |
+| **ForgetEval purge family** | 125 of 385 cases permanently N/A | We have no selective hard purge primitive. This is a product gap, not a measurement gap — the instrument is correct to refuse. |
+| **Procedural** | n=1 | Not a measurement. The lane has no instrument; STATE-Bench is the only candidate. |
+
+## 8. Consolidated integrity findings
+
+**Licenses asserted as a bare string with no LICENSE-blob sha256** — the ClawArena badge
+pattern. The assertion may well be true; the lock simply does not make it checkable:
+`state_bench.lock.json` (MIT — independently verified true by this audit, sha256
+`2e969379…`, but still unbound), `stale.lock.json`, `swe_explore.lock.json`,
+`swe_contextbench.kill.n12.json`, `github_lane_golden.lock.json`,
+`track_r_repo_memory_golden.lock.json`. The last two are HuggingFace dataset-card metadata
+rather than a repo LICENSE blob and were **not** re-fetched, so they are unverified rather
+than wrong.
+
+**No license field at all:** `longmemeval_s.lock.json` — our most-used instrument.
+(`user_lane_golden`, `coding_events_golden` and `syndai_docs_*` are private data; defensible.)
+
+**Correctly bound, and the pattern to copy:** `longmemeval_v2.lock.json`,
+`memsyco.lock.json`, `memora.lock.json`, `deep_swe.pairing.audit.json`. ForgetEval binds its
+license inside the *result* artifact rather than a lock — unusual, but bound.
+
+**Worktree hazard.** 87 of the 88 entries in
+`docs/build-log/artifacts/canonical-artifact-allowlist.txt` are **absent from this
+worktree**. All Memora and MemSyco evidence survives only in `/Users/sidsharma/Memphant`.
+Any audit run inside a worktree will conclude "never run" for lanes that did run. This
+register was checked against the main worktree for exactly that reason; future audits must
+do the same, and the allowlist should say so.
+
+**Report `b` and `c`, always.** Four lanes published only a delta or a bootstrap CI, so
+their ψ is only a lower bound and their power is now unrecoverable. Two discordant cells
+cost nothing to write down and cannot be reconstructed later.
