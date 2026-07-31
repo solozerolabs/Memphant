@@ -253,6 +253,7 @@ class Server:
         log_path: Path | None = None,
         cross_rerank: bool = False,
         reranker: str = "fastembed",
+        rerank_candidate_limit: int | None = None,
         pack_render_cap: int | None = None,
         pack_session_quota: int | None = None,
         pack_submodular_ordering: bool = False,
@@ -269,6 +270,7 @@ class Server:
         self.log_path = log_path
         self.cross_rerank = cross_rerank
         self.reranker = reranker
+        self.rerank_candidate_limit = rerank_candidate_limit
         self.pack_render_cap = pack_render_cap
         self.pack_session_quota = pack_session_quota
         self.pack_submodular_ordering = pack_submodular_ordering
@@ -282,6 +284,7 @@ class Server:
         env.pop("DATABASE_URL", None)
         env.pop("MEMPHANT_CROSS_RERANK", None)
         env.pop("MEMPHANT_RERANKER", None)
+        env.pop("MEMPHANT_RERANK_CANDIDATE_LIMIT", None)
         env.pop("MEMPHANT_PACK_RENDER_CAP", None)
         env.pop("MEMPHANT_PACK_SESSION_QUOTA", None)
         env.pop("MEMPHANT_PACK_SUBMODULAR_ORDERING", None)
@@ -295,6 +298,8 @@ class Server:
         if self.cross_rerank:
             env["MEMPHANT_CROSS_RERANK"] = "1"
             env["MEMPHANT_RERANKER"] = self.reranker
+            if self.rerank_candidate_limit is not None:
+                env["MEMPHANT_RERANK_CANDIDATE_LIMIT"] = str(self.rerank_candidate_limit)
         if self.pack_render_cap is not None:
             env["MEMPHANT_PACK_RENDER_CAP"] = str(self.pack_render_cap)
         if self.pack_session_quota is not None:

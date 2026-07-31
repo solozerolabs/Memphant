@@ -515,6 +515,14 @@ pub struct RecallCandidateTrace {
     pub derived_by: String,
     pub fused_rank: Option<usize>,
     pub fused_score: Option<f32>,
+    /// 1-based rank of this candidate AFTER the W8 cross-encoder rerank stage,
+    /// or `None` when no reranker ran or the candidate sat outside the scored
+    /// head. Recorded because `fused_rank` alone cannot separate the two
+    /// post-rerank miss classes that need different fixes: "the reranker never
+    /// saw the gold" (raise `candidate_limit`) and "the reranker saw it and
+    /// still ranked it below the cut" (a model-quality problem).
+    #[serde(default)]
+    pub cross_rerank_rank: Option<usize>,
     #[serde(default)]
     pub decay_retrievability: f32,
     #[serde(default)]

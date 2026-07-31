@@ -7352,6 +7352,7 @@ where
                 derived_by: derived_by_for_unit(&unit).to_string(),
                 fused_rank: None,
                 fused_score: None,
+                cross_rerank_rank: None,
                 decay_retrievability: decay.retrievability,
                 dsr_stability_days: decay.stability_days,
                 dsr_difficulty: decay.difficulty,
@@ -7395,6 +7396,7 @@ where
                 derived_by: derived_by_for_unit(unit).to_string(),
                 fused_rank: None,
                 fused_score: None,
+                cross_rerank_rank: None,
                 decay_retrievability: decay.retrievability,
                 dsr_stability_days: decay.stability_days,
                 dsr_difficulty: decay.difficulty,
@@ -7470,6 +7472,21 @@ where
             cross_rerank_granularity,
         ));
         cross_rerank_ms = cross_rerank_started.elapsed().as_millis() as u64;
+        // Stamp the post-rerank order onto the trace the same way `fused_rank`
+        // was stamped above. Without it a post-rerank miss cannot be attributed:
+        // "outside the scored head" and "scored and still below the cut" are
+        // different defects with different fixes, and `fused_rank` shows neither.
+        for candidate in fused.iter() {
+            let Some(rank) = candidate.cross_rerank_rank else {
+                continue;
+            };
+            for trace_candidate in candidate_traces
+                .iter_mut()
+                .filter(|trace_candidate| trace_candidate.unit_id == candidate.unit.id)
+            {
+                trace_candidate.cross_rerank_rank = Some(rank + 1);
+            }
+        }
         eprintln!(
             "memphant: cross_rerank_ms={cross_rerank_ms} pool={}",
             recall_pool_depth.min(fused.len())
