@@ -616,3 +616,95 @@ Artifact: `docs/build-log/artifacts/track-r/track_r_phase1e_combined_fixes.json`
 (committed). Per-question evidence and the three analyzer outputs under
 `…/track-r/phase1e/` are gitignored under the same rule as `phase1/`, `phase1d/`
 and `phase1r/` — they carry third-party event bodies.
+
+## Phase 1w — the render-loss fix (2026-07-30, branch `af-w1-render`)
+
+Cost **$0**, deterministic retrieval only, no reader/judge/paid call. Full
+record: `docs/build-log/2026-07-30-packing-render-loss-fix.md`.
+
+Closes the last large packing loss on the coding lane, the one
+`2026-07-30-packing-rank-order-fix.md` §6 quantified and deliberately reverted.
+
+**Mechanism.** `packed_render` charges each chunk block its provenance header on
+top of its body while the per-item render budget is the whole body, so full
+chunk coverage always costs MORE than the whole body: an uncapped chunked item
+can never emit all of itself. Trace, `track_r_021`: gold at fused rank 1, gold
+unit in packed slot 0, and the slot rendered 578 chars of one chunk block
+(`[episode …] [segments 1-4]`) instead of the 696-char body that carries the
+span. 30 of the baseline's 41 misses were this.
+
+**Fix (`f67f2b2a`).** A post-fill pass, the twin of `sibling_gather_pass`: an
+item rendered from a PARTIAL chunk selection takes its whole body — a superset,
+since chunk bodies are byte slices of it — when the pack's LEFTOVER budget
+covers the difference. Not the reverted admission-time fallback: admission is
+untouched, so the packed item set and every drop record are byte-identical, a
+budget-bound pack is a no-op, and `sibling_gather` keeps first claim on the
+leftover (its invariant test is unchanged and passing). `pack_render_cap`
+suppresses the pass entirely, so that lever stays `undecided` and unentangled.
+
+**Coding lane** — 180 Track R goldens (`6f549daa…`), corpus `c008142e…`,
+attempt-scoped, `--lexical-scorer bm25-code --embed-model off`, k=10,
+budget 8192, cap off, worker drained (`done_jobs=64056`, `pending_jobs=0`,
+`dead_jobs=0`) identically in both arms. Baseline re-executed, not remembered,
+and reproduces the committed combined build to the digit (139 packed, 30 render
+losses).
+
+| arm | r@5 | r@10 | packed |
+|---|---:|---:|---:|
+| before `ccaa9e1c` | 0.7278 | 0.7722 | 139/180 |
+| **after `f67f2b2a`** | **0.9222** | **0.9333** | **168/180** |
+| fused ceiling | — | 0.9611 | 173/180 |
+
+Paired exact McNemar: **@10 29 gains / 0 losses, p = 3.73e-09**; @5 35/0,
+p = 5.82e-11. **29 of the 30 render losses recovered** — the holdout
+`track_r_049` is genuine budget pressure (pack already at ~8.1k of 8192 tokens)
+and correctly not upgraded. Misses 41 → 12 (render 30→1, budget 4, rerank 3 all
+at fused rank ≥ 11, absent-from-pool 4). `fused_top10_ceiling` 173 in BOTH arms
+— no retrieval or ranking behaviour moved.
+
+**Chat lane — the gate, and it passes.** Two `bench-lme` arms, dev split
+`e4667bed…`, `--sample 178 --seed 20260710 --k 10 --budget-tokens 8192 --pool 64
+--embed-model small`, product-default `overlap` scorer.
+
+- r@5 and r@10 **0.6145 in both arms**, reproducing the committed rung-7
+  baseline exactly; 102/166 hits both; **0 flips in either direction**,
+  McNemar p = 1.0; per-question hit vectors identical.
+- **The packed context is NOT byte-identical** (`packed_context_identical:
+  false`). Unlike the rank-order fix, this change genuinely runs on the chat
+  lane — and still costs nothing.
+
+**Packed-item counts and per-item render sizes, all four arms.** The pack size
+distribution is IDENTICAL arm-for-arm on both lanes — nothing was displaced
+anywhere, which is the property the reverted patch could not have:
+
+| lane | packed items (total / mean / p50 / max) | per-item chars mean | p50 | max |
+|---|---|---:|---:|---:|
+| coding before | 1760 / 9.778 / 10 / 10 | 1891.6 | 1575 | 7362 |
+| coding after | 1760 / 9.778 / 10 / 10 | 1983.9 (+4.9%) | 1670 | 7395 |
+| chat before | 778 / 4.371 / 4 / 9 | 5214.7 | 3504 | 23078 |
+| chat after | 778 / 4.371 / 4 / 9 | 5465.2 (+4.8%) | 3626 | 23906 |
+
+**Recommendation: default, not flag-gated.** It repairs a defect rather than
+trading behaviours; its safety is structural (cannot evict, reorder, or exceed
+budget, and cannot fire when the leftover is short, so the worst case is exactly
+the old behaviour); the measurement agrees on both lanes; and the two cases
+where bounding an item IS wanted — `pack_render_cap` and a budget-bound pack —
+are already respected in the code. A flag would leave the defect on by default.
+
+**Not a claim.** Track R's magnitude is inflated by a lexically biased bank
+(question→target token coverage 0.396 vs 0.094 to a random non-target). The
+DEFECT is corroborated off-bank — the pass fires on LongMemEval and costs
+nothing there — the 29-question MAGNITUDE is not. No checkbox, default, cutover,
+deployment, or SOTA claim moves. The parked v5-census and SWE-ContextBench pins
+were NOT re-stamped and no new pin collides (`-k census`: 5 passed, 1 skipped).
+
+Suites: `cargo test -p memphant-core --lib` 137 passed; clippy
+`--all-targets --all-features -D warnings` clean; `cargo fmt --check` clean;
+pytest 1027 passed / 15 skipped / 2 failed, both pre-existing at base
+(`test_public_sota_claim_policy_…`, `test_spec_drift_check_…`).
+
+Commits, none pushed: `f67f2b2a` (fix) → `d40091cc` (paired analyzers report the
+render-loss target and the render-size distribution) → `91d486b4` (gitignore).
+Artifacts: `docs/build-log/artifacts/track-r/track_r_phase1w_render_loss.json`
+and `…/rung7-packing-reader-gate/phase1w/chat-lane-nonregression.json`
+(committed, derived); per-question outputs gitignored.
