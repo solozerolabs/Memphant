@@ -481,6 +481,40 @@ def reexec_through_scratch_db(base_url: str) -> None:
     os.execvp("bash", ["bash", helper, base_url, "DATABASE_URL", sys.executable, *sys.argv])
 
 
+def assert_worker_queue_empty(database_url: str) -> None:
+    """Fail closed unless the DATABASE says the reflect queue is fully drained.
+
+    The independent, harness-side half of the drain contract. The worker's own
+    exit check runs on the worker's pool; that pool assumes the `memphant_worker`
+    capability role since ``20260730_004_served_login_roles``, so a queue-wide
+    count there is subject to FORCE RLS (the defect ``20260730_005`` fixed with a
+    ``security definer`` counter). This check runs on the BENCH credential — the
+    scratch-DB superuser ``with_scratch_db.sh`` mints — so it sees the true count
+    no matter what the worker's own bookkeeping believes. `psql`, not the worker.
+
+    This is why ``code_lane_run_memphant.py`` was never exposed: its
+    ``compilation_summary`` asks the same question with the same credential.
+    Dead jobs count as failure too: a dead-lettered job is silently dropped work,
+    not a drained queue.
+    """
+    result = sh([
+        "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+        "--set", "ON_ERROR_STOP=1", database_url, "--command",
+        "select count(*) filter (where state in ('queued', 'running')), "
+        "count(*) filter (where state = 'dead') from memphant.job_state",
+    ])
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"could not verify the worker queue was drained: {result.stderr.strip()[:300]}"
+        )
+    pending, dead = (int(value) for value in result.stdout.strip().split("|"))
+    if pending or dead:
+        raise RuntimeError(
+            f"worker queue is NOT drained: pending={pending} dead={dead}; "
+            "refusing to score a partially compiled corpus"
+        )
+
+
 def drain_worker(
     worker_bin: str,
     database_url: str,
