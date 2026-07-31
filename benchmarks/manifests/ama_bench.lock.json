@@ -78,10 +78,22 @@
       "The card claims the field `type` values map A/B/C/D to recall / causal inference / state updating / state abstraction; verified present and exhaustive (no other values)."
     ],
     "label_provenance": {
-      "verdict": "expert-curated, NOT verified as graduate-annotator-with-cross-review",
-      "evidence": "arXiv:2602.22769 abstract: AMA-Bench \"combines real-world agent trajectories from representative applications with expert-curated QA, as well as synthetic trajectories that scale to arbitrary horizons with rule-based QA\". The 208 shipped episodes are the real-trajectory (expert-curated) half; the synthetic rule-based half is not in this repository. The HF card is silent on who authored the labels.",
-      "unverified": "The specific claim that annotators were graduate students with cross-review is not stated in the card or the abstract and was not confirmed from the shipped data."
-    }
+      "verdict": "HUMAN-AUTHORED as claimed -- adopted on the strength of an explicit, specific paper claim, with the limits of that evidence recorded below",
+      "evidence_quote_1": "arXiv:2602.22769 S3.3.1 (wording identical in v1 and v4): \"we manually annotate each selected trajectory with 12 memory-intensive QA pairs that collectively cover all categories in Tab. 2\"",
+      "evidence_quote_2": "same section: \"QA pairs are then authored by graduate-level annotators with research experience in LLM agents, following shared guidelines that standardize evidence grounding and category coverage across six domains. To improve annotation reliability, each annotated trajectory undergoes a cross-review sanity check by a second annotator.\"",
+      "corroboration": "The project repository (github.com/AMA-Bench/AMA-Hub, which 301-redirects to AMA-Bench/AMA-Bench) contains NO LLM-calling QA generator for the real subset. The only QA-generation code is src/synthetic_data_gen/ for TextWorld and BabyAI, and grepping it for openai|anthropic|gpt-|claude|chat.completions|llm yields only a tiktoken encoding selection and the comment \"heuristic agents do not consume LLM tokens\". The synthetic subset is NOT in this HF repository; the 208 shipped episodes are the real, expert-annotated subset in its entirety.",
+      "data_corroboration": "208 episodes x 12 QA = exactly 2496, so the stated per-trajectory quota is honored exactly; yet the A/B/C/D split is 839/596/647/414 rather than a flat 3/3/3/3, which is what human assignment under a coverage rule looks like and not what a template produces.",
+      "type_assignment": "A/B/C/D are human-assigned as part of the same manual annotation (the guidelines standardize \"category coverage\"), not rule-derived.",
+      "unverified": [
+        "No annotation guideline document is released, in either the repo or the HF dataset.",
+        "No annotator count is stated anywhere.",
+        "No inter-annotator agreement is reported FOR THE QA LABELS. The paper's Appendix C agreement numbers (300 instances, two annotators, majority vote, third adjudicator) belong to its judge-validation study, which is a different task -- do not read them as QA-label agreement.",
+        "No construction code ships for the real subset and no per-item provenance field exists in the JSONL, so nothing in the artifact can independently confirm or refute the authors' claim.",
+        "The paper never affirmatively rules out LLM assistance during annotation."
+      ],
+      "hardening_if_this_becomes_load_bearing": "hand-audit ~30 swebench QA pairs against their trajectories, and ask the authors for the guideline document and annotator count."
+    },
+    "paper_data_inconsistency": "Paper Table 7 states 34 SWE trajectories were selected; the paper's own prose and the shipped data both say 36. Present in v1 and v4. The shipped 36 is what this lock pins."
   },
   "adapter": {
     "entrypoint": "scripts/external_instrument_adapter.py --instrument ama_bench",
@@ -116,6 +128,10 @@
       "reader_input_bytes_upper_bound": 2007040,
       "derivation": "432 QA x 8192-token budget x ~4 bytes/token = 14.2M bytes upper bound if every pack filled the budget; the 245-probe retrieval slice needs 0 paid calls. A judged full run also needs 432 judge calls. Not priced here because no provider is pinned for it."
     }
+  },
+  "judge_if_ever_funded": {
+    "warning": "AMA-Bench absolute scores are judge-dependent to the point that cross-benchmark comparison is meaningless unless the judge is pinned. The repo's own README reports Qwen3-32B (their default) is systematically lenient and worst precisely in our slice: 100 lenient cases vs 15 strict on SOFTWARE/swebench against Claude-4.6. Reported spread across judges: Qwen3-32B 0.4880, Claude-4.6 0.3986, GPT-5.4 0.3906, GPT-5.2 0.3550, DeepSeek-v3.2 0.3309. Their own recommendation is Claude-4.6 as reference judge or ensemble voting.",
+    "official_judge_prompt": "utils/evaluation_metrics.py::judge_prompt -- binary yes/no over (question, reference answer, predicted answer)"
   },
   "primary_sources": [
     "https://huggingface.co/datasets/AMA-bench/AMA-bench/tree/a5777378066f53229a94557a7b192435cd027909",

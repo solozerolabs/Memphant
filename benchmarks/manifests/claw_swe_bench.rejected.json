@@ -1,0 +1,73 @@
+{
+  "benchmark": "Claw-SWE-Bench",
+  "verdict": "REJECTED -- not adopted. Nothing wrong with it; it is simply not an instrument, and every task in it is corpus we already carry.",
+  "evaluated_on": "2026-07-30",
+  "why_recorded": "A verified rejection is a result. This record exists so nobody re-evaluates it, and so the register can see the reuse risk if it is ever proposed again.",
+  "license": "MIT",
+  "license_provenance": "a REAL LICENSE file in the HF repo (1074 bytes), verbatim MIT, 'Copyright (c) 2026 Anonymous Authors'. Card YAML frontmatter agrees: `license: mit`. No shields.io badge anywhere in the repo (grepped README/DATASHEET/ATTRIBUTION/REPO_LICENSES: 0 hits). It also ships a Gebru-structured DATASHEET.md, an ATTRIBUTION.md, and a per-repo licence table flagging phpspreadsheet LGPL and redis RSALv2/SSPL as non-permissive. Documentation quality here is the best of the four instruments in this pass.",
+  "attribution": {
+    "source": "https://huggingface.co/datasets/TokenRhythm/Claw-SWE-Bench",
+    "license": "MIT",
+    "revision": "ca9da7416154a31015f43df71dcf742c6725b312",
+    "paper": "https://arxiv.org/abs/2606.12344"
+  },
+  "dataset": {
+    "revision": "ca9da7416154a31015f43df71dcf742c6725b312",
+    "last_modified": "2026-06-11T05:33:45.000Z",
+    "total_bytes_measured": 2266930,
+    "files": {
+      "LICENSE": {"bytes": 1074, "sha256": "1d0dde41ece0f9620937f1a81a67e295ace0eae180c009d862006e8f3b288458"},
+      "DATASHEET.md": {"bytes": 9874, "sha256": "23391f03d4d59180d4855fc6e68a3c114da3b1cffb44187fe66127dc15fd0c30"},
+      "ATTRIBUTION.md": {"bytes": 2555, "sha256": "e576b026242f28730219988b6056c18555fe408b430efc21c53cc9f3d7ccae39"},
+      "README.md": {"bytes": 5130, "sha256": "4a3b28acaeeac1f48ca7c8741083e9052b0d8d4fab8165e57bb3b6f4d3866965"},
+      "REPO_LICENSES.md": {"bytes": 4585, "sha256": "d104dd3d7af8a5d9f7a09d75ac97b1ef48f3ba48a5ada81446f7857920df71a5"},
+      "data/full-test.parquet": {"bytes": 1885681, "sha256": "68b5781dfb8225a9ddf34b0dd0ddd23aedd71a61eae31079faa74e79e9c06bea"},
+      "data/lite-test.parquet": {"bytes": 326697, "sha256": "40fd4e1f9ac40c11c38ac68113b9b5b2026ae916a11d8ade39b40afd4adf0412"},
+      "data/full350_manifest.json": {"bytes": 3521, "sha256": "4e743ec766907993c824c0e0c33f0e718242ed597612ec5ed5fd0b9c145ea6d0"},
+      "data/lite80_ids.json": {"bytes": 13438, "sha256": "09738eeb71e7fc4b2f2511da963c5cbd47b503a9cccba30cc561703d7003766f"},
+      "build/build_full350.py": {"bytes": 6080, "sha256": "89dd49329807fa48ac2903147b2508dd17a03f1bee0a0636b611a99af0fe2f47"},
+      "build/build_lite80.py": {"bytes": 5734, "sha256": "c56d2bdd956b7b37771e5cfa57d648506cd15c542ab5c5a5fa2d32493eb8adb8"},
+      "build/requirements.txt": {"bytes": 57, "sha256": "119b0c698438df780351105bd1a46c6298cab451b30921db6c6040830866853d"},
+      ".gitattributes": {"bytes": 2504, "sha256": "9e75dd981de037ec3769f24f790e126bc5a160b6871f510214e68dc70649aeeb"}
+    }
+  },
+  "verified_shape": {
+    "claim_350_tasks": "TRUE, measured. full/test = 350 rows; lite/test = 80 rows (a strict subset of full, verified id-by-id).",
+    "language_distribution_full": {"Python": 50, "Ruby": 44, "Java": 43, "Rust": 43, "JS/TS": 43, "PHP": 43, "Go": 42, "C/C++": 42},
+    "columns": 13,
+    "scored_field_population_full_n350": {
+      "patch": "350/350 populated",
+      "test_patch": "350/350 populated",
+      "FAIL_TO_PASS": "349/350 populated -- empty on tokio-rs__axum-1730 (Rust), which is unscoreable as shipped; absent from lite",
+      "PASS_TO_PASS": "324/350 populated -- 26 empty (regression list only, not fatal)",
+      "hints_text": "193/350 populated -- 157 empty"
+    },
+    "emptiness_is_inherited": "diffed row-by-row against upstream: 0 mismatches. Every empty field is upstream's, not introduced here.",
+    "label_provenance": {
+      "verdict": "human/upstream-curated, honestly described. No model-generated labels sold as human.",
+      "evidence": "DATASHEET.md: \"Each instance is a real GitHub issue + its accepted resolution patch, sourced from a public repository.\" and \"We did not collect additional task instances; we composed existing curated sets and selected a calibrated subset.\" and \"We do not modify task instances. We add two columns: `language` ... and `source_dataset`\". No per-row field names a generator model."
+    }
+  },
+  "rejection_reasons": [
+    {
+      "reason": "NO MEMORY CONSTRUCT AT ALL",
+      "detail": "A pure single-shot code-patching task set. No multi-session history, no prior context to retrieve, no instruction updates, no conversation or trajectory or turn fields. All 13 columns are static task input, gold label, or metadata. DATASHEET.md: \"Instances are independent at the task level.\" It cannot function as a memory instrument without us inventing a memory protocol on top of it."
+    },
+    {
+      "reason": "100% UPSTREAM REUSE -- zero novel task content",
+      "detail": "Verified independently against upstream parquets, not taken on trust: 350/350 ids are literal SWE-bench `repo__owner-NNNN` ids; 300 are in SWE-bench_Multilingual, 50 in SWE-bench_Verified, 0 in neither. 350/350 rows are byte-identical to upstream on repo, base_commit, patch, test_patch, problem_statement, and 0/700 mismatches on FAIL_TO_PASS/PASS_TO_PASS. It is a concatenation plus two derived metadata columns.",
+      "consequence": "Contamination surface for our coding lane is total, not partial. Adopting it would add reuse risk without adding signal. The README's \"after future-commit cleanup\" claim is UNVERIFIED -- no content divergence from upstream is visible in the shipped data."
+    }
+  ],
+  "measured_volume_if_ever_wanted": {
+    "full_total_text_chars": 3715208,
+    "full_agent_visible_input_chars": 960190,
+    "lite_total_text_chars": 829511
+  },
+  "published_baselines": {
+    "in_repo": "none -- no baseline number appears in the card or DATASHEET",
+    "in_paper_verbatim": "\"On the full benchmark, OpenClaw with a minimal direct-diff adapter scores only $19.1\\%$ Pass@1, whereas the full adapter reaches $73.4\\%$ with the same GLM 5.1 backbone\"; \"model choice changes Pass@1 by $29.4$ pp and harness choice by $27.4$ pp under fixed models\"",
+    "caveat": "self-run vendor numbers on their own benchmark; no leaderboard and no third-party reproduction. The Lite-80 calibration claims (~4x compute reduction, LOOCV bounds) are asserted in the datasheet with all supporting numbers deferred to the paper -- unverified from the repo."
+  },
+  "only_novel_artifact": "data/lite80_ids.json (13438 bytes) -- a calibrated 80-instance sampling of a corpus we already hold. If we ever want a cheap SWE-bench subsample, that id list is the one thing here worth taking."
+}

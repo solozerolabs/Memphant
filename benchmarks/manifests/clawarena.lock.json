@@ -1,0 +1,122 @@
+{
+  "benchmark": "ClawArena",
+  "track": "agentic-execution (NOT adopted as the preference-lane calibration instrument -- see verdict)",
+  "license": "MIT",
+  "license_provenance": "owner-directed 2026-07-31; GitHub code repo has a real MIT LICENSE; HF dataset card has a badge and no file",
+  "license_evidence_detail": {
+    "hf_dataset_card_yaml_license": null,
+    "hf_dataset_card_license_evidence": "a shields.io badge only: `<img src=\"https://img.shields.io/badge/License-MIT-green...\">` linking to a relative `LICENSE` path that does not exist in the HF repo (verified: no LICENSE among the 13953 shipped files)",
+    "hf_api_license_tags": [],
+    "code_repo_license_file": "https://github.com/aiming-lab/ClawArena -- referenced by the card; not independently fetched in this pass (the aiming-lab HF namespace returns 401). Recorded per owner direction, not re-litigated."
+  },
+  "attribution": {
+    "source": "https://huggingface.co/datasets/Haonian/ClawArena",
+    "source_note": "the canonical `aiming-lab/ClawArena` HF namespace returns 401; `Haonian/ClawArena` is the reachable copy and is what is pinned here",
+    "license": "MIT",
+    "revision": "146bf9a952a9833fa949061aa93ec7eaa3a05ce0",
+    "paper": "https://arxiv.org/abs/2604.04202",
+    "redistribution": "NOT redistributed. Mirror is local-only at ~/.memphant-private/w7-instruments/clawarena; only this lock is committed."
+  },
+  "dataset": {
+    "revision": "146bf9a952a9833fa949061aa93ec7eaa3a05ce0",
+    "last_modified": "2026-05-08T09:56:19.000Z",
+    "mirror": "~/.memphant-private/w7-instruments/clawarena",
+    "mirror_bytes": 191889408,
+    "shipped_files": 13953,
+    "source_tree": "data/clawarena",
+    "aggregate_sha256": "805c793140e0269bfc3b1fd92db366f7cb955c65fc1177f32da6223e1103f853",
+    "aggregate_sha256_method": "sha256 over `relpath\\0filesha256\\n` lines in path order across every file under data/clawarena; recomputed and enforced by scripts/external_instrument_adapter.py before any database is minted"
+  },
+  "verified_shape": {
+    "verified_on": "2026-07-30",
+    "method": "counted from the shipped tree at the pinned revision; no card value trusted",
+    "claim_337_rounds": {
+      "verdict": "FALSE against the shipped data",
+      "claimed": "337 rounds across 12 scenarios (README shields.io badges, and a README table splitting them 95 multi_choice / 242 exec_check)",
+      "measured": "1891 rounds across 65 scenarios, split 1543 multi_choice / 348 exec_check",
+      "note": "the shipped data is LARGER than advertised, not smaller -- the README describes a superseded release. No prefix of the scenario list sums to 337 (12 scenarios = 322, 13 = 352), and the 95/242 split does not match any measured partition. The count that governs is 1891. Every count in the README is stale; every count here was recounted."
+    },
+    "scenarios": 65,
+    "scenario_id_anomaly": "64 scenario directories carry id `hil_<letter><digit>`; the directory `eval/hil_c5` ships id `trace_c5`, and `hil_c5` therefore never appears as an id. One scenario is inconsistently named.",
+    "rounds_total": 1891,
+    "rounds_by_type": {"multi_choice": 1543, "exec_check": 348},
+    "scored_fields_populated": {
+      "rounds_with_empty_question": 0,
+      "rounds_with_empty_eval": 0,
+      "multi_choice_missing_eval_answer": 0,
+      "multi_choice_missing_eval_options": 0,
+      "multi_choice_median_options": 8,
+      "multi_choice_median_correct_answers": 6,
+      "rounds_with_nonempty_update_ids": 464
+    },
+    "executable_checkers": {
+      "verdict": "NOT withheld -- they ship, and they resolve",
+      "exec_check_rounds": 348,
+      "exec_check_rounds_with_a_command": 348,
+      "schema_inconsistency": "the command lives at `exec_check.command` on 64 rounds and at `eval.command` on 284; a consumer reading only one key silently drops 82% of them",
+      "python_checkers_referenced": 207,
+      "python_checkers_present_on_disk": 207,
+      "python_checkers_missing": 0,
+      "checker_form": "shell commands (`test -f`/`grep -q` against ${workspace}) plus 207 python `check_*.py` scripts invoked as ${eval_dir}/${agent_id}/scripts/*.py"
+    },
+    "preference_construct": {
+      "present_in_design": true,
+      "design_quote": "docs/data-spec/design-plan.md: preferences are injected early via feedback/questions and silently examined later ('前期通过 feedback/问题注入偏好规则，后期静默考察是否遵守')",
+      "rounds_with_an_explicit_pref_checker": 32,
+      "note": "the silent-exam construct is real but thin: 32 of 1891 rounds carry a `pref` checker."
+    },
+    "label_provenance": {
+      "verdict": "MODEL-GENERATED. The corrections, preferences and session dialogue are LLM-synthesised by the benchmark's own construction pipeline -- not human corrections captured from real users.",
+      "evidence": "The project ships its own data-fabrication guidebooks under docs/data-spec/ (`augmentation-guide.md`, `difficulty-upgrade-guide.md`, `data-synthesis-pitfalls.md`). The pitfalls doc states plainly that hil_s1 was 'the first scenario whose dialogue content was batch-generated by a subagent' ('第一个由 subagent 批量生成对话内容的场景') and documents the format bugs that generation produced.",
+      "honesty": "not misrepresented -- the repo never claims human authorship; the human-authored reading was ours, and it is wrong."
+    }
+  },
+  "verdict": {
+    "decision": "PINNED AND PROVEN RUNNABLE, but NOT adopted as the preference/user-learning lane's calibration instrument",
+    "reason_1": "Its corrections are model-generated (see label_provenance). The gap this pass exists to close is the absence of an external instrument whose labels are NOT LLM-mined; ClawArena does not close it. MemoryCode does, because its graders are hand-written regexes and it never claims to be anything but synthetic.",
+    "reason_2": "Its native scoring is unreachable at $0. `exec_check` requires a live coding agent writing files into a workspace; `multi_choice` requires a reader to emit \\bbox{} selections. There is no retrieval-only path to a ClawArena score.",
+    "reason_3": "It ships no retrieval ground truth, so the adapter's gold is DERIVED BY US and covers only 385 of 1801 rounds (21%).",
+    "what_it_is_good_for": "a legitimate agentic-execution benchmark with intact, resolving checkers -- if we ever fund an end-to-end agent lane, this is a real instrument. It is not a memory-retrieval instrument."
+  },
+  "adapter": {
+    "entrypoint": "scripts/external_instrument_adapter.py --instrument clawarena",
+    "mode": "retrieval-only, $0, no reader and no judge",
+    "unit": "one workspace file (documents + multi-channel message_logs) of the claude-code arm, ingested as a MemPhant episode (source_kind=resource)",
+    "probe": "a round whose own question/feedback/eval prose names a workspace file that exists",
+    "gold_rule": "DERIVED BY US, not shipped: gold = the named workspace files. Coverage-biased; see verdict reason_3.",
+    "scenarios_with_a_workspace": 59,
+    "units": 720,
+    "probes": 385,
+    "ingest_bytes_measured": 6436902
+  },
+  "power": {
+    "n": 385,
+    "n_note": "385 DERIVED probes over 59 scenarios. This is not 1891, and it does not measure what ClawArena measures.",
+    "resolvable_effect_size": {
+      "paired_mcnemar_alpha_0.05_power_0.80": "a 5.1pp absolute shift in hit@k (discordant-pair basis, ~30% discordance)",
+      "unpaired_two_proportion_alpha_0.05_power_0.80": "a ~10.0pp absolute difference between two independent arms at p~0.5",
+      "clustering_caveat": "probes cluster in 59 scenarios (mean 6.5/scenario); cluster-bootstrap over scenarios, roughly doubling the resolvable effect.",
+      "validity_caveat": "power is not validity. A well-powered measurement of a gold we invented is still a measurement of a gold we invented."
+    }
+  },
+  "cost": {
+    "basis": "measured bytes, not estimated",
+    "retrieval_only_derived_run": {
+      "usd": 0.0,
+      "ingest_bytes": 6436902,
+      "ingest_units": 720,
+      "recalls": 385
+    },
+    "native_run_ceiling": {
+      "status": "NOT RUN, derived ceiling only -- exceeds the $0 constraint, so this pass stopped here as instructed",
+      "multi_choice_rounds_needing_a_reader": 1543,
+      "exec_check_rounds_needing_a_live_agent": 348,
+      "note": "a native run needs a full coding agent (Claude Code / OpenClaw) driving 65 scenarios through 1891 rounds with dynamic update injection, i.e. 1891 agent turns over a 183MB workspace corpus, plus per-round shell verification. That is an agent-hours cost, not a token cost, and it cannot be derived from bytes. No price is asserted here."
+    }
+  },
+  "primary_sources": [
+    "https://huggingface.co/datasets/Haonian/ClawArena/tree/146bf9a952a9833fa949061aa93ec7eaa3a05ce0",
+    "https://arxiv.org/abs/2604.04202",
+    "https://www.clawarena.cc/"
+  ]
+}

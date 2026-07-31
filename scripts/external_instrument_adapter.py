@@ -8,20 +8,22 @@ things -- a loader that turns its shipped rows into (a) ingest *units* and
 runtime: scratch DB, packaged server/worker/cli, ``bind_context`` identity,
 ``/v1/episodes`` retain, worker drain, ``/v1/recall``, hit@k scoring.
 
-$0 by construction. There is no reader and no judge here: a probe is scored
-by whether the gold unit's tag line appears in the recalled bodies. Every
-gold label is derived by a rule from a field the instrument itself ships --
-never by a model call -- so the score is reproducible offline.
+$0 by construction. There is no reader and no judge here, and every gold
+label is derived by a rule from a field the instrument itself ships -- never
+by a model call -- so a score is reproducible offline and costs nothing.
 
-Attribution (reuse policy 26 D-2026-07-30) lives in the per-instrument lock
-under ``benchmarks/manifests/``; this runner verifies the pinned sha256 of
-every source file it reads before it touches a database.
+Source attribution (reuse policy 26 D-2026-07-30) lives in the per-instrument
+lock under ``benchmarks/manifests/``; this runner verifies the pinned sha256
+of every source file, or of the whole source tree, before it touches a
+database.
 
-Unit tagging: each ingested body is prefixed with a single
-``unit: <unit_id>`` line. Recall returns bodies, not ids, so this tag is the
-attribution channel -- the same trick the docs lane's span matching relies
-on, made exact. It is a documented transformation of the source text, not a
-hidden one.
+Scoring: a probe is scored by ``citation_episode_id`` on each recalled
+item, matched against the episode id that ``POST /v1/episodes`` returned for
+the gold unit. Not by substring. Recall returns *citation windows* over an
+episode, so a window can begin past a body's first line -- any tag-in-body
+scheme silently undercounts exactly the long units this lane cares about.
+The id path has no such bias, and it lets the source text be ingested
+verbatim with no marker injected into it at all.
 
 Instruments
 -----------
@@ -38,6 +40,11 @@ Instruments
                 stripping quoted literals from ``topic`` (``always start
                 function names with 'a_'`` and ``... with 'y_'`` collapse to
                 one group), which uses only shipped fields.
+
+``clawarena``   ClawArena, DERIVED gold only -- see load_clawarena. Ships no
+                retrieval ground truth of its own; its native scoring needs a
+                reader and a live agent writing files, so it is not reachable
+                at $0. Included to prove the pin is runnable, not to score.
 """
 
 from __future__ import annotations
@@ -75,10 +82,6 @@ def observed_at(index: int) -> str:
     return (EPOCH + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
 
 
-def tagged(unit_id: str, body: str) -> str:
-    return f"unit: {unit_id}\n{body}"
-
-
 # --------------------------------------------------------------------------
 # Loaders. Each returns list[group]; a group is one isolated memory subject:
 #   {"group_id": str, "units": [...], "probes": [...]}
@@ -103,9 +106,7 @@ def load_ama_bench(source: Path) -> list[dict]:
                     f"agent: {turn['action']}\n"
                     f"tool: {turn['observation']}"
                 )
-                units.append(
-                    {"unit_id": uid, "source_kind": "agent", "body": tagged(uid, body)}
-                )
+                units.append({"unit_id": uid, "source_kind": "agent", "body": body})
             probes = []
             for pair in episode["qa_pairs"]:
                 steps = sorted({int(s) for s in STEP.findall(pair["question"])})
@@ -137,7 +138,7 @@ def load_memorycode(source: Path) -> list[dict]:
             {
                 "unit_id": f"{gid}-s{i}",
                 "source_kind": "user",
-                "body": tagged(f"{gid}-s{i}", session["text"]),
+                "body": session["text"],
             }
             for i, session in enumerate(sessions)
         ]
@@ -168,16 +169,100 @@ def load_memorycode(source: Path) -> list[dict]:
     return groups
 
 
-LOADERS = {"ama_bench": load_ama_bench, "memorycode": load_memorycode}
+FILENAME = re.compile(r"[A-Za-z0-9_./-]+\.(?:md|json|csv|py|sql|txt|yaml|db)")
+CLAWARENA_AGENT = "claude-code"
+
+
+def load_clawarena(source: Path) -> list[dict]:
+    """ClawArena, retrieval-only.
+
+    CAVEAT, and it is the whole story: ClawArena ships NO retrieval ground
+    truth. Its own scoring is (a) a reader picking ``\\bbox{}`` options and
+    (b) shell commands checking files a live agent wrote into a workspace --
+    neither reachable at $0. The gold here is therefore DERIVED BY US: the
+    workspace files a round's own feedback/eval prose names by filename. That
+    covers 385 of 1801 rounds, so it is a coverage-biased proxy for a
+    construct the benchmark does not itself measure. Read any number from
+    this loader as a smoke signal, never as a ClawArena score.
+
+    ``source`` is the scenario root, ``data/clawarena`` inside the mirror.
+    """
+    root = source
+    groups = []
+    for questions_path in sorted(root.glob("eval/*/questions.json")):
+        scenario = questions_path.parent.name
+        workspace = root / CLAWARENA_AGENT / "workspaces" / scenario
+        if not workspace.is_dir():
+            continue
+        units = []
+        by_basename = {}
+        for path in sorted(p for p in workspace.rglob("*") if p.is_file()):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            if not text.strip():
+                continue
+            uid = f"claw-{scenario}-{path.relative_to(workspace).as_posix()}"
+            units.append({"unit_id": uid, "source_kind": "resource", "body": text})
+            by_basename[path.name] = uid
+        if not units:
+            continue
+        probes = []
+        for round_ in json.loads(questions_path.read_text())["rounds"]:
+            prose = (
+                round_["question"]
+                + json.dumps(round_.get("feedback") or {})
+                + json.dumps(round_.get("eval") or {})
+            )
+            named = {Path(m).name for m in FILENAME.findall(prose)}
+            gold = sorted({by_basename[n] for n in named if n in by_basename})
+            if not gold:
+                continue
+            probes.append(
+                {
+                    "probe_id": f"{scenario}-{round_['id']}",
+                    "query": round_["question"],
+                    "kind": f"derived_evidence_{round_['type']}",
+                    "gold_unit_ids": gold,
+                    "distractor_unit_ids": [],
+                }
+            )
+        if probes:
+            groups.append({"group_id": f"claw-{scenario}", "units": units, "probes": probes})
+    return groups
+
+
+LOADERS = {
+    "ama_bench": load_ama_bench,
+    "clawarena": load_clawarena,
+    "memorycode": load_memorycode,
+}
 
 
 # --------------------------------------------------------------------------
 
 
+def sha256_tree(root: Path) -> str:
+    """Aggregate hash of a source TREE: sha256 over `relpath\\0filehash\\n`
+    lines in path order. A Track U bank broke this week because its source
+    tree mutated mid-run; a directory-shaped instrument needs the same
+    immutability check a single file gets."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b"\0" + sha256_file(path).encode() + b"\n")
+    return digest.hexdigest()
+
+
 def verify_source(instrument: str, source: Path, lock_path: Path) -> dict:
     lock = json.loads(lock_path.read_text())
-    expected = lock["dataset"]["files"][lock["dataset"]["primary_file"]]["sha256"]
-    actual = sha256_file(source)
+    if source.is_dir():
+        expected = lock["dataset"]["aggregate_sha256"]
+        actual = sha256_tree(source)
+    else:
+        expected = lock["dataset"]["files"][lock["dataset"]["primary_file"]]["sha256"]
+        actual = sha256_file(source)
     if actual != expected:
         raise SystemExit(
             f"{instrument}: source sha256 {actual} != pinned {expected} "
@@ -186,17 +271,28 @@ def verify_source(instrument: str, source: Path, lock_path: Path) -> dict:
     return lock
 
 
-def unit_hits(bodies: list[str], unit_ids: list[str]) -> list[int]:
-    """Ranks (0-based) at which any of ``unit_ids`` appears in ``bodies``."""
-    wanted = {f"unit: {uid}\n" for uid in unit_ids}
+def episode_hits(items: list[dict], unit_ids: list[str], episode_of: dict) -> list[int]:
+    """Ranks (0-based) at which any of ``unit_ids`` is cited.
+
+    Matched on ``citation_episode_id``, the id ``POST /v1/episodes`` returned
+    for that unit -- exact, and unaffected by where a citation window happens
+    to start inside a long body.
+    """
+    wanted = {episode_of[uid] for uid in unit_ids if uid in episode_of}
     return [
         rank
-        for rank, body in enumerate(bodies)
-        if any(tag in body for tag in wanted)
+        for rank, item in enumerate(items)
+        if item.get("citation_episode_id") in wanted
     ]
 
 
-def run_group(client, group: dict, args) -> list[dict]:
+def ingest_group(client, group: dict) -> tuple[dict, dict, int]:
+    """Retain every unit. Returns (context, unit_id -> episode_id, deduped).
+
+    A retain whose ``dedup.matched`` is true folds into an existing episode
+    and enqueues no compile job; counting those is what lets the caller
+    assert the worker drained completely instead of guessing.
+    """
     context = client.bind_context(
         f"external-{group['group_id']}",
         subject_ref=group["group_id"],
@@ -204,8 +300,10 @@ def run_group(client, group: dict, args) -> list[dict]:
         scope_ref=group["group_id"],
         agent_node_ref="external-instrument-adapter",
     )
+    episode_of = {}
+    deduped = 0
     for index, unit in enumerate(group["units"]):
-        client.post(
+        response = client.post(
             "/v1/episodes",
             gr.episode_retain_payload(
                 context,
@@ -215,24 +313,34 @@ def run_group(client, group: dict, args) -> list[dict]:
                 body=unit["body"],
             ),
         )
-    return context
+        episode_of[unit["unit_id"]] = response["episode_id"]
+        deduped += bool((response.get("dedup") or {}).get("matched"))
+    return context, episode_of, deduped
 
 
-def score_group(client, context, group: dict, args) -> list[dict]:
+def score_group(client, context, episode_of: dict, group: dict, args) -> list[dict]:
     rows = []
     for probe in group["probes"]:
-        bodies, degraded = gr.recall_query(
-            client, context, probe["query"], args.k, args.budget_tokens, args.mode
+        response = client.post(
+            "/v1/recall",
+            {
+                **context,
+                "query": probe["query"],
+                "limit": args.k,
+                "budget_tokens": args.budget_tokens,
+                "mode": args.mode,
+            },
         )
-        gold = unit_hits(bodies, probe["gold_unit_ids"])
-        stale = unit_hits(bodies, probe["distractor_unit_ids"])
+        items = response.get("items", [])
+        gold = episode_hits(items, probe["gold_unit_ids"], episode_of)
+        stale = episode_hits(items, probe["distractor_unit_ids"], episode_of)
         rows.append(
             {
                 "group_id": group["group_id"],
                 "probe_id": probe["probe_id"],
                 "kind": probe["kind"],
-                "returned": len(bodies),
-                "degraded": degraded,
+                "returned": len(items),
+                "degraded": bool(response.get("degraded", False)),
                 "gold_rank": gold[0] if gold else None,
                 "stale_rank": stale[0] if stale else None,
                 "hit_at_1": bool(gold) and gold[0] == 0,
@@ -340,25 +448,35 @@ def main() -> int:
     try:
         server.start()
         client = gr.ApiClient(args.port, api_key, tenant_id)
-        contexts = {}
+        bound = {}
         ingested = 0
+        deduped = 0
         for group in groups:
-            contexts[group["group_id"]] = run_group(client, group, args)
+            context, episode_of, group_deduped = ingest_group(client, group)
+            bound[group["group_id"]] = (context, episode_of)
             ingested += len(group["units"])
+            deduped += group_deduped
         compiled = gr.drain_worker(args.worker_bin, args.database_url, args.embed_model)
-        if compiled != ingested:
-            raise RuntimeError(f"compiled {compiled} != ingested {ingested}")
+        if compiled != ingested - deduped:
+            raise RuntimeError(
+                f"compiled {compiled} != retained {ingested} - deduped {deduped}"
+            )
         rows = []
         for group in groups:
-            rows += score_group(client, contexts[group["group_id"]], group, args)
+            context, episode_of = bound[group["group_id"]]
+            rows += score_group(client, context, episode_of, group, args)
     finally:
         server.stop()
 
     report = {
         "instrument": args.instrument,
         "lock": {"path": lock_path.name, "sha256": sha256_file(lock_path)},
-        "source": {"path": str(source), "sha256": lock["dataset"]["files"][
-            lock["dataset"]["primary_file"]]["sha256"]},
+        "source": {
+            "path": str(source),
+            "sha256": lock["dataset"]["aggregate_sha256"]
+            if source.is_dir()
+            else lock["dataset"]["files"][lock["dataset"]["primary_file"]]["sha256"],
+        },
         "license": lock["license"],
         "attribution": lock["attribution"],
         "recall": {"k": args.k, "mode": args.mode, "budget_tokens": args.budget_tokens,
