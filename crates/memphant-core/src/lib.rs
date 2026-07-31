@@ -7416,6 +7416,11 @@ where
         .unwrap_or_default();
 
     let mut fused: Vec<_> = candidates_by_unit.into_values().collect();
+    // A-recency control (default OFF): the twenty-line substitute for the
+    // bitemporal edifice. See `a_recency_control_enabled`.
+    if a_recency_control_enabled() {
+        retain_most_recent_per_subject(&mut fused);
+    }
     // Decay is an independent retrieval signal, not a feature of the retired
     // heuristic reranker. Fold it into the fused score before the canonical
     // sort so review outcomes remain effective even when subject dedup admits
@@ -12015,11 +12020,87 @@ pub(crate) fn write_router_arm(kind: MemoryKind) -> WriteArm {
 /// `memphant-store-postgres/tests/fact_extraction_subject_key_pg.rs`, so adding
 /// a kind here fails loudly until the constraint agrees.
 pub fn supersedes_own_kind(kind: MemoryKind) -> Option<MemoryKind> {
+    // A-RECENCY CONTROL (measurement only, default OFF). See
+    // `a_recency_control_enabled`. Returning `None` for every arm makes the
+    // write path pure append: no generation is ever closed, so no
+    // `Superseded` state, no `valid_to`, no remainder rectangle and no
+    // `Supersedes`/`Contradicts` edge is ever written. The read side then
+    // resolves the resulting multi-row subject key by `observed_at` alone.
+    if a_recency_control_enabled() {
+        return None;
+    }
     match write_router_arm(kind) {
         WriteArm::Knowledge => Some(MemoryKind::Semantic),
         WriteArm::Preference => Some(MemoryKind::Preference),
         WriteArm::Episodic | WriteArm::Procedural | WriteArm::Belief | WriteArm::Resource => None,
     }
+}
+
+/// **A-recency control. A measurement instrument, not a product feature.**
+///
+/// `MEMPHANT_A_RECENCY_CONTROL=1` replaces the bitemporal edifice —
+/// transaction-time vs valid-time, `tstzrange` exclusion, supersession closing
+/// generations, remainder rectangles, `subject_generation` — with the trivial
+/// rule *the most recent assertion about a subject wins*. Two call sites, and
+/// deliberately no more:
+///
+/// 1. [`supersedes_own_kind`] returns `None` for every arm, so the write path
+///    is pure append and nothing is ever closed, retired or tiled.
+/// 2. [`retain_most_recent_per_subject`] collapses the recall pool to one
+///    candidate per `fact_key`, chosen by `observed_at` alone.
+///
+/// The flag is read once and cached, so a process is entirely one arm or the
+/// other; an arm cannot change under a running harness. **Default OFF.** With
+/// the flag set, `memphant_memory_unit_subject_valid_excl` no longer describes
+/// the write path (the router stops maintaining at-most-one-open-per-key), so
+/// the control's database must drop that constraint — the constraint is itself
+/// part of the machinery under test.
+fn a_recency_control_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("MEMPHANT_A_RECENCY_CONTROL")
+            .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes"))
+            .unwrap_or(false)
+    })
+}
+
+/// A-recency read rule: at most one candidate survives per subject key, and it
+/// is the one with the greatest `observed_at`. Ties break on body so the arm is
+/// deterministic, matching the fusion sort's own tie-break. Candidates without
+/// a `fact_key` have no subject to conflict over and are untouched.
+///
+/// This consults neither `state`, nor `valid_from`/`valid_to`, nor
+/// `transaction_to`, nor `subject_generation`.
+fn retain_most_recent_per_subject(fused: &mut Vec<CandidateAccumulator>) {
+    let mut winner: HashMap<String, usize> = HashMap::new();
+    for index in 0..fused.len() {
+        let Some(key) = fused[index].unit.fact_key.clone() else {
+            continue;
+        };
+        let replace = match winner.get(&key) {
+            None => true,
+            Some(&held) => {
+                match cmp_rfc3339(
+                    &fused[index].unit.observed_at,
+                    &fused[held].unit.observed_at,
+                ) {
+                    std::cmp::Ordering::Greater => true,
+                    std::cmp::Ordering::Less => false,
+                    std::cmp::Ordering::Equal => fused[index].unit.body > fused[held].unit.body,
+                }
+            }
+        };
+        if replace {
+            winner.insert(key, index);
+        }
+    }
+    let keep: HashSet<usize> = winner.into_values().collect();
+    let mut index = 0;
+    fused.retain(|candidate| {
+        let position = index;
+        index += 1;
+        candidate.unit.fact_key.is_none() || keep.contains(&position)
+    });
 }
 
 fn reject_compiler_candidate_as_noise(candidate: &memphant_types::ReflectCandidate) -> bool {
@@ -14310,6 +14391,35 @@ mod pack_cost_tests {
             decay,
             channels: Vec::new(),
         }
+    }
+
+    /// The A-recency control's whole read rule, tested without the env flag so
+    /// the assertion holds regardless of how the process was launched.
+    #[test]
+    fn a_recency_keeps_only_the_newest_row_per_subject_key() {
+        let keyed = |id: u128, body: &str, key: &str, observed: &str| {
+            let mut unit = unit(id, body, Vec::new());
+            unit.fact_key = Some(key.to_string());
+            unit.observed_at = observed.to_string();
+            // Deliberately hostile to the edifice's own signals: the STALE row
+            // is the one the state machine would keep (Active, open valid
+            // range) and the CURRENT row is marked Superseded and valid-closed.
+            // A-recency must ignore all of that and go by `observed_at` alone.
+            candidate(unit, 1.0)
+        };
+        let mut fused = vec![
+            keyed(1, "stale rule", "k1", "2026-07-01T00:00:00Z"),
+            keyed(2, "current rule", "k1", "2026-07-09T00:00:00Z"),
+            keyed(3, "other subject", "k2", "2026-07-02T00:00:00Z"),
+        ];
+        fused[1].unit.state = UnitState::Superseded;
+        fused[1].unit.valid_to = Some("2026-07-05T00:00:00Z".to_string());
+        fused.push(candidate(unit(4, "unkeyed evidence", Vec::new()), 1.0));
+
+        retain_most_recent_per_subject(&mut fused);
+
+        let bodies: Vec<&str> = fused.iter().map(|c| c.unit.body.as_str()).collect();
+        assert_eq!(bodies, vec!["current rule", "other subject", "unkeyed evidence"]);
     }
 
     fn channel_candidate(id: u128, channel: RecallChannel, rank: usize) -> CandidateAccumulator {

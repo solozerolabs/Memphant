@@ -583,6 +583,48 @@ DIAGNOSTIC_QUERIES = {
     "episodes": "select count(*) from memphant.episode",
     "jobs_remaining":
         "select count(*) from memphant.job_state where state in ('queued','running')",
+    # --- A-recency mechanism liveness (both directions) -------------------
+    # An inert arm and a neutral arm produce the same score and mean opposite
+    # things, so both arms must PROVE which one they are.
+    #
+    # `supersedes_edges` / `superseded_units` / `valid_closed_units` must be
+    # NON-ZERO on the bitemporal arm (the edifice fired) and ZERO on the
+    # A-recency arm (the edifice was bypassed, not merely unexercised).
+    "supersedes_edges":
+        "select count(*) from memphant.memory_edge where kind = 'supersedes'",
+    "superseded_units":
+        "select count(*) from memphant.memory_unit where state = 'superseded'",
+    "valid_closed_units":
+        "select count(*) from memphant.memory_unit where valid_to is not null",
+    # THE assertion, and it is deliberately NOT an open-row count. The
+    # bitemporal model correctly leaves a historical remainder open beside the
+    # current generation -- remainders TILE, they do not overlap -- so
+    # `count(open rows) <= 1` is the wrong test and would pass for the wrong
+    # reason. This is the right one: how many pairs of OPEN rows share a
+    # subject key AND have OVERLAPPING valid ranges. Exactly the predicate of
+    # `memphant_memory_unit_subject_valid_excl`, computed rather than trusted.
+    #   bitemporal arm -> 0 (the machinery maintains the invariant)
+    #   A-recency arm   -> >0 (competing live assertions coexist; the read side
+    #                     must choose between them, which is the whole control)
+    "open_subject_key_range_overlaps":
+        "select count(*) from memphant.memory_unit a "
+        "join memphant.memory_unit b on a.tenant_id = b.tenant_id "
+        "and a.data_subject_id = b.data_subject_id and a.scope_id = b.scope_id "
+        "and a.agent_node_id = b.agent_node_id "
+        "and a.subject_generation = b.subject_generation "
+        "and a.fact_key = b.fact_key and a.kind = b.kind and a.id < b.id "
+        "and a.transaction_to is null and b.transaction_to is null "
+        "and tstzrange(a.valid_from, a.valid_to, '[)') "
+        "&& tstzrange(b.valid_from, b.valid_to, '[)') "
+        "where a.kind in ('semantic','preference')",
+    # How much work the recency collapse actually had to do: subject keys
+    # carrying more than one live row. Zero here would mean the A-recency read
+    # rule never fired on anything.
+    "subject_keys_with_competing_live_rows":
+        "select count(*) from (select fact_key from memphant.memory_unit "
+        "where transaction_to is null and kind in ('semantic','preference') "
+        "group by tenant_id, data_subject_id, scope_id, agent_node_id, "
+        "subject_generation, fact_key, kind having count(*) > 1) multi",
 }
 
 
@@ -722,6 +764,17 @@ def build_parser() -> argparse.ArgumentParser:
              "ingest_group_preference)",
     )
     parser.add_argument(
+        "--a-recency",
+        action="store_true",
+        help="A-RECENCY CONTROL. Runs the server and worker with "
+             "MEMPHANT_A_RECENCY_CONTROL=1: the write path never supersedes "
+             "and the read path keeps the greatest-observed_at row per subject "
+             "key. Also DROPS memphant_memory_unit_subject_valid_excl on the "
+             "scratch DB, because that constraint is part of the machinery "
+             "under test and an append-only store has no such invariant. "
+             "Pair with --arm preference; measurement only, never a default",
+    )
+    parser.add_argument(
         "--diagnostics",
         action="store_true",
         help="memphant arm only: dump supersession/state/tier counts from the "
@@ -783,6 +836,11 @@ def main() -> int:
         if missing:
             raise SystemExit(f"gold unit dropped by limiting: {sorted(missing)[:3]}")
 
+    # Set BEFORE the scratch-db re-exec so the flag survives it and is inherited
+    # by every child (server, worker) rather than being re-derived per process.
+    if args.a_recency:
+        os.environ["MEMPHANT_A_RECENCY_CONTROL"] = "1"
+
     started = time.time()
     diagnostics = None
     if args.arm == "lexical":
@@ -806,6 +864,26 @@ def main() -> int:
     tenant_id, api_key = gr.provision_tenant(
         args.cli_bin, args.database_url, name_prefix=f"ext-{args.instrument}"
     )
+    if args.a_recency:
+        # The GiST exclusion constraint asserts at-most-one-open-row per
+        # (subject key, kind) with overlapping valid time. That invariant is
+        # maintained BY supersession, so with supersession off the second
+        # assertion on a key would be rejected at insert. Dropping it is not a
+        # loosening of the control -- the constraint is part of the edifice the
+        # control replaces. Scratch DB only; it is destroyed on exit.
+        drop = gr.sh([
+            "psql", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", args.database_url,
+            "--command",
+            "alter table memphant.memory_unit drop constraint "
+            "memphant_memory_unit_subject_valid_excl",
+        ])
+        if drop.returncode != 0:
+            raise SystemExit(
+                "A-recency control could not drop the subject exclusion "
+                f"constraint: {drop.stderr.strip()[:300]}"
+            )
+        print("[a-recency] dropped memphant_memory_unit_subject_valid_excl", file=sys.stderr)
+
     out_path = Path(args.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     server = gr.Server(
@@ -865,11 +943,36 @@ def main() -> int:
     )
 
 
+def lineage_stamp(args) -> dict:
+    """Git head, working-tree cleanliness, and the sha256 of the served binary."""
+    root = Path(__file__).resolve().parent.parent
+    def git(*argv: str) -> str:
+        result = gr.sh(["git", "-C", str(root), *argv])
+        return result.stdout.strip() if result.returncode == 0 else "unavailable"
+    stamp = {
+        "worktree": str(root),
+        "git_head": git("rev-parse", "HEAD"),
+        "git_branch": git("rev-parse", "--abbrev-ref", "HEAD"),
+        "git_dirty": bool(git("status", "--porcelain")),
+    }
+    for name in ("server_bin", "worker_bin"):
+        path = Path(getattr(args, name))
+        stamp[f"{name}_sha256"] = sha256_file(path) if path.exists() else "absent"
+    return stamp
+
+
 def write_report(args, lock, lock_path, source, rows, groups, ingested,
                  compiled, started, out_path, diagnostics) -> int:
     report = {
         "instrument": args.instrument,
         "arm": args.arm,
+        "a_recency_control": bool(args.a_recency),
+        # Lineage drift across ~19 worktrees is this program's dominant failure
+        # mode: the same false claim was produced twice in two days by two
+        # independent careful sessions reading a binary that was not the tree.
+        # So the tree AND the binary that actually served the recall are both
+        # stamped into every report.
+        "lineage": lineage_stamp(args),
         "lock": {"path": lock_path.name, "sha256": sha256_file(lock_path)},
         "source": {
             "path": str(source),
