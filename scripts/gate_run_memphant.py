@@ -377,9 +377,26 @@ def drain_worker(
     out = sh([worker_bin], env=env)
     if out.returncode != 0:
         raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
-    match = re.fullmatch(r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout)
+    # Accept BOTH the bare form and the worker's tick-honesty form
+    # (`completed=N failed=N retried=N deferred=N`, memphant-worker/src/main.rs:124).
+    # This is the SECOND copy of this parser -- gate_runtime.py has the other --
+    # and it cost a full 53-minute 4920-section ingest that had already reported
+    # `completed=4920 failed=0 retried=0 deferred=0` before this line threw it
+    # away. A duplicated parser is a duplicated outage; fix both or neither.
+    # The failure count is parsed, not discarded: "drained nothing" and "failed
+    # everything" must not collapse into one accepted string.
+    match = re.fullmatch(
+        r"memphant-worker: drain completed=(0|[1-9]\d*)"
+        r"(?: failed=(0|[1-9]\d*) retried=(0|[1-9]\d*) deferred=(0|[1-9]\d*))?\n?",
+        out.stdout,
+    )
     if match is None:
         raise RuntimeError(f"worker drain completion output is malformed: {out.stdout[:300]!r}")
+    if match.group(2) is not None and int(match.group(2)):
+        raise RuntimeError(
+            f"worker drain reported {match.group(2)} FAILED jobs -- the corpus is "
+            f"only partially compiled: {out.stdout.strip()!r}"
+        )
     # This runner keeps its own copy of the drain (only `gate_runtime`'s lacks
     # the `resource_chunks` env), and the copy has NO caller-side count check —
     # so it needs the same independent, bench-credential queue-empty gate the
