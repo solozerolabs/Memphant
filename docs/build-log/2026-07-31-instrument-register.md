@@ -227,7 +227,7 @@ destroys the confirmation. That is a design decision, not a budget line.
 | Track R fused vs BM25 @10 | 180 | 0.1000 | 6.73pt | **ADEQUATE** for 7pt — the only lane that is |
 | Track R rank-order @10 | 180 | 0.1222 | 7.49pt | inadequate; need n≥210 |
 | Track R render-loss @5 | 180 | 0.1944 | 9.51pt | inadequate; need n≥330 |
-| ForgetEval cross-rerank | 259 | 0.3127 | 10.02pt | inadequate for 7pt; need n≥525 |
+| ForgetEval cross-rerank | 259 | 0.3127 | 10.00pt | inadequate for 7pt; need n≥525 |
 | ForgetEval lineage-complete | 259 | 0.4286 | 11.67pt | inadequate for 7pt; need n≥710 |
 | ForgetEval transition-safe *(retracted)* | 259 | 0.6371 | 14.18pt | inadequate; need n≥1045 |
 | Syndai docs hit@10 | 60 | ≥0.1333 | 13.08pt | inadequate; need n≥230 |
