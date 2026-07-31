@@ -43,8 +43,15 @@ gitignored and live at `~/.memphant-private/`; they were read read-only.
 5. **Track R's entire measured ladder rests on a contaminated bank, and the bank that
    fixes it has never been run.** Every banked b/c cell sits on a bank leaking 3.93×.
 
-6. **Four of seven memory types have no banked paired result at all**, and several carry
-   apparatus that has never executed once. Substrate coverage is thinner still (§6).
+6. **Three of seven memory types have no banked paired result at all** —
+   preference/user-learning, procedural, and temporal/state. Four do: chat, code, docs and
+   forgetting. Substrate coverage is thinner still (§5), and **hot/cold planes have neither
+   an instrument nor a feature.**
+
+7. **Both temporal/state adapters failed at first contact on a contract mismatch**, and
+   neither failure was caught before money was authorized (§4.4). That is a systemic gap,
+   not two coincidences: we authorize spend against adapters that have never been exercised
+   against the strict contract.
 
 ---
 
@@ -405,6 +412,73 @@ would not have worked, and the failure was reproduced live at $0.
 - *Cost per run:* **unverified** — with no tasks, envs or trajectories ever materialised
   here, the byte-measured derivation had no input. Any dollar figure quoted for STATE-Bench
   before now was a guess.
+
+**ForgetEval — SOUND, and the one STATUS claim that checks out exactly.**
+Recomputed from the 385 shipped case rows rather than the sentence: baseline 133 pass /
+126 fail / 126 N/A, lineage-complete 244 / 15 / 126, with the **same** 126 N/A rows in both
+arms (agreement 385/385). Paired base n=259, **b=111, c=0** — precisely the claimed "111
+paired gains and zero baseline regressions". The +42.9pt effect sits far above the lane's
+11.67pt MDE, so the banked result is comfortably powered.
+*Restriction:* ψ = 0.43 is the highest of any lane we own, so ForgetEval needs n ≥ 710 to
+resolve 7pt. **Sound for large effects, unusable for fine tuning.** Not SOTA: the raw score
+ties Lethe v1 and trails Mem0 and the published LLM-assisted arms.
+
+**Memora / FAMA — DEGRADED (valid, but too small to decide).** Apache-2.0 verified against
+a pinned LICENSE blob, official code, data and native scorer. Banked result is a real and
+honestly-reported **negative**: official FAMA 32.96 → 53.49 after reader-only replay while
+raw unweighted accuracy stayed flat at 43–44/71. The inventory records the current state as
+"negative pilot retained; no new model run". At n=71 subquestions this lane cannot resolve
+small effects, and **b/c were never published**, so its ψ is unrecoverable.
+
+**STALE — BROKEN. Two authorizations consumed, $0.42 settled, zero official score.**
+- `AUTHORIZATION-1-CLOSURE.json`: `CLOSED_PREPAID_OPERATIONAL_FAILURE` — the adapter passed
+  an upstream **timezone-naive timestamp** to MemPhant and the first episode was rejected.
+- `AUTHORIZATION-2-CLOSURE.json`: `CONSUMED_REJECTED_STOP_NO_BROADENING`, with
+  `native_judge: NOT_RUN_KILL_GATE` and `full_400_scenario_run: FORBIDDEN_NO_BROADENING`.
+  Settled $0.4245304, and `deep_cost_status` is `UNRECONCILED`.
+No official STALE number exists. The lock also asserts its licenses as a bare string with
+no LICENSE blob.
+
+**MemSyco — DEGRADED, and entirely tripwires.** MIT verified against a pinned LICENSE blob,
+and it is the only benchmark with real data committed (3.9M). But **every one of the five
+calibration splits is n = 12–14** (development 14/12/12/12/12, confirmation 12 × 5). By
+§3.3's structural floor, not one of them can reject at any effect size. Only one of the
+five tasks has any run artifact, and that artifact is a shell script, not a result. As
+instrumented, MemSyco cannot carry a decision.
+
+**Procedural — no external instrument exists.** The only apparatus is
+`rung10-procedural-memory-profile.json`, which is self-authored
+(`sampled_public_style`, `benchmark_version: state-style-procedural-memory-2026-07-03`) and
+already **saturated at score 1.0 against baseline 0.0**, so it cannot express a further
+gain. Its `embedding_selection` axis is `source_status: not_run`. **ABSENT.**
+
+**Track U (preference/user-learning) — apparatus without a runner, and a stop condition.**
+The bank is real and well-constructed: 51 goldens accepted from 60 candidates over 91
+feedback files, pinned source snapshot, three axes, category weights within 1.7pt of target.
+But the only script is `user_lane_extract.py` — **there is no runner**, and no artifact
+anywhere references the lane. Worse, the ceiling is structural: at n=51 the lane is
+**UNPOWERABLE below ψ=0.20** and resolves only 17.4pt at ψ=0.20. Deciding 7pt would need
+n = 340 (ψ=0.20) to 665 (ψ=0.40) against a pinned source snapshot of **94 files total**.
+**That n is unreachable on the available corpus.** Track U can honestly be sized for a
+~15pt effect (n=72 at ψ=0.20) and nothing finer. This is a stop condition, not a budget
+request.
+
+### 4.5 The systemic finding: adapters are not exercised before money is authorized
+
+Both temporal/state adapters failed at first contact on a contract mismatch, and in both
+cases the failure was discovered *after* authorization:
+
+| adapter | defect | discovered |
+|---|---|---|
+| STATE-Bench | POSTs `tenant_id`, omits three required fields, against a `deny_unknown_fields` contract | by this audit, before spend |
+| STALE | passed an upstream timezone-naive timestamp; first episode rejected | after a prepaid authorization was consumed |
+
+Both are one-block fixes. Neither is subtle. The common cause is that an adapter is written
+against the contract of the day, the contract then moves (C0 killed `tenant_id`), and
+nothing re-exercises the adapter until money is on the table. **Recommended gate: no paid
+authorization for any lane whose adapter has not completed a $0 stub-server round trip
+against the current strict contract since the last contract change.** That check costs
+minutes and would have caught both.
 
 ## 5. Serving substrates
 

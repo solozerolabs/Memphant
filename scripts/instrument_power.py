@@ -33,7 +33,7 @@ import argparse
 import json
 import sys
 from functools import lru_cache
-from math import comb
+from math import exp, lgamma, log, log1p
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,13 +44,25 @@ TARGET_POWER = 0.80
 
 
 def binom_pmf(k: int, n: int, p: float) -> float:
+    """Binomial pmf, evaluated in log space.
+
+    The naive `comb(n, k) * p**k * q**(n-k)` overflows float conversion once n
+    reaches the low thousands, which the required-n search routinely does.
+    """
     if k < 0 or k > n:
         return 0.0
     if p <= 0.0:
         return 1.0 if k == 0 else 0.0
     if p >= 1.0:
         return 1.0 if k == n else 0.0
-    return comb(n, k) * p**k * (1.0 - p) ** (n - k)
+    log_p = (
+        lgamma(n + 1)
+        - lgamma(k + 1)
+        - lgamma(n - k + 1)
+        + k * log(p)
+        + (n - k) * log1p(-p)
+    )
+    return exp(log_p) if log_p > -700.0 else 0.0
 
 
 @lru_cache(maxsize=None)
@@ -294,6 +306,34 @@ add_lane(
 )
 
 
+add_lane(
+    "forgetting/lifecycle", "ForgetEval cross-rerank+rank-one", 259, 65, 16,
+    f"{A}/next-evidence/forgeteval/adversarial-385-cross-rerank-rank-one.json", D_MIN,
+    "Independently cross-validated: forgeteval.next-evidence.n12.json states this arm "
+    "'repaired 65 failures but regressed 16 baseline passes', matching the recomputed cells "
+    "exactly.",
+)
+add_lane(
+    "forgetting/lifecycle", "ForgetEval transition-safe (RETRACTED)", 259, 110, 55,
+    f"{A}/next-evidence/forgeteval/adversarial-385-transition-safe-confirmed.json", D_MIN,
+    "The retracted 188/71/126 arm. Retracted for good reason: it carries 55 baseline "
+    "REGRESSIONS that the lineage arm eliminates entirely. Net +55 vs lineage's +111.",
+)
+
+# --- temporal / state ------------------------------------------------------
+add_lane(
+    "temporal/state", "Memora/FAMA pilot vs Luna reader-only replay", 71, 12, 13,
+    "/Users/sidsharma/Memphant/docs/build-log/artifacts/unified-sota-20260713/task4-memora/"
+    "weekly-software-engineer.fama.json vs unified-sota-20260714/task4-memora-luna/full.fama.json",
+    D_MIN,
+    "THE 'FLAT' RESULT IS NOT FLAT. STATUS reports 'raw accuracy stayed flat at 43/71 vs "
+    "44/71'. Matched by evaluation_question_id, that one-cell net hides 25 DISCORDANT CELLS "
+    "out of 71 (psi=0.352): 13 the pilot alone got right, 12 the replay alone did. The "
+    "replay is a different system that changed a third of the graded cells, not a "
+    "near-identical run. CAVEAT: the 71 subquestions nest inside 15 parent questions "
+    "(mean 4.7 each) and are NOT independent, so exact McNemar at n=71 is ANTICONSERVATIVE "
+    "-- the effective n is nearer 15. Treat the MDE below as a floor on the true MDE.",
+)
 
 # --- preference / user-learning --------------------------------------------
 add_lane(
