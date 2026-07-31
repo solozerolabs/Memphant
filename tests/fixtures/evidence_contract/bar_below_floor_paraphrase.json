@@ -1,0 +1,45 @@
+{
+  "__fixture__": "Failure 4. The paraphrase bar was preregistered at concentration <= 1.50 while our own W0 floor probe had measured 1.79 as the lowest concentration compatible with an answerable, uniquely-identifying question. The bank then recorded bar_passed=false at 2.018x -- inside the human band.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "the paraphrase bank must reach concentration <= 1.50",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 180,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "leakage": {
+      "unit_definition": "one mined coding-attempt event body as the memory unit",
+      "absolute_target_coverage": 0.1346,
+      "floor": 0.0667,
+      "floor_kind": "exhaustive",
+      "concentration": 2.018,
+      "provenance_class": "self_authored_abstracted",
+      "negative_selection": "same-attempt exhaustive non-target events"
+    },
+    "bar": {
+      "metric": "leakage_concentration",
+      "threshold": 1.5,
+      "direction": "le",
+      "floor_reference": "w0-probe-2026-07-31",
+      "rationale": "set by argument, before the floor was measured"
+    }
+  }
+}

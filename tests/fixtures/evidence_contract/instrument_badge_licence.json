@@ -1,0 +1,39 @@
+{
+  "__fixture__": "Failure 8. ClawArena's 'MIT' is a shields.io badge in the README, not a LICENSE file and not record metadata. benchmarks/manifests/clawarena.lock.json.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "ClawArena is MIT licensed and admissible",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "instrument_verification": {
+      "shipped_rows_verified": true,
+      "rows_counted": 0,
+      "fields_counted": {
+        "task_id": 0
+      },
+      "license_id": "MIT",
+      "license_source": "README_BADGE",
+      "license_evidence": "shields.io badge in the README header"
+    }
+  }
+}

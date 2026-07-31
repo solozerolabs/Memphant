@@ -1,0 +1,31 @@
+{
+  "__fixture__": "Failure 1. The LME-S 12-row _abs sentinel that rejected pack_render_cap: n=12, b=0, c=2. Cells recomputed in scripts/instrument_power.py; exact two-sided p = 0.50. n_d=2 is below the structural floor of 6, so this screen had zero power at ANY effect size and its 'null' was never a measurement.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "pack_render_cap regresses abstention, so the lever is rejected",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 12,
+      "b": 0,
+      "c": 2,
+      "n_d": 2,
+      "psi_observed": 0.16666666666666666,
+      "source": "docs/build-log/artifacts/rung7-packing-reader-gate/{baseline,rendercap1200}-retrieval.json, abstention_correct over the 12 is_abstention rows"
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    }
+  }
+}

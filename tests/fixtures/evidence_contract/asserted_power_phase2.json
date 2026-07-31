@@ -1,0 +1,33 @@
+{
+  "__fixture__": "Failure 2. The Phase-2 packet claimed '~80% power at psi~=0.15'. Recomputed it is 0.728 there and 0.541 at the psi the lane exhibits (0.229). Here the packet's asserted MDE is carried beside cells that do not produce it.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "the Phase-2 reader lane is powered to ~80% at psi=0.15",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 166,
+      "b": 38,
+      "c": 0,
+      "n_d": 38,
+      "psi_observed": 0.2289156626506024,
+      "mde_at_80": 0.15,
+      "computed_by": "asserted in the Phase-2 packet; not computed",
+      "source": "docs/build-log/artifacts/rung7-packing-reader-gate/{baseline,rendercap1200}-retrieval.json"
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    }
+  }
+}
