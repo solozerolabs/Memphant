@@ -895,6 +895,13 @@ LEAKAGE_REFERENCES = {
     "track_r_original": {"target_mean": 0.3960, "floor_mean": 0.1008, "concentration": 3.93},
     "track_r_paraphrase": {"target_mean": 0.135, "floor_mean": 0.067, "concentration": 2.05},
 }
+# Calibration band measured on human-authored coding queries by the sibling
+# GitHub-lane run: concentration 1.76-2.03, absolute target coverage
+# 0.175-0.287. A published human corpus (foundry-ai/swe-prbench) measures 2.42
+# and FAILS the 1.50 bar below -- which is evidence about the bar, not the
+# corpus. Recorded so the lock reports position-in-band, not just pass/fail.
+HUMAN_BAND_CONCENTRATION = (1.76, 2.03)
+HUMAN_BAND_TARGET_MEAN = (0.175, 0.287)
 CONCENTRATION_SHIP_BAR = 1.50
 CONCENTRATION_CONSTRUCT_PREDICTION = 1.30
 TARGET_MEAN_BAR = 0.25
@@ -916,6 +923,77 @@ def measure_leakage(goldens: list[dict], corpus: list[dict]) -> dict:
     return report
 
 
+def cross_project_floor(goldens: list[dict], units: list[dict]) -> dict:
+    """Diagnostic, NOT a bar: the same coverage metric against units from OTHER
+    projects entirely.
+
+    It exists to interpret the in-scope floor. If the in-scope non-target floor
+    is high because this owner's engineering vocabulary is homogeneous, the
+    cross-project floor will be high too, and the gap between the two floors --
+    not the target/floor ratio alone -- is what says whether the question is
+    pointed at its target or merely written in the house dialect.
+    """
+    import random
+    import statistics
+
+    by_project: dict[str, list[dict]] = defaultdict(list)
+    for unit in units:
+        by_project[unit["project"]].append(unit)
+    rng = random.Random(SEED)
+    values = []
+    for row in goldens:
+        home = row["provenance"][0]["project"]
+        others = [u for p, rows in by_project.items() if p != home for u in rows]
+        if not others:
+            continue
+        sample = rng.sample(others, min(200, len(others)))
+        asked = tokens(row["question"])
+        if not asked:
+            continue
+        values.append(
+            statistics.fmean(len(asked & tokens(u["text"])) / len(asked) for u in sample)
+        )
+    if not values:
+        return {}
+    ordered = sorted(values)
+    return {
+        "definition": "mean coverage against 200 seeded units drawn from OTHER projects",
+        "n": len(ordered),
+        "mean": round(statistics.fmean(ordered), 4),
+        "median": round(statistics.median(ordered), 4),
+    }
+
+
+def user_turn_only_corpus(goldens: list[dict], corpus: list[dict], units: list[dict]) -> list[dict]:
+    """The same scopes with each memory unit reduced to the user's turn alone.
+
+    Granularity sensitivity, not an alternative bank. A shipped unit is
+    ``user turn + agent reply`` because that is what an episodic memory would
+    actually store -- but the agent's reply restates the user's vocabulary, so it
+    raises token overlap on BOTH sides of the metric. Reporting both makes the
+    granularity's contribution visible instead of baking it into one number.
+    """
+    by_id = {unit["unit_id"]: unit for unit in units}
+    order = {row["attempt_id"]: row for row in corpus}
+    out = []
+    for golden in goldens:
+        row = order[golden["question_id"]]
+        out.append(
+            {
+                "attempt_id": row["attempt_id"],
+                "events": [
+                    {"sequence": event["sequence"], "text": _user_part(event["text"], by_id)}
+                    for event in row["events"]
+                ],
+            }
+        )
+    return out
+
+
+def _user_part(text: str, _by_id: dict) -> str:
+    return text.split("\n\n[agent] ", 1)[0]
+
+
 def leakage_summary(report: dict) -> dict:
     concentration = report["concentration_vs_exhaustive"]
     return {
@@ -931,6 +1009,24 @@ def leakage_summary(report: dict) -> dict:
         "concentration_vs_sampled": report["concentration_vs_sampled"],
         "by_shape": report["by_shape"],
         "references": LEAKAGE_REFERENCES,
+        "human_band_position": {
+            "concentration_band": list(HUMAN_BAND_CONCENTRATION),
+            "target_mean_band": list(HUMAN_BAND_TARGET_MEAN),
+            "concentration": (
+                "below_human_band"
+                if concentration is not None and concentration < HUMAN_BAND_CONCENTRATION[0]
+                else "in_human_band"
+                if concentration is not None and concentration <= HUMAN_BAND_CONCENTRATION[1]
+                else "above_human_band"
+            ),
+            "target_mean": (
+                "below_human_band"
+                if report["target"]["mean"] < HUMAN_BAND_TARGET_MEAN[0]
+                else "in_human_band"
+                if report["target"]["mean"] <= HUMAN_BAND_TARGET_MEAN[1]
+                else "above_human_band"
+            ),
+        },
         "verdict": (
             "below_construct_prediction"
             if concentration is not None and concentration <= CONCENTRATION_CONSTRUCT_PREDICTION
@@ -1011,6 +1107,33 @@ def make_lock(
         "bar": bar,
         "spotcheck_state": "emitted_pending_owner_review",
         "spend_usd": 0.0,
+        # Amendment A3: provenance and lexical tractability are reported as TWO
+        # fields and never collapsed into one gate. Only contamination -- the
+        # query authored FROM the target -- disqualifies a bank, and that is
+        # settled by provenance, not by a statistic.
+        "provenance": {
+            "class": "human_authored_pre_answer",
+            "goldens_in_class": len(goldens),
+            "fraction": 1.0 if goldens else 0.0,
+            "per_shape": {
+                shape: "human_authored_pre_answer"
+                for shape in sorted(diagnostics["per_shape"])
+            },
+            "basis": (
+                "question is byte-identical to a harness-stamped interactive human "
+                "turn (origin.kind=human, non-sidechain), typed before the agent did "
+                "the work; agent-to-agent turns wearing the same stamp are rejected"
+            ),
+            "contamination_possible": False,
+            "verified_mechanically": True,
+        },
+        "prereg_bar_pass": all(
+            value for key, value in bar.items() if key != "insufficient_below_24"
+        ),
+        "failed_bars": sorted(
+            key for key, value in bar.items()
+            if key != "insufficient_below_24" and not value
+        ),
     }
 
 
@@ -1103,6 +1226,15 @@ def main() -> int:
         )
         write_jsonl(VERDICTS_PATH, ledger)
         report = measure_leakage(goldens, corpus)
+        diagnostics["cross_project_floor"] = cross_project_floor(goldens, units)
+        thin = measure_leakage(goldens, user_turn_only_corpus(goldens, corpus, units))
+        diagnostics["unit_granularity_sensitivity"] = {
+            "definition": "same metric with each memory unit reduced to the user turn "
+            "alone (agent reply removed)",
+            "target_mean": thin["target"]["mean"],
+            "non_target_exhaustive_mean": thin["non_target_exhaustive"]["mean"],
+            "concentration_vs_exhaustive": thin["concentration_vs_exhaustive"],
+        }
         LEAKAGE_PATH.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
         lock = make_lock(goldens, corpus, stats, diagnostics, leakage_summary(report))
         lock["mirror_sha256"] = mirror(

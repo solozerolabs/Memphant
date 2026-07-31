@@ -96,7 +96,7 @@ class TestSecretScan:
         assert all(isinstance(name, str) and " " not in name for name in found)
 
     def test_detects_credentials_in_a_uri(self):
-        assert "uri_credentials" in cle.secret_reasons("postgres://user:hunter2xyz@host/db")
+        assert "uri_credentials" in cle.secret_reasons("postgres://user:NOTAREALSECRET@host/db")
 
     def test_git_sha_is_not_a_secret(self):
         assert cle.secret_reasons("commit 9937bf9581ac253853904832f1eb3cec923d6b4d0011223344") == []

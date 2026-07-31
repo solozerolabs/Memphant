@@ -426,6 +426,304 @@ python3 scripts/convo_lane_extract.py --build      # bank + lock
 python3 scripts/convo_lane_extract.py --check      # re-derive, assert lock
 ```
 
-## 9. Achieved figures and custody hashes
+## 9. Achieved figures — executed 2026-07-30
 
-*(Filled in on completion, from executed runs only. Empty until then.)*
+Every number below is written by an executed run
+(`benchmarks/data/convo_lane_golden.lock.json`, sha256
+`6a9878d4bc3cd25da6abd5dff4dfb912f4d4f1cd22d37bb5fe2641c4e416c091`). None is
+quoted, estimated, or rounded from memory.
+
+### 9.1 Yield of the human-turn rule
+
+| stage | n | note |
+|---|---:|---|
+| session files cheaply prefiltered | 4,843 | grep for the marker byte string |
+| session files scanned in full | **412** | 1.45 GB, the frozen snapshot |
+| records stamped `origin.kind == "human"` | **2,655** | all `isSidechain: false` |
+| ↳ excluded project (§5 `content_sensitive_excluded`) | −325 | |
+| ↳ `agent_to_agent_message` (A2) | −34 | machine turns wearing the human stamp |
+| ↳ `too_short` (<40 chars) | −842 | "y", "1", "continue" |
+| ↳ `boilerplate_repasted` (A1.2) | −564 | still retained as haystack units |
+| ↳ `oversized_prompt` (>2,000 chars, A1.1) | −197 | |
+| ↳ `paste_guard` | −45 | |
+| ↳ `secret_detected` (regex, §5) | −12 | 7 high-entropy, 4 URI creds, 1 GitHub PAT |
+| **admitted as memory units** | **1,200** | 45.2% of stamped |
+| eligible as a *query* after A1.2 | 757 | boilerplate stays in the haystack only |
+| candidates selected (4 shapes, seeded) | **204** | the cue-driven pool, near-exhausted |
+| agent-adjudicated | **204 / 204 (100%)** | 10 subscription-model agents, 2 waves |
+| **accepted into the bank** | **43** | 21.1% of candidates |
+
+Adjudication rejects: `question_self_contained` 85, `content_sensitive` 16,
+`target_unrelated` 12, `ambiguous` 17, `shape_not_supported` 6. Post-adjudication
+caps: `per_project_cap` 19, `per_session_cap` 2, `content_sensitive_quarantine` 4.
+
+**The dominant reject is a real property of the owner, not a bug.** 85 of 204
+candidate turns are fully specified briefs — file, line, root cause, remedy,
+verification command inline — and a competent engineer needs no recalled context
+to act on them. A corpus of self-contained work orders cannot yield
+memory-dependent queries, however human-authored it is.
+
+### 9.2 Composition
+
+43 goldens · 32 distinct sessions · 9 projects (Syndai 25 at the cap, Memphant 9,
+rest ≤2) · 3,912 corpus events across 43 per-golden scopes · mean haystack 91
+prior units. Shapes: `task_resumption` 31, `correction_retention` 9,
+`state_churn` 3, **`file_symbol_grounding` 0**.
+
+### 9.3 Leakage — the headline result
+
+`scripts/track_r_leakage.py`, sha256 `1dd9435e…`, **unmodified** (verified in the
+lock as `leakage_script_modified: false`), n=43, seed 7.
+
+| measure | this bank | Track R original | Track R paraphrase |
+|---|---:|---:|---:|
+| question → **target**, mean / median | **0.3367** / 0.3158 | 0.3960 / 0.3880 | 0.135 |
+| question → non-target, **exhaustive** floor | **0.2246** / 0.2190 | 0.1008 / 0.0942 | 0.067 |
+| question → non-target, **sampled** floor (seed 7) | 0.2177 / 0.2000 | 0.0945 | — |
+| **concentration vs exhaustive floor** | **1.4991** | 3.93 | 2.05 |
+| concentration vs sampled floor | 1.5466 | 4.19 | — |
+| target p10 / p90 / max | 0.1524 / 0.4756 / **0.8750** | — / — / 0.6667 |
+
+By shape: `task_resumption` 0.3355/0.2176 (n=31), `correction_retention`
+0.3516/0.2372 (n=9), `state_churn` 0.3038/0.2594 (n=3).
+
+### 9.3b Amendment A3 — the gate is split into two fields, and the calibration band is external
+
+Received from the coordinator after the numbers above were computed, and adopted
+because it is correct and because it is backed by measurements this slice does
+not have:
+
+**The leakage metric conflates two properties, and only one is disqualifying.**
+
+- **Contamination** — the query was authored *from* the target, so the number is
+  fake. Settled by **provenance**, not by a statistic. Track R fails this: an LLM
+  read the target and wrote the question.
+- **Lexical tractability** — the query naturally shares tokens with its target.
+  The number is real; the bank simply measures the lexical regime and cannot
+  separate lexical from semantic retrieval quality. This is how Track R made
+  dense embeddings look worthless.
+
+**This bank passes provenance by construction.** Every question is byte-identical
+to a turn the owner typed before the agent did the work. So the concentration
+figure here **is not evidence of contamination and is not reported as such.** The
+lock therefore carries two fields that are never collapsed: `provenance`
+(`class: human_authored_pre_answer`, 43/43, `contamination_possible: false`,
+per-shape) and the full concentration distribution.
+
+**External calibration band** (measured by the sibling GitHub-lane run on
+human-authored coding queries): concentration **1.76–2.03**, absolute target
+coverage **0.175–0.287**. A *published human corpus*,
+`foundry-ai/swe-prbench`, measures **2.42** and **fails** the ≤1.50 bar. When a
+human corpus fails a gate, that is evidence about the gate. The ≤1.50 bar in §4.1
+— inherited from the Track R paraphrase prereg — sits **below the human floor**.
+
+The §4.1 bars are **not** rewritten. They are reported as they were preregistered,
+with their pass/fail as measured, plus this band as context. The lock records
+`prereg_bar_pass: false` alongside the provenance class, so nothing downstream can
+read a single boolean and lose the distinction.
+
+### 9.3c Position against the human band — and a construction defect found by looking
+
+| measure | this bank | human band | position |
+|---|---:|---|---|
+| concentration | **1.4991** | 1.76–2.03 | **below band** |
+| absolute target coverage | **0.3367** | 0.175–0.287 | **above band** |
+
+Below on the ratio, above on the absolute — which can only happen if the *floor*
+is unusually high. The coordinator's rule is that landing above 0.287 means
+looking for a construction defect before concluding anything. There is one, and
+it is measurable.
+
+**A shipped memory unit is `user turn + agent reply` (reply clipped to 900
+chars).** The agent's reply restates the user's vocabulary, so it adds shared
+tokens to *both* sides of the metric. Re-running the identical pinned script with
+each unit reduced to the user's turn alone (`diagnostics.unit_granularity_sensitivity`
+in the lock, reproducible, same seed):
+
+| | as shipped (turn + reply) | user turn only |
+|---|---:|---:|
+| target coverage, mean | 0.3367 | **0.1871** |
+| non-target exhaustive floor | 0.2246 | **0.1370** |
+| concentration | 1.4991 | **1.3657** |
+
+**The absolute figure moves 1.8× on a unit-granularity choice alone**, and the
+user-turn-only variant lands **inside** the human band (0.175–0.287). The bank is
+not lexically hotter than real human queries; the *unit definition* is wider.
+
+The shipped corpus is deliberately **left as is**. `user turn + agent reply` is
+what an episodic agent memory would actually store, and narrowing it to hit a
+number would be bar-fitting. The right conclusion is the general one:
+**absolute-coverage bars are not portable between banks with different unit
+definitions**, and only the ratio — measured on a fixed granularity — travels.
+
+### 9.4 Bar table as preregistered — 5 rows FAIL
+
+| bar | result |
+|---|---|
+| concentration ≤ 1.50 | **PASS — 1.4991, by 0.0009.** Not a comfortable pass and is not reported as one. |
+| mean question→target ≤ 0.25 | **FAIL — 0.3367** |
+| max question→target ≤ 0.60 | **FAIL — 0.8750** (2 goldens over) |
+| construct prediction ≤ 1.30 | **FAIL — 1.4991** |
+| 40–80 goldens | PASS — 43 |
+| ≥6 per shape, all four | **FAIL** — `state_churn` 3, `file_symbol_grounding` 0 |
+| ≥20 distinct sessions | PASS — 32 |
+| skeleton ratio ≥ 0.90 | **FAIL — 0.8605** (37 distinct / 43) |
+| max single skeleton ≤ 3 | PASS — 2 |
+| Track U non-duplication (< 0.60 Jaccard) | PASS — max 0.1913, mean 0.0773 |
+| `observable_correct_behavior` + `forbidden_behavior` on 100% | PASS |
+| question byte-identical to the source residual on 100% | PASS (asserted mechanically) |
+| 100% agent-adjudicated | PASS — 204/204 |
+| $0 paid spend | PASS |
+| warm rerun byte-identical | PASS — `--check` exit 0, sha256 reproduced |
+
+`prereg_bar_pass: false`. Under A3 this is **not** a contamination finding:
+`provenance.contamination_possible` is `false` and 43/43 goldens are
+`human_authored_pre_answer`. The failing rows are lexical-tractability and
+composition rows. What they disqualify is *this bank as a general-purpose
+retrieval instrument*, not the corpus and not the construct. No number here may
+be promoted, published, or used to move a default until §9.7 is addressed.
+
+### 9.5 What the failure means
+
+**Said plainly, as the brief requires: the human-authored query did NOT land at
+the non-target floor.** The construct predicted ≤1.30; it delivered 1.4991.
+
+The diagnosis is not "the human turns leaked" — they cannot have, and A3 makes
+that a provenance question rather than a statistical one. Four measurements say
+what actually happened:
+
+0. **Unit granularity accounts for most of the absolute excess** (§9.3c):
+   0.3367 → 0.1871 on the user-turn-only variant, moving the bank from *above*
+   the human band to *inside* it.
+
+1. **The floor moved, not just the target.** The non-target floor here is
+   **0.2246** against Track R's 0.1008. Track R's floor was low because its
+   questions carried *rare* identifiers copied from the target; nothing in a
+   conversational corpus is rare in that way.
+2. **The cross-project floor is 0.1986** — statistically indistinguishable from
+   the in-project floor of 0.2246 (diagnostic, outside the pinned metric). A
+   question drawn from this corpus covers ~20% of *any* unit the owner ever
+   wrote, in *any* project. That is a house dialect, not pointing.
+3. **The residual concentration is length-driven.** Split by question length:
+   shortest third 1.766 (median 86 chars), middle third 1.354, longest third
+   1.393. `coverage = |T(q) ∩ T(e)| / |T(q)|` has a small denominator for a short
+   anaphoric turn, so a 56-char follow-up whose eight tokens are common words
+   scores 0.875 against its referent — the single worst golden in the bank, and
+   an artifact of the metric, not evidence of copying.
+
+**So the honest conclusion is about the instrument, not the corpus.** The
+leakage metric measures *aboutness*. It cannot separate "this question was
+written by copying the target" from "this question is a genuine follow-up to the
+target" — which is exactly why A3 splits provenance out and refuses to let one
+statistic carry both. Track R's 3.93× was pathological and the metric caught it
+correctly. Roughly 1.4–2.0× appears to be what genuine topical aboutness costs on
+human coding queries: this bank measures 1.4991 (1.3657 at the narrower unit
+granularity), the sibling lane's human corpora 1.76–2.03, and a published human
+corpus 2.42.
+
+The absolute bars (≤0.25 mean, ≤0.60 max) were set from Track R's own
+distribution and are, at this bank's unit granularity, **unreachable by
+construction**: they ask target coverage to fall below this corpus's own 0.2246
+non-target floor. They are not relaxed here — they failed, and they are recorded
+as failed. What they demonstrate is that **a bar calibrated on one corpus's floor
+and one unit definition is not portable to another**, corroborated independently
+by `swe-prbench` failing the same gate at 2.42.
+
+**Recommendation to the program, stated as a recommendation and not as an
+action taken here:** the ≤1.50 concentration bar in
+`docs/build-log/2026-07-31-track-r-paraphrase-bar.md` §4.1 sits below the
+measured human floor and should be recalibrated against the human band by
+whoever owns that document. This slice does not amend another lane's prereg.
+
+### 9.6 Two findings that outlive the bank
+
+**A2 — the harness's human stamp is necessary but not sufficient.** An
+agent-to-agent `<cross-session-message>` satisfies every provenance condition in
+§3 and is a machine writing to a machine. 34 turns. Adjudication found it; the
+survey did not. Any future work that trusts `origin.kind == "human"` alone
+inherits this bug.
+
+**The regex secret scan is not sufficient on its own.** It caught 12 turns by
+family. Adjudicators additionally flagged, across 16 packets, material the
+regexes do not match: pasted browser cookies and clearance tokens, an account
+password written in prose, a serialized session record with a client IP, and
+**live API-key material appearing in plain prose in at least four distinct
+source sessions**, one of which reached three separate packets.
+
+> **Action for the owner, outside this lane:** live credential material is
+> present in plaintext in the Claude Code session transcripts under
+> `~/.claude/projects/`. Those keys should be rotated. No value was written into
+> any artifact, log, lock, or report by this slice, and the affected units are
+> quarantined out of the bank, the corpus, and every shipped haystack — but the
+> transcripts themselves still contain them.
+
+### 9.7 What would make a valid instrument
+
+Recorded now, before anyone is tempted to re-cut this bank to hit the bar:
+
+0. **The corpus itself is now strategically load-bearing.** The sibling
+   GitHub-lane run came back with an **empty** human stratum: all 15 "human"
+   review comments in the private repos are the owner replying to CodeRabbit, 11
+   of them `Addressed in <sha>` — the actor describing his own change. The
+   private repos cannot supply human-authored queries at any scale. **This
+   conversation corpus is the only in-house source of genuinely human-authored
+   coding queries there is.** That raises the cost of a wrong human-turn filter
+   and justifies the aggressive-reject posture in §3 and A2: 43 honest goldens
+   from a source that exists beats a larger bank from a source that does not.
+1. **Do not re-cut against the same metric.** The failing lexical rows are not
+   fixable by better selection; they are properties of conversational vocabulary
+   and of the unit granularity (§9.3c). The *composition* rows (per-shape,
+   skeleton ratio) are fixable and are the ones worth another pass.
+2. The discriminating comparison the metric *can* make is **question → target vs
+   question → the top-k non-targets a retrieval system actually returns** (the
+   Track R paraphrase construct's adversarial distractor set), not the mean over
+   the whole scope. That set is buildable here.
+3. The `file_symbol_grounding` shape yielded **0** and `state_churn` **3**. On
+   this owner's corpus, naming an artifact and supplying the diagnosis are the
+   same act. Those two shapes need a different source, not more mining.
+4. The size and per-shape bars should be set from a measured pilot yield, not
+   from a target bank size. 43 from 2,655 stamped turns is the real rate.
+
+## 10. Custody hashes
+
+Frozen source snapshot — `~/.memphant-private/convo-lane/sources/`, 412 files,
+1,448,986,878 bytes, read-only copy of the qualifying live sessions:
+
+| artifact | sha256 |
+|---|---|
+| `snapshot_sha256` (sorted path+hash list) | `a95351adb957865b3c787bb770edf2185ecbd37afaa4f23000f1deaf64fd7b9f` |
+| `sources.manifest.json` | `e56f9c1004d3197577dea3c1bc18e6d4d47d58cd01995a972a37a0f9a1c576a9` |
+
+Gitignored artifacts, mirrored to `~/.memphant-private/convo-lane/` (outside
+every worktree and every git repository):
+
+| file | sha256 |
+|---|---|
+| `convo_lane_golden.jsonl` (43 goldens, 79,189 B) | `bd08c93fa262bb548be82db0808807119463b0dda1c91ebc354fef028be14389` |
+| `convo_lane_corpus.jsonl` (43 scopes / 3,912 events, 4,594,245 B) | `d0bca83452acf42229de913714901d3dc2eff186cf7de68ca70e1f123eeefc51` |
+| `convo_lane_spotcheck.jsonl` (15) | `3d6375f96c5a7850eecf2e8a453a8b7caf51c7fd6f6f91a8ed772224ccbcebcd` |
+| `convo_lane_leakage.json` | `f815787cdb2c79f8881715580eb3f4aa82eee563c75b079bdac523b130a739cf` |
+| `adjudication_verdicts.jsonl` (204, the reply cache) | `89f7597c518b023ecc1228d01c2b0a0d4d3764c79fd015dba24f563ac55a1142` |
+
+Committed: `benchmarks/data/convo_lane_golden.lock.json`, sha256
+`6a9878d4bc3cd25da6abd5dff4dfb912f4d4f1cd22d37bb5fe2641c4e416c091` — counts and
+hashes only. All three committed artifacts (lock, this document, the extractor)
+were re-scanned by the §5 detector after writing: clean.
+
+The external-claim rule in §6 is unchanged and, given `ships: false`, moot: there
+is no number here eligible for publication in any form.
+
+## 11. Reproduce
+
+```
+cd /Users/sidsharma/Memphant-af-w6-convo          # branch af-w6-convo
+python3 scripts/convo_lane_extract.py --snapshot  # re-freeze (live tree drifts)
+python3 scripts/convo_lane_extract.py --extract   # 204 candidates + packets
+python3 scripts/convo_lane_extract.py --build     # bank + leakage + lock
+python3 scripts/convo_lane_extract.py --check     # exit 0, sha256 reproduced
+python3 -m pytest tests/test_convo_lane_extract.py -q
+```
+
+`--build` and `--check` need the mirrored verdict ledger; adjudication itself is
+cached by packet `content_sha256`, so a rerun re-adjudicates nothing and costs
+$0. `--snapshot` is the only stage that reads the live tree, and it only reads.
