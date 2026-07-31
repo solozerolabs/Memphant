@@ -145,3 +145,69 @@ reason on a broken tree. The self-join computes exactly the predicate of
 Lineage (git head, branch, dirty flag, sha256 of the served server and worker
 binaries) is stamped into every arm report, because lineage drift across ~19
 worktrees is this program's dominant failure mode.
+
+---
+
+## 5. A finding that landed before any score: the schema will not let you opt out
+
+Building the control surfaced something the score cannot, and it is worth
+stating separately because it is a *structural* fact rather than a measured one.
+
+The moment `supersedes_own_kind` stops closing generations, the second assertion
+on a subject key is **rejected at insert** by
+`memphant_memory_unit_subject_valid_excl`. Two live `preference` rows sharing a
+`fact_key` both carry `tstzrange(null, null, '[)')`, which overlaps itself, and
+the GiST exclusion constraint refuses the write. The control arm cannot run at
+all until that constraint is dropped.
+
+That is the same failure shape as the production-blocking defect
+`20260731_007` was written to fix — an invariant the schema asserted while the
+router had no way to keep it. Here it is the mirror image: an invariant the
+router keeps and the schema *depends on it* keeping.
+
+**What this proves.** The bitemporal machinery is load-bearing at the DDL level,
+not merely in application code. Supersession is not a feature layered on top of
+the store that can be switched off behind a flag; the store's own integrity
+constraints are written in terms of it. Any estimate of "what would it cost to
+remove the edifice" that counts only Rust lines is wrong by at least one
+breaking migration.
+
+**What this does NOT prove, and the distinction matters.** It shows that *this
+schema* requires supersession. It does not show that *the problem* requires it.
+The constraint exists to enforce at-most-one-open-generation-per-subject-key —
+an invariant that only means anything if you have generations. A design that
+never had the constraint would never need to close a generation either: an
+append-only assertion log with `(fact_key, observed_at)` indexed has no
+uniqueness invariant to violate, because "which one is current" is a *read-time*
+question there rather than a write-time one. So the honest framing is
+**removal has a migration cost, not that removal is impossible** — one breaking
+migration dropping the constraint, plus whatever else keys off it
+(`exclusion_predicate_matches_the_supersedes_own_kind_set` in
+`crates/memphant-store-postgres/tests/fact_extraction_subject_key_pg.rs` derives
+the Rust side from the SQL side and would need to go with it).
+
+The measurement below is what decides whether that cost is worth paying. This
+section only prices the exit.
+
+## 6. A base defect fixed in passing — other lanes are hitting this wall
+
+**`scripts/gate_runtime.py:drain_worker` rejects the current worker's output on
+`accuracy-first`.** `crates/memphant-worker/src/main.rs:124` prints
+
+```
+memphant-worker: drain completed=6 failed=0 retried=0 deferred=0
+```
+
+and the parser was `re.fullmatch(r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", …)`.
+Every harness on the drain path — not just this one — raises
+`worker drain completion output is malformed` before it reaches a single probe.
+Both arms of this measurement died on it on the first attempt.
+
+Fixed here: the richer fields are parsed, and the `failed` count is **asserted**
+rather than discarded. Printing failure counts and then throwing them away was
+the same defect one layer up — the worker went to the trouble of making "drained
+nothing" distinguishable from "failed everything", and the harness collapsed the
+distinction again.
+
+**Agents on sibling branches whose lane touches `drain_worker` are hitting this
+and should take the fix rather than rediscover it.** It is four lines.
