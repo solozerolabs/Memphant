@@ -170,17 +170,11 @@ retrieval algorithm from the one that was measured*, and inventing one to make
 tests green is exactly the failure mode the instrument register was written
 against.
 
-**What is genuinely unverified.** The docs plane. C2 was dropped, so there is no
-docs-lane arm, and the docs plane is precisely where chunk-only candidacy would
-matter most (~80% of prod `contextual_chunks` exceed 512 tokens per the
-rerank-granularity work). **I cannot tell you what this costs on docs, because
-nobody has measured it.** Recommended follow-up, in priority order:
-
-1. Run an `overlap` vs `bm25-code` arm on a docs/resource-chunk corpus with
-   chunks live. That is a $0 retrieval-only comparison.
-2. If it regresses, the fix is one function: extend `bm25_unit_scores` to index
-   `body + contextual_chunks` per document. That is a new arm, and it must be
-   measured, not assumed.
+**The docs plane was then measured — see §9.** The short version, recorded here
+so this section is not read alone: on the docs plane the chunk-only-candidacy
+population is **empty**, for a mechanical reason, and the caveat above is
+narrower than it first appears. It still stands exactly as written for
+**episode** chunks, which is where the five failing tests lived.
 
 ---
 

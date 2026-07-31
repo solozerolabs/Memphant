@@ -521,6 +521,10 @@ def test_provenance_report_aggregates_reranker_facts_and_fingerprints_config(gr)
     assert report["runtime_config"] == {
         "runtime": "memphant-server resource ingest + /v1/recall",
         "embed_model": "small",
+        # In the fingerprint on purpose: two docs-lane arms that differ ONLY in
+        # the lexical scorer must not share a runtime_config_fingerprint, or the
+        # artifacts cannot be told apart after the fact.
+        "lexical_scorer": "bm25-code",
         "breadcrumb": False,
         "resource_chunks": False,
         "cross_rerank": True,
