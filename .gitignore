@@ -71,6 +71,12 @@ benchmarks/data/convo_lane_corpus.jsonl
 benchmarks/data/convo_lane_spotcheck.jsonl
 benchmarks/data/convo_lane_leakage.json
 !benchmarks/data/convo_lane_golden.lock.json
+
+# C1 episodic slice (Syndai production, read-only extract). Bodies live only in
+# benchmarks/data/private/ (already ignored) and the ~/.memphant-private/c1
+# mirror; only the counts-and-hashes lock is committed. See
+# docs/build-log/2026-07-30-c1-replication-privacy-prereg.md
+!benchmarks/data/c1_prod_episodic.lock.json
 .fastembed_cache/
 # Reader-lane evidence packs embed raw LongMemEval session text (the raw
 # dataset stays out of the repo); the scored reader-*.json reports are committed.

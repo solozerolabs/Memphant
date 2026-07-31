@@ -1631,3 +1631,58 @@ measurement · `cc712a86` bank lock + floor result · `2c8c1049` bar mis-specifi
 Custody: bank, spot-check, caches, run outputs and authored brief mirrored to
 `~/.memphant-private/track-r-paraphrase/` with sha256s in
 `docs/build-log/2026-07-31-track-r-paraphrase-bar.md` §8.5.
+
+## W9 — C1 replication: bars re-proven, paired probe structurally impossible (2026-07-30)
+
+Full write-up: `docs/build-log/2026-07-30-c1-replication.md`.
+Privacy prereg: `docs/build-log/2026-07-30-c1-replication-privacy-prereg.md`.
+
+**Ownership condition (d) cannot be settled on C1.** The plan asks for "a paired
+win replicated on the C1 slice", but C1 has no goldens and cannot acquire any.
+Production holds **44 recall-visible episodes across 5 tenants**; recall is
+tenant-scoped, so four pools are 9/6/4/1 — smaller than `k`, making r@10
+identically 1.0 for both arms. Independently fatal: the leak-free anchoring rule
+(anchor on a genuine human turn) has **no edge to anchor to** —
+`episodic_memories.run_message_id` is 0/321 non-null, `run_messages.agent_run_id`
+is 0/191 non-null, and the mission-level join yields 0 rows. All 191 `user`
+rows also carry an identical provenance stamp, so canary/dogfood automation is
+indistinguishable from a human, and only 63 of the 191 bodies are distinct. Max
+discriminating bank = 24 items in one tenant; exact McNemar needs 6 discordant
+pairs sweeping one way. The probe was not run: running it would produce a number
+with the shape of evidence and none of the content.
+
+**Recommendation: amend condition (d) to name the convo lane** (which already
+implements the human-turn rule on a corpus with real provenance and real volume)
+and record C1 as correctness-only, permanently rather than pending.
+
+**Extraction.** Prereg committed before the data was touched. Read-only
+(`default_transaction_read_only=on`, `SELECT` only, `embedding`/`metadata`/
+`summary` refused), snapshot-pinned and hashed, bodies gitignored + mirrored to
+`~/.memphant-private/c1/`, counts-and-hashes lock committed. 321 rows / 5
+tenants / 44 recall-visible / 277 rolled-up; **0 secret-scan drops**; every count
+matches the prereg's pinned recon.
+
+**Bar 2 (hard gate): PASS.** State-filter EXACT, **0 leaks on all 5 tenants**,
+`correctly_excluded` 222/55/0/0/0, identical across two independent runs.
+Drain contract verified from the database on the bench credential
+(`compiled=322 == enqueued=322`, queue empty). **Bar 3: PASS**, unchanged.
+
+**Bar 1: the SLO regression is contention, not drift — resolved.** The synthetic
+corpus, unchanged since it banked p50 = 32.6 ms, reads **p50 = 213.2 ms** today
+on the same 12-CPU host at loadavg ~150. Prod reads 284.9 / 247.9 at loadavg
+134 / 192. A 6.5× inflation on an unchanged corpus rules out a real 2.5×–8×
+regression; it does not yield a clean absolute number. A quiet-window
+re-measurement is scripted and pending — the host never fell below load 180.
+The runner now records `loadavg`/`cpu_count` into the provenance and writes
+artifacts before asserting the bar.
+
+**Verification.** `cargo test --workspace` has one failure,
+`contextual_chunk_write::recall_chunk_renders_matched_window_plus_neighbour`,
+bisect-attributed to **`f67f2b2a`** (pre-existing; this branch touches no Rust).
+`pytest` has one environmental failure (`web/node_modules` absent, Playwright
+not installed). $0 spend; production read-only throughout.
+
+### Commits
+
+`f126286c` privacy prereg · `03aec3ce` extract mechanism + lock ·
+`bf23c3bd` Bars 1–3 + loadavg-recording runner + redaction test.

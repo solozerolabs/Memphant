@@ -255,24 +255,35 @@ def measure_recall_slo(
     samples: int,
 ) -> dict:
     """Measure client wall-clock p50/p95 over ``samples`` real POST /v1/recall
-    calls (Fast). Raises on an SLO breach. This is the HTTP-boundary hot path a
-    user actually waits on (axum + resolve_memory_context + pipeline)."""
+    calls (Fast). This is the HTTP-boundary hot path a user actually waits on
+    (axum + resolve_memory_context + pipeline).
+
+    Returns the measurement including ``passed`` and the host load average
+    observed around it; it does NOT raise. The caller asserts the bar after the
+    artifacts are written, because a latency measurement that produces no
+    artifact when it fails teaches nothing — and a wall-clock number taken on a
+    contended machine is uninterpretable without the load that produced it.
+    """
+    load_before = os.getloadavg()
     latencies_ms: list[float] = []
     for _ in range(samples):
         start = time.perf_counter()
         gr.recall_query(client, ctx, query, k, budget_tokens, "fast")
         latencies_ms.append((time.perf_counter() - start) * 1000.0)
+    load_after = os.getloadavg()
     latencies_ms.sort()
     p50 = statistics.median(latencies_ms)
     # inclusive p95 (matches gate_common._percentile).
     p95 = statistics.quantiles(latencies_ms, n=100, method="inclusive")[94]
-    result = {"p50_ms": p50, "p95_ms": p95, "samples": samples}
-    if p50 >= SLO_P50_MS or p95 >= SLO_P95_MS:
-        raise RuntimeError(
-            f"hot-path SLO BREACHED: p50={p50:.1f}ms (<{SLO_P50_MS}) "
-            f"p95={p95:.1f}ms (<{SLO_P95_MS})"
-        )
-    return result
+    return {
+        "p50_ms": p50,
+        "p95_ms": p95,
+        "samples": samples,
+        "passed": p50 < SLO_P50_MS and p95 < SLO_P95_MS,
+        "cpu_count": os.cpu_count(),
+        "loadavg_1m_before": round(load_before[0], 2),
+        "loadavg_1m_after": round(load_after[0], 2),
+    }
 
 
 # --- live run ----------------------------------------------------------------
@@ -309,6 +320,14 @@ def main() -> int:
     parser.add_argument(
         "--slo-samples", type=int, default=0,
         help="if >0, measure HTTP-boundary recall p50/p95 over N calls and assert the SLO",
+    )
+    parser.add_argument(
+        "--redact-tenant-ids", action="store_true",
+        help="write only the first 8 hex chars of each Syndai user_id into the "
+             "evidence and provenance files. Required whenever the corpus is a "
+             "real-prod extract, because those artifacts are COMMITTED and a "
+             "user_id is production identity "
+             "(docs/build-log/2026-07-30-c1-replication-privacy-prereg.md).",
     )
     parser.add_argument("--server-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-server"))
     parser.add_argument("--worker-bin", default=str(gc.MEMPHANT_ROOT / "target/release/memphant-worker"))
@@ -455,10 +474,17 @@ def main() -> int:
             )
             print(
                 f"SLO (HTTP boundary): p50={slo['p50_ms']:.1f}ms p95={slo['p95_ms']:.1f}ms "
-                f"(< {SLO_P50_MS}/{SLO_P95_MS}) over {slo['samples']} calls",
+                f"(< {SLO_P50_MS}/{SLO_P95_MS}) over {slo['samples']} calls "
+                f"-- {'PASS' if slo['passed'] else 'BREACH'} at loadavg "
+                f"{slo['loadavg_1m_before']}->{slo['loadavg_1m_after']} "
+                f"on {slo['cpu_count']} cpus",
                 file=sys.stderr,
             )
 
+        if args.redact_tenant_ids:
+            per_tenant = {uid[:8]: info for uid, info in per_tenant.items()}
+            if len(per_tenant) != len(user_ids):
+                raise RuntimeError("tenant-id prefix redaction collided; widen the prefix")
         evidence_rows = [{"user_id": uid, **info} for uid, info in per_tenant.items()]
         gc.write_jsonl(Path(args.out_evidence), evidence_rows)
         report = {
@@ -483,6 +509,14 @@ def main() -> int:
             f"evidence={args.out_evidence} provenance={args.out_provenance}",
             file=sys.stderr,
         )
+        # Assert the SLO only now, with the artifacts already on disk.
+        if slo and not slo["passed"]:
+            raise RuntimeError(
+                f"hot-path SLO BREACHED: p50={slo['p50_ms']:.1f}ms (<{SLO_P50_MS}) "
+                f"p95={slo['p95_ms']:.1f}ms (<{SLO_P95_MS}) at loadavg "
+                f"{slo['loadavg_1m_before']}->{slo['loadavg_1m_after']}; "
+                "provenance written"
+            )
     finally:
         server.stop()
     return 0

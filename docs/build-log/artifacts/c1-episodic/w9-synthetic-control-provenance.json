@@ -1,0 +1,43 @@
+{
+  "engine": "memphant",
+  "lane": "episodic",
+  "runtime": "memphant-server episode ingest + /v1/recall (fast, budget 1200)",
+  "database_url_db": "memphant_scratch_14511_1785473223",
+  "corpus_rows": 252,
+  "tenants": 2,
+  "compiled_jobs": 238,
+  "expected_jobs": 238,
+  "queue_drained_verified": true,
+  "k": 10,
+  "budget_tokens": 1200,
+  "conversations_equivalence": "passed",
+  "per_tenant": {
+    "60b6f34f-f85d-82d2-2f63-82c29cc3d1ea": {
+      "visible": 113,
+      "distinct_bodies": 113,
+      "distinct_reachable": 113,
+      "reachability_rate": 1.0,
+      "correctly_excluded": 13,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    },
+    "65bb70cb-c6c2-d868-e284-fef6b47731b9": {
+      "visible": 114,
+      "distinct_bodies": 114,
+      "distinct_reachable": 114,
+      "reachability_rate": 1.0,
+      "correctly_excluded": 12,
+      "state_filter_correct": true,
+      "equivalence": "passed"
+    }
+  },
+  "hot_path_slo": {
+    "p50_ms": 213.15185399907932,
+    "p95_ms": 640.9820610498173,
+    "samples": 200,
+    "passed": false,
+    "cpu_count": 12,
+    "loadavg_1m_before": 157.2,
+    "loadavg_1m_after": 137.78
+  }
+}
