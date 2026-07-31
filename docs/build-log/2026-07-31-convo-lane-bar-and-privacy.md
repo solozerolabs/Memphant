@@ -163,6 +163,44 @@ systematically selects the leakiest available target. Targets are now ranked by
 **shared concrete artifacts** (paths, dotted/snake/Camel identifiers) first,
 lexical overlap only as a tiebreak.
 
+### 3.8 Amendment A2 — the provenance rule had a false positive, and adjudication found it
+
+**This one matters more than A1, because it is a hole in §3 itself.**
+
+Wave-1 adjudication (155 packets) flagged four turns as "not a human turn at
+all". Inspection confirmed it: a message sent from one agent session to another
+is delivered into the receiving session as a `type: "user"` record stamped
+`origin.kind == "human"`, `promptSource: "sdk"`, `isSidechain: false`, no
+`toolUseResult`, not `isMeta`. It passes **every** condition of the §3 rule. The
+body is an XML block, `<cross-session-message from="local_…" name="…">`.
+
+So the harness's human stamp is *necessary but not sufficient*: it marks
+"submitted through the user channel", and an agent-to-agent message enters
+through that channel. This is a machine writing to a machine wearing the human
+stamp — exactly the defect the whole slice exists to escape — and it was caught
+only because the adjudicator was asked to judge, not to rubber-stamp.
+
+**Rule added (§3, condition 7):** a turn whose raw text contains
+`<cross-session-message` or `<agent-message` is rejected outright as
+`agent_to_agent_message`. It is *not* unwrapped and kept, because unlike a
+`<system-reminder>` prefix the machine message *is* the whole turn.
+
+Measured cost on the frozen snapshot: **34 turns**. That is 34 turns that would
+otherwise have been eligible to become model-authored queries in a bank whose
+entire claim is that its queries are not model-authored.
+
+Two smaller adjudication-layer findings are recorded rather than mechanised:
+
+- **The regex secret scan is not sufficient on its own.** It caught 12 turns by
+  family; the adjudicator additionally flagged pasted browser cookies, an
+  account password written in prose, and a serialized session record — none of
+  which match a key-shaped pattern. The adjudicator flag now **quarantines every
+  unit visible in the flagged packet**: it may not be a query, may not be a
+  target, and is removed from every shipped haystack.
+- **One project is excluded wholesale** under §5 `content_sensitive_excluded`:
+  17 of its 18 adjudicated candidates were flagged, and the Track U prereg
+  already excluded the same project's adult-content vocabulary. Cost: 325 turns.
+
 Condition 2 restricts the frame to sessions written since the harness began
 stamping origins (2026-06-26). That is accepted, and it is not only a cost: a
 33-day window over the owner's four active projects is *denser* in

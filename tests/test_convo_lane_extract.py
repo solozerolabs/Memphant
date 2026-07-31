@@ -56,6 +56,17 @@ class TestHumanRule:
     def test_skill_load_meta_is_not_human(self):
         assert not cle._is_human_record(_record(isMeta=True))
 
+    def test_agent_to_agent_message_wears_the_human_stamp(self):
+        """Amendment A2: the harness stamp is necessary, not sufficient. A
+        cross-session agent message passes every provenance condition, so the
+        rule needs a second, content-level rejection."""
+        text = '<cross-session-message from="local_abc" name="Docs">status</cross-session-message>'
+        assert cle._is_human_record(_record(message={"content": text}))
+        assert cle.AGENT_TO_AGENT_RE.search(text)
+
+    def test_ordinary_turn_is_not_flagged_as_agent_to_agent(self):
+        assert not cle.AGENT_TO_AGENT_RE.search("can you send a message to the other session?")
+
 
 class TestWrappers:
     def test_system_reminder_prefix_is_stripped_and_turn_survives(self):

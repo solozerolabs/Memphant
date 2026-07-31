@@ -80,7 +80,7 @@ MAX_QUESTION_CHARS = 2000  # §3.7 (amendment A1): a memory query, not a pasted 
 BOILERPLATE_JACCARD = 0.80  # §3.7 (A1): the same turn re-pasted across sessions
 TARGET_NEAR_DUP_JACCARD = 0.45  # §3.7 (A1): the target must not restate the question
 TARGET_MIN_JACCARD = 0.06  # a target has to be related to the query at all
-CANDIDATES_PER_SHAPE = 60
+CANDIDATES_PER_SHAPE = 130
 BANK_MIN, BANK_MAX = 40, 80  # §4.3
 BANK_INSUFFICIENT_BELOW = 24  # §4.3 honest-failure clause
 PER_SHAPE_MIN = 6
@@ -90,6 +90,13 @@ SPOTCHECK_N = 15
 TRACK_U_JACCARD_MAX = 0.60  # §4.4
 SKELETON_RATIO_MIN = 0.90  # §4.5
 SKELETON_SHARE_MAX = 3
+
+# §5 content exclusion, carried over from the Track U prereg, which excluded the
+# same project's adult-content tagging vocabulary. Measured here: 17 of 18
+# adjudicated candidates from this project were flagged content_sensitive. It is
+# excluded as a project rather than per-candidate so no derivative artifact --
+# bank, corpus, packet, or future public variant -- can carry the material.
+CONTENT_EXCLUDED_PROJECT_SUBSTRINGS = ("-Users-sidsharma-Yurivan",)
 
 SHAPES = (
     "task_resumption",
@@ -138,6 +145,14 @@ SECRET_RES = (
 )
 HIGH_ENTROPY_RE = re.compile(r"\b[0-9A-Za-z+/]{40,}={0,2}\b")
 
+# §3.8 amendment A2 -- a false positive the provenance rule does NOT catch, found
+# by adjudication, not by the survey. A message sent from one agent session to
+# another is delivered into the receiving session as a user record stamped
+# `origin.kind == "human"`, `promptSource: "sdk"`. It is a machine talking to a
+# machine wearing the human stamp, which is precisely the defect this bank
+# exists to avoid, so the whole turn is rejected rather than unwrapped.
+AGENT_TO_AGENT_RE = re.compile(r"<(?:cross-session-message|agent-message)\b", re.I)
+
 
 def _shannon(text: str) -> float:
     counts = Counter(text)
@@ -182,6 +197,24 @@ SUPERSEDE_RE = re.compile(
     r"\b(instead|switch to|change to|now use|actually|scrap|drop (?:that|the)|"
     r"replace|no longer|superseded?|we moved to|forget (?:that|the)|"
     r"changed my mind|new plan|revised?|update (?:that|the) decision)\b",
+    re.I,
+)
+# Wave-2 selection widening. Wave 1 exhausted the cue-driven pool at 155
+# candidates and adjudication accepted 24 (15.5%), with `question_self_contained`
+# the dominant reject: the owner writes long, fully specified briefs, and a brief
+# that carries its own file, line, root cause and fix needs no memory at all. The
+# class that DOES need memory is the short anaphoric turn -- "does that still
+# hold?", "why did it regress?" -- which carries a dangling reference and names no
+# new artifact. These cues are selection heuristics only; no §4 bar moves, and
+# every candidate still has to survive the same adjudication.
+ANAPHORA_RE = re.compile(
+    r"\b(?:that|this|it|those|these|the (?:fix|change|plan|issue|bug|test|approach|"
+    r"decision|number|result|run|one|other one|same))\b",
+    re.I,
+)
+FOLLOWUP_RE = re.compile(
+    r"^\s*(?:and\b|but\b|also\b|so\b|then\b|ok(?:ay)?\b|yes\b|no\b|why\b|what about\b|"
+    r"how about\b|does\b|did\b|is it\b|are we\b|can we\b|should we\b|still\b)",
     re.I,
 )
 PATH_RE = re.compile(r"[\w./-]*\.(?:py|pyx|pyi|rs|js|jsx|ts|tsx|toml|cfg|ini|sql|sh|md|yaml|yml|json)\b")
@@ -384,8 +417,17 @@ def derive_units(stats: Counter) -> list[dict]:
         rel = path.relative_to(SNAPSHOT_ROOT)
         project = rel.parts[0]
         session = rel.stem
+        excluded_project = any(
+            marker in project for marker in CONTENT_EXCLUDED_PROJECT_SUBSTRINGS
+        )
         for index, unit in enumerate(parse_session(path)):
             stats["human_turns_stamped"] += 1
+            if excluded_project:
+                stats["reject:content_sensitive_excluded"] += 1
+                continue
+            if AGENT_TO_AGENT_RE.search(unit["raw_text"]):
+                stats["reject:agent_to_agent_message"] += 1
+                continue
             residual = strip_wrappers(unit["raw_text"])
             if not residual:
                 stats["reject:harness_wrapper_only"] += 1
@@ -493,14 +535,30 @@ def select_candidates(units: list[dict]) -> list[dict]:
             continue
 
         cross_session = any(row["session"] != unit["session"] for row in prior)
+        recent = prior[-6:]
+        # An anaphoric turn that introduces no artifact of its own is the class
+        # that cannot be self-contained: its referent is necessarily in memory.
+        dangling = (
+            len(question) <= 600
+            and ANAPHORA_RE.search(question) is not None
+            and (FOLLOWUP_RE.search(question) is not None or not qartifacts)
+        )
         shapes: list[str] = []
-        if BACKREF_RE.search(question) and cross_session and unit["index"] <= 4:
+        if BACKREF_RE.search(question) and cross_session:
+            shapes.append("task_resumption")
+        elif dangling and cross_session and unit["index"] <= 2:
             shapes.append("task_resumption")
         if CORRECTION_RE.search(question) and unit["index"] >= 1:
             shapes.append("correction_retention")
+        elif dangling and any(CORRECTION_RE.search(row["question"]) for row in recent):
+            shapes.append("correction_retention")
         if SUPERSEDE_RE.search(question):
             shapes.append("state_churn")
+        elif dangling and any(SUPERSEDE_RE.search(row["question"]) for row in recent):
+            shapes.append("state_churn")
         if len(qartifacts & artifacts(best["text"])) >= 1 and len(qartifacts) >= 1:
+            shapes.append("file_symbol_grounding")
+        elif dangling and artifacts(best["text"]):
             shapes.append("file_symbol_grounding")
         for shape in shapes:
             candidates.append(
@@ -648,6 +706,26 @@ def build_bank(units: list[dict], candidates: list[dict], stats: Counter) -> tup
     verdicts = load_verdicts(packet_hashes(candidates, units))
     track_u = track_u_token_sets()
 
+    # Quarantine propagation. The regex scan (§5) is one layer; the adjudicator
+    # is the other, and it catches what regexes cannot -- pasted cookies, an
+    # account password in prose, adult non-engineering media. When a packet is
+    # flagged, EVERY unit visible in that packet is quarantined: it may not be a
+    # query, may not be a target, and is removed from every haystack. The flag
+    # names a packet, not a line, so the safe reading is the whole window.
+    by_candidate_all = {row["candidate_id"]: row for row in candidates}
+    quarantined: set[str] = set()
+    for candidate_id, verdict in verdicts.items():
+        if not (verdict.get("content_sensitive") or verdict.get("reason") == "content_sensitive"):
+            continue
+        candidate = by_candidate_all.get(candidate_id)
+        if candidate is None:
+            continue
+        quarantined.add(candidate["unit_id"])
+        quarantined.update(
+            row["unit_id"] for row in build_packet(candidate, by_id)["prior_context"]
+        )
+    stats["quarantined_units_content_sensitive"] = len(quarantined)
+
     accepted: list[dict] = []
     per_shape: Counter = Counter()
     per_session: Counter = Counter()
@@ -675,6 +753,11 @@ def build_bank(units: list[dict], candidates: list[dict], stats: Counter) -> tup
         if target_id not in candidate["haystack_unit_ids"]:
             stats["reject:target_outside_haystack"] += 1
             continue
+        if candidate["unit_id"] in quarantined or target_id in quarantined:
+            stats["reject:content_sensitive_quarantine"] += 1
+            continue
+        # the haystack this golden ships with never contains a quarantined unit
+        safe_ids = [uid for uid in candidate["haystack_unit_ids"] if uid not in quarantined]
         correct = (verdict.get("observable_correct_behavior") or "").strip()
         forbidden = (verdict.get("forbidden_behavior") or "").strip()
         if not correct or not forbidden:
@@ -707,7 +790,7 @@ def build_bank(units: list[dict], candidates: list[dict], stats: Counter) -> tup
             "provenance": [
                 {
                     "attempt_id": candidate["candidate_id"],
-                    "event_sequence": candidate["haystack_unit_ids"].index(target_id),
+                    "event_sequence": safe_ids.index(target_id),
                     "target_unit_id": target_id,
                     "query_unit_id": candidate["unit_id"],
                     "project": candidate["project"],
@@ -718,7 +801,7 @@ def build_bank(units: list[dict], candidates: list[dict], stats: Counter) -> tup
             "identification": {
                 "human_authored": True,
                 "authored_before_answer_existed": True,
-                "haystack_size": candidate["haystack_size"],
+                "haystack_size": len(safe_ids),
                 "adjudicator_note": (verdict.get("note") or "")[:400],
             },
             "skeleton": skeleton(candidate["question"]),
@@ -754,12 +837,13 @@ def build_bank(units: list[dict], candidates: list[dict], stats: Counter) -> tup
     corpus = []
     for row in accepted:
         candidate = by_candidate[row["question_id"]]
+        safe = [uid for uid in candidate["haystack_unit_ids"] if uid not in quarantined]
         corpus.append(
             {
                 "attempt_id": row["question_id"],
                 "events": [
                     {"sequence": index, "text": by_id[uid]["text"]}
-                    for index, uid in enumerate(candidate["haystack_unit_ids"])
+                    for index, uid in enumerate(safe)
                 ],
             }
         )
