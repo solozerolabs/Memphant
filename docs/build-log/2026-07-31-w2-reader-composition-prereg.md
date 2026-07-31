@@ -42,17 +42,49 @@ composition:
 Singles before the combination — a combined arm whose parts cannot be attributed
 is not promotable. If B and C are individually null, D does not run.
 
-## Corpus, and a dependency on W0.3
+## Corpus — and two corrections to this document (2026-08-01)
 
-Run on the **frozen 178-question development split** (`3264db1f…`, source
-revision `98d7416c`), *not* the sealed 259 confirmation set.
+Run on the **frozen 178-question development split**, not the sealed 259.
 
-**Blocking dependency:** W0.3 is re-pinning to `xiaowu0162/longmemeval-cleaned`,
-whose upstream deprecates the split we currently use for removing noisy history
-sessions that interfere with answer correctness. **Part of our 0.56 may be an
-artifact of a deprecated split.** W2.1 does not launch until W0.3 reports, and
-runs on whichever split W0.3 establishes as canonical — measuring composition on
-a corpus we are about to replace would waste the exposure and the money.
+**Correction 1: the deprecation premise was false, and I asserted it as fact.**
+This document blocked W2.1 on "LongMemEval's upstream deprecates the split we
+currently use". Both upstream pages were re-fetched: **there is no deprecation
+notice and no successor designation.** The only "deprecated" strings anywhere are
+our own local filename and one sentence in our own repo. That premise is
+withdrawn.
+
+It also would not have mattered. W0.3 measured both splits, retrieval-only, $0:
+**R@k does not move** — 0.6170 cleaned vs 0.6277 current at both k=5 and k=10,
+one discordant question of 94 scored, exact two-sided McNemar **p = 1.0**,
+bootstrap 95% CI [-0.0319, 0]. The cleaning is de-padding, not a content change:
+it drops 1,243 haystack sessions of which **1,230 are empty**, leaves all 23,854
+retained sessions byte-identical, and removes 0.07% of corpus turns. So our 0.56
+is **not** an artifact of the split.
+
+**Correction 2: the design below is underpowered, and this is the real blocker.**
+The `d_min = 7pt` endpoint claims "~80% power at ψ≈0.15". Recomputed under the
+exact test this packet names, and independently reproduced:
+
+| n | ψ | power at 7pt |
+|---:|---:|---:|
+| 221 | 0.15 (assumed) | **0.728** |
+| 221 | **0.229 (observed on this lane)** | **0.541** |
+| 260 | 0.229 | 0.618 |
+| 300 | 0.229 | 0.686 |
+| 390 | 0.229 | 0.804 |
+
+At the discordance rate this lane actually exhibits, the run is a **coin flip**.
+True MDE is 7.6–9.2pt. Reaching 7pt needs n≈390, and 390 is only reachable by
+consuming the sealed-259 confirmation set *inside* the screen — which would
+destroy the one held-out asset the lane has.
+
+**W2.1 does not launch on this design.** The $142.32 ceiling was sound; the
+statistics were not. Before any spend, one of: (a) re-target the endpoint to the
+effect the instrument can actually resolve (~9pt, which the Chain-of-Note
+literature's ~+10pt claim would still clear), (b) find additional non-sealed
+exposure to reach n≈390, or (c) accept a lower confidence level and preregister
+it explicitly. Silently running at 54% power is the failure this whole program
+exists to prevent.
 
 ## Endpoints and analysis, fixed now
 
