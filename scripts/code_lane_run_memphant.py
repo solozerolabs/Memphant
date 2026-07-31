@@ -653,8 +653,12 @@ def build_parser():
     parser.add_argument("--out-provenance", required=True)
     parser.add_argument(
         "--embed-model",
-        default="off",
-        help="MEMPHANT_EMBEDDINGS id passed into BOTH the server and worker subprocess env",
+        default="small",
+        help="MEMPHANT_EMBEDDINGS id passed into BOTH the server and worker "
+             "subprocess env. Default 'small' (local bge-small-en-v1.5) since "
+             "2026-08-01: dense is the shipped default, so the harness's "
+             "default arm measures the shipped product. Pass 'off' for the "
+             "dense-off control arm",
     )
     parser.add_argument("--label", default=None)
     parser.add_argument("--port", type=int, default=39413)
@@ -679,10 +683,11 @@ def build_parser():
         "--lexical-scorer", default=None,
         choices=("overlap", "bm25-control", "bm25-code"),
         help="MEMPHANT_LEXICAL_SCORER for the server arm (fusion's lexical "
-             "family: today's two token-overlap passes, or one Okapi BM25 pass "
-             "over the candidate pool). Omit for the default overlap arm; like "
-             "--pack-render-cap it is selected here and nowhere else, and "
-             "gate_runtime.Server closes the inherited variable",
+             "family: the two token-overlap passes, or one Okapi BM25 pass "
+             "over the candidate pool). Omit to inherit the server's own "
+             "shipped default, bm25-code since 2026-08-01; pass 'overlap' for "
+             "the control arm. Like --pack-render-cap it is selected here and "
+             "nowhere else, and gate_runtime.Server closes the inherited variable",
     )
     return parser
 
@@ -860,7 +865,9 @@ def main() -> int:
             "recall_mode": args.mode,
             "budget_tokens": args.budget_tokens,
             "pack_render_cap": args.pack_render_cap,
-            "lexical_scorer": args.lexical_scorer or "overlap",
+            # None means "inherit the server default", which is bm25-code
+            # since 2026-08-01. Record what actually ran, not the flag.
+            "lexical_scorer": args.lexical_scorer or "bm25-code",
             "ingested_attempts": len(ingest_rows),
             "ingested_events": evaluation_events + isolation_sentinel_events,
             "evaluation_events": evaluation_events,

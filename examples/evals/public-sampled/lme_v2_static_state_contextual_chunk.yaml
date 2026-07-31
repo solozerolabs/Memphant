@@ -1,6 +1,12 @@
 id: lme_v2_static_state_contextual_chunk
 second_author_confirmed: true
 query: "I am working with our ServiceNow portal. When we order a Dell XPS as the developer laptop, what is the extra dollar amount if we choose the largest SSD option?"
+# Rung-4 proves the contextual-chunk DELTA: candidacy must come from the
+# chunk-aware `Semantic` overlap pass, which is the only pass that reads
+# `contextual_chunks`. The shipped default scorer (`bm25-code` since
+# 2026-08-01) scores unit BODIES only and cannot express this delta at all.
+# See docs/build-log/2026-08-01-dense-default-on.md.
+lexical_scorer: overlap
 seed:
   units:
     - name: lme_v2_dell_xps_ssd_delta

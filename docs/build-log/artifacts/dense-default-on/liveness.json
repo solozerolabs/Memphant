@@ -1,0 +1,49 @@
+{
+  "default": {
+    "arm": "default",
+    "embedding_rows": 6,
+    "compiled_units": 6,
+    "worker_compile_ms": 6383,
+    "feature_flags": [
+      "entity_exact_enabled",
+      "fts_enabled",
+      "vector_enabled",
+      "temporal_enabled",
+      "contextual_chunks_enabled",
+      "context_packing_abstention_enabled",
+      "procedure_recall_enabled",
+      "decay_enabled",
+      "lexical_scorer:bm25-code"
+    ],
+    "bm25_code_flagged": true,
+    "vector_stage_detail": "completed",
+    "vector_candidates": 6,
+    "max_vector_score": 0.641464,
+    "top_item_body": "The staging rollout halts when the canary error budget is exhausted.",
+    "items": 6
+  },
+  "control": {
+    "arm": "control",
+    "embedding_rows": 0,
+    "compiled_units": 6,
+    "worker_compile_ms": 3114,
+    "feature_flags": [
+      "entity_exact_enabled",
+      "fts_enabled",
+      "vector_disabled",
+      "temporal_enabled",
+      "contextual_chunks_enabled",
+      "context_packing_abstention_enabled",
+      "procedure_recall_enabled",
+      "decay_enabled"
+    ],
+    "bm25_code_flagged": false,
+    "vector_stage_detail": "disabled",
+    "vector_candidates": 0,
+    "max_vector_score": 0.0,
+    "top_item_body": "Invoices are reconciled nightly against the ledger snapshot.",
+    "items": 5
+  },
+  "problems": [],
+  "ingest_cost_ratio_default_over_control": 2.05
+}

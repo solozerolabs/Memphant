@@ -952,7 +952,16 @@ async fn oversized_chunks_are_sub_split_so_a_tail_needle_survives_truncation() {
     stage_unit_with_chunks(&store, &context, "unit alpha", &[long_tail.as_str()]).await;
     stage_unit_with_chunks(&store, &context, "unit bravo", &["widget short chunk"]).await;
 
+    // Both bodies here are "unit alpha"/"unit bravo" — the query term `widget`
+    // lives ONLY in the contextual chunks, so candidacy comes from the
+    // chunk-aware `Semantic` overlap pass. The shipped default scorer
+    // (bm25-code since 2026-08-01) scores BODIES only and would produce an
+    // empty pool; that gap is pinned in `recall_trace_golden.rs`
+    // (`contextual_chunk_recall_finds_source_unit_and_traces_flag`). This test
+    // is about the rerank sub-split, so it selects the overlap arm explicitly
+    // rather than testing two things at once.
     let service = stub_service(store.clone())
+        .with_lexical_scorer(memphant_core::LexicalScorer::Overlap)
         .with_cross_rerank_granularity(CrossRerankGranularity::ContextualChunks)
         .with_cross_reranker(Arc::new(TruncatingBoostReranker {
             needle: "NEEDLE".to_string(),

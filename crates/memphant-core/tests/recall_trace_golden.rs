@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use memphant_core::{
-    CoreError, FixedClock, InMemoryStore, MemoryStore, SystemClock, recall, record_mark,
+    CoreError, DEFAULT_RECALL_POOL_DEPTH, FixedClock, InMemoryStore, LexicalScorer, MemoryStore,
+    PackLevers, SystemClock, recall, recall_with_pool, record_mark,
 };
 use memphant_types::{
     ActorId, ContextualChunk, MarkOutcome, MarkRequest, MemoryEdgeKind, MemoryKind, NewEpisode,
@@ -583,26 +584,67 @@ async fn contextual_chunk_recall_finds_source_unit_and_traces_flag() {
         .expect("unit seeded");
     store.commit(tx).await.expect("seed committed");
 
-    let response = recall(
+    let chunk_query = || RecallRequest {
+        context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
+        query: "What is the albatross codeword?".to_string(),
+        k: 1,
+        budget_tokens: 80,
+        mode: RecallMode::Fast,
+        include_beliefs: false,
+        edge_expansion_enabled: true,
+        context_packing_abstention_enabled: true,
+        procedure_recall_enabled: true,
+        decay_enabled: true,
+        engine_version: "engine-ws4-test".to_string(),
+        transaction_as_of: None,
+        valid_at: None,
+        aggregation_window: None,
+    };
+
+    // KNOWN GAP, pinned deliberately (see docs/build-log/2026-08-01-dense-default-on.md).
+    // Only the `Semantic` token-set-overlap pass reads `contextual_chunks`
+    // (`token_set_overlap_score` maxes body against `contextual_chunk_score`).
+    // Every BM25 variant replaces BOTH overlap passes and scores unit BODIES
+    // only, so a unit whose body does NOT match but whose chunk does is not a
+    // candidate at all under the shipped `bm25-code` default. The 2026-08-01
+    // flip made bm25-code the default; this assertion makes the consequence
+    // visible instead of silent. The code-lane arms that justified the flip ran
+    // WITH this gap and still won 89 vs 40 fused@10 against overlap, so it is
+    // priced in there — it has never been measured on the docs plane.
+    let bm25_default = recall_with_pool(
         &store,
-        RecallRequest {
-            context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
-            query: "What is the albatross codeword?".to_string(),
-            k: 1,
-            budget_tokens: 80,
-            mode: RecallMode::Fast,
-            include_beliefs: false,
-            edge_expansion_enabled: true,
-            context_packing_abstention_enabled: true,
-            procedure_recall_enabled: true,
-            decay_enabled: true,
-            engine_version: "engine-ws4-test".to_string(),
-            transaction_as_of: None,
-            valid_at: None,
-            aggregation_window: None,
-        },
+        chunk_query(),
         None,
         &CLOCK,
+        DEFAULT_RECALL_POOL_DEPTH,
+        PackLevers::default(),
+        LexicalScorer::default(),
+        false,
+        None,
+    )
+    .await
+    .expect("recall succeeds");
+    assert_eq!(
+        LexicalScorer::default(),
+        LexicalScorer::Bm25Code,
+        "this assertion is about the shipped default"
+    );
+    assert!(
+        bm25_default.items.is_empty(),
+        "BM25 scores bodies only — chunk-only candidacy is lost under the default scorer"
+    );
+
+    // The chunk channel itself is intact and is exercised under the overlap arm.
+    let response = recall_with_pool(
+        &store,
+        chunk_query(),
+        None,
+        &CLOCK,
+        DEFAULT_RECALL_POOL_DEPTH,
+        PackLevers::default(),
+        LexicalScorer::Overlap,
+        false,
+        None,
     )
     .await
     .expect("recall succeeds");
@@ -611,8 +653,11 @@ async fn contextual_chunk_recall_finds_source_unit_and_traces_flag() {
     assert_eq!(response.items[0].unit_id, unit_id);
     assert_eq!(response.items[0].inclusion_reason, "contextual_chunk");
 
+    // Two recalls above (the pinned bm25 default, then the overlap arm); the
+    // chunk assertions below are about the second.
     let traces = store.retrieval_traces(tenant_id);
-    assert_eq!(traces.len(), 1);
+    assert_eq!(traces.len(), 2);
+    let traces = &traces[1..];
     assert!(
         traces[0]
             .feature_flags

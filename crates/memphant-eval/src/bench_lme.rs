@@ -121,8 +121,9 @@ pub struct BenchLmeOptions {
     /// budget so a large chunk-matched body cannot hog the pack budget.
     pub pack_render_cap: Option<usize>,
     /// Which lexical scorer fusion uses (`--lexical-scorer`, default
-    /// `LexicalScorer::Overlap`) threaded via `with_lexical_scorer`. The BM25
-    /// variants replace both token-overlap passes with one Okapi BM25 pass.
+    /// `LexicalScorer::Bm25Code` since 2026-08-01) threaded via
+    /// `with_lexical_scorer`. The BM25 variants replace both token-overlap
+    /// passes with one Okapi BM25 pass; `overlap` is the control arm.
     pub lexical_scorer: LexicalScorer,
     /// Budgeted submodular evidence ordering (`--pack-submodular-ordering`,
     /// default off).

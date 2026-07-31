@@ -499,6 +499,14 @@ struct GoldenCase {
     mode: Option<RecallMode>,
     #[serde(default)]
     include_beliefs: bool,
+    /// Per-case override of the fusion's lexical family. Absent means the
+    /// SHIPPED default (`LexicalScorer::default()` — `bm25-code` since
+    /// 2026-08-01), so the oracle suite measures the product as configured.
+    /// Only a case whose candidacy depends on the chunk-aware overlap pass
+    /// needs to name `overlap` here; see
+    /// `docs/build-log/2026-08-01-dense-default-on.md`.
+    #[serde(default)]
+    lexical_scorer: Option<LexicalScorer>,
     seed: GoldenSeed,
     expect: GoldenExpect,
 }
@@ -2029,7 +2037,7 @@ async fn run_golden_case_inner(
         &EVAL_CLOCK,
         DEFAULT_RECALL_POOL_DEPTH,
         PackLevers::default(),
-        LexicalScorer::default(),
+        case.lexical_scorer.unwrap_or_default(),
         false,
         None,
         CrossRerankCandidateSelection::FusedHead,
@@ -2272,6 +2280,7 @@ async fn run_fixture_security_lane(lane: &SecurityLane) -> EvalResult<String> {
         query: lane.query.clone(),
         k: None,
         budget_tokens: None,
+        lexical_scorer: None,
         mode: None,
         include_beliefs: false,
         seed: lane.seed.clone(),
@@ -2412,6 +2421,7 @@ async fn run_deletion_lane(lane: &SecurityLane) -> EvalResult<String> {
         query: lane.query.clone(),
         k: None,
         budget_tokens: None,
+        lexical_scorer: None,
         mode: None,
         include_beliefs: false,
         seed: GoldenSeed::default(),
