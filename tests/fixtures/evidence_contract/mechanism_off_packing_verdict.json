@@ -1,0 +1,33 @@
+{
+  "__fixture__": "Failure 5. The 276/276 'measured-permanent' packing verdict was taken on the cross-rerank arm, where rank_based_ordering_active disables the very contest under test. The suppression could not have fired, so the unanimous result was produced by the mechanism being off -- not by the mechanism.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "the coarse admit_or_drop gate is measured-permanent: 276/276 correct suppressions",
+    "probe_kind": "suppression",
+    "mechanism_enabled": false,
+    "mechanism_evidence": "rank_based_ordering_active=true on the cross-rerank arm, which disables the admit_or_drop contest",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 276,
+      "b": 0,
+      "c": 0,
+      "n_d": 0,
+      "source": "docs/build-log/artifacts/next-evidence/forgeteval/adversarial-385-cross-rerank-rank-one.json"
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    }
+  }
+}

@@ -71,6 +71,12 @@ benchmarks/data/convo_lane_corpus.jsonl
 benchmarks/data/convo_lane_spotcheck.jsonl
 benchmarks/data/convo_lane_leakage.json
 !benchmarks/data/convo_lane_golden.lock.json
+
+# C1 episodic slice (Syndai production, read-only extract). Bodies live only in
+# benchmarks/data/private/ (already ignored) and the ~/.memphant-private/c1
+# mirror; only the counts-and-hashes lock is committed. See
+# docs/build-log/2026-07-30-c1-replication-privacy-prereg.md
+!benchmarks/data/c1_prod_episodic.lock.json
 .fastembed_cache/
 # Reader-lane evidence packs embed raw LongMemEval session text (the raw
 # dataset stays out of the repo); the scored reader-*.json reports are committed.
@@ -187,3 +193,16 @@ docs/build-log/artifacts/rung7-packing-reader-gate/phase1w/*.log
 benchmarks/data/github_lane_golden.jsonl
 benchmarks/data/github_lane_corpus.jsonl
 !benchmarks/data/github_lane_golden.lock.json
+
+# W0.1 Track R PARAPHRASE variant. Same rule as the original bank: the reply
+# cache, request batches, run outputs and mined golden bodies carry third-party
+# event text; only the lock and the derived leakage report are committed.
+docs/build-log/artifacts/track-r-paraphrase/agent-cache/
+docs/build-log/artifacts/track-r-paraphrase/requests/
+docs/build-log/artifacts/track-r-paraphrase/run/
+benchmarks/data/track_r_paraphrase_golden.jsonl
+benchmarks/data/track_r_paraphrase_spotcheck.jsonl
+!benchmarks/data/track_r_paraphrase_golden.lock.json
+docs/build-log/artifacts/track-r-floor/agent-cache/
+docs/build-log/artifacts/track-r-floor/requests/
+docs/build-log/artifacts/track-r-paraphrase/leakage-paraphrase.json

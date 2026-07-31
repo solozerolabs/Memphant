@@ -280,11 +280,24 @@ user: The pomegranate molasses comes from a shop downtown.\n\
 assistant: A downtown shop for pomegranate molasses is handy.\n";
 
 /// End-to-end: retain → reflect (chunks on) → recall. The packed context text of
-/// the chunk-matched item is rendered from its chunks — every window it shows
-/// carries its `[turns a-b]` provenance header, and it is never the raw session
-/// body. A pack with room completes the item to full chunk coverage; a
-/// budget-bound one keeps the partial render, and the far unmatched window stays
-/// dropped.
+/// the chunk-matched item is rendered from its chunks — the matched window's
+/// header + body and a neighbour window — NOT the full session body (the far,
+/// unmatched window is dropped).
+///
+/// The dropped far window is a BUDGET-BOUND outcome, not a redaction contract:
+/// since f67f2b2a the post-fill completion pass trades a partial chunk render up
+/// to a superset whenever the pack's leftover budget covers the difference. So
+/// the partial render is only observable when the budget cannot afford the
+/// completion, and this test pins an explicit `budget_tokens` to sit in that band
+/// (the whole body costs 248; 240 admits the item and gathers the neighbour with
+/// no room left to complete).
+///
+/// What the completion may NEVER do is drop the provenance with the partiality.
+/// The chunk render carries a `[turns a-b]` header on every block and the raw
+/// whole body carries none, so the completion goes to FULL CHUNK COVERAGE — same
+/// content, headers intact. The tail of the test recalls again on the default
+/// roomy budget and asserts exactly that: every window present, every window
+/// headed, and still not the raw session body.
 #[tokio::test]
 async fn recall_chunk_renders_matched_window_plus_neighbour() {
     let store = InMemoryStore::default();
@@ -317,10 +330,12 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
     let episode_id = retained.episode_id.expect("episode retained");
     service.run_worker_tick(usize::MAX).await.expect("reflect");
 
+    let mut tight = recall_request(tenant, scope, actor, "quantum harmonica");
+    tight.budget_tokens = Some(240);
     let response = service
         .recall(
             memphant_store_testkit::resolved_context(tenant, scope, actor),
-            recall_request(tenant, scope, actor, "quantum harmonica"),
+            tight,
         )
         .await
         .expect("recall");
@@ -362,16 +377,15 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
         "packed text is chunk-rendered, not the raw session body"
     );
 
-    // …and when the pack CANNOT afford the completion, the far unmatched window
-    // stays dropped: the budget-bound render is the partial one, still headed.
-    // (204 tokens is the two-window admission render; 210 leaves too little for
-    // either the third block or the header-free whole body.)
-    let mut tight = recall_request(tenant, scope, actor, "quantum harmonica");
-    tight.budget_tokens = Some(210);
+    // Roomy budget: the completion pass supersedes the partial render and the
+    // item emits all of itself — far window included, and every window still
+    // carrying its own provenance header. Dropping content the budget can afford
+    // was the render loss f67f2b2a fixed; dropping the headers with it was the
+    // regression that fix introduced.
     let response = service
         .recall(
             memphant_store_testkit::resolved_context(tenant, scope, actor),
-            tight,
+            recall_request(tenant, scope, actor, "quantum harmonica"),
         )
         .await
         .expect("recall");
@@ -381,14 +395,20 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
         .find(|item| item.citation_episode_id == Some(episode_id))
         .expect("episode-derived item recalled");
     assert!(
-        item.body.contains("[turns 5-8]") && item.body.contains("[turns 1-4]"),
-        "budget-bound render keeps its window headers: {}",
+        item.body.contains("pomegranate"),
+        "leftover budget covers the completion, so the far window returns: {}",
         item.body
     );
-    assert!(
-        !item.body.contains("pomegranate") && !item.body.contains("[turns 9-12]"),
-        "far unmatched window stays dropped when the pack cannot afford it: {}",
-        item.body
+    for window in ["[turns 1-4]", "[turns 5-8]", "[turns 9-12]"] {
+        assert!(
+            item.body.contains(window),
+            "no window may appear without its header — {window} missing from: {}",
+            item.body
+        );
+    }
+    assert_ne!(
+        item.body, SESSION_BODY,
+        "the completion is chunk-rendered, not the bare session body"
     );
 }
 

@@ -274,3 +274,29 @@ def test_expected_compiled_jobs_matches_the_banked_c1_provenance():
     real_prod = {"retain": 35, "forget": 235, "skip": 0}
     assert sum(real_prod.values()) == 270
     assert runner.expected_compiled_jobs(real_prod, True) == 271
+
+
+def test_committed_c1_prod_artifacts_carry_no_full_identifier():
+    """The C1 real-prod artifacts are COMMITTED and derive from production, so a
+    Syndai `user_id` must never appear in one — only the 8-hex prefix that
+    `--redact-tenant-ids` writes
+    (docs/build-log/2026-07-30-c1-replication-privacy-prereg.md, "What is
+    committed and what is not"). A UUID anywhere in these files means either the
+    flag was dropped from the run or an identifier leaked through another field.
+
+    The scratch-database name is exempt: it is an ephemeral local database that
+    is dropped when the run ends, and it carries no production identity.
+    """
+    import re
+
+    uuid_re = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                         r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+    artifacts = Path(__file__).resolve().parents[1] / "docs/build-log/artifacts/c1-episodic"
+    committed = sorted(artifacts.glob("w9-real-prod-*")) + [
+        artifacts / "real-prod-backfill-provenance.json"
+    ]
+    assert committed, "no C1 real-prod artifacts found to check"
+    for path in committed:
+        if not path.exists():
+            continue
+        assert not uuid_re.search(path.read_text()), f"full identifier in {path.name}"

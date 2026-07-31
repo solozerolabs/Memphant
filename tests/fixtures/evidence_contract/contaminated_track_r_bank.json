@@ -1,0 +1,42 @@
+{
+  "__fixture__": "Failure 3, second half. The Track R fused-vs-scoped-BM25 contrast (n=180, b=15, c=3) was measured on a bank whose questions were authored FROM their target events -- target coverage 0.3960 against a 0.0945 floor, 4.19x. Provenance settles contamination, and contamination makes the effect unfalsifiable as a memory gain. Cells from scripts/instrument_power.py, 'Track R fused vs scoped-BM25 @10'.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "MemPhant beats a scoped-BM25 lexical control at @10",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 180,
+      "b": 15,
+      "c": 3,
+      "n_d": 18,
+      "psi_observed": 0.1,
+      "mde_at_80": 0.06726731835145612,
+      "computed_by": "scripts/instrument_power.py",
+      "source": "docs/build-log/artifacts/track-r/track_r_phase1e_combined_fixes.json"
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "leakage": {
+      "unit_definition": "one mined coding-attempt event body as the memory unit",
+      "absolute_target_coverage": 0.396,
+      "floor": 0.0945,
+      "floor_kind": "exhaustive",
+      "concentration": 4.19,
+      "provenance_class": "authored_from_target",
+      "negative_selection": "same-attempt exhaustive non-target events"
+    }
+  }
+}

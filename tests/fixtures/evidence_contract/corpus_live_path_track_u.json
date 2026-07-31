@@ -1,0 +1,29 @@
+{
+  "__fixture__": "Failure 7. Track U broke mid-run when a concurrent session wrote a feedback_* file into the 'pinned' source directory and the corpus went 90 -> 91. The lock named a live path, which is not an identity.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "the Track U preference bank was mined over a pinned 90-file feedback corpus",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 51,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "~/.claude/projects/-Users-sidsharma-Memphant/feedback",
+      "n_items": 90
+    }
+  }
+}

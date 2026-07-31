@@ -42,6 +42,35 @@ MemPhant is the public Apache-2.0 memory substrate repo. Treat `docs/superpowers
 - Paid-run response bodies and resumable state under `docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot*/` are gitignored by design and live only on disk. Only the compact authorization/census/canary-gate proofs are committed. Each pilot directory carries a local (also gitignored) `SHA256SUMS`; verify a copy with `shasum -a 256 -c SHA256SUMS` from inside that directory, and regenerate it after any authorized resume writes new bodies.
 - `benchmarks/` is a namespace package and the repo has no `pyproject.toml`, so scripts importing it must be invoked with the repo root on the path: `PYTHONPATH=. python3 scripts/<script>.py ...`. `scripts/run_lme_v2_state_aware.py` is pinned by sha256 in the v5 campaign manifest — do not "fix" its imports; that would invalidate a live authorization chain.
 
+## Evidence Contract (enforced — do not re-derive from prose)
+
+Nine measurement failures were committed in one week; every one of them was already
+written down as a rule somewhere. The rules now live in code, so read the code, not a
+paragraph:
+
+- **Schema** — `benchmarks/manifests/evidence_contract.schema.json`. The required fields
+  of the `evidence_contract` block every promotion-capable result artifact carries, each
+  annotated with the failure it exists to prevent.
+- **Checker** — `python3 scripts/check_evidence_contract.py` (fast, DB-free, no model
+  call; runs in CI). `--file X` validates one artifact; `--report` rewrites the retrofit
+  ledger.
+- **Registry** — `benchmarks/manifests/evidence_contract_registry.json`. `contracted`
+  artifacts must validate; `pending` is retrofit debt. **A new decisional artifact in
+  neither list fails CI** — that ratchet is the enforcement.
+- **Floors** — `benchmarks/manifests/leakage_floor_reference.json`. A preregistered
+  leakage bar must cite a floor id here, may not sit below it, and may not be a bar a
+  recorded human corpus fails.
+- **Power** — `python3 scripts/instrument_power.py --check`. MDEs are recomputed from the
+  artifact's own cells; an asserted power note is not a value.
+- **Retrofit ledger** — `docs/build-log/artifacts/evidence-contract-retrofit.json`.
+
+To satisfy the gate: add an `evidence_contract` block to your result artifact, move its
+path from `pending` to `contracted`, rerun `--report`, and run
+`python3 scripts/check_evidence_contract.py`. Two rules the checker cannot infer for you:
+**never backfill a field you cannot verify** — write the literal string `"unverified"`,
+which forces `decisional: false` — and **attribute by bisect, never base-relative**; the
+base already contained the regression twice.
+
 ## Verification
 
 Run the narrowest meaningful checks while iterating, then the full gate before claiming a workstream exit:
@@ -49,9 +78,11 @@ Run the narrowest meaningful checks while iterating, then the full gate before c
 ```sh
 python3 -m pytest tests/ -q
 python3 scripts/check_spec_drift.py
+python3 scripts/instrument_power.py --check
+python3 scripts/check_evidence_contract.py
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
+cargo test --workspace --all-targets --all-features  # --workspace is the floor; never `-p X --lib`
 cargo test --doc
 # Live-Postgres contract + worker-binary smoke tests: #[ignore]d by default.
 # with_scratch_db.sh mints an ephemeral migrated database, points

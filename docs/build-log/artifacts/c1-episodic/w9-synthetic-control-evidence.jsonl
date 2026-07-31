@@ -1,0 +1,2 @@
+{"user_id": "60b6f34f-f85d-82d2-2f63-82c29cc3d1ea", "visible": 113, "distinct_bodies": 113, "distinct_reachable": 113, "reachability_rate": 1.0, "correctly_excluded": 13, "state_filter_correct": true, "equivalence": "passed"}
+{"user_id": "65bb70cb-c6c2-d868-e284-fef6b47731b9", "visible": 114, "distinct_bodies": 114, "distinct_reachable": 114, "reachability_rate": 1.0, "correctly_excluded": 12, "state_filter_correct": true, "equivalence": "passed"}

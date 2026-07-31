@@ -11,9 +11,11 @@ Run these before tagging a release candidate:
 ```bash
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
+cargo test --workspace --all-targets --all-features
 cargo test --doc
 python -m pytest tests -q
+python3 scripts/instrument_power.py --check
+python3 scripts/check_evidence_contract.py
 cargo run -p memphant-eval -- verify-golden examples/evals/golden.yaml
 cargo run -p memphant-eval -- run benchmarks/nightly-sampled.yaml --archive-traces --archive-dir docs/build-log/artifacts
 cargo run -p memphant-eval -- security examples/evals/security-smoke.yaml

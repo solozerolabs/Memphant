@@ -49,7 +49,8 @@ def test_release_process_and_ci_run_public_launch_gates() -> None:
     required_commands = [
         "cargo fmt --check",
         "cargo clippy --all-targets --all-features -- -D warnings",
-        "cargo test --all-targets --all-features",
+        # --workspace is the floor: `-p X --lib` excludes every tests/ file.
+        "cargo test --workspace --all-targets --all-features",
         "cargo test --doc",
         "python -m pytest tests -q",
         "cargo run -p memphant-eval -- verify-golden examples/evals/golden.yaml",

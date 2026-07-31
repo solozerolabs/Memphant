@@ -1,0 +1,427 @@
+{
+  "answerable_unique": 27,
+  "answerable_unique_floor": {
+    "concentration": 1.79,
+    "floor_mean": 0.0732,
+    "n": 27,
+    "target_mean": 0.131,
+    "target_median": 0.125
+  },
+  "by_shape_answerable_unique": {
+    "file-symbol-grounding": {
+      "concentration": 2.1717,
+      "floor_mean": 0.0726,
+      "n": 10,
+      "target_mean": 0.1577,
+      "target_median": 0.1471
+    },
+    "state-churn": {
+      "concentration": 0.9134,
+      "floor_mean": 0.0674,
+      "n": 7,
+      "target_mean": 0.0615,
+      "target_median": 0.05
+    },
+    "task-resumption": {
+      "concentration": 1.965,
+      "floor_mean": 0.0778,
+      "n": 10,
+      "target_mean": 0.1529,
+      "target_median": 0.1339
+    }
+  },
+  "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+  "identifier_clean": 36,
+  "measured": 36,
+  "method": "seeded shape-stratified sample from the paraphrase bank's own candidate stream; the agent is asked for maximum abstraction subject to remaining answerable and unique; the SAME uniqueness adjudication and the SAME BM25-nearest distractor set as the bank",
+  "paid_api_spend_usd": 0,
+  "per_question": [
+    {
+      "attempt_id": "chatcmpl-9a24b1ca056a93028fbadc66cf2c71c0",
+      "floor_coverage": 0.047,
+      "leaked": [],
+      "sequence": 9,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.05,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-28754ef083456633402bd825d1142435",
+      "floor_coverage": 0.0671,
+      "leaked": [],
+      "sequence": 8,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.0,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-cf8ede425316a104598edcf99eccbff4",
+      "floor_coverage": 0.064,
+      "leaked": [],
+      "sequence": 111,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.1818,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-70e2cf13b5ad8a10f885354770a533d8",
+      "floor_coverage": 0.0747,
+      "leaked": [],
+      "sequence": 89,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.05,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-4847035fa15d6bda0fea27fa94890601",
+      "floor_coverage": 0.0668,
+      "leaked": [],
+      "sequence": 87,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.0526,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-10570f82e664c42ead236a3dd52c8736",
+      "floor_coverage": 0.0616,
+      "leaked": [],
+      "sequence": 72,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.2105,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-33b3017f5bb20fe6ec8794553e72f619",
+      "floor_coverage": 0.0824,
+      "leaked": [],
+      "sequence": 101,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.0,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-f3d390a76ee84833774d377c6a835592",
+      "floor_coverage": 0.0582,
+      "leaked": [],
+      "sequence": 47,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.1053,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-5687f150dda2671528e0504b984f912a",
+      "floor_coverage": 0.0757,
+      "leaked": [],
+      "sequence": 79,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.375,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-684c8f27b270abde0b52209038e3c4aa",
+      "floor_coverage": 0.0559,
+      "leaked": [],
+      "sequence": 75,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.2,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-629502c75809ef1c76a536179b4d68fa",
+      "floor_coverage": 0.071,
+      "leaked": [],
+      "sequence": 95,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.1667,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-a0bbf9241644b0ca1dab11760608efc1",
+      "floor_coverage": 0.0711,
+      "leaked": [],
+      "sequence": 35,
+      "shape": "state-churn",
+      "status": "measured",
+      "target_coverage": 0.0588,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-854bad2eb7bae7916ad01506f8ce0767",
+      "floor_coverage": 0.0755,
+      "leaked": [],
+      "sequence": 59,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.25,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-57424552868715cf410e80567ec56508",
+      "floor_coverage": 0.0719,
+      "leaked": [],
+      "sequence": 81,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.125,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-c1499492aec222ab357d32007330f392",
+      "floor_coverage": 0.0841,
+      "leaked": [],
+      "sequence": 33,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.2632,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-4951718e6d82ab6cd045302e05bd9001",
+      "floor_coverage": 0.0676,
+      "leaked": [],
+      "sequence": 21,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.0625,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-805588dbd2e52511db6a66c9746d34bb",
+      "floor_coverage": 0.0581,
+      "leaked": [],
+      "sequence": 163,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.1,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-45730ecafef27bbc7858050414630f0f",
+      "floor_coverage": 0.0721,
+      "leaked": [],
+      "sequence": 75,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.1176,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-3d3d80fe348f5fc7567bb7093be25421",
+      "floor_coverage": 0.0681,
+      "leaked": [],
+      "sequence": 19,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.1579,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-288349df38b0a9bb3644f0e6264f6a88",
+      "floor_coverage": 0.0984,
+      "leaked": [],
+      "sequence": 29,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.1765,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-a564f1d82ef56aee43cf7980b0356613",
+      "floor_coverage": 0.0503,
+      "leaked": [],
+      "sequence": 57,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.1364,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-efc869b063c00a8f4973286a806d1031",
+      "floor_coverage": 0.072,
+      "leaked": [],
+      "sequence": 13,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.2381,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-824393214a13297330210ce326cca967",
+      "floor_coverage": 0.0716,
+      "leaked": [],
+      "sequence": 111,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.1875,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-43dabf3e97eced268ffd41728e0d9e8e",
+      "floor_coverage": 0.0922,
+      "leaked": [],
+      "sequence": 23,
+      "shape": "file-symbol-grounding",
+      "status": "measured",
+      "target_coverage": 0.2632,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-65e8afcaff69e24aea2a2e76e24a5f4d",
+      "floor_coverage": 0.0839,
+      "leaked": [],
+      "sequence": 53,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.0625,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-824393214a13297330210ce326cca967",
+      "floor_coverage": 0.1169,
+      "leaked": [],
+      "sequence": 95,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.25,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-931200b7efcd6896b89505bd2dca81f1",
+      "floor_coverage": 0.0976,
+      "leaked": [],
+      "sequence": 77,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.1,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-0207ed054455a3121474a9ec8aeef756",
+      "floor_coverage": 0.0628,
+      "leaked": [],
+      "sequence": 139,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.125,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-a511a30214812e2523cd724c1cffab69",
+      "floor_coverage": 0.0621,
+      "leaked": [],
+      "sequence": 101,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.0,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-f0a7432212dd16e8dfeb42f7976ecd0b",
+      "floor_coverage": 0.0523,
+      "leaked": [],
+      "sequence": 124,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.3043,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-8a6466f7ba1bd26c10558900f939d963",
+      "floor_coverage": 0.0586,
+      "leaked": [],
+      "sequence": 87,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.1429,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-8b9122718113b9f026ac777f23fa1576",
+      "floor_coverage": 0.0831,
+      "leaked": [],
+      "sequence": 83,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.0714,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-27a59f5b6ff788022f18c0c7f29638a1",
+      "floor_coverage": 0.0632,
+      "leaked": [],
+      "sequence": 153,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.1154,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-e1f7138672b6521d8676aafea57b9f27",
+      "floor_coverage": 0.075,
+      "leaked": [],
+      "sequence": 158,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.1579,
+      "unique": true
+    },
+    {
+      "attempt_id": "chatcmpl-8098407a665228d2d4d016ab716e8ef2",
+      "floor_coverage": 0.079,
+      "leaked": [],
+      "sequence": 157,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.2353,
+      "unique": false
+    },
+    {
+      "attempt_id": "chatcmpl-090c62ae5116fc6dcb09d59c3057f8cf",
+      "floor_coverage": 0.0848,
+      "leaked": [],
+      "sequence": 139,
+      "shape": "task-resumption",
+      "status": "measured",
+      "target_coverage": 0.2,
+      "unique": true
+    }
+  ],
+  "question": "what is the lowest question->target concentration compatible with the question still being answerable and uniquely identifying",
+  "reference_original_bank": {
+    "concentration": 3.9286,
+    "floor_mean": 0.1008,
+    "target_mean": 0.396
+  },
+  "reject_status_counts": {
+    "measured": 36
+  },
+  "roughness": "SMALL SAMPLE, SINGLE GENERATOR, AGENT-JUDGED UNIQUENESS. n per cell is in the tens, one model wrote every probe question, and 'uniquely identifying' is an agent verdict rather than a human one. Read this as a bound on the achievable floor, not a pinned value. It is recorded as a finding; it does not re-preregister any bar.",
+  "same_targets_bank_questions": {
+    "concentration": 2.1858,
+    "floor_mean": 0.064,
+    "n": 36,
+    "target_mean": 0.1398,
+    "target_median": 0.127
+  },
+  "sample_size": 36,
+  "schema": "memphant.eval.track-r-floor-probe.v1",
+  "unconstrained_max_abstraction": {
+    "concentration": 2.0382,
+    "floor_mean": 0.0721,
+    "n": 36,
+    "target_mean": 0.147,
+    "target_median": 0.1396
+  },
+  "uniqueness_survival_rate": 0.75
+}

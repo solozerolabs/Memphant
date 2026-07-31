@@ -1,0 +1,32 @@
+{
+  "__fixture__": "Failure 3. Leakage reported as a single concentration figure. Four of the five required fields are simply absent, and a scalar cannot say which unit it was measured over.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "the mined bank leaks at 2.02x",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 180,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "leakage": {
+      "concentration": 2.018
+    }
+  }
+}

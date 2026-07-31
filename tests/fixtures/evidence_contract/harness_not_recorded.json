@@ -1,0 +1,21 @@
+{
+  "__fixture__": "Failure 6. The whole code lane ran --embed-model off, and 'dense is useless' became a near-architectural conclusion from it. A default is not evidence merely because it was the default. Here the score is reported with no harness block at all.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": true,
+    "claim": "dense retrieval adds nothing on the coding lane",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 40,
+      "b": 0,
+      "c": 2,
+      "n_d": 2,
+      "source": "benchmarks/manifests/code_lane_controls.2026-07-13.json"
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    }
+  }
+}

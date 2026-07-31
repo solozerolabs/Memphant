@@ -1,0 +1,41 @@
+{
+  "__fixture__": "Failure 3. The SAME conversation bank reads 0.3367 / 1.4991x under 'user turn + agent reply' and 0.1871 / 1.3657x under 'user turn only'. Absolute coverage is not portable across unit definitions, so putting the two numbers side by side is not a comparison.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "the conversation bank improved its absolute target coverage from 0.3367 to 0.1871",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 5,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "fastembed:BAAI/bge-small-en-v1.5",
+      "scorer": "hybrid bm25 + dense, rrf",
+      "k": 10,
+      "budget": 4000,
+      "flags": [
+        "--archive-traces"
+      ]
+    },
+    "corpus": {
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "snapshot_id": "fixture-snapshot-0000",
+      "n_items": 100
+    },
+    "leakage_comparisons": [
+      {
+        "label": "before",
+        "unit_definition": "one memory unit = user turn + agent reply",
+        "absolute_target_coverage": 0.3367
+      },
+      {
+        "label": "after",
+        "unit_definition": "one memory unit = user turn only",
+        "absolute_target_coverage": 0.1871
+      }
+    ]
+  }
+}
