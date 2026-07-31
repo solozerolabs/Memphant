@@ -99,6 +99,14 @@ def main() -> int:
     ap.add_argument("--control", required=True, type=Path)
     ap.add_argument("--arm", action="append", required=True, metavar="NAME=FILE")
     ap.add_argument("--contrast", action="append", default=[], metavar="LEFT:RIGHT")
+    ap.add_argument(
+        "--packed-status",
+        default="LINEAGE-STALE (pre-f67f2b2a)",
+        help=(
+            "comparability stamp for every packed-stage figure; set to SOUND "
+            "only when the arms were built with both render fixes present"
+        ),
+    )
     ap.add_argument("--out", required=True, type=Path)
     args = ap.parse_args()
 
@@ -124,9 +132,40 @@ def main() -> int:
         if set(a["rows"]) != set(order):
             raise RuntimeError(f"arm {name} has a different question set")
 
+    # Lineage. Packed-stage figures are only comparable across artifacts built at
+    # the same render lineage; fused-stage figures are not affected by it. Stamp
+    # both the arms' git_head and the render-fix ancestry so a reader cannot pick
+    # up a packed number without seeing what it is comparable to.
+    arm_heads = sorted(
+        {
+            (a["report"].get("runtime_identity") or {})
+            .get("repository", {})
+            .get("git_head")
+            for a in arms.values()
+        }
+        - {None}
+    )
+    lineage = {
+        "arm_git_heads": arm_heads,
+        "render_fixes_required_for_packed_comparability": {
+            "f67f2b2a": "let a partially chunk-rendered item emit its whole body",
+            "3fc4eede": "scale the Exact channel by its own subject-key coverage",
+        },
+        "packed_stage_status": args.packed_status,
+        "fused_stage_status": (
+            "SOUND -- render lineage is a packing-stage concern and does not "
+            "affect retrieval or fusion"
+        ),
+        "note": (
+            "Do NOT compare any packed figure here against a banked figure built "
+            "at a different render lineage; that moves two variables at once."
+        ),
+    }
+
     out = {
-        "schema": "memphant.eval.track-r-z1-paraphrase-ladder.v1",
+        "schema": "memphant.eval.track-r-z1-paraphrase-ladder.v2",
         "paid_api_spend_usd": 0,
+        "lineage": lineage,
         "golden_sha256": shas.pop(),
         "corpus_sha256": corpora.pop(),
         "n": len(order),
@@ -188,7 +227,10 @@ def main() -> int:
         block = {}
         for stage in ("fused", "packed"):
             for k in (5, 10):
-                block[f"{stage}_at_{k}"] = cells(hits[name][(stage, k)], ctrl[k])
+                cell = cells(hits[name][(stage, k)], ctrl[k])
+                if stage == "packed":
+                    cell["comparability"] = args.packed_status
+                block[f"{stage}_at_{k}"] = cell
         out["vs_control"][name] = block
 
     for spec in args.contrast:
@@ -196,9 +238,10 @@ def main() -> int:
         block = {}
         for stage in ("fused", "packed"):
             for k in (5, 10):
-                block[f"{stage}_at_{k}"] = cells(
-                    hits[left][(stage, k)], hits[right][(stage, k)]
-                )
+                cell = cells(hits[left][(stage, k)], hits[right][(stage, k)])
+                if stage == "packed":
+                    cell["comparability"] = args.packed_status
+                block[f"{stage}_at_{k}"] = cell
         out["contrasts"][spec] = block
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

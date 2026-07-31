@@ -13,8 +13,32 @@ power 0.99)** against `bm25-code` alone, and **b=71 / c=4 (p=6.8e-17)** against
 the control. The null was an artifact of a bank that leaked 3.93× lexically. The
 claim "embeddings add nothing to the coding lane" must be **withdrawn**.
 
-The second headline is the reverse of the one this task was framed to expect: the
-retrieval win did **not** shrink on clean data. It grew.
+The second finding, also fused-stage and also sound: the retrieval win over the
+scoped BM25 control did **not** shrink on clean data. It grew — b=15/c=3 →
+b=48/c=5 at fused@10.
+
+> ## LINEAGE WARNING — read before using any packed number in this document
+>
+> The arms scored here ran at `af-w0-instrument` `3e2cc2ba` (worktree git_head
+> `742e2e6a`). **Both render fixes are absent from that branch**, verified by
+> ancestry:
+>
+> | commit | subject | in `af-w0-instrument` | on `accuracy-first` |
+> |---|---|---|---|
+> | `f67f2b2a` | let a partially chunk-rendered item emit its whole body | **NO — absent** | YES |
+> | `3fc4eede` | scale the Exact channel by its own subject-key coverage | **NO — absent** | YES |
+>
+> `f67f2b2a` is the render-loss fix that took provenance from 163 to 1,193 items
+> and moved the original-bank packed ladder to 168/180.
+>
+> **Fused-stage numbers are unaffected and stand.** Render loss is a
+> packing-stage defect; it does not touch retrieval or fusion. The dense finding,
+> the control comparison and every `fused@k` cell in §4 are sound.
+>
+> **Every packed-stage number in this document is `LINEAGE-STALE
+> (pre-f67f2b2a)`** and is *not* comparable to any banked post-fix figure. A
+> comparison between them moves two variables at once — bank contamination *and*
+> render lineage — and can support no conclusion about either.
 
 ---
 
@@ -37,9 +61,9 @@ committed numbers, this pass does four things the prior run did not:
 3. **Attaches realized-ψ exact-McNemar power and MDE to every contrast** — the
    W0.2 log reports p-values with no power analysis at all. This is register
    action Z6 (§4).
-4. **Reports the miss composition side-by-side against the original bank** and
-   identifies where the decontaminated ladder now loses its questions (§5) — a
-   channel shift the prior log did not surface.
+4. **Establishes that the prior run's packed figures are lineage-stale** (§5) —
+   they predate both render fixes, so the packed half of that comparison, and the
+   packed half of this one, support no conclusion.
 
 **One arm from the assignment is genuinely missing and is NOT reported here:**
 the textbook-BM25 attribution arm (`--lexical-scorer bm25-control`). See §6.
@@ -153,16 +177,16 @@ r@5 0.8278 / r@10 0.8944. Removing the lexical give-away costs the control
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `bm25code_off` | fused@5 | 43 | 4 | 47 | 0.261 | +0.2167 | 2.78e-09 | 0.109 | 1.000 |
 | `bm25code_off` | fused@10 | **48** | **5** | 53 | 0.294 | +0.2389 | 7.08e-10 | 0.116 | 1.000 |
-| `bm25code_off` | packed@5 | 25 | 8 | 33 | 0.183 | +0.0944 | 0.00455 | 0.092 | 0.819 |
-| `bm25code_off` | packed@10 | 35 | 14 | 49 | 0.272 | +0.1167 | 0.00380 | 0.112 | 0.837 |
+| `bm25code_off` | packed@5 | 25 | 8 | 33 | 0.183 | +0.0944 | 0.00455 | 0.092 | 0.819 | **STALE**
+| `bm25code_off` | packed@10 | 35 | 14 | 49 | 0.272 | +0.1167 | 0.00380 | 0.112 | 0.837 | **STALE**
 | `bm25code_dense` | fused@5 | 61 | 4 | 65 | 0.361 | +0.3167 | 3.92e-14 | 0.129 | 1.000 |
 | `bm25code_dense` | fused@10 | **71** | **4** | 75 | 0.417 | +0.3722 | 6.81e-17 | 0.138 | 1.000 |
-| `bm25code_dense` | packed@5 | 43 | 6 | 49 | 0.272 | +0.2056 | 5.73e-08 | 0.112 | 1.000 |
-| `bm25code_dense` | packed@10 | 54 | 12 | 66 | 0.367 | +0.2333 | 1.69e-07 | 0.130 | 1.000 |
+| `bm25code_dense` | packed@5 | 43 | 6 | 49 | 0.272 | +0.2056 | 5.73e-08 | 0.112 | 1.000 | **STALE**
+| `bm25code_dense` | packed@10 | 54 | 12 | 66 | 0.367 | +0.2333 | 1.69e-07 | 0.130 | 1.000 | **STALE**
 | `overlap_dense` | fused@10 | 51 | 14 | 65 | 0.361 | +0.2056 | 4.48e-06 | 0.129 | 0.997 |
-| `overlap_dense` | packed@10 | 37 | 23 | 60 | 0.333 | +0.0778 | 0.0925 | 0.124 | 0.394 |
+| `overlap_dense` | packed@10 | 37 | 23 | 60 | 0.333 | +0.0778 | 0.0925 | 0.124 | 0.394 | **STALE**
 | `overlap_off` | fused@10 | 17 | 23 | 40 | 0.222 | −0.0333 | 0.430 | 0.101 | 0.122 |
-| `overlap_off` | packed@10 | 12 | 27 | 39 | 0.217 | −0.0833 | 0.0237 | 0.100 | 0.626 |
+| `overlap_off` | packed@10 | 12 | 27 | 39 | 0.217 | −0.0833 | 0.0237 | 0.100 | 0.626 | **STALE**
 
 **Side-by-side, `bm25-code` (embeddings off) vs the control at fused@10:**
 
@@ -178,13 +202,24 @@ survival ratio at fused@10 is 3.58. This is the opposite of the expected outcome
 and it should be stated plainly: the prediction that the coding-lane win was
 lexical give-away is **falsified**.
 
-Two honest qualifications. First, the win grew largely because the *control
-collapsed* (0.8944 → 0.2556), not because MemPhant improved — MemPhant also fell
-(0.9611 → 0.4944). Both fell; the control fell much further. Second, at the
-**packed** stage the sign flips rather than scales: MemPhant went from a 0.12
-deficit on the original bank to a +0.1167 advantage here. A "survival ratio"
-against a negative baseline margin is not interpretable and is reported as a sign
-flip, not as a ratio.
+One honest qualification: the win grew largely because the *control collapsed*
+(0.8944 → 0.2556), not because MemPhant improved — MemPhant also fell (0.9611 →
+0.4944). Both fell; the control fell much further.
+
+**No packed-stage survival claim is made here — retracted, for the second time.**
+An earlier draft of this document reported that MemPhant "went from a 0.12 deficit
+on the original bank to a +0.1167 advantage", i.e. a sign flip. That claim is
+**withdrawn**, and it is worth recording that this program **already withdrew the
+identical claim once before, on identical grounds**. It is wrong twice over:
+
+- The paraphrase packed figures are pre-`f67f2b2a`; the original-bank packed
+  figures they were compared against are post-fix. Two variables moved.
+- The premise is false regardless. On trunk the original-bank packed figure is
+  **0.9333 against the 0.8944 control = +0.0389, already a win**. There was never
+  a deficit to flip out of.
+
+This is not softened to a "trend" or a "direction". There is no packed-stage
+finding in this document.
 
 `overlap_off` — the pre-fix configuration — is now **losing to the control** at
 packed@10 (b=12/c=27, p=0.0237). At fused@10 it is a genuine null (b=17/c=23,
@@ -196,10 +231,10 @@ n_d=40, p=0.430, power only 0.122 against its own −0.0333 effect, so this is
 | contrast | stage | b | c | n_d | ψ | Δ | exact p | power |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | `bm25code_off` vs `overlap_off` | fused@10 | 52 | 3 | 55 | 0.306 | +0.2722 | 1.54e-12 | 1.000 |
-| `bm25code_off` vs `overlap_off` | packed@10 | 41 | 5 | 46 | 0.256 | +0.2000 | 4.41e-08 | 1.000 |
+| `bm25code_off` vs `overlap_off` | packed@10 | 41 | 5 | 46 | 0.256 | +0.2000 | 4.41e-08 | 1.000 | **STALE**
 | `overlap_dense` vs `overlap_off` | fused@10 | 46 | 3 | 49 | 0.272 | +0.2389 | 6.98e-11 | 1.000 |
 | `bm25code_dense` vs `bm25code_off` | fused@10 | **29** | **5** | 34 | 0.189 | +0.1333 | 3.86e-05 | 0.990 |
-| `bm25code_dense` vs `bm25code_off` | packed@10 | 26 | 5 | 31 | 0.172 | +0.1167 | 1.92e-04 | 0.971 |
+| `bm25code_dense` vs `bm25code_off` | packed@10 | 26 | 5 | 31 | 0.172 | +0.1167 | 1.92e-04 | 0.971 | **STALE**
 | `bm25code_dense` vs `overlap_dense` | fused@10 | 43 | 6 | 49 | 0.272 | +0.1667 | 5.7e-08 | 1.000 |
 
 The lexical fix and the dense fix are **both real and largely additive**: lexical
@@ -243,7 +278,12 @@ Note the runner has no "lexical off" mode (`--lexical-scorer` accepts only
 `overlap` + `small`, matching how the original bank's `armC_dense_overlap` was
 defined. Strictly-isolated dense is not measurable with this harness.
 
-## 5. The packed ladder and miss composition
+## 5. The packed ladder and miss composition — ALL LINEAGE-STALE (pre-`f67f2b2a`)
+
+**Nothing in this section may be compared against a banked post-render-fix
+figure, and no conclusion is drawn from it.** It is retained only to show what
+the stale arms contain and to scope the re-run. Every number below carries the
+`LINEAGE-STALE (pre-f67f2b2a)` stamp.
 
 | arm | fused r@10 | packed r@10 | gold in pool | absent from pool | in-pool unpacked | budget | rerank | render |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -252,31 +292,62 @@ defined. Strictly-isolated dense is not measurable with this harness.
 | `overlap_dense` | 0.4611 | 0.3333 | 169 | 11 | 109 | 2 | 78 | 29 |
 | `bm25code_dense` | **0.6278** | **0.4889** | 169 | 11 | 81 | 7 | 50 | 24 |
 
-Decontaminated ladder in packed hits of 180: **31 → 60 → 67 → 88**.
-Contaminated ladder: **91 → 113 → 139 → 168**.
+Stale decontaminated ladder in packed hits of 180: **31 → 60 → 67 → 88**.
 
-Magnitude collapses by roughly half. The best decontaminated configuration
-(`bm25-code` + `small`) reaches 88/180 packed against a fused ceiling of 113/180
-and a pool ceiling of 169/180. The original bank's best reached 168/180 packed
-against a 173/180 fused ceiling.
+**This must not be set beside the banked 91 → 113 → 139 → 168.** That ladder is
+post-render-fix; this one is pre-. The apparent "magnitude collapses by roughly
+half" is the sum of two changes — decontamination and a missing render fix — and
+attributing it to the bank would be exactly the error §4.1 retracts. **No
+magnitude claim is made.**
 
-**The channel that loses the questions has changed, and this is the most
-actionable new finding in this pass.** On the original bank the best arm lost 30
-to render, 4 to budget and only **3 to rerank**. On the paraphrase bank the best
-arm loses **50 to rerank**, 24 to render and 7 to budget. Rerank goes from a
-negligible loss channel to the **dominant** one — a 16× increase in absolute
-count on a bank with fewer hits to lose.
+The fused ceilings *are* comparable and are the honest statement of what
+decontamination costs: fused r@10 falls **0.9611 → 0.4944** (`bm25-code`) and the
+pool ceiling is 169/180 against the original 173/180.
 
-The straightforward reading is that the reranker was riding the same lexical
-give-away the control was, and on paraphrased queries it demotes gold it has
-already retrieved. 50 questions are in the pool, ranked inside top-k, and thrown
-away by rerank. That is the single largest recoverable pool in the coding lane
-and it is invisible on the original bank.
+**The rerank observation is also LINEAGE-STALE and is downgraded to a
+hypothesis.** The stale arms show the best configuration losing 50 gold to rerank,
+24 to render and 7 to budget, against 3 / 30 / 4 on the original bank — rerank
+apparently moving from negligible to dominant. It is a plausible mechanism (a
+reranker riding the same lexical give-away the control was, demoting gold on
+paraphrased queries), but `f67f2b2a` changes what renders and therefore changes
+how misses are attributed across exactly these buckets. **It is not a finding, it
+is a question for the re-run**, and it must not be cited as the coding lane's
+largest recoverable pool until measured on trunk.
 
-**Two upper rungs of the banked ladder have no decontaminated counterpart.** The
-packing-adjacency fix and the `pack_render_cap` lever (the rungs that produced
-168/180) were never run on the paraphrase bank. Their contribution on clean data
-is **unmeasured**, and the 168 figure should not be paired against anything here.
+**Two upper rungs have no counterpart at all.** The packing-adjacency fix and the
+`pack_render_cap` lever (the rungs that produced 168/180) were never run on the
+paraphrase bank.
+
+### 5.1 What a valid packed comparison requires
+
+**Re-run the four paraphrase arms on trunk** (`accuracy-first`, which contains
+both `f67f2b2a` and `3fc4eede`), against the same golden sha `4aed8e99…` and the
+same corpus sha `c008142e…`, then re-score. Only then is a packed figure
+comparable to the banked 168. Not run now — the host is saturated (§6). Recipe:
+
+```bash
+# in a worktree off accuracy-first, which HAS both render fixes
+cargo build --release -p memphant-server -p memphant-worker -p memphant-cli
+# then, per arm, varying --lexical-scorer {overlap,bm25-code} x --embed-model {off,small}
+python3 scripts/code_lane_run_memphant.py \
+  --database-url postgres://memphant:memphant@localhost:5432/memphant \
+  --corpus docs/build-log/artifacts/track-r/corpus.jsonl \
+  --golden benchmarks/data/track_r_paraphrase_golden.jsonl \
+  --out-evidence  docs/build-log/artifacts/track-r-paraphrase/run/trunk-<arm>-evidence.jsonl \
+  --out-provenance docs/build-log/artifacts/track-r-paraphrase/run/trunk-<arm>-provenance.json \
+  --embed-model <off|small> --mode fast --k 10 --budget-tokens 8192 \
+  --lexical-scorer <overlap|bm25-code> --label trunk-<arm> --port <unique> \
+  --server-bin target/release/memphant-server \
+  --worker-bin target/release/memphant-worker \
+  --cli-bin target/release/memphant-cli
+# stagger launches ~60s apart; each arm mints and drops its own scratch DB
+python3 scripts/z1_paraphrase_ladder.py --run-dir <dir> --control <control> \
+  --arm ... --contrast ... --out <artifact>
+```
+
+Fold the `bm25-control` attribution arm (§6) into the same sweep — it is the same
+build and the same corpus ingest, so running five arms costs barely more than
+four and closes both gaps at once.
 
 ## 6. What did not run, and why
 
@@ -357,21 +428,49 @@ live at `~/.memphant-private/track-r-paraphrase/run/`.
    grows: b=15/c=3 → b=48/c=5 at fused@10. Magnitude on the original bank was not
    a memory effect, but the *ordering* was right. State that the growth is driven
    mostly by the control's collapse (0.8944 → 0.2556).
-4. **AMEND — the packed ladder 91 → 113 → 139 → 168.** Decontaminated counterpart
-   is 31 → 60 → 67 → 88, and only the first four-arm portion has a counterpart at
-   all; the packing-adjacency and render-cap rungs are unmeasured on clean data.
-5. **NEW — the reranker is the dominant loss channel on clean data** (50 of 92
-   misses for the best arm, against 3 on the original bank). Not a claim to
-   withdraw; a claim to open.
-6. **CORRECT — register §4.2** says the paraphrase bank passes 19/20 bar checks;
+4. **NO CHANGE — the packed ladder 91 → 113 → 139 → 168 stands unchallenged.**
+   This pass produces **no valid decontaminated counterpart**. The stale
+   31 → 60 → 67 → 88 is pre-`f67f2b2a` and must not be paired against it. Needs
+   the trunk re-run in §5.1.
+5. **WITHDRAWN BEFORE PUBLICATION (second occurrence) — the packed "sign flip",
+   0.12 deficit → 0.12 advantage.** Wrong on lineage (stale vs post-fix arms) and
+   wrong on premise (trunk original-bank packed is 0.9333 vs 0.8944 control =
+   +0.0389, already a win — no deficit existed). **This program withdrew the
+   identical claim once already, on identical grounds.** Recorded here so the
+   record shows it was caught twice, not newly discovered.
+6. **NOT A FINDING — the reranker as dominant loss channel** (50 vs 3 misses).
+   Derived from packing-stage rows and therefore lineage-stale; `f67f2b2a`
+   changes how misses are attributed across exactly these buckets. Downgraded to
+   a hypothesis for the trunk re-run. Must not be cited as the coding lane's
+   largest recoverable pool.
+7. **CORRECT — register §4.2** says the paraphrase bank passes 19/20 bar checks;
    the lock records **20/21**. Same single failure.
-7. **CORRECT — register §4.2 / the Z1 task framing** state the paraphrase arms
-   were not executed. They were, on 2026-07-30, committed as `af-w0-instrument`
-   `3e2cc2ba`.
-8. **CORRECT — register §6.1's Z2 item.** The code lane's packed evidence rows
+8. **REGISTER DEFECT — §4.2 / §6.0 record the Z1 paraphrase arms as "verified as
+   runnable but not executed". They were executed** on 2026-07-30 and committed
+   as `af-w0-instrument` `3e2cc2ba`. The error propagated: the Z1 task brief
+   repeated it verbatim and framed this work as "the first-ever execution".
+   Fix the register entry so the next reader does not re-run banked arms.
+9. **CORRECT — register §6.1's Z2 item.** The code lane's packed evidence rows
    are not missing; 180/180 reader-ready rows exist per arm under
    `--out-evidence`. The Phase 3 ceiling is derivable now (§6). `--emit-qa` is a
    chat-lane `bench-lme` flag and does not apply to the code-lane runner.
+
+## 7.1 This is the case for A1 (lineage stamping) going first
+
+**The same lineage trap produced the same false packed claim twice in two days,
+in two independent sessions, both times inside careful prose that survived
+review.** Neither session was careless: both stated their arms, both cited their
+provenance, both reported exact cells. What neither could see from the artifact
+alone was which commits the arms were built at, because **nothing in the
+provenance report makes lineage comparable across artifacts** — `runtime_identity`
+records a `git_head`, but reading it requires knowing which fixes to check
+ancestry for, and the packed figure it qualifies carries no stamp at all.
+
+A number that cannot be compared should not be readable as if it could. **A1
+(lineage stamping) should go before any further packed-stage measurement**: until
+each packed figure carries the render-lineage it was produced at, every
+cross-artifact packed comparison in this program is one ancestry check away from
+being wrong, and the check is not currently prompted by anything.
 
 ## 8. Artifacts
 
