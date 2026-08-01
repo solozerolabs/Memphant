@@ -218,8 +218,23 @@ def test_the_amendment_records_why_the_pool_changed():
 MIRROR = Path.home() / ".memphant-private/w7-instruments/swe-contextbench"
 LOCK = ROOT / "benchmarks/manifests/swe_contextbench.lock.json"
 
+_HAS_PYARROW = importlib.util.find_spec("pyarrow") is not None
+
+# Two independent preconditions, and BOTH must be guarded. The mirror check was
+# here already; the reader was not. `pyarrow` is not installed anywhere on this
+# host — every lane that reads the pinned parquets creates its own venv — so
+# these three tests failed rather than skipped for anyone running the suite
+# outside such a venv, and a permanently-red test is how a real regression gets
+# waved through. Skipping with a reason is the honest state for a test whose
+# optional heavy dependency the repo deliberately does not vendor; it matches
+# how the Syndai-corpus and Track-U tests already handle absent resources.
 pytestmark_mirror = pytest.mark.skipif(
-    not MIRROR.is_dir(), reason="pinned instrument mirror is not present on this host"
+    not MIRROR.is_dir() or not _HAS_PYARROW,
+    reason=(
+        "pinned instrument mirror is not present on this host"
+        if not MIRROR.is_dir()
+        else "pyarrow is not installed (required to read the pinned parquets)"
+    ),
 )
 
 
