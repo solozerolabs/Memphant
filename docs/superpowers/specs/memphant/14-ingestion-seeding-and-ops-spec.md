@@ -143,7 +143,7 @@ Jobs must be resumable after process death. No correctness-critical state lives 
 > transitions, §13.4 demotion); this section owns only the **ops** half —
 > schedule, inputs, bounds, idempotency, failure handling, alarm.
 
-**`tier_episode`** — the only writer of `episode.retention_tier` (`04` §13.3
+**`tier_episode`** — **WITHDRAWN 2026-07-31.** The column it was to write was dropped by `20260801_008_drop_retention_tier.sql` (0 readers, 0 writers, empty index). Retained below only as the record of what was specced and never built. Was: the only writer of `episode.retention_tier` (`04` §13.3
 RT-3).
 
 | Property | Contract |
