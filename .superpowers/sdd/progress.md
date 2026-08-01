@@ -1960,3 +1960,95 @@ default, checkbox, cutover or SOTA claim moves. `paid_model_calls: 0`.**
 Report: `.superpowers/sdd/s2-instrument-report.md`. Survey:
 `docs/build-log/2026-08-01-discriminating-instrument-survey.md`. Branch
 `s2-instrument`, **not merged, not pushed.**
+
+## 2026-08-01 — S7: MDN browser-compat-data pinned, mined, and KILLED as an instrument ($0, `s7-bcd`, NOT merged)
+
+**The instrument does not discriminate, and that is the result.** BCD was ranked
+the coding answer by S2's survey (§4b) because it exhibits all four regimes
+MemoryCode cannot: re-assertion, non-recency currency, bounded validity,
+expensive wrong retirement. It was acquired, pinned, mined, and then screened
+against its trivial-baseline ceiling **before any substrate arm was built** —
+S6's lesson applied as a rule rather than relearned. The screen killed it.
+
+**Acquisition, clean.** Pinned at commit `9851c5cb2361b4fe35b6a49b4dbda64792579fd9`
+(tag `v8.0.8` resolved through the refs API — tags move, so the tag is not the
+identity), distributed as npm `@mdn/browser-compat-data@8.0.8`. Recomputed sha512
+equals the registry `dist.integrity` and recomputed sha1 equals `dist.shasum`;
+both checked, both match. `data.json` 19,891,093 bytes, sha256 `a1ff82ea…521a70f`,
+and its in-band `__meta` self-identifies as 8.0.8 at the registry publish time.
+**Licence graded [F]:** the LICENSE blob was fetched *at the pinned commit* (not
+`main`, not a guessed path) and read — verbatim CC0 1.0 Universal, 6,555 bytes,
+sha256 `36ffd9dc…f39673`. Corroborated three ways, none a badge: the GitHub API
+licence object, the npm registry metadata, and — the strong one — **the LICENSE
+inside the npm tarball hashes to the same sha256 as the blob from the pinned git
+commit.** CC0 carries no named rightsholder by design; that is the licence
+working, and is categorically unlike the FreshQA/TAQA/HyTE uninstantiated
+Apache-2.0 copyright lines.
+
+**Census reproduces exactly, and the §4b.4 false-positive gate is PAID.**
+20,243 features / 284,845 support statements / 7,454 bounded-validity statements
+/ 1,152 deprecated / 17 runtimes — all five match the survey. They did *not* at
+first: the initial pass omitted the `manifests` (38) and `mediatypes` (17)
+namespaces and returned 20,188 / 284,085 / 7,446, and that 55-feature gap is
+exactly those two. The arc filter ladder: naive removed-then-added returns
+**1,553** features / 5,079 pairs; the strict filter (no `flags` / `prefix` /
+`alternative_name` / `partial_implementation`, strict version gap) returns
+**326 features / 705 browser-pairs** — a **79.0% false-positive rate** against
+the survey's stated ~75%. **Yield stated: 326 / 705**, one more feature and one
+more pair than the survey's 325 / 704, the extra one in `nodejs`; disclosed, not
+tuned away. `api.AbortSignal.timeout_static` reads 16.14.0 → removed 17.0.0 →
+re-added 17.3.0 in the pinned data, exactly as predicted.
+
+**The kill.** 2,115 probes over 326 feature clusters, three bands per arc; band
+B2 (`removed ≤ V < re-added`) is discriminating because there the newest
+assertion is the wrong answer. **Every recency-shaped and frequency-shaped
+trivial rule scores exactly 0.0000 on B2** — constant, mode, latest-declared,
+max-version. That is BCD delivering precisely what the survey promised, and it
+is a strictly stronger property than MemoryCode has. **And then `scoped_interval`
+— filter to the queried browser, take the greatest version ≤ V, honour removals,
+about twenty lines, no substrate — scores 1.0000 on every band.** Headroom above
+the trivial baseline is **exactly 0.0000**. Robustness held on interior query
+versions (never a declared version, so no exact-match win): still 1.0000.
+
+**Why no rescue exists.** BCD's gold *is* interval containment on a totally
+ordered `(browser, version)` key and the probe is indexed by that same key, so
+any probe whose gold derives from BCD's intervals is by construction answerable
+by evaluating them. A substrate could only win if *our authored episode wording*
+obscured scope or version — at which point the difficulty is self-authored (the
+class this program discounts) and the thing measured is extraction, not memory.
+**On this corpus, "discriminating" and "inherited gold" are mutually exclusive.**
+The executable endpoint of §4b.2 does not rescue it either: §4b.7 gates it on the
+retrieval result, and the retrieval result is zero headroom.
+
+**Power: at no n.** The required-n table was recomputed
+(166/260/340/425/505/585/665/825 at ψ 0.10–0.50, `D_MIN = 0.07`) and reproduces
+survey §5 exactly. 2,115 probes clear every bar by 3×, so the instrument was
+never power-limited — it is **ceiling-limited**. Against the saturating baseline
+ψ = 0.0000 and `n_d` = 0, below the `n_d ≥ 6` floor at any n. The artifact is
+therefore recorded **`decisional: false`** with `test: descriptive-only`: it is
+an exhaustive ceiling census, not a sampled paired test, and marking it
+decisional would weaken the guard that exists to stop nulls reading as results.
+
+**Two corpora, opposite directions, same wall.** S6 broke recency on MemoryCode
+(`max(observed_at)` → 0.0000) and was saturated at **0.9064** by
+`max(observed_at ≤ t)`; S7 broke recency on BCD (all four rules → 0.0000) and
+was saturated at **1.0000**. BCD *has* 705 genuine re-assertion arcs, the regime
+MemoryCode structurally cannot supply — **so the missing ingredient is neither
+re-assertion nor non-recency currency.** Both are now present in a pinned, CC0,
+externally-authored corpus and neither is sufficient. What is needed is a corpus
+where resolving which fact is in force is **not computable from the fact
+statements themselves**. Every future candidate should have its trivial ceiling
+measured first, at $0, before any arm is built: that screen is now two-for-two
+at killing a week of engineering in an afternoon.
+
+**Cost $0, `paid_model_calls: 0`.** One 925 KB tarball, one 6.5 KB licence blob,
+two stdlib-only scripts running in under a second each — no server, no scratch
+database, no port, no embedding model, no reader, no judge, so no cross-lane
+hazard was touched. Avoided the survey's costed ~1 day extraction + 3–4 days
+session synthesis + 2 days executable harness plus a paid reader endpoint.
+**No default, checkbox, cutover or SOTA claim moves. No paid spend proposed.**
+
+Report: `.superpowers/sdd/s7-bcd-report.md`. Build log:
+`docs/build-log/2026-08-01-bcd-instrument.md`. Lock:
+`benchmarks/manifests/browser_compat_data.lock.json`. Branch `s7-bcd`,
+**not merged, not pushed.**

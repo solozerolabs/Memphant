@@ -1,0 +1,169 @@
+{
+ "instrument": "MDN browser-compat-data v8.0.8 @ 9851c5cb2361b4fe35b6a49b4dbda64792579fd9",
+ "lock": "benchmarks/manifests/browser_compat_data.lock.json",
+ "measurement": "trivial-baseline ceiling, run BEFORE any substrate arm existed",
+ "verdict": "THE INSTRUMENT DOES NOT DISCRIMINATE. A ~20-line scope-filter-plus-interval-containment rule (`scoped_interval`) scores 1.0000 on all 2,115 probes and on all three bands, including the discriminating band where every recency baseline scores 0.0000. Headroom above the trivial baseline is exactly 0.0000, so no substrate arm can win anything here at any n. Do not build the session synthesiser, the probe generator, or the executable harness costed in survey section 4b.7.",
+ "probes": {
+  "n": 2115,
+  "clusters": 326,
+  "cluster_unit": "BCD feature (arcs for the same feature across browsers share a cluster)",
+  "bands": {
+   "B1": 705,
+   "B2": 705,
+   "B3": 705
+  },
+  "gold_balance": {
+   "supported": 1410,
+   "not_supported": 705
+  },
+  "construction": "For each of the 705 strict removed-then-re-added arcs (feature, browser, live_from L, removed_at R, readded_at A): B1 asks at L <= V < R (gold supported), B2 at R <= V < A (gold NOT supported), B3 at V >= A (gold supported). B2 is the discriminating band: the newest assertion about the feature is the wrong answer there.",
+  "gold_provenance": "BCD's own version intervals, verbatim. No gold authored here."
+ },
+ "baselines_single_browser_fact_set": {
+  "constant_supported": {
+   "overall": 0.6667,
+   "B1": 1.0,
+   "B2": 0.0,
+   "B3": 1.0
+  },
+  "most_frequent": {
+   "overall": 0.6667,
+   "B1": 1.0,
+   "B2": 0.0,
+   "B3": 1.0
+  },
+  "latest_declared": {
+   "overall": 0.6667,
+   "B1": 1.0,
+   "B2": 0.0,
+   "B3": 1.0
+  },
+  "max_version": {
+   "overall": 0.6667,
+   "B1": 1.0,
+   "B2": 0.0,
+   "B3": 1.0
+  },
+  "max_version_le_V": {
+   "overall": 1.0,
+   "B1": 1.0,
+   "B2": 1.0,
+   "B3": 1.0
+  },
+  "scoped_interval": {
+   "overall": 1.0,
+   "B1": 1.0,
+   "B2": 1.0,
+   "B3": 1.0
+  }
+ },
+ "baselines_cross_browser_pool": {
+  "constant_supported": {
+   "overall": 0.6667,
+   "B2": 0.0
+  },
+  "most_frequent": {
+   "overall": 0.6667,
+   "B2": 0.0
+  },
+  "latest_declared": {
+   "overall": 0.6667,
+   "B2": 0.0
+  },
+  "max_version": {
+   "overall": 0.6667,
+   "B2": 0.0
+  },
+  "max_version_le_V": {
+   "overall": 0.9995,
+   "B2": 1.0,
+   "B3": 0.9986
+  },
+  "scoped_interval": {
+   "overall": 1.0,
+   "B2": 1.0
+  }
+ },
+ "robustness_interior_query_versions_only": {
+  "why": "the query version is never a declared version, so no rule can win by exact match",
+  "n": 2075,
+  "bands": {
+   "B1": 686,
+   "B2": 684,
+   "B3": 705
+  },
+  "recency_family": {
+   "overall": 0.6704,
+   "B2": 0.0
+  },
+  "max_version_le_V": {
+   "overall": 1.0,
+   "B2": 1.0
+  },
+  "scoped_interval": {
+   "overall": 1.0,
+   "B2": 1.0
+  }
+ },
+ "headroom_above_trivial_baseline": 0.0,
+ "the_good_half_of_the_result": "BCD does what the survey promised on the recency axis: constant, mode, latest-declared and max-version ALL score exactly 0.0000 on the discriminating band. That is a strictly stronger property than MemoryCode, whose gold is recency-identified by construction. It is simply not sufficient, which is precisely S6's lesson repeated on a second corpus.",
+ "why_this_is_structural_not_an_authoring_choice": "BCD's gold IS interval containment on a totally ordered (browser, version) key, and the probe is indexed by that same key. Any probe whose gold derives from BCD's intervals is by construction answerable by evaluating them. A substrate could only beat the 20-line rule if our authored episode wording obscured scope or version enough to make extraction hard -- at which point the difficulty is authored by us (the self-mined class this program discounts) and the thing measured is extraction, not memory semantics. On this corpus, 'discriminating' and 'inherited gold' are mutually exclusive.",
+ "decisional_false_reason": "n_d = 0 against the saturating baseline, which is below the n_d >= 6 floor, so this artifact may not carry a promotion decision and is not claiming one. It is an EXHAUSTIVE CEILING CENSUS over the full arc set, not a sampled paired test: the kill follows from a deterministic score of 1.0000 on every probe, not from a failed significance test. Recording it as decisional=true would weaken the very guard that exists to stop nulls being read as results.",
+ "evidence_contract": {
+  "schema_version": 1,
+  "decisional": false,
+  "claim": "On 2,115 probes mined from the 705 strict removed-then-re-added arcs in MDN browser-compat-data v8.0.8, a ~20-line scope-filtered interval-containment rule that touches no substrate scores 1.0000 overall and 1.0000 on the discriminating band, leaving exactly zero headroom for any memory arm.",
+  "power": {
+   "test": "descriptive-only (no test)",
+   "n": 2115,
+   "b": 0,
+   "c": 0,
+   "n_d": 0,
+   "psi_observed": 0.0,
+   "mde_at_80": null,
+   "computed_by": "scripts/instrument_power.py (required-n table recomputed: 166/260/340/425/505/585/665/825 at psi 0.10-0.50 for D_MIN=0.07, reproducing survey section 5 exactly)",
+   "source": "docs/build-log/artifacts/2026-08-01-bcd-instrument/baseline-ceiling.json, produced by scripts/bcd_baselines.py --report over benchmarks/manifests/browser_compat_data.arcs.json"
+  },
+  "mechanism_enabled": false,
+  "probe_kind": null,
+  "mechanism_evidence": "No MemPhant mechanism was enabled and none was intended: no server, no scratch database, no embedding model, no recall path. This artifact measures only substrate-free read rules, which is the point -- it is the gate that decides whether running a mechanism here is worth anything, and it says no.",
+  "harness": {
+   "embed_model": "none (no retrieval was run; all baselines are pure arithmetic over BCD version strings)",
+   "scorer": "exact match against BCD's own interval containment; deterministic, no judge, no model call",
+   "k": "n/a (answer-level accuracy, not ranked retrieval)",
+   "budget": null,
+   "flags": [
+    "--report"
+   ],
+   "command": "python3 scripts/bcd_mine.py --bank BANK.json && python3 scripts/bcd_baselines.py --bank BANK.json --report"
+  },
+  "corpus": {
+   "sha256": "027f40e9871db4939ee2881adf28c9dd47b7e25036ce46e023c2d79024764e7f",
+   "snapshot_id": "mdn/browser-compat-data@9851c5cb2361b4fe35b6a49b4dbda64792579fd9 (tag v8.0.8, npm 8.0.8, data.json __meta timestamp 2026-07-24T16:06:32.098Z)",
+   "n_items": 2115,
+   "path": "benchmarks/manifests/browser_compat_data.arcs.json",
+   "corpus_note": "sha256 and path name the derived 705-row arc table committed in this repo. Its immutable source is the pinned data.json in the private mirror (~/.memphant-private/w7-instruments/browser-compat-data/pkg/package/data.json), sha256 a1ff82ea5c9ed3684dc4ecdce78598a8e42f35d473d90ea19955fd7c1521a70f, 19891093 bytes, from which the arc table is regenerated bit-identically by scripts/bcd_mine.py --bank.",
+   "source_sha256": "a1ff82ea5c9ed3684dc4ecdce78598a8e42f35d473d90ea19955fd7c1521a70f"
+  },
+  "instrument_verification": {
+   "shipped_rows_verified": true,
+   "fields_counted": {
+    "compat_features": 20243,
+    "support_statements": 284845,
+    "statements_with_version_added_and_version_removed": 7454,
+    "features_with_status_deprecated": 1152,
+    "runtimes": 17,
+    "strict_arc_browser_pairs": 705,
+    "strict_arc_features": 326,
+    "control_never_removed_pairs": 211911,
+    "control_stayed_removed_pairs": 1965
+   },
+   "false_positive_gate": "Survey section 4b.4 requires reproducing the ~75%-false-positive naive arc query. Reproduced: the naive removed-then-added query returns 1,553 features / 5,079 pairs; the strict filter (no flags / prefix / alternative_name / partial_implementation, strict version gap) returns 326 / 705, a 79.0% false-positive rate. Yield stated as 326 features / 705 browser-pairs against the survey's 325 / 704 -- one more feature and one more pair, in nodejs, disclosed and not reconciled by tuning a threshold.",
+   "canonical_case_verified": "api.AbortSignal.timeout_static in nodejs reads version_added 16.14.0, version_removed 17.0.0, re-added 17.3.0 in the pinned data.json, exactly as the survey predicted.",
+   "rows_counted": 705,
+   "license_id": "CC0-1.0",
+   "license_source": "LICENSE_FILE",
+   "license_evidence": "LICENSE blob fetched at the pinned commit from raw.githubusercontent.com and read in full (verbatim CC0 1.0 Universal text, 6555 bytes, sha256 36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673). Corroborated by the GitHub API licence object (spdx_id CC0-1.0) and by the LICENSE inside the npm tarball hashing to the SAME sha256. Not a badge, not a card, not an API object alone."
+  }
+ }
+}
