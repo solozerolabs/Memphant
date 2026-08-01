@@ -360,6 +360,21 @@ tiebreak by +3.01 points of latest-state-wins (95% CI [+1.70, +4.43]) and
 257 instances. It is not established at any larger per-key scale, and the
 asymmetry that makes it safe here runs the other way there (§7).**
 
+**Both arms encode the gold rule, and that bounds what this generalises to.**
+MemoryCode's gold is the latest declarer of a key and its distractors are always
+earlier declarations of that same key, so on this corpus *"latest wins" is the
+scoring rule*. The control computes it directly (§8.8a). The bitemporal arm
+arrives at it too, because supersession makes the newest generation the live one.
+So **+3.01pp is the residual between two implementations of the same correct
+rule** — evidence that the edifice reaches that rule more effectively, not that
+it picks a better answer. **This instrument is therefore structurally silent on
+the case the edifice exists for**: where latest is *not* correct — bounded
+validity, contradiction with no recency ordering, a correction that reinstates an
+older rule. §3(b) preregistered that limit for the valid-time axis; it binds the
+verdict as a whole. What would settle it is a corpus whose gold is not
+recency-identified. Until one is run, this result says supersession is a better
+*implementation* of recency, not that it is better than recency.
+
 Both endpoints move the same way, both CIs exclude zero, and the effect is
 roughly 1.4× the instrument's 80%-power MDE — so this is a real effect, and a
 small one. The ~20-line control does **not** tie the edifice and does not beat
