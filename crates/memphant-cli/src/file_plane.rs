@@ -16,7 +16,7 @@ use memphant_core::service::{canonical_projection_fingerprint, file_sync_plan_sh
 use memphant_types::{
     CanonicalProjectionResponse, CanonicalProjectionUnit, FileSyncOperation,
     FileSyncOperationResult, FileSyncRequest, FileSyncResult, FileSyncUnitMetadata,
-    MAX_FILE_SYNC_REQUEST_ENCODED_BYTES, MemoryKind, UnitId,
+    MAX_FILE_SYNC_REQUEST_ENCODED_BYTES, MemoryKind, UnitId, UnitState,
 };
 use serde::de::{self, DeserializeOwned, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -50,7 +50,11 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 const DEFAULT_URL: &str = "http://127.0.0.1:8080";
-const SCHEMA_VERSION: u32 = 1;
+// D2 (2026-08-01) bumped 1 -> 2: the unit footer gained state, valid_from,
+// valid_to and source_span, and MEMORY.md became a table. Both are
+// `deny_unknown_fields` round-trips, so a v1 tree on disk cannot be parsed by
+// this binary — the manifest check must fail loudly rather than mid-parse.
+const SCHEMA_VERSION: u32 = 2;
 const COMPILER_VERSION: &str = "b2-file-plane-v1";
 const MEMORY_FILE: &str = "MEMORY.md";
 const MANIFEST_FILE: &str = "memphant-export.json";
@@ -298,6 +302,16 @@ pub(crate) struct UnitFooter {
     pub fact_key: Option<String>,
     pub predicate: Option<String>,
     pub confidence: Option<f32>,
+    // D2. The projection already sends these and the renderer discarded them,
+    // so a unit file could not tell you when its rule became true, when it
+    // stopped, whether it had been validated, or which source bytes it came
+    // from — the four things a human reviewing memory actually asks. The
+    // projection is state- and interval-filtered by construction, so these
+    // are provenance for the row that IS here, not a filter to apply.
+    pub state: UnitState,
+    pub valid_from: Option<String>,
+    pub valid_to: Option<String>,
+    pub source_span: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -311,6 +325,8 @@ pub(crate) struct ManifestEntry {
     pub confidence: Option<f32>,
     pub valid_from: Option<String>,
     pub valid_to: Option<String>,
+    pub state: UnitState,
+    pub source_span: Option<String>,
     pub body_sha256: String,
     pub file_sha256: String,
 }
@@ -907,6 +923,8 @@ fn scan_sync_handles(handles: &TreeHandles) -> Result<SyncSnapshot, Vec<String>>
                                 predicate: entry.predicate.clone(),
                                 body: body.clone(),
                                 confidence: entry.confidence,
+                                state: entry.state,
+                                source_span: entry.source_span.clone(),
                                 valid_from: entry.valid_from.clone(),
                                 valid_to: entry.valid_to.clone(),
                                 body_sha256: entry.body_sha256.clone(),
@@ -1429,6 +1447,8 @@ fn render_projection(response: &CanonicalProjectionResponse) -> Result<RenderedP
             confidence: item.confidence,
             valid_from: item.valid_from.clone(),
             valid_to: item.valid_to.clone(),
+            state: item.state,
+            source_span: item.source_span.clone(),
             body_sha256: item.body_sha256.clone(),
             file_sha256,
         });
@@ -1489,24 +1509,56 @@ fn render_unit(generation: u64, item: &CanonicalProjectionUnit) -> Result<Vec<u8
         fact_key: item.fact_key.clone(),
         predicate: item.predicate.clone(),
         confidence: item.confidence,
+        state: item.state,
+        valid_from: item.valid_from.clone(),
+        valid_to: item.valid_to.clone(),
+        source_span: item.source_span.clone(),
     };
     let footer = serde_json::to_string(&footer)
         .map_err(|error| format!("footer serialization failed: {error}"))?;
     Ok(format!("# {title}\n\n{}\n\n<!-- memphant {footer} -->\n", item.body).into_bytes())
 }
 
+/// D2. The index is a table, not a bullet list: state, the valid interval and
+/// confidence are what make a memory file reviewable, and every one of them was
+/// already sitting in `ManifestEntry`. Nothing here filters — the projection
+/// already excludes superseded and out-of-interval rows by construction, so the
+/// moment supersession fires a dead rule leaves this file on its own. The
+/// columns explain what survived, they do not decide it.
 fn render_memory(scope_id: Uuid, fingerprint: &str, entries: &[ManifestEntry]) -> Vec<u8> {
     let mut memory =
         format!("# MemPhant Memory\n\nScope: `{scope_id}`\nSnapshot: `{fingerprint}`\n\n");
+    if entries.is_empty() {
+        return memory.into_bytes();
+    }
+    memory.push_str("| Memory | State | Since | Until | Confidence |\n");
+    memory.push_str("| --- | --- | --- | --- | --- |\n");
     for entry in entries {
         let title = entry.fact_key.as_deref().unwrap_or(&entry.unit_id);
         memory.push_str(&format!(
-            "- [{}]({})\n",
+            "| [{}]({}) | {} | {} | {} | {} |\n",
             escape_link_text(title),
-            entry.path
+            entry.path,
+            escape_cell(&serde_json::to_string(&entry.state).unwrap_or_default()),
+            escape_cell(entry.valid_from.as_deref().unwrap_or("—")),
+            escape_cell(entry.valid_to.as_deref().unwrap_or("—")),
+            entry
+                .confidence
+                .map_or_else(|| "—".to_string(), |value| format!("{value:.2}")),
         ));
     }
     memory.into_bytes()
+}
+
+/// A table cell may not contain a `|` or a newline, or it splits the row. The
+/// projection's own validators already reject newlines in these fields; the
+/// pipe escape is belt-and-braces for values that arrive from a store.
+fn escape_cell(value: &str) -> String {
+    value
+        .trim_matches('"')
+        .replace('\\', "\\\\")
+        .replace('|', "\\|")
+        .replace(['\n', '\r'], " ")
 }
 
 fn escape_link_text(value: &str) -> String {
@@ -2389,6 +2441,8 @@ fn validate_export_handles(
                         predicate: entry.predicate.clone(),
                         body,
                         confidence: entry.confidence,
+                        state: entry.state,
+                        source_span: entry.source_span.clone(),
                         valid_from: entry.valid_from.clone(),
                         valid_to: entry.valid_to.clone(),
                         body_sha256: entry.body_sha256.clone(),
@@ -2626,15 +2680,12 @@ fn validate_footer(
         fact_key: entry.fact_key.clone(),
         predicate: entry.predicate.clone(),
         confidence: entry.confidence,
+        state: entry.state,
+        valid_from: entry.valid_from.clone(),
+        valid_to: entry.valid_to.clone(),
+        source_span: entry.source_span.clone(),
     };
-    if footer.unit_id != expected.unit_id
-        || footer.body_sha256 != expected.body_sha256
-        || footer.subject_generation != expected.subject_generation
-        || footer.kind != expected.kind
-        || footer.fact_key != expected.fact_key
-        || footer.predicate != expected.predicate
-        || footer.confidence != expected.confidence
-    {
+    if *footer != expected {
         findings.push(format!(
             "{}: footer metadata differs from manifest",
             entry.path
@@ -5329,6 +5380,8 @@ mod tests {
             confidence: None,
             valid_from: None,
             valid_to: None,
+            state: memphant_types::UnitState::Validated,
+            source_span: None,
             body_sha256: sha256(body.as_bytes()),
         }];
         let fingerprint = canonical_projection_fingerprint(&items).unwrap();
@@ -5351,6 +5404,52 @@ mod tests {
         assert!(super::verify_export(&output).is_ok());
     }
 
+    /// D2: the four fields the projection has always SENT and the renderer
+    /// discarded now reach the unit footer, and the index is a reviewable table
+    /// rather than a list of opaque links. Round-trip too: what is written must
+    /// parse back and validate against the manifest, or `verify` breaks.
+    #[test]
+    fn the_unit_footer_and_memory_index_carry_state_interval_and_span() {
+        let rendered = rendered_projection(&[(1, "Deploy straight to production.")]);
+
+        let (_, footer) = super::parse_unit(rendered.units.values().next().unwrap()).unwrap();
+        assert_eq!(footer.state, memphant_types::UnitState::Active);
+        assert_eq!(footer.valid_from.as_deref(), Some("2026-07-01T00:00:00Z"));
+        assert_eq!(footer.valid_to, None);
+        assert_eq!(footer.source_span.as_deref(), Some("0-30"));
+
+        let memory = String::from_utf8(rendered.memory.clone()).unwrap();
+        assert!(
+            memory.contains("| Memory | State | Since | Until | Confidence |"),
+            "{memory}"
+        );
+        assert!(
+            memory.contains("| [fact:1](units/"),
+            "the row still links to the unit file: {memory}"
+        );
+        assert!(
+            memory.contains("| active | 2026-07-01T00:00:00Z | — | 0.90 |"),
+            "{memory}"
+        );
+
+        // The footer must still validate against the manifest entry it was
+        // rendered from — the two carry the same four new fields, so a
+        // half-applied change fails here rather than at a user's `verify`.
+        let mut findings = Vec::new();
+        super::validate_footer(&rendered.manifest.entries[0], 0, &footer, &mut findings);
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    /// An empty projection renders a header and nothing else — no dangling
+    /// table head promising rows that do not exist.
+    #[test]
+    fn an_empty_projection_renders_no_table_header() {
+        let rendered = rendered_projection(&[]);
+        let memory = String::from_utf8(rendered.memory).unwrap();
+        assert!(!memory.contains("| Memory |"), "{memory}");
+        assert!(memory.ends_with("\n\n"), "{memory:?}");
+    }
+
     fn rendered_projection(items: &[(u128, &str)]) -> super::RenderedProjection {
         let items = items
             .iter()
@@ -5361,8 +5460,10 @@ mod tests {
                 predicate: Some("states".to_string()),
                 body: (*body).to_string(),
                 confidence: Some(0.9),
-                valid_from: None,
+                valid_from: Some("2026-07-01T00:00:00Z".to_string()),
                 valid_to: None,
+                state: memphant_types::UnitState::Active,
+                source_span: Some(format!("0-{}", body.len())),
                 body_sha256: sha256(body.as_bytes()),
             })
             .collect::<Vec<_>>();

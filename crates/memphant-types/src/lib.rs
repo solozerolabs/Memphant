@@ -2171,6 +2171,17 @@ pub struct CanonicalProjectionUnit {
     pub valid_from: Option<String>,
     pub valid_to: Option<String>,
     pub body_sha256: String,
+    /// D2. The unit's lifecycle state, carried so the file plane can SHOW it
+    /// rather than merely filter on it. The projection query admits only
+    /// `active` and `validated`, so this is not a filter the reader has to
+    /// apply — it is the distinction between a rule that is merely current and
+    /// one that has been validated.
+    pub state: UnitState,
+    /// D2. `start-end` byte offsets into the source body, from
+    /// [`covering_source_span`]. Same value the recall correction handle
+    /// carries, read through the same primitive.
+    #[serde(default)]
+    pub source_span: Option<String>,
 }
 
 /// The complete, unranked, tenant-bound file-projection snapshot evaluated at one RFC3339 server-clock instant.

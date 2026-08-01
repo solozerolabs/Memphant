@@ -116,6 +116,18 @@
               "null"
             ]
           },
+          "source_span": {
+            "default": null,
+            "description": "D2. `start-end` byte offsets into the source body, from\n[`covering_source_span`]. Same value the recall correction handle\ncarries, read through the same primitive.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/UnitState",
+            "description": "D2. The unit's lifecycle state, carried so the file plane can SHOW it\nrather than merely filter on it. The projection query admits only\n`active` and `validated`, so this is not a filter the reader has to\napply — it is the distinction between a rule that is merely current and\none that has been validated."
+          },
           "unit_id": {
             "$ref": "#/components/schemas/UnitId"
           },
@@ -136,7 +148,8 @@
           "unit_id",
           "kind",
           "body",
-          "body_sha256"
+          "body_sha256",
+          "state"
         ],
         "type": "object"
       },

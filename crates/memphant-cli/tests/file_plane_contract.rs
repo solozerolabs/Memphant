@@ -210,8 +210,8 @@ async fn sync_fails_closed_on_immutable_and_inbox_format_edits() {
                 fs::write(
                     path,
                     text.replacen(
-                        "\"schema_version\": 1,",
-                        "\"schema_version\": 1,\n  \"schema_version\": 1,",
+                        "\"schema_version\": 2,",
+                        "\"schema_version\": 2,\n  \"schema_version\": 2,",
                         1,
                     ),
                 )

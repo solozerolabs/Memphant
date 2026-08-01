@@ -433,6 +433,8 @@ mod canonical_projection_store_tests {
                 confidence: Some(0.5),
                 valid_from: None,
                 valid_to: None,
+                state: UnitState::Validated,
+                source_span: None,
                 body_sha256: "bb".to_string(),
             },
             CanonicalProjectionUnit {
@@ -444,12 +446,16 @@ mod canonical_projection_store_tests {
                 confidence: Some(1.0),
                 valid_from: Some("2026-07-01T00:00:00Z".to_string()),
                 valid_to: Some("2026-08-01T00:00:00Z".to_string()),
+                state: UnitState::Active,
+                source_span: Some("0-1".to_string()),
                 body_sha256: "aa".to_string(),
             },
         ];
         assert_eq!(
             canonical_projection_fingerprint(&items).expect("fingerprint"),
-            "4b2e0c7f4801952ddf18abfb6136d9c7cbf83a50180f49fba66774e1bd568cb8"
+            // D2 re-pinned: `state` and `source_span` joined the projection unit, so
+            // the fingerprint over the serialized items necessarily moved.
+            "82c9591abf851236986e56ef44a18a16147b1add4d0e817988ff21c70c68e22b"
         );
         assert_ne!(
             canonical_projection_fingerprint(&items).expect("fingerprint"),
@@ -780,6 +786,8 @@ mod file_sync_tests {
             confidence: Some(1.0),
             valid_from: None,
             valid_to: None,
+            state: UnitState::Active,
+            source_span: None,
             body_sha256: format!("{:x}", Sha256::digest(body.as_bytes())),
         }
     }
@@ -2149,6 +2157,11 @@ fn projection_items(
                 confidence: unit.confidence,
                 valid_from: unit.valid_from,
                 valid_to: unit.valid_to,
+                state: unit.state,
+                // D2. The same primitive the recall correction handle uses, so
+                // the file plane and the API can never disagree about where a
+                // unit came from.
+                source_span: memphant_types::covering_source_span(&unit.contextual_chunks),
             })
         })
         .collect()
