@@ -34,10 +34,16 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill -TERM "$pid" 2>/dev/null || true
   done
-  # Reap any server this run's children left holding a port. Matched on the
-  # exact ports this script uses so a concurrent lane's server is never killed.
+  # Reap any server this run's children left holding a port.
+  #
+  # DOUBLY SCOPED, AND BOTH SCOPES ARE LOAD-BEARING. `pgrep -f memphant-server`
+  # matches EVERY worktree's binary on this host -- sibling lanes share the
+  # machine, and an unscoped reap silently kills their in-flight measurements
+  # with the failure surfacing far from the cause. This lane lost three runs to
+  # exactly that pattern from the other side. So: only this worktree's own
+  # binary path, AND only a process listening on one of this run's own ports.
   for port in 39571 39572 39573 39574; do
-    for spid in $(pgrep -f "memphant-server" 2>/dev/null); do
+    for spid in $(pgrep -f "^$ROOT/target/release/memphant-server" 2>/dev/null); do
       if lsof -p "$spid" -a -i :"$port" >/dev/null 2>&1; then
         echo "[cleanup] reaping memphant-server pid=$spid port=$port" >&2
         kill -TERM "$spid" 2>/dev/null || true
