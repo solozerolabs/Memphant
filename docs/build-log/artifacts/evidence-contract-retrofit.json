@@ -2,11 +2,11 @@
   "schema_version": 1,
   "generated_by": "scripts/check_evidence_contract.py --report",
   "method": "Every tracked JSON under docs/build-log/artifacts/ carrying a decision key at depth <= 4 is a promotion-capable candidate. NOTHING here is backfilled: a field that cannot be verified from a banked artifact is left absent and reported as a violation rather than invented.",
-  "candidates": 77,
-  "contracted": 32,
+  "candidates": 79,
+  "contracted": 34,
   "pending_retrofit": 45,
   "failing": 45,
-  "unverified_fields_total": 21,
+  "unverified_fields_total": 23,
   "artifacts": [
     {
       "artifact": "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-a-vs-b.json",
@@ -714,6 +714,32 @@
         "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
       ],
       "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/s4-controls/analysis-completecase-n177.json",
+      "state": "contracted",
+      "decision_keys": [
+        "delta",
+        "power",
+        "verdict"
+      ],
+      "violations": [],
+      "unverified_fields": [
+        "evidence_contract.attribution.method"
+      ]
+    },
+    {
+      "artifact": "docs/build-log/artifacts/s4-controls/analysis.json",
+      "state": "contracted",
+      "decision_keys": [
+        "delta",
+        "power",
+        "verdict"
+      ],
+      "violations": [],
+      "unverified_fields": [
+        "evidence_contract.attribution.method"
+      ]
     },
     {
       "artifact": "docs/build-log/artifacts/sibling-gather-deletion/sibling_gather_deletion.json",

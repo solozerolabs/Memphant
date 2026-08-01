@@ -293,12 +293,29 @@ def main() -> int:
         help="repeatable; e.g. agentic=/path/prov.json",
     )
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--drop-ids",
+        default="",
+        help=(
+            "comma-separated question_ids to exclude from EVERY arm. Used for "
+            "the complete-case sensitivity analysis when a row is unscoreable "
+            "for a reason outside the harness -- e.g. the pinned provider's "
+            "content filter refusing a question deterministically. Dropping is "
+            "never the headline: the headline scores an unscoreable row as a "
+            "MISS for the arm that could not produce it."
+        ),
+    )
     args = parser.parse_args()
 
+    dropped = {value for value in args.drop_ids.split(",") if value}
     treatment = json.loads(args.treatment.read_text())
     assert_same_stage("treatment", treatment)
     treatment_facts = assert_treatment_liveness(treatment)
-    treatment_hits = hits_by_question(treatment)
+    treatment_hits = {
+        key: value
+        for key, value in hits_by_question(treatment).items()
+        if key not in dropped
+    }
 
     contrasts = {}
     arms = {
@@ -316,7 +333,11 @@ def main() -> int:
         name, _, path = spec.partition("=")
         report = json.loads(Path(path).read_text())
         assert_same_stage(name, report)
-        control_hits = hits_by_question(report)
+        control_hits = {
+            key: value
+            for key, value in hits_by_question(report).items()
+            if key not in dropped
+        }
         order = [q for q in control_hits if q in treatment_hits]
         if len(order) != len(control_hits):
             raise SystemExit(f"{name}: question ids not a subset of the treatment's")
@@ -337,6 +358,7 @@ def main() -> int:
         "preregistration": s4.PREREGISTRATION,
         "planning_mde_pp": round(PLANNING_MDE * 100, 2),
         "n_d_structural_floor": N_D_FLOOR,
+        "dropped_question_ids": sorted(dropped),
         "arms": arms,
         "contrasts": contrasts,
         "lineage": s4.lineage({}),

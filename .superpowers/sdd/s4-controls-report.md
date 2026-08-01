@@ -29,11 +29,57 @@ top-10 bodies, Track R paraphrase bank, n=180.
 
 ## 2. Results
 
-*(Part B of the build log carries the full numbers, the transcripts and the
-lineage. This section is the summary the caller reads.)*
+| arm | hits@10 | rate | hits@5 | LLM calls at recall | spend |
+|---|---:|---:|---:|---:|---:|
+| **C1 — agentic `grep`** | **174 / 180** | **0.9667** | **174 / 180** | 718 | $25.93 |
+| T — MemPhant `bm25code_dense` | 106 / 180 | 0.5889 | 73 / 180 | **0** | $0 |
+| C0 — scoped BM25 (reference) | 46 / 180 | 0.2556 | — | 0 | $0 |
 
-See `docs/build-log/2026-08-01-agentic-search-controls.md` Part B and
-`docs/build-log/artifacts/s4-controls/analysis.json`.
+Ceiling on this bank, for every arm: **178 / 180**.
+
+| contrast | b | c | n_d | Δ | exact p | realized ψ / MDE | verdict |
+|---|---:|---:|---:|---:|---:|---:|---|
+| **T vs C1** | **1** | **69** | 70 | **−37.78pp** | 1.20e−19 | 0.389 / 13.34pp | **B — the control wins** |
+| T vs C0 | 66 | 6 | 72 | +33.33pp | 7.26e−14 | 0.400 / 13.54pp | A — MemPhant wins |
+
+**Answer: no. MemPhant does not beat an agent with `grep`.** It loses by 37.8
+points on its own bank, at its shipped default, on the same haystack, at the same
+stage, with the same query string — while beating the comparator the program has
+been using (scoped BM25) by +33.3 points on that same bank. There is exactly
+**one** question in 180 where MemPhant hits and `grep` misses.
+
+**Consequence: the ~$545 SWE-ContextBench lane is NOT authorized by this lane**
+(§A.3, fixed before any cell).
+
+**Not a budget artifact.** The §A.6 caps never bound — mean 3.99 tool calls
+against 12, mean 4.51 selections against 10, ~700 completion tokens against
+24,000 — and **hits@5 equals hits@10 exactly**, so every hit came in the first
+five picks. Post-hoc: search surfaced the gold event on 176/180 and the agent
+selected it on 175.
+
+**Not an upper bound.** §A.1.2, committed before any cell, fixed that a control
+margin on this identifier-withholding bank is a **lower** bound; on
+human-phrased queries the gap can only widen.
+
+**What MemPhant still has here is cost, not accuracy:** 0 LLM calls versus
+$0.144 per question. That is a defensible product position and it is a different
+one from the program's current claim.
+
+Handled honestly rather than smoothed: three provider content-filter refusals
+scored as misses for the control (with an n=177 complete-case sensitivity,
+−38.42pp, same verdict); a 2-question dead zone in the bank verified symmetric
+across arms; an ONCU probe at 2/20 whose bias inflates the control; and three
+preregistration deviations listed in Part B §B.8.
+
+Full numbers, transcripts and lineage: `docs/build-log/2026-08-01-agentic-search-controls.md`
+Part B and `docs/build-log/artifacts/s4-controls/analysis.json`.
+
+**Arm 2 (dense RAG, $0)** was still embedding when this was written; it tests a
+weaker claim and changes no verdict above.
+
+**Total spend: $25.98** against an $80 ceiling (ONCU $0.0512 + agentic $25.93).
+Figures are pinned-price × reported tokens — an upper bound, not settled cost;
+generation ids are banked for reconciliation.
 
 ---
 

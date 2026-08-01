@@ -59,7 +59,7 @@ MAX_PRICE_PER_MILLION = {"prompt": Decimal("5.0"), "completion": Decimal("25.0")
 MAX_TOOL_CALLS = 12
 MAX_TURNS = 16
 MAX_COMPLETION_TOKENS_PER_QUESTION = 24_000
-MAX_TOKENS_PER_CALL = 2_000
+MAX_TOKENS_PER_CALL = 8_000
 GREP_MAX_MATCHES = 25
 GREP_SNIPPET_CHARS = 300
 READ_EVENT_CHARS = 6_000
@@ -265,7 +265,9 @@ class StubEngine:
     def __init__(self) -> None:
         self.usage = {"prompt_tokens": 0, "completion_tokens": 0}
 
-    def complete(self, messages: list[dict], question: str) -> dict:
+    def complete(
+        self, messages: list[dict], question: str, *, force_tool: bool = False
+    ) -> dict:
         turn = sum(1 for message in messages if message["role"] == "tool")
         self.usage["prompt_tokens"] += 100
         self.usage["completion_tokens"] += 20
@@ -327,9 +329,19 @@ class OpenRouterEngine:
         self.generation_ids: list[str] = []
         self._lock = threading.Lock()
 
-    def complete(self, messages: list[dict], question: str) -> dict:
+    def complete(
+        self, messages: list[dict], question: str, *, force_tool: bool = False
+    ) -> dict:
+        # `tool_choice: "required"` is the escalation after a prose turn. Three
+        # questions refused to call a tool under "auto" on every retry at
+        # temperature 0 -- deterministic, so re-running alone could never fix
+        # them. Forcing the choice is a protocol constraint, applied identically
+        # to every row that hits it and carrying no task information, so it
+        # cannot favour either arm.
         return self._post(
-            {"tools": TOOLS, "tool_choice": "auto"}, messages, MAX_TOKENS_PER_CALL
+            {"tools": TOOLS, "tool_choice": "required" if force_tool else "auto"},
+            messages,
+            MAX_TOKENS_PER_CALL,
         )
 
     def complete_plain(self, messages: list[dict], max_tokens: int = 512) -> dict:
@@ -392,6 +404,8 @@ class OpenRouterEngine:
                 self.generation_ids.append(data["id"])
         return {
             "message": data["choices"][0]["message"],
+            "finish_reason": data["choices"][0].get("finish_reason")
+            or data["choices"][0].get("native_finish_reason"),
             "usage": usage,
             "id": data.get("id"),
             "cost": usage.get("cost"),
@@ -420,12 +434,13 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
     selection: list[int] | None = None
     error: str | None = None
     nudges = 0
+    prose: list[str] = []
     completion_tokens = 0
     turns = 0
     while turns < MAX_TURNS:
         turns += 1
         try:
-            response = engine.complete(messages, query)
+            response = engine.complete(messages, query, force_tool=nudges > 0)
         except Exception as exception:  # noqa: BLE001 - recorded, not swallowed
             error = f"engine: {type(exception).__name__}: {exception}"
             break
@@ -448,8 +463,21 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
             # did not measure. The nudge carries no task information and is
             # outcome-independent, so it cannot favour either arm.
             nudges += 1
+            prose.append(
+                f"finish_reason={response.get('finish_reason')!r} "
+                f"completion_tokens={(response.get('usage') or {}).get('completion_tokens')} "
+                f"content={(message.get('content') or '')[:300]!r}"
+            )
             if nudges > MAX_PROSE_NUDGES:
-                error = "model returned prose instead of calling a tool"
+                # Name the provider's own terminal reason. Three questions on
+                # this bank come back with finish_reason='content_filter',
+                # 2-8 completion tokens and an empty message on every retry at
+                # temperature 0, including under tool_choice='required': the
+                # pinned provider refuses them. That is a provider limit, not a
+                # harness defect and not a search failure, and it is reported as
+                # such rather than smoothed into a miss.
+                reason = response.get("finish_reason") or "no_tool_call"
+                error = f"no tool call after {nudges - 1} nudges (finish_reason={reason})"
                 break
             messages.append(
                 {
@@ -535,6 +563,7 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
         "resolved_sequences": resolved,
         "unresolved_sequences": unresolved,
         "completion_tokens": completion_tokens,
+        "prose_turns": prose,
         "gold_event_sequence": gold_sequence,
         "gold_surfaced_by_a_tool_call": gold_surfaced,
         "gold_rank_in_selection": (

@@ -1,0 +1,156 @@
+{
+  "instrument": "track_r_paraphrase n=180",
+  "endpoint": "gate_common.provenance_hit@10 over top-10 bodies",
+  "preregistration": "docs/build-log/2026-08-01-agentic-search-controls.md#part-a",
+  "planning_mde_pp": 9.38,
+  "n_d_structural_floor": 6,
+  "dropped_question_ids": [
+    "track_r_par_057",
+    "track_r_par_126",
+    "track_r_par_155"
+  ],
+  "arms": {
+    "memphant_bm25code_dense": {
+      "hits_at_10": 106,
+      "n": 177,
+      "rate": 0.59887,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-fusion/fusion_probe-provenance.json",
+      "liveness": {
+        "lexical_scorer": "bm25-code",
+        "embed_model": "small",
+        "questions_with_channel_table": 171,
+        "questions_with_lexical_channel": 171,
+        "questions_with_vector_channel": 171
+      },
+      "llm_calls_at_recall": 0,
+      "reported_spend_usd": 0.0
+    },
+    "agentic_grep": {
+      "hits_at_10": 174,
+      "n": 177,
+      "rate": 0.983051,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s4/agentic-final-provenance.json",
+      "liveness": {
+        "rows": 180,
+        "rows_with_zero_tool_calls": 3,
+        "rows_with_errors": 3,
+        "error_kinds": [
+          "no tool call after 2 nudges (finish_reason=content_filter)"
+        ],
+        "rows_with_unresolved_selection": 0,
+        "mean_tool_calls": 3.989
+      },
+      "reported_spend_usd": 25.9318
+    },
+    "bm25_scoped": {
+      "hits_at_10": 46,
+      "n": 177,
+      "rate": 0.259887,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-trunk/bm25-scoped-provenance.json",
+      "liveness": null,
+      "reported_spend_usd": null
+    }
+  },
+  "contrasts": {
+    "memphant_vs_agentic_grep": {
+      "n": 177,
+      "treatment_hits": 106,
+      "control_hits": 174,
+      "both": 105,
+      "neither": 2,
+      "treatment_only_b": 1,
+      "control_only_c": 69,
+      "n_discordant": 70,
+      "delta": -0.384181,
+      "delta_pp": -38.42,
+      "mcnemar_exact_p": 1.2027867851011065e-19,
+      "realized_psi": 0.39548,
+      "realized_mde_pp": 13.57,
+      "planning_mde_pp": 9.38,
+      "verdict": "B \u2014 the control wins",
+      "reason": "delta <= -MDE and p < 0.05"
+    },
+    "memphant_vs_bm25_scoped": {
+      "n": 177,
+      "treatment_hits": 106,
+      "control_hits": 46,
+      "both": 40,
+      "neither": 65,
+      "treatment_only_b": 66,
+      "control_only_c": 6,
+      "n_discordant": 72,
+      "delta": 0.338983,
+      "delta_pp": 33.9,
+      "mcnemar_exact_p": 7.255748219519502e-14,
+      "realized_psi": 0.40678,
+      "realized_mde_pp": 13.77,
+      "planning_mde_pp": 9.38,
+      "verdict": "A \u2014 MemPhant wins",
+      "reason": "delta >= MDE and p < 0.05"
+    }
+  },
+  "lineage": {
+    "git_head": "5859e840195d3b8945940d6710963b52d930ceeb",
+    "git_branch": "s4-controls",
+    "git_dirty": true,
+    "git_dirty_paths": [
+      "cripts/code_lane_run_agentic_control.py",
+      "docs/build-log/artifacts/s4-controls/",
+      "scripts/s4_controls_compare.py"
+    ],
+    "input_sha256": {},
+    "preregistration": "docs/build-log/2026-08-01-agentic-search-controls.md#part-a"
+  },
+  "bias_bound": "The paraphrase bank bans identifier surfaces; absolute q->target coverage brackets as paraphrase 0.1346 < human 0.175-0.287 < original 0.396. A grep-driven control is a lexical instrument, so this bank is its hardest point. Any MemPhant margin over the agentic control here is an UPPER BOUND; any agentic-control margin over MemPhant is a LOWER BOUND.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "On the 180-question Track R paraphrase bank, at one shared endpoint (gate_common.provenance_hit@10 over top-10 bodies), one haystack (the golden's bound attempt) and one query string, MemPhant at its shipped bm25code_dense default scores 106/180 against 174/180 for a no-substrate agentic control given only grep/read/ls over the same raw events: b=1 / c=69, n_d=70, delta=-38.42pp, two-sided exact McNemar p=1.203e-19.",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 177,
+      "b": 1,
+      "c": 69,
+      "n_d": 70,
+      "psi_observed": 0.39548,
+      "mde_at_80": 0.13568375697350468,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "source": "docs/build-log/artifacts/s4-controls/analysis.json contrasts['memphant_vs_agentic_grep']"
+    },
+    "harness": {
+      "embed_model": "treatment: small (bge-small-en-v1.5). agentic control: none \u2014 no embeddings at all, which is the point of the arm.",
+      "scorer": "treatment: lexical=bm25-code + weighted-RRF fusion, recall mode=fast. agentic control: anthropic/claude-opus-5 in a bounded grep/read_event/list_events loop, provider pinned only=[anthropic] allow_fallbacks=false, max_price 5.0/25.0 USD per million.",
+      "k": 10,
+      "budget": 8192,
+      "flags": [
+        "agentic caps: 12 tool calls, 16 turns, 24000 completion tokens per question, grep<=25 matches, read_event<=6000 chars",
+        "treatment costs 0 LLM calls at recall"
+      ],
+      "command": "scripts/s4_controls_run.sh pilot && scripts/s4_controls_run.sh full"
+    },
+    "corpus": {
+      "sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+      "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921 (nebius/SWE-rebench-openhands-trajectories@35455389, 495 sampled attempts, 64055 content events)",
+      "n_items": 177,
+      "path_note": "benchmarks/data/track_r_paraphrase_golden.jsonl is not tracked in this repo (only its lock), so the checker cannot recompute the golden sha here"
+    },
+    "leakage": {
+      "unit_definition": "one content event of the attempt, 4000-char clip",
+      "absolute_target_coverage": 0.1346,
+      "floor": 0.0667,
+      "floor_kind": "exhaustive",
+      "concentration": 2.018,
+      "provenance_class": "machine_generated",
+      "source": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+      "negative_selection": "same-attempt hard negatives \u2014 every non-target content event of the bound attempt, which is also exactly the retrieval haystack for every arm here"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Treatment: lexical_scorer='bm25-code' and embed_model='small' in the served run's provenance, with BOTH 'lexical' and 'vector' entries observed in its per-candidate channel_table on every question \u2014 asserted by s4_controls_compare.assert_treatment_liveness, which exits non-zero if either channel is absent. Control: every scored row carries an executed tool call and a selection that resolves to real event sequences in that attempt; rows_with_errors and rows_with_zero_tool_calls are recorded in the arm's own liveness block and both must be 0 before the arm is reported.",
+    "probe_kind": "gate",
+    "attribution": {
+      "method": "unverified",
+      "note": "No bisect and none applicable: this contrasts two different retrieval systems, not two commits of one. The treatment is a banked run at head 4a39ce5f with its binary sha256s recorded; the control has no MemPhant binary in its path at all."
+    },
+    "notes": "decisional=false for the two reasons carried by every artifact on this bank and neither fixable by re-reading: (1) the bank FAILS its own preregistered headline leakage bar \u2014 concentration 2.018 against <=1.50, bar_passed=false in the lock; (2) the corpus licence CC-BY-4.0 is a HuggingFace card assertion with no LICENSE blob pinned. A third caveat is specific to THIS artifact and runs in the direction of the result rather than against it: the paraphrase bank bans identifier surfaces (q->target coverage 0.1346 vs human 0.175-0.287), which is the hardest regime for a lexical grep control, so the control's margin here is a LOWER bound. Fourth: two goldens (track_r_par_028, track_r_par_066) have spans that appear in no event of their own attempt, so the ceiling is 178/180 for every arm equally; verified symmetric, so it does not bias the contrast. Fifth: an ONCU no-corpus probe answered 2/20 questions correctly with no evidence, a bias that inflates the CONTROL, not the treatment."
+  }
+}

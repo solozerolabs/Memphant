@@ -222,3 +222,234 @@ and — for T — the banked `binaries.sha256` of the served MemPhant binaries. 
 artifact without lineage did not happen.
 
 ---
+
+# PART B — RESULTS (appended after the runs; Part A above is unedited)
+
+## B.0 The answer, in one table
+
+**Instrument:** Track R paraphrase, n=180. **Endpoint:**
+`gate_common.provenance_hit` at k=10 over each arm's top-10 bodies. **Haystack:**
+the golden's bound attempt, identical for all four arms. **Query:**
+`retrieval_query(golden)`, identical for all four arms.
+
+| arm | hits@10 | rate | hits@5 | LLM calls at recall | spend |
+|---|---:|---:|---:|---:|---:|
+| **C1 — agentic `grep` control** | **174 / 180** | **0.9667** | **174 / 180** | 718 | **$25.93** |
+| T — MemPhant `bm25code_dense` (shipped default) | 106 / 180 | 0.5889 | 73 / 180 | **0** | **$0** |
+| C0 — scoped BM25 (banked reference) | 46 / 180 | 0.2556 | — | 0 | $0 |
+
+Ceiling for every arm on this bank: **178 / 180** (§B.5).
+
+| contrast | b | c | n_d | Δ | exact McNemar p | realized ψ | realized MDE | **verdict** |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| **T vs C1 (agentic `grep`)** | **1** | **69** | 70 | **−37.78pp** | **1.20e−19** | 0.389 | 13.34pp | **B — the control wins** |
+| T vs C0 (scoped BM25) | 66 | 6 | 72 | +33.33pp | 7.26e−14 | 0.400 | 13.54pp | A — MemPhant wins |
+
+**Read the b-cell.** Across 180 questions there is **exactly one** on which
+MemPhant retrieves the gold and the `grep` agent does not
+(`track_r_par_024`). There are **69** the other way.
+
+**The answer to the question this lane was opened to settle:
+no. MemPhant does not beat an agent with `grep`. It loses by 37.8 points on its
+own bank, at its own shipped default, on the same haystack, at the same stage,
+with the same query string.**
+
+## B.1 The verdict, and the gate it closes
+
+§A.4 was committed before any cell was seen. Applied verbatim:
+n_d = 70 ≥ 6, Δ = −37.78pp ≤ −9.38pp, p = 1.20e−19 < 0.05 ⇒ **Verdict B.**
+
+Per §A.3, **the ~$545 SWE-ContextBench lane is NOT authorized by this lane.**
+The arms review's premise was *"if we cannot beat `grep` for $40, we will not
+beat a no-memory baseline for $545."* We could not, and it cost $25.98.
+
+This also settles the plan's §D4 fallback in the direction the plan feared:
+**retrieval is not this product's contribution on coding work.** The honest
+product is governance — supersession, forgetting, provenance, the file plane —
+and this lane's result should be read as evidence *for* that pivot, not as a
+number to improve.
+
+## B.2 The result is not an artifact of budget, and the arm's own trace says so
+
+§A.6 fixed hard caps precisely so a win could not be dismissed as an unbounded
+agent beating a bounded retriever. The caps turned out **not to bind**:
+
+| cap | value | realized |
+|---|---:|---:|
+| tool calls per question | 12 | **mean 3.99, median 4, max 9** |
+| model turns | 16 | never reached |
+| completion tokens per question | 24,000 | mean ~700 |
+| selection size | 10 | **mean 4.51** |
+
+The agent did not spend its budget. It also did not need depth: **hits@5 equals
+hits@10 exactly** (174 both), so every hit it got, it got in its first five
+picks. Loosening the caps could not have produced this margin, and tightening
+them would not have removed it.
+
+**Miss attribution, post-hoc from the transcript** (the gold sequence never
+entered the agent's context): a `grep`/`read_event` result surfaced the gold
+event on **176 / 180** questions, and the agent then selected it on **175**. So
+its search located the evidence 97.8% of the time and its ranking dropped it
+once. The remaining losses are the three provider refusals of §B.4.
+
+**What the control does spend, and MemPhant does not:** 4,554,054 prompt tokens
+and 126,460 completion tokens, 718 model calls, **$25.93 — $0.144 per
+question.** MemPhant answers with **zero** LLM calls at recall. That is the
+whole of MemPhant's remaining advantage on this lane and it is a cost-and-latency
+advantage, not an accuracy one. It is a real product position; it is not the one
+the program has been arguing for.
+
+## B.3 The bound carried ahead of the numbers now cuts against us
+
+§A.1.2, written before any cell: *"Any MemPhant margin over the agentic control
+here is an UPPER BOUND; any agentic-control margin over MemPhant is a LOWER
+BOUND."*
+
+The margin went to the control. Therefore **−37.78pp is a lower bound.** This
+bank withholds the identifier surfaces a `grep` control feeds on
+(q→target coverage 0.1346 against human 0.175–0.287), which is the hardest
+regime we could have put it in — and it still won 174 to 106. On
+human-phrased queries, which name files and symbols, the gap can only widen.
+
+The ONCU probe (§B.6) points the same way: it bounds a bias that inflates the
+**control**, and even granting every one of its questions to that bias the
+verdict does not move.
+
+## B.4 Three rows the pinned provider refuses — reported, not smoothed
+
+`track_r_par_057`, `track_r_par_126`, `track_r_par_155` return
+`finish_reason="content_filter"`, 2–8 completion tokens and an empty message on
+**every** retry at temperature 0 — including after two protocol nudges and under
+`tool_choice="required"`, and with the per-call token cap raised from 2,000 to
+8,000 to rule out truncation. The pinned provider refuses them. This is a
+provider limit, not a harness defect and not a search failure.
+
+The standing rule is to drive errors to zero before reporting. **Here that is
+not achievable without unpinning the provider, which is a preregistered guard,
+so the rule is honoured the other way: the unscoreable rows are scored as MISSES
+for the arm that could not produce them** — the assumption most favourable to
+the treatment — and the complete-case analysis is reported beside it.
+
+| analysis | n | T | C1 | Δ | p | verdict |
+|---|---:|---:|---:|---:|---:|---|
+| **headline** (refusals = miss for C1) | 180 | 106 | 174 | −37.78pp | 1.20e−19 | B |
+| complete case (refusals dropped from both arms) | 177 | 106 | 174 | −38.42pp | 1.20e−19 | B |
+
+The headline is the *smaller* of the two margins. Nothing in the verdict turns
+on the handling.
+
+## B.5 A 2-question dead zone in the instrument, found free and verified symmetric
+
+`track_r_par_028` and `track_r_par_066` carry required spans that appear in **no
+event of their own attempt** — the corpus clips events at 4,000 characters and
+these spans sit past the clip. No arm can reach them: verified false for
+MemPhant (`gold_in_pool` false, `gold_fused_rank` null), for scoped BM25, and
+for a raw-event oracle handed the declared gold event itself.
+
+**The effective ceiling on this bank is 178/180 (0.9889) for every arm equally.**
+It is symmetric, so it biases no contrast; it does mean the agentic control at
+174/180 is within **4 questions of the achievable ceiling.**
+
+## B.6 ONCU contamination probe
+
+20 questions, `anthropic/claude-opus-5`, no corpus and no tools, seed 20260801.
+**2 / 20 answered correctly with no evidence** (`track_r_par_051`,
+`track_r_par_018`) — both cases where the question's phrasing lets the answer be
+reconstructed, not deep memorisation; 10/20 correctly said `UNKNOWN`. Cost
+$0.0512.
+
+On a *retrieval* endpoint this cannot manufacture a provenance hit, but it can
+let a `grep` control search for the **answer** instead of the evidence — a bias
+that inflates C1. At 10% it cannot come close to explaining a 69-vs-1 discordance.
+
+## B.7 Mechanism liveness — proved from each arm's own trace
+
+| arm | proof | source |
+|---|---|---|
+| **T** | `lexical_scorer="bm25-code"`, `embed_model="small"`, and **both** `lexical` and `vector` entries present in the per-candidate `channel_table` on all 180 questions | asserted by `s4_controls_compare.assert_treatment_liveness`, which exits non-zero if either channel is absent |
+| **C1** | 177/180 rows carry ≥1 executed tool call; **0** rows have an unresolved selection; the 3 exceptions are the provider refusals, recorded with their `finish_reason` | the arm's own `liveness` block and per-row transcript |
+
+The treatment artifact is `run-fusion/fusion_probe-provenance.json` rather than
+`run-trunk/bm25code_dense-provenance.json` for one reason: the two are
+**byte-identical on `hit_at_10` for all 180 questions**, and only the former
+banks the `channel_table` that proves both fusion channels fired. Choosing the
+artifact that can prove its own mechanism is the point of the rule.
+
+## B.8 Preregistration deviations — disclosed, not smoothed
+
+**1. §A.8's ordering was not followed.** A.8 said C2 (free) runs before any money
+moves. C2 was running when the paid arms started, and had not finished. The
+reason: the host went to load ~130–165 under six sibling lanes and C2's local
+embed fell to ~3 docs/s, which would have idled the paid arm for over an hour.
+On inspection **the ordering could not have saved money anyway** — the brief
+requires C1 regardless of C2's value, so no C2 result would have cancelled C1's
+spend. What A.8 was protecting (a free falsifier is not skipped, and its number
+is in hand before the expensive one is interpreted) is preserved: C2 is not
+cancelled. But the letter of A.8 was not followed and it is recorded here as a
+deviation rather than claimed as compliance.
+
+**2. `MAX_TOKENS_PER_CALL` was raised 2,000 → 8,000 mid-lane**, while diagnosing
+the three refusals, to rule out truncation as their cause. It is not one of
+A.6's preregistered caps (the per-question ceiling of 24,000 completion tokens
+is, and never bound at a realized mean of ~700). It changed no scored row: the
+three rows still refuse, and no other row came near either limit.
+
+**3. A protocol nudge and `tool_choice="required"` escalation were added mid-lane**
+after the pilot showed prose turns. Both are outcome-independent, carry no task
+information, and apply identically to any row that hits them. Neither rescued
+the three refusals.
+
+## B.9 Arm 2 (no-memory dense RAG) — status
+
+Still running at the time this section was written: `bge-small-en-v1.5` over
+21,629 raw events, in-process, at ~3 documents/second on a host at load ~150.
+It is $0 and its result changes no verdict above — C1 already answers the
+question the lane was opened for. Its artifact and contrast will be appended to
+`docs/build-log/artifacts/s4-controls/` when it lands. Reporting the lane's
+answer without it is not a shortcut: C2 tests a different and weaker claim
+("the substrate beats a 60-line script"), and the arm that tests the claim the
+program actually rests on has reported.
+
+## B.10 Spend ledger
+
+| stage | what | reported | basis |
+|---|---|---:|---|
+| 0 | stub round trip (full adapter contract, no network) | $0 | — |
+| 0 | C2 dense RAG (local `bge-small`) | $0 | — |
+| 0 | C0 re-read from banked artifact | $0 | — |
+| 1 | ONCU probe, 20 rows | $0.0512 | pinned price × reported tokens |
+| 2 | C1 pilot, 30 rows | $4.31 | ″ |
+| 3 | C1 remaining 152 rows + 3 refusal retries | $21.62 | ″ |
+| | **total** | **$25.98** | **ceiling $80** |
+
+Unsettled liability: the figures are **pinned-catalogue-price × reported
+tokens**, an upper bound, not OpenRouter's settled cost. Generation ids are
+banked in the arm's provenance for reconciliation.
+
+Provider pin held for every paid call: `only: ["anthropic"]`,
+`allow_fallbacks: false`, `max_price = {prompt: 5.0, completion: 25.0}` USD/M,
+fetched live from the OpenRouter catalogue on 2026-08-01. No call was served by
+a fallback provider and no price change occurred.
+
+## B.11 What this does and does not license
+
+**Licensed.** (1) Do not authorize the ~$545 SWE-ContextBench lane on the
+strength of MemPhant's coding retrieval. (2) Stop treating scoped BM25 as the
+control: beating it by +33pp and losing to `grep` by −38pp on the same bank, at
+the same stage, shows what that comparator was worth. (3) Any future coding
+retrieval arm must carry the agentic control in the same table, or it is not a
+measurement.
+
+**Not licensed.** This artifact is `decisional: false` and says so in its
+contract. The bank **fails its own preregistered leakage bar**
+(`leak_concentration_le_1_50` false at 2.018, `bar_passed` false) and its corpus
+licence is a card assertion with no LICENSE blob pinned. So this does not
+promote or kill a mechanism by itself. It also does not measure answer accuracy,
+end-to-end latency, cost at scale, or anything about governance — supersession,
+forgetting, provenance — which is the surface this result points at and which no
+control here touched.
+
+**And it does not say MemPhant is worthless.** It says that on *this* lane, at
+*this* endpoint, retrieval quality is not where the value is, and that the value
+that remains — 0 LLM calls against $0.144 per question — is a cost-and-latency
+claim that this lane did not set out to make and did not measure properly.
