@@ -519,8 +519,23 @@ increment at +0.0247 [−0.0033, +0.0532] — CI spanning zero, negative at thei
 preregistered bar. Read together with this lane: the bitemporal *resolution* rule
 is worth ~3pp over the best trivial alternative (measured here), while the
 *semantic target selection* that feeds it is not yet demonstrably worth more than
-retiring an arbitrary prior (measured there). Those are separate claims about
-separate stages, and they are not in tension.
+retiring an arbitrary prior **as implemented** (measured there). Those are
+separate claims about separate stages, and they are not in tension.
+
+**The second clause is dated, and the date matters more than it looks.** It is a
+statement about a *body-level* Jaccard selector at τ = 0.25 — the only selector
+anyone has run live — not about semantic selection in general. B1's follow-up
+(`w1-b1arm-unit`, `4ef2dd8e`) re-scored the same 7890 candidate pairs with the
+compared object swapped from the whole session body to the best-matching
+directive sentence, same ranker, no gold in scoring, and precision at their exact
+operating point **more than doubled, 0.341 → 0.765**. So the selector is starved
+by its *unit*, not its threshold, and there is now a measured reason to expect a
+sentence-level one to do better — with, deliberately, no LSW number for it yet.
+
+Cite the second clause as *"not demonstrably better than an arbitrary prior, for
+the body-level selector, as of 2026-08-01"*. Read as a verdict on semantic
+selection as such, it would be exactly the shelf-life error §8.6 warns about,
+committed against someone else's number instead of my own.
 
 Two near-inversions in one evening — this lane's from a stale banked ceiling
 (§8.6), theirs from a mis-specified ablation — were each caught only by re-running
