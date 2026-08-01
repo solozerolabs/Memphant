@@ -242,3 +242,140 @@ def test_random_ranker_floor_is_exact_and_bounded():
         assert analyze.random_ranker_baseline(
             gold_ranks, pool_sizes, order, n
         ) <= analyze.coverage_at(gold_ranks, order, n) + 1e-9
+
+
+def _tiny_inputs(tmp_path: Path, n: int = 6):
+    """A minimal bank + pool dump the runner will accept end to end."""
+    goldens = []
+    pool_rows = []
+    for i in range(1, n + 1):
+        question_id = f"q{i}"
+        goldens.append(
+            {
+                "question_id": question_id,
+                "question_type": "t",
+                "question": f"where is marker{i}",
+                "is_abstention": False,
+                "gold_answer": f"marker{i}",
+                "provenance": [
+                    {"attempt_id": "a1", "event_sequence": i, "span": f"marker{i}"}
+                ],
+            }
+        )
+        pool_rows.append(
+            {
+                "question_id": question_id,
+                "question_type": "t",
+                "attempt_id": "a1",
+                "query": f"where is marker{i}",
+                "packed_bodies": [f"noise {j}" for j in range(10)],
+                "pool": [
+                    {
+                        "fused_rank": j,
+                        "unit_id": f"u{i}-{j}",
+                        "is_gold": j == 2,
+                        "body": f"marker{i} body" if j == 2 else f"noise {i}-{j}",
+                    }
+                    for j in range(1, 9)
+                ],
+            }
+        )
+    dump = tmp_path / "pool.jsonl"
+    dump.write_text("\n".join(json.dumps(row) for row in pool_rows) + "\n")
+    # lineage() hashes every input it was handed, so they must exist on disk.
+    (tmp_path / "corpus.jsonl").write_text("")
+    (tmp_path / "golden.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in goldens) + "\n"
+    )
+    return goldens, dump
+
+
+def test_checkpoint_banks_every_finished_question_and_resumes(tmp_path: Path, monkeypatch):
+    """A campaign killed at a lifecycle boundary must re-bill nothing it finished."""
+    import code_lane_run_memphant as memphant_runner
+
+    goldens, dump = _tiny_inputs(tmp_path)
+    monkeypatch.setattr(
+        memphant_runner, "golden_lock_path", lambda path: tmp_path / "lock.json"
+    )
+    (tmp_path / "lock.json").write_text(json.dumps({"sha256": "deadbeef"}))
+    monkeypatch.setattr(
+        memphant_runner, "verify_input_contract", lambda c, g, lock: ([], goldens)
+    )
+    monkeypatch.setattr(
+        memphant_runner, "corpus_contract", lambda lock: {"corpus_sha256": "cafe"}
+    )
+
+    argv = [
+        "code_lane_run_hybrid_rank.py",
+        "--corpus", str(tmp_path / "corpus.jsonl"),
+        "--golden", str(tmp_path / "golden.jsonl"),
+        "--pool-dump", str(dump),
+        "--pool-depth", "8",
+        "--label", "ckpt",
+        "--concurrency", "1",
+        "--out-evidence", str(tmp_path / "a-evidence.jsonl"),
+        "--out-provenance", str(tmp_path / "a-provenance.json"),
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert hybrid.main() == 0
+
+    checkpoint = tmp_path / "a-checkpoint.jsonl"
+    lines = [json.loads(line) for line in checkpoint.read_text().splitlines() if line.strip()]
+    assert lines[0]["kind"] == "header"
+    assert len([line for line in lines if line["kind"] == "row"]) == len(goldens)
+
+    first = json.loads((tmp_path / "a-provenance.json").read_text())
+    before = checkpoint.read_text()
+
+    # Re-running the identical command must run nothing and cost nothing: the
+    # checkpoint does not grow, and the reported token spend is unchanged.
+    monkeypatch.setattr(sys, "argv", argv)
+    assert hybrid.main() == 0
+    report = json.loads((tmp_path / "a-provenance.json").read_text())
+    assert report["golden_count"] == len(goldens)
+    assert report["liveness"]["pool_containment_violations"] == 0
+    assert checkpoint.read_text() == before  # nothing was re-run
+    assert report["usage"]["prompt_tokens"] == first["usage"]["prompt_tokens"]
+    assert report["reported_spend_usd"] == first["reported_spend_usd"]
+
+
+def test_a_checkpoint_from_a_different_depth_is_refused(tmp_path: Path, monkeypatch):
+    import code_lane_run_memphant as memphant_runner
+
+    goldens, dump = _tiny_inputs(tmp_path, n=2)
+    monkeypatch.setattr(memphant_runner, "golden_lock_path", lambda path: tmp_path / "lock.json")
+    (tmp_path / "lock.json").write_text(json.dumps({"sha256": "deadbeef"}))
+    monkeypatch.setattr(
+        memphant_runner, "verify_input_contract", lambda c, g, lock: ([], goldens)
+    )
+    monkeypatch.setattr(memphant_runner, "corpus_contract", lambda lock: {"corpus_sha256": "cafe"})
+    checkpoint = tmp_path / "b-checkpoint.jsonl"
+    checkpoint.write_text(
+        json.dumps(
+            {
+                "kind": "header",
+                "golden_sha256": "deadbeef",
+                "pool_depth_requested": 4,
+                "model": "stub",
+                "label": "ckpt",
+            }
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "code_lane_run_hybrid_rank.py",
+            "--corpus", str(tmp_path / "corpus.jsonl"),
+            "--golden", str(tmp_path / "golden.jsonl"),
+            "--pool-dump", str(dump),
+            "--pool-depth", "8",
+            "--label", "ckpt",
+            "--out-evidence", str(tmp_path / "b-evidence.jsonl"),
+            "--out-provenance", str(tmp_path / "b-provenance.json"),
+        ],
+    )
+    with pytest.raises(SystemExit, match="different run"):
+        hybrid.main()

@@ -548,6 +548,13 @@ def main() -> int:
         "and committed before any cell was seen",
     )
     parser.add_argument("--resume-from", type=Path, default=None)
+    parser.add_argument(
+        "--no-checkpoint",
+        action="store_true",
+        help="disable the per-question checkpoint. Do not use for a paid run: a "
+        "campaign killed at an agent lifecycle boundary bills for every question "
+        "it finished and banks none of them",
+    )
     parser.add_argument("--concurrency", type=int, default=6)
     parser.add_argument("--label", required=True)
     parser.add_argument(
@@ -577,7 +584,6 @@ def main() -> int:
 
     carried: list[dict] = []
     carried_selections: dict[str, list[str]] = {}
-    carried_usage = {"prompt_tokens": 0, "completion_tokens": 0}
     if args.resume_from:
         prior = json.loads(args.resume_from.read_text())
         if prior.get("golden_sha256") != lock["sha256"]:
@@ -604,13 +610,63 @@ def main() -> int:
                 continue  # an errored row is re-run, never carried
             carried.append(row)
             carried_selections[row["question_id"]] = prior_evidence[row["question_id"]]
-        carried_usage = {
-            "prompt_tokens": int(prior.get("usage", {}).get("prompt_tokens") or 0),
-            "completion_tokens": int(prior.get("usage", {}).get("completion_tokens") or 0),
-        }
         done = set(carried_selections)
         selected = [g for g in selected if g["question_id"] not in done]
         print(f"resuming: {len(carried)} rows carried, {len(selected)} to run", flush=True)
+
+    # --- the per-question checkpoint ---------------------------------------
+    # A sibling lane lost a whole chain to SIGTERM at exactly 60 minutes with no
+    # error in its log. This arm bills per question, so nothing finished may be
+    # left unbanked: every completed question is appended and flushed before the
+    # next one starts, and a re-run of the identical command picks up where the
+    # kill landed. Errored rows are never carried.
+    checkpoint_path = (
+        None
+        if args.no_checkpoint
+        else args.out_provenance.with_name(
+            args.out_provenance.name.replace("provenance.json", "checkpoint.jsonl")
+        )
+    )
+    checkpoint_header = {
+        "golden_sha256": lock["sha256"],
+        "pool_depth_requested": args.pool_depth,
+        "model": MODEL if args.engine == "openrouter" else "stub",
+        "label": args.label,
+    }
+    if checkpoint_path is not None and checkpoint_path.exists():
+        lines = [
+            json.loads(line)
+            for line in checkpoint_path.read_text().splitlines()
+            if line.strip()
+        ]
+        if lines and lines[0].get("kind") == "header":
+            if {k: lines[0][k] for k in checkpoint_header} != checkpoint_header:
+                raise SystemExit(
+                    f"{checkpoint_path} was written by a different run "
+                    f"({ {k: lines[0][k] for k in checkpoint_header} }); refusing to "
+                    "resume across configurations"
+                )
+            recovered = 0
+            for entry in lines[1:]:
+                row = entry["row"]
+                if row.get("error"):
+                    continue
+                if row["question_id"] in carried_selections:
+                    continue
+                carried.append(row)
+                carried_selections[row["question_id"]] = entry["bodies"]
+                recovered += 1
+            if recovered:
+                done_ids = set(carried_selections)
+                selected = [g for g in selected if g["question_id"] not in done_ids]
+                print(
+                    f"checkpoint: {recovered} rows recovered, {len(selected)} left "
+                    f"to run (nothing already billed is re-billed)",
+                    flush=True,
+                )
+    if checkpoint_path is not None and not checkpoint_path.exists():
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_path.write_text(json.dumps({"kind": "header", **checkpoint_header}) + "\n")
 
     if args.engine == "stub":
         engine = StubEngine()
@@ -631,7 +687,15 @@ def main() -> int:
         row = run_question(engine, golden, pools[golden["question_id"]], args.pool_depth)
         with progress_lock:
             done += 1
-            selections[golden["question_id"]] = row.pop("bodies")
+            bodies = row.pop("bodies")
+            selections[golden["question_id"]] = bodies
+            if checkpoint_path is not None:
+                with checkpoint_path.open("a") as handle:
+                    handle.write(
+                        json.dumps({"kind": "row", "row": row, "bodies": bodies}) + "\n"
+                    )
+                    handle.flush()
+                    os.fsync(handle.fileno())
             # A heartbeat: silence must never be a valid outcome for a detached
             # run, and this adapter is otherwise mute between questions.
             print(
@@ -673,8 +737,11 @@ def main() -> int:
         )
 
     report = s8.score_arm(scored_goldens, selections, k=args.k)
-    prompt_tokens = engine.usage["prompt_tokens"] + carried_usage["prompt_tokens"]
-    completion_tokens = engine.usage["completion_tokens"] + carried_usage["completion_tokens"]
+    # Summed from the rows, not from the engine's counters. The two agree on a
+    # fresh run, but only the row sums survive a resume — and a resumed run that
+    # under-reported its tokens would under-report its spend.
+    prompt_tokens = sum(int(row.get("prompt_tokens") or 0) for row in rows)
+    completion_tokens = sum(int(row.get("completion_tokens") or 0) for row in rows)
     spend = (
         Decimal(prompt_tokens) * MAX_PRICE_PER_MILLION["prompt"] / Decimal(1_000_000)
         + Decimal(completion_tokens) * MAX_PRICE_PER_MILLION["completion"] / Decimal(1_000_000)

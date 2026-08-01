@@ -8,7 +8,18 @@
 # curve are worth more than none — but every failure is printed, and the ledger
 # at the end reports what actually landed.
 #
-# Usage: doppler run --project syndai --config dev -- scripts/s8_sweep_all.sh
+# LAUNCH THIS DETACHED, ALWAYS:
+#   doppler run --project syndai --config dev -- \
+#     python3 scripts/detach.py "$LOG" caffeinate -i bash scripts/s8_sweep_all.sh
+# `nohup` alone is NOT enough. It ignores SIGHUP but leaves the launching
+# shell's process group, so a group-wide SIGTERM at an agent lifecycle boundary
+# still reaps the chain -- a sibling lane lost a whole run that way at exactly
+# 60 minutes, rc=143, with no error in its log. scripts/detach.py starts a new
+# session (PPID 1, PGID == PID) so no group kill can reach this.
+#
+# Note for anyone editing this file: in zsh an unmatched glob ABORTS the whole
+# command line, so never put a bare `rm -f *.json` in a launch line -- a sibling
+# lost an entire launch to exactly that, silently.
 set -u -o pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
