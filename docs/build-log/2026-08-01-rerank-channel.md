@@ -728,6 +728,115 @@ false explanation of the result; **the failure is model quality on this
 material.** Recorded because a caveat that survives quantification is a finding
 and one that does not is a retraction.
 
+## 9. Fixing both channels, and why Track R still cannot validate the fix
+
+### 9.1 What changed
+
+- **`exact_score`** — new `fact_key_subject_tokens` strips the structural
+  scaffolding before scoring. Full coverage of a curated subject now reaches
+  **1.0** (was 0.375); partial coverage stays partial; the scope UUID is no
+  longer matchable *or* counted. A segment is dropped only when it actually
+  parses as a UUID, so unscoped keys (`timezone:value`, `profile:{id}`, the
+  extractor's own `candidate.fact_key`) are untouched.
+- **`temporal_score`** — a real monotonic decay `1 / (1 + age / half_life)` over
+  `valid_from`, falling back to `transaction_from` then `observed_at`, evaluated
+  at the **recall clock** rather than a fresh `now()` so a `transaction_as_of`
+  replay stays reproducible. Strictly positive at any age (nothing is dropped by
+  the `score > 0.0` filter for being old); an unparseable stamp scores a low
+  constant instead of scoring as brand new. The W5 date-window boost is
+  unchanged and now explicitly takes precedence.
+- The **half-life is 30 days and is declared UNFITTED**, because no lane that
+  can express this channel has been run — see §9.3.
+
+The four characterisation tests were written to fail when this was fixed. They
+did, and are now **11 tests** asserting the corrected behaviour — including one
+that pins that both channels *remain* inert on an episodic corpus.
+
+**One deviation, stated rather than buried.** The instruction was to score
+auto-derived keys "on content rather than dropped". `{scope}:auto:{sha256}`
+carries no curated subject at all — only a marker and a body hash — so after the
+scaffolding is stripped it still earns no Exact vote. That is the same zero for
+a different and now correct reason: the unit has no subject key to match, rather
+than a UUID having diluted one. Synthesising an Exact vote from the body would
+double-count a single signal across two channels, since the body is already
+scored by the lexical family. The real asymmetry — which units get an explicit
+subject at all — lives in the extractor, not the scorer.
+
+### 9.2 Do the banked Track R numbers move? No — and here is the proof, at $0
+
+The instrumented run's own channel table settles it without a re-run. Across
+**all 180 questions** under the banked configuration:
+
+| channel | votes cast |
+|---|---:|
+| lexical (BM25) | 21,668 |
+| vector | 10,944 |
+| **exact** | **0** |
+| **temporal** | **0** |
+| edge | 0 |
+
+Both fixes touch only `exact_score` and `temporal_score`. Neither cast a single
+vote. **No banked Track R figure can move, and none needs re-running.**
+
+### 9.3 Turning both channels on — they go live, and they are still empty
+
+`MEMPHANT_FACT_EXTRACTION=1` mints semantic units with real fact keys from the
+trajectory corpus, which is the only way to make either channel live on this
+lane. Run at this branch's HEAD against the banked `bm25code_off` arm:
+
+| | votes |
+|---|---:|
+| lexical | 21,696 |
+| **exact** | **13** |
+| **temporal** | **4** |
+
+| stage | extraction ON | banked `bm25code_off` | b | c | n_d | verdict |
+|---|---:|---:|---:|---:|---:|---|
+| fused@10 | 88 | 89 | — | — | — | one question |
+| packed@10 | **87** | **87** | 1 | 1 | **2** | **NOT A MEASUREMENT** (n_d < 6) |
+| packed@5 | 60 | 58 | 2 | 0 | **2** | **NOT A MEASUREMENT** (n_d < 6) |
+
+The numbers do not move — **and that is not evidence of equivalence.** At n_d = 2
+against the structural floor of 6 this comparison has no rejection region at any
+effect size. The informative part is the mechanism, not the p-value: fact
+extraction over agent-trajectory episodes yields **13 exact and 4 temporal votes
+across 180 questions**, against 21,696 lexical ones. The channels went from
+*structurally inert* to *live and negligible*.
+
+**So the §7 scope limit stands, and turning extraction on does not lift it.**
+Track R cannot validate either fix. Neither can it refute one: it has no
+opinion.
+
+**A standing note is now stale and should be retired.** The trunk-arms log warns
+that `MEMPHANT_FACT_EXTRACTION=1` breaks full-corpus drain on the
+`memphant_memory_unit_subject_valid_excl` exclusion constraint. On this base it
+does not: the extraction-ON arm drained **21,630 jobs clean**, 0 pending, 0 dead.
+Whoever owned that fix has landed it.
+
+### 9.4 What was NOT done, and what it would take
+
+**Neither fix is validated on a lane that can express it.** Both are covered by
+11 unit tests and by construction; neither has a paired lane-level result. That
+is the honest state, and the candidates are all blocked:
+
+- **Track R** — measured above. Live but empty; cannot express either fix.
+- **Track U** — 51 goldens of real rules and preferences, which *would* mint
+  semantic units with genuine fact keys. But the register records that **no
+  runner exists**, and the lane is **UNPOWERABLE below ψ=0.20** with a 17.4pt
+  MDE at best on a pinned source snapshot of 94 files. Building a runner for a
+  lane that cannot resolve anything finer than ~15pt is a poor trade.
+- **C1 episodic slice** — real production rows, but episodic, so it needs the
+  same extraction pass and would likely land in the same place as §9.3.
+- **The preference lane (MemoryCode)** is explicitly disqualified for
+  `temporal_score`: a sibling session found its distractors are always *older*
+  declarations, so any recency-flavoured change scores well there **for the
+  wrong reason**. Validating there needs a rate-matched ablation guard, and
+  without one the result would be an artifact.
+
+The `temporal_score` half-life (30 days) is the sharpest consequence: it is a
+free parameter with no instrument, and it is labelled as such in the source
+rather than presented as tuned.
+
 ## 8. Artifacts
 
 Committed: `docs/build-log/artifacts/track-r-rerank/rerank-channel.json`, schema
