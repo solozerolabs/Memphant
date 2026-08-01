@@ -257,5 +257,70 @@
       "license_evidence": "HuggingFace record metadata at the pinned revision declares cardData.license=mit and the card README.md is pinned by sha256. NO LICENSE FILE EXISTS in either the dataset or the code repo -- independently re-confirmed. Local measurement and citation only; NOT redistribution-clear.",
       "note": "The paper states 1,100 base and 376 related tasks. Measured distinct counts are 1,007 and 357. The 357 figure is corroborated independently by 357 Docker instance tags on jiayuanz3/swecontextbench and by 357 case files in cases/SWEContextBench Full/ at code rev 31bb0415."
     }
-  }
+  },
+  "endpoint_adjudication": {
+    "question": "Which Table 4 endpoint, if any, can this instrument resolve at its maximum available n of 357?",
+    "method": "Ceiling taken as the published baseline-to-best-memory-arm gap; expected MemPhant effect = ceiling x measured packed recall@5 (0.7591); power by two-sided exact McNemar, alpha=0.05, scripts/instrument_power.py.",
+    "endpoints": [
+      {
+        "endpoint": "Resolved",
+        "baseline_pct": 26.26,
+        "best_memory_pct": 30.3,
+        "ceiling_pp": 4.04,
+        "related_split_ceiling_pp": 3.72,
+        "expected_pp": 2.82,
+        "mde_at_357_pp": "3.38 (psi=0.05) to 8.32 (psi=0.30)",
+        "power_for_expected": "0.14 - 0.61",
+        "verdict": "NOT RESOLVABLE. The expected effect is below the MDE at every psi including 0.05. No tranche fixes this: 357 is the entire split."
+      },
+      {
+        "endpoint": "FAIL_TO_PASS Tasks",
+        "baseline_pct": 29.29,
+        "best_memory_pct": 40.4,
+        "ceiling_pp": 11.11,
+        "expected_pp": 8.43,
+        "mde_at_357_pp": "5.89 (psi=0.15) to 9.58 (psi=0.40)",
+        "power_for_expected": "0.75 - 0.99 across the ENTIRE plausible psi range 0.15-0.40",
+        "verdict": "RESOLVABLE, and robustly so."
+      },
+      {
+        "endpoint": "Patch N/A",
+        "baseline_pct": 3.03,
+        "best_memory_pct": 10.1,
+        "ceiling_pp": 7.07,
+        "expected_pp": 5.37,
+        "verdict": "BORDERLINE. Resolvable only at low psi, and psi cannot be below the effect size itself, so this sits near its own floor. Worth recording as a diagnostic, not as a primary."
+      },
+      {
+        "endpoint": "PASS_TO_PASS Tasks",
+        "baseline_pct": 88.89,
+        "best_memory_pct": 88.89,
+        "ceiling_pp": 0.0,
+        "verdict": "NO EFFECT TO MEASURE in the published data."
+      }
+    ],
+    "the_finding_that_changes_the_plan": "The FAIL_TO_PASS-Tasks endpoint is powered at 0.75-0.99 across the WHOLE plausible psi range. That means a re-scoped stage 2 does not need a psi estimate at all -- the run is adequately powered whatever psi turns out to be. This voids the only preregistered purpose of the $40 stage 1 pilot.",
+    "a_trap_avoided": "Table 4's FAIL_TO_PASS TESTS column moves 19.64 -> 55.95, roughly ten times the Resolved effect, and it is tempting to use it as the endpoint. It should NOT be used: tests are clustered within tasks (a correct patch passes all of a task's F2P tests at once), so the per-test n is not an independent n and the apparent effect size is inflated by within-task correlation. The per-TASK column (29.29 -> 40.40) is the honest version of the same signal, and it is the one costed above."
+  },
+  "stage_1_adjudication": {
+    "question": "What decision does the $40 stage 1 pilot change?",
+    "preregistered_purpose": "psi estimation for stage 2, plus live-defect discovery.",
+    "purpose_1_psi_estimation": {
+      "status": "VOID",
+      "why": "Two independent reasons. (a) For the Resolved endpoint, stage 2 is cancelled, so sizing it is sizing a run that will not happen. (b) For the FAIL_TO_PASS-Tasks endpoint, power is 0.75-0.99 across the entire plausible psi range, so knowing psi does not change the go/no-go. Either way psi buys no decision.",
+      "and_it_could_not_deliver_anyway": "At n=30, expected discordant pairs are 4.5 (psi=0.15) to 9.0 (psi=0.30) and power for even the 11.11pp ceiling is 0.12. The pilot is below this programme's own n_d>=6 floor at the lower end. It was never going to be a measurement, which the brief already stated."
+    },
+    "purpose_2_live_defect_discovery": {
+      "status": "STILL REAL, AND MISPRICED",
+      "why": "No Claude Code scaffold exists in this repository. Pinning to Claude Code + Claude Sonnet 4.5 is mandatory for comparability to Table 3 and has never been round-tripped. This programme has had three adapters fail at first contact, two after money was authorised, and one that would have billed $211-634 for zero rows. That risk is real and unretired.",
+      "but": "It does not cost $40. The lock's own stage 0 acceptance item 5 already specifies the right instrument: drive the pinned scaffold end-to-end on ONE instance with a hard token cap, as a liveness probe and not a measurement. At Table 3's measured $0.67/task that is roughly $1, not $40."
+    },
+    "recommendation": {
+      "cancel": "Stage 1 as scoped ($40, n=30). Its stated purpose is void and its unstated purpose is 40x overpriced.",
+      "replace_with": "A ~$1-$5 scaffold liveness probe: one to three Related instances, Claude Code + Claude Sonnet 4.5, hard token cap, official grader on the shipped gold patch (must resolve) and on an empty patch (must not resolve), plus one MemPhant-memory round trip proving the retrieved context reaches the agent. Decision it changes: whether a re-scoped stage 2 is executable at all. Nothing else can answer that, and it is the single largest unretired execution risk in the plan.",
+      "then": "Stage 2 re-scoped to FAIL_TO_PASS Tasks as primary is an OWNER decision, not a lane decision, because it changes what the headline claim is about. It is powered; Resolved is not. If the owner wants the Resolved headline specifically, the honest answer is that this instrument cannot supply it at any budget.",
+      "spend_authorised_but_not_spent": "Standing authority exists. It is not exercised here because no run below the re-scope decision changes a decision, except the ~$1 probe."
+    }
+  },
+  "pattern_across_lanes": "This is the third instrument in this programme to fail on a structural property rather than on MemPhant's quality, and the first to fail from the POWER side rather than the baseline side. S7 killed MDN browser-compat-data because a 20-line scoped_interval rule scores 1.0000 on every band; S6 found as-of saturation at 0.9064; both are cases where the gold is computable from the fact statements themselves, so a short rule saturates the baseline. SWE-ContextBench is the complement: its baseline is nowhere near saturated (19.68%), but the HEADROOM A MEMORY SYSTEM CAN ADDRESS is only 3.72pp, which is smaller than the instrument's own minimum detectable effect at its maximum n. Saturation kills an instrument from below; an effect ceiling under the MDE kills it from above. Both are properties of the instrument, both are cheap to check before spending, and neither is visible from a baseline rate alone."
 }
