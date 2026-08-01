@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # S6 as-of re-cut: the substrate arms, one tree, same binaries, serialized.
 #
+# LAUNCH IT DETACHED, ALWAYS:
+#   python3 scripts/detach_run.py <outdir>/chain.out bash scripts/s6_asof_arms.sh <outdir>
+#
+# Not `nohup ... &`. This chain lost a run to `rc=143` -- SIGTERM at exactly 60
+# minutes when the launching agent's process group was reaped -- and then lost a
+# SECOND one to a hand-rolled double-fork that reparented to launchd (ppid=1)
+# while staying in the launching shell's process group, so a group-wide signal
+# still reached it. **`pgid == pid` is the load-bearing assertion, not
+# `ppid == 1`.** Verify after launch:
+#   ps -o pid=,ppid=,pgid= -p <pid>   # want ppid 1 AND pgid equal to pid
+# `scripts/detach_run.py` (trunk, tested) is the only supported launcher; do not
+# grow a second implementation here.
+#
 # Server reaping is anchored to THIS worktree's absolute binary path. Six
 # MemPhant lanes run concurrently on this host out of sibling worktrees, and an
 # unanchored `pkill -f memphant-server` kills their in-flight measurements.
