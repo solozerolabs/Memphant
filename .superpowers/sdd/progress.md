@@ -1831,3 +1831,62 @@ Report: `docs/build-log/2026-07-31-preference-writepath.md`. Artifacts:
 `af-w11-writepath`, **none pushed**. `paid_model_calls: 0`. **No checkbox,
 default, cutover or SOTA claim moves** except `MEMPHANT_FACT_EXTRACTION`, which
 is measured at exactly zero effect on this instrument.
+
+---
+
+## 2026-08-01 — S5 SWE-ContextBench stage 0 (`s5-swecb`, branch point `0e874da0`, not merged)
+
+**Stage 0 gate: GREEN. `paid_model_calls: 0`, settled cost $0.00.** Preregistered primary statistic —
+packed recall@5 of the official Relationship parent over 357 distinct targets, ANY-PARENT, with the
+whole 1,007-row experience pool bound into **one** subject/scope as a single haystack — is **0.7591**
+against a GREEN band of ≥ 0.50 committed at `fd2ebd7c` before the first ingest. Retrieval recall@5
+(trace `fused_rank`) 0.7787; packed @1/@10/@25 = 0.5602 / 0.8291 / 0.8824.
+
+**The miss profile names the lever.** Of 86 misses at k=5: **74 ranked below the cut**, 8 retrieved
+but not packed, 4 never a candidate. Candidate coverage 98.9%. This is a **ranking** problem, not
+candidate generation and not the packing budget, so `pack_render_cap` is worth at most ~2pp here.
+This is also a free, 357-question, public-instrument bench for evaluating a reranker.
+
+**Two premises in the plan of record were false and were corrected before any cell existed.**
+(1) The tranche is **357, not 376** — `Related` is Lite(99) ⊎ Verified(166) ⊎ Multilingual(111)
+concatenated, Lite ∩ Verified is exactly the 19 duplicated ids, and those duplicates are *not*
+byte-identical. Confirmed independently by 357 Docker instance tags and 357 official case files.
+`Experience` is 1,100 rows over **1,007** distinct ids. (2) The "$0 gold-patch pool" is **an answer
+leak**, not a safe pool: 75.5% of gold parents touch a target patch file, 32.4% have an identical
+touched-file set, **37.2% contain an exact target added line** and 29.8% share ≥50% of them, against
+a same-repo random control of 9.1% / 0.13%. The temporal "predates by construction" premise is also
+false — only 131 of 376 edges strictly predate, and Related's `created_at` inverts against PR number
+on 23.6% of within-repo pairs (Experience: 0 of 60,372). Pool changed to patch-free prose, which
+leaks at 9.0% against a **6.9% floor** set by targets quoting their own patches. Amendment
+`0e137b54`, before any cell existed.
+
+**Stage 2 ($504) recommended CANCEL as scoped, on evidence independent of s4-controls.** Table 3's
+own numbers give a **+3.72pp ceiling** (no-memory 19.68 → oracle-summary 23.40, same scaffold). Our
+expected effect is `0.759 × 3.72 =` **2.82pp**, an upper bound. MDE at the maximum available n of
+**357** is 3.38pp (ψ=0.05) to 8.32pp (ψ=0.30) — **the expected effect is below the MDE at every ψ**,
+with power 0.14–0.24 at realistic ψ. The instrument is too small for the effect it measures, which is
+equally true of Table 4's own ranking and of Supermemory's 4.04pp at n=99. Also uncosted in the plan:
+**~453 GB** of Docker pulls against 220 GB free, and **no Claude Code scaffold exists in this repo**.
+Recommended instead: re-scope the primary endpoint to FAIL_TO_PASS (Table 4 moves it 19.64 → 55.95,
+~10× the effect), and publish the retrieval result and the instrument audit, both already $0.
+
+**Stage 0 turns out to have published comparators** — Table 5's Matched (%) is this exact endpoint
+(Mem0 39.39 @k=3, OpenViking 51.52 @k=3, Supermemory 59.60 @k=15, LangMem 73.34 @k=10, all on the
+300-row Lite pool). The retranche log's "both arms must be ours" holds for `Resolved` and **not** for
+retrieval. A like-for-like Lite-scoped arm is running; the full-pool number is not directly
+comparable and is not cited as if it were.
+
+**Live defects, all caught at $0:** HTTP 422 on 300 of 1,007 rows shipping `created_at` with no
+timezone (exactly the 41 multilingual repos vs the 12 Python ones, zero overlap); `rc` read from the
+wrong end of a pipe reporting `EXITCODE=0` for a run that died; a cross-worktree `pkill` that killed
+three sibling-lane servers; and shared `with_scratch_db.sh` holding a host-wide lock for whole runs —
+trunk's fix `6fdcaf9d` adopted verbatim rather than re-derived, and the with-patch arm was
+deliberately killed (rc=143, artifact refused, no DB orphaned) to unblock four lanes at loadavg 56.
+
+**Verification.** `tests/test_swecb_stage0_recall.py`, 18 tests, green. Scratch DBs only; queue
+emptiness asserted from the database on the bench superuser credential (1,007 completed, 0 pending,
+0 dead), never a worker self-report; 0 degraded recalls; 376/376 traces fetched. Branch is purely
+additive to its branch point apart from taking trunk's `with_scratch_db.sh`. Report:
+`.superpowers/sdd/s5-swecb-report.md`. Build log: the S5 section of
+`docs/build-log/2026-08-01-swe-contextbench-retranche.md`. Artifacts:
+`docs/build-log/artifacts/s5-swecb/`. **No STATUS, ledger, default, cutover or SOTA claim moves.**
