@@ -97,17 +97,71 @@ Three resource facts the plan did not carry: **~453 GB** of Docker pulls for a c
 unbuilt and unpriced work; and the paper's trajectory pool is **public and free** for the 300 Lite
 experiences, so the "~$737 rebuild" applies only to the other 707.
 
-## Recommendation
+## Endpoint adjudication and final disposition
 
-- **Stage 1 (~$40): proceed, re-scoped.** Its value is the Claude Code + MemPhant round trip (the
-  largest unpriced risk) and the same-arm re-run leg that measures ψ empirically, not ψ for a stage 2
-  that should not happen.
-- **Stage 2 ($504): CANCEL as scoped**, independently of s4-controls.
-- **Promote FAIL_TO_PASS to primary** if a paid run is still wanted: Table 4 moves it 19.64 → 55.95
-  versus Resolved's 26.26 → 30.30. ~10× the effect, measured per test. Already preregistered here as
-  secondary; promoting it is an owner decision, not a drift.
-- **Publish the retrieval result and the instrument audit.** Both are $0, neutral, public-instrument
-  evidence on the endpoint MemPhant actually claims.
+**Which endpoint can this instrument resolve at n=357?** Ceiling = published baseline → best memory
+arm; expected = ceiling × measured recall (0.7591).
+
+| endpoint | baseline → best memory | ceiling | expected | verdict |
+| --- | --- | --- | --- | --- |
+| `Resolved` | 26.26 → 30.30 | 4.04pp | 2.82pp | **NOT resolvable at any ψ** |
+| **`FAIL_TO_PASS` Tasks** | 29.29 → 40.40 | **11.11pp** | **8.43pp** | power **0.75–0.99** across all ψ ∈ [0.15, 0.40] |
+| `Patch N/A` | 3.03 → 10.10 | 7.07pp | 5.37pp | borderline; diagnostic only |
+| `PASS_TO_PASS` Tasks | 88.89 → 88.89 | 0.00pp | — | nothing to measure |
+
+**A trap avoided.** Table 4's `FAIL_TO_PASS` **Tests** column (19.64 → 55.95) looks like ~10× the
+`Resolved` effect and must not be the endpoint: tests cluster within tasks — one correct patch flips
+all of a task's F2P tests together — so per-test n is not independent and the effect is inflated by
+within-task correlation. The per-**task** column is the honest version, and it is the one costed.
+
+**Stage 1 ($40): CANCELLED.** Its preregistered purpose was ψ estimation for stage 2. Void twice:
+`Resolved` stage 2 is cancelled, and the surviving F2P-Tasks stage 2 is powered *whatever ψ turns out
+to be*, so ψ changes no decision. It could not have delivered anyway — n=30 gives 4.5–9.0 discordant
+pairs against the n_d ≥ 6 floor, power 0.12.
+
+**Stage 2 ($504): CANCELLED.** s4-controls reported: on the Track R paraphrase bank (n=180) agentic
+`grep` hits@10 **96.67%** against MemPhant's **58.89%**; paired b=1, c=69, n_d=70,
+**McNemar p = 1.2e-19**, delta **−37.78pp** against a realized MDE of 13.34pp. The packing objection
+is pre-closed: MemPhant's pre-packing fused@10 against the control's packed@10 still loses 33.89pp.
+
+**Scaffold liveness probe (~$1–5): approved but NEVER STARTED, and skipped.** Its only value was
+retiring execution risk for a run that will not happen. **Total lane spend: $0.00.**
+
+## The honest reading of the comparator table
+
+The like-for-like result stands, and it must travel with its companion sentence:
+
+> MemPhant beats other memory systems at retrieving the gold parent — **and all of them are losing to
+> an agent with a shell.**
+
+Mem0 scores *below* no-context on this very benchmark (24.24 vs 26.26 Resolved); on SWE-Explore an
+agent with `grep` gets HitFile@5 0.667 against dense-RAG's 0.088. Winning among memory systems is not
+winning the task.
+
+**Three lanes, one conclusion.** S6/S7 die from *below* (gold computable from the fact statements, so
+a short rule saturates the baseline). S5 dies from *above* (baseline wide open at 19.68%, addressable
+headroom 3.72pp, under its own MDE at max n). S4 shows the substrate losing to a shell loop by
+37.78pp on repo-recoverable facts. **Track R and SWE-ContextBench both test facts recoverable from
+files, and an agent with `grep` is extremely good at that.** The niche the substrate wins is what is
+*not* in the repo — corrections, preferences, rejected approaches, rationale.
+
+## Recommendation to the plan of record: pair a ceiling check with every baseline check
+
+A baseline rate alone is not sufficient evidence that an instrument can express an effect. Two free
+checks are needed at acquisition:
+
+1. **Baseline check** (already standard) — is the no-memory baseline far from ceiling? Guards against
+   the S6/S7 saturation failure.
+2. **Ceiling check** (proposed) — take the largest *published* effect any comparable system achieves,
+   ideally an oracle arm since that upper-bounds retrieval-based memory, and compare it to the
+   instrument's MDE at its **maximum available n**. If addressable headroom is below the MDE, the
+   instrument cannot express the effect **at any budget** and no tranche fixes it.
+
+This lane is the worked example: check 1 passed correctly (80pp of headroom) and $545 was scoped on
+it; check 2 takes ten minutes from the *same table* (oracle 23.40 vs baseline 19.68 → 3.72pp against
+MDE 3.38–8.32pp) and shows the effect was never resolvable. Concretely, `benchmarks/manifests/
+*.lock.json` should carry an `effect_ceiling` block beside the existing `power` block, and
+`scripts/instrument_power.py` should refuse to emit a staging plan when ceiling/MDE < 1.
 
 ## Verification
 
