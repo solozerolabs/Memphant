@@ -1831,3 +1831,132 @@ Report: `docs/build-log/2026-07-31-preference-writepath.md`. Artifacts:
 `af-w11-writepath`, **none pushed**. `paid_model_calls: 0`. **No checkbox,
 default, cutover or SOTA claim moves** except `MEMPHANT_FACT_EXTRACTION`, which
 is measured at exactly zero effect on this instrument.
+
+## 2026-08-01 — S2: a discriminating instrument. Survey + build spec. ($0, `s2-instrument`, NOT merged)
+
+**The question.** Every positive result this program holds lives on a corpus
+that answers the question for us. MemoryCode's gold is recency-identified by
+construction, so the A-recency control and the bitemporal arm compute the *same*
+rule; and wrong retirement is nearly free there (16 of 309 edges at τ=0.25 touch
+a gold, 5.2%), so the corpus **compresses** the effect. Find or specify an
+instrument where retiring the wrong rule is EXPENSIVE and currency is NOT
+recency.
+
+**THE TRAP, stated first because it is the finding most likely to be misread.**
+A corpus whose gold is not recency-identified **will make BOTH arms score
+worse**, and the tempting read is "supersession regressed". It will not have —
++3.01pp is measured near a ceiling by construction. **Whoever runs any
+instrument from this work must preregister that a DROP is expected and that the
+endpoint is the GAP BETWEEN ARMS, not either level**, with the *direction* of
+the Δ prediction written down before the run. It is §0 of the survey, not a
+footnote.
+
+**A second trap, new.** A corpus that defeats *recency* may be defeated by a
+*different* trivial rule. Measured on TempLAMA's shipped files: `max(timestamp)`
+is correct on **55.5%** of rows, `most_frequent_answer` on **70.7%**. Every
+adopted instrument must preregister its **full** trivial baseline set —
+`max(observed_at)`, mode, first-declared, and `max(observed_at <= t)`.
+
+**Three things measured here at $0, not cited.**
+
+1. The gold-is-recency premise re-verified by reading
+   `external_instrument_adapter.py:163-179`, not by citing §8.8.
+2. **MemoryCode contains ZERO re-assertion.** 1,063 groups / 4,679 declarations
+   / **0** keys where a value reappears after being displaced. Regime (a) is
+   structurally absent and no re-cut produces it.
+3. **MemoryCode CAN be re-cut to break recency identification, at $0.** **3,608**
+   as-of probes over **257** instances (mean 14.04, max 71) already exist in the
+   pinned parquet. Ingest is unchanged; the probe asks the question *as of an
+   earlier session*, so `max(observed_at)` returns a DISTRACTOR by construction,
+   and every earlier declaration becomes the gold of its own probe — which is
+   the fix for the 5.2% compression.
+
+**The machinery is already in the tree** — verified, not assumed:
+`RecallRequest.valid_at` -> `valid_for_query` (`memphant-core/src/lib.rs:10163-10167`)
+is a live interval filter; `correction_rectangles` (`:1064-1167`) with
+`start_lt(None, Some(now)) == true` (`:1221-1227`) **does** mint the historical
+remainder; `gate_run_memphant.py` already threads `valid_at`.
+
+**The arm ladder this forces, and it is the real contribution.** The honest
+baseline is not A-recency, it is **A-recency + as-of truncation**
+(`max(observed_at <= t)`) — a 20-line read rule. Preregister the primary as
+**bitemporal − (A-recency + truncation)**; report bitemporal − A-recency as a
+labelled floor. That arm did not exist before this document.
+
+**Ranked answer.**
+
+| rank | instrument | regimes | licence | cost |
+|---|---|---|---|---|
+| 1 run now | **MemoryCode as-of re-cut** | (c)(d) | **[F] Apache-2.0**, held | $0, ~1 day + 3 h |
+| 2 build | **MDN `browser-compat-data`** — the CODING answer | **(a)(b)(c)(d)** | **[F] CC0-1.0**, API agrees | $0, ~1–2 wks |
+| 3 build | **Wikidata** | **(a)(b)(c)(d)** | **[F] CC0-1.0** | $0, ~1 wk |
+| 4 adopt | **VersiCode** | (a)(b)+coding | **[F] Apache-2.0** (HF card says `mit` — contradiction) | $0 |
+| 5 adopt | **RoundEdit** | (a)(d) | **[F] MIT, ZJUNLP** | $0 |
+| 6 local only | **ChroKnowBench** | (a)(b)+static control | **[C]; LICENSE ABSENT** | $0 |
+
+**MDN BCD is the coding answer and it is not close.** **[F] CC0-1.0** fetched
+here with the GitHub API object agreeing — the only source in the survey with a
+clean licence on both code and data. 20,243 features / 284,845 support
+statements / **7,454 with both `version_added` and `version_removed`** / **325
+features and 704 browser-pairs with a strict removed-then-re-added arc**. It has
+**no timestamp axis at all** — currency is keyed to *scope* (runtime, version),
+so `max(timestamp)` is not a weak baseline, it is undefined. `AbortSignal.timeout()`
+is live in Node 16.14, dead in 17.0, live again from 17.3. And wrong retirement
+is **executable**: needless polyfill one way, runtime throw the other. Two gates
+carried: the naive arc query has ~75% false positives (1,279 -> 325 only after
+excluding `flags`/`prefix`/`alternative_name`/`partial_implementation` and
+requiring a strict version gap), and **BCD has no sessions** — we would author
+the episodes but **not the gold**, which is the distinction that must never be
+blurred in a publication.
+
+**Power, computed with `scripts/instrument_power.py`, never asserted.** Required
+n for the 7pt decision: 340 at psi=0.20, 505 at 0.30, 665 at 0.40 — so losing
+recency identification costs only ~4x in n between psi=0.10 and 0.40.
+**Discrimination is cheap in n and expensive in level.** MDE for the as-of
+re-cut at n=3,608: 2.58pp at psi=0.30 flat, 3.66/5.20/7.38pp at design effect
+2/4/8. **The 7pt decision survives to DEFF ~ 8.**
+
+**Licence hygiene — nine artifacts re-fetched by hand in this worktree.** MDN
+BCD **[F] CC0-1.0**; GitHub Advisory DB **[F] CC-BY-4.0**; ESLint **[F] MIT
+(OpenJS Foundation)**; CronKGQA **[F] MIT © 2021 Apoorv Umang** (upgrades a
+prior [A]); VersiCode **[F] Apache-2.0** with the HF card contradicting at
+`mit`; CodeUpdateArena **[F] MIT** with the copyright line literally
+`Copyright (c) 2024 <anonymized>`; RoundEdit **[F] MIT © 2023 ZJUNLP**;
+RippleEdits **[F] MIT © 2023 Eden Biran** at `LICENSE.txt`; Wikidata
+**[F] CC0-1.0** quoted from `Wikidata:Licensing`.
+
+**A path-shape lesson worth a standing rule: a 404 on a GUESSED path is not
+evidence of an absent licence.** Four of seven guessed paths were wrong and each
+produced a false ABSENT — RippleEdits ships `LICENSE.txt`; FreshQA is
+`freshllms/freshqa`; WikiBigEdit is `ExplainableML/WikiBigEdit`; HyTE's branch
+is `master`. Separately, the **GitHub API licence object is wrong or incomplete**
+for AOSP, llvm, linux, CPython, OpenJDK (hides the Classpath Exception), Clippy
+(hides the dual grant), WikiBigEdit (NOASSERTION from header ordering) and
+**LoCoMo (reports NOASSERTION, hiding CC-BY-NC)**. And three Apache-2.0 files —
+FreshQA, TAQA, HyTE — ship stock text with the copyright line never filled in,
+so there is **no named rightsholder to cite**.
+
+**Verified traps added to the record.** YAGO11k and everything derived from it
+(incl. TGQA) has **measured zero re-assertion**. MQuAKE has **no locality
+metric** despite its reputation. AToKe's `HES`/`HRS` is the most on-point
+wrong-retirement metric in existence and its licence is **ABSENT** — copy the
+metric, not the data. ConflictBank is the strongest non-recency construct found
+and has **no licence of any grade**. ICEWS has **no licence**. LibEvolutionEval
+is **CC-BY-NC**. ELKEN is **CC-BY-NC-SA** (circulating summaries say CC-BY-SA;
+the fetched file disagrees). Wikidata `-truthy` dumps are useless here — they
+drop qualifiers **and** non-best ranks, destroying both signals. Academic revert
+datasets (Yan/Shimagaki/Wen) are **legally unusable as published**; "RevertDataset"
+is a phantom name.
+
+**Cost to have an instrument that can falsify our positive results: $0 and about
+a week of engineering.** No candidate needs a paid run to reach a decision. The
+~$545 SWE-ContextBench frontier is a *public-claim* purchase, not a
+discrimination purchase, and is unchanged by this work.
+
+**Nothing here says the +3.01pp is wrong.** It says it is measured in a regime
+that cannot distinguish the bitemporal rule from `max(observed_at)`. **No
+default, checkbox, cutover or SOTA claim moves. `paid_model_calls: 0`.**
+
+Report: `.superpowers/sdd/s2-instrument-report.md`. Survey:
+`docs/build-log/2026-08-01-discriminating-instrument-survey.md`. Branch
+`s2-instrument`, **not merged, not pushed.**
