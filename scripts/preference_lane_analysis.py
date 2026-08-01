@@ -27,7 +27,15 @@ import instrument_power as ip  # noqa: E402
 
 SEED = 20260801
 RESAMPLES = 10000
-ENDPOINTS = ("appropriate_application", "misapplication", "neither_returned")
+ENDPOINTS = ("appropriate_application", "misapplication", "neither_returned",
+             # Added for the S6 as-of re-cut. On that cut the gold-vs-stale
+             # endpoint is SATURATED by a trivial truncation rule -- a rule
+             # that filters at `observed_at <= t` cannot rank a distractor
+             # first, and measures 0.0000 misapplication -- so
+             # `appropriate_application` alone cannot separate the arms and
+             # `hit_at_1` is where they differ. Purely additive: an extra key
+             # in the output, no existing figure changes.
+             "hit_at_1")
 
 
 def load_arm(path: Path) -> tuple[str, dict[str, dict]]:
