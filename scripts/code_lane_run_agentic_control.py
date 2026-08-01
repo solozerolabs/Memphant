@@ -309,13 +309,20 @@ class OpenRouterEngine:
         self.generation_ids: list[str] = []
 
     def complete(self, messages: list[dict], question: str) -> dict:
+        return self._post(
+            {"tools": TOOLS, "tool_choice": "auto"}, messages, MAX_TOKENS_PER_CALL
+        )
+
+    def complete_plain(self, messages: list[dict], max_tokens: int = 512) -> dict:
+        """No tools. Used by the ONCU contamination probe."""
+        return self._post({}, messages, max_tokens)
+
+    def _post(self, extra: dict, messages: list[dict], max_tokens: int) -> dict:
         body = {
             "model": MODEL,
             "messages": messages,
-            "tools": TOOLS,
-            "tool_choice": "auto",
             "temperature": 0,
-            "max_tokens": MAX_TOKENS_PER_CALL,
+            "max_tokens": max_tokens,
             "usage": {"include": True},
             "provider": {
                 "only": PROVIDER_ONLY,
@@ -325,7 +332,7 @@ class OpenRouterEngine:
                     for key, value in MAX_PRICE_PER_MILLION.items()
                 },
             },
-        }
+        } | extra
         payload = json.dumps(body).encode()
         request = urllib.request.Request(
             OPENROUTER_URL,

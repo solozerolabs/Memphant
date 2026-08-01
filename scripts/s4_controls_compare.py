@@ -59,22 +59,30 @@ def assert_treatment_liveness(report: dict) -> dict:
         "questions_with_channel_table": sum(
             1 for row in report["per_question"] if row.get("channel_table")
         ),
-        "questions_with_dense_channel": sum(
+        "questions_with_lexical_channel": sum(
             1
             for row in report["per_question"]
             if any(
-                entry.get("vector_rank") is not None
-                or entry.get("dense_rank") is not None
-                or "vector_score" in entry
-                or "dense_score" in entry
+                any(channel[0] == "lexical" for channel in entry.get("channels") or [])
+                for entry in (row.get("channel_table") or [])
+            )
+        ),
+        "questions_with_vector_channel": sum(
+            1
+            for row in report["per_question"]
+            if any(
+                any(channel[0] == "vector" for channel in entry.get("channels") or [])
                 for entry in (row.get("channel_table") or [])
             )
         ),
     }
     if facts["lexical_scorer"] != "bm25-code" or facts["embed_model"] != "small":
         raise SystemExit(f"treatment is not the shipped default: {facts}")
-    if facts["questions_with_channel_table"] == 0:
-        raise SystemExit("treatment provenance carries no channel_table: mechanism unproven")
+    # Both fusion channels must be observed CONTRIBUTING in the served run's own
+    # per-candidate channel table. A flag says what was asked for; this says
+    # what fired. An inert dense channel and a neutral one score the same.
+    if facts["questions_with_lexical_channel"] == 0 or facts["questions_with_vector_channel"] == 0:
+        raise SystemExit(f"treatment channels not proven live from its own trace: {facts}")
     return facts
 
 
@@ -110,14 +118,22 @@ def paired(treatment: dict[str, bool], control: dict[str, bool], order: list[str
 def verdict(stats: dict) -> dict:
     """§A.4, applied verbatim."""
     if stats["n_discordant"] < N_D_FLOOR:
-        needed = required_n(max(stats["realized_psi"], 1e-6), PLANNING_MDE)
+        psi = stats["realized_psi"]
+        # Below six discordant pairs no split of them reaches alpha=0.05 under
+        # the two-sided exact test (2 * 2^-6 = 0.031 is the first p that can),
+        # so the required n follows from the observed discordance rate.
+        floor_n = int(-(-N_D_FLOOR // psi)) if psi > 0 else None
         return {
             "verdict": "NOT A MEASUREMENT",
             "reason": (
-                f"n_d={stats['n_discordant']} < {N_D_FLOOR} structural floor. "
-                "This is not a tie and not a null."
+                f"n_d={stats['n_discordant']} < {N_D_FLOOR} structural floor: at "
+                "this discordance no exact two-sided McNemar can reach p<0.05 at "
+                "any split. This is not a tie and not a null."
             ),
-            "required_n": needed,
+            "required_n_for_n_d_floor": floor_n,
+            "required_n_for_planning_mde": (
+                required_n(psi, PLANNING_MDE) if psi > 0 else None
+            ),
         }
     delta, p = stats["delta"], stats["mcnemar_exact_p"]
     if delta >= PLANNING_MDE and p < 0.05:
