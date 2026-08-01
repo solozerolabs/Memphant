@@ -10,13 +10,14 @@
 # Everything here is scoped to this worktree's absolute path. The trap reaps only
 # children this script started, matched on the absolute binary path.
 #
-# Usage: bash scripts/swecb_stage0_run.sh <patchfree|withpatch> <port> <python> <output.json>
+# Usage: bash scripts/swecb_stage0_run.sh <patchfree|withpatch> <port> <python> <output.json> [full|lite]
 set -euo pipefail
 
 VARIANT="${1:?variant required: patchfree|withpatch}"
 PORT="${2:?port required}"
 PYTHON="${3:?python interpreter required}"
 OUTPUT="${4:?output path required}"
+SCOPE="${5:-full}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MIRROR="$HOME/.memphant-private/w7-instruments/swe-contextbench"
@@ -34,12 +35,13 @@ set +e
 "$PYTHON" "$ROOT/scripts/swecb_stage0_recall.py" \
   --mirror "$MIRROR" \
   --body "$VARIANT" \
+  --scope "$SCOPE" \
   --port "$PORT" \
   --output "$OUTPUT"
 rc=$?
 set -e
 
-echo "swecb_stage0_run: variant=$VARIANT rc=$rc"
+echo "swecb_stage0_run: variant=$VARIANT scope=$SCOPE rc=$rc"
 if [ "$rc" -ne 0 ]; then
   echo "swecb_stage0_run: ABORTED -- no number may be reported from this run" >&2
   exit "$rc"
