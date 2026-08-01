@@ -8,10 +8,11 @@
 > on branch `w1-b1arm` off `main` @ `5d7b9d5a`.
 >
 > **Verdict in one line (§10):** naming a unit id makes bitemporal supersession
-> fire and buys **16.4%** of the on-tree oracle headroom (§7.1), but a
-> rate-matched arm that reads no bodies at all captures **half** of that, and B1's semantic increment
-> (+0.0247, CI [−0.0033, +0.0532]) **does not clear zero** on the confirmatory
-> slice. Positive mechanism, unproven semantics.
+> fire and buys **≈16%** of the oracle headroom (§7.1 — ceiling re-measured
+> 2026-08-01; this denominator drifts, do not carry it forward), but a
+> rate-matched arm that reads no bodies at all captures **half** of that, and
+> B1's semantic increment (+0.0247, CI [−0.0033, +0.0532]) **does not clear
+> zero** on the confirmatory slice. Positive mechanism, unproven semantics.
 
 ## 1. The problem B1 attacks
 
@@ -393,6 +394,17 @@ session notes that had it reused the cited 0.5795 instead of re-running its own
 ceiling, it would have reported −1.4pp and concluded the opposite of the truth.
 **A banked ceiling is not a constant.**
 
+**And that applies to this section's own output.** 0.6237 is a ceiling for *this
+tree and this instrument*, and it is no more stable than the 0.5795 it replaces
+— it moved 4.4pp in a day on retrieval coverage alone while the staleness
+behaviour stayed flat. So every share in the on-tree column is written here as
+**"≈16%, ceiling re-measured 2026-08-01"** rather than as a bare percentage, and
+that is how it should be quoted. **If the figure is load-bearing for a decision,
+re-cut the ceiling on the tree you are claiming against; do not carry this one
+forward.** A ratio whose denominator drifts 4pp per day is context, not a
+constant, and this paragraph exists so that a reader three weeks from now is
+wrong in a way they can see rather than in the way "18.9%" was.
+
 Arm P is a **ceiling, not a target**. The honest reading is: removing key
 production from the supersession decision recovers a fifth of the headroom that
 a perfect oracle key recovers, using an extractor that costs nothing and knows
@@ -476,6 +488,25 @@ gold-destruction cost, and it tells us nothing about the size of either.
 that B1 beats the worst way to spend the same edge budget. §8.3 asks the
 question that matters.
 
+**"Recency" is two opposite policies, and the word hides the sign.** Put to the
+A-recency workstream, this caution inverts — its reply is recorded here because
+it is the cleanest statement of why R2 lands where it does (`w1-arecency`
+§8.8, `343e1a0d`; no measured cell of theirs moved):
+
+- **Recency-as-retirement** — arm R2 — *closes* the most recent live prior. On
+  an instrument whose gold is by construction the latest declaring session, that
+  is spending the edge budget on the golds themselves. It lands on a **floor**.
+- **Recency-as-selection** — the A-recency control — retires nothing and instead
+  *selects* `max(observed_at)` per `fact_key` at read time. `load_memorycode`
+  takes `occurrences[-1]` and assigns `observed_at` in session order, so that
+  read rule **computes the gold rule directly**. It lands on a **ceiling** — the
+  most favourable trivial baseline this instrument admits.
+
+Same word, opposite sign. The practical consequence for reading these two logs
+together: their +3.0pp is a win over the strongest trivial alternative, and this
+log's R2 is a loss against the weakest. Neither number transfers to the other's
+question, and the coincidence of vocabulary is the trap.
+
 ### 8.2 The rescued, un-rate-matched recency ablation (arm R) — exploratory only
 
 The earlier ablation run banked at `0ecf8cb2` is superseded by R2 as a
@@ -558,9 +589,10 @@ So the decomposition of arm S's +0.0506 over S0, on the confirmatory slice:
 
 As a fraction of the **on-tree** oracle headroom of +0.3095 (§7.1 — the
 preregistered +0.2672 is a cross-tree constant and overstates every share by
-about a sixth): the edge mechanism closes **16.4%**, of which **8.4% is
-established as retirement** and **8.0% is attributed to semantics but not
-established**.
+about a sixth): the edge mechanism closes **≈16%**, of which **≈8% is
+established as retirement** and **≈8% is attributed to semantics but not
+established**. Ceiling re-measured 2026-08-01 and drifting; the *deltas* are the
+durable quantities here, not the shares.
 
 **Why this matters more than the raw numbers.** Without R3 this log would have
 reported "B1 recovers a fifth of the oracle gap and the ablation proves it is
@@ -634,8 +666,10 @@ engineering result and it is solid.
 
 **Did it pay?** Yes, but less than the headline says, and for a reason that is
 half boring. Arm S beats its own no-op isolator by **+0.0506** on the
-confirmatory slice, CI [+0.0269, +0.0753] — **16.4%** of the on-tree oracle
-headroom (§7.1; 18.9% against the preregistered cross-tree constant).
+confirmatory slice, CI [+0.0269, +0.0753] — **≈16% of the oracle headroom,
+ceiling re-measured 2026-08-01** (§7.1; 18.9% against the preregistered
+cross-tree constant, which is stale). That denominator moved 4.4pp in a day;
+re-cut it before leaning on the ratio.
 About half of that is **retirement per se**: a rate-matched arm that reads no
 bodies at all captures **+0.0259**, CI clear of zero.
 
