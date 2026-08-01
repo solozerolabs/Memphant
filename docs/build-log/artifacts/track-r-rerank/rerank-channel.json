@@ -96,6 +96,70 @@
   "p50": 22166,
   "p95": 34399
  },
+ "evidence_contract": {
+  "attribution": {
+   "method": "unverified",
+   "note": "no bisect. Attribution is by single-variable paired arms (cross-encoder present vs absent at one HEAD and one binary) and, for the decisive contrast, two orderings read out of the SAME trace, which admits no between-run confound at all."
+  },
+  "bar": null,
+  "claim": "A local bge-reranker-base cross-encoder over the 64-deep fused head is compared against the shipped weighted-RRF order on the 180-golden Track R paraphrase bank. The decisive contrast is WITHIN one arm -- same recall, same pool, two orderings -- so no lineage, corpus or run-to-run confound can enter it.",
+  "corpus": {
+   "n_items": 180,
+   "sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+   "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921"
+  },
+  "decisional": false,
+  "harness": {
+   "budget": 8192,
+   "command": "scripts/run_rerank_arms.sh",
+   "embed_model": "fastembed:bge-small-en-v1.5",
+   "flags": [
+    "MEMPHANT_FACT_EXTRACTION=0",
+    "--limit-attempts 1"
+   ],
+   "k": 10,
+   "scorer": "memphant recall mode=fast, lexical=bm25-code"
+  },
+  "instrument_verification": {
+   "fields_counted": {
+    "goldens": 180,
+    "questions_scored": 180
+   },
+   "license_evidence": "corpus license recorded in benchmarks/data/track_r_paraphrase_golden.lock.json",
+   "license_id": "CC-BY-4.0",
+   "license_note": "CC-BY-4.0 asserted by the HuggingFace dataset card and recorded in track_r_paraphrase_golden.lock.json; no LICENSE blob is pinned and the card was not re-fetched, so this is unverified rather than wrong (instrument-register \u00a78, the ClawArena badge pattern)",
+   "license_source": "unverified",
+   "rows_counted": 180,
+   "shipped_rows_verified": true
+  },
+  "leakage": {
+   "absolute_target_coverage": 0.1346,
+   "concentration": 2.018,
+   "floor": 0.0667,
+   "floor_kind": "exhaustive",
+   "floor_scope_note": "mean over every non-target event of the same attempt; no seed, no draw",
+   "negative_selection": "same-attempt hard negatives -- every non-target content event of the bound attempt, which is also exactly the retrieval haystack",
+   "provenance_class": "machine_generated",
+   "provenance_note": "paraphrase: agent-generated with the target identifiers withheld (mean 19.45 withheld terms/query), 180/180 with adjudicated distractors",
+   "unit_definition": "one content event of the attempt, 4000-char clip"
+  },
+  "mechanism_enabled": true,
+  "mechanism_evidence": "Two-sided, from the server's OWN traces and not from the flag passed: the reranked arm carries a cross_rerank trace on 180/180 queries with failure histogram {none: 180} and 10,944 docs scored; the control carries 0/180 and docs_scored=0. This matters because the seam FAILS OPEN to the pre-rerank order, so an all-error arm would be byte-identical to the control while calling itself reranked.",
+  "notes": "NOT PROMOTION-GRADE, and decisional=false for two independent reasons: the bank fails its own preregistered leakage bar (2.018 vs <=1.50), and the corpus licence is a HuggingFace dataset-card assertion with no pinned LICENSE blob. DIAGNOSTIC, not promotion-grade: the bank fails its own preregistered leakage bar (2.018 vs <=1.50), used deliberately on the standing finding that the bar sits below the 1.79 achievable floor. Retrieval and packing only -- no reader, no judge, $0 paid spend. The endpoint contrast (packed@10, b=16/c=27, n_d=43, p=0.126, power 0.34) is UNDERPOWERED and does not carry the conclusion; the within-arm ordering contrast (power 0.996) does. Control reproduces the banked 495-attempt arm on all 180 questions at both k.",
+  "power": {
+   "b": 12,
+   "c": 46,
+   "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+   "mde_at_80": 0.12150148025607287,
+   "n": 180,
+   "n_d": 58,
+   "psi_observed": 0.32222222222222224,
+   "source": "docs/build-log/artifacts/track-r-rerank/rerank-channel.json",
+   "test": "two-sided exact (conditional binomial) McNemar"
+  },
+  "probe_kind": "lever",
+  "schema_version": 1
+ },
  "lineage": {
   "git_head": {
    "rerank_bge": "88b6e5f80a99e060c6d00c18910bfb3db61bb4a3",

@@ -56,6 +56,13 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace --all-targets --all-features
 
+      # The hot-path SLO bar is calibrated against OPTIMIZED code, so it is
+      # `#[ignore]`d under `debug_assertions` and must be run here explicitly.
+      # Without this step the previous line silently ran it in debug, where its
+      # margin is ~3% and it fails at random (see the test's own comment).
+      - name: Hot-path SLO (release)
+        run: cargo test --release -p memphant-core --test hot_path_slo
+
       - name: Rust docs
         run: cargo test --doc
 

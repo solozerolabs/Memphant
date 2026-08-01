@@ -602,6 +602,70 @@
  "baseline_gold_at_10": 113,
  "caveat": "Ranks the POOL, does not run packing. Any winner is a CANDIDATE and must be confirmed by a live arm before it moves a default.",
  "cut_depth": 10,
+ "evidence_contract": {
+  "attribution": {
+   "method": "unverified",
+   "note": "no bisect. Attribution is by single-variable paired arms (cross-encoder present vs absent at one HEAD and one binary) and, for the decisive contrast, two orderings read out of the SAME trace, which admits no between-run confound at all."
+  },
+  "bar": null,
+  "claim": "Every cheap structural lever of the shipped fuser -- RRF K, per-channel weights, score-normalised convex fusion, and the decay multiplier -- is swept against the shipped configuration on the same 180 goldens. 36 arms; none beats the baseline of 113/180.",
+  "corpus": {
+   "n_items": 180,
+   "sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+   "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921"
+  },
+  "decisional": false,
+  "harness": {
+   "budget": 8192,
+   "command": "scripts/fusion_sweep.py --provenance <instrumented arm>",
+   "embed_model": "fastembed:bge-small-en-v1.5",
+   "flags": [
+    "MEMPHANT_FACT_EXTRACTION=0",
+    "--limit-attempts 1"
+   ],
+   "k": 10,
+   "scorer": "memphant recall mode=fast, lexical=bm25-code"
+  },
+  "instrument_verification": {
+   "fields_counted": {
+    "arms_swept": 46,
+    "goldens": 180
+   },
+   "license_evidence": "corpus license recorded in benchmarks/data/track_r_paraphrase_golden.lock.json",
+   "license_id": "CC-BY-4.0",
+   "license_note": "CC-BY-4.0 asserted by the HuggingFace dataset card and recorded in track_r_paraphrase_golden.lock.json; no LICENSE blob is pinned and the card was not re-fetched, so this is unverified rather than wrong (instrument-register \u00a78, the ClawArena badge pattern)",
+   "license_source": "unverified",
+   "rows_counted": 180,
+   "shipped_rows_verified": true
+  },
+  "leakage": {
+   "absolute_target_coverage": 0.1346,
+   "concentration": 2.018,
+   "floor": 0.0667,
+   "floor_kind": "exhaustive",
+   "floor_scope_note": "mean over every non-target event of the same attempt; no seed, no draw",
+   "negative_selection": "same-attempt hard negatives -- every non-target content event of the bound attempt, which is also exactly the retrieval haystack",
+   "provenance_class": "machine_generated",
+   "provenance_note": "paraphrase: agent-generated with the target identifiers withheld (mean 19.45 withheld terms/query), 180/180 with adjudicated distractors",
+   "unit_definition": "one content event of the attempt, 4000-char clip"
+  },
+  "mechanism_enabled": true,
+  "mechanism_evidence": "The sweep is the engine's OWN arithmetic, gated on proving it: scripts/fusion_sweep.py recomputes the SHIPPED constants from the recorded per-candidate votes and refuses to print a row unless it matches. It reproduces traced fused_score to 9.52e-09 (float32 precision) on every candidate and the gold rank on 180/180. The gate fired on first use, rejecting a simulator that disagreed on 133/180 because ChannelPass::Bm25 traces under the `lexical` label while carrying the combined lexical+semantic weight of 3.0.",
+  "notes": "Cells shown are the WORST arm, the most-powered result in the sweep (power 0.902). Every arm carries its own b/c/n_d/psi/MDE/power and an is_a_measurement flag against the n_d>=6 floor. The top arms tie the baseline at n_d=0, which is NOT evidence of equivalence. NOT PROMOTION-GRADE, and decisional=false for two independent reasons: the bank fails its own preregistered leakage bar (2.018 vs <=1.50), and the corpus licence is a HuggingFace dataset-card assertion with no pinned LICENSE blob. DIAGNOSTIC, not promotion-grade; same failing-bar caveat as the bank. Ranks the POOL and does not run packing, so any winner would be a CANDIDATE needing a live confirming arm -- moot here, since no arm wins. Two of six channels (Exact, Temporal) are structurally inert on this episodic corpus with fact extraction off, so this sweep cannot speak to their weights. $0 spend.",
+  "power": {
+   "b": 5,
+   "c": 22,
+   "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+   "mde_at_80": 0.08358661173244086,
+   "n": 180,
+   "n_d": 27,
+   "psi_observed": 0.15,
+   "source": "docs/build-log/artifacts/track-r-rerank/fusion-sweep.json",
+   "test": "two-sided exact (conditional binomial) McNemar"
+  },
+  "probe_kind": "lever",
+  "schema_version": 1
+ },
  "min_nd_for_rejection": 6,
  "n": 180,
  "paid_api_spend_usd": 0,
