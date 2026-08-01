@@ -11,8 +11,79 @@ printed as an interval rather than a partition.
 from __future__ import annotations
 
 import json
+import random
 import sys
 from pathlib import Path
+
+BOOTSTRAP_DRAWS = 20000
+BOOTSTRAP_SEED = 20260801
+
+
+def conversion(art: dict, hits: dict[str, dict[str, bool]],
+               treatment: str, control: str) -> dict | None:
+    """How much of a retrieval gap arrives at the answer?
+
+    conversion = (accuracy gap) / (hit@10 gap), on the SAME paired questions.
+
+    Reported as its own number because the two arm rates do not carry it: a
+    +0.378 retrieval gap that yields +0.167 on answers means retrieval points
+    are discounted by more than half at the outcome, which changes what a
+    retrieval point is worth. The CI is a paired bootstrap over question ids —
+    resampling questions, not arms, because both arms answer every question and
+    the numerator and denominator move together.
+
+    Draws where the resampled hit gap is <= 0 are DROPPED and counted, not
+    silently kept: the ratio is undefined there, and keeping them would let a
+    near-zero denominator manufacture an arbitrarily wide interval.
+    """
+    order = art["per_question_vectors"]["order"]
+    arms = art["per_question_vectors"]["arms"]
+    if treatment not in arms or control not in arms:
+        return None
+    if treatment not in hits or control not in hits:
+        return None
+    t_acc = [bool(x) for x in arms[treatment]]
+    c_acc = [bool(x) for x in arms[control]]
+    t_hit = [bool(hits[treatment].get(q)) for q in order]
+    c_hit = [bool(hits[control].get(q)) for q in order]
+    n = len(order)
+
+    def point(idx: list[int]) -> tuple[float, float]:
+        gap_hit = sum(c_hit[i] for i in idx) / len(idx) - sum(t_hit[i] for i in idx) / len(idx)
+        gap_acc = sum(c_acc[i] for i in idx) / len(idx) - sum(t_acc[i] for i in idx) / len(idx)
+        return gap_hit, gap_acc
+
+    base_hit, base_acc = point(list(range(n)))
+    if base_hit <= 0:
+        return {"defined": False, "hit_gap": base_hit, "accuracy_gap": base_acc,
+                "note": "hit gap is not positive; a conversion ratio is undefined"}
+    rng = random.Random(BOOTSTRAP_SEED)
+    ratios: list[float] = []
+    dropped = 0
+    for _ in range(BOOTSTRAP_DRAWS):
+        idx = [rng.randrange(n) for _ in range(n)]
+        gap_hit, gap_acc = point(idx)
+        if gap_hit <= 0:
+            dropped += 1
+            continue
+        ratios.append(gap_acc / gap_hit)
+    ratios.sort()
+    lo = ratios[int(0.025 * len(ratios))] if ratios else None
+    hi = ratios[int(0.975 * len(ratios)) - 1] if ratios else None
+    return {
+        "defined": True,
+        "treatment": treatment,
+        "control": control,
+        "hit_gap": base_hit,
+        "accuracy_gap": base_acc,
+        "conversion_ratio": base_acc / base_hit,
+        "ci_lo": lo,
+        "ci_hi": hi,
+        "draws": len(ratios),
+        "draws_dropped_undefined": dropped,
+        "method": f"paired bootstrap over question ids, {BOOTSTRAP_DRAWS} draws, "
+                  f"seed {BOOTSTRAP_SEED}, percentile CI",
+    }
 
 
 def pct(x: float | None, digits: int = 4) -> str:
@@ -27,6 +98,12 @@ def ci(block: dict | None) -> str:
 
 def main() -> int:
     art = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    hits: dict[str, dict[str, bool]] = {}
+    for spec in sys.argv[2:]:
+        name, _, path = spec.partition("=")
+        report = json.loads(Path(path).read_text(encoding="utf-8"))
+        hits[name] = {r["question_id"]: bool(r.get("hit_at_10"))
+                      for r in report.get("per_question", [])}
     print(f"## Endpoint `{art['endpoint']}` · n = {art['n_paired']} · "
           f"control = `{art['control_arm']}`\n")
 
@@ -39,6 +116,31 @@ def main() -> int:
         print(f"| `{name}` | **{acc:.4f}** ({art['arm_correct_counts'][name]}/{art['n_paired']}) | "
               f"{pct(g['retrieval_hit_at_10'])} | {j['reader_abstentions']} | "
               f"{j['reader_provider_refusals']} | {j['rows_with_error']} |")
+
+    bounded = [f"`{n}` +{j['reader_provider_refusals']}"
+               for n, j in art["judge_accounting"].items()
+               if j["reader_provider_refusals"]]
+    if bounded:
+        print(f"\n**These accuracies are LOWER BOUNDS.** A provider refusal is scored "
+              f"as a non-answer, so those rows are guaranteed-incorrect for a reason "
+              f"that is not the pack: {', '.join(bounded)} row(s). The true ceiling "
+              f"for each arm is its figure plus its refusal count.")
+
+    conv = conversion(art, hits, "memphant", art["control_arm"])
+    if conv and conv.get("defined"):
+        print(f"\n### Does the retrieval gap convert?\n")
+        print(f"| quantity | value |")
+        print(f"|---|---:|")
+        print(f"| hit@10 gap (`{conv['control']}` − `{conv['treatment']}`) | "
+              f"**{conv['hit_gap']:+.4f}** |")
+        print(f"| answer-accuracy gap, same questions | **{conv['accuracy_gap']:+.4f}** |")
+        print(f"| **conversion ratio** | **{conv['conversion_ratio']:.3f}** "
+              f"[{conv['ci_lo']:.3f}, {conv['ci_hi']:.3f}] |")
+        print(f"\n{conv['method']}; {conv['draws_dropped_undefined']} of "
+              f"{BOOTSTRAP_DRAWS} draws dropped as undefined (resampled hit gap "
+              f"<= 0). A ratio below 1 means retrieval points are DISCOUNTED at "
+              f"the outcome: {(1 - conv['conversion_ratio']) * 100:.1f}% of this "
+              f"retrieval gap does not arrive as answer correctness.")
 
     print("\n### The joint distribution — the primary deliverable\n")
     for name in art["arm_accuracy"]:
