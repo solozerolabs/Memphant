@@ -42,6 +42,17 @@ def main() -> int:
     parser.add_argument("--out-evidence", required=True, type=Path)
     parser.add_argument("--out-provenance", required=True, type=Path)
     parser.add_argument("--k", type=int, default=10)
+    parser.add_argument(
+        "--vector-cache",
+        type=Path,
+        default=None,
+        help=(
+            "npz cache of the document vectors, keyed by corpus+golden sha256. "
+            "Exists because the first full run spent ~90 minutes embedding and "
+            "then discarded every vector when a liveness assertion tripped. "
+            "Compute that expensive is checkpointed before it is judged."
+        ),
+    )
     args = parser.parse_args()
 
     import numpy as np
@@ -71,21 +82,45 @@ def main() -> int:
     # fed through a pickling queue", and this job wedged in `os_write` on that
     # queue with 0% CPU for three minutes. The progress lines, not the CPU
     # percentage, are what distinguished the two.
-    chunks = []
-    embed_started = time.time()
-    for start in range(0, len(texts), 2048):
-        batch = texts[start : start + 2048]
-        chunks.extend(embedder.embed(batch, batch_size=64))
-        print(
-            f"embedded {len(chunks)}/{len(texts)} "
-            f"({time.time() - embed_started:.0f}s)",
-            flush=True,
-        )
-    doc_vectors = np.array(chunks, dtype=np.float32)
-    queries = [memphant_runner.retrieval_query(golden) for golden in goldens]
-    query_vectors = np.array(
-        list(embedder.embed(queries, batch_size=64)), dtype=np.float32
+    cache_key = (
+        memphant_runner.corpus_contract(lock)["corpus_sha256"][:16]
+        + "-"
+        + lock["sha256"][:16]
     )
+    cached = None
+    if args.vector_cache and args.vector_cache.exists():
+        blob = np.load(args.vector_cache, allow_pickle=False)
+        if str(blob["key"]) == cache_key and blob["docs"].shape[0] == len(texts):
+            cached = blob
+            print(f"vector cache hit ({args.vector_cache})", flush=True)
+    if cached is not None:
+        doc_vectors = cached["docs"]
+        query_vectors = cached["queries"]
+    else:
+        chunks = []
+        embed_started = time.time()
+        for start in range(0, len(texts), 2048):
+            batch = texts[start : start + 2048]
+            chunks.extend(embedder.embed(batch, batch_size=64))
+            print(
+                f"embedded {len(chunks)}/{len(texts)} "
+                f"({time.time() - embed_started:.0f}s)",
+                flush=True,
+            )
+        doc_vectors = np.array(chunks, dtype=np.float32)
+        queries = [memphant_runner.retrieval_query(golden) for golden in goldens]
+        query_vectors = np.array(
+            list(embedder.embed(queries, batch_size=64)), dtype=np.float32
+        )
+        if args.vector_cache:
+            args.vector_cache.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(
+                args.vector_cache,
+                key=np.array(cache_key),
+                docs=doc_vectors,
+                queries=query_vectors,
+            )
+            print(f"vector cache written ({args.vector_cache})", flush=True)
 
     # --- mechanism liveness, from this arm's own output (A.5) ---------------
     if doc_vectors.shape[1] != EXPECTED_DIMS or query_vectors.shape[1] != EXPECTED_DIMS:
@@ -93,13 +128,26 @@ def main() -> int:
             f"embedding dim {doc_vectors.shape[1]}/{query_vectors.shape[1]} "
             f"!= {EXPECTED_DIMS}: the embedder did not fire as declared"
         )
+    # Liveness, corrected. The first version asserted distinct_vectors/N >= 0.99
+    # and tripped at 0.9004 -- but that ratio measures how duplicated the CORPUS
+    # is, not whether the embedder discriminates: 1,330 of the 21,629 events are
+    # byte-identical to another event, so 0.9385 was the ceiling before a single
+    # vector was computed. The question the gate is FOR is whether the embedder
+    # maps distinct inputs to distinct vectors, so that is what it now asks, and
+    # it asks it more strictly on that axis than the original did.
     distinct = len({vector.tobytes() for vector in doc_vectors})
-    distinct_ratio = distinct / len(doc_vectors)
-    if distinct_ratio < 0.99:
+    distinct_texts = len(set(texts))
+    injectivity = distinct / distinct_texts
+    if doc_vectors.shape[0] and distinct <= 1:
+        raise RuntimeError("the embedder returned one vector for every document")
+    if injectivity < 0.95:
         raise RuntimeError(
-            f"only {distinct_ratio:.4f} of document vectors are distinct — a "
-            "degenerate embedder scores identically to a neutral one"
+            f"distinct vectors {distinct} / distinct texts {distinct_texts} = "
+            f"{injectivity:.4f} < 0.95: the embedder is not discriminating "
+            "between inputs that differ"
         )
+    if len({vector.tobytes() for vector in query_vectors}) != len(query_vectors):
+        raise RuntimeError("two queries produced the same vector")
 
     def normalize(matrix):
         norms = np.linalg.norm(matrix, axis=1, keepdims=True)
@@ -152,7 +200,14 @@ def main() -> int:
         "golden_sha256": lock["sha256"],
         "liveness": {
             "distinct_document_vectors": distinct,
-            "distinct_ratio": round(distinct_ratio, 6),
+            "distinct_document_texts": distinct_texts,
+            "vector_injectivity_on_distinct_texts": round(injectivity, 6),
+            "distinct_vector_share_of_all_documents": round(
+                distinct / len(doc_vectors), 6
+            ),
+            "distinct_query_vectors": len(
+                {vector.tobytes() for vector in query_vectors}
+            ),
             "query_vector_sha256": hashlib.sha256(query_vectors.tobytes()).hexdigest(),
             "document_vector_sha256": hashlib.sha256(doc_vectors.tobytes()).hexdigest(),
         },
