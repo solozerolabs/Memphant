@@ -15948,9 +15948,11 @@ mod inert_on_the_bank_live_in_prod_tests {
     #[test]
     fn exact_score_can_never_reach_one_because_the_scope_uuid_is_in_the_denominator() {
         let scope = "550e8400-e29b-41d4-a716-446655440000";
-        let unit = semantic_unit(1, "deploy target is fly.io", Some(&format!(
-            "{scope}:deploy_target:is"
-        )));
+        let unit = semantic_unit(
+            1,
+            "deploy target is fly.io",
+            Some(&format!("{scope}:deploy_target:is")),
+        );
         // A query covering EVERY semantic component of the key.
         let query = tokenize("deploy target is");
         let score = exact_score(&unit, &query);
@@ -15977,7 +15979,10 @@ mod inert_on_the_bank_live_in_prod_tests {
             None,
             "the deploy target is fly.io",
         );
-        assert!(key.contains(":auto:"), "expected the auto branch, got {key}");
+        assert!(
+            key.contains(":auto:"),
+            "expected the auto branch, got {key}"
+        );
         let unit = semantic_unit(1, "the deploy target is fly.io", Some(&key));
         let query = tokenize("the deploy target is fly.io");
         assert_eq!(

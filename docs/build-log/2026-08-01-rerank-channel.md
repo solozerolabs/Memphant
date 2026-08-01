@@ -41,10 +41,13 @@ Three results follow, in the order they cost the bank of standing claims:
    64-deep head is *significantly* worse than the fusion it replaces — gold in
    the top 10 goes 113 → 79, b=12/c=46, exact p=8.2e-06, **power 0.996**. A
    powered negative. `MEMPHANT_CROSS_RERANK` stays default-OFF (§3).
-2. **The real target is the fusion ordering, and its constants were never fit.**
-   Two live channels combined by weighted RRF at `K = 60` — a constant chosen for
-   TREC-scale pools — which compresses a 124-candidate pool into a 3× score band
-   (§6).
+2. **The fusion ordering is the real target — and it is already at a local
+   optimum.** A 36-arm offline sweep of every cheap structural lever (RRF `K`,
+   channel weights, score-normalised convex fusion, the decay multiplier),
+   gated on reproducing the shipped fusion to float32 precision on all 180
+   questions, produced **no arm better than the shipped configuration** and
+   several significantly worse. My own "`K=60` is the wrong constant" hypothesis
+   is falsified by it (§6).
 3. **This bank cannot see two ranking defects that are live in production.**
    `exact_score` and `temporal_score` are both broken and both structurally
    inert on an episodic corpus with fact extraction off. Every ranking number
@@ -515,11 +518,16 @@ overwhelmingly **consensus-biased**. Concretely — and this is the shape of the
 | 20 | 90 |
 
 At `K ≤ 20` a rank-1 BM25 hit beats a rank-15/15 consensus distractor at **any**
-vector rank. One unfitted constant is currently able to bury a channel's
-top-ranked answer under mutual mediocrity. This is the first lever to measure —
-it is a one-line change with no model, no latency, and no spend.
+vector rank. One unfitted constant is able to bury a channel's top-ranked answer
+under mutual mediocrity — so this was the first lever to measure.
 
-### 6.4 Levers, in the order they should be measured
+> **The prediction that follows from this arithmetic is WRONG. Measured in §6.6:
+> sharpening `K` is significantly worse** (`K=10` p=0.0213 power 0.66, `K=5`
+> p=0.0026 power 0.87). The compression is real; burying rank-1 hits under
+> consensus is, on this corpus, the correct thing to do. The section is kept
+> because the arithmetic is right and the inference from it was not.
+
+### 6.4 Levers, in the order they were measured
 
 1. **`K`** (60 → 5/10/20). Sharpens rank-1 dominance. §6.3.
 2. **Channel weights** (the unfitted 3.0 : 2.0).
@@ -528,7 +536,7 @@ it is a one-line change with no model, no latency, and no spend.
    generalise it, because the *production* fuser is six heterogeneous channels.
    **On this lane there are only two live channels**, which is exactly the
    2-channel setting P1 measured — so P1's objection does not apply here, and
-   its finding becomes directly testable.
+   its finding becomes directly testable. It does not replicate (§6.6).
 4. **`decay.retrievability` as a post-hoc multiplier** on the fused score.
 
 `scripts/code_lane_run_memphant.py` now records the full per-candidate
@@ -537,6 +545,94 @@ from one instrumented run** rather than one ~2h ingest+compile arm per
 configuration. **Precondition on reading any of it: the offline simulator must
 first reproduce the shipped fused ranking exactly from those rows.** A sweep
 that cannot reproduce the baseline is measuring its own reimplementation.
+
+### 6.5 The gate earned its keep on its first use
+
+`scripts/fusion_sweep.py --verify` **refused to print a single row** on the
+first run: the simulator disagreed with the shipped fusion on **133 of 180**
+questions. The cause was worth catching — `ChannelPass::Bm25` traces under the
+honest `lexical` label (it *is* the lexical family) and carries the **combined**
+Lexical + Semantic weight of **3.0**, not Lexical's 1.0. A sweep built on the
+label alone silently weights the dominant channel at one third of its real
+value, and every conclusion drawn from it would have been confident and wrong.
+
+After resolving the label, the gate passes on both checks it makes:
+
+> `fused_score` reproduced to **9.52e-09** (float32 precision) on **every
+> candidate of every question**, and the gold's rank is identical on
+> **180/180**.
+
+The sweep below is therefore the shipped fuser's own arithmetic, not a
+reimplementation of it.
+
+### 6.6 The sweep — every cheap lever is null or worse, and my §6.3 argument is FALSIFIED
+
+Baseline (shipped: `K=60`, lexical 3.0, vector 2.0, decay on): **gold@10 = 113/180**.
+`b` favours the arm, `c` the shipped baseline; paired exact McNemar, n=180.
+
+| arm | gold@10 | b | c | n_d | p | power |
+|---|---:|---:|---:|---:|---:|---:|
+| **shipped `K=60`, vector 2.0** | **113** | — | — | — | — | — |
+| decay OFF | 113 | 0 | 0 | **0** | 1.000 | — |
+| vector_w=3.0 | 112 | 5 | 6 | 11 | 1.000 | 0.03 |
+| vector_w=4.0 | 112 | 10 | 11 | 21 | 1.000 | 0.03 |
+| K=30 | 111 | 1 | 3 | 4 | 0.625 | — |
+| CONVEX minmax vector_w=3.0 | 110 | 9 | 12 | 21 | 0.664 | 0.07 |
+| K=20 | 108 | 1 | 6 | 7 | 0.125 | 0.32 |
+| vector_w=1.0 | 108 | 3 | 8 | 11 | 0.227 | 0.22 |
+| **K=10** | 103 | 3 | 13 | 16 | **0.0213** | 0.66 |
+| CONVEX z vector_w=2.0 | 100 | 2 | 15 | 17 | **0.0023** | 0.89 |
+| vector_w=0.5 | 100 | 6 | 19 | 25 | **0.0146** | 0.69 |
+| **K=5** | 98 | 4 | 19 | 23 | **0.0026** | 0.87 |
+| K=5 vector_w=1.0 | 97 | 4 | 20 | 24 | **0.0015** | 0.91 |
+| CONVEX z vector_w=0.5 | 96 | 4 | 21 | 25 | **0.0009** | 0.93 |
+
+**No arm beats the baseline. Not one.** The shipped configuration is the top of
+a 36-arm sweep, and the significant results are all *against* the alternatives,
+several at power 0.87–0.93.
+
+**§6.3 is falsified and I withdraw it.** I argued that `K = 60` was an unfitted
+TREC-scale constant whose consensus bias buries rank-1 BM25 hits, and predicted
+that sharpening `K` would recover them. Sharpening `K` makes it **significantly
+worse**: `K=10` loses 10 questions (p=0.0213, power 0.66) and `K=5` loses 15
+(p=0.0026, power 0.87). The arithmetic in §6.3 is correct and its conclusion is
+wrong — the consensus bias is doing real work. A gold that one channel ranks #1
+and the other ranks 60th is, on this corpus, usually **not** the gold; requiring
+agreement is what keeps the other 113 in place. Cheap and decisive, which is
+exactly what an offline sweep is for.
+
+Three further results:
+
+- **The unfitted weights are at a local optimum.** Vector weight sweeps
+  0.5 → 100, 1.0 → 108, **2.0 → 113 (shipped)**, 3.0 → 112, 4.0 → 112, 6.0 → 109
+  — a smooth peak on the shipped value. They were never fit and they are right
+  anyway, at least on this bank. Stated plainly because "nobody fit this
+  constant" is a reason to *measure* it, not a finding in itself.
+- **Convex score-normalised fusion loses**, best 110 (min-max, vector 3.0) vs
+  113, and z-normalisation is significantly worse (p=0.0023, power 0.89). P1's
+  finding does **not** transfer here even though this is the 2-channel setting
+  P1's own caveat carved out. P1's objection was about heterogeneous scales; the
+  actual reason it fails here is different and unresolved.
+- **`decay.retrievability` is completely inert on this corpus** — b=0, c=0, not
+  a single question moves. It is uniform across a corpus ingested in one pass.
+  So it is neither helping nor hurting here, and like §7 it **cannot be
+  evaluated on this bank at all**.
+
+### 6.7 What this leaves
+
+The 58-question headroom in §1.3 is real, and it is now known **not** to be
+reachable by:
+
+1. a local cross-encoder over the head (§3 — powered negative), or
+2. any reweighting or reparameterisation of what the two existing channels
+   already say (§6.6 — 36 arms, none better).
+
+The shipped fuser is at a local optimum of its own parameterisation. Closing the
+gap therefore needs a **new or better signal**, not a better combination of the
+present two — a stronger retriever, a code-appropriate reranker, or query
+transformation. That is a materially different and more expensive programme than
+"tune the fusion", and it should be planned as one rather than discovered
+arm-by-arm.
 
 ## 7. The bank is flattering us: two broken scorers that are inert here and live in prod
 

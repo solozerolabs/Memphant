@@ -51,6 +51,25 @@ SHIPPED_WEIGHTS = {
 SHIPPED_K = 60.0
 
 
+def resolve_weights(questions: list[dict], weights: dict[str, float]) -> dict[str, float]:
+    """The BM25 pass traces under the `lexical` label, not `bm25`.
+
+    `ChannelPass::Bm25` deliberately reports the honest `lexical` trace label
+    (it IS the lexical family), and it REPLACES both the Lexical and Semantic
+    overlap passes, so it carries their combined weight of 3.0 rather than
+    Lexical's 1.0. A `lexical` label with no `semantic` label anywhere in the
+    run is therefore BM25 wearing the lexical name.
+
+    Getting this wrong is not subtle in its effect and is completely silent in
+    its symptom: it moved the gold's simulated rank on 133 of 180 questions,
+    and the only thing that caught it was the reproduce-the-baseline gate."""
+    labels = {channel for row in questions for cand in row["channel_table"] for channel, _r, _s in cand["channels"]}
+    resolved = dict(weights)
+    if "lexical" in labels and "semantic" not in labels:
+        resolved["lexical"] = weights["lexical"] + weights["semantic"]
+    return resolved
+
+
 def fused_score(row: dict, weights: dict[str, float], k: float, use_decay: bool) -> float:
     total = 0.0
     for channel, rank, score in row["channels"]:
@@ -59,6 +78,50 @@ def fused_score(row: dict, weights: dict[str, float], k: float, use_decay: bool)
     if use_decay:
         total *= row.get("decay_retrievability") or 1.0
     return total
+
+
+def convex_gold_rank(rows: list[dict], weights: dict[str, float], norm: str, use_decay: bool):
+    """Score-normalised convex fusion: min-max or z-normalise each channel's raw
+    scores onto a shared scale, then take the weighted SUM of scores rather than
+    of reciprocal ranks.
+
+    This is the P1 bench's winner (0.847 vs RRF's 0.833). P1 correctly refused to
+    generalise it, because the PRODUCTION fuser combines six heterogeneous
+    channels whose score scales are not comparable -- which is the whole reason
+    RRF (rank-only) exists. On this lane only two channels are live, which is
+    exactly the 2-channel setting P1 measured, so the objection does not apply
+    and the finding becomes directly testable here."""
+    per_channel: dict[str, list[float]] = {}
+    for row in rows:
+        for channel, _rank, score in row["channels"]:
+            per_channel.setdefault(channel, []).append(score)
+    stats = {}
+    for channel, values in per_channel.items():
+        lo, hi = min(values), max(values)
+        mean = sum(values) / len(values)
+        var = sum((v - mean) ** 2 for v in values) / max(1, len(values) - 1)
+        stats[channel] = (lo, hi, mean, var**0.5)
+
+    def normalise(channel: str, score: float) -> float:
+        lo, hi, mean, sd = stats[channel]
+        if norm == "minmax":
+            return 0.0 if hi <= lo else (score - lo) / (hi - lo)
+        return 0.0 if sd == 0 else (score - mean) / sd
+
+    scored = []
+    for row in rows:
+        total = sum(
+            weights.get(channel, 0.0) * normalise(channel, score)
+            for channel, _rank, score in row["channels"]
+        )
+        if use_decay:
+            total *= row.get("decay_retrievability") or 1.0
+        scored.append((total, row["unit_id"], row["is_gold"]))
+    scored.sort(key=lambda triple: (-triple[0], triple[1]))
+    for index, (_score, _unit, is_gold) in enumerate(scored, start=1):
+        if is_gold:
+            return index
+    return None
 
 
 def gold_rank(rows: list[dict], weights: dict[str, float], k: float, use_decay: bool):
@@ -115,11 +178,23 @@ def load(path: Path) -> list[dict]:
     return report["per_question"]
 
 
-def verify(questions: list[dict]) -> None:
-    """Refuse to sweep unless the shipped constants are reproduced exactly."""
+def verify(questions: list[dict], weights: dict[str, float]) -> None:
+    """Refuse to sweep unless the shipped constants are reproduced exactly.
+
+    Checks BOTH the recomputed `fused_score` against the traced one (catches a
+    wrong formula) and the resulting gold RANK (catches a wrong tie-break)."""
+    worst = 0.0
+    for row in questions:
+        for cand in row["channel_table"]:
+            worst = max(worst, abs(fused_score(cand, weights, SHIPPED_K, True) - cand["fused_score"]))
+    if worst > 1e-6:
+        raise SystemExit(
+            f"SIMULATOR SCORE MISMATCH: max |recomputed - traced fused_score| = {worst:.3e} "
+            "-- the formula is wrong, refusing to sweep"
+        )
     mismatches = []
     for row in questions:
-        recomputed = gold_rank(row["channel_table"], SHIPPED_WEIGHTS, SHIPPED_K, use_decay=True)
+        recomputed = gold_rank(row["channel_table"], weights, SHIPPED_K, use_decay=True)
         if recomputed != row["gold_fused_rank"]:
             mismatches.append((row["question_id"], row["gold_fused_rank"], recomputed))
     if mismatches:
@@ -128,8 +203,10 @@ def verify(questions: list[dict]) -> None:
             f"SIMULATOR DOES NOT REPRODUCE THE SHIPPED FUSION on "
             f"{len(mismatches)}/{len(questions)} questions -- refusing to sweep. {head}"
         )
-    print(f"simulator gate PASSED: shipped fusion reproduced on {len(questions)}/{len(questions)} "
-          "questions (gold rank identical)")
+    print(
+        f"simulator gate PASSED: fused_score reproduced to {worst:.2e} (float32 precision) on every "
+        f"candidate, and the gold rank is identical on {len(questions)}/{len(questions)} questions"
+    )
 
 
 def main() -> int:
@@ -141,7 +218,8 @@ def main() -> int:
 
     questions = load(Path(args.provenance))
     n = len(questions)
-    verify(questions)
+    shipped = resolve_weights(questions, SHIPPED_WEIGHTS)
+    verify(questions, shipped)
 
     baseline = [
         (row["gold_fused_rank"] is not None and row["gold_fused_rank"] <= args.k)
@@ -150,22 +228,36 @@ def main() -> int:
     print(f"baseline gold@{args.k}: {sum(baseline)}/{n}\n")
 
     arms: list[tuple[str, dict, float, bool]] = []
-    for k_rrf in (1, 5, 10, 20, 30, 60):
-        arms.append((f"K={k_rrf}", SHIPPED_WEIGHTS, float(k_rrf), True))
+    for k_rrf in (0, 1, 2, 5, 10, 20, 30, 60):
+        arms.append((f"K={k_rrf}", shipped, float(k_rrf), True))
     for vec in (0.5, 1.0, 2.0, 3.0, 4.0, 6.0):
-        weights = dict(SHIPPED_WEIGHTS, vector=vec)
-        arms.append((f"vector_w={vec} (bm25=3.0)", weights, SHIPPED_K, True))
-    for k_rrf in (5, 10, 20):
-        for vec in (1.0, 2.0, 3.0, 4.0):
-            weights = dict(SHIPPED_WEIGHTS, vector=vec)
-            arms.append((f"K={k_rrf} vector_w={vec}", weights, float(k_rrf), True))
-    arms.append(("decay OFF", SHIPPED_WEIGHTS, SHIPPED_K, False))
+        arms.append((f"vector_w={vec} (lex=3.0, K=60)", dict(shipped, vector=vec), SHIPPED_K, True))
+    for k_rrf in (2, 5, 10, 20):
+        for vec in (1.0, 2.0, 3.0, 4.0, 6.0):
+            arms.append((f"K={k_rrf} vector_w={vec}", dict(shipped, vector=vec), float(k_rrf), True))
+    arms.append(("decay OFF (K=60)", shipped, SHIPPED_K, False))
+    arms.append(("decay OFF, K=5", shipped, 5.0, False))
+
+    convex_arms = []
+    for norm in ("minmax", "z"):
+        for vec in (0.5, 1.0, 1.5, 2.0, 3.0):
+            convex_arms.append((f"CONVEX {norm} vector_w={vec} (lex=3.0)", dict(shipped, vector=vec), norm))
 
     results = []
     for label, weights, k_rrf, use_decay in arms:
         hits = [
             (lambda r: r is not None and r <= args.k)(
                 gold_rank(row["channel_table"], weights, k_rrf, use_decay)
+            )
+            for row in questions
+        ]
+        cell = cells(hits, baseline, n)
+        results.append({"arm": label, f"gold_at_{args.k}": sum(hits), **cell})
+
+    for label, weights, norm in convex_arms:
+        hits = [
+            (lambda r: r is not None and r <= args.k)(
+                convex_gold_rank(row["channel_table"], weights, norm, True)
             )
             for row in questions
         ]
@@ -180,7 +272,8 @@ def main() -> int:
         print(
             f"{r['arm'].ljust(width)}  {r[f'gold_at_{args.k}']:>6}  "
             f"{r['b']:>3}  {r['c']:>3}  {r['n_d']:>3}  {r['exact_p']:.4f}  "
-            f"{r['mde_at_80']:.4f}  {r['power']:.3f}{flag}"
+            f"{'  n/a ' if r['mde_at_80'] is None else format(r['mde_at_80'], '.4f')}  "
+            f"{r['power']:.3f}{flag}"
         )
 
     if args.out:
@@ -191,7 +284,7 @@ def main() -> int:
             "paid_api_spend_usd": 0,
             "min_nd_for_rejection": 6,
             "simulator_gate": "shipped fusion reproduced on all questions",
-            "shipped": {"weights": SHIPPED_WEIGHTS, "rrf_k": SHIPPED_K},
+            "shipped": {"weights": shipped, "rrf_k": SHIPPED_K},
             f"baseline_gold_at_{args.k}": sum(baseline),
             "arms": results,
             "caveat": (
