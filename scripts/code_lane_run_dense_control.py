@@ -61,9 +61,31 @@ def main() -> int:
         for position, event in enumerate(by_attempt[attempt_id]):
             texts.append(event["text"])
             index.append((attempt_id, position))
-    doc_vectors = np.array(list(embedder.embed(texts)), dtype=np.float32)
+    # Chunked with progress on purpose: an unobservable 20-minute local job is
+    # indistinguishable from a stalled one, and silence must never be a valid
+    # outcome.
+    #
+    # `parallel` is left at fastembed's None, which means NO multiprocessing —
+    # ONNX's own intra-op threads do the work in this process. Measured the hard
+    # way: `parallel=1` does not mean "one thread", it means "one forked worker
+    # fed through a pickling queue", and this job wedged in `os_write` on that
+    # queue with 0% CPU for three minutes. The progress lines, not the CPU
+    # percentage, are what distinguished the two.
+    chunks = []
+    embed_started = time.time()
+    for start in range(0, len(texts), 2048):
+        batch = texts[start : start + 2048]
+        chunks.extend(embedder.embed(batch, batch_size=64))
+        print(
+            f"embedded {len(chunks)}/{len(texts)} "
+            f"({time.time() - embed_started:.0f}s)",
+            flush=True,
+        )
+    doc_vectors = np.array(chunks, dtype=np.float32)
     queries = [memphant_runner.retrieval_query(golden) for golden in goldens]
-    query_vectors = np.array(list(embedder.embed(queries)), dtype=np.float32)
+    query_vectors = np.array(
+        list(embedder.embed(queries, batch_size=64)), dtype=np.float32
+    )
 
     # --- mechanism liveness, from this arm's own output (A.5) ---------------
     if doc_vectors.shape[1] != EXPECTED_DIMS or query_vectors.shape[1] != EXPECTED_DIMS:
