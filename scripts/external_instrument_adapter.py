@@ -56,7 +56,7 @@ import os
 import re
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -78,7 +78,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def observed_at(index: int) -> str:
+def observed_at(index: float) -> str:
     return (EPOCH + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
 
 
@@ -181,6 +181,108 @@ def load_memorycode(source: Path) -> list[dict]:
     return groups
 
 
+def load_memorycode_asof(source: Path) -> list[dict]:
+    """MemoryCode, RE-CUT so the gold is not the latest declaration (S2 §4).
+
+    THE CORPUS IS UNCHANGED AND SO IS INGEST. Only the question moves: for a
+    key declared at sessions j_1 < ... < j_m, today's cut emits ONE probe with
+    gold = j_m. This cut emits m-1 probes, one per non-final declaration r,
+    asking the question **as of a time while j_r's declaration was in force**:
+
+        valid_at       = midpoint(observed_at(j_r), observed_at(j_{r+1}))
+        gold           = j_r
+        distractors    = every OTHER declaring session, including j_{r+1}..j_m
+
+    So `max(observed_at)` returns j_m -- a distractor -- on every probe, by
+    construction, and every earlier declaration becomes the gold of its own
+    probe (which is what makes wrong retirement expensive; see §4.3).
+
+    WHY THE MIDPOINT AND NOT `observed_at(j_r) + eps`, WHICH IS WHAT S2 §4.1
+    SPECIFIES. Measured on the pinned parquet before this loader was written:
+    under the eps policy the LATEST SESSION OF ANY KIND at or before valid_at
+    is the gold on **3599 of 3599** probes -- the trivial rule
+    `max(observed_at <= t)` over the raw session stream is then the gold rule
+    exactly, and the re-cut reproduces the very identification it exists to
+    break, one axis over. Under the midpoint policy that collapses to
+    **667 of 3599 (18.5%)**, because 2932 probes have at least one
+    non-declaring session between j_r and t. The midpoint is also the
+    semantically honest choice: "as of a time while rule r was in force"
+    rather than "one epsilon after it was stated".
+
+    WHAT THE MIDPOINT STILL DOES NOT FIX, stated here rather than discovered
+    downstream: among the DECLARING sessions of the key, `max(observed_at <=
+    t)` is still exactly j_r for every probe, because MemoryCode has zero
+    re-assertions (measured) so a key's declarations form a monotone chain.
+    Any rule that truncates at t and then takes the newest therefore ranks the
+    gold above every distractor it returns. The gold-vs-stale endpoint
+    (`appropriate_application` / latest-state-wins) is consequently
+    **saturated by the trivial as-of rule up to pool coverage**, and that is a
+    property of the corpus, not of this loader. `hit_at_1` is the endpoint
+    where the baselines genuinely separate. Both are reported.
+    """
+    import pyarrow.parquet as pq
+
+    groups = []
+    for row in pq.read_table(source).to_pylist():
+        sessions = json.loads(row["sessions"])
+        gid = f"mc-{row['id']}"
+        units = [
+            {
+                "unit_id": f"{gid}-s{i}",
+                "source_kind": "user",
+                "body": session["text"],
+                # Bounded ingest (S2 §4.4): valid time is put on the SESSION
+                # axis, not on wall-clock ingest order, so a probe's valid_at
+                # is computable from the loader alone.
+                "valid_from": observed_at(i),
+                "declarations": sorted(
+                    {
+                        QUOTED.sub("<X>", topic).strip()
+                        for kind, topic in zip(session["type"], session["topic"])
+                        if kind in ("instruction-add", "instruction-update")
+                    }
+                ),
+            }
+            for i, session in enumerate(sessions)
+        ]
+        statements = defaultdict(list)
+        for i, session in enumerate(sessions):
+            for kind, topic in zip(session["type"], session["topic"]):
+                if kind in ("instruction-add", "instruction-update"):
+                    statements[QUOTED.sub("<X>", topic).strip()].append((i, topic))
+        probes = []
+        for key, occurrences in statements.items():
+            if len(occurrences) < 2:
+                continue
+            indices = [i for i, _ in occurrences]
+            digest = hashlib.sha256(key.encode()).hexdigest()[:12]
+            for rank in range(len(indices) - 1):
+                here, nxt = indices[rank], indices[rank + 1]
+                if nxt <= here:
+                    # Two declarations of one key inside ONE session: there is
+                    # no interval during which the earlier one was uniquely in
+                    # force, so the probe is degenerate and is dropped.
+                    continue
+                probes.append(
+                    {
+                        "probe_id": f"{gid}-{digest}-r{rank}",
+                        "query": key.replace("<X>", "").strip(),
+                        "kind": "asof_retention",
+                        "valid_at": observed_at((here + nxt) / 2.0),
+                        "asof_rank": rank,
+                        "declarations": len(indices),
+                        "intervening_sessions": nxt - here - 1,
+                        "gold_unit_ids": [f"{gid}-s{here}"],
+                        "distractor_unit_ids": [
+                            f"{gid}-s{i}" for i in indices if i != here
+                        ],
+                    }
+                )
+        if probes:
+            groups.append({"group_id": gid, "units": units, "probes": probes})
+    return groups
+
+
 FILENAME = re.compile(r"[A-Za-z0-9_./-]+\.(?:md|json|csv|py|sql|txt|yaml|db)")
 CLAWARENA_AGENT = "claude-code"
 
@@ -249,7 +351,14 @@ LOADERS = {
     "ama_bench": load_ama_bench,
     "clawarena": load_clawarena,
     "memorycode": load_memorycode,
+    "memorycode_asof": load_memorycode_asof,
 }
+
+# Instruments whose probes carry a `valid_at` and whose units carry a
+# `valid_from`. Threaded explicitly rather than sniffed per row, so an
+# instrument that forgets one of the two fails loudly instead of silently
+# degrading to an unbounded run.
+ASOF_INSTRUMENTS = frozenset({"memorycode_asof"})
 
 
 # --------------------------------------------------------------------------
@@ -349,6 +458,100 @@ def score_group_lexical(group: dict, args) -> list[dict]:
     return rows
 
 
+def trivial_rank(group: dict, probe: dict, rule: str, k: int) -> list[str]:
+    """THE TRIVIAL-BASELINE SET, preregistered in full before any cell existed.
+
+    S2 §3.3's finding, measured on TempLAMA's own shipped files: a corpus that
+    defeats `max(timestamp)` (correct on 55.5% of rows) can still be defeated
+    by `most_frequent_answer` (70.7%). Beating the recency control is therefore
+    not evidence of anything until the OTHER cheap rules have been run too. All
+    six below rank the same haystack the substrate arms recall over -- the
+    instance's own sessions, the scope `bind_context` binds -- so they are
+    comparable at the same stage, and all are $0: no database, no server, no
+    network, no model call.
+
+    ``t`` is the probe's ``valid_at``; unit index i has ``observed_at(i)``, so
+    ``index <= t_minutes`` is exactly ``observed_at <= valid_at``.
+    """
+    units = group["units"]
+    n = len(units)
+    order = list(range(n))
+    cutoff = None
+    if probe.get("valid_at"):
+        # valid_at is EPOCH + minutes; recover the minute offset.
+        cutoff = (
+            datetime.fromisoformat(probe["valid_at"].replace("Z", "+00:00")) - EPOCH
+        ).total_seconds() / 60.0
+
+    if rule == "constant":
+        # CONSTANT / MAJORITY CONTROL. Session order, first session first.
+        # Carries no time signal, no query signal and no key signal; it is the
+        # floor every other rule must clear to have shown anything at all.
+        ranked = order
+    elif rule == "first":
+        ranked = order
+    elif rule == "recency":
+        # `max(observed_at)`. The A-recency rule with no truncation. WRONG ON
+        # EVERY PROBE BY CONSTRUCTION on this cut -- it returns j_m.
+        ranked = sorted(order, reverse=True)
+    elif rule == "asof_truncation":
+        # `max(observed_at <= t)`. THE HONEST BASELINE (S2 §4.2): a ~20-line
+        # read rule, no substrate. Truncate, then newest-first.
+        ranked = sorted((i for i in order if i <= cutoff), reverse=True)
+    elif rule == "bm25":
+        # The repo's own BM25, no time signal at all. Same function the
+        # `lexical` arm uses.
+        by_id = {unit["unit_id"]: i for i, unit in enumerate(units)}
+        ranked = [by_id[u] for u in lexical_rank(group, probe["query"], n)]
+    elif rule == "bm25_asof":
+        # RELEVANCE THEN TRUNCATION -- the strongest non-oracle trivial rule
+        # available, and the one an engineer would actually ship: retrieve by
+        # relevance, drop anything asserted after t.
+        by_id = {unit["unit_id"]: i for i, unit in enumerate(units)}
+        ranked = [
+            by_id[u]
+            for u in lexical_rank(group, probe["query"], n)
+            if by_id[u] <= cutoff
+        ]
+    elif rule == "mode_oracle":
+        # `most_frequent_answer` -- S2 §3.3's named trap. ORACLE-KEYED and
+        # therefore NOT comparable to any other arm here: it has to know which
+        # sessions declare the probe's key, which is the gold structure
+        # itself. It is run because the prereg says run every cheap rule that
+        # could explain a win, and reported with this label attached.
+        declaring = [
+            i
+            for i, unit in enumerate(units)
+            if any(
+                d.replace("<X>", "").strip() == probe["query"]
+                for d in (unit.get("declarations") or [])
+            )
+        ]
+        counts = Counter(units[i]["body"] for i in declaring)
+        ranked = sorted(
+            declaring, key=lambda i: (-counts[units[i]["body"]], i)
+        ) + [i for i in order if i not in set(declaring)]
+    else:
+        raise SystemExit(f"unknown trivial rule {rule!r}")
+    return [units[i]["unit_id"] for i in ranked[:k]]
+
+
+def score_group_trivial(group: dict, args) -> list[dict]:
+    """A trivial-rule arm. No database, no server, no network -- $0."""
+    rows = []
+    for probe in group["probes"]:
+        ranked = trivial_rank(group, probe, args.trivial_rule, args.k)
+        rows.append(
+            probe_row(
+                group,
+                probe,
+                [{"citation_episode_id": unit_id} for unit_id in ranked],
+                {unit_id: unit_id for unit_id in ranked},
+            )
+        )
+    return rows
+
+
 def probe_row(group: dict, probe: dict, items: list[dict], episode_of: dict,
               degraded: bool = False) -> dict:
     """One scored probe, arm-agnostic.
@@ -373,6 +576,12 @@ def probe_row(group: dict, probe: dict, items: list[dict], episode_of: dict,
         "group_id": group["group_id"],
         "probe_id": probe["probe_id"],
         "kind": probe["kind"],
+        # As-of stratifiers, carried so the analysis can condition on them
+        # without re-deriving them from the corpus. Absent on the original cut.
+        "valid_at": probe.get("valid_at"),
+        "asof_rank": probe.get("asof_rank"),
+        "declarations": probe.get("declarations"),
+        "intervening_sessions": probe.get("intervening_sessions"),
         "returned": len(items),
         # Kept so a scoring hazard can be CHECKED rather than assumed. A
         # close-generation mints a valid-time-closed "remainder" carrying the
@@ -427,7 +636,66 @@ def ingest_group(client, group: dict) -> tuple[dict, dict, int]:
     return context, episode_of, deduped
 
 
-def ingest_group_preference(client, group: dict) -> tuple[dict, dict, int]:
+def retain_keyed_unit(client, context, unit, index, key, body, identity,
+                      key_last_session, bounded):
+    """One keyed preference retain, with BOUNDED valid time and correct
+    remainder attribution. Shared by Arm P and Arm K so the two cannot drift.
+
+    THE ATTRIBUTION IS THE WHOLE POINT AND IT IS NEW HERE. On the original cut
+    a supersede's remainder was never recallable (`remainders_recalled: 0` in
+    every banked run), so last-writer-wins on the identity map was safe. On the
+    as-of cut it is exactly WRONG. Bounded supersession closes
+    `[observed_at(j_r), inf)` against a candidate `[observed_at(j_next), inf)`,
+    `interval_intersection` yields `[observed_at(j_next), inf)`, and
+    `correction_rectangles` mints the historical remainder
+    `[observed_at(j_r), observed_at(j_next))` **carrying j_r's body** -- which
+    is the GOLD of the as-of probe at any t inside that interval. That
+    remainder is returned in the SUPERSEDING retain's `unit_ids`. Crediting it
+    to j_next, as the old map did, would attribute every correct as-of answer
+    to a distractor and score the bitemporal arm near zero for a bookkeeping
+    reason. So the leading ids of a supersede response are credited to the
+    session that last asserted this key, and only the trailing id -- the
+    compiler appends the caller's own unit last -- to this session.
+    """
+    payload = {
+        "kind": "preference",
+        "fact_key": f"preference:{key}",
+        "predicate": "prefers",
+        "body": body,
+        "confidence": 1.0,
+    }
+    if bounded:
+        payload["valid_from"] = unit["valid_from"]
+    response = client.post(
+        "/v1/episodes",
+        {
+            **context,
+            "source_ref": f"{unit['unit_id']}#{key}",
+            "observed_at": observed_at(index),
+            "payload": {"unit": payload},
+        },
+    )
+    minted = list(response.get("unit_ids") or [])
+    if not minted:
+        raise RuntimeError(
+            f"REFUSING TO SCORE: keyed retain {unit['unit_id']}#{key} minted no "
+            "unit -- the declaration was silently dropped"
+        )
+    prior = key_last_session.get(key)
+    if len(minted) > 1:
+        if prior is None:
+            raise RuntimeError(
+                f"REFUSING TO SCORE: retain {unit['unit_id']}#{key} minted "
+                f"{len(minted)} units with no prior assertion on the key -- the "
+                "remainder cannot be attributed and the identity map would lie"
+            )
+        identity.setdefault(prior, set()).update(minted[:-1])
+    identity.setdefault(unit["unit_id"], set()).add(minted[-1])
+    key_last_session[key] = unit["unit_id"]
+    return len(minted) - 1
+
+
+def ingest_group_preference(client, group: dict, bounded: bool = False) -> tuple:
     """Arm P. Every instruction-bearing session is retained as a **preference
     unit** with an explicit subject key; every other session stays an episode.
 
@@ -457,8 +725,10 @@ def ingest_group_preference(client, group: dict) -> tuple[dict, dict, int]:
         agent_node_ref="external-instrument-adapter",
     )
     identity: dict[str, set] = {}
+    key_last_session: dict[str, str] = {}
     episodes = 0
     deduped = 0
+    remainders = 0
     for index, unit in enumerate(group["units"]):
         declarations = unit.get("declarations") or []
         if not declarations:
@@ -472,39 +742,17 @@ def ingest_group_preference(client, group: dict) -> tuple[dict, dict, int]:
                     body=unit["body"],
                 ),
             )
-            identity[unit["unit_id"]] = {response["episode_id"]}
+            identity.setdefault(unit["unit_id"], set()).add(response["episode_id"])
             episodes += 1
             deduped += bool((response.get("dedup") or {}).get("matched"))
             continue
-        ids: set = set()
         for declaration in sorted(declarations):
-            key = hashlib.sha256(declaration.encode()).hexdigest()[:16]
-            response = client.post(
-                "/v1/episodes",
-                {
-                    **context,
-                    "source_ref": f"{unit['unit_id']}#{key}",
-                    "observed_at": observed_at(index),
-                    "payload": {
-                        "unit": {
-                            "kind": "preference",
-                            "fact_key": f"preference:{key}",
-                            "predicate": "prefers",
-                            "body": unit["body"],
-                            "confidence": 1.0,
-                        }
-                    },
-                },
+            remainders += retain_keyed_unit(
+                client, context, unit, index,
+                hashlib.sha256(declaration.encode()).hexdigest()[:16],
+                unit["body"], identity, key_last_session, bounded,
             )
-            minted = set(response.get("unit_ids") or [])
-            if not minted:
-                raise RuntimeError(
-                    f"REFUSING TO SCORE: preference retain {unit['unit_id']}#{key} "
-                    "minted no unit -- the declaration was silently dropped"
-                )
-            ids |= minted
-        identity[unit["unit_id"]] = ids
-    return context, identity, episodes, deduped
+    return context, identity, episodes, deduped, remainders
 
 
 def ingest_group_derived(client, group: dict, args) -> tuple[dict, dict, int, int]:
@@ -535,8 +783,10 @@ def ingest_group_derived(client, group: dict, args) -> tuple[dict, dict, int, in
         agent_node_ref="external-instrument-adapter",
     )
     identity: dict[str, set] = {}
+    key_last_session: dict[str, str] = {}
     episodes = 0
     deduped = 0
+    remainders = 0
     for index, unit in enumerate(group["units"]):
         # GOLD-INDEPENDENCE, enforced rather than promised: the oracle field is
         # deleted from the unit before the rule can see it.
@@ -553,39 +803,17 @@ def ingest_group_derived(client, group: dict, args) -> tuple[dict, dict, int, in
                     body=unit["body"],
                 ),
             )
-            identity[unit["unit_id"]] = {response["episode_id"]}
+            identity.setdefault(unit["unit_id"], set()).add(response["episode_id"])
             episodes += 1
             deduped += bool((response.get("dedup") or {}).get("matched"))
             continue
-        ids: set = set()
         for derived_key in derived:
-            key = hashlib.sha256(derived_key.encode()).hexdigest()[:16]
-            response = client.post(
-                "/v1/episodes",
-                {
-                    **context,
-                    "source_ref": f"{unit['unit_id']}#{key}",
-                    "observed_at": observed_at(index),
-                    "payload": {
-                        "unit": {
-                            "kind": "preference",
-                            "fact_key": f"preference:{key}",
-                            "predicate": "prefers",
-                            "body": unit["body"],
-                            "confidence": 1.0,
-                        }
-                    },
-                },
+            remainders += retain_keyed_unit(
+                client, context, unit, index,
+                hashlib.sha256(derived_key.encode()).hexdigest()[:16],
+                unit["body"], identity, key_last_session, args.bounded,
             )
-            minted = set(response.get("unit_ids") or [])
-            if not minted:
-                raise RuntimeError(
-                    f"REFUSING TO SCORE: derived retain {unit['unit_id']}#{key} "
-                    "minted no unit -- the declaration was silently dropped"
-                )
-            ids |= minted
-        identity[unit["unit_id"]] = ids
-    return context, identity, episodes, deduped
+    return context, identity, episodes, deduped, remainders
 
 
 WORD = re.compile(r"[a-z0-9_]+")
@@ -792,16 +1020,20 @@ def ingest_group_structured(client, group: dict, args) -> tuple:
 def score_group(client, context, episode_of: dict, group: dict, args) -> list[dict]:
     rows = []
     for probe in group["probes"]:
-        response = client.post(
-            "/v1/recall",
-            {
-                **context,
-                "query": probe["query"],
-                "limit": args.k,
-                "budget_tokens": args.budget_tokens,
-                "mode": args.mode,
-            },
-        )
+        request = {
+            **context,
+            "query": probe["query"],
+            "limit": args.k,
+            "budget_tokens": args.budget_tokens,
+            "mode": args.mode,
+        }
+        # THE AS-OF QUESTION. `valid_at` is a live recall filter, not a stub:
+        # RecallRequest.valid_at -> valid_for_query, `valid_from <= valid_at`
+        # and `valid_at < valid_to`. Sending it is what makes the bitemporal
+        # arm answerable at all on this cut.
+        if probe.get("valid_at"):
+            request["valid_at"] = probe["valid_at"]
+        response = client.post("/v1/recall", request)
         rows.append(
             probe_row(
                 group,
@@ -1038,7 +1270,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--arm",
         default="memphant",
-        choices=("memphant", "lexical", "preference", "structured", "derived"),
+        choices=("memphant", "lexical", "preference", "structured", "derived",
+                 "trivial"),
         help="memphant = live recall; lexical = the repo's BM25 control over "
              "the same units and queries (no DB, no server, no network); "
              "preference = ORACLE-KEYED write-path mechanism arm, NOT "
@@ -1099,6 +1332,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="memphant arm only: dump supersession/state/tier counts from the "
              "scratch DB into the report BEFORE it is dropped",
+    )
+    parser.add_argument(
+        "--trivial-rule", default="asof_truncation",
+        choices=("constant", "first", "recency", "asof_truncation", "bm25",
+                 "bm25_asof", "mode_oracle"),
+        help="trivial arm: which cheap read rule to run. The FULL set is "
+             "preregistered and every member is reported, because a corpus "
+             "that defeats recency can still be defeated by a different "
+             "trivial rule (S2 3.3, measured on TempLAMA).",
+    )
+    parser.add_argument(
+        "--bounded", action="store_true",
+        help="keyed arms: send `valid_from` on every unit payload, putting "
+             "valid time on the SESSION axis instead of wall-clock ingest "
+             "order. Required for any as-of question; changes the write path "
+             "(close_open_generation takes the interval_intersection branch "
+             "and mints the historical remainder).",
     )
     parser.add_argument("--source", required=True, help="pinned mirror file")
     parser.add_argument("--lock", default=None, help="manifest lock (default: derived)")
@@ -1181,12 +1431,32 @@ def main() -> int:
     if args.a_recency:
         os.environ["MEMPHANT_A_RECENCY_CONTROL"] = "1"
 
+    if args.instrument in ASOF_INSTRUMENTS and args.arm == "structured":
+        # Arm S names supersession targets by exact unit id and keys on a
+        # content hash of the body, so its remainders cannot be attributed by
+        # the `key_last_session` rule the keyed arms use. Supporting it is a
+        # separate build; refusing is honest, silently mis-attributing is not.
+        raise SystemExit(
+            "memorycode_asof: arm `structured` has no remainder-attribution "
+            "rule on this cut and would credit every as-of gold to a "
+            "distractor. Not built; refusing rather than mis-scoring."
+        )
+    if args.instrument in ASOF_INSTRUMENTS and args.arm in (
+        "preference", "derived"
+    ) and not args.bounded:
+        raise SystemExit(
+            f"{args.instrument}: arm {args.arm} without --bounded puts valid "
+            "time on wall-clock ingest order, so every as-of probe would be "
+            "answered against an axis the loader does not control. Refusing."
+        )
+
     started = time.time()
     diagnostics = None
-    if args.arm == "lexical":
-        # Arm B short-circuits every runtime: no scratch DB, no server, no
-        # worker, no embedder, no network. Same probes, same queries, same k.
-        rows = [row for group in groups for row in score_group_lexical(group, args)]
+    if args.arm in ("lexical", "trivial"):
+        # Arms B and T short-circuit every runtime: no scratch DB, no server,
+        # no worker, no embedder, no network. Same probes, same queries, same k.
+        scorer = score_group_lexical if args.arm == "lexical" else score_group_trivial
+        rows = [row for group in groups for row in scorer(group, args)]
         ingested = sum(len(group["units"]) for group in groups)
         compiled = 0
         out_path = Path(args.out).resolve()
@@ -1240,6 +1510,7 @@ def main() -> int:
         ingested = 0
         deduped = 0
         episodes_retained = 0
+        remainders_minted = 0
         structured_counts = {"proposed": 0, "considered": 0}
         for group in groups:
             if args.arm == "structured":
@@ -1251,15 +1522,17 @@ def main() -> int:
                 structured_counts["considered"] += counts["considered"]
                 structured_counts.setdefault("ledger", []).extend(counts["ledger"])
             elif args.arm == "derived":
-                context, episode_of, group_episodes, group_deduped = (
+                context, episode_of, group_episodes, group_deduped, group_rem = (
                     ingest_group_derived(client, group, args)
                 )
                 episodes_retained += group_episodes
+                remainders_minted += group_rem
             elif args.arm == "preference":
-                context, episode_of, group_episodes, group_deduped = (
-                    ingest_group_preference(client, group)
+                context, episode_of, group_episodes, group_deduped, group_rem = (
+                    ingest_group_preference(client, group, args.bounded)
                 )
                 episodes_retained += group_episodes
+                remainders_minted += group_rem
             else:
                 context, episode_of, group_deduped = ingest_group(client, group)
                 episodes_retained += len(group["units"])
@@ -1288,6 +1561,23 @@ def main() -> int:
             diagnostics["remainders_recalled"] = count_recalled_remainders(
                 args.database_url, rows
             )
+            # MECHANISM LIVENESS FOR THE AS-OF CONSTRUCT, and the direction is
+            # the OPPOSITE of every prior lane's. On the original cut a
+            # recalled remainder was a scoring hazard and 0 was the pass. Here
+            # the historical rectangle IS the gold answer, so `> 0` is the
+            # pass and 0 means the valid-time machinery never fired -- "inert"
+            # is then the whole report, exactly as Arm F was voided.
+            diagnostics["asof_liveness"] = {
+                "bounded_ingest": bool(args.bounded),
+                "remainders_minted": remainders_minted,
+                "remainders_recalled": diagnostics["remainders_recalled"],
+                "probes_with_valid_at": sum(1 for r in rows if r.get("valid_at")),
+                "expectation": (
+                    "remainders_recalled > 0"
+                    if args.instrument in ASOF_INSTRUMENTS and args.bounded
+                    else "remainders_recalled == 0"
+                ),
+            }
             if args.arm == "structured":
                 # MECHANISM LIVENESS. An inert arm and a neutral arm produce the
                 # same score; only these counts tell them apart.
@@ -1332,6 +1622,8 @@ def write_report(args, lock, lock_path, source, rows, groups, ingested,
     report = {
         "instrument": args.instrument,
         "arm": args.arm,
+        "trivial_rule": args.trivial_rule if args.arm == "trivial" else None,
+        "bounded_valid_time": bool(args.bounded),
         "a_recency_control": bool(args.a_recency),
         # Lineage drift across ~19 worktrees is this program's dominant failure
         # mode: the same false claim was produced twice in two days by two
@@ -1351,6 +1643,9 @@ def write_report(args, lock, lock_path, source, rows, groups, ingested,
         "recall": {"k": args.k, "mode": args.mode, "budget_tokens": args.budget_tokens,
                    "embed_model": args.embed_model}
         if args.arm in ("memphant", "preference", "structured", "derived")
+        else {"k": args.k, "mechanism": f"trivial read rule `{args.trivial_rule}` "
+              "over the instance's own sessions; no DB, no server, no network"}
+        if args.arm == "trivial"
         else {"k": args.k, "mechanism": "Okapi BM25 k1=1.2 b=0.75, instance-scoped, "
               "code_lane_run_deterministic.bm25_search"},
         "scale": {
