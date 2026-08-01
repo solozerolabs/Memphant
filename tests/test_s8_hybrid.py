@@ -123,13 +123,33 @@ def test_below_the_discordance_floor_is_not_a_measurement():
     assert "required n" in result["reason"]
 
 
-def test_required_n_is_called_with_psi_first():
-    # Transposing these arguments both asks the wrong question and walks the
-    # exact-power search to its 20,000 cap, which reads as a hung test run.
-    from instrument_power import required_n
+def test_this_lanes_verdict_calls_required_n_with_psi_first():
+    # The signature itself is guarded on trunk by
+    # tests/test_instrument_power_contract.py, which is the survivor; this test
+    # guards only THIS lane's call site. A transposed call here would be
+    # type-correct, would return a plausible integer, and would stall ~23s
+    # walking the exact-power search to its cap -- so it is pinned by the
+    # observable difference between the two orders, not by reading the comment.
+    stats = analyze.paired({"a": True, "b": True}, {"a": True, "b": False}, ["a", "b"])
+    assert stats["n_discordant"] == 1  # under the floor: the branch runs
+    reason = analyze.verdict(stats, decisive=True)["reason"]
+    # psi=0.5 > delta=0.0938, so psi-first reaches an n; the transposed order
+    # (psi=0.0938, delta=0.5) would return None and say "unreachable".
+    assert "unreachable" not in reason and "~=" in reason
 
-    assert required_n(0.4, 0.1) is not None  # psi=0.40, delta=0.10pp: reachable
-    assert required_n(0.01, 0.0938) is None  # delta > psi: no n reaches it
+
+def test_the_two_reasons_required_n_returns_none_are_reported_differently():
+    # psi == 0 (no discordant pairs) and delta > psi (no n attains the planning
+    # effect) are materially different facts and must not collapse into one line.
+    concordant = analyze.paired({"a": True}, {"a": True}, ["a"])
+    assert "undefined" in analyze.verdict(concordant, decisive=True)["reason"]
+
+    thin = {f"q{i}": True for i in range(200)}
+    control = dict(thin)
+    control["q0"] = False
+    stats = analyze.paired(thin, control, sorted(thin))
+    assert stats["realized_psi"] < 0.0938
+    assert "unreachable at any n" in analyze.verdict(stats, decisive=True)["reason"]
 
 
 def test_analysis_refuses_an_arm_that_escaped_the_pool():

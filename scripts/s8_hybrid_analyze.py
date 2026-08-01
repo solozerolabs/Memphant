@@ -132,30 +132,38 @@ def verdict(stats: dict, *, decisive: bool) -> dict:
             ),
         }
     elif stats["n_discordant"] < N_D_FLOOR:
-        # `required_n(psi, delta)` -- in that order. S4's compare script called
-        # it with the arguments transposed, which both asks the wrong question
-        # and walks the exact-power search to its 20,000 cap.
-        needed = (
-            required_n(stats["realized_psi"], PLANNING_MDE)
-            if stats["realized_psi"] > 0
-            else None
-        )
+        # `required_n(psi, delta)` -- PSI FIRST. Both arguments are small floats
+        # in the same range, so a transposed call is type-correct, returns a
+        # plausible integer, answers a different question, and walks the exact
+        # -power search to its 20,000 cap (~23s), which reads as a hung run. The
+        # call order is pinned by a test rather than by this comment.
+        psi = stats["realized_psi"]
+        needed = required_n(psi, PLANNING_MDE) if psi > 0 else None
+        # `None` comes back for two materially different reasons and they must
+        # not be reported as one. psi == 0: there are no discordant pairs at all,
+        # so the rate is undefined and n says nothing. delta > psi: the planning
+        # effect EXCEEDS the realized discordance rate, so no n attains it --
+        # a property of the instrument on this contrast, not of the budget.
+        if needed:
+            required = (
+                f"~= {needed} to detect the {round(PLANNING_MDE * 100, 2)}pp "
+                "planning effect at this discordance rate"
+            )
+        elif psi <= 0:
+            required = (
+                "is undefined: there are no discordant pairs at all, so this "
+                "contrast has no discordance rate to size against"
+            )
+        else:
+            required = (
+                f"is unreachable at any n: the realized discordance {psi} is "
+                f"smaller than the {round(PLANNING_MDE * 100, 2)}pp planning "
+                "effect, which is a property of the instrument on this contrast "
+                "rather than of the sample size"
+            )
         base = {
             "verdict": "NOT A MEASUREMENT",
-            "reason": (
-                f"n_discordant={stats['n_discordant']} < {N_D_FLOOR}; required n "
-                + (
-                    f"~= {needed} to detect the {round(PLANNING_MDE * 100, 2)}pp "
-                    "planning effect at this discordance rate"
-                    if needed
-                    else (
-                        f"is unreachable: the realized discordance "
-                        f"{stats['realized_psi']} cannot express a "
-                        f"{round(PLANNING_MDE * 100, 2)}pp effect at any n, so any "
-                        "true effect is smaller than this contrast can resolve"
-                    )
-                )
-            ),
+            "reason": f"n_discordant={stats['n_discordant']} < {N_D_FLOOR}; required n {required}",
         }
     else:
         mde = (stats["realized_mde_pp"] or PLANNING_MDE * 100) / 100
