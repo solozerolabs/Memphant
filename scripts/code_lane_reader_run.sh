@@ -51,8 +51,19 @@ python3 scripts/code_lane_reader_prepare.py \
 
 mint_arm() {  # arm retrieval
   local arm="$1" retrieval="$2"
-  rm -f "$OUT/attempts-$arm.jsonl" "$OUT/attempts-$arm.jsonl.lock"
-  rm -rf "$OUT/cache-$arm"
+  # RESUME=1 keeps the reader cache and the attempt ledger. This is a money
+  # property, not a convenience: the cache is the per-CALL checkpoint, so a run
+  # killed at any point replays every completed reader and judge call for free
+  # and re-bills only what it had not finished. Wiping it on a restart re-bills
+  # the whole arm — the opposite of what a restart is for. The packet is
+  # deterministic in its inputs, so the re-minted authorization hash (part of
+  # the cache key) matches and the cache is genuinely readable.
+  if [ "${RESUME:-0}" = "1" ]; then
+    echo "RESUME=1: keeping cache-$arm ($(ls "$OUT/cache-$arm" 2>/dev/null | wc -l | tr -d ' ') cached calls) and the attempt ledger"
+  else
+    rm -f "$OUT/attempts-$arm.jsonl" "$OUT/attempts-$arm.jsonl.lock"
+    rm -rf "$OUT/cache-$arm"
+  fi
   python3 scripts/code_lane_reader_packet.py \
     --arm "$arm=$EQ/$arm-equalized-evidence.jsonl:$retrieval:$ROOT/$OUT/reader-$arm.json" \
     --out "$ROOT/$OUT/authorization-$arm.json" --ledger-name "attempts-$arm.jsonl" \
