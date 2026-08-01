@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "lane": "s5-swecb",
+  "artifact": "SWE-ContextBench published comparators, re-extracted independently",
+  "extracted_on": "2026-08-01",
+  "model_calls": 0,
+  "cost_usd": 0.0,
+  "source": {
+    "paper": "arXiv:2602.08316v3, 'SWE Context Bench: A Benchmark for Context Learning in Coding'",
+    "url": "https://arxiv.org/html/2602.08316v3",
+    "fetched_html_sha256": "ff7720e930184f165db2033b25a16978ffcb32bd69ee60c4f4610d2471ef1cef",
+    "reproduction_note": "This sha256 is byte-identical to the one recorded by the 2026-08-01 retranche log, so the fetch is reproducible. Every cell below was re-parsed from the raw HTML in this lane; none was copied from a prior MemPhant artifact.",
+    "provenance_class": "BENCHMARK AUTHORS' OWN RUNS. Not third-party, not a leaderboard, not vendor-reproduced. No per-instance results are published for any arm, so nothing here can be paired against."
+  },
+
+  "table_3_resolution_on_Related": {
+    "caption": "Performance of five coding agents on SWE-ContextBench under baseline and oracle-summary settings.",
+    "split": "Related",
+    "n_as_published": 376,
+    "n_as_measured": 357,
+    "n_note": "The paper says 376. The parquet has 376 ROWS over 357 distinct instance_ids; the official Docker registry ships 357 instance tags plus one `base`; the official cases/SWEContextBench Full directory holds 357 case files. 376 = Lite 99 + Verified 166 + Multilingual 111, and Lite INTERSECT Verified = the 19 duplicated ids.",
+    "rows": [
+      {"setting": "Closed-source Baseline", "model": "Claude Sonnet 4.5", "scaffold": "Claude Code", "file_loc": 52.14, "func_loc": 14.97, "line_loc": 11.76, "resolved": 19.68, "avg_tool_calls": 44.67, "avg_tokens": 1701548.05, "avg_time_s": 344.47, "cost_usd": 0.67},
+      {"setting": "Closed-source Baseline", "model": "GPT-5.3 Codex", "scaffold": "Codex", "file_loc": 54.01, "func_loc": 19.25, "line_loc": 14.71, "resolved": 22.60, "avg_tool_calls": 28.91, "avg_tokens": 858252.71, "avg_time_s": 349.41, "cost_usd": 0.31},
+      {"setting": "Open-weight Baseline", "model": "Qwen3.5-plus", "scaffold": "Qwen Code", "resolved": 16.22, "cost_usd": 0.33},
+      {"setting": "Open-weight Baseline", "model": "GLM-5", "scaffold": "Qwen Code", "resolved": 18.35, "cost_usd": 0.58},
+      {"setting": "Open-weight Baseline", "model": "MiniMax 2.7", "scaffold": "Claude Code", "resolved": 19.68, "cost_usd": 0.65},
+      {"setting": "Closed-source Oracle Summary", "model": "Claude Sonnet 4.5", "scaffold": "Claude Code", "file_loc": 53.21, "func_loc": 15.78, "line_loc": 11.76, "resolved": 23.40, "avg_tool_calls": 36.19, "avg_tokens": 1352829.76, "avg_time_s": 280.62, "cost_usd": 0.55},
+      {"setting": "Closed-source Oracle Summary", "model": "GPT-5.3 Codex", "scaffold": "Codex", "resolved": 23.94, "cost_usd": 0.27},
+      {"setting": "Open-weight Oracle Summary", "model": "Qwen3.5-plus", "scaffold": "Qwen Code", "resolved": 21.54, "cost_usd": 0.18},
+      {"setting": "Open-weight Oracle Summary", "model": "GLM-5", "scaffold": "Qwen Code", "resolved": 19.41, "cost_usd": 0.48},
+      {"setting": "Open-weight Oracle Summary", "model": "MiniMax 2.7", "scaffold": "Claude Code", "resolved": 22.07, "cost_usd": 0.46}
+    ],
+    "the_number_that_decides_this_lane": {
+      "arm": "Claude Sonnet 4.5 / Claude Code",
+      "baseline_resolved_pct": 19.68,
+      "oracle_summary_resolved_pct": 23.40,
+      "ceiling_effect_pp": 3.72,
+      "what_it_means": "3.72pp is the lift the benchmark's own authors measured for a memory arm that is HANDED the gold parent by construction. It is the ceiling any retrieval-based memory system can approach on this split with this scaffold, and MemPhant's arm can only approach it in proportion to how often it retrieves that parent."
+    }
+  },
+
+  "table_4_resolution_on_Related_Lite": {
+    "caption": "Comparison of different context learning settings and memory retrieval frameworks on 99 related tasks from SWE-ContextBench Lite.",
+    "split": "Related_Lite",
+    "n": 99,
+    "columns": ["patch_na_pct", "f2p_tests_pct", "p2p_tests_pct", "f2p_tasks_pct", "p2p_tasks_pct", "resolved_pct", "time_min", "cost_usd"],
+    "rows": [
+      {"method": "No-Context (Baseline)", "patch_na_pct": 3.03, "f2p_tests_pct": 19.64, "p2p_tests_pct": 94.91, "f2p_tasks_pct": 29.29, "p2p_tasks_pct": 88.89, "resolved_pct": 26.26, "time_min": 6.37, "cost_usd": 0.79},
+      {"method": "Free Context Learning", "patch_na_pct": 2.02, "f2p_tests_pct": 22.22, "p2p_tests_pct": 95.46, "f2p_tasks_pct": 28.28, "p2p_tasks_pct": 85.86, "resolved_pct": 26.26, "time_min": 6.78, "cost_usd": 0.98},
+      {"method": "Oracle Context Learning", "patch_na_pct": 4.04, "f2p_tests_pct": 20.44, "p2p_tests_pct": 94.41, "f2p_tasks_pct": 31.31, "p2p_tasks_pct": 89.90, "resolved_pct": 27.27, "time_min": 5.95, "cost_usd": 0.77},
+      {"method": "Mem0", "patch_na_pct": 14.14, "f2p_tests_pct": 20.24, "p2p_tests_pct": 82.44, "f2p_tasks_pct": 39.39, "p2p_tasks_pct": 86.87, "resolved_pct": 24.24, "time_min": 4.72, "cost_usd": 0.62},
+      {"method": "OpenViking", "patch_na_pct": 10.10, "f2p_tests_pct": 57.34, "p2p_tests_pct": 91.83, "f2p_tasks_pct": 40.40, "p2p_tasks_pct": 88.89, "resolved_pct": 29.20, "time_min": 4.20, "cost_usd": 0.53},
+      {"method": "Supermemory", "patch_na_pct": 10.10, "f2p_tests_pct": 55.95, "p2p_tests_pct": 90.23, "f2p_tasks_pct": 40.40, "p2p_tasks_pct": 88.89, "resolved_pct": 30.30, "time_min": 5.04, "cost_usd": 0.58}
+    ],
+    "the_substrate_insight_preregistered_as_secondary": "Memory moves FAIL_TO_PASS tests 19.64 -> 55.95 while moving Resolved only 26.26 -> 30.30, because Patch N/A rises 3.03 -> 10.10 and PASS_TO_PASS falls 94.91 -> 90.23. Memory finds the right code and then breaks the patch. The F2P endpoint carries roughly ten times the effect size of Resolved.",
+    "power_warning": "Every margin here is unmeasurable at n=99. Supermemory's 4.04pp lead over the baseline is a four-instance difference; detecting it has power 0.08-0.15 and needs n = 510-1485. Do not cite this ranking as a measurement, ours or theirs."
+  },
+
+  "table_5_retrieval_quality_on_Related_Lite": {
+    "caption": "Retrieval quality of two context learning settings and four memory retrieval approaches on SWE-ContextBench Lite related tasks.",
+    "split": "Related_Lite",
+    "n": 99,
+    "why_this_table_matters_here": "This is the SAME endpoint stage 0 measures -- did the system retrieve the gold parent. The retranche log concluded that no published per-arm results exist and therefore both arms must be ours. That is true for Resolved and FALSE for retrieval: these are published, per-method, on a configuration we can reproduce exactly at $0.",
+    "metric": "Matched (%) -- the retrieved context is the gold related experience",
+    "rows": [
+      {"method": "Free Context Learning", "k": "self-determine", "top1_matched_pct": 18.18, "top2_matched_pct": 0.0, "top3_matched_pct": 0.0, "overall_matched_pct": 18.18, "top1_avg_tokens": 136907},
+      {"method": "Free Summary Learning", "k": "self-determine", "top1_matched_pct": 34.34, "top2_matched_pct": 2.02, "top3_matched_pct": 0.0, "overall_matched_pct": 36.36, "top1_avg_tokens": 372.79},
+      {"method": "Mem0", "k": 3, "top1_score_pct": 55.91, "top1_avg_tokens": 11.97, "top1_matched_pct": 25.25, "top2_matched_pct": 15.15, "top3_matched_pct": 9.09, "overall_matched_pct": 39.39},
+      {"method": "OpenViking", "k": 3, "top1_score_pct": 50.40, "top1_avg_tokens": 245.90, "top1_matched_pct": 38.38, "top2_matched_pct": 35.35, "top3_matched_pct": 40.40, "overall_matched_pct": 51.52},
+      {"method": "LangMem", "k": 10, "top1_score_pct": 49.70, "top1_avg_tokens": 48.18, "top1_matched_pct": 55.56, "top2_matched_pct": 35.35, "top3_matched_pct": 14.14, "overall_matched_pct": 73.34},
+      {"method": "Supermemory", "k": 15, "top1_score_pct": 74.51, "top1_avg_tokens": 30.06, "top1_matched_pct": 23.23, "top2_matched_pct": 20.20, "top3_matched_pct": 11.11, "overall_matched_pct": 59.60}
+    ],
+    "comparability_caveats_that_must_travel_with_any_citation": [
+      "Each method chose its own k. Mem0 and OpenViking report at k=3, LangMem at k=10, Supermemory at k=15. An overall Matched (%) at k=15 is not comparable to one at k=3, and the table does not normalise this. Any MemPhant comparison must state its own k and compare like for like.",
+      "n=99. A 10pp difference here is ten instances. These are rankings, not measurements, by this programme's own n_d >= 6 floor.",
+      "The pool is the 300-row Lite experience set, not the 1,007-row full pool. Retrieval against 300 candidates is a materially easier problem than against 1,007.",
+      "These are the benchmark authors' runs of other people's systems, with no published per-instance detail, so nothing can be paired and no significance test is possible against them.",
+      "One gold parent (scikit-learn__scikit-learn-26323) is absent from the 300-row Lite pool, so a strict reproduction has an unreachable edge. It is unknown whether the published numbers account for it."
+    ]
+  },
+
+  "counts_the_paper_states_versus_counts_measured_on_the_pinned_files": {
+    "note": "Every measured figure below was counted from the parquets at pinned revision 5bec275a2095768a53ac804ae4fdf90b1723b8af and cross-checked against the official code repo at 31bb04155f52b184bf31b220e3cff0607ac9c953 and against Docker Hub.",
+    "base_tasks": {"stated": 1100, "measured_distinct": 1007, "explanation": "93 byte-identical duplicate rows"},
+    "related_tasks": {"stated": 376, "measured_distinct": 357, "explanation": "Lite 99 + Verified 166 + Multilingual 111 concatenated; the 19 instances in both Lite and Verified appear twice, with DIFFERENT version / problem_statement / FAIL_TO_PASS / PASS_TO_PASS values, and one pair differs in patch, test_patch and base_commit"},
+    "total_tasks": {"stated": 1476, "measured_distinct": 1364},
+    "repositories": {"stated": 51, "measured_experience": 53, "measured_related": 40},
+    "corroboration": {
+      "docker_hub_tags": {"total": 358, "instance_tags": 357, "other": ["base"], "naming": "instance_id with '__' replaced by '.', lowercase"},
+      "official_case_directories": {"SWEContextBench Full": 357, "SWEContextBench Verified": 166, "SWEContextBench Multilingual": 111, "SWEContextBench Lite": 99, "SWEContextBench Lite Past Experience": 300}
+    }
+  },
+
+  "the_trajectory_pool_is_public": {
+    "finding": "cases/SWEContextBench Lite Past Experience/ contains 300 .jsonl files in the official CODE repo. They are Claude Code session transcripts (type: summary / file-history-snapshot / leafUuid), i.e. the paper's trajectory memory pool, roughly 236 KB and ~117 records each.",
+    "consequence": "The retranche log costed 'rebuild the trajectory pool as the paper does' at ~$737 (1,100 tasks x $0.67). For the Lite universe that rebuild is unnecessary -- the trajectories are already published and free. Only the 707 non-Lite experiences would need generating.",
+    "caveat": "Not verified end to end: the mapping from hash-named .jsonl to instance_id was not established, and the licence position is unchanged (declared-only, no LICENSE file, not redistribution-clear)."
+  }
+}
