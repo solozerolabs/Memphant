@@ -1,0 +1,806 @@
+[
+ {
+  "files": 9852,
+  "source_files": 4829,
+  "authored_source": 4829,
+  "repo": "bridgecrewio/checkov"
+ },
+ {
+  "files": 5824,
+  "source_files": 3086,
+  "authored_source": 3085,
+  "repo": "sqlfluff/sqlfluff"
+ },
+ {
+  "files": 5469,
+  "source_files": 2180,
+  "authored_source": 2179,
+  "repo": "mesonbuild/meson"
+ },
+ {
+  "files": 3153,
+  "source_files": 1576,
+  "authored_source": 1575,
+  "repo": "argilla-io/argilla"
+ },
+ {
+  "files": 2756,
+  "source_files": 1491,
+  "authored_source": 1491,
+  "repo": "facebookresearch/ParlAI"
+ },
+ {
+  "files": 2622,
+  "source_files": 1422,
+  "authored_source": 1422,
+  "repo": "iossifovlab/gpf"
+ },
+ {
+  "files": 1940,
+  "source_files": 1333,
+  "authored_source": 1333,
+  "repo": "PennyLaneAI/pennylane"
+ },
+ {
+  "files": 2306,
+  "source_files": 1284,
+  "authored_source": 1253,
+  "repo": "pretalx/pretalx"
+ },
+ {
+  "files": 13634,
+  "source_files": 1118,
+  "authored_source": 1115,
+  "repo": "cloud-custodian/cloud-custodian"
+ },
+ {
+  "files": 3188,
+  "source_files": 1084,
+  "authored_source": 1084,
+  "repo": "aiogram/aiogram"
+ },
+ {
+  "files": 2120,
+  "source_files": 988,
+  "authored_source": 988,
+  "repo": "Textualize/textual"
+ },
+ {
+  "files": 962,
+  "source_files": 769,
+  "authored_source": 769,
+  "repo": "globus/globus-sdk-python"
+ },
+ {
+  "files": 1220,
+  "source_files": 747,
+  "authored_source": 747,
+  "repo": "pybamm-team/PyBaMM"
+ },
+ {
+  "files": 725,
+  "source_files": 656,
+  "authored_source": 656,
+  "repo": "keras-team/keras-cv"
+ },
+ {
+  "files": 1428,
+  "source_files": 628,
+  "authored_source": 628,
+  "repo": "frictionlessdata/frictionless-py"
+ },
+ {
+  "files": 779,
+  "source_files": 603,
+  "authored_source": 600,
+  "repo": "beeware/briefcase"
+ },
+ {
+  "files": 591,
+  "source_files": 555,
+  "authored_source": 555,
+  "repo": "iterative/dvc"
+ },
+ {
+  "files": 827,
+  "source_files": 530,
+  "authored_source": 530,
+  "repo": "gammapy/gammapy"
+ },
+ {
+  "files": 631,
+  "source_files": 524,
+  "authored_source": 524,
+  "repo": "narwhals-dev/narwhals"
+ },
+ {
+  "files": 6582,
+  "source_files": 487,
+  "authored_source": 487,
+  "repo": "pyvista/pyvista"
+ },
+ {
+  "files": 657,
+  "source_files": 453,
+  "authored_source": 452,
+  "repo": "OpenMined/PySyft"
+ },
+ {
+  "files": 702,
+  "source_files": 446,
+  "authored_source": 446,
+  "repo": "tinosulzer/PyBaMM"
+ },
+ {
+  "files": 494,
+  "source_files": 446,
+  "authored_source": 442,
+  "repo": "spdx/tools-python"
+ },
+ {
+  "files": 1801,
+  "source_files": 432,
+  "authored_source": 426,
+  "repo": "python-pillow/Pillow"
+ },
+ {
+  "files": 617,
+  "source_files": 398,
+  "authored_source": 398,
+  "repo": "catalystneuro/neuroconv"
+ },
+ {
+  "files": 854,
+  "source_files": 386,
+  "authored_source": 386,
+  "repo": "mwouts/jupytext"
+ },
+ {
+  "files": 471,
+  "source_files": 382,
+  "authored_source": 380,
+  "repo": "optuna/optuna"
+ },
+ {
+  "files": 637,
+  "source_files": 379,
+  "authored_source": 379,
+  "repo": "zarr-developers/zarr-python"
+ },
+ {
+  "files": 536,
+  "source_files": 371,
+  "authored_source": 371,
+  "repo": "pytorch/ignite"
+ },
+ {
+  "files": 450,
+  "source_files": 357,
+  "authored_source": 357,
+  "repo": "ethereum/web3.py"
+ },
+ {
+  "files": 595,
+  "source_files": 360,
+  "authored_source": 354,
+  "repo": "xonsh/xonsh"
+ },
+ {
+  "files": 448,
+  "source_files": 336,
+  "authored_source": 336,
+  "repo": "tefra/xsdata"
+ },
+ {
+  "files": 578,
+  "source_files": 309,
+  "authored_source": 309,
+  "repo": "beetbox/beets"
+ },
+ {
+  "files": 555,
+  "source_files": 361,
+  "authored_source": 282,
+  "repo": "postlund/pyatv"
+ },
+ {
+  "files": 355,
+  "source_files": 279,
+  "authored_source": 279,
+  "repo": "tobymao/sqlglot"
+ },
+ {
+  "files": 3586,
+  "source_files": 270,
+  "authored_source": 269,
+  "repo": "NCAS-CMS/cfdm"
+ },
+ {
+  "files": 563,
+  "source_files": 263,
+  "authored_source": 263,
+  "repo": "mikedh/trimesh"
+ },
+ {
+  "files": 588,
+  "source_files": 260,
+  "authored_source": 260,
+  "repo": "fgmacedo/python-statemachine"
+ },
+ {
+  "files": 314,
+  "source_files": 259,
+  "authored_source": 259,
+  "repo": "tox-dev/tox"
+ },
+ {
+  "files": 293,
+  "source_files": 256,
+  "authored_source": 256,
+  "repo": "wyfo/apischema"
+ },
+ {
+  "files": 1179,
+  "source_files": 250,
+  "authored_source": 246,
+  "repo": "fitbenchmarking/fitbenchmarking"
+ },
+ {
+  "files": 825,
+  "source_files": 244,
+  "authored_source": 244,
+  "repo": "canonical/charmcraft"
+ },
+ {
+  "files": 270,
+  "source_files": 229,
+  "authored_source": 229,
+  "repo": "reata/sqllineage"
+ },
+ {
+  "files": 344,
+  "source_files": 227,
+  "authored_source": 227,
+  "repo": "nose-devs/nose2"
+ },
+ {
+  "files": 258,
+  "source_files": 202,
+  "authored_source": 202,
+  "repo": "datalad/datalad-next"
+ },
+ {
+  "files": 356,
+  "source_files": 201,
+  "authored_source": 201,
+  "repo": "pyro-ppl/numpyro"
+ },
+ {
+  "files": 289,
+  "source_files": 178,
+  "authored_source": 178,
+  "repo": "CWorthy-ocean/C-Star"
+ },
+ {
+  "files": 446,
+  "source_files": 171,
+  "authored_source": 171,
+  "repo": "whatshap/whatshap"
+ },
+ {
+  "files": 313,
+  "source_files": 153,
+  "authored_source": 153,
+  "repo": "Materials-Consortia/optimade-python-tools"
+ },
+ {
+  "files": 222,
+  "source_files": 147,
+  "authored_source": 147,
+  "repo": "cunla/fakeredis-py"
+ },
+ {
+  "files": 202,
+  "source_files": 141,
+  "authored_source": 141,
+  "repo": "pycontribs/jenkinsapi"
+ },
+ {
+  "files": 381,
+  "source_files": 133,
+  "authored_source": 133,
+  "repo": "CS-SI/eodag"
+ },
+ {
+  "files": 246,
+  "source_files": 132,
+  "authored_source": 132,
+  "repo": "RemDelaporteMathurin/FESTIM"
+ },
+ {
+  "files": 356,
+  "source_files": 129,
+  "authored_source": 129,
+  "repo": "Sceptre/sceptre"
+ },
+ {
+  "files": 186,
+  "source_files": 124,
+  "authored_source": 124,
+  "repo": "pypa/setuptools_scm"
+ },
+ {
+  "files": 215,
+  "source_files": 122,
+  "authored_source": 122,
+  "repo": "zopefoundation/ZODB"
+ },
+ {
+  "files": 128,
+  "source_files": 118,
+  "authored_source": 118,
+  "repo": "ramonhagenaars/jsons"
+ },
+ {
+  "files": 156,
+  "source_files": 114,
+  "authored_source": 114,
+  "repo": "fsspec/filesystem_spec"
+ },
+ {
+  "files": 183,
+  "source_files": 110,
+  "authored_source": 110,
+  "repo": "hgrecco/pint"
+ },
+ {
+  "files": 334,
+  "source_files": 109,
+  "authored_source": 109,
+  "repo": "Skyscanner/cfripper"
+ },
+ {
+  "files": 223,
+  "source_files": 106,
+  "authored_source": 106,
+  "repo": "Ouranosinc/xclim"
+ },
+ {
+  "files": 131,
+  "source_files": 105,
+  "authored_source": 105,
+  "repo": "google/mobly"
+ },
+ {
+  "files": 224,
+  "source_files": 105,
+  "authored_source": 105,
+  "repo": "python-cmd2/cmd2"
+ },
+ {
+  "files": 165,
+  "source_files": 104,
+  "authored_source": 104,
+  "repo": "astropy/specutils"
+ },
+ {
+  "files": 227,
+  "source_files": 103,
+  "authored_source": 103,
+  "repo": "scipp/plopp"
+ },
+ {
+  "files": 111,
+  "source_files": 101,
+  "authored_source": 101,
+  "repo": "asottile/pyupgrade"
+ },
+ {
+  "files": 25693,
+  "source_files": 101,
+  "authored_source": 101,
+  "repo": "googlefonts/glyphsLib"
+ },
+ {
+  "files": 125,
+  "source_files": 100,
+  "authored_source": 100,
+  "repo": "ably/ably-python"
+ },
+ {
+  "files": 365,
+  "source_files": 99,
+  "authored_source": 99,
+  "repo": "facelessuser/pymdown-extensions"
+ },
+ {
+  "files": 197,
+  "source_files": 101,
+  "authored_source": 98,
+  "repo": "mit-ll-responsible-ai/hydra-zen"
+ },
+ {
+  "files": 236,
+  "source_files": 97,
+  "authored_source": 97,
+  "repo": "TRoboto/Maha"
+ },
+ {
+  "files": 239,
+  "source_files": 92,
+  "authored_source": 92,
+  "repo": "lightkurve/lightkurve"
+ },
+ {
+  "files": 115,
+  "source_files": 86,
+  "authored_source": 86,
+  "repo": "Backblaze/B2_Command_Line_Tool"
+ },
+ {
+  "files": 107,
+  "source_files": 84,
+  "authored_source": 84,
+  "repo": "zalando-stups/senza"
+ },
+ {
+  "files": 128,
+  "source_files": 83,
+  "authored_source": 83,
+  "repo": "European-XFEL/EXtra-data"
+ },
+ {
+  "files": 253,
+  "source_files": 82,
+  "authored_source": 79,
+  "repo": "cekit/cekit"
+ },
+ {
+  "files": 155,
+  "source_files": 77,
+  "authored_source": 77,
+  "repo": "microsoft/pybryt"
+ },
+ {
+  "files": 110,
+  "source_files": 72,
+  "authored_source": 72,
+  "repo": "dwavesystems/dwave-system"
+ },
+ {
+  "files": 106,
+  "source_files": 72,
+  "authored_source": 72,
+  "repo": "pre-commit/pre-commit-hooks"
+ },
+ {
+  "files": 87,
+  "source_files": 71,
+  "authored_source": 71,
+  "repo": "Azure/msrest-for-python"
+ },
+ {
+  "files": 113,
+  "source_files": 67,
+  "authored_source": 67,
+  "repo": "AzureAD/microsoft-authentication-library-for-python"
+ },
+ {
+  "files": 129,
+  "source_files": 67,
+  "authored_source": 67,
+  "repo": "encode/starlette"
+ },
+ {
+  "files": 112,
+  "source_files": 63,
+  "authored_source": 63,
+  "repo": "akaihola/darker"
+ },
+ {
+  "files": 115,
+  "source_files": 63,
+  "authored_source": 63,
+  "repo": "hasgeek/coaster"
+ },
+ {
+  "files": 97,
+  "source_files": 63,
+  "authored_source": 63,
+  "repo": "omni-us/jsonargparse"
+ },
+ {
+  "files": 142,
+  "source_files": 62,
+  "authored_source": 62,
+  "repo": "lepture/mistune"
+ },
+ {
+  "files": 106,
+  "source_files": 62,
+  "authored_source": 62,
+  "repo": "pynamodb/PynamoDB"
+ },
+ {
+  "files": 130,
+  "source_files": 61,
+  "authored_source": 61,
+  "repo": "mmaelicke/scikit-gstat"
+ },
+ {
+  "files": 125,
+  "source_files": 60,
+  "authored_source": 60,
+  "repo": "encode/httpx"
+ },
+ {
+  "files": 86,
+  "source_files": 59,
+  "authored_source": 59,
+  "repo": "reportportal/client-Python"
+ },
+ {
+  "files": 72,
+  "source_files": 57,
+  "authored_source": 57,
+  "repo": "l-vo/photos-picker"
+ },
+ {
+  "files": 96,
+  "source_files": 53,
+  "authored_source": 53,
+  "repo": "joshuadavidthomas/django-bird"
+ },
+ {
+  "files": 78,
+  "source_files": 51,
+  "authored_source": 51,
+  "repo": "cwacek/python-jsonschema-objects"
+ },
+ {
+  "files": 67,
+  "source_files": 51,
+  "authored_source": 51,
+  "repo": "google/latexify_py"
+ },
+ {
+  "files": 211,
+  "source_files": 51,
+  "authored_source": 51,
+  "repo": "wireservice/csvkit"
+ },
+ {
+  "files": 84,
+  "source_files": 49,
+  "authored_source": 49,
+  "repo": "alexgolec/tda-api"
+ },
+ {
+  "files": 81,
+  "source_files": 47,
+  "authored_source": 47,
+  "repo": "just-work/fffw"
+ },
+ {
+  "files": 82,
+  "source_files": 46,
+  "authored_source": 46,
+  "repo": "JeffLIrion/python-androidtv"
+ },
+ {
+  "files": 71,
+  "source_files": 44,
+  "authored_source": 44,
+  "repo": "trinodb/trino-python-client"
+ },
+ {
+  "files": 87,
+  "source_files": 44,
+  "authored_source": 44,
+  "repo": "zopefoundation/zope.security"
+ },
+ {
+  "files": 60,
+  "source_files": 44,
+  "authored_source": 43,
+  "repo": "Yelp/py_zipkin"
+ },
+ {
+  "files": 85,
+  "source_files": 43,
+  "authored_source": 43,
+  "repo": "python-versioneer/python-versioneer"
+ },
+ {
+  "files": 59,
+  "source_files": 42,
+  "authored_source": 42,
+  "repo": "macbre/sql-metadata"
+ },
+ {
+  "files": 149,
+  "source_files": 41,
+  "authored_source": 41,
+  "repo": "theavey/ParaTemp"
+ },
+ {
+  "files": 89,
+  "source_files": 40,
+  "authored_source": 40,
+  "repo": "yt-project/unyt"
+ },
+ {
+  "files": 86,
+  "source_files": 39,
+  "authored_source": 39,
+  "repo": "bvanelli/actualpy"
+ },
+ {
+  "files": 135,
+  "source_files": 39,
+  "authored_source": 39,
+  "repo": "koaning/clumper"
+ },
+ {
+  "files": 116,
+  "source_files": 38,
+  "authored_source": 38,
+  "repo": "MAIF/arta"
+ },
+ {
+  "files": 66,
+  "source_files": 38,
+  "authored_source": 38,
+  "repo": "mpdavis/python-jose"
+ },
+ {
+  "files": 63,
+  "source_files": 37,
+  "authored_source": 37,
+  "repo": "fronzbot/blinkpy"
+ },
+ {
+  "files": 106,
+  "source_files": 31,
+  "authored_source": 31,
+  "repo": "ReproNim/neurodocker"
+ },
+ {
+  "files": 59,
+  "source_files": 31,
+  "authored_source": 31,
+  "repo": "borgbackup/borgstore"
+ },
+ {
+  "files": 54,
+  "source_files": 29,
+  "authored_source": 29,
+  "repo": "MaxGhenis/microdf"
+ },
+ {
+  "files": 56,
+  "source_files": 29,
+  "authored_source": 29,
+  "repo": "oasis-open/cti-taxii-server"
+ },
+ {
+  "files": 92,
+  "source_files": 26,
+  "authored_source": 26,
+  "repo": "jpadilla/pyjwt"
+ },
+ {
+  "files": 58,
+  "source_files": 25,
+  "authored_source": 25,
+  "repo": "numpy/numpydoc"
+ },
+ {
+  "files": 54,
+  "source_files": 24,
+  "authored_source": 24,
+  "repo": "twu/skjold"
+ },
+ {
+  "files": 32,
+  "source_files": 22,
+  "authored_source": 22,
+  "repo": "PyCQA/pyflakes"
+ },
+ {
+  "files": 52,
+  "source_files": 20,
+  "authored_source": 20,
+  "repo": "alexander-akhmetov/python-telegram"
+ },
+ {
+  "files": 77,
+  "source_files": 20,
+  "authored_source": 20,
+  "repo": "collective/zpretty"
+ },
+ {
+  "files": 48,
+  "source_files": 19,
+  "authored_source": 19,
+  "repo": "ithaka/apiron"
+ },
+ {
+  "files": 28,
+  "source_files": 18,
+  "authored_source": 18,
+  "repo": "Qiskit/qiskit-bot"
+ },
+ {
+  "files": 25,
+  "source_files": 17,
+  "authored_source": 17,
+  "repo": "kvesteri/intervals"
+ },
+ {
+  "files": 30,
+  "source_files": 16,
+  "authored_source": 16,
+  "repo": "agronholm/exceptiongroup"
+ },
+ {
+  "files": 46,
+  "source_files": 15,
+  "authored_source": 15,
+  "repo": "chimpler/pyhocon"
+ },
+ {
+  "files": 22,
+  "source_files": 14,
+  "authored_source": 14,
+  "repo": "astamminger/zotero-bibtize"
+ },
+ {
+  "files": 44,
+  "source_files": 13,
+  "authored_source": 13,
+  "repo": "RockefellerArchiveCenter/DACSspace"
+ },
+ {
+  "files": 36,
+  "source_files": 12,
+  "authored_source": 12,
+  "repo": "getsentry/responses"
+ },
+ {
+  "files": 18,
+  "source_files": 10,
+  "authored_source": 10,
+  "repo": "dchevell/flask-executor"
+ },
+ {
+  "files": 24,
+  "source_files": 8,
+  "authored_source": 8,
+  "repo": "zopefoundation/zope.ramcache"
+ },
+ {
+  "files": 26,
+  "source_files": 6,
+  "authored_source": 6,
+  "repo": "stefankoegl/python-json-patch"
+ },
+ {
+  "files": 16,
+  "source_files": 3,
+  "authored_source": 3,
+  "repo": "kiwicom/structlog-sentry"
+ },
+ {
+  "files": 4,
+  "source_files": 0,
+  "authored_source": 0,
+  "repo": "googleapis/python-api-core"
+ },
+ {
+  "files": 4,
+  "source_files": 0,
+  "authored_source": 0,
+  "repo": "googleapis/python-firestore"
+ }
+]

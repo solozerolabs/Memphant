@@ -1,0 +1,249 @@
+{
+ "lane": "s9-scale",
+ "date": "2026-08-01",
+ "paid_model_calls": 0,
+ "price": {
+  "model": "claude-opus-5",
+  "input_usd_per_mtok": 5.0,
+  "output_usd_per_mtok": 25.0,
+  "cache_read_usd_per_mtok": 0.5,
+  "cache_write_5m_usd_per_mtok": 6.25,
+  "batch_input_usd_per_mtok": 2.5,
+  "context_window_tokens": 1000000,
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "fetched": "2026-08-01"
+ },
+ "measured": {
+  "s4_enumeration": {
+   "n_questions": 180,
+   "list_events_calls": 159,
+   "chars_per_enumerated_item_mean": 121.19,
+   "chars_per_enumerated_item_p50": 121.47,
+   "items_enumerated_mean": 140.6,
+   "items_enumerated_max": 200,
+   "list_events_cap": 200,
+   "prompt_tokens": 4554054,
+   "completion_tokens": 126460,
+   "tool_text_chars_resent": 16805422,
+   "tokens_per_char_upper_bound": 0.271,
+   "usd_per_question": 0.14407,
+   "reported_spend_usd": 25.9318,
+   "mean_tool_calls": 3.989,
+   "amplification_vs_single_pass": 6.241,
+   "wall_seconds_total_full_run": 486.62,
+   "wall_concurrency": 6,
+   "wall_seconds_per_question": 16.22,
+   "wall_source": "run-s4/agentic-full-provenance.json elapsed_seconds; --concurrency default 6 in code_lane_run_agentic_control.py"
+  },
+  "coverage": {
+   "n": 180,
+   "in_pool": 169,
+   "in_pool_rate": 0.9389,
+   "coverage_at_k": {
+    "1": 0.1667,
+    "3": 0.35,
+    "5": 0.4333,
+    "10": 0.6278,
+    "16": 0.7056,
+    "32": 0.8444,
+    "64": 0.9111,
+    "128": 0.9333,
+    "256": 0.9389
+   },
+   "gold_rank_p50": 6,
+   "gold_rank_p90": 31,
+   "gold_rank_max": 131,
+   "pool_size_p50": 122.5,
+   "pool_size_max": 199,
+   "recall_seconds_total": 789.6548781394958,
+   "recall_seconds_per_question": 4.387,
+   "llm_calls_at_recall": 0,
+   "marginal_llm_usd_at_recall": 0.0
+  },
+  "track_r_corpus": {
+   "sampled_attempts": 495,
+   "emitted_events": 64055,
+   "bound_attempts": 0,
+   "bound_repositories": 134,
+   "events_per_attempt": {
+    "min": 66,
+    "p50": 122,
+    "p90": 200,
+    "max": 200,
+    "mean": 129.4
+   },
+   "bytes_per_event_mean": 851.5,
+   "bytes_per_attempt_p50": 103479
+  },
+  "track_r_repos": {
+   "n_repos": 134,
+   "files": {
+    "min": 4,
+    "p10": 46,
+    "p25": 85,
+    "p50": 183,
+    "p75": 563,
+    "p90": 1940,
+    "p95": 3188,
+    "p99": 13634,
+    "max": 25693,
+    "mean": 907.4
+   },
+   "source_files": {
+    "min": 0,
+    "p10": 19,
+    "p25": 44,
+    "p50": 101,
+    "p75": 309,
+    "p90": 656,
+    "p95": 1284,
+    "p99": 3086,
+    "max": 4829,
+    "mean": 297.7
+   },
+   "authored_source": {
+    "min": 0,
+    "p10": 19,
+    "p25": 43,
+    "p50": 100,
+    "p75": 282,
+    "p90": 656,
+    "p95": 1253,
+    "p99": 3085,
+    "max": 4829,
+    "mean": 296.6
+   }
+  }
+ },
+ "modelled": {
+  "frontier": {
+   "preview_index": {
+    "chars_per_item": 121.19,
+    "tokens_per_item": 32.84,
+    "usd_per_item_single_pass": 0.00016421245000000005,
+    "usd_per_item_agentic": 0.0010248499004500004,
+    "at_N": {
+     "1e2": {
+      "tokens": 3284,
+      "usd_single_pass": 0.0164,
+      "usd_agentic": 0.1025
+     },
+     "1e3": {
+      "tokens": 32842,
+      "usd_single_pass": 0.1642,
+      "usd_agentic": 1.0248
+     },
+     "1e4": {
+      "tokens": 328425,
+      "usd_single_pass": 1.6421,
+      "usd_agentic": 10.2485
+     },
+     "1e5": {
+      "tokens": 3284249,
+      "usd_single_pass": 16.4212,
+      "usd_agentic": 102.485
+     },
+     "1e6": {
+      "tokens": 32842490,
+      "usd_single_pass": 164.2125,
+      "usd_agentic": 1024.8499
+     }
+    },
+    "thresholds": {
+     "N_at_200k_context": 6090,
+     "N_at_1M_context": 30448,
+     "N_at_1usd_single_pass": 6090,
+     "N_at_1usd_agentic": 976
+    }
+   },
+   "path_only_index": {
+    "chars_per_item": 61.9,
+    "tokens_per_item": 16.77,
+    "usd_per_item_single_pass": 8.387450000000003e-05,
+    "usd_per_item_agentic": 0.0005234607545000001,
+    "at_N": {
+     "1e2": {
+      "tokens": 1677,
+      "usd_single_pass": 0.0084,
+      "usd_agentic": 0.0523
+     },
+     "1e3": {
+      "tokens": 16775,
+      "usd_single_pass": 0.0839,
+      "usd_agentic": 0.5235
+     },
+     "1e4": {
+      "tokens": 167749,
+      "usd_single_pass": 0.8387,
+      "usd_agentic": 5.2346
+     },
+     "1e5": {
+      "tokens": 1677490,
+      "usd_single_pass": 8.3875,
+      "usd_agentic": 52.3461
+     },
+     "1e6": {
+      "tokens": 16774900,
+      "usd_single_pass": 83.8745,
+      "usd_agentic": 523.4608
+     }
+    },
+    "thresholds": {
+     "N_at_200k_context": 11923,
+     "N_at_1M_context": 59613,
+     "N_at_1usd_single_pass": 11923,
+     "N_at_1usd_agentic": 1910
+    }
+   },
+   "latency": {
+    "measured_seconds_at_N": {
+     "N": 140.6,
+     "seconds": 16.22
+    },
+    "N_at_10s_linear_model": 87,
+    "note": "linear-in-N is the optimistic model: it ignores that more items provoke more tool calls, and each call is a serial round trip."
+   }
+  },
+  "crossover": {
+   "condition": "RankAcc(N)/RankAcc(k) < Coverage(k)",
+   "required_relative_decay_by_k": {
+    "5": {
+     "coverage": 0.4333,
+     "max_ratio_RankAcc_N_over_RankAcc_k": 0.4333,
+     "min_relative_decay_pct": 56.7
+    },
+    "10": {
+     "coverage": 0.6278,
+     "max_ratio_RankAcc_N_over_RankAcc_k": 0.6278,
+     "min_relative_decay_pct": 37.2
+    },
+    "16": {
+     "coverage": 0.7056,
+     "max_ratio_RankAcc_N_over_RankAcc_k": 0.7056,
+     "min_relative_decay_pct": 29.4
+    },
+    "32": {
+     "coverage": 0.8444,
+     "max_ratio_RankAcc_N_over_RankAcc_k": 0.8444,
+     "min_relative_decay_pct": 15.6
+    },
+    "64": {
+     "coverage": 0.9111,
+     "max_ratio_RankAcc_N_over_RankAcc_k": 0.9111,
+     "min_relative_decay_pct": 8.9
+    },
+    "128": {
+     "coverage": 0.9333,
+     "max_ratio_RankAcc_N_over_RankAcc_k": 0.9333,
+     "min_relative_decay_pct": 6.7
+    }
+   },
+   "measured_RankAcc_point": {
+    "N": 140.6,
+    "value": 0.9667,
+    "source": "s4-controls agentic_grep 174/180 at full enumeration"
+   },
+   "unmeasured": "RankAcc(k) for k != ~140 \u2014 owned by lane s8-hybrid. No value is invented here."
+  }
+ }
+}
