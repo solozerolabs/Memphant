@@ -1,0 +1,166 @@
+{
+  "arm_a": {
+    "name": "structured",
+    "report": "docs/build-log/artifacts/2026-08-01-b1-structured/arm-s-structured.json"
+  },
+  "arm_b": {
+    "name": "structured",
+    "report": "docs/build-log/artifacts/2026-08-01-b1-structured/arm-s0-noop.json"
+  },
+  "endpoints": {
+    "appropriate_application": {
+      "arm_a_rate": 0.3621825023518344,
+      "arm_b_rate": 0.3142050799623706,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.33591065292096217,
+          0.39053803339517623
+        ],
+        "arm_b_ci95": [
+          0.28765690376569036,
+          0.3419642857142857
+        ],
+        "clusters": 257,
+        "delta_ci95": [
+          0.02615062761506276,
+          0.06934306569343068
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 9.999000099990002e-05,
+      "delta_a_minus_b": 0.047977422389463786,
+      "discordant_a_only": 102,
+      "discordant_b_only": 51,
+      "endpoint": "appropriate_application",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 4.554006265861128e-05,
+      "n_instances": 257,
+      "n_probes": 1063
+    },
+    "misapplication": {
+      "arm_a_rate": 0.6208842897460018,
+      "arm_b_rate": 0.6735653809971778,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.5936936936936937,
+          0.647117296222664
+        ],
+        "arm_b_ci95": [
+          0.6457085828343313,
+          0.7002583979328165
+        ],
+        "clusters": 257,
+        "delta_ci95": [
+          -0.07461328480436757,
+          -0.030384271671135
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 9.999000099990002e-05,
+      "delta_a_minus_b": -0.05268109125117593,
+      "discordant_a_only": 50,
+      "discordant_b_only": 106,
+      "endpoint": "misapplication",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 8.632696276335697e-06,
+      "n_instances": 257,
+      "n_probes": 1063
+    },
+    "neither_returned": {
+      "arm_a_rate": 0.011288805268109126,
+      "arm_b_rate": 0.00658513640639699,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.0048449612403100775,
+          0.018570102135561744
+        ],
+        "arm_b_ci95": [
+          0.002034587995930824,
+          0.011353711790393014
+        ],
+        "clusters": 257,
+        "delta_ci95": [
+          -0.0010471204188481666,
+          0.011650485436893206
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.28387161283871615,
+      "delta_a_minus_b": 0.004703668861712136,
+      "discordant_a_only": 7,
+      "discordant_b_only": 2,
+      "endpoint": "neither_returned",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.1796875,
+      "n_instances": 257,
+      "n_probes": 1063
+    }
+  },
+  "evidence_contract": {
+    "attribution": {
+      "method": "bisect"
+    },
+    "bar": null,
+    "claim": "s_vs_s0_full",
+    "corpus": {
+      "n_items": 8147,
+      "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
+    },
+    "decisional": true,
+    "harness": {
+      "budget": 8192,
+      "command": "scripts/external_instrument_adapter.py --instrument memorycode",
+      "embed_model": "fastembed-default",
+      "flags": [],
+      "k": 10,
+      "scorer": "memphant recall mode=fast"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "sessions": 360,
+        "topic": 8400,
+        "type": 8400
+      },
+      "license_evidence": "Cohere-Labs-Community/MemoryCode LICENSE file, recorded in benchmarks/manifests/memorycode.lock.json",
+      "license_id": "Apache-2.0",
+      "license_source": "LICENSE_FILE",
+      "rows_counted": 360,
+      "shipped_rows_verified": true
+    },
+    "leakage": null,
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
+    "notes": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
+    "power": {
+      "b": 102,
+      "c": 51,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "mde_at_80": 0.033320576236669716,
+      "n": 1063,
+      "n_d": 153,
+      "psi_observed": 0.14393226716839136,
+      "source": "docs/build-log/artifacts/2026-08-01-b1-structured/arm-s-structured.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "suppression",
+    "schema_version": 1
+  },
+  "paid_model_calls": 0,
+  "prereg": "docs/build-log/2026-08-01-preference-lane-prereg.md",
+  "primary_endpoint": "appropriate_application (latest-state-wins)",
+  "probes": 1063,
+  "secondary_descriptive": {
+    "hit_at_1": {
+      "arm_a": 0.270931326434619,
+      "arm_b": 0.24082784571966134
+    },
+    "hit_at_k": {
+      "arm_a": 0.8071495766698025,
+      "arm_b": 0.8428974600188147
+    }
+  }
+}
