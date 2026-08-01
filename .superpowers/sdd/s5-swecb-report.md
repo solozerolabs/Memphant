@@ -5,7 +5,8 @@
 - Preregistration: `docs/build-log/artifacts/s5-swecb/stage0-prereg.json` — committed at `fd2ebd7c`
   **before the first ingest**, amended at `0e137b54` **before any cell existed**.
 - Build log: `docs/build-log/2026-08-01-swe-contextbench-retranche.md`, S5 section appended.
-- Stage 2's $504 is **held** and is **recommended for cancellation**, on evidence independent of s4-controls.
+- **Stage 1 ($40) and stage 2 ($504) are both CANCELLED.** The ~$1-5 scaffold probe was approved but
+  never started, and was skipped. **Nothing was spent on this lane.**
 
 ## Outcome
 
@@ -54,8 +55,14 @@ against a 6.9% floor set by the target quoting its own patch — clean, and stil
 **Stage 0 has published comparators.** Table 5 reports Matched (%) — retrieved the gold parent — per
 method on Lite: Mem0 39.39 @k=3, OpenViking 51.52 @k=3, Supermemory 59.60 @k=15, LangMem 73.34 @k=10.
 The retranche log's "both arms must be ours" is correct for `Resolved` and **wrong for retrieval**.
-A like-for-like Lite-scoped arm is running; the full-pool number above is not directly comparable
-(harder pool, different k) and must not be cited as if it were.
+The Lite-scoped arm reproduces the published configuration exactly (99 targets, 300-row pool):
+Mem0 39.39 → **68.69** at k=3, OpenViking 51.52 → **68.69** at k=3, LangMem 73.34 → **79.80** at
+k=10; Supermemory's k=15 is left **bracketed** (79.80@10 to 87.88@25) rather than interpolated.
+MemPhant leads every published method at matched or smaller k. The metric alignment was *verified*
+rather than assumed: Mem0's per-rank cells sum to 49.49 against an Overall of 39.39, so Overall is a
+union over top-k — the same ANY-PARENT recall@k reported here. That reasoning must stay attached to
+the number wherever it travels, as must the caveats: n=99, the authors' own runs of other people's
+systems, no per-instance data, so **nothing can be paired and no significance test is possible**.
 
 ## Live defects found, at $0
 
@@ -75,7 +82,7 @@ A like-for-like Lite-scoped arm is running; the full-pool number above is not di
    note. This lane's first arm head-of-line blocked four lanes at loadavg 56; the with-patch arm was
    deliberately killed to release it (rc=143, artifact correctly refused, no DB orphaned).
 
-## Why stage 2 should be cancelled as scoped
+## Why stage 2 was already unbuyable before s4 reported
 
 Table 3's own numbers: `Claude Sonnet 4.5 / Claude Code` resolves **19.68%** with no memory and
 **23.40%** when handed the gold parent. **+3.72pp is the ceiling** for any retrieval-based memory
