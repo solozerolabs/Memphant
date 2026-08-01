@@ -1,15 +1,15 @@
 {
   "packet": "/Users/sidsharma/Memphant-s10-conversion/docs/build-log/artifacts/s10-conversion/pilot30/authorization-nomemory.json",
   "ledger": "/Users/sidsharma/Memphant-s10-conversion/docs/build-log/artifacts/s10-conversion/pilot30/attempts-nomemory.jsonl",
-  "total_derived_ceiling_usd": "2.89",
+  "total_derived_ceiling_usd": "5.86",
   "derivation": {
     "nomemory": {
       "n_rows": 30,
       "logical_calls": 60,
       "widest_prompt_bytes_measured": 409,
-      "per_call_ceiling_usd": "0.048125",
-      "arm_ceiling_usd": "2.89",
-      "hard_max_spend_usd": "2.89"
+      "per_call_ceiling_usd": "0.097525",
+      "arm_ceiling_usd": "5.86",
+      "hard_max_spend_usd": "5.86"
     }
   }
 }

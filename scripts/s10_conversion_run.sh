@@ -57,6 +57,7 @@ mint_arm() {  # arm retrieval
     --cache-dir "$ROOT/$OUT/cache-$arm" \
     --reader-model anthropic/claude-opus-5 --judge-model anthropic/claude-opus-5 \
     --prompt-version "$PROMPT_VERSION" --price-prompt 5 --price-completion 25 \
+    --max-output-tokens 3000 \
     --spend-headroom 1.0 \
     --authorized-by "owner standing authority, ceiling \$150: S10 endpoint validity" \
     --authorized-at "2026-08-01T00:00:00-07:00" > "$OUT/packet-$arm.json"
@@ -79,7 +80,7 @@ run_arm() {  # arm profile retrieval
     --authorization-manifest "$OUT/authorization-$arm.json" --authorization-arm "$arm" \
     --max-calls "$calls" --max-provider-attempts $((calls * 4)) --max-spend-usd "$spend" \
     --max-price-prompt-per-million 5 --max-price-completion-per-million 25 \
-    --max-output-tokens 1024 > "$OUT/$arm.log" 2>&1
+    --max-output-tokens 3000 > "$OUT/$arm.log" 2>&1
   rc=$?
   set -e
   echo "DONE $TAG/$arm rc=$rc $(date -u +%FT%TZ)"

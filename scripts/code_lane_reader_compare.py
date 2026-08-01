@@ -337,6 +337,7 @@ def judge_accounting(report: dict, order: list[str]) -> dict:
         key = str(row.get("judge_parse_status"))
         parse_status[key] = parse_status.get(key, 0) + 1
     abstained = sum(1 for row in subset if row.get("abstain"))
+    refused = sum(1 for row in subset if row.get("reader_refusal"))
     errored = sum(
         1 for row in subset
         if row.get("reader_error") or row.get("parse_error") or row.get("judge_error")
@@ -348,6 +349,11 @@ def judge_accounting(report: dict, order: list[str]) -> dict:
         "judge_fire_rate": llm_judged / len(subset) if subset else 0.0,
         "reader_abstentions": abstained,
         "reader_abstention_rate": abstained / len(subset) if subset else 0.0,
+        # A provider refusal is scored as a non-answer, so this many rows are
+        # guaranteed-incorrect for a reason that is not the pack. The arm's
+        # accuracy is a LOWER bound by exactly this count.
+        "reader_provider_refusals": refused,
+        "reader_provider_refusal_rate": refused / len(subset) if subset else 0.0,
         "rows_with_error": errored,
         "reader_errors": sum(1 for row in subset if row.get("reader_error")),
         "parse_errors": sum(1 for row in subset if row.get("parse_error")),

@@ -560,6 +560,18 @@ class CallBudgetExceeded(Exception):
     pass
 
 
+class ProviderRefusal(RuntimeError):
+    """The provider declined to answer (finish_reason content_filter/refusal).
+
+    Distinct from a transport failure on purpose. A refusal is deterministic —
+    the same prompt refuses again — so it must not be retried, and it is the
+    model declining to produce an answer, which is behaviourally an abstention.
+    Recording it as a generic reader error would charge the arm with an
+    instrument failure it did not have, and an errored arm reports a deficit it
+    did not measure.
+    """
+
+
 def positive_decimal(value: str) -> Decimal:
     try:
         parsed = Decimal(value)
@@ -1255,13 +1267,40 @@ class ReaderCli:
                         f"openrouter returned empty content (attempt "
                         f"{attempt + 1}/4): {json.dumps(data)[:500]}"
                     )
+                    # Record WHY the content was empty. Without these three
+                    # fields an empty_content retry is unattributable after the
+                    # fact, and the two causes need opposite fixes: a `length`
+                    # finish means the completion budget was consumed (by
+                    # reasoning tokens, which bill and count against max_tokens)
+                    # and the budget must rise; anything else is a provider
+                    # fault and retrying is the right response.
+                    choice = (data.get("choices") or [{}])[0]
+                    finish = choice.get("finish_reason")
+                    native = choice.get("native_finish_reason")
+                    refused = finish == "content_filter" or native == "refusal"
                     error_payload = {
-                        "error": "empty_content",
+                        "error": "provider_refusal" if refused else "empty_content",
                         "elapsed_seconds": time.monotonic() - attempt_started,
                         "retry_index": attempt,
+                        "finish_reason": finish,
+                        "native_finish_reason": native,
+                        "usage": data.get("usage"),
                     }
                     self.provider_attempt_log.append(error_payload)
                     self._provider_attempt_event("error", error_payload)
+                    if refused:
+                        # An upstream refusal is deterministic: the same prompt
+                        # refuses again. Retrying it three more times buys
+                        # nothing and bills four times. It is also not a
+                        # transport fault — the model declined to answer, which
+                        # is behaviourally an abstention, so it is surfaced as
+                        # its own exception rather than folded into the generic
+                        # error class where it would be counted as an instrument
+                        # failure the arm did not have.
+                        raise ProviderRefusal(
+                            f"provider refused to answer "
+                            f"(finish_reason={finish}, native={native})"
+                        )
                     continue
                 self.provider_attempt_log.append({"response": metadata})
                 self._provider_attempt_event("result", {"response": metadata})
@@ -2016,6 +2055,7 @@ def main() -> int:
             "reader_error": None,
             "parse_error": None,
             "judge_error": None,
+            "reader_refusal": False,
         }
         if args.judge_profile == RAG_SUPPORTED_SCHEMA_ID:
             record.update(_rag_audit_defaults())
@@ -2049,6 +2089,17 @@ def main() -> int:
             per_question.append(record)
             print(f"ABORT at row {index + 1}/{len(rows)}: {error}", file=sys.stderr)
             break
+        except ProviderRefusal as error:
+            # Scored exactly as the reader's own abstention would be: no answer,
+            # so not correct. It is flagged rather than hidden, because a high
+            # refusal rate makes that arm's accuracy a LOWER bound on what the
+            # arm could express, and the reader must be able to say so.
+            record["reader_refusal"] = True
+            record["abstain"] = True
+            record["answer"] = None
+            record["notes"] = str(error)
+            record["judge_method"] = "provider_refusal"
+            record["correct"] = False
         except (RuntimeError, subprocess.TimeoutExpired) as error:
             record["reader_error"] = str(error)
         per_question.append(record)

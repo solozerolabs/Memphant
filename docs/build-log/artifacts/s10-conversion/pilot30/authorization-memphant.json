@@ -2,7 +2,7 @@
   "schema_version": 2,
   "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
   "frozen_inputs": {
-    "reader_runner_sha256": "400ebd09501e625ff8fc5d6da2d89749ea71aa3416e388222cb375922f98fb38",
+    "reader_runner_sha256": "56b441850f0e80ba48de0c67989af2569aad482195ca360220393332c9562b83",
     "provider_attempts_sha256": "833d8782dd54a8f9937ddb7ca65544be470c8e5bb38c790424ae4b4eca52d04a",
     "memphant_evidence_sha256": "bcbfc2c89cd6b237082a4b49a0d47468d40b75bb6708578cb935f0e885d848a4",
     "memphant_retrieval_sha256": "c7f3d3118c95627e461c32b812427f22bb9f4558ad1aea6e8485463467a8003b"
@@ -14,7 +14,7 @@
     "judge": "anthropic/claude-opus-5",
     "judge_profile": "rag-supported-v1",
     "prompt_version": 3,
-    "max_output_tokens_per_request": 1024,
+    "max_output_tokens_per_request": 3000,
     "provider_max_price_usd_per_million": {
       "prompt": "5",
       "completion": "25"
@@ -24,7 +24,7 @@
     "memphant": {
       "max_logical_calls": 60,
       "max_provider_attempts": 240,
-      "max_spend_usd": "10.19"
+      "max_spend_usd": "13.16"
     }
   },
   "execution": {
@@ -45,6 +45,6 @@
   "authorization": {
     "authorized_by": "owner standing authority, ceiling $150: S10 endpoint validity",
     "authorized_at": "2026-08-01T00:00:00-07:00",
-    "authorization_scope_sha256": "b3303b390442e712b0daa95aa36d8423b316b3ab493a3de42796a1f3346b475d"
+    "authorization_scope_sha256": "cdd89ab51b144008acedb2f876a89bdd2d1889d97b0f6ed093d40e2abd8c866d"
   }
 }
