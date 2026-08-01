@@ -3,6 +3,48 @@
   "after": "sibling-gather ON",
   "before": "sibling-gather OFF"
  },
+ "evidence_contract": {
+  "attribution": {
+   "method": "unverified",
+   "note": "no bisect, and this artifact records no git head and no binary sha256. The run is identified only by the harness settings above and by the reproduction command in docs/build-log/2026-07-30-sibling-gather-deletion.md. Not backfilled from the deleting commit 2552d4c1, which is when the artifact was committed, not necessarily when the arms were run."
+  },
+  "claim": "The sibling-gather packing lever moved no retrieval on the frozen LME-S dev cohort: paired ON/OFF arms (n=178, 166 scored) produce an IDENTICAL per-question hit vector at k=5 and k=10 -- 0 before-only, 0 after-only -- while the ON arm packs 52,946 fewer characters of content across 778 items.",
+  "corpus": {
+   "n_items": 178,
+   "path_note": "benchmarks/data/longmemeval_s.development.json is not tracked in this repo, so the checker cannot recompute this sha; it is the same dataset sha256 carried by the sibling artifact lme-s-nonregression.json and by the A1 dev-fast lattice",
+   "sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",
+   "snapshot_id": "longmemeval_s.development@e4667bed2956, frozen LME-S dev cohort, sample 178 seed 20260710"
+  },
+  "decisional": false,
+  "harness": {
+   "budget": 8192,
+   "command": "target/release/memphant-eval bench-lme, each arm under scripts/with_scratch_db.sh (docs/build-log/2026-07-30-sibling-gather-deletion.md)",
+   "embed_model": "small",
+   "flags": [
+    "--sample 178",
+    "--seed 20260710",
+    "--pool 64",
+    "--embed-model small",
+    "reader: none (retrieval-only), no paid call"
+   ],
+   "k": 10,
+   "scorer": "memphant-eval bench-lme, recall mode=fast, pool=64; the lexical scorer is not recorded in this artifact"
+  },
+  "mechanism_enabled": true,
+  "mechanism_evidence": "From the packed output, not from the flag passed: with the lever ON, 82 of 778 items render SHORTER, 7 LONGER, 60 interleaved, 16 show content the ON arm lacks and 2 show content the OFF arm lacks (id-normalized bodies, packed_context_identical=false). The pass demonstrably ran; a lever that had silently not run would have produced byte-identical packs.",
+  "notes": "decisional=false, and the retrieval arm could not be decisional at any effect size: n_d=0 has no rejection region. The null was also PREDICTED before the run -- the pass runs strictly after the greedy fill and never changes which candidates are admitted, so recall@k cannot move -- which makes it a confirmation, not the finding. The `verdict: delete` this artifact carries rests on three things recorded here and argued in docs/build-log/2026-07-30-sibling-gather-deletion.md, none of which is this null: (1) the exhaustive unit sweep over budgets 1..=260, where the lever changed bytes or cost at 50 budgets and added coverage at 0; (2) the lever defeating pack_render_cap (40-token cap refilled to 5 chunks / 124 tokens); (3) exactly one call site tree-wide and no production surface. NOT verified here and deliberately not claimed: corpus licence (no leakage or licence block was recorded for the LME-S cohort at run time) and run lineage.",
+  "power": {
+   "b": 0,
+   "c": 0,
+   "n": 166,
+   "n_d": 0,
+   "psi_observed": 0.0,
+   "source": "docs/build-log/artifacts/sibling-gather-deletion/lme-s-nonregression.json",
+   "test": "two-sided exact (conditional binomial) McNemar"
+  },
+  "probe_kind": "lever",
+  "schema_version": 1
+ },
  "harness": {
   "budget_tokens": 8192,
   "dataset_sha256": "e4667bed29565884b827ca0a75fbbec8d15f772c96011bb058ea5e2863d3a475",

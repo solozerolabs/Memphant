@@ -41,6 +41,19 @@ def _skip_if_absent(path: Path) -> None:
         pytest.skip(f"{path} not present")
 
 
+def _is_git_repo(path: Path) -> bool:
+    """A candidate corpus root is usable only if it is a git checkout."""
+    if not path.exists():
+        return False
+    return (
+        subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--git-dir"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
 def _rows(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().split("\n") if line.strip()]
 
@@ -405,9 +418,12 @@ def test_answer_spans_are_verbatim_in_the_pinned_corpus(golden_path: Path, lock_
     ]
     if env_root := __import__("os").environ.get("MEMPHANT_SYNDAI_ROOT"):
         candidates.insert(0, Path(env_root))
-    root = next((path for path in candidates if path.exists()), None)
+    # A directory that exists but is NOT a git checkout (e.g. a stale
+    # /private/tmp/Syndai) cannot answer `git show`, and selecting it turned
+    # this skip into a CalledProcessError. Require a real repo, then skip.
+    root = next((path for path in candidates if _is_git_repo(path)), None)
     if root is None:
-        pytest.skip(f"Syndai corpus not present at any of {candidates}")
+        pytest.skip(f"Syndai corpus not present as a git checkout at any of {candidates}")
     pinned_commit = manifest["git_commit"]
     for g in _rows(golden_path):
         for entry in g["provenance"]:

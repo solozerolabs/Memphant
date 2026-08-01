@@ -610,6 +610,58 @@
   "recall_at_5": 0.11666666666666667
  },
  "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+ "evidence_contract": {
+  "attribution": {
+   "method": "unverified",
+   "note": "no bisect. Attribution is by single-variable paired arms at one git head (lineage.arm_git_heads = 4a39ce5f) and one binary set (lineage.binaries sha256s recorded in this artifact)."
+  },
+  "claim": "Re-run on trunk (head 4a39ce5f) at a render lineage containing both f67f2b2a and 3fc4eede, the dense channel still adds retrieval on the 180-question Track R paraphrase bank: bm25code_dense vs bm25code_off at fused@10 is b=29 / c=5, n_d=34, delta +0.1333, two-sided exact McNemar p=3.86e-05.",
+  "corpus": {
+   "n_items": 180,
+   "path_note": "benchmarks/data/track_r_paraphrase_golden.jsonl is NOT tracked in this repo (only its lock, benchmarks/data/track_r_paraphrase_golden.lock.json, which records this sha256 and count=180), so the checker cannot recompute the sha here",
+   "sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+   "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921 (nebius/SWE-rebench-openhands-trajectories@35455389, 495 sampled attempts)"
+  },
+  "decisional": false,
+  "harness": {
+   "budget": 8192,
+   "embed_model": "small (left arm) vs off (right arm) -- the single variable under contrast",
+   "flags": [
+    "MEMPHANT_FACT_EXTRACTION=0"
+   ],
+   "flags_evidence": "lineage.harness_env.MEMPHANT_FACT_EXTRACTION.value = '0' in this artifact",
+   "k": 10,
+   "scorer": "lexical=bm25-code, weighted-RRF fusion, memphant recall mode=fast"
+  },
+  "leakage": {
+   "absolute_target_coverage": 0.1346,
+   "concentration": 2.018,
+   "floor": 0.0667,
+   "floor_kind": "exhaustive",
+   "floor_scope_note": "mean over every non-target event of the same attempt; no seed, no draw",
+   "negative_selection": "same-attempt hard negatives -- every non-target content event of the bound attempt, which is also exactly the retrieval haystack",
+   "provenance_class": "machine_generated",
+   "provenance_note": "paraphrase bank: agent-generated with the target identifiers withheld, 180/180 with adjudicated distractors (lock.json params)",
+   "source": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+   "unit_definition": "one content event of the attempt, 4000-char clip"
+  },
+  "mechanism_enabled": true,
+  "mechanism_evidence": "The contrasted arms differ in exactly one recorded setting, arms[*].embed_model = 'small' vs 'off', at one git head (4a39ce5f) and one set of binary sha256s recorded in lineage.binaries; both arms drained the same corpus to the same counts (done_jobs=64056, episodic_units=64014, pending_jobs=0, dead_jobs=0).",
+  "notes": "decisional=false for two independent reasons, both verified on disk and neither fixable by re-reading this artifact: (1) the bank FAILS its own preregistered headline leakage bar -- concentration 2.018 against <= 1.50, bar_checks.leak_concentration_le_1_50=false and bar_passed=false in benchmarks/data/track_r_paraphrase_golden.lock.json -- and is used deliberately with that failure declared, because it is still far less lexically confounded than the original bank at 3.9286; (2) the corpus licence CC-BY-4.0 is a HuggingFace dataset-card assertion recorded in the lock, with no LICENSE blob pinned and no re-fetch, so it is unverified rather than wrong -- the ClawArena badge pattern. No `bar` block is declared here because the bank's own bar sits below the recorded achievable floor; asserting it would be re-registering a bar no answerable question set can pass. instrument_verification is omitted rather than filled: the golden jsonl is not tracked in this repo, so its rows were NOT counted on disk by the author of this contract.",
+  "power": {
+   "b": 29,
+   "c": 5,
+   "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+   "mde_at_80": 0.09382266353178041,
+   "n": 180,
+   "n_d": 34,
+   "psi_observed": 0.18888888888888888,
+   "source": "docs/build-log/artifacts/track-r-paraphrase/w02-trunk-arms.json contrasts['bm25code_dense:bm25code_off'].fused_at_10",
+   "test": "two-sided exact (conditional binomial) McNemar"
+  },
+  "probe_kind": "lever",
+  "schema_version": 1
+ },
  "golden_sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
  "lineage": {
   "arm_git_heads": [
