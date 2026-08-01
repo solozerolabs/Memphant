@@ -798,7 +798,43 @@ def build_parser():
         "--rerank-candidate-limit", type=int, default=None,
         help="MEMPHANT_RERANK_CANDIDATE_LIMIT for the --cross-rerank arm",
     )
+    parser.add_argument(
+        "--dump-pool", type=Path, default=None,
+        help="write the fused candidate pool — every candidate's rank, unit id "
+             "and BODY — to this JSONL, one row per golden. The banked "
+             "channel_table already carries ranks and unit ids but no bodies, "
+             "so a retrieve-then-rank arm cannot be built from it offline. "
+             "This is capture only: it changes no served request and no score",
+    )
+    parser.add_argument(
+        "--dump-pool-depth", type=int, default=0,
+        help="0 = the whole pool; otherwise the first N fused candidates",
+    )
     return parser
+
+
+def ranked_pool(
+    trace: dict, unit_bodies: dict[str, str], gold_ids: set[str], depth: int
+) -> list[dict]:
+    """The fused candidate pool as ranked rows carrying their bodies.
+
+    The unit of the hybrid arm's haystack. `is_gold` is banked for the
+    post-hoc in-pool/out-of-pool decomposition and is NEVER shown to a ranker;
+    the arm reads bodies only.
+    """
+    rows: dict[str, dict] = {}
+    for candidate in trace.get("candidates") or []:
+        unit_id = candidate["unit_id"]
+        if unit_id in rows:
+            continue
+        rows[unit_id] = {
+            "fused_rank": candidate.get("fused_rank"),
+            "unit_id": unit_id,
+            "is_gold": unit_id in gold_ids,
+            "body": unit_bodies.get(unit_id, ""),
+        }
+    ordered = sorted(rows.values(), key=lambda row: row["fused_rank"] or 10**9)
+    return ordered[:depth] if depth > 0 else ordered
 
 
 def main() -> int:
@@ -918,6 +954,7 @@ def main() -> int:
         unit_bodies = episodic_unit_bodies(args.database_url, principals[0][0])
         evidence_rows = []
         provenance_rows = []
+        pool_rows = []
         recall_started = time.time()
         for i, golden in enumerate(goldens):
             attempt_id = golden["provenance"][0]["attempt_id"]
@@ -940,9 +977,32 @@ def main() -> int:
                     ),
                 }
             )
+            if args.dump_pool is not None:
+                pool_rows.append(
+                    {
+                        "question_id": golden["question_id"],
+                        "question_type": golden["question_type"],
+                        "attempt_id": attempt_id,
+                        "query": retrieval_query(golden),
+                        "packed_bodies": bodies,
+                        "pool": ranked_pool(
+                            trace,
+                            unit_bodies,
+                            gold_bearing_units(golden, unit_bodies)
+                            & {c["unit_id"] for c in (trace.get("candidates") or [])},
+                            args.dump_pool_depth,
+                        ),
+                    }
+                )
             if (i + 1) % 10 == 0:
                 print(f"{label_prefix}  recalled {i + 1}/{len(goldens)}", file=sys.stderr)
         recall_seconds = time.time() - recall_started
+        if args.dump_pool is not None:
+            gc.write_jsonl(args.dump_pool, pool_rows)
+            print(
+                f"{label_prefix}pool dump: {len(pool_rows)} rows -> {args.dump_pool}",
+                file=sys.stderr,
+            )
 
         isolation_golden = goldens[0]
         other_bodies, other_degraded = gr.recall_query(
