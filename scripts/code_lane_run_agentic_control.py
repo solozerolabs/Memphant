@@ -35,9 +35,11 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from pathlib import Path
 
@@ -322,6 +324,7 @@ class OpenRouterEngine:
         self.api_key = api_key
         self.usage = {"prompt_tokens": 0, "completion_tokens": 0}
         self.generation_ids: list[str] = []
+        self._lock = threading.Lock()
 
     def complete(self, messages: list[dict], question: str) -> dict:
         return self._post(
@@ -381,10 +384,11 @@ class OpenRouterEngine:
         if "choices" not in data or not data["choices"]:
             raise RuntimeError(f"openrouter returned no choices: {str(data)[:400]}")
         usage = data.get("usage") or {}
-        self.usage["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
-        self.usage["completion_tokens"] += int(usage.get("completion_tokens") or 0)
-        if data.get("id"):
-            self.generation_ids.append(data["id"])
+        with self._lock:
+            self.usage["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
+            self.usage["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+            if data.get("id"):
+                self.generation_ids.append(data["id"])
         return {
             "message": data["choices"][0]["message"],
             "usage": usage,
@@ -544,6 +548,7 @@ def main() -> int:
             "is therefore the first slice of the full run, not a discarded one."
         ),
     )
+    parser.add_argument("--concurrency", type=int, default=6)
     parser.add_argument("--label", default="agentic_control")
     args = parser.parse_args()
 
@@ -606,17 +611,30 @@ def main() -> int:
     started = time.time()
     rows = []
     selections: dict[str, list[str]] = {}
-    for position, golden in enumerate(selected_goldens, 1):
-        events = s4.haystack_for(by_attempt, golden)
-        row = run_question(engine, golden, events)
-        selections[golden["question_id"]] = row.pop("bodies")
-        rows.append(row)
-        print(
-            f"[{position}/{len(selected_goldens)}] {row['question_id']} "
-            f"calls={row['tool_calls']} sel={len(row['selection'])} "
-            f"err={row['error']}",
-            flush=True,
-        )
+    # Questions are independent episodes, so they run concurrently. This is a
+    # latency choice, not a budget one: the caps are per question, the engine's
+    # usage counters are summed under a lock, and the host is CPU-starved by
+    # sibling lanes while this arm is network-bound.
+    progress_lock = threading.Lock()
+    done = 0
+
+    def work(golden: dict) -> dict:
+        nonlocal done
+        row = run_question(engine, golden, s4.haystack_for(by_attempt, golden))
+        with progress_lock:
+            done += 1
+            selections[golden["question_id"]] = row.pop("bodies")
+            print(
+                f"[{done}/{len(selected_goldens)}] {row['question_id']} "
+                f"calls={row['tool_calls']} sel={len(row['selection'])} "
+                f"err={row['error']}",
+                flush=True,
+            )
+        return row
+
+    if selected_goldens:
+        with ThreadPoolExecutor(max_workers=min(args.concurrency, len(selected_goldens))) as pool:
+            rows = list(pool.map(work, selected_goldens))
 
     selections |= carried_selections
     rows = carried + rows
