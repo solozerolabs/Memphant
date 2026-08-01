@@ -10,12 +10,13 @@
 #
 # LAUNCH THIS DETACHED, ALWAYS:
 #   doppler run --project syndai --config dev -- \
-#     python3 scripts/detach.py "$LOG" caffeinate -i bash scripts/s8_sweep_all.sh
+#     python3 scripts/detach_run.py "$LOG" caffeinate -i bash scripts/s8_sweep_all.sh
 # `nohup` alone is NOT enough. It ignores SIGHUP but leaves the launching
 # shell's process group, so a group-wide SIGTERM at an agent lifecycle boundary
 # still reaps the chain -- a sibling lane lost a whole run that way at exactly
-# 60 minutes, rc=143, with no error in its log. scripts/detach.py starts a new
-# session (PPID 1, PGID == PID) so no group kill can reach this.
+# 60 minutes, rc=143, with no error in its log. scripts/detach_run.py starts a new
+# session; PGID == PID is the load-bearing assertion, not PPID == 1 -- a nohup
+# launch can show PPID 1 while still sitting in the launching shell's group.
 #
 # Note for anyone editing this file: in zsh an unmatched glob ABORTS the whole
 # command line, so never put a bare `rm -f *.json` in a launch line -- a sibling
