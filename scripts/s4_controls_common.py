@@ -47,8 +47,11 @@ def lineage(inputs: dict[str, Path]) -> dict:
         "git_head": _git("rev-parse", "HEAD"),
         "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
         "git_dirty": bool(status),
+        # `git status --porcelain` is `XY<space>path`, but a staged-only entry
+        # is `M <space>path` and a naive line[3:] eats the path's first
+        # character. Split on the first run of whitespace after the 2-char code.
         "git_dirty_paths": sorted(
-            line[3:] for line in status.splitlines() if line.strip()
+            line[2:].strip() for line in status.splitlines() if line.strip()
         )[:50],
         "input_sha256": {
             name: hashlib.sha256(path.read_bytes()).hexdigest()

@@ -361,7 +361,30 @@ def main() -> int:
         "dropped_question_ids": sorted(dropped),
         "arms": arms,
         "contrasts": contrasts,
-        "lineage": s4.lineage({}),
+        "lineage": s4.lineage(
+            {
+                "treatment_provenance": args.treatment,
+                **{
+                    f"control:{spec.partition('=')[0]}": Path(spec.partition("=")[2])
+                    for spec in args.control
+                },
+            }
+        )
+        | {
+            # The rule is sha256 of the SERVED binaries. The treatment was
+            # served by a MemPhant build whose hashes were banked beside its
+            # run; the controls served no MemPhant binary at all, which is
+            # itself the arm's defining property.
+            "treatment_served_binaries": (
+                args.treatment.with_name("binaries.sha256").read_text().strip()
+                if args.treatment.with_name("binaries.sha256").exists()
+                else "unverified"
+            ),
+            "treatment_runtime_identity": treatment.get("runtime_identity", {}).get(
+                "repository"
+            ),
+            "control_served_binaries": "none — the controls run no MemPhant binary",
+        },
         "bias_bound": (
             "The paraphrase bank bans identifier surfaces; absolute q->target "
             "coverage brackets as paraphrase 0.1346 < human 0.175-0.287 < "

@@ -394,6 +394,14 @@ The treatment artifact is `run-fusion/fusion_probe-provenance.json` rather than
 banks the `channel_table` that proves both fusion channels fired. Choosing the
 artifact that can prove its own mechanism is the point of the rule.
 
+The two were served at different heads — `run-trunk` at `4a39ce5f`, `run-fusion`
+at `d4ea945d` — and that is recorded rather than tidied. It does not move the
+treatment value, because the hit vectors are identical question-by-question, and
+that identity was checked rather than assumed. The served binary sha256s for the
+cited run are carried in the analysis artifact's `lineage.treatment_served_binaries`;
+the controls carry `"none — the controls run no MemPhant binary"`, which is not
+a gap in the lineage but the arms' defining property.
+
 ## B.8 Preregistration deviations — disclosed, not smoothed
 
 **1. §A.8's ordering was not followed.** A.8 said C2 (free) runs before any money
