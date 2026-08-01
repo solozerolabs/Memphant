@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -110,6 +111,50 @@ def _norm(text: str) -> str:
     return " ".join(_WORD.findall(str(text).lower()))
 
 
+def wilson(successes: int, n: int, z: float = 1.959963984540054) -> dict | None:
+    """Wilson score interval — the CI reported for the two conditional rates.
+
+    Wald is not usable here: the conditional cells are small and the rates run
+    near 0 and 1, where Wald produces intervals that leave [0, 1].
+    """
+    if n <= 0:
+        return None
+    p = successes / n
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / denom
+    return {
+        "k": successes,
+        "n": n,
+        "point": p,
+        "lo": max(0.0, centre - half),
+        "hi": min(1.0, centre + half),
+        "method": "Wilson score, 95%",
+    }
+
+
+def two_proportion_z(k1: int, n1: int, k2: int, n2: int) -> dict | None:
+    """Unpaired two-proportion test for P(correct|hit) vs P(correct|miss).
+
+    These two rates are computed on DISJOINT subsets of questions, so McNemar
+    does not apply; the contrast is between-group, not paired.
+    """
+    if n1 <= 0 or n2 <= 0:
+        return None
+    p1, p2 = k1 / n1, k2 / n2
+    pooled = (k1 + k2) / (n1 + n2)
+    se = (pooled * (1 - pooled) * (1 / n1 + 1 / n2)) ** 0.5
+    if se == 0:
+        return {"diff": p1 - p2, "z": None, "p_two_sided": 1.0}
+    z = (p1 - p2) / se
+    return {
+        "diff": p1 - p2,
+        "z": z,
+        "p_two_sided": math.erfc(abs(z) / math.sqrt(2.0)),
+        "test": "two-proportion z, pooled SE, two-sided",
+    }
+
+
 def gold_span_decomposition(
     reader_report: dict,
     retrieval_report: Path | None,
@@ -189,7 +234,31 @@ def gold_span_decomposition(
 
     n, hit_n = tally["n"], tally["gold_span_in_pack"]
     miss_n = n - hit_n
-    return tally | {
+    # --- the primary deliverable: the joint distribution, written down whole.
+    #
+    # a = gold retrieved   AND answer correct
+    # b = gold retrieved   AND answer wrong      -> bottleneck is DOWNSTREAM of retrieval
+    # c = gold NOT retrieved AND answer correct  -> hit@k is not what carries the answer
+    # d = gold NOT retrieved AND answer wrong
+    a = tally["correct_gold_present"]
+    b = hit_n - a
+    c = tally["correct"] - a
+    d = miss_n - c
+    joint = {"a_hit_correct": a, "b_hit_wrong": b, "c_miss_correct": c, "d_miss_wrong": d}
+    p_hit = wilson(a, hit_n)
+    p_miss = wilson(c, miss_n)
+    # phi (= Pearson r for two binary vectors) and raw agreement between the
+    # hit@10 vector and the answer_correct vector.
+    denom = ((a + b) * (c + d) * (a + c) * (b + d)) ** 0.5
+    phi = ((a * d - b * c) / denom) if denom else None
+    return tally | joint | {
+        "retrieval_report_available": bool(hits),
+        "joint_2x2": joint,
+        "p_correct_given_gold_present_ci": p_hit,
+        "p_correct_given_gold_absent_ci": p_miss,
+        "conditional_rate_difference": two_proportion_z(a, hit_n, c, miss_n),
+        "hit_vs_correct_phi": phi,
+        "hit_vs_correct_agreement": ((a + d) / n) if n else None,
         "retrieval_hit_at_10": hit_n / n if n else None,
         "answer_accuracy": tally["correct"] / n if n else None,
         # The two conditional rates are the whole point: if they are close, the
@@ -304,6 +373,15 @@ def main() -> int:
                         metavar="NAME=PROVENANCE.json",
                         help="that arm's retrieval provenance, for the gold-span decomposition")
     parser.add_argument("--control", required=True, help="arm name used as the reference")
+    parser.add_argument(
+        "--control-description",
+        default="deterministic attempt-scoped BM25",
+        help=(
+            "what the control arm's retrieval actually is. Stamped verbatim into "
+            "the evidence contract's harness.scorer field, which would otherwise "
+            "name a control this run did not use."
+        ),
+    )
     parser.add_argument("--stage-manifest", required=True, type=Path,
                         help="stage-equalization.json from code_lane_reader_prepare.py")
     parser.add_argument("--bank", required=True, help="golden bank label, e.g. paraphrase")
@@ -487,7 +565,7 @@ def main() -> int:
             "embed_model": "fastembed:bge-small-en-v1.5 (shipped default)",
             "scorer": (
                 "memphant recall mode=fast lexical=bm25-code (shipped default) "
-                f"vs deterministic attempt-scoped BM25; reader "
+                f"vs {args.control_description}; reader "
                 f"{next(iter(readers.values()))}, judge "
                 f"{next(iter(judges.values()))}, judge_profile rag-supported-v1"
             ),

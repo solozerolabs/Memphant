@@ -1,0 +1,15 @@
+{
+  "packet": "/Users/sidsharma/Memphant-s10-conversion/docs/build-log/artifacts/s10-conversion/pilot30/authorization-agenticgrep.json",
+  "ledger": "/Users/sidsharma/Memphant-s10-conversion/docs/build-log/artifacts/s10-conversion/pilot30/attempts-agenticgrep.jsonl",
+  "total_derived_ceiling_usd": "7.39",
+  "derivation": {
+    "agenticgrep": {
+      "n_rows": 30,
+      "logical_calls": 60,
+      "widest_prompt_bytes_measured": 15390,
+      "per_call_ceiling_usd": "0.12303",
+      "arm_ceiling_usd": "7.39",
+      "hard_max_spend_usd": "7.39"
+    }
+  }
+}

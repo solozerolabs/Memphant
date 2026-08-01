@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+  "frozen_inputs": {
+    "reader_runner_sha256": "400ebd09501e625ff8fc5d6da2d89749ea71aa3416e388222cb375922f98fb38",
+    "provider_attempts_sha256": "833d8782dd54a8f9937ddb7ca65544be470c8e5bb38c790424ae4b4eca52d04a",
+    "memphant_evidence_sha256": "bcbfc2c89cd6b237082a4b49a0d47468d40b75bb6708578cb935f0e885d848a4",
+    "memphant_retrieval_sha256": "c7f3d3118c95627e461c32b812427f22bb9f4558ad1aea6e8485463467a8003b"
+  },
+  "models": {
+    "provider": "OpenRouter",
+    "reader": "anthropic/claude-opus-5",
+    "reader_reasoning_effort": null,
+    "judge": "anthropic/claude-opus-5",
+    "judge_profile": "rag-supported-v1",
+    "prompt_version": 3,
+    "max_output_tokens_per_request": 1024,
+    "provider_max_price_usd_per_million": {
+      "prompt": "5",
+      "completion": "25"
+    }
+  },
+  "hard_limits": {
+    "memphant": {
+      "max_logical_calls": 60,
+      "max_provider_attempts": 240,
+      "max_spend_usd": "10.19"
+    }
+  },
+  "execution": {
+    "memphant": {
+      "run_id": "memphant",
+      "attempt_ledger": "docs/build-log/artifacts/s10-conversion/pilot30/attempts-memphant.jsonl",
+      "cache_dir": "docs/build-log/artifacts/s10-conversion/pilot30/cache-memphant",
+      "output": "docs/build-log/artifacts/s10-conversion/pilot30/reader-memphant.json"
+    }
+  },
+  "campaign": {
+    "journal_path": "attempts-memphant.jsonl",
+    "hard_ceiling_nanos": 200000000000,
+    "unallocated_reserve_nanos": 10000000000,
+    "opening_liability_nanos": 0,
+    "opening_reservations": []
+  },
+  "authorization": {
+    "authorized_by": "owner standing authority, ceiling $150: S10 endpoint validity",
+    "authorized_at": "2026-08-01T00:00:00-07:00",
+    "authorization_scope_sha256": "b3303b390442e712b0daa95aa36d8423b316b3ab493a3de42796a1f3346b475d"
+  }
+}
