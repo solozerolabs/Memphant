@@ -499,6 +499,16 @@ def main() -> int:
     parser.add_argument(
         "--only-ids", type=Path, default=None, help="JSON list of question_ids to run"
     )
+    parser.add_argument(
+        "--resume-from",
+        type=Path,
+        default=None,
+        help=(
+            "an earlier provenance JSON from THIS arm. Its rows are carried "
+            "forward verbatim and their questions are not re-billed. The pilot "
+            "is therefore the first slice of the full run, not a discarded one."
+        ),
+    )
     parser.add_argument("--label", default="agentic_control")
     args = parser.parse_args()
 
@@ -510,6 +520,43 @@ def main() -> int:
         selected_goldens = [g for g in goldens if g["question_id"] in wanted]
     elif args.limit > 0:
         selected_goldens = goldens[: args.limit]
+
+    carried: list[dict] = []
+    carried_selections: dict[str, list[str]] = {}
+    carried_usage = {"prompt_tokens": 0, "completion_tokens": 0}
+    if args.resume_from:
+        prior = json.loads(args.resume_from.read_text())
+        if prior.get("golden_sha256") != lock["sha256"] or prior.get(
+            "corpus_sha256"
+        ) != memphant_runner.corpus_contract(lock)["corpus_sha256"]:
+            raise SystemExit("--resume-from was run against different inputs")
+        expected_model = MODEL if args.engine == "openrouter" else "stub"
+        if prior.get("model") != expected_model:
+            raise SystemExit(
+                f"--resume-from used model {prior.get('model')!r}, not {expected_model!r}"
+            )
+        by_question = {row["question_id"]: row for row in prior["transcript"]}
+        prior_evidence = {
+            row["question_id"]: [item["body"] for item in row["evidence"]]
+            for row in (
+                json.loads(line)
+                for line in args.resume_from.with_name(
+                    args.resume_from.name.replace("provenance.json", "evidence.jsonl")
+                ).read_text().splitlines()
+                if line.strip()
+            )
+        }
+        for golden in goldens:
+            question_id = golden["question_id"]
+            row = by_question.get(question_id)
+            if row is None or row.get("error"):
+                continue  # an errored row is re-run, never carried
+            carried.append(row)
+            carried_selections[question_id] = prior_evidence[question_id]
+        carried_usage = dict(prior.get("usage", carried_usage))
+        done = set(carried_selections)
+        selected_goldens = [g for g in selected_goldens if g["question_id"] not in done]
+        print(f"resuming: {len(carried)} rows carried, {len(selected_goldens)} to run")
 
     if args.engine == "stub":
         engine = StubEngine()
@@ -536,9 +583,14 @@ def main() -> int:
             flush=True,
         )
 
-    report = s4.score_arm(selected_goldens, selections, k=args.k)
-    prompt_tokens = engine.usage["prompt_tokens"]
-    completion_tokens = engine.usage["completion_tokens"]
+    selections |= carried_selections
+    rows = carried + rows
+    scored_goldens = [g for g in goldens if g["question_id"] in selections]
+    report = s4.score_arm(scored_goldens, selections, k=args.k)
+    prompt_tokens = engine.usage["prompt_tokens"] + carried_usage.get("prompt_tokens", 0)
+    completion_tokens = engine.usage["completion_tokens"] + carried_usage.get(
+        "completion_tokens", 0
+    )
     spend = (
         Decimal(prompt_tokens) * MAX_PRICE_PER_MILLION["prompt"] / Decimal(1_000_000)
         + Decimal(completion_tokens)
