@@ -18,12 +18,29 @@ const WORKER_CLAIM_THROUGHPUT_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260724_003_worker_claim_throughput.sql");
 const SERVED_LOGIN_ROLES_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260730_004_served_login_roles.sql");
+const PENDING_WORKER_JOB_COUNT_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260730_005_pending_worker_job_count.sql");
+const PREFERENCE_MEMORY_KIND_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260731_006_preference_memory_kind.sql");
+const SEMANTIC_ONLY_SUBJECT_EXCLUSION_SQL: &str = include_str!(
+    "../../../memphant_migrations/versions/20260731_007_semantic_only_subject_exclusion.sql"
+);
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260730_004_served_login_roles";
+pub const MIGRATION_HEAD: &str = "20260731_007_semantic_only_subject_exclusion";
 
 /// Bundled migrations in apply order.
+///
+/// This list had silently fallen three migrations behind
+/// `memphant_migrations/versions/`, which is not a cosmetic drift: readiness
+/// compares the applied head against `MIGRATIONS.last()`, so a scratch DB at
+/// the real head reported as not-ready and left
+/// `ping_rejects_bootstrap_only_schema_until_required_revision_is_applied`
+/// permanently red; and `lint_migrations` lints only what is embedded here, so
+/// provider bootstrap-check could not see the unembedded migrations at all.
+/// `migrations_list_matches_the_versions_directory` below now fails the build
+/// the moment the two disagree — adding a `.sql` file is no longer enough.
 pub const MIGRATIONS: &[(&str, &str)] = &[
     ("20260703_001_wsa_bootstrap", WSA_BOOTSTRAP_SQL),
     (
@@ -34,7 +51,16 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "20260724_003_worker_claim_throughput",
         WORKER_CLAIM_THROUGHPUT_SQL,
     ),
-    (MIGRATION_HEAD, SERVED_LOGIN_ROLES_SQL),
+    ("20260730_004_served_login_roles", SERVED_LOGIN_ROLES_SQL),
+    (
+        "20260730_005_pending_worker_job_count",
+        PENDING_WORKER_JOB_COUNT_SQL,
+    ),
+    (
+        "20260731_006_preference_memory_kind",
+        PREFERENCE_MEMORY_KIND_SQL,
+    ),
+    (MIGRATION_HEAD, SEMANTIC_ONLY_SUBJECT_EXCLUSION_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[

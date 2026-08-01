@@ -1599,7 +1599,18 @@ pub struct RetainResourceOutcome {
 pub const ENGINE_VERSION: &str = "0.1.0-ws0";
 pub const COMPILER_VERSION: &str = "compiler-0.1.0-ws0";
 pub const TRACE_SCHEMA_VERSION: &str = "trace-0.1.0-ws0";
-pub const SCHEMA_COMPAT_REVISION: &str = "20260723_002_file_sync_mutation_verb";
+/// The oldest schema this binary can safely read — i.e. the floor recorded by
+/// the newest embedded migration, NOT the newest migration itself.
+///
+/// This must be bumped by any BREAKING migration. `20260731_006` added the
+/// `preference` variant to a frozen closed Rust enum and moved the floor to
+/// itself precisely so an older binary self-gates at boot rather than failing
+/// serde decode on a `preference` row — but this constant was left at `002`.
+/// Readiness (`PgStore::ping`) requires a `schema_migrations` row matching BOTH
+/// `MIGRATION_HEAD` and this value, so a correctly-migrated database reported
+/// as incompatible and the server never became ready. Pinned by
+/// `migrations_manifest.rs::schema_compat_revision_matches_the_newest_migration`.
+pub const SCHEMA_COMPAT_REVISION: &str = "20260731_006_preference_memory_kind";
 pub const METHODOLOGY_VERSION: &str = "memphant-methodology-2026-07-03";
 pub const EXPORT_SCHEMA_VERSION: &str = "export-0.1.0-ws0";
 

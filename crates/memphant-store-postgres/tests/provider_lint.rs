@@ -10,24 +10,30 @@ fn bundled_wsa_migration_passes_all_provider_lints() {
     }
 }
 
+/// The compatibility floor must be strictly older than the head — a binary
+/// whose floor IS its head refuses every database but the one it just shipped.
+///
+/// This test used to hardcode the full migration list and the literal value of
+/// `SCHEMA_COMPAT_REVISION`. That did not merely go stale, it PINNED A BUG:
+/// migration `20260731_006` moved the floor to itself, and this assertion kept
+/// claiming the floor was still `002`, so the mismatch that made `ping` reject
+/// a correctly-migrated database read as intentional. Hardcoding a second copy
+/// of a list is how the first copy stops being checked.
+///
+/// The list, the head, and the floor's value are now derived from
+/// `memphant_migrations/versions/` and from the migrations' own SQL in
+/// `tests/migrations_manifest.rs`. Only the relational invariant lives here.
 #[test]
-fn bundled_migrations_are_ordered_through_served_login_roles_migration() {
-    let versions: Vec<_> = MIGRATIONS.iter().map(|(version, _)| *version).collect();
+fn the_compatibility_floor_is_older_than_the_migration_head() {
     assert_eq!(
-        versions,
-        [
-            "20260703_001_wsa_bootstrap",
-            "20260723_002_file_sync_mutation_verb",
-            "20260724_003_worker_claim_throughput",
-            "20260730_004_served_login_roles",
-        ]
+        MIGRATIONS.last().expect("MIGRATIONS is non-empty").0,
+        MIGRATION_HEAD
     );
-    assert_eq!(MIGRATIONS.last().unwrap().0, MIGRATION_HEAD);
-    assert_eq!(
-        SCHEMA_COMPAT_REVISION,
-        "20260723_002_file_sync_mutation_verb"
+    assert!(
+        MIGRATION_HEAD > SCHEMA_COMPAT_REVISION,
+        "MIGRATION_HEAD {MIGRATION_HEAD:?} must be strictly newer than \
+         SCHEMA_COMPAT_REVISION {SCHEMA_COMPAT_REVISION:?}"
     );
-    assert!(MIGRATION_HEAD > SCHEMA_COMPAT_REVISION);
 }
 
 #[test]
