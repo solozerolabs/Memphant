@@ -104,7 +104,7 @@
       "method": "bisect"
     },
     "bar": null,
-    "claim": "s_vs_s0_full",
+    "claim": "SECONDARY (contains the dev slice). Full 1063-probe bank: arm S over arm S0, +0.0480, CI95 [+0.0262,+0.0693].",
     "corpus": {
       "n_items": 8147,
       "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
@@ -133,8 +133,8 @@
     },
     "leakage": null,
     "mechanism_enabled": true,
-    "mechanism_evidence": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
-    "notes": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
+    "mechanism_evidence": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Secondary by preregistration because the full bank contains the dev quarter on which tau was chosen.",
+    "notes": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Secondary by preregistration because the full bank contains the dev quarter on which tau was chosen.",
     "power": {
       "b": 102,
       "c": 51,

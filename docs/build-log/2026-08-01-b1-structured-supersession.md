@@ -8,8 +8,8 @@
 > on branch `w1-b1arm` off `main` @ `5d7b9d5a`.
 >
 > **Verdict in one line (§10):** naming a unit id makes bitemporal supersession
-> fire and buys **18.9%** of the oracle headroom, but a rate-matched arm that
-> reads no bodies at all captures **half** of that, and B1's semantic increment
+> fire and buys **16.4%** of the on-tree oracle headroom (§7.1), but a
+> rate-matched arm that reads no bodies at all captures **half** of that, and B1's semantic increment
 > (+0.0247, CI [−0.0033, +0.0532]) **does not clear zero** on the confirmatory
 > slice. Positive mechanism, unproven semantics.
 
@@ -347,11 +347,51 @@ reported as context and are *not* the decisional comparison.
 | S − A′ (cross-lineage) | +0.0499 | [+0.0233, +0.0775] | 223 | 0.0006 |
 | S − B (cross-lineage, cross-stage) | +0.0423 | [+0.0138, +0.0711] | 261 | 0.0044 |
 
-**Fraction of the oracle's +0.2672 that B1 closes:**
+**Fraction of the oracle's +0.2672 that B1 closes**, using the preregistered
+denominator exactly as written:
 
 - confirmatory slice, S vs S0: 0.0506 / 0.2672 = **18.9%**
 - full bank, S vs S0: 0.0480 / 0.2672 = **18.0%**
 - full bank, S vs A′: 0.0499 / 0.2672 = 18.7%
+
+### 7.1 The denominator is cross-tree, and it is wrong by about 4 points
+
+**This correction is not mine and is cited, not asserted.** The concurrent
+A-recency workstream (`w1-arecency`, committed `baa267fa`) re-ran the
+oracle-keyed configuration on `main @ 5d7b9d5a` — the same base commit this
+branch sits on, with only a docs-only commit between — and reports **LSW
+0.6237**, against Arm P's banked **0.5795**. Its mechanism counts reproduce Arm
+P's *exactly* (7,198 supersedes / 3,599 contradicts / 3,599 superseded), and
+misapplication (0.3396 vs 0.3405) and stale-outranks-current (361 vs 362) are
+unchanged. **The entire +4.4pp is retrieval coverage: hit@10 0.925 vs 0.840.**
+The base got much better at surfacing the rule at all, somewhere between
+`accuracy-first@d01affad` and `main@5d7b9d5a`, and no better at telling live
+from retired.
+
+So `0.2672` is a gap between two numbers measured on a *tree that is not this
+one*, and every percentage above inherits ~4pp of base drift. Rule 4 of this
+program says compare only at the same lineage; the preregistered decision rule
+named a constant that silently violates it.
+
+**Recomputed against an on-tree ceiling** (0.6237 oracle vs this tree's own
+no-supersession floor S0 = 0.3142, headroom **0.3095**):
+
+| quantity | preregistered denom (0.2672) | on-tree denom (0.3095) |
+|---|---:|---:|
+| S − S0, confirmatory | 18.9% | **16.4%** |
+| S − S0, full bank | 18.0% | **15.5%** |
+| …retirement alone (R3 − S0, conf.) | 9.7% | **8.4%** |
+| …B1's semantics (S − R3, conf.) | 9.2% *(CI spans 0)* | **8.0%** *(CI spans 0)* |
+
+The **on-tree column is the honest one** and §10 uses it. Nothing about the
+verdict changes — the semantic increment still fails to clear zero — but the
+headline shrinks from "a fifth of the headroom" to "about a sixth", and any
+future citation of "18.9%" should be read as the cross-tree figure it is.
+
+The caution generalises and is worth carrying into the register: the A-recency
+session notes that had it reused the cited 0.5795 instead of re-running its own
+ceiling, it would have reported −1.4pp and concluded the opposite of the truth.
+**A banked ceiling is not a constant.**
 
 Arm P is a **ceiling, not a target**. The honest reading is: removing key
 production from the supersession decision recovers a fifth of the headroom that
@@ -516,9 +556,11 @@ So the decomposition of arm S's +0.0506 over S0, on the confirmatory slice:
 | …of which retirement alone (R3 − S0) | +0.0259 | [+0.0088, +0.0432] | **yes** |
 | …of which B1's semantics (S − R3) | +0.0247 | [−0.0033, +0.0532] | **no** |
 
-As a fraction of the oracle's +0.2672 headroom: the edge mechanism closes
-**18.9%**, of which **9.7% is established as retirement** and **9.2% is
-attributed to semantics but not established**.
+As a fraction of the **on-tree** oracle headroom of +0.3095 (§7.1 — the
+preregistered +0.2672 is a cross-tree constant and overstates every share by
+about a sixth): the edge mechanism closes **16.4%**, of which **8.4% is
+established as retirement** and **8.0% is attributed to semantics but not
+established**.
 
 **Why this matters more than the raw numbers.** Without R3 this log would have
 reported "B1 recovers a fifth of the oracle gap and the ablation proves it is
@@ -566,6 +608,20 @@ job. It just did not produce the answer that was hoped for.
    a different mechanism answering a different question, and neither result can
    borrow the other's.
 
+   **That workstream has now answered its half, and it comes out in B1's
+   favour.** `w1-arecency` @ `baa267fa`, 1,063 probes / 257 instances, both arms
+   oracle-keyed identically on one pair of binaries: full bitemporal **0.6237**
+   against `ORDER BY observed_at DESC` **0.5936**, ΔLSW **+0.0301**, CI95
+   [+0.0170, +0.0443], n_d 62, cluster-permutation p 1.0e-4; misapplication
+   moves the same way, −0.0245, CI95 [−0.0376, −0.0125]. Its liveness gate
+   passed two-sided (bitemporal 7,198/3,599/3,599 with 0 overlapping open pairs;
+   control 0/0/0 with 10,294 overlapping open pairs and 1,060 keys carrying
+   competing live rows). So with a *correct key held fixed*, the bitemporal
+   state machine beats plain recency by about three points. **Cited, not
+   asserted, and not merged into any B1 cell** — it is a different arm pair on a
+   different branch, and it belongs in the same paragraph as this log's result
+   rather than inside its tables.
+
 ## 10. Verdict
 
 **Did the mechanism work?** Yes, unambiguously. `supersede by exact prior unit
@@ -578,7 +634,8 @@ engineering result and it is solid.
 
 **Did it pay?** Yes, but less than the headline says, and for a reason that is
 half boring. Arm S beats its own no-op isolator by **+0.0506** on the
-confirmatory slice, CI [+0.0269, +0.0753] — **18.9%** of the oracle's headroom.
+confirmatory slice, CI [+0.0269, +0.0753] — **16.4%** of the on-tree oracle
+headroom (§7.1; 18.9% against the preregistered cross-tree constant).
 About half of that is **retirement per se**: a rate-matched arm that reads no
 bodies at all captures **+0.0259**, CI clear of zero.
 

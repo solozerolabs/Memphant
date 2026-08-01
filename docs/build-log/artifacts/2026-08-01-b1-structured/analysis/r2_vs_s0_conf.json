@@ -104,7 +104,7 @@
       "method": "bisect"
     },
     "bar": null,
-    "claim": "r2_vs_s0_conf",
+    "claim": "The recency ablation is null against the no-op isolator, -0.0086, CI95 [-0.0299,+0.0125], n_d 69. This null must NOT be read as 'retirement buys nothing' -- see the random ablation, which is positive.",
     "corpus": {
       "n_items": 8147,
       "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
@@ -133,8 +133,8 @@
     },
     "leakage": null,
     "mechanism_enabled": true,
-    "mechanism_evidence": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
-    "notes": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
+    "mechanism_evidence": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Recency spends every edge on the rows most likely to be golds, so its null is a retirement benefit netted against a gold-destruction cost and decomposes neither.",
+    "notes": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Recency spends every edge on the rows most likely to be golds, so its null is a retirement benefit netted against a gold-destruction cost and decomposes neither.",
     "power": {
       "b": 31,
       "c": 38,

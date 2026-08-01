@@ -104,13 +104,13 @@
       "method": "bisect"
     },
     "bar": null,
-    "claim": "s_vs_s0_dev",
+    "claim": "NON-DECISIONAL by preregistration: the dev slice is where tau was chosen. Arm S over arm S0, +0.0395, CI95 spans 0.",
     "corpus": {
       "n_items": 8147,
       "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
       "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
     },
-    "decisional": true,
+    "decisional": false,
     "harness": {
       "budget": 8192,
       "command": "scripts/external_instrument_adapter.py --instrument memorycode",
@@ -133,8 +133,8 @@
     },
     "leakage": null,
     "mechanism_enabled": true,
-    "mechanism_evidence": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
-    "notes": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
+    "mechanism_evidence": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Reported for completeness only; the threshold was selected on this slice.",
+    "notes": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Reported for completeness only; the threshold was selected on this slice.",
     "power": {
       "b": 23,
       "c": 13,

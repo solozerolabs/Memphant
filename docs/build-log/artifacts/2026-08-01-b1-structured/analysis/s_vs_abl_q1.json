@@ -104,13 +104,13 @@
       "method": "bisect"
     },
     "bar": null,
-    "claim": "s_vs_abl_q1",
+    "claim": "EXPLORATORY. Arm S over the RESCUED un-rate-matched recency ablation on its own --group-mod 1/4 slice, +0.0701.",
     "corpus": {
       "n_items": 8147,
       "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
       "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
     },
-    "decisional": true,
+    "decisional": false,
     "harness": {
       "budget": 8192,
       "command": "scripts/external_instrument_adapter.py --instrument memorycode",
@@ -133,8 +133,8 @@
     },
     "leakage": null,
     "mechanism_enabled": true,
-    "mechanism_evidence": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
-    "notes": "Deterministic regex-derived gold; no reader, no judge, no paid model call on any path.",
+    "mechanism_evidence": "NOT DECISIONAL: the comparator carries no lineage block, so the tree and served binary that produced it are unrecoverable and the arms are not on the same pipeline stage. Context only. The rescued arm also ran at the default tau 0.35 and at fire_rate 0.096, which is 69% of arm S's measured 0.1383, so it was never rate-matched. Superseded as a comparator by arm R2.",
+    "notes": "NOT DECISIONAL: the comparator carries no lineage block, so the tree and served binary that produced it are unrecoverable and the arms are not on the same pipeline stage. Context only. The rescued arm also ran at the default tau 0.35 and at fire_rate 0.096, which is 69% of arm S's measured 0.1383, so it was never rate-matched. Superseded as a comparator by arm R2.",
     "power": {
       "b": 37,
       "c": 18,
