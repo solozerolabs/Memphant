@@ -205,6 +205,8 @@ async fn seed_reference_corpus(
                         memphant_types::RetainEpisodePayload {
                             source_kind: "system".to_string(),
                             body: body.to_string(),
+                            subject: None,
+                            predicate: None,
                         },
                     ),
                 },

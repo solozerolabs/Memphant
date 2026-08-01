@@ -20,7 +20,8 @@ fn unit_request(context: &ResolvedMemoryContext) -> RetainEpisodeHttpRequest {
         observed_at: "2030-01-01T00:00:00+00:00".to_string(),
         payload: RetainPayload::Unit(RetainUnitPayload {
             kind: MemoryKind::Semantic,
-            fact_key: "profile:city".to_string(),
+            fact_key: Some("profile:city".to_string()),
+            subject: None,
             predicate: "lives_in".to_string(),
             body: "The user lives in Lima".to_string(),
             confidence: 0.9,
@@ -66,7 +67,7 @@ async fn retain_rejects_invalid_provenance_confidence_and_valid_time() {
     let RetainPayload::Unit(unit) = &mut short.payload else {
         unreachable!()
     };
-    unit.fact_key = "profile:greeting".to_string();
+    unit.fact_key = Some("profile:greeting".to_string());
     unit.predicate = "states".to_string();
     unit.body = "Hi.".to_string();
     let short_response = service
@@ -111,10 +112,21 @@ async fn retain_rejects_invalid_provenance_confidence_and_valid_time() {
     let RetainPayload::Unit(unit) = &mut request.payload else {
         unreachable!()
     };
-    unit.fact_key = " ".to_string();
+    unit.fact_key = Some(" ".to_string());
     cases.push((
         request,
-        "invalid request: unit retain requires an explicit fact_key and predicate",
+        "invalid request: unit retain requires a predicate and either a subject or a fact_key",
+    ));
+    // D1: a blank subject is no more a key than a blank fact_key.
+    let mut request = base.clone();
+    let RetainPayload::Unit(unit) = &mut request.payload else {
+        unreachable!()
+    };
+    unit.fact_key = None;
+    unit.subject = Some("   ".to_string());
+    cases.push((
+        request,
+        "invalid request: unit retain requires a predicate and either a subject or a fact_key",
     ));
     let mut request = base.clone();
     let RetainPayload::Unit(unit) = &mut request.payload else {

@@ -116,6 +116,18 @@
               "null"
             ]
           },
+          "source_span": {
+            "default": null,
+            "description": "D2. `start-end` byte offsets into the source body, from\n[`covering_source_span`]. Same value the recall correction handle\ncarries, read through the same primitive.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/UnitState",
+            "description": "D2. The unit's lifecycle state, carried so the file plane can SHOW it\nrather than merely filter on it. The projection query admits only\n`active` and `validated`, so this is not a filter the reader has to\napply — it is the distinction between a rule that is merely current and\none that has been validated."
+          },
           "unit_id": {
             "$ref": "#/components/schemas/UnitId"
           },
@@ -136,7 +148,8 @@
           "unit_id",
           "kind",
           "body",
-          "body_sha256"
+          "body_sha256",
+          "state"
         ],
         "type": "object"
       },
@@ -496,6 +509,59 @@
         },
         "required": [
           "memory_unit_id"
+        ],
+        "type": "object"
+      },
+      "CorrectionHandle": {
+        "description": "Everything a caller needs to correct a recalled memory in one more round\ntrip, emitted at the exact point the memory was applied (spec plan D1).\n\nIt names the unit and the generation it was written under, the key a\ncorrection must reuse to supersede it, the bitemporal rectangle it claims,\nthe byte range of the source body it was minted from, and the episode that\nbody belongs to. Nothing here is derived from the query: the handle is a\nproperty of the unit, so the same unit yields the same handle on every\nrecall and in the file plane's unit footer.\n\n`fact_key` may be an auto key (`{scope}:auto:{sha256[..16]}`), which never\nsupersedes — a corrector seeing one knows a keyed rewrite is required\nrather than a supersession.",
+        "properties": {
+          "episode_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fact_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_span": {
+            "description": "`start-end` UTF-8 byte offsets into the source episode or resource\nbody, covering every contextual chunk this unit was minted from.\n`None` when the unit carries no chunk with a parseable span.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unit_id": {
+            "$ref": "#/components/schemas/UnitId"
+          },
+          "valid_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "unit_id",
+          "subject_generation"
         ],
         "type": "object"
       },
@@ -1743,6 +1809,18 @@
               }
             ]
           },
+          "correction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CorrectionHandle"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The D1 correction handle. `None` only on the degraded path, where the\nitem is a raw un-reflected episode and there is no stored unit to\ncorrect — emitting a handle there would name a synthetic id."
+          },
           "derived_by": {
             "type": "string"
           },
@@ -2234,8 +2312,23 @@
           "body": {
             "type": "string"
           },
+          "predicate": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "source_kind": {
             "type": "string"
+          },
+          "subject": {
+            "default": null,
+            "description": "What this episode is *about*, supplied by the caller that authored the\nwrite — typically the agent that just read the directive it is\nrecording. With `predicate` it makes the compiled unit's fact key\nexplicit, which is the only thing that lets it supersede a prior rule\non the same subject; absent either, `derive_fact_key` falls back to the\ncontent-hash auto key exactly as before. Never an LLM call on this\npath — the caller already knows the subject or it does not.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -2334,7 +2427,7 @@
       },
       "RetainUnitPayload": {
         "additionalProperties": false,
-        "description": "Direct pre-compiled unit payload for trusted callers (spec 08 §209 `unit`\nshape). Requires an explicit fact key, predicate, confidence, and kind; the admission\ntrust policy still applies.",
+        "description": "Direct pre-compiled unit payload for trusted callers (spec 08 §209 `unit`\nshape). Requires a predicate, confidence, kind, and a subject key — as\neither an explicit `subject` (the server composes the scope-qualified key)\nor a pre-composed `fact_key`. The admission trust policy still applies.",
         "properties": {
           "body": {
             "type": "string"
@@ -2344,13 +2437,26 @@
             "type": "number"
           },
           "fact_key": {
-            "type": "string"
+            "default": null,
+            "description": "A pre-composed `{scope_id}:{subject}:{predicate}` key. Optional since\nD1: prefer `subject`, which lets the server apply `derive_fact_key` and\nspares the caller from reimplementing that primitive. When both are\npresent `fact_key` wins, so callers that supplied one before are\nbyte-for-byte unaffected.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "kind": {
             "$ref": "#/components/schemas/MemoryKind"
           },
           "predicate": {
             "type": "string"
+          },
+          "subject": {
+            "default": null,
+            "description": "The subject this assertion is about. Composed server-side with\n`predicate` into the fact key when `fact_key` is absent.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "target_unit_ids": {
             "default": null,
@@ -2380,7 +2486,6 @@
         },
         "required": [
           "kind",
-          "fact_key",
           "predicate",
           "body",
           "confidence"

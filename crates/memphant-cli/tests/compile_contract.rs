@@ -76,7 +76,7 @@ async fn compile_is_a_deterministic_server_backed_projection_and_verify_is_compl
     let manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(out.path().join("memphant-export.json")).unwrap())
             .unwrap();
-    assert_eq!(manifest["schema_version"], 1);
+    assert_eq!(manifest["schema_version"], 2);
     assert_eq!(manifest["snapshot_sha256"].as_str().unwrap().len(), 64);
     assert_eq!(manifest["memory_sha256"].as_str().unwrap().len(), 64);
     assert_eq!(manifest["entries"].as_array().unwrap().len(), 1);
@@ -201,8 +201,8 @@ async fn compile_refuses_dirty_tampered_duplicate_traversal_and_unmanaged_trees(
                 fs::write(
                     path,
                     manifest.replacen(
-                        "\"schema_version\": 1,",
-                        "\"schema_version\": 1,\n  \"schema_version\": 1,",
+                        "\"schema_version\": 2,",
+                        "\"schema_version\": 2,\n  \"schema_version\": 2,",
                         1,
                     ),
                 )

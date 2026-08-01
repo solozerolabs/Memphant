@@ -37,7 +37,7 @@ use crate::{
     StructuredStateProvider, StructuredStateRequest, VectorQuery, apply_correction_transition,
     apply_unit_forget_transition, canonical_mutation_request_hash, correction_rectangles_with_ids,
     derive_episode_dedup_key, embedding_profile_for, evidence_slices_for_episode,
-    fold_structured_observations, normalize_component, parse_content_date,
+    fold_structured_observations, non_blank, normalize_component, parse_content_date,
     prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
     project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed_owned,
@@ -433,6 +433,8 @@ mod canonical_projection_store_tests {
                 confidence: Some(0.5),
                 valid_from: None,
                 valid_to: None,
+                state: UnitState::Validated,
+                source_span: None,
                 body_sha256: "bb".to_string(),
             },
             CanonicalProjectionUnit {
@@ -444,12 +446,16 @@ mod canonical_projection_store_tests {
                 confidence: Some(1.0),
                 valid_from: Some("2026-07-01T00:00:00Z".to_string()),
                 valid_to: Some("2026-08-01T00:00:00Z".to_string()),
+                state: UnitState::Active,
+                source_span: Some("0-1".to_string()),
                 body_sha256: "aa".to_string(),
             },
         ];
         assert_eq!(
             canonical_projection_fingerprint(&items).expect("fingerprint"),
-            "4b2e0c7f4801952ddf18abfb6136d9c7cbf83a50180f49fba66774e1bd568cb8"
+            // D2 re-pinned: `state` and `source_span` joined the projection unit, so
+            // the fingerprint over the serialized items necessarily moved.
+            "82c9591abf851236986e56ef44a18a16147b1add4d0e817988ff21c70c68e22b"
         );
         assert_ne!(
             canonical_projection_fingerprint(&items).expect("fingerprint"),
@@ -780,6 +786,8 @@ mod file_sync_tests {
             confidence: Some(1.0),
             valid_from: None,
             valid_to: None,
+            state: UnitState::Active,
+            source_span: None,
             body_sha256: format!("{:x}", Sha256::digest(body.as_bytes())),
         }
     }
@@ -2149,6 +2157,11 @@ fn projection_items(
                 confidence: unit.confidence,
                 valid_from: unit.valid_from,
                 valid_to: unit.valid_to,
+                state: unit.state,
+                // D2. The same primitive the recall correction handle uses, so
+                // the file plane and the API can never disagree about where a
+                // unit came from.
+                source_span: memphant_types::covering_source_span(&unit.contextual_chunks),
             })
         })
         .collect()
@@ -2402,6 +2415,8 @@ mod structured_provider_retry_tests {
             payload: memphant_types::RetainPayload::Episode(memphant_types::RetainEpisodePayload {
                 source_kind: "user".to_string(),
                 body: body.into(),
+                subject: None,
+                predicate: None,
             }),
         }
     }
@@ -3350,6 +3365,8 @@ mod retain_atomicity_tests {
             payload: RetainPayload::Episode(RetainEpisodePayload {
                 source_kind: "user".to_string(),
                 body: "an atomic retained episode".to_string(),
+                subject: None,
+                predicate: None,
             }),
         };
 
@@ -3744,9 +3761,16 @@ impl<S: MemoryStore> MemoryService<S> {
                 if unit.body.trim().is_empty() {
                     return Err(CoreError::EmptyBody.into());
                 }
-                if unit.fact_key.trim().is_empty() || unit.predicate.trim().is_empty() {
+                // A direct unit write must still name its subject — that is what
+                // makes it supersedable. It may do so as a pre-composed
+                // `fact_key` (the pre-D1 shape) or as a plain `subject` the
+                // server keys with `derive_fact_key`. Neither is accepted blank.
+                let keyed = non_blank(unit.fact_key.as_deref()).is_some()
+                    || non_blank(unit.subject.as_deref()).is_some();
+                if !keyed || unit.predicate.trim().is_empty() {
                     return Err(ServiceError::Invalid(
-                        "unit retain requires an explicit fact_key and predicate".to_string(),
+                        "unit retain requires a predicate and either a subject or a fact_key"
+                            .to_string(),
                     ));
                 }
                 if !unit.confidence.is_finite() || !(0.0..=1.0).contains(&unit.confidence) {
@@ -3876,9 +3900,14 @@ impl<S: MemoryStore> MemoryService<S> {
                             source_kind: "direct".to_string(),
                             trust_level: assigned_trust,
                             actor_id: context.actor_id,
-                            subject: None,
+                            // D1: pass the caller's subject through instead of
+                            // dropping it. `fact_key`, when the caller composed
+                            // one itself, still wins — `prepare_compiled_write`
+                            // only reaches `derive_fact_key` when it is absent,
+                            // so pre-D1 callers are unaffected.
+                            subject: non_blank(unit.subject.as_deref()),
                             predicate: Some(unit.predicate.clone()),
-                            fact_key: Some(unit.fact_key.clone()),
+                            fact_key: non_blank(unit.fact_key.as_deref()),
                             kind: Some(unit.kind),
                             body: unit.body,
                             confidence: Some(unit.confidence),
@@ -3987,8 +4016,14 @@ impl<S: MemoryStore> MemoryService<S> {
                             resource_id: None,
                             kind: ReflectJobKind::ReflectEpisode,
                             compiler_version,
-                            subject: None,
-                            predicate: None,
+                            // D1: the caller's own subject/predicate, carried
+                            // to reflect stage 1 where the candidate is minted.
+                            // `ReflectJob` has always had these fields and the
+                            // episodic candidate has always read them; only the
+                            // public payload was missing a way to fill them.
+                            // Both `None` reproduces the pre-D1 auto key.
+                            subject: non_blank(episode.subject.as_deref()),
+                            predicate: non_blank(episode.predicate.as_deref()),
                         },
                     )
                     .await?;
@@ -6729,6 +6764,11 @@ fn degraded_episode_items(
             citation_resource_id: None,
             derived_from_unit_ids: Vec::new(),
             suppression_labels: Vec::new(),
+            // D1: no handle. `unit_id` here is synthesised from the episode id
+            // because consolidation has not run — there is no stored unit, no
+            // fact key and no generation to correct. A handle would name a row
+            // that does not exist.
+            correction: None,
         })
         .collect()
 }

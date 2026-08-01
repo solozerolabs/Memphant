@@ -1535,6 +1535,7 @@ pub async fn review_marks_credit_synthetic_sources_and_stay_trace_bound<H: Store
             citation_resource_id: None,
             derived_from_unit_ids: vec![source_a, source_b],
             suppression_labels: Vec::new(),
+            correction: None,
         }],
         dropped_items: Vec::new(),
         citations: Vec::new(),
@@ -2286,7 +2287,17 @@ pub async fn semantic_update_supersedes_unit_aged_past_recall_window<H: StoreHar
                 observed_at: CLOCK.0.to_string(),
                 payload: RetainPayload::Unit(RetainUnitPayload {
                     kind: MemoryKind::Semantic,
-                    fact_key: derive_fact_key(scope.as_uuid(), Some("role"), Some("is"), ""),
+                    // Deliberately the pre-D1 shape: a caller that composed the
+                    // scope-qualified key itself. Kept so the `fact_key`-wins
+                    // branch stays covered alongside the new `subject` branch
+                    // in `caller_subject_key_supersedes_without_client_derivation`.
+                    fact_key: Some(derive_fact_key(
+                        scope.as_uuid(),
+                        Some("role"),
+                        Some("is"),
+                        "",
+                    )),
+                    subject: None,
                     predicate: "is".to_string(),
                     body: "the user is a developer".to_string(),
                     confidence: 1.0,
@@ -2320,6 +2331,119 @@ pub async fn semantic_update_supersedes_unit_aged_past_recall_window<H: StoreHar
         "the aged value must end where the current value begins"
     );
     assert_eq!(current[0].body, "the user is a developer");
+}
+
+/// D1, both halves, on one shared path so neither store can drift.
+///
+/// **Caller-authored keys.** A caller that knows what its write is about sends
+/// `subject` + `predicate` and never touches `derive_fact_key`; the server
+/// composes the scope-qualified key. That is the whole point — before this, the
+/// only way to get a supersedable key through `/v1/episodes` was to reimplement
+/// the key primitive client-side, scope UUID and normalization included, and
+/// nothing on the served path did. Here the second write must SUPERSEDE the
+/// first, which only happens when `has_explicit_subject` is true.
+///
+/// **The correction handle.** The surviving unit comes back from recall with a
+/// handle naming exactly the key a correction must reuse — so the tap that
+/// applies a stale rule and the write that retires it agree on the key without
+/// the client deriving anything.
+pub async fn caller_subject_key_supersedes_without_client_derivation<H: StoreHarness>(h: &H) {
+    let store = h.store();
+    let tenant = h.fresh_tenant().await;
+    let context = bind_context(store, tenant).await;
+    let scope = context.scope_id;
+
+    let write = |source_ref: &'static str, body: &'static str| {
+        let context = context.clone();
+        async move {
+            service(store)
+                .retain(
+                    &context,
+                    source_ref,
+                    TrustLevel::TrustedUser,
+                    RetainEpisodeHttpRequest {
+                        subject_id: context.data_subject_id,
+                        scope_id: context.scope_id,
+                        actor_id: context.actor_id,
+                        agent_node_id: context.agent_node_id,
+                        subject_generation: context.subject_generation,
+                        source_ref: source_ref.to_string(),
+                        observed_at: CLOCK.0.to_string(),
+                        payload: RetainPayload::Unit(RetainUnitPayload {
+                            kind: MemoryKind::Semantic,
+                            // No `fact_key`: the caller states its subject and
+                            // lets the server key it.
+                            fact_key: None,
+                            subject: Some("deploy target".to_string()),
+                            predicate: "is".to_string(),
+                            body: body.to_string(),
+                            confidence: 1.0,
+                            valid_from: None,
+                            valid_to: None,
+                            target_unit_ids: None,
+                        }),
+                    },
+                )
+                .await
+                .expect("a subject-keyed unit retain is admitted")
+        }
+    };
+    write("testkit:deploy-old", "Deploy to staging first.").await;
+    write("testkit:deploy-new", "Deploy straight to production.").await;
+
+    // Server-side derivation must land on the same key the primitive produces,
+    // including the whitespace→underscore normalization the caller never saw.
+    let expected_key = derive_fact_key(scope.as_uuid(), Some("deploy target"), Some("is"), "");
+    assert_eq!(
+        expected_key,
+        format!("{}:deploy_target:is", scope.as_uuid()),
+        "the caller's plain subject is normalized into the scope-qualified key"
+    );
+
+    let live: Vec<_> = store
+        .fetch_scope_open_units(&context)
+        .await
+        .expect("fetch open units")
+        .into_iter()
+        .filter(|unit| unit.body.starts_with("Deploy"))
+        .filter(|unit| {
+            unit.valid_from
+                .as_deref()
+                .is_none_or(|from| from <= CLOCK.0)
+                && unit.valid_to.as_deref().is_none_or(|to| CLOCK.0 < to)
+        })
+        .collect();
+    assert_eq!(
+        live.len(),
+        1,
+        "the caller's subject must supersede, not append — an auto key would leave both live"
+    );
+    assert_eq!(live[0].body, "Deploy straight to production.");
+    assert_eq!(live[0].fact_key.as_deref(), Some(expected_key.as_str()));
+
+    let response = recall(store, recall_request(&context, "Deploy"), None, &CLOCK)
+        .await
+        .expect("recall");
+    let item = response
+        .items
+        .iter()
+        .find(|item| item.unit_id == live[0].id)
+        .expect("the live unit is recalled");
+    let handle = item
+        .correction
+        .as_ref()
+        .expect("every recalled stored unit carries a correction handle");
+    assert_eq!(
+        handle,
+        &memphant_types::CorrectionHandle::for_unit(&live[0]),
+        "the handle is the unit's own identity, not a per-query derivation"
+    );
+    assert_eq!(handle.fact_key.as_deref(), Some(expected_key.as_str()));
+    assert_eq!(handle.subject_generation, context.subject_generation);
+    assert_eq!(
+        handle.valid_to, None,
+        "the surviving generation is still open"
+    );
 }
 
 /// `fetch_episodes_for_scope` honors the caller's `limit` — no silent store-side

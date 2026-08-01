@@ -46,6 +46,8 @@ fn retain_request(context: &memphant_types::ResolvedMemoryContext) -> RetainEpis
         payload: memphant_types::RetainPayload::Episode(memphant_types::RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: EPISODE_BODY.to_string(),
+            subject: None,
+            predicate: None,
         }),
     }
 }
@@ -456,4 +458,46 @@ async fn recall_cites_chunk_matched_item_to_parent_episode() {
         Some(episode_id),
         "chunk-matched recall cites the PARENT episode, not the chunk"
     );
+
+    // D1: the correction handle gives `source_span` its first non-test
+    // consumer. The span must slice the ORIGINAL episode body — that is the
+    // whole value of shipping it, and it is what lets a correction surface
+    // quote the exact bytes the memory was minted from.
+    let handle = item
+        .correction
+        .as_ref()
+        .expect("a recalled stored unit carries a correction handle");
+    assert_eq!(handle.unit_id, item.unit_id);
+    assert_eq!(handle.episode_id, Some(episode_id));
+    let span = handle
+        .source_span
+        .as_deref()
+        .expect("a chunked unit has a covering span");
+    let (start, end) = span.split_once('-').expect("span is start-end");
+    let (start, end): (usize, usize) = (start.parse().unwrap(), end.parse().unwrap());
+    assert!(
+        EPISODE_BODY.get(start..end).is_some(),
+        "span {span} must be a valid byte range of the {} byte episode body",
+        EPISODE_BODY.len()
+    );
+    assert!(
+        EPISODE_BODY[start..end].contains("oolong"),
+        "the span must cover the text the unit was minted from"
+    );
+
+    // The handle is a property of the unit, so the item that was rendered from
+    // a chunk subset carries the same span as the whole-body render of the same
+    // unit — it never narrows to this query's packing decision.
+    let whole = service
+        .recall(
+            memphant_store_testkit::resolved_context(tenant, scope, actor),
+            recall_request(tenant, scope, actor, "oolong tea"),
+        )
+        .await
+        .expect("second recall")
+        .items
+        .into_iter()
+        .find(|other| other.unit_id == item.unit_id)
+        .expect("same unit recalled again");
+    assert_eq!(whole.correction.as_ref(), Some(handle));
 }

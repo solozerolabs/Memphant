@@ -515,7 +515,8 @@ async fn canonical_projection_rejects_native_reserved_and_prefix_collisions() {
                     observed_at: "2026-07-23T00:00:00Z".to_string(),
                     payload: RetainPayload::Unit(RetainUnitPayload {
                         kind: MemoryKind::Semantic,
-                        fact_key: fact_key.to_string(),
+                        fact_key: Some(fact_key.to_string()),
+                        subject: None,
                         predicate: "memory_file".to_string(),
                         body: format!("collision {index}"),
                         confidence: 1.0,
@@ -586,7 +587,8 @@ async fn canonical_projection_rejects_native_reserved_and_prefix_collisions() {
                 observed_at: "2026-07-23T00:00:00Z".to_string(),
                 payload: RetainPayload::Unit(RetainUnitPayload {
                     kind: MemoryKind::Semantic,
-                    fact_key: "memory_path:MEMORY.md".to_string(),
+                    fact_key: Some("memory_path:MEMORY.md".to_string()),
+                    subject: None,
                     predicate: "memory_file".to_string(),
                     body: "reserved index collision".to_string(),
                     confidence: 1.0,

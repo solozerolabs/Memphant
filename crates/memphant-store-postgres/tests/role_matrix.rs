@@ -414,6 +414,8 @@ async fn pg_store_runs_with_separate_least_privilege_credentials() {
                     memphant_types::RetainEpisodePayload {
                         source_kind: "user".to_string(),
                         body: "least privilege survives the real store".to_string(),
+                        subject: None,
+                        predicate: None,
                     },
                 ),
             },

@@ -1960,3 +1960,92 @@ default, checkbox, cutover or SOTA claim moves. `paid_model_calls: 0`.**
 Report: `.superpowers/sdd/s2-instrument-report.md`. Survey:
 `docs/build-log/2026-08-01-discriminating-instrument-survey.md`. Branch
 `s2-instrument`, **not merged, not pushed.**
+
+## 2026-08-01 — D1 correction handle + caller-authored keys + D2 file plane (`s3-d1handle`, $0)
+
+**Phase D is plumbing, not invention, and that is the finding.** Every mechanism
+D1 needs was already compiled in: `RetainUnitPayload.fact_key` has always been
+mandatory, `ReflectJob` has always carried `subject`/`predicate`, the episodic
+candidate has always read them (`service.rs:5384`), and `source_span` has
+shipped end to end with real byte offsets. What was missing was a **surface**.
+The public payload had no subject field, so two hardcoded `None`s at the
+enqueue site were the entire break between a caller that knows what it is
+writing and a supersedable key — and `context_item_for` dropped the chunks, so
+`source_span` had zero readers. Good sign about the architecture; bad sign about
+how the public surfaces were reviewed.
+
+**Shipped**, three commits on `s3-d1handle` off `main@0e874da0`, **none merged,
+none pushed**, `paid_model_calls: 0`, no measurement run and none requested:
+
+- `41dc9fc4` — `CorrectionHandle {unit_id, subject_generation, fact_key,
+  valid_from, valid_to, source_span, episode_id}` on every `RecallContextItem`.
+- `4df4e23f` — `subject`/`predicate` on both public retain payloads;
+  `RetainUnitPayload.fact_key` relaxed to optional and still **wins** when
+  present.
+- `33541d75` — unit footer gains `state`/`valid_from`/`valid_to`/`source_span`;
+  `MEMORY.md` becomes a State/Since/Until/Confidence table; `SCHEMA_VERSION`
+  1 → 2.
+
+**The design call worth keeping: `source_span` is a property of the ROW, not of
+the query.** Recall's chunk mask was available and tempting, but selected chunks
+need not be contiguous, so a covering span over a subset would name bytes we did
+not render — a provenance value that is *wrong* is worse than one that is
+absent. And D2 needs the same value with no query in sight. So
+`covering_source_span` is defined once in memphant-types with exactly two
+callers (`CorrectionHandle::for_unit`, `projection_items`), and the invariant is
+asserted directly: the same unit recalled chunk-rendered and whole-body yields
+byte-identical handles. A span shape neither chunker mints degrades to `None`,
+never to a wrong range.
+
+**The claim NOT made.** The episode-payload subject keys the compiled episodic
+unit; it does **not** make episodes supersede — `supersedes_own_kind` maps the
+Episodic arm to `None` on purpose, which is the cross-kind bug `ffa640b8` fixed.
+The supersedable caller-key path is the *unit* payload. The test carries that in
+its name (`an_episode_payload_subject_keys_the_compiled_unit_without_superseding`)
+so the two stages cannot be collapsed into one headline later.
+
+**Non-regression is a test, not an intention.** `derive_fact_key`'s fallback is
+untouched and pinned by asserting against the primitive itself; a pre-D1 caller
+that composed its own key is byte-for-byte unaffected; blank subjects are
+refused rather than minting `{scope}::{predicate}` and collapsing a whole scope
+onto one generation. The positive path is a **shared testkit scenario**
+(`caller_subject_key_supersedes_without_client_derivation`) registered in both
+`store_contract.rs` and `pg_store_contract.rs`, so InMemory and Postgres cannot
+diverge on the new write path.
+
+**Verification.** `cargo build/test --workspace` 0 failed; clippy and
+`fmt --check` clean; `pytest -q tests/` 736 passed with the one pre-existing
+`test_spec_drift_check_passes_against_linked_syndai_docs` failure (sibling-repo
+state, identical before and after). Schema artifacts regenerated from their
+generators. **No migration** — `source_span` already rides in
+`memory_unit.payload` jsonb, so `MIGRATIONS`, `MIGRATION_HEAD` and
+`SCHEMA_COMPAT_REVISION` are untouched. No new `MemoryKind`; the RW-1 kind lists
+already derive from `MemoryKind::ALL` in this tree.
+
+**Postgres leg: 90 passed, 1 failed** under `--no-fail-fast` (without which the
+run stops at the first failing binary and the rest are never reported).
+`pg_store_contract` reports **53 passed** — the 52 from before plus the new
+shared scenario. The one failure is `hot_path_slo_pg`'s 200 ms debug-build p50
+threshold, and **the baseline breaches it too**: alternating baseline and HEAD
+back to back gave baseline 291/334/602 ms against HEAD 309/476/662 ms while
+1-minute load climbed 45 → 126 on 12 cores. Baseline-3 alone exceeds the
+threshold 3×, so the gate is failing for reasons that predate this change.
+**That is all it shows** — HEAD always ran second, so arm order is confounded
+with the monotonic load trend and the within-pair gaps are not separable from
+it. No latency claim is made.
+
+**A cross-lane defect fell out of running that gate** (`d91303c5`).
+`with_scratch_db.sh` keys its bootstrap mutex on `sha256(url_prefix)`, so
+`localhost:5432` and `127.0.0.1:5432` — one cluster, one cluster-wide
+`pg_authid` — hash to **two different lock files**. Five sibling lanes spell it
+`localhost`; this lane's prescribed gate command spells it `127.0.0.1`. So this
+lane's bootstraps ran with no mutex against five others, which is exactly the
+concurrent `create role` collision the lock exists to prevent, and the likely
+cause of an unexplained `database "memphant_scratch_…" does not exist` abort
+here. Fixed alongside `6fdcaf9d` (early lock release, taken from trunk).
+Collapsed with parameter expansion, not `sed` — BSD `sed` has no `\?`, so the
+obvious pattern silently no-ops on macOS and leaves the bug looking fixed.
+
+Report: `.superpowers/sdd/s3-d1handle-report.md`. Build log:
+`docs/build-log/2026-08-01-d1-correction-handle.md`. **No checkbox, default,
+cutover or SOTA claim moves.**
