@@ -499,6 +499,59 @@
         ],
         "type": "object"
       },
+      "CorrectionHandle": {
+        "description": "Everything a caller needs to correct a recalled memory in one more round\ntrip, emitted at the exact point the memory was applied (spec plan D1).\n\nIt names the unit and the generation it was written under, the key a\ncorrection must reuse to supersede it, the bitemporal rectangle it claims,\nthe byte range of the source body it was minted from, and the episode that\nbody belongs to. Nothing here is derived from the query: the handle is a\nproperty of the unit, so the same unit yields the same handle on every\nrecall and in the file plane's unit footer.\n\n`fact_key` may be an auto key (`{scope}:auto:{sha256[..16]}`), which never\nsupersedes — a corrector seeing one knows a keyed rewrite is required\nrather than a supersession.",
+        "properties": {
+          "episode_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fact_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_span": {
+            "description": "`start-end` UTF-8 byte offsets into the source episode or resource\nbody, covering every contextual chunk this unit was minted from.\n`None` when the unit carries no chunk with a parseable span.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unit_id": {
+            "$ref": "#/components/schemas/UnitId"
+          },
+          "valid_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "unit_id",
+          "subject_generation"
+        ],
+        "type": "object"
+      },
       "CorrectionPayload": {
         "additionalProperties": false,
         "properties": {
@@ -1742,6 +1795,18 @@
                 "type": "null"
               }
             ]
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CorrectionHandle"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The D1 correction handle. `None` only on the degraded path, where the\nitem is a raw un-reflected episode and there is no stored unit to\ncorrect — emitting a handle there would name a synthetic id."
           },
           "derived_by": {
             "type": "string"

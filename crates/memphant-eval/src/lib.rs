@@ -2592,6 +2592,7 @@ fn seeded_review_trace(
             citation_resource_id: None,
             derived_from_unit_ids: Vec::new(),
             suppression_labels: Vec::new(),
+            correction: None,
         }],
         dropped_items: Vec::new(),
         citations: Vec::new(),

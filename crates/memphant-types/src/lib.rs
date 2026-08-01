@@ -724,6 +724,33 @@ pub struct ProcedureTraceFact {
     pub safety_status: String,
 }
 
+/// Everything a caller needs to correct a recalled memory in one more round
+/// trip, emitted at the exact point the memory was applied (spec plan D1).
+///
+/// It names the unit and the generation it was written under, the key a
+/// correction must reuse to supersede it, the bitemporal rectangle it claims,
+/// the byte range of the source body it was minted from, and the episode that
+/// body belongs to. Nothing here is derived from the query: the handle is a
+/// property of the unit, so the same unit yields the same handle on every
+/// recall and in the file plane's unit footer.
+///
+/// `fact_key` may be an auto key (`{scope}:auto:{sha256[..16]}`), which never
+/// supersedes — a corrector seeing one knows a keyed rewrite is required
+/// rather than a supersession.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CorrectionHandle {
+    pub unit_id: UnitId,
+    pub subject_generation: u64,
+    pub fact_key: Option<String>,
+    pub valid_from: Option<String>,
+    pub valid_to: Option<String>,
+    /// `start-end` UTF-8 byte offsets into the source episode or resource
+    /// body, covering every contextual chunk this unit was minted from.
+    /// `None` when the unit carries no chunk with a parseable span.
+    pub source_span: Option<String>,
+    pub episode_id: Option<EpisodeId>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RecallContextItem {
     pub unit_id: UnitId,
@@ -736,6 +763,11 @@ pub struct RecallContextItem {
     #[serde(default)]
     pub derived_from_unit_ids: Vec<UnitId>,
     pub suppression_labels: Vec<String>,
+    /// The D1 correction handle. `None` only on the degraded path, where the
+    /// item is a raw un-reflected episode and there is no stored unit to
+    /// correct — emitting a handle there would name a synthetic id.
+    #[serde(default)]
+    pub correction: Option<CorrectionHandle>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -1198,6 +1230,42 @@ pub struct ContextualChunk {
     pub source_span: Option<String>,
 }
 
+/// Parses a chunk's `start-end` byte-offset span. Returns `None` for any shape
+/// the two chunkers do not mint (both emit `format!("{start}-{end}")`), so a
+/// decorated or malformed span degrades to "no span" rather than to a wrong one.
+fn parse_source_span(span: &str) -> Option<(usize, usize)> {
+    let (start, end) = span.split_once('-')?;
+    let (start, end) = (start.parse().ok()?, end.parse().ok()?);
+    (start <= end).then_some((start, end))
+}
+
+/// The single byte range of the source body that a unit's contextual chunks
+/// were minted from: `min(start)-max(end)` over every chunk carrying a
+/// parseable span. `None` when there are no chunks or none parse.
+///
+/// This is the one definition of a unit-level `source_span`. Both the recall
+/// correction handle and the file-plane unit footer read it here rather than
+/// deriving their own — a lane may add fields to provenance, never reimplement
+/// a primitive. It is deliberately independent of what recall chose to render:
+/// a correction points at where the memory came from, not at this query's
+/// packing decision.
+pub fn covering_source_span(chunks: &[ContextualChunk]) -> Option<String> {
+    let mut bounds: Option<(usize, usize)> = None;
+    for span in chunks
+        .iter()
+        .filter_map(|chunk| chunk.source_span.as_deref())
+    {
+        let Some((start, end)) = parse_source_span(span) else {
+            continue;
+        };
+        bounds = Some(match bounds {
+            Some((lo, hi)) => (lo.min(start), hi.max(end)),
+            None => (start, end),
+        });
+    }
+    bounds.map(|(start, end)| format!("{start}-{end}"))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct NewMemoryUnit {
     pub tenant_id: TenantId,
@@ -1272,6 +1340,22 @@ pub struct StoredMemoryUnit {
     pub last_reinforced_at: Option<String>,
     #[serde(default)]
     pub reinforcement_count: u32,
+}
+
+impl CorrectionHandle {
+    /// Reads the handle straight off the stored unit. Every field is a
+    /// persisted property of the unit, so this is total and never fails.
+    pub fn for_unit(unit: &StoredMemoryUnit) -> Self {
+        Self {
+            unit_id: unit.id,
+            subject_generation: unit.subject_generation,
+            fact_key: unit.fact_key.clone(),
+            valid_from: unit.valid_from.clone(),
+            valid_to: unit.valid_to.clone(),
+            source_span: covering_source_span(&unit.contextual_chunks),
+            episode_id: unit.source_episode_id,
+        }
+    }
 }
 
 #[derive(
@@ -2200,6 +2284,117 @@ pub struct McpToolSpec {
     pub input_schema: serde_json::Value,
     pub output_schema: serde_json::Value,
     pub annotations: McpToolAnnotations,
+}
+
+#[cfg(test)]
+mod correction_handle_tests {
+    use super::*;
+
+    fn chunk(source_span: Option<&str>) -> ContextualChunk {
+        ContextualChunk {
+            id: "chunk".to_string(),
+            header: String::new(),
+            body: "body".to_string(),
+            source_span: source_span.map(str::to_string),
+        }
+    }
+
+    /// The covering span is the union of every parseable chunk span, so a unit
+    /// minted from several windows still points at one contiguous byte range in
+    /// its source body. Chunk order must not matter.
+    #[test]
+    fn covering_span_unions_every_parseable_chunk_in_any_order() {
+        let chunks = vec![chunk(Some("40-72")), chunk(Some("0-31")), chunk(None)];
+        assert_eq!(covering_source_span(&chunks), Some("0-72".to_string()));
+        let reversed: Vec<_> = chunks.into_iter().rev().collect();
+        assert_eq!(covering_source_span(&reversed), Some("0-72".to_string()));
+    }
+
+    /// A span shape neither chunker mints degrades to "no span". Reporting a
+    /// wrong byte range is worse than reporting none: a corrector would
+    /// highlight text the unit was not minted from.
+    #[test]
+    fn unparseable_and_absent_spans_yield_no_span_rather_than_a_wrong_one() {
+        for span in ["episode:0-72", "0-", "-72", "abc", "72-0", ""] {
+            assert_eq!(
+                covering_source_span(&[chunk(Some(span))]),
+                None,
+                "{span:?} must not produce a span"
+            );
+        }
+        assert_eq!(covering_source_span(&[]), None);
+        assert_eq!(covering_source_span(&[chunk(None)]), None);
+    }
+
+    /// Every handle field is read straight off the stored unit, so two recalls
+    /// of the same row — however each one was packed — hand back the same
+    /// handle. Guards against the handle becoming query-dependent.
+    #[test]
+    fn handle_reads_the_units_own_identity_key_interval_span_and_episode() {
+        let unit = StoredMemoryUnit {
+            id: UnitId::from_u128(1),
+            tenant_id: TenantId::from_u128(2),
+            data_subject_id: SubjectId::from_u128(3),
+            scope_id: ScopeId::from_u128(4),
+            agent_node_id: AgentNodeId::from_u128(5),
+            subject_generation: 7,
+            kind: MemoryKind::Semantic,
+            state: UnitState::Active,
+            fact_key: Some("scope:profile:city".to_string()),
+            predicate: Some("lives_in".to_string()),
+            body: "Lives in Lima".to_string(),
+            confidence: Some(1.0),
+            trust_level: TrustLevel::TrustedUser,
+            churn_class: None,
+            freshness_due_at: None,
+            actor_id: None,
+            source_kind: None,
+            source_ref: "test".to_string(),
+            observed_at: "2026-08-01T00:00:00Z".to_string(),
+            source_episode_id: Some(EpisodeId::from_u128(9)),
+            source_resource_id: None,
+            deletion_generation: None,
+            contextual_chunks: vec![chunk(Some("4-13"))],
+            valid_from: Some("2026-07-01T00:00:00Z".to_string()),
+            valid_to: None,
+            transaction_from: None,
+            transaction_to: None,
+            difficulty: None,
+            stability_days: None,
+            last_reinforced_at: None,
+            reinforcement_count: 0,
+        };
+        assert_eq!(
+            CorrectionHandle::for_unit(&unit),
+            CorrectionHandle {
+                unit_id: UnitId::from_u128(1),
+                subject_generation: 7,
+                fact_key: Some("scope:profile:city".to_string()),
+                valid_from: Some("2026-07-01T00:00:00Z".to_string()),
+                valid_to: None,
+                source_span: Some("4-13".to_string()),
+                episode_id: Some(EpisodeId::from_u128(9)),
+            }
+        );
+    }
+
+    /// The handle is `#[serde(default)]` on `RecallContextItem`, so every trace
+    /// banked before D1 still decodes — as a handle-less item, not an error.
+    #[test]
+    fn pre_d1_context_items_still_deserialize_without_a_handle() {
+        let item: RecallContextItem = serde_json::from_value(serde_json::json!({
+            "unit_id": UnitId::from_u128(1),
+            "body": "b",
+            "kind": "semantic",
+            "derived_by": "d",
+            "inclusion_reason": "fused_top_k",
+            "citation_episode_id": null,
+            "citation_resource_id": null,
+            "suppression_labels": []
+        }))
+        .expect("a pre-D1 context item decodes");
+        assert_eq!(item.correction, None);
+    }
 }
 
 #[cfg(test)]

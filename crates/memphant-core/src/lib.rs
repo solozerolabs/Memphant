@@ -8053,6 +8053,7 @@ mod evidence_receipt_tests {
             citation_resource_id: None,
             derived_from_unit_ids: Vec::new(),
             suppression_labels: Vec::new(),
+            correction: None,
         };
         (store, request, recall_time, item, citation)
     }
@@ -9735,6 +9736,11 @@ fn context_item_for(
     } else {
         "fused_top_k"
     };
+    // D1: read the correction handle off the unit BEFORE `rendered_body` moves
+    // the body out of it. The handle is a property of the unit, never of this
+    // query's packing decision, so a chunk-rendered item and a whole-body item
+    // of the same unit carry byte-identical handles.
+    let correction = Some(memphant_types::CorrectionHandle::for_unit(&candidate.unit));
     RecallContextItem {
         unit_id: candidate.unit.id,
         body: rendered_body.unwrap_or(candidate.unit.body),
@@ -9745,6 +9751,7 @@ fn context_item_for(
         citation_resource_id: candidate.unit.source_resource_id,
         derived_from_unit_ids: Vec::new(),
         suppression_labels,
+        correction,
     }
 }
 

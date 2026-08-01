@@ -1535,6 +1535,7 @@ pub async fn review_marks_credit_synthetic_sources_and_stay_trace_bound<H: Store
             citation_resource_id: None,
             derived_from_unit_ids: vec![source_a, source_b],
             suppression_labels: Vec::new(),
+            correction: None,
         }],
         dropped_items: Vec::new(),
         citations: Vec::new(),

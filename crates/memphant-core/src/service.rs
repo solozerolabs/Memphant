@@ -6729,6 +6729,11 @@ fn degraded_episode_items(
             citation_resource_id: None,
             derived_from_unit_ids: Vec::new(),
             suppression_labels: Vec::new(),
+            // D1: no handle. `unit_id` here is synthesised from the episode id
+            // because consolidation has not run — there is no stored unit, no
+            // fact key and no generation to correct. A handle would name a row
+            // that does not exist.
+            correction: None,
         })
         .collect()
 }
