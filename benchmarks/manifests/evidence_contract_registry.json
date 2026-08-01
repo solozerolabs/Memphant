@@ -31,6 +31,8 @@
     "docs/build-log/artifacts/null-review-ledger.json",
     "docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json",
     "docs/build-log/artifacts/r6-docs-decision/packet.json",
+    "docs/build-log/artifacts/s4-controls/analysis-completecase-n177.json",
+    "docs/build-log/artifacts/s4-controls/analysis.json",
     "docs/build-log/artifacts/s5-swecb/stage0-analysis.json",
     "docs/build-log/artifacts/s5-swecb/stage0-prereg.json",
     "docs/build-log/artifacts/sibling-gather-deletion/sibling_gather_deletion.json",

@@ -2355,3 +2355,81 @@ Report: `.superpowers/sdd/s9-scale-report.md`. Build log:
 `docs/build-log/artifacts/s9-scale/{frontier.json,track-r-repo-sizes.json}`.
 Script: `scripts/s9_scale_frontier.py`. Branch `s9-scale`, **not merged, not
 pushed.**
+
+---
+
+## 2026-08-01 — S4: the controls we never ran. `grep` beats MemPhant by 37.8 points.
+
+**Branch `s4-controls` (base `main` @ `0e874da0`), not merged. Spend $25.98 of an
+$80 ceiling.** Preregistration committed at `6912e35f` **before any cell was
+seen**; Part B appended afterwards and never edits Part A.
+
+**The question and the answer.** *Can MemPhant, at its shipped default, beat a
+competent coding agent that has `grep` and nothing else?* **No.** On the Track R
+paraphrase bank, n=180, at one endpoint (`gate_common.provenance_hit@10` over
+top-10 bodies), one haystack (the golden's bound attempt) and one query string:
+
+| arm | hits@10 | hits@5 | LLM calls at recall | spend |
+|---|---:|---:|---:|---:|
+| agentic `grep` control (`claude-opus-5`, bounded loop, no substrate) | **174/180** | **174/180** | 718 | $25.93 |
+| MemPhant `bm25code_dense` (shipped default) | 106/180 | 73/180 | **0** | $0 |
+| scoped BM25 (banked reference) | 46/180 | — | 0 | $0 |
+
+T vs agentic: **b=1, c=69, n_d=70, Δ=−37.78pp, two-sided exact McNemar
+p=1.20e−19** ⇒ **Verdict B, the control wins**, under the rule fixed in §A.4
+before any cell. T vs scoped BM25: b=66, c=6, Δ=+33.33pp, Verdict A. **The same
+system beats the old control by +33 and loses to the real one by −38.** There is
+exactly **one** question in 180 where MemPhant hits and `grep` misses.
+
+**The gate this closes.** Per §A.3, **the ~$545 SWE-ContextBench lane is NOT
+authorized by this lane.** The arms review's premise — *"if we cannot beat `grep`
+for $40 we will not beat a no-memory baseline for $545"* — was tested and failed,
+for $25.98.
+
+**It is not a budget artifact, and the arm's own trace says so.** §A.6's caps
+never bound: mean 3.99 tool calls against a cap of 12, mean 4.51 selections
+against 10, ~700 completion tokens against 24,000, and **hits@5 equals hits@10
+exactly**. Post-hoc miss attribution: a `grep`/`read` result surfaced the gold
+event on 176/180 and the agent then selected it on 175. **It is also a lower
+bound**: §A.1.2, written before any cell, fixed that a control margin on this
+identifier-withholding bank can only widen on human-phrased queries.
+
+**MemPhant's remaining advantage on this lane is cost, not accuracy**: 0 LLM
+calls versus $0.144 per question. That is a real product position and not the
+one the program has been arguing for. This is evidence *for* the plan's §D4
+governance pivot — supersession, forgetting, provenance — and none of it was
+measured here.
+
+**Reported honestly rather than smoothed.** (1) Three questions come back
+`finish_reason="content_filter"` from the pinned provider on every retry at
+temperature 0, including under `tool_choice="required"` and with the per-call
+token cap raised; errors could not be driven to zero without unpinning a
+preregistered guard, so they are scored as **misses for the control** (the
+assumption most favourable to MemPhant) with a complete-case n=177 sensitivity
+beside them — −37.78pp and −38.42pp, same verdict. (2) Two goldens
+(`track_r_par_028`, `track_r_par_066`) carry spans present in **no event of their
+own attempt**, so the bank's ceiling is 178/180 for every arm; verified
+symmetric. (3) ONCU no-corpus probe: 2/20 answerable without evidence, a bias
+that inflates the **control**. (4) Three preregistration deviations are listed in
+Part B §B.8, including that §A.8's "free arm first" ordering was **not** followed
+— and why, on inspection, it could never have saved money.
+
+**Arm 2 (no-memory dense RAG, $0) did NOT land, and no number is reported for it.**
+Its own preregistered liveness gate killed it after ~90 minutes of embedding --
+and the gate was wrong: it asserted distinct_vectors/N >= 0.99, but 1,330 of the
+21,629 events are byte-identical to another event, so **0.9385 was the ceiling
+before a single vector was computed**. Fixed to ask the question it was for
+(distinct vectors / distinct TEXTS >= 0.95, measured 0.9594 -- stricter on that
+axis than the original) and, more importantly, **vectors are now checkpointed
+before they are gated**: ninety minutes of compute was judged before it was
+saved. Recorded as deviation 4. The re-run was ~2h from finishing on a host at
+load 100-165; C2 is an open cheap follow-up and no C2 value changes the T-vs-C1
+verdict or the $545 gate.
+
+Report: `.superpowers/sdd/s4-controls-report.md`. Build log:
+`docs/build-log/2026-08-01-agentic-search-controls.md`. Artifacts:
+`docs/build-log/artifacts/s4-controls/analysis.json` (+ `-completecase-n177`),
+both registered and `decisional: false` — the bank **fails its own preregistered
+leakage bar** (concentration 2.018 against ≤1.50) and its corpus licence is a
+card assertion. **No default, checkbox or SOTA claim moves.** `paid_model_calls:
+738`.
