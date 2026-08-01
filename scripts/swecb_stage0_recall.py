@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import datetime as dt
 import hashlib
 import json
 import os
@@ -161,6 +162,38 @@ def verify_and_load(lock: dict, mirror: Path) -> dict:
     }
 
 
+def canonical_observed_at(value: str) -> str:
+    """Normalize the pinned parquet's TWO created_at formats to RFC3339 UTC.
+
+    LIVE DEFECT, found at $0 on the first ingest attempt: 300 of the 1,007
+    distinct experience rows carry ``YYYY-MM-DD HH:MM:SS`` -- a space separator
+    and NO timezone -- while the other 707 carry proper ``...Z``. /v1/episodes
+    rejects the former with HTTP 422 "observed_at must use a UTC offset", so a
+    naive adapter dies 30% of the way through the pool.
+
+    The split is not random: the 707 Z-format rows are exactly the 12 original
+    SWE-bench Python repos, and the 300 space-format rows are exactly the 41
+    newer multilingual repos, with ZERO repo overlap. Two upstream pipelines
+    were concatenated into one file.
+
+    Naive-UTC is the only defensible reading -- the sibling pipeline emits UTC,
+    and the pool's created_at is perfectly monotone with PR number (0 inversions
+    in 60,372 within-repo pairs), so the values are coherent even where the
+    offset is unstated. The assumption is recorded in the artifact rather than
+    hidden here.
+    """
+    text = str(value).strip()
+    if text.endswith("Z"):
+        parsed = dt.datetime.fromisoformat(text[:-1] + "+00:00")
+    elif text.endswith("+00:00"):
+        parsed = dt.datetime.fromisoformat(text)
+    else:
+        parsed = dt.datetime.fromisoformat(text)
+        require(parsed.tzinfo is None, f"unexpected offset in observed_at: {text!r}")
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def experience_body(row: dict, variant: str) -> str:
     """The experience text placed in memory.
 
@@ -274,6 +307,10 @@ def run(
             agent_node_ref="swecb-stage0-agent",
         )
 
+        observed_at_formats = collections.Counter(
+            "Z" if str(r["created_at"]).endswith("Z") else "naive_space_assumed_utc"
+            for r in pool.values()
+        )
         ingest_started = time.perf_counter()
         episode_ids: dict[str, str] = {}
         body_chars = 0
@@ -283,7 +320,7 @@ def run(
             payload = gr.episode_retain_payload(
                 context,
                 source_ref=f"swecb:exp:{instance_id}",
-                observed_at=row["created_at"],
+                observed_at=canonical_observed_at(row["created_at"]),
                 source_kind="resource",
                 body=body,
             )
@@ -458,6 +495,7 @@ def run(
             "query_seconds": query_seconds,
             "wall_seconds": round(time.time() - started_wall, 1),
             "ingested_body_chars": body_chars,
+            "observed_at_source_formats": dict(observed_at_formats),
         },
         "records": records,
     }
