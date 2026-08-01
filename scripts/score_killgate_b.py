@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 from math import comb
 from pathlib import Path
@@ -52,6 +53,13 @@ DEFAULT_DIR = ROOT / "docs/build-log/artifacts/p1-c2-killgate/killgate-b"
 CEILING_MS = 1500
 # A rerank that reorders almost nothing is indistinguishable from an inert one.
 MIN_REORDER_FRACTION = 0.50
+# Above this 1-minute loadavg per core the host is oversubscribed and a wall-clock
+# latency figure measures the queue, not the model. Precedent in this repo:
+# docs/build-log/2026-08-01-rerank-channel.md recorded cross_rerank_ms p50 =
+# 22,166 ms under loadavg 120-140 for work that takes ~1,460 ms uncontended — a
+# ~15x contention artifact. A contended sample is therefore an UPPER BOUND and
+# may neither pass nor fail the latency leg; it forces INDETERMINATE.
+QUIET_LOADAVG_PER_CORE = 1.5
 
 
 def mcnemar_exact(b: int, c: int) -> float:
@@ -134,6 +142,13 @@ def main() -> int:
     parser.add_argument("--dir", default=str(DEFAULT_DIR))
     parser.add_argument("--evidence-dir", required=True,
                         help="holds ev-{arm}-{v}.jsonl; bodies stay here, only digests are emitted")
+    parser.add_argument(
+        "--build-profile", default="release", choices=("release", "debug"),
+        help="profile the SERVED binaries were built under. A latency figure "
+             "measured on a debug build is worthless (see the 2026-08-01 near "
+             "miss); 'debug' is accepted only so such a run is stamped as "
+             "latency-invalid rather than silently banked.",
+    )
     args = parser.parse_args()
     base_dir, ev_dir = Path(args.dir), Path(args.evidence_dir)
 
@@ -183,7 +198,7 @@ def main() -> int:
 
     mechanism = {
         "cross_rerank_declared": arms_differ,
-        "reranker": rr_h["v1"].get("cross_reranker"),
+        "reranker": rr_h["v1"].get("runtime_config", {}).get("cross_reranker"),
         "questions_with_rerank_trace": len(lat),
         "questions_total": len(ids),
         "candidate_count_min": min([s for s in scored if s is not None], default=None),
@@ -208,15 +223,62 @@ def main() -> int:
         ),
     }
 
+    # Latency is only meaningful against the profile the server actually ran
+    # under, and against the load the host was carrying while it ran. Both are
+    # recorded beside the number, never inferred from it.
+    cpu_count = os.cpu_count() or 1
+    loadavg = list(os.getloadavg())
+    arm_load = {}
+    for arm in ("base", "rerank"):
+        path = base_dir / f"host-{arm}.txt"
+        arm_load[arm] = path.read_text().strip() if path.exists() else None
+    contended = loadavg[0] > QUIET_LOADAVG_PER_CORE * cpu_count
+    host = {
+        "cpu_count": cpu_count,
+        "loadavg_1_5_15": loadavg,
+        "loadavg_per_core": loadavg[0] / cpu_count,
+        "quiet_bar_per_core": QUIET_LOADAVG_PER_CORE,
+        "contended": contended,
+        "loadavg_source": "at scoring time; per-arm start-of-run loadavg below",
+        "per_arm_start": arm_load,
+        "concurrency_caveat": (
+            "sibling git worktrees of this repo ran full-corpus ingests on the "
+            "same host during this wave. Under contention a wall-clock latency "
+            "figure measures the run queue, not the model, so it is recorded as "
+            "an UPPER BOUND and is not allowed to decide the latency leg either "
+            "way. The retrieval half is unaffected: span containment is "
+            "deterministic and does not depend on how long anything took."
+        ),
+    }
+
     latency = {
         "source": "this run's own per-question cross_rerank_ms on this host",
+        "build_profile": args.build_profile,
+        "valid_for_a_ceiling_claim": args.build_profile == "release",
+        "host": host,
         "n": len(lat),
         "p50_ms": pct(0.50),
         "p95_ms": pct(0.95),
         "max_ms": lat[-1] if lat else None,
         "ceiling_ms": CEILING_MS,
         "p95_under_ceiling": (pct(0.95) is not None and pct(0.95) <= CEILING_MS),
+        "figures_are_upper_bounds_only": contended,
+        "verdict": (
+            "UNVERIFIED — sampled on a contended host; upper bound only, "
+            "re-measure on a quiet box before this leg decides anything"
+            if contended
+            else ("WITHIN CEILING" if (pct(0.95) is not None and pct(0.95) <= CEILING_MS)
+                  else "BREACHES CEILING")
+        ),
         "inherited_claim_ms": 449,
+        "inherited_claim_status": (
+            "RETRACTED — re-measured on the same #[ignore]d matrix, same model "
+            "dir, same --release profile: 1140/1871/1448/1472 ms, median ~1460 "
+            "ms, 2 of 4 samples breaching the 1500 ms ceiling. That matrix is "
+            "BODY granularity on synthetic ~1.5 KB docs, the cheapest case; "
+            "this arm runs CHUNK granularity on real sections and can only be "
+            "slower. The figure below is the authoritative one."
+        ),
         "inherited_claim_source": "docs/build-log/2026-07-22-reranker-latency-spike.md, synthetic 64x~1.5KB body-granularity matrix",
     }
 
@@ -245,6 +307,26 @@ def main() -> int:
     hit10_base = sum(bh.values()) / len(ids)
     hit10_rr = sum(rh.values()) / len(ids)
 
+    # --- served-binary identity ----------------------------------------------
+    # §K.4: the first attempt at this gate served target/debug/memphant-server
+    # and would have banked a meaningless latency figure beside a 1.5 s ceiling.
+    # The arms record the sha256 of the binary they ACTUALLY spawned in
+    # runtime_config.generation_identity.files; this checks that against the
+    # release binary on disk, so the profile is proven rather than asserted.
+    bin_dir = ROOT / "target" / args.build_profile
+    served_detail, served_ok = {}, True
+    for arm, hs in (("base", base_h), ("rerank", rr_h)):
+        for v in ("v1", "v2"):
+            ident = (hs[v].get("runtime_config", {})
+                     .get("generation_identity", {}).get("files", {}))
+            for role in ("server", "worker"):
+                on_disk = hashlib.sha256((bin_dir / f"memphant-{role}").read_bytes()).hexdigest()
+                match = ident.get(role) == on_disk
+                served_detail[f"{arm}.{v}.{role}"] = {
+                    "arm_recorded": ident.get(role), "on_disk": on_disk, "match": match
+                }
+                served_ok = served_ok and match
+
     # --- verdict --------------------------------------------------------------
     # (b) passes only if the rerank produces a REAL, powered retrieval gain that
     # it could actually ship: mechanism live, latency inside the ceiling, and a
@@ -252,12 +334,27 @@ def main() -> int:
     reasons = []
     if not lineage_ok or not arms_differ:
         reasons.append("lineage: arms are not a clean single-variable contrast")
+    if not served_ok:
+        reasons.append(
+            f"lineage: the binaries the arms served do not match "
+            f"target/{args.build_profile} on disk — the profile behind the "
+            f"latency figure is unproven"
+        )
+    if args.build_profile != "release":
+        reasons.append(
+            "lineage: arms ran on a debug build — the latency half of this gate "
+            "is not a measurement"
+        )
     if not mechanism["reorder_bar_met"]:
         reasons.append(
             f"mechanism: rerank changed the returned order on only "
             f"{reorder_fraction:.1%} of questions (bar {MIN_REORDER_FRACTION:.0%})"
         )
-    if not latency["p95_under_ceiling"]:
+    # The latency leg is separated from the accuracy legs on purpose. A
+    # contended sample is an upper bound: it may not fail the gate (that would
+    # be a finding manufactured by sibling load) and it may not pass it either.
+    latency_indeterminate = contended
+    if not latency_indeterminate and not latency["p95_under_ceiling"]:
         reasons.append(
             f"latency: p95 {latency['p95_ms']} ms breaches the {CEILING_MS} ms ceiling"
         )
@@ -270,6 +367,13 @@ def main() -> int:
             "the paired test does not reject"
         )
     passed = not reasons
+    # A gate that fails on accuracy is decided outright: if a full-pool rerank
+    # does not move retrieval, how fast it is cannot rescue it. Only a gate that
+    # clears every accuracy leg has to wait on a clean latency sample.
+    verdict = "FAIL" if reasons else (
+        "INDETERMINATE — accuracy legs pass; latency unverified on a contended host"
+        if latency_indeterminate else "PASS"
+    )
 
     packet = {
         "gate": "C2 kill-gate (b) — full-pool sub-second chunk-rerank on the retrieval endpoint",
@@ -284,10 +388,21 @@ def main() -> int:
             "memphant_git_head": subprocess.run(
                 ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
                 capture_output=True, text=True, check=True).stdout.strip(),
+            "git_branch": subprocess.run(
+                ["git", "-C", str(ROOT), "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True, text=True, check=True).stdout.strip(),
+            "git_dirty": bool(subprocess.run(
+                ["git", "-C", str(ROOT), "status", "--porcelain"],
+                capture_output=True, text=True, check=True).stdout.strip()),
+            "build_profile": args.build_profile,
+            "server_bin": str(bin_dir / "memphant-server"),
             "server_bin_sha256": hashlib.sha256(
-                (ROOT / "target/debug/memphant-server").read_bytes()).hexdigest(),
+                (bin_dir / "memphant-server").read_bytes()).hexdigest(),
+            "worker_bin": str(bin_dir / "memphant-worker"),
             "worker_bin_sha256": hashlib.sha256(
-                (ROOT / "target/debug/memphant-worker").read_bytes()).hexdigest(),
+                (bin_dir / "memphant-worker").read_bytes()).hexdigest(),
+            "served_binary_identity_matches_arms": served_ok,
+            "served_binary_identity_detail": served_detail,
             "single_variable_contrast": lineage_ok and arms_differ,
             "arms_differ_only_in_cross_rerank": arms_differ,
             "fields": lineage_detail,
@@ -315,7 +430,9 @@ def main() -> int:
             "pooled_at5": pooled_at5,
             "mde_at_80_from_this_runs_psi": mde,
         },
-        "verdict": "PASS" if passed else "FAIL",
+        "verdict": verdict,
+        "accuracy_legs_pass": passed,
+        "latency_leg": latency["verdict"],
         "failing_reasons": reasons,
     }
 
@@ -326,10 +443,13 @@ def main() -> int:
     print(f"paired pooled n={pooled['n']} b={pooled['rerank_only_b']} c={pooled['base_only_c']} "
           f"n_d={pooled['n_d']} psi={pooled['psi']:.4f} delta={pooled['delta']:+.4f} "
           f"p={pooled['p_exact']:.4f} MDE={mde}")
-    print(f"mechanism: reordered {len(reordered)}/{len(ids)} "
-          f"({reorder_fraction:.1%}), docs_scored {mechanism['docs_scored_min']}-{mechanism['docs_scored_max']}")
+    print(f"mechanism: reordered {len(reordered)}/{len(ids)} ({reorder_fraction:.1%}), "
+          f"candidate_count {mechanism['candidate_count_min']}-{mechanism['candidate_count_max']}, "
+          f"traces {mechanism['questions_with_rerank_trace']}/{mechanism['questions_total']}")
     print(f"latency: p50={latency['p50_ms']}ms p95={latency['p95_ms']}ms max={latency['max_ms']}ms "
-          f"(ceiling {CEILING_MS}ms, inherited claim 449ms)")
+          f"(ceiling {CEILING_MS}ms, profile={args.build_profile}, "
+          f"cpu={host['cpu_count']} loadavg={host['loadavg_1_5_15'][0]:.1f}; "
+          f"the 449ms inherited claim is RETRACTED)")
     print(f"VERDICT: {packet['verdict']}")
     for r in reasons:
         print("  -", r)

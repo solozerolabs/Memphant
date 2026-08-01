@@ -207,3 +207,4 @@ docs/build-log/artifacts/track-r-floor/agent-cache/
 docs/build-log/artifacts/track-r-floor/requests/
 docs/build-log/artifacts/track-r-paraphrase/leakage-paraphrase.json
 .fastembed_cache
+docs/build-log/artifacts/p1-c2-killgate/killgate-b/*.log
