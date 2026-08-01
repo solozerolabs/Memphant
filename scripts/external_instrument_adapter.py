@@ -507,6 +507,87 @@ def ingest_group_preference(client, group: dict) -> tuple[dict, dict, int]:
     return context, identity, episodes, deduped
 
 
+def ingest_group_derived(client, group: dict, args) -> tuple[dict, dict, int, int]:
+    """Arm K. IDENTICAL to Arm P in every respect except where the key comes
+    from — which is the whole point of running it.
+
+    Arm P keys on ``unit["declarations"]``: the instrument's own supersession
+    group key, the same field the gold labels are built from, which is why P is
+    ``decisional: false`` and a ceiling rather than a result. Arm K keys on a
+    rule in ``scripts/measure_key_recovery.py`` that reads the session BODY and
+    nothing else. Same kind, same predicate, same retain shape, same recall,
+    same scorer — so K is comparable to A' and B at the same pipeline stage on
+    the same haystack, and the A'→K→P triple prices exactly one variable: key
+    quality.
+
+    The rule is chosen on the offline frontier
+    (``docs/build-log/artifacts/2026-08-01-key-production/recovery.json``), not
+    here, and it is passed by name so the artifact records which one ran.
+    """
+    import measure_key_recovery as kr
+
+    rule = kr.BODY_RULES[args.derived_rule]
+    context = client.bind_context(
+        f"external-{group['group_id']}",
+        subject_ref=group["group_id"],
+        actor_ref=f"{group['group_id']}-runner",
+        scope_ref=group["group_id"],
+        agent_node_ref="external-instrument-adapter",
+    )
+    identity: dict[str, set] = {}
+    episodes = 0
+    deduped = 0
+    for index, unit in enumerate(group["units"]):
+        # GOLD-INDEPENDENCE, enforced rather than promised: the oracle field is
+        # deleted from the unit before the rule can see it.
+        unit.pop("declarations", None)
+        derived = sorted(rule(unit["body"]))
+        if not derived:
+            response = client.post(
+                "/v1/episodes",
+                gr.episode_retain_payload(
+                    context,
+                    source_ref=unit["unit_id"],
+                    observed_at=observed_at(index),
+                    source_kind=unit["source_kind"],
+                    body=unit["body"],
+                ),
+            )
+            identity[unit["unit_id"]] = {response["episode_id"]}
+            episodes += 1
+            deduped += bool((response.get("dedup") or {}).get("matched"))
+            continue
+        ids: set = set()
+        for derived_key in derived:
+            key = hashlib.sha256(derived_key.encode()).hexdigest()[:16]
+            response = client.post(
+                "/v1/episodes",
+                {
+                    **context,
+                    "source_ref": f"{unit['unit_id']}#{key}",
+                    "observed_at": observed_at(index),
+                    "payload": {
+                        "unit": {
+                            "kind": "preference",
+                            "fact_key": f"preference:{key}",
+                            "predicate": "prefers",
+                            "body": unit["body"],
+                            "confidence": 1.0,
+                        }
+                    },
+                },
+            )
+            minted = set(response.get("unit_ids") or [])
+            if not minted:
+                raise RuntimeError(
+                    f"REFUSING TO SCORE: derived retain {unit['unit_id']}#{key} "
+                    "minted no unit -- the declaration was silently dropped"
+                )
+            ids |= minted
+        identity[unit["unit_id"]] = ids
+    return context, identity, episodes, deduped
+
+
 WORD = re.compile(r"[a-z0-9_]+")
 # Deliberately tiny: the discriminating vocabulary here is code-convention
 # nouns, and an aggressive stoplist would delete the very tokens ("names",
@@ -957,7 +1038,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--arm",
         default="memphant",
-        choices=("memphant", "lexical", "preference", "structured"),
+        choices=("memphant", "lexical", "preference", "structured", "derived"),
         help="memphant = live recall; lexical = the repo's BM25 control over "
              "the same units and queries (no DB, no server, no network); "
              "preference = ORACLE-KEYED write-path mechanism arm, NOT "
@@ -1027,6 +1108,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit-units-per-group", type=int, default=0)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--budget-tokens", type=int, default=8192)
+    parser.add_argument(
+        "--derived-rule",
+        default="pre3_content_words",
+        help="derived arm: which gold-independent body rule from "
+             "scripts/measure_key_recovery.py mints the subject key. Chosen on "
+             "the offline frontier, never here.",
+    )
     parser.add_argument("--mode", default="fast", choices=("fast", "deep"))
     parser.add_argument("--port", type=int, default=39471)
     parser.add_argument("--embed-model", default=None)
@@ -1162,6 +1250,11 @@ def main() -> int:
                 structured_counts["proposed"] += counts["proposed"]
                 structured_counts["considered"] += counts["considered"]
                 structured_counts.setdefault("ledger", []).extend(counts["ledger"])
+            elif args.arm == "derived":
+                context, episode_of, group_episodes, group_deduped = (
+                    ingest_group_derived(client, group, args)
+                )
+                episodes_retained += group_episodes
             elif args.arm == "preference":
                 context, episode_of, group_episodes, group_deduped = (
                     ingest_group_preference(client, group)
@@ -1257,7 +1350,7 @@ def write_report(args, lock, lock_path, source, rows, groups, ingested,
         "attribution": lock["attribution"],
         "recall": {"k": args.k, "mode": args.mode, "budget_tokens": args.budget_tokens,
                    "embed_model": args.embed_model}
-        if args.arm in ("memphant", "preference", "structured")
+        if args.arm in ("memphant", "preference", "structured", "derived")
         else {"k": args.k, "mechanism": "Okapi BM25 k1=1.2 b=0.75, instance-scoped, "
               "code_lane_run_deterministic.bm25_search"},
         "scale": {
