@@ -1,0 +1,63 @@
+{
+  "b1_named": 1091,
+  "co_declaring_pairs": 1174,
+  "corpus": {
+    "revision": "32d888b11c73c67be91414e571dfe98c5c20feac",
+    "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733"
+  },
+  "decisional": false,
+  "decisional_reason": "A precision comparison at matched firing count on pairs B1's ranker already selected. It is not a retrieval measurement and it is not latest-state-wins; only a live arm can carry that.",
+  "distribution": {
+    "body": {
+      "max": 0.521277,
+      "median": 0.193966,
+      "p95": 0.283019
+    },
+    "sentence": {
+      "max": 1.0,
+      "median": 0.0,
+      "p95": 0.75
+    }
+  },
+  "lineage": {
+    "git_branch": "w1-keyprod",
+    "git_dirty": true,
+    "git_head": "ed5fd6d7f72e0fde5c528ba974db41542e32b2dd",
+    "script_sha256": "f55137cb8807da698eb66224b15c0532af2b1beb7759606cfe1305e9f9ce9c72",
+    "served_binaries": "NONE \u2014 no binary, server, worker or database runs here.",
+    "upstream_artifact": "/Users/sidsharma/Memphant-w1-b1arm/docs/build-log/artifacts/2026-08-01-b1-structured/arm-s-structured.json",
+    "upstream_lineage": {
+      "git_branch": "w1-b1arm",
+      "git_dirty": true,
+      "git_head": "0ecf8cb25e5f4f8b48506febfff9745799ab16a1",
+      "server_bin_sha256": "a06f3a295ad0685dddf33f09721b9e8c25096df77eb7d3384f1500de2b1af3ee",
+      "worker_bin_sha256": "c8017e7701445c9c805f48eabdbfede9c4d32a5911872ffeb0043bcb4410a926",
+      "worktree": "/Users/sidsharma/Memphant-w1-b1arm"
+    }
+  },
+  "measurement": "b1_ledger_rescored_with_a_directive_sentence_unit",
+  "paid_model_calls": 0,
+  "pairs_scored": 7890,
+  "precision_at_matched_firing_count": {
+    "100": {
+      "body": 0.46,
+      "sentence": 1.0
+    },
+    "1091": {
+      "body": 0.340972,
+      "sentence": 0.765353
+    },
+    "2000": {
+      "body": 0.296,
+      "sentence": 0.556
+    },
+    "250": {
+      "body": 0.416,
+      "sentence": 0.992
+    },
+    "500": {
+      "body": 0.402,
+      "sentence": 0.972
+    }
+  }
+}
