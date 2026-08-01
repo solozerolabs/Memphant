@@ -123,6 +123,33 @@ def verdict(stats: dict) -> dict:
         # the two-sided exact test (2 * 2^-6 = 0.031 is the first p that can),
         # so the required n follows from the observed discordance rate.
         floor_n = int(-(-N_D_FLOOR // psi)) if psi > 0 else None
+        # `required_n(psi, delta)` -- psi FIRST. Both are small floats in the
+        # same range, so a transposed call is type-correct, returns a plausible
+        # integer, and answers a different question. Pinned by
+        # tests/test_instrument_power_contract.py on trunk.
+        #
+        # None is NOT missing data, and a bare null in an artifact reads as
+        # though it were. It carries one of two meanings and the reader cannot
+        # recover which, so say which:
+        #   psi == 0    -> no discordant pairs at all; the rate is undefined
+        #   delta > psi -> the planning MDE exceeds the observed discordance
+        #                  rate, so NO n reaches it. More rows will not help;
+        #                  a different instrument or a smaller target effect
+        #                  is the only route.
+        if psi <= 0:
+            planning_n = None
+            planning_note = "psi=0: no discordant pairs, so the rate is undefined"
+        else:
+            planning_n = required_n(psi, PLANNING_MDE)
+            planning_note = (
+                None
+                if planning_n is not None
+                else (
+                    f"unreachable at any n: planning MDE {PLANNING_MDE:.4f} "
+                    f"exceeds realized psi {psi:.4f}, so no sample size attains "
+                    "it. This is a property of the instrument, not of the budget."
+                )
+            )
         return {
             "verdict": "NOT A MEASUREMENT",
             "reason": (
@@ -131,9 +158,8 @@ def verdict(stats: dict) -> dict:
                 "any split. This is not a tie and not a null."
             ),
             "required_n_for_n_d_floor": floor_n,
-            "required_n_for_planning_mde": (
-                required_n(psi, PLANNING_MDE) if psi > 0 else None
-            ),
+            "required_n_for_planning_mde": planning_n,
+            "required_n_for_planning_mde_note": planning_note,
         }
     delta, p = stats["delta"], stats["mcnemar_exact_p"]
     if delta >= PLANNING_MDE and p < 0.05:
