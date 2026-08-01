@@ -26,7 +26,9 @@ require_nonempty() {
   done
 }
 
-stage="${1:?usage: s4_controls_run.sh {oncu|pilot|full|compare}}"
+# No braces in this message: the first `}` would close the parameter expansion
+# and the remainder would be appended to $1, silently corrupting the stage name.
+stage="${1:?usage: s4_controls_run.sh oncu|pilot|full|compare}"
 
 case "$stage" in
 oncu)
