@@ -2,8 +2,8 @@
   "schema_version": 1,
   "generated_by": "scripts/check_evidence_contract.py --report",
   "method": "Every tracked JSON under docs/build-log/artifacts/ carrying a decision key at depth <= 4 is a promotion-capable candidate. NOTHING here is backfilled: a field that cannot be verified from a banked artifact is left absent and reported as a violation rather than invented.",
-  "candidates": 58,
-  "contracted": 13,
+  "candidates": 74,
+  "contracted": 29,
   "pending_retrofit": 45,
   "failing": 45,
   "unverified_fields_total": 21,
@@ -50,6 +50,166 @@
     },
     {
       "artifact": "docs/build-log/artifacts/2026-08-01-a-recency/analysis-bitemporal-vs-arecency.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/abl_vs_s0_q1.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r2_vs_s0_conf.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r2_vs_s0_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_r2_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_s0_conf.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_s0_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_a_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_abl_q1.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_b_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r2_conf.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r2_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r3_conf.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r3_full.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_conf.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_dev.json",
+      "state": "contracted",
+      "decision_keys": [
+        "bar",
+        "power"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
+      "artifact": "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_full.json",
       "state": "contracted",
       "decision_keys": [
         "bar",

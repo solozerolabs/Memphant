@@ -1,0 +1,166 @@
+{
+  "arm_a": {
+    "name": "structured",
+    "report": "/private/tmp/claude-501/-Users-sidsharma-Memphant/935d7479-615e-44e9-9a36-bd3644add597/scratchpad/s.dev.json"
+  },
+  "arm_b": {
+    "name": "structured",
+    "report": "/private/tmp/claude-501/-Users-sidsharma-Memphant/935d7479-615e-44e9-9a36-bd3644add597/scratchpad/s0.dev.json"
+  },
+  "endpoints": {
+    "appropriate_application": {
+      "arm_a_rate": 0.3438735177865613,
+      "arm_b_rate": 0.30434782608695654,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.2946058091286307,
+          0.39705882352941174
+        ],
+        "arm_b_ci95": [
+          0.25,
+          0.36271186440677966
+        ],
+        "clusters": 54,
+        "delta_ci95": [
+          -0.008298755186722018,
+          0.08582089552238809
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.1625837416258374,
+      "delta_a_minus_b": 0.03952569169960474,
+      "discordant_a_only": 23,
+      "discordant_b_only": 13,
+      "endpoint": "appropriate_application",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.13249816396273673,
+      "n_instances": 54,
+      "n_probes": 253
+    },
+    "misapplication": {
+      "arm_a_rate": 0.6403162055335968,
+      "arm_b_rate": 0.6837944664031621,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.592274678111588,
+          0.6867469879518072
+        ],
+        "arm_b_ci95": [
+          0.6276150627615062,
+          0.7368421052631579
+        ],
+        "clusters": 54,
+        "delta_ci95": [
+          -0.08771929824561397,
+          0.0
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.10478952104789521,
+      "delta_a_minus_b": -0.0434782608695653,
+      "discordant_a_only": 12,
+      "discordant_b_only": 23,
+      "endpoint": "misapplication",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.0895310789346695,
+      "n_instances": 54,
+      "n_probes": 253
+    },
+    "neither_returned": {
+      "arm_a_rate": 0.011857707509881422,
+      "arm_b_rate": 0.007905138339920948,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.0,
+          0.024
+        ],
+        "arm_b_ci95": [
+          0.0,
+          0.018518518518518517
+        ],
+        "clusters": 54,
+        "delta_ci95": [
+          0.0,
+          0.012396694214876033
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 1.0,
+      "delta_a_minus_b": 0.003952569169960474,
+      "discordant_a_only": 1,
+      "discordant_b_only": 0,
+      "endpoint": "neither_returned",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 1.0,
+      "n_instances": 54,
+      "n_probes": 253
+    }
+  },
+  "evidence_contract": {
+    "attribution": {
+      "method": "bisect"
+    },
+    "bar": null,
+    "claim": "NON-DECISIONAL by preregistration: the dev slice is where tau was chosen. Arm S over arm S0, +0.0395, CI95 spans 0.",
+    "corpus": {
+      "n_items": 8147,
+      "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 8192,
+      "command": "scripts/external_instrument_adapter.py --instrument memorycode",
+      "embed_model": "fastembed-default",
+      "flags": [],
+      "k": 10,
+      "scorer": "memphant recall mode=fast"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "sessions": 360,
+        "topic": 8400,
+        "type": 8400
+      },
+      "license_evidence": "Cohere-Labs-Community/MemoryCode LICENSE file, recorded in benchmarks/manifests/memorycode.lock.json",
+      "license_id": "Apache-2.0",
+      "license_source": "LICENSE_FILE",
+      "rows_counted": 360,
+      "shipped_rows_verified": true
+    },
+    "leakage": null,
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Reported for completeness only; the threshold was selected on this slice.",
+    "notes": "Mechanism liveness verified from the arm's own scratch DB before it was dropped: arm S proposed 1091 targets, closed 1091 generations, 0 superseded rows left transaction-open, 0 competing live rows on a subject key, 0 remainders recalled; arm S0 is 0 on every counter while having seen the identical 7890 candidates and written the identical 7890-entry ledger. Reported for completeness only; the threshold was selected on this slice.",
+    "power": {
+      "b": 23,
+      "c": 13,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "mde_at_80": 0.06863704091059884,
+      "n": 253,
+      "n_d": 36,
+      "psi_observed": 0.1422924901185771,
+      "source": "/private/tmp/claude-501/-Users-sidsharma-Memphant/935d7479-615e-44e9-9a36-bd3644add597/scratchpad/s.dev.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "suppression",
+    "schema_version": 1
+  },
+  "paid_model_calls": 0,
+  "prereg": "docs/build-log/2026-08-01-preference-lane-prereg.md",
+  "primary_endpoint": "appropriate_application (latest-state-wins)",
+  "probes": 253,
+  "secondary_descriptive": {
+    "hit_at_1": {
+      "arm_a": 0.233201581027668,
+      "arm_b": 0.21739130434782608
+    },
+    "hit_at_k": {
+      "arm_a": 0.8142292490118577,
+      "arm_b": 0.8300395256916996
+    }
+  }
+}

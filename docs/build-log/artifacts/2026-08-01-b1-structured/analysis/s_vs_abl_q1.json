@@ -1,0 +1,166 @@
+{
+  "arm_a": {
+    "name": "structured",
+    "report": "/private/tmp/claude-501/-Users-sidsharma-Memphant/935d7479-615e-44e9-9a36-bd3644add597/scratchpad/s.q1.json"
+  },
+  "arm_b": {
+    "name": "structured",
+    "report": "docs/build-log/artifacts/2026-08-01-b1-structured/arm-r-ablation-recency.json"
+  },
+  "endpoints": {
+    "appropriate_application": {
+      "arm_a_rate": 0.3985239852398524,
+      "arm_b_rate": 0.3284132841328413,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.3458904109589041,
+          0.4557823129251701
+        ],
+        "arm_b_ci95": [
+          0.26996197718631176,
+          0.3905579399141631
+        ],
+        "clusters": 77,
+        "delta_ci95": [
+          0.023622047244094446,
+          0.11923076923076925
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.0103989601039896,
+      "delta_a_minus_b": 0.07011070110701106,
+      "discordant_a_only": 37,
+      "discordant_b_only": 18,
+      "endpoint": "appropriate_application",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.014453833533827731,
+      "n_instances": 77,
+      "n_probes": 271
+    },
+    "misapplication": {
+      "arm_a_rate": 0.5867158671586716,
+      "arm_b_rate": 0.6383763837638377,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.5289855072463768,
+          0.6404109589041096
+        ],
+        "arm_b_ci95": [
+          0.5720338983050848,
+          0.7033333333333334
+        ],
+        "clusters": 77,
+        "delta_ci95": [
+          -0.10389610389610382,
+          -0.0035460992907800915
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.07069293070692931,
+      "delta_a_minus_b": -0.05166051660516602,
+      "discordant_a_only": 19,
+      "discordant_b_only": 33,
+      "endpoint": "misapplication",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.07039422106706228,
+      "n_instances": 77,
+      "n_probes": 271
+    },
+    "neither_returned": {
+      "arm_a_rate": 0.007380073800738007,
+      "arm_b_rate": 0.025830258302583026,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.0,
+          0.017921146953405017
+        ],
+        "arm_b_ci95": [
+          0.008,
+          0.045774647887323945
+        ],
+        "clusters": 77,
+        "delta_ci95": [
+          -0.033707865168539325,
+          -0.00411522633744856
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.062193780621937804,
+      "delta_a_minus_b": -0.01845018450184502,
+      "discordant_a_only": 1,
+      "discordant_b_only": 6,
+      "endpoint": "neither_returned",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.125,
+      "n_instances": 77,
+      "n_probes": 271
+    }
+  },
+  "evidence_contract": {
+    "attribution": {
+      "method": "bisect"
+    },
+    "bar": null,
+    "claim": "EXPLORATORY. Arm S over the RESCUED un-rate-matched recency ablation on its own --group-mod 1/4 slice, +0.0701.",
+    "corpus": {
+      "n_items": 8147,
+      "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 8192,
+      "command": "scripts/external_instrument_adapter.py --instrument memorycode",
+      "embed_model": "fastembed-default",
+      "flags": [],
+      "k": 10,
+      "scorer": "memphant recall mode=fast"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "sessions": 360,
+        "topic": 8400,
+        "type": 8400
+      },
+      "license_evidence": "Cohere-Labs-Community/MemoryCode LICENSE file, recorded in benchmarks/manifests/memorycode.lock.json",
+      "license_id": "Apache-2.0",
+      "license_source": "LICENSE_FILE",
+      "rows_counted": 360,
+      "shipped_rows_verified": true
+    },
+    "leakage": null,
+    "mechanism_enabled": true,
+    "mechanism_evidence": "NOT DECISIONAL: the comparator carries no lineage block, so the tree and served binary that produced it are unrecoverable and the arms are not on the same pipeline stage. Context only. The rescued arm also ran at the default tau 0.35 and at fire_rate 0.096, which is 69% of arm S's measured 0.1383, so it was never rate-matched. Superseded as a comparator by arm R2.",
+    "notes": "NOT DECISIONAL: the comparator carries no lineage block, so the tree and served binary that produced it are unrecoverable and the arms are not on the same pipeline stage. Context only. The rescued arm also ran at the default tau 0.35 and at fire_rate 0.096, which is 69% of arm S's measured 0.1383, so it was never rate-matched. Superseded as a comparator by arm R2.",
+    "power": {
+      "b": 37,
+      "c": 18,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "mde_at_80": 0.07864088123947828,
+      "n": 271,
+      "n_d": 55,
+      "psi_observed": 0.2029520295202952,
+      "source": "/private/tmp/claude-501/-Users-sidsharma-Memphant/935d7479-615e-44e9-9a36-bd3644add597/scratchpad/s.q1.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "suppression",
+    "schema_version": 1
+  },
+  "paid_model_calls": 0,
+  "prereg": "docs/build-log/2026-08-01-preference-lane-prereg.md",
+  "primary_endpoint": "appropriate_application (latest-state-wins)",
+  "probes": 271,
+  "secondary_descriptive": {
+    "hit_at_1": {
+      "arm_a": 0.3173431734317343,
+      "arm_b": 0.22509225092250923
+    },
+    "hit_at_k": {
+      "arm_a": 0.8597785977859779,
+      "arm_b": 0.7638376383763837
+    }
+  }
+}
