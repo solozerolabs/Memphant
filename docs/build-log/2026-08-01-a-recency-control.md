@@ -448,3 +448,66 @@ and their output must go to a file rather than through a buffering pipe, or the
 diagnostics die with the process. Sibling lanes on this box lost time to the same
 shape.
 
+
+### 8.8 Two cross-checks that arrived after the verdict, both of which tighten it
+
+Neither changes a measured cell. Both are recorded because each closes a hole a
+reader would otherwise be right to poke at.
+
+**(a) The control is gold-aligned, so it is a strong baseline, not a strawman.**
+The sibling B1 lane (`w1-b1arm`, `a7f3e550`) measured a rate-matched *recency
+ablation* and found it near-null against its no-op control (R2 − S0 = −0.0086),
+then correctly refused to read that as evidence for semantics: an ablation that
+*retires* the most recent live prior spends every edge on the rows most likely to
+be golds, so it is a floor rather than a neutral baseline.
+
+The same question has to be asked of A-recency, and it comes out the opposite
+way. This control does not retire anything. It *selects* `max(observed_at)` per
+`fact_key` — and on MemoryCode the gold unit is by construction the latest
+session declaring that topic (`load_memorycode`: `occurrences[-1]`), with
+`observed_at` assigned in session order. **The control's read rule therefore
+computes the gold rule directly.** It is the most favourable trivial baseline this
+instrument admits, not a weak one. The bitemporal arm beating it by +3.0pp is a
+win over a baseline that was handed the answer's shape.
+
+**(b) The §7 pruning-placement confound is now measured, not just argued, and it
+did not bind.** §7 reasoned that the caps do not truncate at this scale. The run
+gives a sharper check than the cap arithmetic:
+
+| | rows the recall query can see |
+|---|---|
+| bitemporal (SQL filters `transaction_to` / `valid_to`) | 10489 active |
+| A-recency (nothing to filter; every row open) | 10489 active |
+
+**Exact parity.** The bitemporal arm's 3599 closed generations are excluded in
+SQL; the control never mints them. So both arms present the *same number* of live
+candidate rows to fusion, and the control is not spending pool slots on rows it
+is about to discard — the mechanism by which §7 feared the confound could bite.
+The confound is real in principle and inert here, for a reason stronger than the
+cap margin.
+
+Note what (b) does **not** rescue: the scale-conditional bound in §7 and §8.5
+stands unchanged. That parity is a property of *this* corpus, where a subject key
+carries ~3.4 assertions. Where a key carries many more, the control's pool fills
+with older generations of the same key while the bitemporal arm's does not, and
+the parity above breaks in the control's disfavour.
+
+The residual coverage gap is small and runs the same way: `hit@10` 0.9247 vs
+0.9087. With pool size held equal, that 1.6pp is the bitemporal arm ranking
+better inside an identically-sized pool, not the control being starved of one.
+
+**The sibling result, cited but kept out of these tables** (different arm pair,
+different branch, different tree — `0ecf8cb2`): B1's structured extractor beats
+its own no-op control by +0.0506 [+0.0269, +0.0753], but its *random* ablation
+also beats that control by +0.0259 [+0.0088, +0.0432], leaving the semantic
+increment at +0.0247 [−0.0033, +0.0532] — CI spanning zero, negative at their
+preregistered bar. Read together with this lane: the bitemporal *resolution* rule
+is worth ~3pp over the best trivial alternative (measured here), while the
+*semantic target selection* that feeds it is not yet demonstrably worth more than
+retiring an arbitrary prior (measured there). Those are separate claims about
+separate stages, and they are not in tension.
+
+Two near-inversions in one evening — this lane's from a stale banked ceiling
+(§8.6), theirs from a mis-specified ablation — were each caught only by re-running
+a control rather than citing one. **A banked ceiling is not a constant, and a
+baseline that moves in the gold's direction is not neutral.**
