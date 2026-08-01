@@ -12,7 +12,10 @@
 > 2026-08-01; this denominator drifts, do not carry it forward), but a
 > rate-matched arm that reads no bodies at all captures **half** of that, and
 > B1's semantic increment (+0.0247, CI [−0.0033, +0.0532]) **does not clear
-> zero** on the confirmatory slice. Positive mechanism, unproven semantics.
+> zero** on the confirmatory slice. Positive mechanism, unproven semantics —
+> **as implemented**, meaning a whole-body content-word Jaccard at τ = 0.25,
+> which §10.1 shows is the wrong unit and is the only selector anyone has run
+> live. This is not a verdict on semantic selection in general.
 
 ## 1. The problem B1 attacks
 
@@ -674,7 +677,11 @@ About half of that is **retirement per se**: a rate-matched arm that reads no
 bodies at all captures **+0.0259**, CI clear of zero.
 
 **Do B1's semantics add anything over plain distractor retirement?**
-**Not established.** S − R3 on the confirmatory slice is **+0.0247 with CI
+**Not established — for the selector that was run.** The qualifier is
+load-bearing and is stated before the number rather than after it: the only
+semantic selector any live arm has used is a whole-body content-word Jaccard at
+τ = 0.25, and §10.1 shows that unit is dominated by filler every session shares.
+A negative here is a negative about *that* selector. S − R3 on the confirmatory slice is **+0.0247 with CI
 [−0.0033, +0.0532]** — the interval includes zero, which the preregistration
 defines as a NEGATIVE. The point estimate is positive and roughly the size of
 the retirement effect, and the full-bank (secondary, dev-contaminated) figure
@@ -683,6 +690,19 @@ plausibly real and roughly half the total, and this experiment could not
 demonstrate it.* It is not a null result — n_d = 146, well above the floor, and
 the MDE on this slice is ~0.038 against a point estimate of 0.025 — it is an
 **underpowered positive**, and the fix is more probes, not a better story.
+
+*Why the qualifier, rather than the bare clause.* The point is owed to the
+A-recency lane (`w1-arecency` @ `bfb58631`), which took §7.1's shelf-life rule
+in the harder direction — against someone else's number rather than its own.
+That rule was stated for absolute *rates*: not differenced within a single run,
+so it has a shelf life. The sharpening is that **an absolute claim about a
+MECHANISM inherits the shelf life of the implementation it was measured on, not
+only of the tree it ran on** — and that this is the easier one to miss, because
+a finding arrives as prose and prose does not look like it has a denominator.
+"Unproven semantics" would have been carried forward indefinitely as a fact
+about semantic selection. It is a fact about one Jaccard at one τ. `as
+implemented` is what makes that denominator visible, and it belongs on more
+claims in this program than currently carry it.
 
 **Should B1 be pursued?** Qualified yes, in this order, and *not* as an LLM
 subsystem:
@@ -766,9 +786,11 @@ measured by re-running S against R3, or it is not measured.
 
 **What this log establishes for the register, stated so it cannot be over-read:**
 naming a unit id makes bitemporal supersession fire on a real corpus and buys
-≈16% of the oracle headroom (ceiling re-measured 2026-08-01, and drifting); roughly half of that is available to a policy that
-understands nothing; and the semantic half of it has not been demonstrated at
-the preregistered bar.
+≈16% of the oracle headroom (ceiling re-measured 2026-08-01, and drifting);
+roughly half of that is available to a policy that understands nothing; and the
+semantic half of it has not been demonstrated at the preregistered bar **by the
+one selector that has been run live — a whole-body Jaccard at τ = 0.25, which
+§10.1 shows is the wrong unit.**
 
 ## 11. Reproduce
 
