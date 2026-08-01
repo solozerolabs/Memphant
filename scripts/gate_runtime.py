@@ -574,14 +574,28 @@ def drain_worker(
             out = sh([worker_bin], env=env)
             if out.returncode != 0:
                 raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
+            # `memphant-worker/src/main.rs:124` prints the failure counts on the
+            # drain line, deliberately, so "completed zero" is distinguishable
+            # from "failed everything". This parser only accepted the bare
+            # `completed=N` form, so EVERY harness on this drain path raised
+            # "malformed" on the current worker. The richer fields are now read
+            # and, more to the point, ASSERTED -- printing them and then
+            # discarding them was the same defect one layer up.
             match = re.fullmatch(
-                r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout
+                r"memphant-worker: drain completed=(0|[1-9]\d*)"
+                r"(?: failed=(0|[1-9]\d*) retried=(0|[1-9]\d*) deferred=(0|[1-9]\d*))?\n?",
+                out.stdout,
             )
             if match is None:
                 raise RuntimeError(
                     f"worker drain completion output is malformed: {out.stdout[:300]!r}"
                 )
             completed = int(match.group(1))
+            if match.group(2) is not None and int(match.group(2)):
+                raise RuntimeError(
+                    f"worker drain reported {match.group(2)} FAILED jobs -- the "
+                    f"corpus is only partially compiled: {out.stdout.strip()!r}"
+                )
             total += completed
             pending = sh([
                 "psql", "--no-psqlrc", "--tuples-only", "--no-align",
