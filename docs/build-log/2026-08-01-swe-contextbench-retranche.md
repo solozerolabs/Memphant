@@ -623,3 +623,42 @@ Concretely: `benchmarks/manifests/*.lock.json` should carry an `effect_ceiling` 
 existing `power` block — the largest published effect, its source, and the ratio of ceiling to MDE at
 max n — and `scripts/instrument_power.py` should refuse to emit a staging plan when that ratio is
 below 1.
+
+## 14. The with-patch diagnostic arm: NOT MEASURED
+
+Two attempts, no artifact, and the runner refused to emit a number both times — which is the intended
+behaviour. Attempt 1 was **deliberately killed** minutes into ingest to release the host-wide
+bootstrap lock that was head-of-line blocking four sibling lanes at loadavg 56. Attempt 2 reached 150
+of 357 query batches before the harness's background-task lifecycle stopped it. Neither was a defect
+in the arm.
+
+**It was not re-run**, because its only purpose was to price what a code-bearing memory pool buys on
+retrieval — which is what the ~$737 trajectory-pool rebuild would have been paying for — and with
+stage 2 cancelled that decision no longer exists.
+
+**Therefore UNKNOWN:** how much including the gold merged patch would raise retrieval above the
+patch-free 0.7591. It is *expected* to be substantially higher. That is an expectation, not a
+measurement, and must not be cited as one.
+
+**Unaffected and complete:** the leakage measurement that made this arm diagnostic-only in the first
+place. The with-patch pool is inadmissible however well it retrieves — 75.5% of gold parents touch a
+target patch file, 32.4% share an identical touched-file set, 37.2% contain an exact target added
+line, 29.8% share at least half of them, against a same-repo random control of 9.1% / 0.13%.
+
+## 15. Final ledger
+
+| stage | disposition | spend |
+| --- | --- | --- |
+| 0 — retrieval gate | **COMPLETE, GREEN** (packed recall@5 = 0.759, 95% CI 0.713–0.801) | **$0.00** |
+| 0 — Lite comparator arm | **COMPLETE**, leads every published method at matched-or-smaller k | **$0.00** |
+| 0 — with-patch diagnostic | **NOT MEASURED**, not re-run, decision moot | **$0.00** |
+| 1 — ψ pilot ($40, n=30) | **CANCELLED** — purpose void; below the n_d floor at power 0.12 | **$0.00** |
+| scaffold liveness probe (~$1–5) | **APPROVED, NEVER STARTED, SKIPPED** | **$0.00** |
+| 2 — measurement ($504) | **CANCELLED** — unbuyable on `Resolved` before s4; closed by s4 after | **$0.00** |
+
+**Total: 0 model calls, $0.00 settled, $0.00 unsettled.**
+
+What the lane produced for that: a GREEN retrieval gate on a neutral public instrument with published
+comparators; a corrected census (357/1,007, not 376/1,100) confirmed four ways; a prevented
+contamination (the patch-bearing pool); four live defects; and an endpoint-power adjudication that
+retired $544 of planned spend on arithmetic that was available before any of it was scoped.

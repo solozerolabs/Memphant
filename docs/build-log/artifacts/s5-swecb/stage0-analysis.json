@@ -322,5 +322,21 @@
       "spend_authorised_but_not_spent": "Standing authority exists. It is not exercised here because no run below the re-scope decision changes a decision, except the ~$1 probe."
     }
   },
-  "pattern_across_lanes": "This is the third instrument in this programme to fail on a structural property rather than on MemPhant's quality, and the first to fail from the POWER side rather than the baseline side. S7 killed MDN browser-compat-data because a 20-line scoped_interval rule scores 1.0000 on every band; S6 found as-of saturation at 0.9064; both are cases where the gold is computable from the fact statements themselves, so a short rule saturates the baseline. SWE-ContextBench is the complement: its baseline is nowhere near saturated (19.68%), but the HEADROOM A MEMORY SYSTEM CAN ADDRESS is only 3.72pp, which is smaller than the instrument's own minimum detectable effect at its maximum n. Saturation kills an instrument from below; an effect ceiling under the MDE kills it from above. Both are properties of the instrument, both are cheap to check before spending, and neither is visible from a baseline rate alone."
+  "pattern_across_lanes": "This is the third instrument in this programme to fail on a structural property rather than on MemPhant's quality, and the first to fail from the POWER side rather than the baseline side. S7 killed MDN browser-compat-data because a 20-line scoped_interval rule scores 1.0000 on every band; S6 found as-of saturation at 0.9064; both are cases where the gold is computable from the fact statements themselves, so a short rule saturates the baseline. SWE-ContextBench is the complement: its baseline is nowhere near saturated (19.68%), but the HEADROOM A MEMORY SYSTEM CAN ADDRESS is only 3.72pp, which is smaller than the instrument's own minimum detectable effect at its maximum n. Saturation kills an instrument from below; an effect ceiling under the MDE kills it from above. Both are properties of the instrument, both are cheap to check before spending, and neither is visible from a baseline rate alone.",
+  "withpatch_diagnostic_arm": {
+    "status": "NOT MEASURED",
+    "attempts": 2,
+    "why_not": "Attempt 1 was deliberately killed a few minutes into ingest to release a host-wide bootstrap lock that was head-of-line blocking four sibling lanes at loadavg 56. Attempt 2 reached 150 of 357 query batches and was stopped by the harness's background-task lifecycle, not by a defect. In both cases the runner captured rc (143) and REFUSED to emit an artifact, which is the intended behaviour.",
+    "why_it_was_not_re_run": "Its only purpose was to price what a code-bearing memory pool buys on retrieval, which is what the ~$737 trajectory-pool rebuild would have been paying for. With stage 2 cancelled that rebuild is moot, so a third attempt would spend wall time to inform a decision that no longer exists.",
+    "what_is_therefore_UNKNOWN": "How much including the gold merged patch in the memory body would raise retrieval above the patch-free 0.7591. It is expected to be substantially higher, but that is an expectation and NOT a measurement, and it must not be cited as one.",
+    "what_is_known_and_stands": "The with-patch pool is INADMISSIBLE regardless of how well it retrieves: 75.5% of gold parents touch a target patch file, 32.4% share an identical touched-file set, 37.2% contain an exact target added line and 29.8% share at least half of them, against a same-repo random control of 9.1% and 0.13%. That leakage measurement is complete, was made before any cell existed, and is the reason the arm was diagnostic-only in the first place."
+  },
+  "final_disposition": {
+    "stage_0": "COMPLETE, GREEN, $0.00",
+    "stage_1": "CANCELLED -- purpose void (the surviving endpoint is powered across the whole psi range) and, at n=30, below the n_d>=6 floor with power 0.12",
+    "scaffold_liveness_probe": "APPROVED BUT NEVER STARTED, then skipped when stage 2 was cancelled. $0.00",
+    "stage_2": "CANCELLED. On Resolved it was never buyable (ceiling 3.72pp under an MDE of 3.38-8.32pp at max n=357). s4-controls then closed it independently: agentic grep 96.67% vs MemPhant 58.89% hits@10 on the Track R paraphrase bank, n=180, b=1 c=69 n_d=70, McNemar p=1.2e-19, delta -37.78pp against a realized MDE of 13.34pp.",
+    "total_lane_spend_usd": 0.0,
+    "model_calls": 0
+  }
 }
