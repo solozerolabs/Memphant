@@ -227,7 +227,20 @@ disk; the provenance report — the only file carrying the per-question diagnosi
 was never written. Nothing in the failure points at `.gitignore`. Fixed in
 `88b6e5f8` by ignoring the bare name, and the arm was re-run from scratch.
 
-**(b) The drain-line parser, below.**
+**(b) A third, found by the final verification run and NOT caused by this
+branch: `fast_mode_recall_holds_release_hot_path_slo`
+(`crates/memphant-core/tests/hot_path_slo.rs`) fails randomly under
+`cargo test --workspace`.** Its bar is `p50 < 200ms` and its name says
+*release*, but nothing enforces a release build, so the documented pre-commit
+command compiles it in **debug** — 12–17s per run versus 2.56s in release —
+where it sits on top of its own bar. Same binary, three consecutive runs at
+loadavg ~34: pass, pass, **FAILED at 206.4ms**. An earlier run under heavier
+load failed at 269ms; `--release` passes comfortably. A latency assertion with a
+3% margin on a shared machine is not measuring the code, and a pre-commit suite
+that goes red at random trains people to ignore it. Not fixed here (it is
+unrelated to this work and deserves its own change); filed as a follow-up.
+
+**(c) The drain-line parser, below.**
 
 `accuracy-first` @ `d01affad` carries the worker tick-honesty change, which made
 the drain line print `drain completed=N failed=N retried=N deferred=N`
