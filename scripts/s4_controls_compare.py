@@ -150,6 +150,141 @@ def verdict(stats: dict) -> dict:
     }
 
 
+def evidence_contract(headline: dict, treatment: dict, args) -> dict:
+    """The `evidence_contract` block for the headline contrast.
+
+    `decisional` is **false**, and not as a formality. The paraphrase bank fails
+    its OWN preregistered headline leakage bar — `leak_concentration_le_1_50` is
+    false at 2.018 and `bar_passed` is false in
+    `benchmarks/data/track_r_paraphrase_golden.lock.json` — and the corpus
+    licence is a HuggingFace card assertion with no LICENSE blob pinned. Both
+    are recorded in `w02-trunk-arms.json`'s contract and neither is fixable by
+    re-reading an artifact. The bank is used deliberately with those failures
+    declared, because it is still the least lexically confounded coding bank we
+    own; that is a reason to use it, not a reason to promote off it.
+    """
+    return {
+        "schema_version": 1,
+        "decisional": False,
+        "claim": (
+            "On the 180-question Track R paraphrase bank, at one shared endpoint "
+            "(gate_common.provenance_hit@10 over top-10 bodies), one haystack "
+            "(the golden's bound attempt) and one query string, MemPhant at its "
+            f"shipped bm25code_dense default scores {headline['treatment_hits']}/180 "
+            f"against {headline['control_hits']}/180 for a no-substrate agentic "
+            "control given only grep/read/ls over the same raw events: "
+            f"b={headline['treatment_only_b']} / c={headline['control_only_c']}, "
+            f"n_d={headline['n_discordant']}, delta={headline['delta_pp']}pp, "
+            f"two-sided exact McNemar p={headline['mcnemar_exact_p']:.4g}."
+        ),
+        "power": {
+            "test": "two-sided exact (conditional binomial) McNemar",
+            "n": headline["n"],
+            "b": headline["treatment_only_b"],
+            "c": headline["control_only_c"],
+            "n_d": headline["n_discordant"],
+            "psi_observed": headline["realized_psi"],
+            "mde_at_80": min_detectable_effect(
+                headline["n"], headline["realized_psi"]
+            ),
+            "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+            "source": (
+                "docs/build-log/artifacts/s4-controls/analysis.json "
+                "contrasts['memphant_vs_agentic_grep']"
+            ),
+        },
+        "harness": {
+            "embed_model": (
+                "treatment: small (bge-small-en-v1.5). agentic control: none — "
+                "no embeddings at all, which is the point of the arm."
+            ),
+            "scorer": (
+                "treatment: lexical=bm25-code + weighted-RRF fusion, recall "
+                "mode=fast. agentic control: anthropic/claude-opus-5 in a "
+                "bounded grep/read_event/list_events loop, provider pinned "
+                "only=[anthropic] allow_fallbacks=false, max_price "
+                "5.0/25.0 USD per million."
+            ),
+            "k": 10,
+            "budget": treatment.get("budget_tokens"),
+            "flags": [
+                "agentic caps: 12 tool calls, 16 turns, 24000 completion tokens "
+                "per question, grep<=25 matches, read_event<=6000 chars",
+                "treatment costs 0 LLM calls at recall",
+            ],
+            "command": "scripts/s4_controls_run.sh pilot && scripts/s4_controls_run.sh full",
+        },
+        "corpus": {
+            "sha256": treatment.get("corpus_sha256", "unverified"),
+            "snapshot_id": (
+                "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921 "
+                "(nebius/SWE-rebench-openhands-trajectories@35455389, 495 sampled "
+                "attempts, 64055 content events)"
+            ),
+            "n_items": headline["n"],
+            "path_note": (
+                "benchmarks/data/track_r_paraphrase_golden.jsonl is not tracked "
+                "in this repo (only its lock), so the checker cannot recompute "
+                "the golden sha here"
+            ),
+        },
+        "leakage": {
+            "unit_definition": "one content event of the attempt, 4000-char clip",
+            "absolute_target_coverage": 0.1346,
+            "floor": 0.0667,
+            "floor_kind": "exhaustive",
+            "concentration": 2.018,
+            "provenance_class": "machine_generated",
+            "source": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+            "negative_selection": (
+                "same-attempt hard negatives — every non-target content event of "
+                "the bound attempt, which is also exactly the retrieval haystack "
+                "for every arm here"
+            ),
+        },
+        "mechanism_enabled": True,
+        "mechanism_evidence": (
+            "Treatment: lexical_scorer='bm25-code' and embed_model='small' in the "
+            "served run's provenance, with BOTH 'lexical' and 'vector' entries "
+            "observed in its per-candidate channel_table on every question — "
+            "asserted by s4_controls_compare.assert_treatment_liveness, which "
+            "exits non-zero if either channel is absent. Control: every scored "
+            "row carries an executed tool call and a selection that resolves to "
+            "real event sequences in that attempt; rows_with_errors and "
+            "rows_with_zero_tool_calls are recorded in the arm's own liveness "
+            "block and both must be 0 before the arm is reported."
+        ),
+        "probe_kind": "gate",
+        "attribution": {
+            "method": "unverified",
+            "note": (
+                "No bisect and none applicable: this contrasts two different "
+                "retrieval systems, not two commits of one. The treatment is a "
+                "banked run at head 4a39ce5f with its binary sha256s recorded; "
+                "the control has no MemPhant binary in its path at all."
+            ),
+        },
+        "notes": (
+            "decisional=false for the two reasons carried by every artifact on "
+            "this bank and neither fixable by re-reading: (1) the bank FAILS its "
+            "own preregistered headline leakage bar — concentration 2.018 against "
+            "<=1.50, bar_passed=false in the lock; (2) the corpus licence "
+            "CC-BY-4.0 is a HuggingFace card assertion with no LICENSE blob "
+            "pinned. A third caveat is specific to THIS artifact and runs in the "
+            "direction of the result rather than against it: the paraphrase bank "
+            "bans identifier surfaces (q->target coverage 0.1346 vs human "
+            "0.175-0.287), which is the hardest regime for a lexical grep "
+            "control, so the control's margin here is a LOWER bound. Fourth: two "
+            "goldens (track_r_par_028, track_r_par_066) have spans that appear in "
+            "no event of their own attempt, so the ceiling is 178/180 for every "
+            "arm equally; verified symmetric, so it does not bias the contrast. "
+            "Fifth: an ONCU no-corpus probe answered 2/20 questions correctly "
+            "with no evidence, a bias that inflates the CONTROL, not the "
+            "treatment."
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--treatment", required=True, type=Path)
@@ -214,6 +349,9 @@ def main() -> int:
             "over MemPhant is a LOWER BOUND."
         ),
     }
+    headline = contrasts.get("memphant_vs_agentic_grep")
+    if headline is not None:
+        output["evidence_contract"] = evidence_contract(headline, treatment, args)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(output, indent=2) + "\n")
     print(json.dumps({"arms": {k: v["rate"] for k, v in arms.items()}}, indent=2))
