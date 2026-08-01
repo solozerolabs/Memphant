@@ -1,0 +1,14 @@
+{
+  "corpus_commit_archived": "96a26f1f",
+  "lock_recorded_commit": "6fe7f78f",
+  "corpus_files": 114,
+  "corpus_sections": 4920,
+  "section_revision": "sha256:82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885",
+  "sections_chunk_header_already_in_body": 4918,
+  "sections_chunk_header_from_uri_stem": 2,
+  "goldens": 120,
+  "goldens_every_required_span_resolved": 120,
+  "goldens_unresolved": [],
+  "gold_bearing_sections_with_chunk_text_beyond_body": 0,
+  "gold_questions_exposed_to_chunk_only_candidacy": []
+}

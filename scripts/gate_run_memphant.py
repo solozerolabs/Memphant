@@ -142,6 +142,7 @@ class Server:
         cross_rerank_candidates: str = "fused-head",
         reranker: str = "fastembed",
         rerank_granularity: str | None = None,
+        lexical_scorer: str | None = None,
     ) -> None:
         self.server_bin = server_bin
         self.database_url = database_url
@@ -156,6 +157,7 @@ class Server:
         self.cross_rerank_candidates = cross_rerank_candidates
         self.reranker = reranker
         self.rerank_granularity = rerank_granularity
+        self.lexical_scorer = lexical_scorer
         self.proc: subprocess.Popen | None = None
         self._log_file = None
 
@@ -196,6 +198,10 @@ class Server:
         env.pop("MEMPHANT_RERANK_MAX_LENGTH", None)
         env.pop("MEMPHANT_RERANK_BATCH_SIZE", None)
         env.pop("MEMPHANT_RERANK_GRANULARITY", None)
+        # Closed like the rerank vars above: an ambient MEMPHANT_LEXICAL_SCORER
+        # must never decide an arm silently. Unset here means "inherit the
+        # server's own shipped default" (bm25-code since 2026-08-01).
+        env.pop("MEMPHANT_LEXICAL_SCORER", None)
         env["MEMPHANT_APP_DATABASE_URL"] = self.database_url
         env["MEMPHANT_AUTHN_DATABASE_URL"] = self.database_url
         env["MEMPHANT_BIND"] = f"127.0.0.1:{self.port}"
@@ -214,6 +220,8 @@ class Server:
         if self.rerank_granularity:
             env["MEMPHANT_RERANK_GRANULARITY"] = self.rerank_granularity
         env["MEMPHANT_CROSS_RERANK_CANDIDATES"] = self.cross_rerank_candidates
+        if self.lexical_scorer:
+            env["MEMPHANT_LEXICAL_SCORER"] = self.lexical_scorer
         return env
 
     def start(self) -> None:
@@ -369,9 +377,26 @@ def drain_worker(
     out = sh([worker_bin], env=env)
     if out.returncode != 0:
         raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
-    match = re.fullmatch(r"memphant-worker: drain completed=(0|[1-9]\d*)\n?", out.stdout)
+    # Accept BOTH the bare form and the worker's tick-honesty form
+    # (`completed=N failed=N retried=N deferred=N`, memphant-worker/src/main.rs:124).
+    # This is the SECOND copy of this parser -- gate_runtime.py has the other --
+    # and it cost a full 53-minute 4920-section ingest that had already reported
+    # `completed=4920 failed=0 retried=0 deferred=0` before this line threw it
+    # away. A duplicated parser is a duplicated outage; fix both or neither.
+    # The failure count is parsed, not discarded: "drained nothing" and "failed
+    # everything" must not collapse into one accepted string.
+    match = re.fullmatch(
+        r"memphant-worker: drain completed=(0|[1-9]\d*)"
+        r"(?: failed=(0|[1-9]\d*) retried=(0|[1-9]\d*) deferred=(0|[1-9]\d*))?\n?",
+        out.stdout,
+    )
     if match is None:
         raise RuntimeError(f"worker drain completion output is malformed: {out.stdout[:300]!r}")
+    if match.group(2) is not None and int(match.group(2)):
+        raise RuntimeError(
+            f"worker drain reported {match.group(2)} FAILED jobs -- the corpus is "
+            f"only partially compiled: {out.stdout.strip()!r}"
+        )
     # This runner keeps its own copy of the drain (only `gate_runtime`'s lacks
     # the `resource_chunks` env), and the copy has NO caller-side count check —
     # so it needs the same independent, bench-credential queue-empty gate the
@@ -559,6 +584,7 @@ def build_provenance_report(
     expected_n: int | None = None,
     requested_rerank_config: dict[str, object] | None = None,
     cross_rerank_candidates: str = "fused-head",
+    lexical_scorer: str | None = None,
 ) -> dict:
     """Assembles the self-describing provenance-report header + per-question
     rows. ``breadcrumb`` records whether ``--breadcrumb`` was set for this
@@ -625,6 +651,9 @@ def build_provenance_report(
     runtime_config = {
         "runtime": "memphant-server resource ingest + /v1/recall",
         "embed_model": embed_model,
+        # None means the flag was omitted and the server used its own shipped
+        # default. Record what RAN, not the flag, so an arm is never ambiguous.
+        "lexical_scorer": lexical_scorer or "bm25-code",
         "breadcrumb": breadcrumb,
         "resource_chunks": resource_chunks,
         "cross_rerank": cross_rerank,
@@ -661,6 +690,7 @@ def build_provenance_report(
         "engine": "memphant",
         "runtime": "memphant-server resource ingest + /v1/recall",
         "embed_model": embed_model,
+        "lexical_scorer": lexical_scorer or "bm25-code",
         "label": label,
         "breadcrumb": breadcrumb,
         "resource_chunks": resource_chunks,
@@ -854,6 +884,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0,
         help="0 disables; 64 runs a separate high-budget candidate-oracle recall",
     )
+    parser.add_argument(
+        "--lexical-scorer", default=None,
+        choices=("overlap", "bm25-control", "bm25-code"),
+        help="MEMPHANT_LEXICAL_SCORER for the server arm (fusion's lexical "
+             "family). Omit to inherit the server's shipped default, bm25-code "
+             "since 2026-08-01; pass 'overlap' for the pre-flip control arm. "
+             "Selected here and nowhere else: Server.environment() closes the "
+             "inherited variable so an ambient value can never decide an arm",
+    )
     parser.add_argument("--port", type=int, default=39412)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--budget-tokens", type=int, default=8192)
@@ -975,6 +1014,7 @@ def main() -> int:
         cross_rerank_candidates=args.cross_rerank_candidates,
         reranker=args.reranker,
         rerank_granularity=args.rerank_granularity,
+        lexical_scorer=args.lexical_scorer,
     )
     # Symmetric cleanup: start() and the ingest/recall body are both inside
     # this try so the server child is always killed on any exception path,
@@ -1167,6 +1207,7 @@ def main() -> int:
                 expected_n=expected_n,
                 requested_rerank_config=requested_rerank_config,
                 cross_rerank_candidates=args.cross_rerank_candidates,
+                lexical_scorer=args.lexical_scorer,
             )
             if negative_summary is not None:
                 report["negative"] = negative_summary

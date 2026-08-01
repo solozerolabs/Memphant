@@ -1,6 +1,12 @@
 id: beam_100k_contradiction_contextual_chunk
 second_author_confirmed: true
 query: "Have I worked with Flask routes and handled HTTP requests in this project?"
+# Rung-4 proves the contextual-chunk DELTA: candidacy must come from the
+# chunk-aware `Semantic` overlap pass, which is the only pass that reads
+# `contextual_chunks`. The shipped default scorer (`bm25-code` since
+# 2026-08-01) scores unit BODIES only and cannot express this delta at all.
+# See docs/build-log/2026-08-01-dense-default-on.md.
+lexical_scorer: overlap
 seed:
   units:
     - name: beam_100k_flask_route_contradiction

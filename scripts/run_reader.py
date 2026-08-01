@@ -72,6 +72,34 @@ from provider_attempts import (
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 ENGINES = ("claude", "codex", "openrouter")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# $0 dry-run target. Three external instruments in this program failed at first
+# contact on OUR side, two of them after money was already authorized, and the
+# instrument register's single highest-leverage governance recommendation is a
+# stub round trip against the current contract before any paid authorization.
+# MEMPHANT_OPENROUTER_STUB_URL points the whole paid path — manifest validation,
+# ledger, reservation, request body, response_format, parsing, judging, report —
+# at a local stub so that round trip costs nothing.
+#
+# It is deliberately loopback-only and deliberately runs WITHOUT the real API
+# key: a stub URL that could be any host, carrying a live bearer token, is an
+# exfiltration primitive, and a stub run that authenticates for real is one
+# typo away from being a paid run that nobody accounted for.
+OPENROUTER_STUB_ENV = "MEMPHANT_OPENROUTER_STUB_URL"
+STUB_API_KEY = "stub-no-credential"
+
+
+def openrouter_endpoint() -> tuple[str, bool]:
+    """Returns (url, is_stub). Refuses any stub target that is not loopback."""
+    stub = os.environ.get(OPENROUTER_STUB_ENV)
+    if not stub:
+        return OPENROUTER_URL, False
+    host = urllib.parse.urlsplit(stub).hostname
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        raise RuntimeError(
+            f"{OPENROUTER_STUB_ENV} must be a loopback URL; refusing to send "
+            f"reader traffic to {host!r}"
+        )
+    return stub, True
 
 
 def _file_sha256(path: Path) -> str:
@@ -112,7 +140,15 @@ def validate_paid_authorization(
     execution = manifest.get("execution", {}).get(arm)
     if not all(isinstance(value, dict) for value in (frozen, models, limits, execution)):
         raise ValueError("paid authorization manifest arm is missing")
-    arm_prefix = "baseline" if arm == "baseline" else "treatment"
+    # The chat lane's two historical arm names keep their historical frozen-input
+    # prefixes so every packet already on disk still validates byte-for-byte. Any
+    # other arm name is its own prefix, which is what lets a lane with more than
+    # two arms (the coding lane has three) freeze them in one packet instead of
+    # splitting into several manifests whose ledgers cannot see each other's spend.
+    arm_prefix = {
+        "baseline": "baseline",
+        "treatment_and_paired_adjudication": "treatment",
+    }.get(arm, arm)
     expected = {
         f"{arm_prefix}_evidence_sha256": _file_sha256(evidence_path),
         f"{arm_prefix}_retrieval_sha256": (
@@ -273,6 +309,38 @@ READER_SYSTEM_PROMPTS = {
     2: READER_SYSTEM_PROMPT_V2,
 }
 
+# --reader-profile closed-book: the no-memory baseline arm.
+#
+# A no-memory arm run under the evidence-grounded prompts above is INERT, not
+# neutral: every evidence-profile prompt orders the reader to answer from the
+# evidence only, and the calibrated-abstention line then tells it to abstain
+# when no item bears on the question — which, with an empty pack, is always. It
+# would abstain on every row, score 0 by construction, and answer nothing about
+# whether the reader already knew. The saturation question ("does the reader
+# resolve these without any memory at all?") requires a prompt that permits a
+# parametric answer, so the closed-book arm gets one, and the difference is
+# recorded in the report as `reader_profile` rather than hidden.
+#
+# This makes the closed-book arm NOT prompt-identical to the scored arms. That
+# is a property of the question it answers, not a defect: it is a saturation
+# probe, never the paired comparator for a memory claim.
+READER_CLOSED_BOOK_INSTRUCTION = (
+    "You answer from your own knowledge. No retrieved evidence is available "
+    "for this question."
+)
+READER_CLOSED_BOOK_ABSTENTION = (
+    "Abstain only if you genuinely cannot produce a specific answer; give your "
+    "best-supported answer otherwise."
+)
+READER_SYSTEM_PROMPT_CLOSED_BOOK = " ".join(
+    [
+        READER_CLOSED_BOOK_INSTRUCTION,
+        READER_TERSE_INSTRUCTION,
+        READER_CLOSED_BOOK_ABSTENTION,
+        READER_OUTPUT_CONTRACT,
+    ]
+)
+
 # v3 (--prompt-version 3): stratum-routed prompt. Evidence: v2's CoT +
 # calibrated abstention moved temporal-reasoning 0.52->0.78 but regressed
 # multi-session 0.44->0.26 on the same lattice — the CoT reasoning helps
@@ -327,9 +395,15 @@ RAG_SUPPORTED_JUDGE_JSON_SCHEMA = {
     "properties": {
         "answer_correct": {"type": "boolean"},
         "fully_supported": {"type": "boolean"},
+        # No `minimum` here: Anthropic's structured-output validator rejects it
+        # outright ("For 'integer' type, property 'minimum' is not supported"),
+        # which failed every judge call on the coding lane's first paid pilot.
+        # Nothing is lost — `parse_rag_supported_judge_output` already requires
+        # every cited rank to be one of the ranks actually present in that row's
+        # pack, which is a strictly stronger check than `>= 1`.
         "supporting_evidence_ranks": {
             "type": "array",
-            "items": {"type": "integer", "minimum": 1},
+            "items": {"type": "integer"},
         },
     },
     "required": [
@@ -658,13 +732,49 @@ def response_contract(engine: str, kind: str, model: str | None = None) -> dict:
 def openrouter_provider_preferences(
     model: str,
     max_price_per_million: dict[str, Decimal] | None = None,
+    provider_only: list[str] | None = None,
 ) -> dict:
+    """Provider routing for one request.
+
+    ``provider_only`` pins the serving provider and turns fallbacks OFF.
+    ``require_parameters`` is not sufficient on its own: OpenRouter's endpoint
+    catalogue advertises ``structured_outputs`` for *every*
+    ``anthropic/claude-opus-5`` endpoint, but the Azure workspace actually
+    rejects it — ``structured_outputs not supported in your workspace`` — so a
+    run routed there loses every row to HTTP 400. Routing is decided per
+    request, so without a pin a campaign can clear a pilot and then lose rows
+    mid-run to a provider it never touched before. When provider identity
+    decides whether a row scores at all it is evidence, and evidence is pinned
+    rather than renegotiated on every call.
+    """
     preferences = {"require_parameters": True}
     if max_price_per_million is not None:
         preferences["max_price"] = {
             key: float(value) for key, value in max_price_per_million.items()
         }
-    if model == FLASH_MODEL:
+    if provider_only:
+        # `require_parameters` is dropped WITH a pin, and only with a pin.
+        # It filters on OpenRouter's advertised parameter list, which for
+        # `anthropic/claude-opus-5` omits `temperature` on the Anthropic
+        # endpoint even though the Anthropic API accepts it. Keeping the filter
+        # therefore leaves exactly one "eligible" endpoint — Azure — which then
+        # rejects `structured_outputs` outright. The three ways out were
+        # measured against the live API, one call each:
+        #
+        #   only=anthropic + require_parameters + temperature=0  -> 404, no endpoint
+        #   only=anthropic + temperature=0                       -> OK, schema honoured
+        #   only=anthropic + require_parameters, no temperature  -> OK, but decoding
+        #                                                           falls to the
+        #                                                           provider default
+        #
+        # The middle row is the only one that keeps deterministic decoding AND
+        # structured outputs, so it is what we ship. What `require_parameters`
+        # was buying — a guarantee that response_format is honoured — is carried
+        # instead by the explicit pin, by the strict fail-closed parsers, and by
+        # that probe. `max_price` is a separate filter and still applies.
+        preferences |= {"only": list(provider_only), "allow_fallbacks": False}
+        preferences.pop("require_parameters", None)
+    elif model == FLASH_MODEL:
         preferences |= {
             "only": [FLASH_PROVIDER],
             "allow_fallbacks": True,
@@ -719,6 +829,9 @@ class ReaderCli:
         self.reported_spend_usd = Decimal("0")
         self.unsettled_liability_usd = Decimal("0")
         self._active_cache_key: str | None = None
+        # Set by main() after construction; None preserves today's routing for
+        # every other caller of ReaderCli.
+        self.provider_only: list[str] | None = None
         self.last_call_metadata: dict | None = None
         self._openrouter_generation_lookup = None
 
@@ -754,7 +867,7 @@ class ReaderCli:
             )
         if self.engine == "openrouter":
             contract_identity["provider"] = openrouter_provider_preferences(
-                self.model_for(kind), self.max_price_per_million
+                self.model_for(kind), self.max_price_per_million, self.provider_only
             )
         contract = json.dumps(contract_identity, sort_keys=True, separators=(",", ":"))
         key = hashlib.sha256(
@@ -1010,7 +1123,7 @@ class ReaderCli:
             **decoding,
             "response_format": self.response_contract_for(kind)["response_format"],
             "provider": openrouter_provider_preferences(
-                self.model_for(kind), self.max_price_per_million
+                self.model_for(kind), self.max_price_per_million, self.provider_only
             ),
         }
         if self.reasoning_effort is not None:
@@ -1046,18 +1159,27 @@ class ReaderCli:
             self.provider_attempts += 1
             attempt_started = time.monotonic()
             try:
-                api_key = os.environ.get("OPENROUTER_API_KEY")
+                endpoint, is_stub = openrouter_endpoint()
+                api_key = STUB_API_KEY if is_stub else os.environ.get("OPENROUTER_API_KEY")
                 if not api_key:
                     raise RuntimeError(
                         "--engine openrouter requires OPENROUTER_API_KEY in the "
                         "environment; run via Doppler"
                     )
                 if self._openrouter_generation_lookup is None:
-                    self._openrouter_generation_lookup = openrouter_generation_lookup(
-                        api_key
+                    # base_url is passed ONLY when stubbing, so the live call
+                    # signature is unchanged and test doubles that replace this
+                    # function keep working.
+                    self._openrouter_generation_lookup = (
+                        openrouter_generation_lookup(
+                            api_key,
+                            base_url=endpoint.rsplit("/chat/completions", 1)[0],
+                        )
+                        if is_stub
+                        else openrouter_generation_lookup(api_key)
                     )
                 request = urllib.request.Request(
-                    OPENROUTER_URL,
+                    endpoint,
                     data=body,
                     method="POST",
                     headers={
@@ -1664,6 +1786,29 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--provider-only",
+        action="append",
+        default=[],
+        metavar="PROVIDER",
+        help=(
+            "pin the OpenRouter serving provider (repeatable) and disable "
+            "fallbacks. require_parameters alone is not enough: every "
+            "anthropic/claude-opus-5 endpoint advertises structured_outputs and "
+            "the Azure workspace rejects it, losing every row to HTTP 400"
+        ),
+    )
+    parser.add_argument(
+        "--reader-profile",
+        choices=("evidence", "closed-book"),
+        default="evidence",
+        help=(
+            "'evidence' (default) answers from the packed evidence only; "
+            "'closed-book' mints the no-memory saturation arm — it answers from "
+            "parametric knowledge, overrides --prompt-version's system prompt, "
+            "and is NOT prompt-identical to the evidence arms"
+        ),
+    )
+    parser.add_argument(
         "--judge-model",
         default=None,
         help="judge model id (defaults to --model; lets a stronger model judge)",
@@ -1721,8 +1866,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--authorization-arm",
-        choices=("baseline", "treatment_and_paired_adjudication"),
-        help="hard-limit arm in the paid authorization packet",
+        help=(
+            "hard-limit arm in the paid authorization packet. 'baseline' and "
+            "'treatment_and_paired_adjudication' keep their historical "
+            "frozen-input prefixes; any other name is its own prefix"
+        ),
     )
     parser.add_argument("--limit", type=int, help="only process the first N evidence rows (smoke)")
     parser.add_argument("--seed", type=int, default=20260710, help="bootstrap seed")
@@ -1840,8 +1988,16 @@ def main() -> int:
         cli.set_provider_attempt_ledger(attempt_ledger)
     if args.max_provider_attempts is not None:
         cli.set_provider_attempt_limit(args.max_provider_attempts)
+    # Before any call, and part of the cache key, so a reply produced by a
+    # different provider can never be reused under a new pin.
+    cli.provider_only = list(args.provider_only) or None
     reader_system_prompt = READER_SYSTEM_PROMPTS.get(args.prompt_version)
-    routing_counts = {"cot": 0, "terse": 0} if args.prompt_version == 3 else None
+    closed_book = args.reader_profile == "closed-book"
+    if closed_book:
+        reader_system_prompt = READER_SYSTEM_PROMPT_CLOSED_BOOK
+    routing_counts = (
+        {"cot": 0, "terse": 0} if args.prompt_version == 3 and not closed_book else None
+    )
     per_question: list[dict] = []
     aborted_reason = None
     for index, row in enumerate(rows):
@@ -1863,7 +2019,7 @@ def main() -> int:
         }
         if args.judge_profile == RAG_SUPPORTED_SCHEMA_ID:
             record.update(_rag_audit_defaults())
-        if args.prompt_version == 3:
+        if args.prompt_version == 3 and not closed_book:
             route, system_prompt = route_v3(row["question_type"], row["question"])
             routing_counts[route] += 1
         else:
@@ -1965,12 +2121,13 @@ def main() -> int:
         "source_evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),
         "retrieval_report_sha256": retrieval_report_sha256,
         "prompt_version": args.prompt_version,
+        "reader_profile": args.reader_profile,
         "active_reader_prompt_sha256": (
             {
                 "cot": sha256_text(READER_SYSTEM_PROMPT_V2),
                 "terse": sha256_text(READER_SYSTEM_PROMPT_V3_TERSE),
             }
-            if args.prompt_version == 3
+            if args.prompt_version == 3 and not closed_book
             else sha256_text(reader_system_prompt)
         ),
         "judge_system_prompt_sha256": sha256_text(judge_system_prompt),
@@ -2012,6 +2169,8 @@ def main() -> int:
         "judge_model_id": judge_model,
         "judge_profile": args.judge_profile,
         "prompt_version": args.prompt_version,
+        "reader_profile": args.reader_profile,
+        "provider_only": list(args.provider_only) or None,
         "routing": routing_counts,
         "reasoning_effort": args.reasoning_effort,
         "runtime": "postgres",
@@ -2025,8 +2184,16 @@ def main() -> int:
         "source_expected_n": len(source_rows),
         "evaluated_expected_n": len(rows),
         "smoke_only": smoke_only,
+        # A stub run must never be mistakable for a paid one, in either
+        # direction: the flag is recorded and it disqualifies promotion.
+        "openrouter_stub_url": os.environ.get(OPENROUTER_STUB_ENV),
         "complete": complete,
-        "promotion_ineligible": smoke_only or not complete or any(errors.values()),
+        "promotion_ineligible": (
+            smoke_only
+            or not complete
+            or any(errors.values())
+            or bool(os.environ.get(OPENROUTER_STUB_ENV))
+        ),
         "errors": errors,
         "evidence_sha256": hashlib.sha256(evaluated_evidence_bytes).hexdigest(),
         "source_evidence_sha256": hashlib.sha256(evidence_bytes).hexdigest(),

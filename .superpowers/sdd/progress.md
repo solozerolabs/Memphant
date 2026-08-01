@@ -502,9 +502,11 @@ Artifacts: `docs/build-log/artifacts/track-r/track_r_phase1d_packing_rank_order.
 Answers the Phase 1c kill gate on its own construct. Build log:
 `docs/build-log/2026-07-30-phase1r-retrieval-bm25.md`. $0 paid spend.
 
-`MEMPHANT_LEXICAL_SCORER` (default `overlap`, byte-identical off-path) replaces
-fusion's two token-overlap passes with ONE Okapi BM25 pass over the recall
-candidate pool. Same 180 goldens (`6f549daa…`), same attempt-scoped haystack,
+`MEMPHANT_LEXICAL_SCORER` (default `overlap` **at the time of this entry** —
+flipped to `bm25-code` on 2026-08-01, see
+`docs/build-log/2026-08-01-dense-default-on.md`; `overlap` is now the opt-out)
+replaces fusion's two token-overlap passes with ONE Okapi BM25 pass over the
+recall candidate pool. Same 180 goldens (`6f549daa…`), same attempt-scoped haystack,
 same stage (fused ranked top-k), exact McNemar:
 
 | arm | embed | r@5 | r@10 | @5 vs scoped BM25 | @10 vs scoped BM25 |
@@ -846,7 +848,8 @@ at fused rank ≥ 11, absent-from-pool 4). `fused_top10_ceiling` 173 in BOTH arm
 
 **Chat lane — the gate, and it passes.** Two `bench-lme` arms, dev split
 `e4667bed…`, `--sample 178 --seed 20260710 --k 10 --budget-tokens 8192 --pool 64
---embed-model small`, product-default `overlap` scorer.
+--embed-model small`, product-default `overlap` scorer (product default as of
+that run; `bm25-code` since 2026-08-01).
 
 - r@5 and r@10 **0.6145 in both arms**, reproducing the committed rung-7
   baseline exactly; 102/166 hits both; **0 flips in either direction**,

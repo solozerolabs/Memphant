@@ -1,0 +1,33 @@
+{
+  "arm": "bm25-code+dense",
+  "control": "overlap+dense",
+  "sample_n": 20,
+  "seed": 1,
+  "lexical_scorer_recorded": [
+    "overlap",
+    "bm25-code"
+  ],
+  "embed_model": "small",
+  "hit_at_5": {
+    "graded_n": 20,
+    "bm25code_hits": 12,
+    "overlap_hits": 11,
+    "both": 11,
+    "arm_only": 1,
+    "control_only": 0,
+    "neither": 8,
+    "discordant": 1,
+    "mcnemar_exact_p": 1.0
+  },
+  "hit_at_10": {
+    "graded_n": 20,
+    "bm25code_hits": 12,
+    "overlap_hits": 11,
+    "both": 11,
+    "arm_only": 1,
+    "control_only": 0,
+    "neither": 8,
+    "discordant": 1,
+    "mcnemar_exact_p": 1.0
+  }
+}

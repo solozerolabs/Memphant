@@ -597,11 +597,17 @@ pub struct PackLevers {
 
 /// Which lexical scorer the fusion's lexical family uses, threaded
 /// construction-time exactly like [`PackLevers`] — no `RecallRequest`/wire
-/// field. [`LexicalScorer::Overlap`] is the DEFAULT and byte-identical to
-/// today: two token-overlap passes (body-overlap density + token-set Jaccard)
-/// both reported under `RecallChannel::Lexical`.
+/// field.
 ///
-/// The BM25 variants replace BOTH of those passes with ONE Okapi BM25 pass
+/// [`LexicalScorer::Bm25Code`] is the DEFAULT (flipped 2026-08-01). Together
+/// with the default-on dense embedder (`MEMPHANT_EMBEDDINGS` unset →
+/// bge-small-en-v1.5) this makes the shipped configuration the measured
+/// `bm25code_dense` arm. [`LexicalScorer::Overlap`] — the two token-overlap
+/// passes (body-overlap density + token-set Jaccard) that used to be the
+/// default — remains reachable as the deterministic control arm via
+/// `MEMPHANT_LEXICAL_SCORER=overlap`.
+///
+/// The BM25 variants replace BOTH overlap passes with ONE Okapi BM25 pass
 /// (k1=1.2, b=0.75) scored over the recall candidate pool, still reported under
 /// `RecallChannel::Lexical`, at the combined weight of the two passes it
 /// replaces. They differ only in tokenization. Motivation is measured, not
@@ -612,8 +618,8 @@ pub struct PackLevers {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum LexicalScorer {
-    /// Today's two token-overlap passes. Default; off-path is unchanged.
-    #[default]
+    /// The two token-overlap passes. The pre-2026-08-01 default, kept as the
+    /// deterministic control arm.
     Overlap,
     /// BM25 over [`bm25_control_tokens`] — the tokenization the repo's own
     /// deterministic BM25 control uses (`scripts/code_lane_run_deterministic.py`),
@@ -621,7 +627,8 @@ pub enum LexicalScorer {
     Bm25Control,
     /// BM25 over [`bm25_code_tokens`]: every control token PLUS its
     /// alphanumeric sub-tokens, so `src/foo/bar.py` and `snake_case_name`
-    /// match both as a whole identifier and by part.
+    /// match both as a whole identifier and by part. **The shipped default.**
+    #[default]
     Bm25Code,
 }
 
@@ -14490,13 +14497,17 @@ mod pack_cost_tests {
     }
 
     #[test]
-    fn the_default_lexical_scorer_emits_no_feature_flag() {
-        assert_eq!(LexicalScorer::default(), LexicalScorer::Overlap);
-        assert_eq!(LexicalScorer::Overlap.flag(), None);
+    fn the_default_lexical_scorer_is_bm25_code_and_names_itself_in_the_trace() {
+        // Flipped 2026-08-01: bm25-code is the shipped default, so a served
+        // recall carries `lexical_scorer:bm25-code` as positive evidence that
+        // the BM25 pass — not the overlap passes — actually ran. The overlap
+        // control arm stays flagless, exactly as before.
+        assert_eq!(LexicalScorer::default(), LexicalScorer::Bm25Code);
         assert_eq!(
-            LexicalScorer::Bm25Code.flag(),
+            LexicalScorer::default().flag(),
             Some("lexical_scorer:bm25-code")
         );
+        assert_eq!(LexicalScorer::Overlap.flag(), None);
     }
 
     fn candidate(unit: StoredMemoryUnit, fused_score: f32) -> CandidateAccumulator {

@@ -1,6 +1,14 @@
 id: contextual_chunk_breaker
 second_author_confirmed: true
 query: "What is the albatross codeword?"
+# Candidacy here comes ONLY from the chunk-aware `Semantic` token-set-overlap
+# pass: the unit body ("Runbook contains a gated switch.") shares no term with
+# the query, the chunk does. The shipped default scorer (`bm25-code` since
+# 2026-08-01) scores unit BODIES only, so it cannot see this unit at all. That
+# gap is real, pinned in memphant-core's `recall_trace_golden.rs`, and recorded
+# in docs/build-log/2026-08-01-dense-default-on.md. This case names the scorer
+# it is actually testing rather than silently passing or silently failing.
+lexical_scorer: overlap
 seed:
   units:
     - name: mem_contextual_breaker

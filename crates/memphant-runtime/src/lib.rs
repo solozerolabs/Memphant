@@ -4,6 +4,15 @@
 //! provider seam. Binaries built with the `fastembed` feature (the shipped
 //! server/worker default) embed with local bge-small-en-v1.5 unless
 //! `MEMPHANT_EMBEDDINGS=off`; feature-less binaries fall back to Noop.
+//!
+//! **Shipped retrieval default (2026-08-01): `bm25code_dense`.** Dense
+//! retrieval is ON by default (the `MEMPHANT_EMBEDDINGS`-unset path above) and
+//! the lexical family defaults to code-aware Okapi BM25
+//! (`MEMPHANT_LEXICAL_SCORER` unset → `bm25-code`). This is the configuration
+//! measured on the decontaminated Track R paraphrase bank: `dense + bm25-code`
+//! vs `bm25-code` alone is b=29/c=5 fused@10, p=3.86e-05. There is no gate and
+//! no opt-in; the only escape hatches are the two env vars, which exist so the
+//! eval harness can run deterministic control arms.
 
 use std::sync::Arc;
 
@@ -558,9 +567,12 @@ fn pack_submodular_ordering_from_env() -> Result<bool, String> {
 /// `MEMPHANT_RESOURCE_CHUNKS` → bool. Truthy (`1`/`true`/`on`, case-insensitive)
 /// enables the resource-chunk write path; unset/empty/anything else keeps it OFF
 /// (the shipped default), so no env means byte-identical-to-today behavior.
-/// `MEMPHANT_LEXICAL_SCORER` → [`LexicalScorer`]. Unset/empty/`overlap` keeps
-/// today's two token-overlap passes; `bm25-control` and `bm25-code` select the
-/// Okapi BM25 lexical family. Threaded from ONE env var into
+/// `MEMPHANT_LEXICAL_SCORER` → [`LexicalScorer`], **default `bm25-code`**
+/// (flipped 2026-08-01). Unset/empty selects the Okapi BM25 code-aware pass,
+/// which together with the default-on dense embedder is the measured
+/// `bm25code_dense` configuration. `overlap` restores the two token-overlap
+/// passes for the deterministic control arm; `bm25-control` selects BM25 with
+/// the control tokenization. Threaded from ONE env var into
 /// [`build_base_service`] so server and worker resolve it identically, the same
 /// pattern as `MEMPHANT_RECALL_POOL_DEPTH`.
 fn lexical_scorer_from_env() -> Result<LexicalScorer, String> {
@@ -569,9 +581,9 @@ fn lexical_scorer_from_env() -> Result<LexicalScorer, String> {
 
 fn lexical_scorer_from_value(value: Option<&str>) -> Result<LexicalScorer, String> {
     match value.map(str::trim).filter(|value| !value.is_empty()) {
-        None | Some("overlap") => Ok(LexicalScorer::Overlap),
+        None | Some("bm25-code") => Ok(LexicalScorer::Bm25Code),
+        Some("overlap") => Ok(LexicalScorer::Overlap),
         Some("bm25-control") => Ok(LexicalScorer::Bm25Control),
-        Some("bm25-code") => Ok(LexicalScorer::Bm25Code),
         Some(other) => Err(format!(
             "must be one of overlap, bm25-control, bm25-code, got {other:?}"
         )),
@@ -1373,17 +1385,29 @@ mod tests {
     }
 
     #[test]
-    fn lexical_scorer_defaults_to_overlap_and_fails_closed() {
-        for value in [None, Some(""), Some("  "), Some("overlap")] {
-            assert_eq!(lexical_scorer_from_value(value), Ok(LexicalScorer::Overlap));
+    fn lexical_scorer_defaults_to_bm25_code_and_fails_closed() {
+        // Flipped 2026-08-01. Unset MUST resolve to bm25-code, and it MUST
+        // agree with `LexicalScorer::default()` — the served path picks up the
+        // enum default through `MemoryService::new`, the env path through here,
+        // and a drift between the two silently ships two different products.
+        for value in [None, Some(""), Some("  "), Some("bm25-code")] {
+            assert_eq!(
+                lexical_scorer_from_value(value),
+                Ok(LexicalScorer::Bm25Code)
+            );
         }
+        assert_eq!(
+            lexical_scorer_from_value(None),
+            Ok(LexicalScorer::default())
+        );
         assert_eq!(
             lexical_scorer_from_value(Some(" bm25-control ")),
             Ok(LexicalScorer::Bm25Control)
         );
+        // The only escape hatch: the deterministic overlap control arm.
         assert_eq!(
-            lexical_scorer_from_value(Some("bm25-code")),
-            Ok(LexicalScorer::Bm25Code)
+            lexical_scorer_from_value(Some("overlap")),
+            Ok(LexicalScorer::Overlap)
         );
         assert!(lexical_scorer_from_value(Some("bm25")).is_err());
         assert!(lexical_scorer_from_value(Some("BM25-CODE")).is_err());

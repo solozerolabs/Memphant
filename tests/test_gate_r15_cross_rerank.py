@@ -194,6 +194,28 @@ def test_worker_drain_fails_closed_on_malformed_or_missing_completion(gr, monkey
         gr.drain_worker("worker", "db")
 
 
+def test_worker_drain_accepts_the_tick_honesty_line_and_raises_on_failed_jobs(gr, monkeypatch, tmp_path):
+    """This runner keeps a SECOND copy of the drain parser (gate_runtime.py has
+    the other). The bare-form-only regex here silently discarded a completed
+    53-minute 4920-section docs ingest that had already reported
+    `completed=4920 failed=0 retried=0 deferred=0`. A duplicated parser is a
+    duplicated outage, so both copies carry this contract."""
+    def fake_sh(command, **kwargs):
+        if command and command[0] == "psql":
+            return type("Result", (), {"returncode": 0, "stdout": "0|0\n", "stderr": ""})()
+        return type("Result", (), {"returncode": 0, "stdout": fake_sh.stdout, "stderr": ""})()
+
+    monkeypatch.setattr(gr, "sh", fake_sh)
+    monkeypatch.setattr(sys.modules[gr.assert_worker_queue_empty.__module__], "sh", fake_sh)
+
+    fake_sh.stdout = "memphant-worker: drain completed=4920 failed=0 retried=0 deferred=0\n"
+    assert gr.drain_worker("worker", "db") == 4920
+
+    fake_sh.stdout = "memphant-worker: drain completed=4918 failed=2 retried=0 deferred=0\n"
+    with pytest.raises(RuntimeError, match="2 FAILED jobs"):
+        gr.drain_worker("worker", "db")
+
+
 def test_worker_drain_fails_closed_on_process_failure(gr, monkeypatch):
     monkeypatch.setattr(
         gr,
@@ -521,6 +543,10 @@ def test_provenance_report_aggregates_reranker_facts_and_fingerprints_config(gr)
     assert report["runtime_config"] == {
         "runtime": "memphant-server resource ingest + /v1/recall",
         "embed_model": "small",
+        # In the fingerprint on purpose: two docs-lane arms that differ ONLY in
+        # the lexical scorer must not share a runtime_config_fingerprint, or the
+        # artifacts cannot be told apart after the fact.
+        "lexical_scorer": "bm25-code",
         "breadcrumb": False,
         "resource_chunks": False,
         "cross_rerank": True,
