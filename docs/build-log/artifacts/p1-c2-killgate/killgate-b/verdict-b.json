@@ -1,0 +1,324 @@
+{
+  "accuracy_legs_pass": false,
+  "aggregate": {
+    "hit10_base": 0.225,
+    "hit10_rerank": 0.16666666666666666
+  },
+  "effect": {
+    "mde_at_80_from_this_runs_psi": 0.10364688301369955,
+    "per_set": {
+      "v1": {
+        "base_only_c": 7,
+        "both": 4,
+        "clears_nd_floor_of_6": true,
+        "delta": -0.08333333333333333,
+        "n": 60,
+        "n_d": 9,
+        "neither": 47,
+        "p_exact": 0.1796875,
+        "psi": 0.15,
+        "psi_ci95_wilson": [
+          0.08097440579001275,
+          0.26114589072802935
+        ],
+        "rerank_only_b": 2
+      },
+      "v2": {
+        "base_only_c": 6,
+        "both": 10,
+        "clears_nd_floor_of_6": true,
+        "delta": -0.03333333333333333,
+        "n": 60,
+        "n_d": 10,
+        "neither": 40,
+        "p_exact": 0.75390625,
+        "psi": 0.16666666666666666,
+        "psi_ci95_wilson": [
+          0.09313176977917205,
+          0.28031613166658237
+        ],
+        "rerank_only_b": 4
+      }
+    },
+    "pooled_at10": {
+      "base_only_c": 13,
+      "both": 14,
+      "clears_nd_floor_of_6": true,
+      "delta": -0.058333333333333334,
+      "n": 120,
+      "n_d": 19,
+      "neither": 87,
+      "p_exact": 0.1670684814453125,
+      "psi": 0.15833333333333333,
+      "psi_ci95_wilson": [
+        0.10376977358371119,
+        0.23409332347870926
+      ],
+      "rerank_only_b": 6
+    },
+    "pooled_at5": {
+      "base_only_c": 9,
+      "both": 8,
+      "clears_nd_floor_of_6": true,
+      "delta": -0.025,
+      "n": 120,
+      "n_d": 15,
+      "neither": 97,
+      "p_exact": 0.60723876953125,
+      "psi": 0.125,
+      "psi_ci95_wilson": [
+        0.07723497272521943,
+        0.19602940209938843
+      ],
+      "rerank_only_b": 6
+    },
+    "test": "two-sided exact (conditional binomial) McNemar, alpha=0.05"
+  },
+  "endpoint": "retrieval hit@10, gate_common.provenance_hit span containment, no reader, no judge",
+  "evidence_contract": {
+    "claim": "A full-pool (64-candidate) chunk-granularity MiniLM-L6-int8 cross-rerank neither fits the 1500 ms ceiling (p50 2142 ms / p95 3275 ms, release, uncontended) nor reproduces the L1XC retrieval advantage (delta -0.058, n=120, n_d=19, p=0.167) on the pinned Syndai docs bank; C2 kill-gate (b) fails and the R6 docs-lane spend is not authorized.",
+    "corpus": {
+      "n_items": 4920,
+      "sha256": "82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885",
+      "snapshot_id": "syndai-docs@96a26f1f (git-archive of the pinned tree, 114/114 files verified)"
+    },
+    "decisional": true,
+    "harness": {
+      "budget": 8192,
+      "build_profile": "release",
+      "command": "docs/build-log/artifacts/p1-c2-killgate/killgate-b/run_arms.sh",
+      "embed_model": "modernbert",
+      "flags": [
+        "--mode fast",
+        "--resource-chunks",
+        "rerank arm: --cross-rerank --reranker byo --rerank-granularity chunk --rerank-candidate-limit 64 --rerank-max-length 512"
+      ],
+      "k": 10,
+      "scorer": "gate_common.provenance_hit span containment (hit@10), retrieval endpoint only"
+    },
+    "leakage": null,
+    "power": {
+      "b": 6,
+      "c": 13,
+      "mde_at_80": 0.10364688301369955,
+      "n": 120,
+      "n_d": 19,
+      "psi_observed": 0.15833333333333333,
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "schema_version": 1
+  },
+  "failing_reasons": [
+    "latency: p95 3275 ms breaches the 1500 ms ceiling",
+    "effect: delta -0.0583, exact p = 0.1671 \u2014 the paired test does not reject"
+  ],
+  "gate": "C2 kill-gate (b) \u2014 full-pool sub-second chunk-rerank on the retrieval endpoint",
+  "latency": {
+    "build_profile": "release",
+    "ceiling_ms": 1500,
+    "figures_are_upper_bounds_only": false,
+    "host": {
+      "concurrency_caveat": "sibling git worktrees of this repo ran full-corpus ingests on the same host during this wave. Under contention a wall-clock latency figure measures the run queue, not the model, so it is recorded as an UPPER BOUND and is not allowed to decide the latency leg either way. The retrieval half is unaffected: span containment is deterministic and does not depend on how long anything took.",
+      "contended": false,
+      "cpu_count": 12,
+      "governing_loadavg": 9.58,
+      "governing_loadavg_per_core": 0.7983333333333333,
+      "governing_loadavg_source": "the rerank arm's own start-of-run stamp \u2014 it owns the latency sample. Scoring-time loadavg is recorded too but does not decide contention: scoring runs after the box has drained.",
+      "loadavg_1_5_15": [
+        2.06005859375,
+        7.0517578125,
+        12.052734375
+      ],
+      "loadavg_per_core": 0.17167154947916666,
+      "loadavg_source": "at scoring time; per-arm start-of-run loadavg below",
+      "per_arm_start": {
+        "base": "arm=base start=2026-08-01T07:06:05Z cpu_count=12\n 0:06  up  3:22, 1 user, load averages: 35.50 34.55 30.56",
+        "rerank": "arm=rerank start=2026-08-01T07:54:21Z cpu_count=12\n 0:54  up  4:10, 1 user, load averages: 9.58 11.92 17.72"
+      },
+      "quiet_bar_per_core": 1.5
+    },
+    "inherited_claim_ms": 449,
+    "inherited_claim_source": "docs/build-log/2026-07-22-reranker-latency-spike.md, synthetic 64x~1.5KB body-granularity matrix",
+    "inherited_claim_status": "RETRACTED \u2014 re-measured on the same #[ignore]d matrix, same model dir, same --release profile: 1140/1871/1448/1472 ms, median ~1460 ms, 2 of 4 samples breaching the 1500 ms ceiling. That matrix is BODY granularity on synthetic ~1.5 KB docs, the cheapest case; this arm runs CHUNK granularity on real sections and can only be slower. The figure below is the authoritative one.",
+    "max_ms": 3852,
+    "n": 120,
+    "p50_ms": 2142,
+    "p95_ms": 3275,
+    "p95_under_ceiling": false,
+    "source": "this run's own per-question cross_rerank_ms on this host",
+    "valid_for_a_ceiling_claim": true,
+    "verdict": "BREACHES CEILING"
+  },
+  "latency_leg": "BREACHES CEILING",
+  "lineage": {
+    "arms_differ_only_in_cross_rerank": true,
+    "build_profile": "release",
+    "corpus_pin": "syndai-docs @ 96a26f1f842a4f76eb46c2e7c5385b1ec835238e \u2014 git-archive of the pinned tree into a scratch dir, 114/114 files sha256-verified against benchmarks/manifests/syndai_docs_gate.lock.json before ingest. The live Syndai HEAD (7cbcd13e) has drifted off the pin and fails the corpus contract; the archive preserves the pin without re-mining.",
+    "corpus_revision": "sha256:82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885",
+    "fields": {
+      "v1.budget_tokens": {
+        "base": 8192,
+        "match": true,
+        "rerank": 8192
+      },
+      "v1.corpus_revision": {
+        "base": "sha256:82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885",
+        "match": true,
+        "rerank": "sha256:82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885"
+      },
+      "v1.embed_model": {
+        "base": "modernbert",
+        "match": true,
+        "rerank": "modernbert"
+      },
+      "v1.golden_sha256": {
+        "base": "8cb21da4ec3c5215dbe04f0f23eba8ab07a8bb0c3134bc2482cbd0695d68fd64",
+        "match": true,
+        "rerank": "8cb21da4ec3c5215dbe04f0f23eba8ab07a8bb0c3134bc2482cbd0695d68fd64"
+      },
+      "v1.haystack_sections": {
+        "base": 4920,
+        "match": true,
+        "rerank": 4920
+      },
+      "v1.k": {
+        "base": 10,
+        "match": true,
+        "rerank": 10
+      },
+      "v1.resource_chunks": {
+        "base": true,
+        "match": true,
+        "rerank": true
+      },
+      "v2.budget_tokens": {
+        "base": 8192,
+        "match": true,
+        "rerank": 8192
+      },
+      "v2.corpus_revision": {
+        "base": "sha256:82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885",
+        "match": true,
+        "rerank": "sha256:82a1eecacbf0414cc7e0da2923f8725ee948771784141d2994bb5ffbc4035885"
+      },
+      "v2.embed_model": {
+        "base": "modernbert",
+        "match": true,
+        "rerank": "modernbert"
+      },
+      "v2.golden_sha256": {
+        "base": "1dc12fbb1f76fbfb2c33848924b8d612d9ce022d2d31117800057bcab942d671",
+        "match": true,
+        "rerank": "1dc12fbb1f76fbfb2c33848924b8d612d9ce022d2d31117800057bcab942d671"
+      },
+      "v2.haystack_sections": {
+        "base": 4920,
+        "match": true,
+        "rerank": 4920
+      },
+      "v2.k": {
+        "base": 10,
+        "match": true,
+        "rerank": 10
+      },
+      "v2.resource_chunks": {
+        "base": true,
+        "match": true,
+        "rerank": true
+      }
+    },
+    "git_branch": "w1-r6gate",
+    "git_dirty": true,
+    "memphant_git_head": "b24b5f36dd68aa0085fa8d2b7bb47d0db731a0bc",
+    "runtime_config_fingerprints": {
+      "v1": {
+        "base": "52d8ddc715479f2b453fdc4df48b98dd2cc1ad6674c9887e18572342643be9a3",
+        "rerank": "9bf0aabf230edc6dda215ba1b19b95e1ea7c53d6d09fc750ed70ab7b042b1b12"
+      },
+      "v2": {
+        "base": "a28168c6ed8016a2685f025fd3968f336aadc73ac90be787ec65d4079831256c",
+        "rerank": "39fc233b12ae74c9a149853990bbde4821dd07d984c7814aba9d5dd9e17cb3fa"
+      }
+    },
+    "served_binary_identity_detail": {
+      "base.v1.server": {
+        "arm_recorded": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167",
+        "match": true,
+        "on_disk": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167"
+      },
+      "base.v1.worker": {
+        "arm_recorded": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36",
+        "match": true,
+        "on_disk": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36"
+      },
+      "base.v2.server": {
+        "arm_recorded": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167",
+        "match": true,
+        "on_disk": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167"
+      },
+      "base.v2.worker": {
+        "arm_recorded": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36",
+        "match": true,
+        "on_disk": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36"
+      },
+      "rerank.v1.server": {
+        "arm_recorded": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167",
+        "match": true,
+        "on_disk": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167"
+      },
+      "rerank.v1.worker": {
+        "arm_recorded": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36",
+        "match": true,
+        "on_disk": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36"
+      },
+      "rerank.v2.server": {
+        "arm_recorded": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167",
+        "match": true,
+        "on_disk": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167"
+      },
+      "rerank.v2.worker": {
+        "arm_recorded": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36",
+        "match": true,
+        "on_disk": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36"
+      }
+    },
+    "served_binary_identity_matches_arms": true,
+    "server_bin": "/Users/sidsharma/Memphant-w1-r6gate/target/release/memphant-server",
+    "server_bin_sha256": "aa4534bd7b8a5a9fd19d93b1209b21e6c6e866d0d7c2cbb66d735a9d8e782167",
+    "single_variable_contrast": true,
+    "worker_bin": "/Users/sidsharma/Memphant-w1-r6gate/target/release/memphant-worker",
+    "worker_bin_sha256": "66c259530cd8954d1327b49f32fc8291e4881a7357d66f15675a3ea91f9afd36"
+  },
+  "mechanism": {
+    "candidate_count_max": 64,
+    "candidate_count_min": 64,
+    "candidate_limit": [
+      64
+    ],
+    "cross_rerank_declared": true,
+    "docs_scored": "unverified \u2014 CrossRerankTrace.docs_scored is not propagated into the provenance row",
+    "full_pool_scored_on_every_question": true,
+    "granularity": "unverified in provenance \u2014 requested via MEMPHANT_RERANK_GRANULARITY=chunk (see the arm command)",
+    "note": "an inert rerank and a neutral rerank give the same score; the ordered-output digest is what separates them. Digests are sha256 over the ordered returned bodies \u2014 no corpus content is emitted.",
+    "ordered_output_differs_from_base": 120,
+    "questions_total": 120,
+    "questions_with_rerank_trace": 120,
+    "reorder_bar_met": true,
+    "reorder_fraction": 1.0,
+    "reorder_fraction_bar": 0.5,
+    "reranker": {
+      "batch_size": 256,
+      "candidate_limit": 64,
+      "max_length": 512,
+      "model": "byo:model_quantized.onnx",
+      "provider": "byo"
+    },
+    "reranker_failure_count": {
+      "v1": 0,
+      "v2": 0
+    }
+  },
+  "question": "kill-gate (a) proved the r15 win lives at candidate ranks 17-64. Now that MiniLM-L6-int8 can rerank the full 64 pool, is that band reachable in practice \u2014 and does reaching it move hit@10?",
+  "spend_usd": 0,
+  "verdict": "FAIL"
+}

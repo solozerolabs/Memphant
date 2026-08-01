@@ -232,13 +232,39 @@ def main() -> int:
     for arm in ("base", "rerank"):
         path = base_dir / f"host-{arm}.txt"
         arm_load[arm] = path.read_text().strip() if path.exists() else None
-    contended = loadavg[0] > QUIET_LOADAVG_PER_CORE * cpu_count
+    # Contention must be judged from the load the ARM carried, not from the load
+    # at scoring time — scoring runs minutes to hours later and an idle box then
+    # says nothing about a contended box during the run. The rerank arm's own
+    # start-of-run stamp is the governing figure (it owns the latency sample);
+    # scoring-time load is kept only as a second, weaker guard.
+    def stamped_loadavg(arm: str) -> float | None:
+        text = arm_load.get(arm) or ""
+        marker = "load averages:"
+        if marker not in text:
+            return None
+        return float(text.split(marker)[1].split()[0])
+
+    rerank_run_loadavg = stamped_loadavg("rerank")
+    bar = QUIET_LOADAVG_PER_CORE * cpu_count
+    contended = (
+        rerank_run_loadavg > bar if rerank_run_loadavg is not None
+        else loadavg[0] > bar
+    )
     host = {
         "cpu_count": cpu_count,
         "loadavg_1_5_15": loadavg,
         "loadavg_per_core": loadavg[0] / cpu_count,
         "quiet_bar_per_core": QUIET_LOADAVG_PER_CORE,
         "contended": contended,
+        "governing_loadavg": rerank_run_loadavg,
+        "governing_loadavg_per_core": (
+            rerank_run_loadavg / cpu_count if rerank_run_loadavg is not None else None
+        ),
+        "governing_loadavg_source": (
+            "the rerank arm's own start-of-run stamp — it owns the latency "
+            "sample. Scoring-time loadavg is recorded too but does not decide "
+            "contention: scoring runs after the box has drained."
+        ),
         "loadavg_source": "at scoring time; per-arm start-of-run loadavg below",
         "per_arm_start": arm_load,
         "concurrency_caveat": (
@@ -429,6 +455,53 @@ def main() -> int:
             "pooled_at10": pooled,
             "pooled_at5": pooled_at5,
             "mde_at_80_from_this_runs_psi": mde,
+        },
+        "evidence_contract": {
+            "schema_version": 1,
+            # n_d = 19 clears the floor, mechanism liveness is proven from the
+            # server's own traces, the latency sample is uncontended release,
+            # and every field below is read off a banked artifact.
+            "decisional": pooled["clears_nd_floor_of_6"],
+            "claim": (
+                "A full-pool (64-candidate) chunk-granularity MiniLM-L6-int8 "
+                "cross-rerank neither fits the 1500 ms ceiling (p50 2142 ms / "
+                "p95 3275 ms, release, uncontended) nor reproduces the L1XC "
+                "retrieval advantage (delta -0.058, n=120, n_d=19, p=0.167) on "
+                "the pinned Syndai docs bank; C2 kill-gate (b) fails and the "
+                "R6 docs-lane spend is not authorized."
+            ),
+            "power": {
+                "test": "two-sided exact (conditional binomial) McNemar",
+                "n": pooled["n"],
+                "b": pooled["rerank_only_b"],
+                "c": pooled["base_only_c"],
+                "n_d": pooled["n_d"],
+                "psi_observed": pooled["psi"],
+                "mde_at_80": mde,
+            },
+            "harness": {
+                "embed_model": base_h["v1"]["embed_model"],
+                "scorer": "gate_common.provenance_hit span containment (hit@10), retrieval endpoint only",
+                "k": base_h["v1"]["k"],
+                "budget": base_h["v1"]["budget_tokens"],
+                "flags": [
+                    "--mode fast", "--resource-chunks",
+                    "rerank arm: --cross-rerank --reranker byo "
+                    "--rerank-granularity chunk --rerank-candidate-limit 64 "
+                    "--rerank-max-length 512",
+                ],
+                "command": "docs/build-log/artifacts/p1-c2-killgate/killgate-b/run_arms.sh",
+                "build_profile": args.build_profile,
+            },
+            "corpus": {
+                "sha256": base_h["v1"]["corpus_revision"].removeprefix("sha256:"),
+                "snapshot_id": "syndai-docs@96a26f1f (git-archive of the pinned tree, 114/114 files verified)",
+                "n_items": base_h["v1"]["haystack_sections"],
+            },
+            # No set was mined here, so no leakage characterization is claimed
+            # and none is upgraded: the docs bank's leakage stays UNVERIFIED in
+            # the instrument register.
+            "leakage": None,
         },
         "verdict": verdict,
         "accuracy_legs_pass": passed,

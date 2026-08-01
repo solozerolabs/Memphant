@@ -9,6 +9,14 @@
 
 ## Verdict
 
+> **UPDATE, 2026-08-01, after kill-gate (b) ran (§K.5, §7): the recommendation
+> is NO-GO on the $57.72–$121.39.** The $0 pre-check §5 required first has now
+> been completed and it fails on both legs — full-pool MiniLM-L6-int8 chunk
+> rerank costs 2,142 ms p50 / 3,275 ms p95 against a 1,500 ms ceiling on a quiet
+> release host, and returns δ = −0.058 (n = 120, n_d = 19, p = 0.167) where the
+> L1XC advantage it had to reproduce was +0.083. The pricing below stands as
+> correct arithmetic for a run that should not be authorized.
+
 **R6 is NOT decidable at $0. The blocker is money, and the price is
 $57.72 floor / $121.39 ceiling.** It is not a corpus blocker, not a licence
 blocker, and — contrary to the C2-era record — no longer an infrastructure
@@ -371,9 +379,92 @@ Scratch-DB hygiene held throughout: the killed run's ephemeral database was
 dropped by `with_scratch_db.sh`'s own trap, and no sibling worktree, shared
 database, or Syndai file was touched.
 
-### K.5 Result
+### K.4b A third process failure: `--mode deep` is no longer a $0 endpoint
 
-*Pending — the arms are running. Filled in on completion.*
+§K.1 specifies both arms in "deep mode". That specification is dead and the
+first re-run died on it: every `/v1/recall` returned
+`503 deep_unavailable`. `RecallMode::Exhaustive` — what "deep" meant when the
+r15/r1 docs runs were scored, and what their provenance headers actually record
+(`recall_mode: "exhaustive"`) — was removed; `deep` now routes through the L4
+agentic provider and requires `MEMPHANT_DEEP=on` with a paid OpenRouter model.
+
+The gate does not want that pass and cannot afford it. The cross-encoder rerank
+is not behind the deep branch: it runs in the shared retrieval path
+(`cross_rerank_candidates` over the top `recall_pool_depth` = 64 fused
+candidates) before packing, identically under either mode. Both arms therefore
+ran `--mode fast`, which is the retrieval endpoint (b) asks for and the only one
+reachable at $0. The deviation is recorded in the launcher and here rather than
+absorbed silently, because "deep" in a §K.1 arm spec and "deep" in today's
+server are two different things and the collision will bite the next reader too.
+
+### K.5 Result — **(b) FAILS, on both legs, and R6 as specified is moot**
+
+Both arms completed on the pinned corpus (4,920 sections, section_revision
+`82a1eeca…`, 114/114 files verified) against the currently pinned 120-golden
+bank (v1 `8cb21da4…`, v2 `1dc12fbb…`), `--release` binaries, sha256 of the
+served server/worker cross-checked against `target/release` on disk from each
+arm's own `generation_identity`. Machine-readable:
+`docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json`.
+
+**Mechanism liveness — the reranker demonstrably fired.** From the server's own
+per-question traces, not from the flags passed to it: 120/120 questions carry a
+`cross_rerank` trace, `candidate_count` = 64 on every one of them against
+`candidate_limit` = 64 (the full pool was scored, not a top-16 head),
+`provider: byo`, `model: byo:model_quantized.onnx`, zero reranker failures, and
+the ordered returned-body digest differs from the base arm on **120/120**
+questions against a 50% bar. An inert reranker was ruled out before any score
+was read.
+
+**Latency — breaches the ceiling by 2.2×, on a quiet host.**
+
+| | p50 | p95 | max | ceiling | profile | cpu_count | loadavg (1/5/15) |
+|---|---:|---:|---:|---:|---|---:|---|
+| `cross_rerank_ms`, n=120 | **2,142 ms** | **3,275 ms** | 3,852 ms | 1,500 ms | release | 12 | 10.19 / 11.63 / 14.55 |
+
+That is **0.85 loadavg per core** — below the 1.5/core quiet bar the scorer
+enforces — and the rerank arm started at loadavg 9.58 and ended at 10.91, so the
+sample neither started nor finished contended. This is not the 22,166 ms
+contention artifact this repo recorded elsewhere at loadavg 120–140; it is the
+real cost of the work. It lands exactly where §K.2 predicted: the retracted
+449 ms and the re-measured ~1,460 ms were both **body** granularity on synthetic
+~1.5 KB documents, and **chunk** granularity on real sections — where each of the
+64 candidates flattens into several scored chunks — is 1.5× slower again than the
+already-at-ceiling body case. **There is no sub-second full-pool chunk-rerank on
+this host.** The premise (b) was built on does not exist.
+
+**Effect — the L1XC retrieval advantage is not reproduced.** Paired exact
+McNemar on hit@10, per-question vectors, deterministic `provenance_hit` span
+containment, no reader, no judge:
+
+| set | n | b (rerank only) | c (base only) | n_d | ψ | δ | exact p |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v1 | 60 | 2 | 7 | 9 | 0.1500 | −0.0833 | 0.1797 |
+| v2 | 60 | 4 | 6 | 10 | 0.1667 | −0.0333 | 0.7539 |
+| **pooled** | **120** | **6** | **13** | **19** | **0.1583** | **−0.0583** | **0.1671** |
+
+Aggregate hit@10: base **0.2250**, rerank **0.1667**. hit@5 pooled: b=6, c=9,
+n_d=15, δ = −0.0250, p = 0.607. n_d = 19 clears the structural floor of 6, so
+this **is** a measurement; the run's own MDE at 80% power is 10.4pt.
+
+Read it precisely. The test does not reject in either direction, so this is not
+a demonstration that full-pool chunk-rerank *harms* retrieval, and an effect
+smaller than 10.4pt cannot be excluded at n = 120. What it is not, is the thing
+(b) had to find: **the point estimate is −5.8pt, and both sets point the same
+way.** Passing required a positive rejection. A gate looking for a reproduction
+of a +8.3pt advantage found a negative point estimate on 120 paired questions
+with a live, full-pool, 100%-reordering cross-encoder. Nothing here argues for
+spending money on the arm.
+
+**Both legs fail independently, and the accuracy leg is the one that would still
+fail on infinite hardware.** A faster machine could in principle move the latency
+figure under the ceiling; nothing about a faster machine changes a −5.8pt δ.
+
+This is also the published norm rather than an anomaly. The 2026-08-01
+arms-and-landscape review records CoREB finding 4 of 5 off-the-shelf rerankers
+net-negative on *every* code task, and no published number supporting top-64 CPU
+rerank under 200 ms on ~512-token documents — the size class that fits the budget
+(<35M params) and the class with any evidence behind it (149M–4B) are disjoint.
+Our bge negative and this MiniLM negative are what the field reports.
 
 ## 6. What must stop being said
 
@@ -385,6 +476,48 @@ those rows gives p = 0.0755 — not a rejection, but not a null either. The
 correct statement is: *R6 has never been measured at a resolution capable of
 answering it, the corpus and the infrastructure to do so both exist, and the
 measurement costs $57.72–$121.39.*
+
+## 7. Revised spend recommendation — **NO-GO. Do not authorize the $57.72–$121.39.**
+
+§5 preregistered the decision rule before the run: *"If a sub-second full-pool
+rerank does not reproduce the retrieval advantage, R6 is moot and $57–121 is
+saved."* It does not, on either half of that sentence. The rerank is not
+sub-second — it is 2,142 ms p50 / 3,275 ms p95 against a 1,500 ms ceiling on a
+quiet release host — and it does not reproduce the advantage, returning
+δ = −0.058 where +0.083 was the thing being chased. **The recommendation is
+no-go, and the money is saved.**
+
+What that does and does not decide, stated narrowly:
+
+- **Decided.** The R6 contrast *as specified* has no shippable arm. Its best arm
+  was L1XC, whose win came from a cross-encoder that costs 12.9–13.6 s/query;
+  kill-gate (a) showed the win lives at candidate ranks 17–64, out of reach of
+  the top-16 compression that was the only affordable shape; (b) has now shown
+  that the cheap full-pool substitute is neither affordable nor better. Paying
+  $57–121 to measure, at n = 370, an arm that cannot ship at any n is the
+  clearest kind of waste this program exists to avoid.
+- **Not decided.** Whether MemPhant *without any cross-rerank* beats the Syndai
+  incumbent. That is a different arm with a different, entirely unmeasured
+  effect size — the packet's n = 370 was derived from L1XC's realized ψ and does
+  not transfer. If that question is wanted, it needs its own $0 pre-check and
+  its own sizing, not this packet's number with a different arm substituted in.
+- **Not decided.** Whether a *better* reranker exists in the affordable class.
+  The landscape review's finding — that the <35M size class has no published
+  code-lane evidence and the 149M–4B class has no published sub-200 ms top-64
+  CPU number — says the search space is empty today, not that it is empty
+  forever. Revisit on a new model, not on a new hope.
+
+**If a go is ever taken on any docs-lane arm, size at n = 500, not 370.** §2's
+reasoning is untouched by this gate: 370 falls out of a ψ point estimate from 26
+discordant pairs whose Wilson interval reaches 0.299, where the same run
+delivers ~65% power instead of 80%. The alternative — preregistering acceptance
+at the MDE that 370 actually delivers, i.e. **12.3pt, not 7pt** — is acceptable
+only if stated in advance and in those words. Do not preregister 7pt and run 370.
+
+One standing instrument note, not a blocker for this decision: the base arm's own
+hit@10 on this bank is 0.225. A lane whose incumbent-free baseline retrieves the
+gold section in under a quarter of questions has room to move that is not about
+reranking at all, and any future docs-lane spend is better aimed there.
 
 ---
 
@@ -410,6 +543,22 @@ measurement costs $57.72–$121.39.*
   is involved in this derivation.
 - **Spend: $0.** No paid model call, no live benchmark run, read-only access to
   the Syndai checkout and dev database, no shared MemPhant database touched.
+- **Kill-gate (b)'s own artifact.** `killgate-b/verdict-b.json` carries a
+  schema-valid `evidence_contract` with `decisional: true` (n_d = 19 clears the
+  floor; every field is read off a banked artifact, none is `unverified`) and is
+  registered under `contracted`. It stamps git head, branch, dirty flag, build
+  profile, the sha256 of the binaries the arms actually served cross-checked
+  against `target/release` on disk, corpus revision, and cpu_count + the
+  governing run-time loadavg beside the latency figures. Two known gaps are
+  recorded in it rather than papered over: `CrossRerankTrace.docs_scored` and
+  the granularity are not propagated into the provenance row by
+  `gate_run_memphant._cross_rerank_facts`, so both read `unverified` in the
+  mechanism block — chunk granularity is evidenced by the arm command and by the
+  measured cost, not by a server-side field. Closing that propagation gap is the
+  right next instrumentation fix; it does not affect this verdict, which turns on
+  `candidate_count` = 64 (verified) and on wall-clock.
+- **Spend for (b): $0.** Retrieval endpoint only, no reader, no judge, no paid
+  provider — which is precisely why `--mode deep` had to be dropped (§K.4b).
 - **Evidence-contract ratchet:** `packet.json` carries a schema-valid
   `evidence_contract` block with `decisional: false` — it decides nothing, it
   re-derives banked cells and prices an unauthorized run — and is registered in
@@ -435,3 +584,12 @@ branch's artifact removed:
 
 No Rust changed, so `cargo test` / `clippy` / `fmt` are not in scope for this
 commit.
+
+**Re-run after kill-gate (b), on the merged base:**
+`python -m pytest tests/test_check_evidence_contract.py` → 43 passed, 2 failed.
+Kill-gate (b)'s artifact is not among the failures — it validates and is
+registered. Both failures are inherited from the trunk merge (the
+`2026-08-01-key-production/recovery.json` artifact is unregistered, which also
+leaves the retrofit report stale) and were reproduced with this branch's changes
+stashed. Not this branch's debt, and deliberately not swept in: regenerating that
+report would fold another session's artifact into this commit.
