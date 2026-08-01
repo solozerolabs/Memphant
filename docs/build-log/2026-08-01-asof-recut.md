@@ -224,3 +224,58 @@ the served server and worker binaries are stamped into every artifact. All arms
 run on **one tree, the same binaries, the same stage, the same haystack.**
 
 **$0.** No paid arm on any path. `paid_model_calls: 0` asserted in every report.
+
+---
+
+## 6b. PREREG AMENDMENT — written after the 20-group liveness gate, before any full-n arm
+
+**Exactly what existed when this section was written, and nothing more:** the
+§4 trivial table, and the **20-group / 25-probe liveness smoke** of arm P
+(§7.1). No full-n substrate cell existed; the first full-n arm was launched
+after this section was committed. This amendment is disclosed as an amendment
+rather than folded back into §5, because silently improving a prediction after
+seeing a pilot is how a prereg becomes decoration.
+
+**The smoke is a pilot, not a result — n=25, one arm, no control.** It is
+recorded here because it changes the *expected magnitude*, and because
+withholding it until it agreed with a prediction would be the exact failure §5
+exists to prevent.
+
+**Amended prediction: the P-vs-trivial gap is expected to be SMALL OR NULL, and
+"the instrument does not discriminate" is the anticipated and fully valuable
+outcome.** Arm P measured **LSW 0.92** on the smoke against `asof_truncation`'s
+**0.9064** at full n — a ~1.4pp gap that is far inside noise at n=25 and is
+**not** evidence of a gap. That is exactly what §3.2 predicts analytically: with
+zero re-assertions the declaration chain is monotone, so a truncating rule
+cannot rank a distractor first, and there is almost nothing left for the
+substrate to win.
+
+**This amendment therefore LOWERS the expected effect; it does not license a
+search for a larger one.** No stratum will be promoted to primary after the
+fact, no threshold will be tuned, and the endpoint stays LSW with hit@1 as the
+preregistered secondary. If the full-n gap is small, null, or negative, that is
+the finding.
+
+**Corroboration from sibling lanes, which is why the amendment is stated as a
+general claim rather than a local one.** S7 pinned MDN browser-compat-data —
+CC0, **705 genuine re-assertion arcs**, the exact regime MemoryCode structurally
+lacks — and a ~20-line `scoped_interval` rule scores **1.0000 on every band**.
+So **re-assertion and non-recency currency are not the missing ingredients**;
+both are present there and neither is sufficient.
+
+**The general claim this lane is the cleanest demonstration of, preregistered
+here as the conclusion to test rather than discovered afterwards:**
+
+> **A corpus whose gold is computable from the fact statements themselves will
+> always be saturated by a short rule.** MemoryCode's gold is a function of the
+> declaration sequence — latest on the original cut, latest-before-t on the
+> as-of cut — so some ~20-line rule computes it either way. Re-cutting moves
+> *which* short rule wins; it cannot make the gold uncomputable from the
+> statements, and no amount of probes or power changes that.
+
+**What would falsify it:** an instrument whose gold depends on evidence outside
+the statement set — execution, external authority, or scope the statements do
+not carry — such that no rule over the statements alone recovers it. That is a
+property of the *source of truth*, not of the temporal construction, and it is
+the specification any future instrument spend must satisfy **before** it is
+bought.
