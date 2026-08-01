@@ -210,3 +210,55 @@ def test_the_amendment_records_why_the_pool_changed():
     overlap = amendment["measured_evidence"]["patch_overlap"]
     assert overlap["gold_parent_contains_an_exact_target_added_line_over_20_chars"]["pct"] > 30
     assert overlap["same_repo_random_non_parent_control"]["mean_added_line_overlap"] < 0.01
+
+
+# --------------------------------------------------------------- scope
+
+
+MIRROR = Path.home() / ".memphant-private/w7-instruments/swe-contextbench"
+LOCK = ROOT / "benchmarks/manifests/swe_contextbench.lock.json"
+
+pytestmark_mirror = pytest.mark.skipif(
+    not MIRROR.is_dir(), reason="pinned instrument mirror is not present on this host"
+)
+
+
+@pytestmark_mirror
+def test_the_full_scope_census_is_357_tasks_not_the_published_376():
+    """376 is a row count over concatenated sub-splits: Lite (99) + Verified
+    (166) + Multilingual (111) = 376, and Lite INTERSECT Verified = 19. The
+    official Docker registry and the official cases/ directory both ship 357."""
+    counts = MODULE.verify_and_load(json.loads(LOCK.read_text()), MIRROR, "full")["counts"]
+    assert counts["related_rows"] == 376
+    assert counts["related_distinct"] == 357
+    assert counts["related_duplicate_ids"] == 19
+    assert counts["experience_rows"] == 1100
+    assert counts["experience_distinct"] == 1007
+
+
+@pytestmark_mirror
+def test_the_lite_scope_reproduces_the_published_table_5_configuration():
+    counts = MODULE.verify_and_load(json.loads(LOCK.read_text()), MIRROR, "lite")["counts"]
+    assert counts["related_distinct"] == 99
+    assert counts["experience_distinct"] == 300
+    assert counts["related_duplicate_ids"] == 0
+
+
+@pytestmark_mirror
+def test_a_gold_parent_outside_the_lite_pool_is_unreachable_not_a_miss():
+    """One Lite parent is absent from the 300-row Lite pool. Scoring it as a
+    retrieval failure would blame the retriever for a corpus gap."""
+    sources = MODULE.verify_and_load(json.loads(LOCK.read_text()), MIRROR, "lite")
+    assert sources["counts"]["gold_parents_unreachable_from_pool"] == [
+        "scikit-learn__scikit-learn-26323"
+    ]
+    # and no target is left with zero reachable parents
+    pool = set(sources["pool"])
+    for target, parents in sources["parents"].items():
+        assert set(parents) & pool, target
+
+
+@pytestmark_mirror
+def test_an_unknown_scope_is_refused():
+    with pytest.raises(ValueError):
+        MODULE.verify_and_load(json.loads(LOCK.read_text()), MIRROR, "verified")

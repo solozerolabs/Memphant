@@ -79,7 +79,7 @@ def load_parquet(path: Path) -> list[dict]:
 # ---------------------------------------------------------------- sources
 
 
-def verify_and_load(lock: dict, mirror: Path) -> dict:
+def verify_and_load(lock: dict, mirror: Path, scope: str = "full") -> dict:
     """Re-verify every pinned parquet on disk, then load and de-duplicate.
 
     Duplicate handling is asserted, not assumed: the Experience duplicates must
@@ -98,14 +98,28 @@ def verify_and_load(lock: dict, mirror: Path) -> dict:
         require(digest == spec["sha256"], f"sha256 drift: {name}")
         verified[name] = {"bytes": spec["bytes"], "sha256": digest}
 
-    experience_rows = load_parquet(mirror / "data/SWEContextBench_Experience.parquet")
-    target_rows = load_parquet(mirror / "data/SWEContextBench_Related.parquet")
+    # `lite` reproduces the exact configuration of the paper's Table 5 -- 99 Lite
+    # targets against the 300-row Lite experience pool -- so our retrieval number
+    # is comparable to the published Matched (%) column for Mem0, OpenViking,
+    # LangMem and Supermemory. `full` is the census tranche.
+    if scope == "lite":
+        experience_rows = load_parquet(mirror / "data/SWEContextBench_Lite_Experience.parquet")
+        target_rows = load_parquet(mirror / "data/SWEContextBench_Related_Lite.parquet")
+    elif scope == "full":
+        experience_rows = load_parquet(mirror / "data/SWEContextBench_Experience.parquet")
+        target_rows = load_parquet(mirror / "data/SWEContextBench_Related.parquet")
+    else:
+        raise ValueError(f"unknown scope: {scope}")
     edge_rows = load_parquet(mirror / "data/SWEContextBench_Relationship.parquet")
 
     exp_groups: dict[str, list[dict]] = collections.defaultdict(list)
     for row in experience_rows:
         exp_groups[row["instance_id"]].append(row)
     exp_dupe_ids = [k for k, v in exp_groups.items() if len(v) > 1]
+    require(
+        scope != "lite" or not exp_dupe_ids,
+        "the Lite experience pool grew duplicates upstream",
+    )
     for key in exp_dupe_ids:
         prints = {row_fingerprint(r) for r in exp_groups[key]}
         require(
@@ -119,6 +133,10 @@ def verify_and_load(lock: dict, mirror: Path) -> dict:
     for row in target_rows:
         tgt_groups[row["instance_id"]].append(row)
     tgt_dupe_ids = [k for k, v in tgt_groups.items() if len(v) > 1]
+    require(
+        scope != "lite" or not tgt_dupe_ids,
+        "the Lite related split grew duplicates upstream",
+    )
     for key in tgt_dupe_ids:
         prints = {row_fingerprint(r) for r in tgt_groups[key]}
         require(
@@ -133,10 +151,19 @@ def verify_and_load(lock: dict, mirror: Path) -> dict:
     for key in parents:
         parents[key] = sorted(set(parents[key]))
 
-    require(set(parents) <= set(tgt_groups), "an edge names a target absent from Related")
+    parents = {k: v for k, v in parents.items() if k in tgt_groups}
     require(set(tgt_groups) <= set(parents), "a Related target has no relationship edge")
-    missing = {p for ps in parents.values() for p in ps} - set(pool)
-    require(not missing, f"gold parents absent from the pool: {sorted(missing)[:5]}")
+
+    # A gold parent outside the pool is UNREACHABLE, not a miss to be scored as
+    # though retrieval failed. The Lite pool is missing exactly one parent
+    # (scikit-learn__scikit-learn-26323); both targets that name it also name a
+    # parent that IS present, so no target is starved under ANY-PARENT. Any
+    # target that loses ALL its parents this way is refused outright.
+    unreachable = sorted({p for ps in parents.values() for p in ps} - set(pool))
+    if scope == "full":
+        require(not unreachable, f"gold parents absent from the pool: {unreachable[:5]}")
+    starved = sorted(t for t, ps in parents.items() if not (set(ps) & set(pool)))
+    require(not starved, f"targets whose every gold parent is outside the pool: {starved[:5]}")
 
     overlap = sorted(set(tgt_groups) & set(pool))
     return {
@@ -157,6 +184,8 @@ def verify_and_load(lock: dict, mirror: Path) -> dict:
             "distinct_parents": len({p for ps in parents.values() for p in ps}),
             "two_parent_targets": sum(1 for v in parents.values() if len(v) > 1),
             "related_intersect_experience": len(overlap),
+            "scope": scope,
+            "gold_parents_unreachable_from_pool": unreachable,
         },
         "self_retrieval_ids": overlap,
     }
@@ -474,6 +503,7 @@ def run(
             "limit": limit,
             "budget_tokens": budget_tokens,
             "mode": "fast",
+            "scope": sources["counts"]["scope"],
             "haystack": "single subject/scope containing every distinct experience",
             "body_variant": body_variant,
             "body": {
@@ -628,11 +658,12 @@ def main() -> int:
     parser.add_argument("--cli-bin", default=str(ROOT / "target/release/memphant-cli"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--body", choices=("patchfree", "withpatch"), default="patchfree")
+    parser.add_argument("--scope", choices=("full", "lite"), default="full")
     parser.add_argument("--sources-only", action="store_true")
     args = parser.parse_args()
 
     lock = json.loads(args.lock.read_text(encoding="utf-8"))
-    sources = verify_and_load(lock, args.mirror.expanduser())
+    sources = verify_and_load(lock, args.mirror.expanduser(), args.scope)
     if args.sources_only:
         print(json.dumps(sources["counts"], indent=2, sort_keys=True))
         return 0
