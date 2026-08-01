@@ -2141,3 +2141,103 @@ Report: `.superpowers/sdd/s7-bcd-report.md`. Build log:
 `docs/build-log/2026-08-01-bcd-instrument.md`. Lock:
 `benchmarks/manifests/browser_compat_data.lock.json`. Branch `s7-bcd`,
 **not merged, not pushed.**
+
+---
+
+## 2026-08-01 — S5 SWE-ContextBench stage 0 (`s5-swecb`, branch point `0e874da0`, not merged)
+
+**Stage 0 gate: GREEN. `paid_model_calls: 0`, settled cost $0.00.** Preregistered primary statistic —
+packed recall@5 of the official Relationship parent over 357 distinct targets, ANY-PARENT, with the
+whole 1,007-row experience pool bound into **one** subject/scope as a single haystack — is **0.7591**
+against a GREEN band of ≥ 0.50 committed at `fd2ebd7c` before the first ingest. Retrieval recall@5
+(trace `fused_rank`) 0.7787; packed @1/@10/@25 = 0.5602 / 0.8291 / 0.8824.
+
+**The miss profile names the lever.** Of 86 misses at k=5: **74 ranked below the cut**, 8 retrieved
+but not packed, 4 never a candidate. Candidate coverage 98.9%. This is a **ranking** problem, not
+candidate generation and not the packing budget, so `pack_render_cap` is worth at most ~2pp here.
+This is also a free, 357-question, public-instrument bench for evaluating a reranker.
+
+**Two premises in the plan of record were false and were corrected before any cell existed.**
+(1) The tranche is **357, not 376** — `Related` is Lite(99) ⊎ Verified(166) ⊎ Multilingual(111)
+concatenated, Lite ∩ Verified is exactly the 19 duplicated ids, and those duplicates are *not*
+byte-identical. Confirmed independently by 357 Docker instance tags and 357 official case files.
+`Experience` is 1,100 rows over **1,007** distinct ids. (2) The "$0 gold-patch pool" is **an answer
+leak**, not a safe pool: 75.5% of gold parents touch a target patch file, 32.4% have an identical
+touched-file set, **37.2% contain an exact target added line** and 29.8% share ≥50% of them, against
+a same-repo random control of 9.1% / 0.13%. The temporal "predates by construction" premise is also
+false — only 131 of 376 edges strictly predate, and Related's `created_at` inverts against PR number
+on 23.6% of within-repo pairs (Experience: 0 of 60,372). Pool changed to patch-free prose, which
+leaks at 9.0% against a **6.9% floor** set by targets quoting their own patches. Amendment
+`0e137b54`, before any cell existed.
+
+**Stage 2 ($504) recommended CANCEL as scoped, on evidence independent of s4-controls.** Table 3's
+own numbers give a **+3.72pp ceiling** (no-memory 19.68 → oracle-summary 23.40, same scaffold). Our
+expected effect is `0.759 × 3.72 =` **2.82pp**, an upper bound. MDE at the maximum available n of
+**357** is 3.38pp (ψ=0.05) to 8.32pp (ψ=0.30) — **the expected effect is below the MDE at every ψ**,
+with power 0.14–0.24 at realistic ψ. The instrument is too small for the effect it measures, which is
+equally true of Table 4's own ranking and of Supermemory's 4.04pp at n=99. Also uncosted in the plan:
+**~453 GB** of Docker pulls against 220 GB free, and **no Claude Code scaffold exists in this repo**.
+Recommended instead: re-scope the primary endpoint to FAIL_TO_PASS (Table 4 moves it 19.64 → 55.95,
+~10× the effect), and publish the retrieval result and the instrument audit, both already $0.
+
+**Stage 0 turns out to have published comparators** — Table 5's Matched (%) is this exact endpoint
+(Mem0 39.39 @k=3, OpenViking 51.52 @k=3, Supermemory 59.60 @k=15, LangMem 73.34 @k=10, all on the
+300-row Lite pool). The retranche log's "both arms must be ours" holds for `Resolved` and **not** for
+retrieval. A like-for-like Lite-scoped arm is running; the full-pool number is not directly
+comparable and is not cited as if it were.
+
+**Live defects, all caught at $0:** HTTP 422 on 300 of 1,007 rows shipping `created_at` with no
+timezone (exactly the 41 multilingual repos vs the 12 Python ones, zero overlap); `rc` read from the
+wrong end of a pipe reporting `EXITCODE=0` for a run that died; a cross-worktree `pkill` that killed
+three sibling-lane servers; and shared `with_scratch_db.sh` holding a host-wide lock for whole runs —
+trunk's fix `6fdcaf9d` adopted verbatim rather than re-derived, and the with-patch arm was
+deliberately killed (rc=143, artifact refused, no DB orphaned) to unblock four lanes at loadavg 56.
+
+**Verification.** `tests/test_swecb_stage0_recall.py`, 18 tests, green. Scratch DBs only; queue
+emptiness asserted from the database on the bench superuser credential (1,007 completed, 0 pending,
+0 dead), never a worker self-report; 0 degraded recalls; 376/376 traces fetched. Branch is purely
+additive to its branch point apart from taking trunk's `with_scratch_db.sh`. Report:
+`.superpowers/sdd/s5-swecb-report.md`. Build log: the S5 section of
+`docs/build-log/2026-08-01-swe-contextbench-retranche.md`. Artifacts:
+`docs/build-log/artifacts/s5-swecb/`. **No STATUS, ledger, default, cutover or SOTA claim moves.**
+
+**S5 addendum — final disposition (same day).** The Lite comparator arm landed: on the published
+configuration reproduced exactly (99 targets, 300-row pool) MemPhant leads every published method at
+matched or smaller k — Mem0 39.39 → **68.69** @k=3, OpenViking 51.52 → **68.69** @k=3, LangMem
+73.34 → **79.80** @k=10, with Supermemory's k=15 left **bracketed** (79.80@10–87.88@25) rather than
+interpolated. Metric alignment was verified, not assumed: Mem0's per-rank cells sum to 49.49 against
+an Overall of 39.39, so Overall is a union over top-k — the same ANY-PARENT recall@k reported here.
+
+**Endpoint adjudication.** `Resolved` is not resolvable at n=357 (ceiling 3.72–4.04pp, expected
+2.82pp, MDE 3.38–8.32pp). **`FAIL_TO_PASS` Tasks is** (ceiling 11.11pp, expected 8.43pp, power
+0.75–0.99 across all ψ ∈ [0.15, 0.40]). Table 4's F2P **Tests** column (19.64 → 55.95) must NOT be
+used — tests cluster within tasks, so per-test n is not independent and that effect is inflated.
+
+**Both paid stages CANCELLED; nothing was spent.** Stage 1's ψ-sizing purpose was void because the
+surviving endpoint is powered whatever ψ is, and at n=30 it sits below the n_d ≥ 6 floor at power
+0.12. Stage 2 was unbuyable on `Resolved` before s4-controls reported, and s4 then closed it
+independently: agentic `grep` 96.67% vs MemPhant 58.89% hits@10 on the Track R paraphrase bank,
+n=180, b=1 c=69 n_d=70, **McNemar p=1.2e-19**, delta **−37.78pp** against a realized MDE of 13.34pp.
+The ~$1–5 scaffold liveness probe was approved but never started and was skipped. The with-patch
+diagnostic arm is **NOT MEASURED** (killed twice, artifact correctly refused both times) and was not
+re-run because the decision it informed no longer exists. **Final ledger: 0 model calls, $0.00
+settled, $0.00 unsettled, on a lane scoped at $545.**
+
+**Standing recommendation to the plan of record: pair a CEILING check with every baseline check at
+instrument acquisition.** Take the largest published effect any comparable system achieves — ideally
+an oracle arm, which upper-bounds retrieval-based memory — and compare it to the instrument's MDE at
+maximum available n; if addressable headroom is below the MDE the instrument cannot express the
+effect at any budget. This lane is the worked example: the baseline check passed correctly (80pp of
+headroom) and $545 was scoped on it, while the ceiling check takes ten minutes from the *same
+published table* and shows it was never resolvable. Suggested mechanisation: an `effect_ceiling`
+block in `benchmarks/manifests/*.lock.json` beside the existing `power` block, and
+`scripts/instrument_power.py` refusing to emit a staging plan when ceiling/MDE < 1.
+
+**The three-lane reading.** S6/S7 die from *below* (gold computable from the fact statements, so a
+short rule saturates the baseline); S5 dies from *above* (baseline wide open, addressable headroom
+under its own MDE); S4 shows the substrate losing to a shell loop by 37.78pp. Track R and
+SWE-ContextBench both test facts recoverable from files, and an agent with `grep` is extremely good
+at that. **The comparator table must therefore always be stated as "MemPhant beats other memory
+systems at retrieving the gold parent — and all of them are losing to an agent with a shell."** The
+niche the substrate wins is what is *not* in the repo: corrections, preferences, rejected approaches,
+rationale.
