@@ -262,3 +262,233 @@ authorized, one would have billed $211–634 for zero rows):**
 - **Do not cite Table 4's framework ranking as a measurement**, ours or theirs.
 - **Do not conflate SWE-ContextBench (2602.08316) with ContextBench (2602.05892).**
 - **The licence is declared-only.** Local measurement and citation are fine; redistribution is not.
+
+---
+
+# S5 stage 0: the gate is GREEN, the instrument is smaller than advertised, and stage 2 cannot be powered
+
+**Date** 2026-08-01 · **Branch** `s5-swecb` · **Branch point** `0e874da0` · **Model calls** 0 · **Settled cost** $0.00
+**Preregistration** `docs/build-log/artifacts/s5-swecb/stage0-prereg.json`, committed at `fd2ebd7c` **before the first ingest**, amended at `0e137b54` **before any cell existed**.
+
+## Verdict up front
+
+| Question | Answer |
+| --- | --- |
+| Can MemPhant retrieve the official Relationship parent? | **Yes. Packed recall@5 = 0.759** over 357 targets against a 1,007-row pool. |
+| Stage 0 gate | **GREEN** (preregistered band: GREEN ≥ 0.50). Stage 1 proceeds. |
+| Where do the remaining misses live? | **Ranking, not packing and not candidate generation.** Of 86 misses at k=5: 74 ranked below the cut, 8 retrieved-but-unpacked, 4 never a candidate. |
+| Is the tranche 376? | **No. It is 357.** Confirmed four independent ways. |
+| Was the "$0 gold-patch pool" safe? | **No.** It leaks the answer on ~30% of targets. Changed to a patch-free pool before any cell existed. |
+| Is stage 2 worth $504? | **No, as currently scoped.** The instrument's own ceiling effect is 3.72pp and its MDE at max n is 3.38–8.32pp. |
+
+## 1. The gate — GREEN, and it is a real measurement
+
+`scripts/swecb_stage0_recall.py`, artifact `docs/build-log/artifacts/s5-swecb/stage0-recall-patchfree.json`,
+lineage `0809249d`, worktree clean, local embeddings, ephemeral scratch DB, **0 model calls, $0.00**.
+
+Every one of the 1,007 distinct experiences is bound to **one** subject and **one** scope, and all 376
+Related rows are queried against that same context. This is the structural difference from the
+retained n=12 rehearsal, which bound a fresh scope per `(target, arm)` and therefore ranked over a
+pool of **one** — its citation assertion could not fail, and it was never a retrieval measurement.
+
+**Primary view — 357 distinct tasks, ANY-PARENT, patch-free pool:**
+
+| k | packed recall@k (what the agent would see) | retrieval recall@k (trace `fused_rank`) |
+| --- | --- | --- |
+| 1 | 0.5602 | 0.5602 |
+| 3 | 0.7143 | 0.7283 |
+| **5** | **0.7591** | 0.7787 |
+| 10 | 0.8291 | 0.8459 |
+| 25 | 0.8824 | 0.9048 |
+
+Row census (376 rows, the published n): packed recall@5 = 0.7553. The two views agree to 0.4pp, so
+the duplication does not move the number — it moves what the number is *of*.
+
+**Miss taxonomy at k=5, over 357 tasks.** This is the part that tells us what to fix:
+
+| class | n | share of misses |
+| --- | --- | --- |
+| hit | 271 | — |
+| **ranked below the cut** | **74** | **86.0%** |
+| retrieved but not packed | 8 | 9.3% |
+| never a candidate | 4 | 4.7% |
+
+The retriever surfaces ~550 candidates per query out of 1,007 and the gold parent is in that set for
+353 of 357 targets. **The bottleneck is ranking.** It is not candidate generation (98.9% coverage)
+and it is not the packing budget (9.3% of misses) — so `pack_render_cap`, the lever the rung-7
+verdict handed us, is worth at most ~2pp here. A reranker is the lever that matters, and this is a
+clean, free, 357-question bench to evaluate one on.
+
+**Difficulty scales with haystack, as it should.** `django/django` (n=84, 345 same-repo pool rows)
+scores 0.679; repos with a handful of siblings score 1.0. Any aggregate here averages over an
+order-of-magnitude spread in per-target difficulty.
+
+**Mechanism liveness, all asserted in code with the run aborting on failure:** 1,007 retains, 1,007
+distinct episode ids, worker completed 1,007, queue drained **verified on the bench credential**
+(pending=0, dead=0) and not the worker's self-report, 1,007/1,007 instances carrying a compiled
+memory unit, 1,053 memory units, 1,053 embeddings, **0 degraded recalls**, 376/376 traces fetched.
+Latency p50 1,398 ms, p95 4,368 ms, max 29,876 ms. Wall 1,112 s.
+
+## 2. Stage 0 has published comparators — the retranche log was right about Resolved and wrong about retrieval
+
+Table 5 of the paper reports **Matched (%)** — did the system retrieve the gold parent — per method
+on Lite. That is *this* endpoint. Banked at `docs/build-log/artifacts/s5-swecb/published-comparators.json`.
+
+| method | k | overall Matched (%) | pool |
+| --- | --- | --- | --- |
+| Free Context Learning | self-determine | 18.18 | 300 |
+| Free Summary Learning | self-determine | 36.36 | 300 |
+| Mem0 | 3 | 39.39 | 300 |
+| OpenViking | 3 | 51.52 | 300 |
+| Supermemory | 15 | 59.60 | 300 |
+| LangMem | 10 | 73.34 | 300 |
+| **MemPhant (this run)** | **5** | **75.91** | **1,007** |
+
+**Every caveat must travel with that last row.** Each published method chose its own k and the table
+does not normalise it. Their pool is 300 rows; ours is 1,007, which is a harder retrieval problem.
+n=99 there versus 357 here. These are the benchmark authors' runs of other people's systems with no
+per-instance detail published, so **nothing can be paired and no significance test is possible**.
+A like-for-like Lite-scoped arm is running; until it lands, the row above is suggestive, not a claim.
+
+## 3. The tranche is 357, not 376 — confirmed four independent ways
+
+`SWEContextBench_Related.parquet` has **376 rows over 357 distinct `instance_id`s**. The 19
+duplicated ids are **not** byte-identical: they differ in `version` (one of each pair is null),
+`problem_statement` (11), `PASS_TO_PASS` (12), `FAIL_TO_PASS` (8), and one pair differs in `patch`,
+`test_patch` and `base_commit`.
+
+The complete explanation: the split is **Lite (99) ⊎ Verified (166) ⊎ Multilingual (111) = 376**,
+concatenated, and **Lite ∩ Verified is exactly those 19 ids**. Corroboration:
+
+1. distinct `instance_id`s in the parquet: **357**
+2. Docker Hub `jiayuanz3/swecontextbench`: **357 instance tags** plus one `base`
+3. official repo `cases/SWEContextBench Full/`: **357** case files
+4. the sub-split arithmetic above
+
+`SWEContextBench_Experience.parquet` is likewise **1,100 rows over 1,007 distinct ids** (93
+duplicate groups, all byte-identical). The paper's "1,476 tasks" is **1,364** distinct.
+
+**Correction to §3 of the retranche log above.** It states that `SWEContextBench Full`,
+`Multilingual` and `Lite Past Experience` do not exist. They exist — as case directories in the
+**code** repo rather than parquets in the **dataset** repo, at pinned rev `31bb0415`: Full 357,
+Verified 166, Multilingual 111, Lite 99, Lite Past Experience 300.
+
+**Correction to the edge-table claim.** "19 tasks have 2 parents" is wrong. There are 376 edges over
+**360 distinct (target, parent) pairs**; only **three** targets have two *distinct* parents
+(`django__django-27910`, `scikit-learn__scikit-learn-25763`, `scikit-learn__scikit-learn-25365`).
+The other 16 surplus edges are repeated pairs, 14 of them byte-identical rows. The ANY-PARENT vs
+ALL-PARENT choice governs 3 tasks, not 19.
+
+## 4. The "$0 gold-patch pool" leaks the answer — changed before any cell existed
+
+The task brief and §6 of the retranche log both hold that gold patches "predate their targets by
+construction, so no target leakage". **Both halves are false.**
+
+**Temporal.** Parsing both `created_at` formats properly, of 376 edges only **131** have a parent
+that strictly predates its target; **120** are exact ties and **125** postdate. And the Related
+split's `created_at` is not trustworthy at all: within a repo it inverts against PR number on
+**23.6%** of pairs (1,423 of 6,022), where the Experience pool inverts on **0 of 60,372**. The
+honest statement is that the temporal relation **cannot be established from the shipped metadata**.
+
+**Patch overlap — which needs no timestamps and is the load-bearing evidence:**
+
+| measure | gold parent | same-repo random non-parent |
+| --- | --- | --- |
+| touches ≥1 target patch file | **75.5%** | 9.1% |
+| identical touched-file set | 32.4% | — |
+| contains an exact target added line (>20 chars) | **37.2%** | — |
+| shares ≥50% of target added lines | 29.8% | — |
+| mean added-line overlap | **0.2856** | 0.0013 |
+
+For roughly a third of targets the gold patch **is** substantially the answer diff, at 220× the
+random control. Ingesting it is not a "probably stronger memory"; it is an answer key.
+
+**The patch-free body is clean.** Parent `problem_statement` + `hints_text` contains an exact target
+added line on **9.0%** of edges, against a **6.9%** floor set by the target's *own* problem statement
+quoting its *own* patch. That is the instrument's irreducible noise. Admissible, and still $0.
+
+**Consequence for the plan.** The `$0` pool in the staging table is inadmissible as specified. The
+admissible $0 pool is patch-free prose, which is what the GREEN number above was measured on.
+
+## 5. Two live defects, both caught for $0
+
+1. **HTTP 422 `observed_at must use a UTC offset`.** 300 of the 1,007 experience rows ship
+   `created_at` as `YYYY-MM-DD HH:MM:SS` with no timezone; 707 ship `...Z`. The split is exactly the
+   41 multilingual repos versus the 12 original SWE-bench Python repos, **zero repo overlap** — two
+   upstream pipelines concatenated into one file. A naive adapter dies 30% through the pool.
+2. **`rc` from the wrong end of a pipe.** The first invocation printed `EXITCODE=0` for a run that
+   had died with a traceback, because the status came from the trailing `tail`. The repo's own
+   hazard notes say to capture `rc` first; the runner now does, and asserts a non-empty artifact.
+
+Both are exactly the class stage 1 exists to find, found before any money moved.
+
+## 6. Stage 2 cannot be powered — and this is independent of MemPhant
+
+The decisive numbers are the benchmark's own. Table 3, `Claude Sonnet 4.5 / Claude Code` on Related:
+**no-memory 19.68%, Oracle Summary 23.40%**. That **+3.72pp** is the lift the authors measured for an
+arm *handed* the gold parent. It is the ceiling for any retrieval-based memory system on this split
+with this scaffold.
+
+Two-sided exact McNemar, α=0.05, at the maximum n this split can offer (**357**):
+
+| ψ | power for the 3.72pp ceiling | power for our expected 2.82pp | MDE at n=357 |
+| --- | --- | --- | --- |
+| 0.05 | 0.887 | 0.609 | 3.38pp |
+| 0.10 | 0.546 | 0.330 | 4.85pp |
+| 0.15 | 0.395 | 0.239 | 5.89pp |
+| 0.20 | 0.308 | 0.189 | 6.81pp |
+| 0.25 | 0.255 | 0.159 | 7.61pp |
+| 0.30 | 0.220 | 0.140 | 8.32pp |
+
+Our expected effect is `recall × ceiling = 0.759 × 3.72pp = ` **2.82pp**, and that is an *upper*
+bound — it assumes a retrieved parent helps exactly as much as an oracle-supplied one.
+
+**2.82pp is below the MDE at every ψ, including ψ = 0.05.** For an agentic coding benchmark ψ is not
+0.05: under independence at these rates ψ = 0.339, and Table 3 itself hints at the noise (two
+different models scoring *exactly* 19.68, and Free Context Learning scoring *exactly* the 26.26
+baseline). At a realistic ψ = 0.15–0.30, power to detect our expected effect is **0.14–0.24**.
+
+**The instrument is too small for the effect it measures.** That is true for us, and it is equally
+true for the benchmark's own Table 4 ranking and for Supermemory's 4.04pp margin at n=99. Spending
+$504 to run it would buy a non-significant result whose cause we already know, and reporting it
+would violate this programme's own n_d floor in spirit if not in letter.
+
+## 7. Resource facts stage 2 planning did not have
+
+- **357 official images × 1.27 GB mean = ~453 GB** of Docker pulls. This host has **220 GB** free.
+  A census run requires a serialized pull → run → `rmi` loop, not a warm cache.
+- **No Claude Code scaffold exists in this repo.** Pinning to Claude Code + Claude Sonnet 4.5 —
+  required for comparability to Table 3 — is unbuilt integration work that was never costed.
+- **The paper's trajectory pool is public and free.** `cases/SWEContextBench Lite Past Experience/`
+  holds 300 `.jsonl` Claude Code session transcripts (~236 KB each). The "~$737 to rebuild the
+  trajectory pool" line applies only to the 707 non-Lite experiences, not to all 1,100.
+
+## 8. Recommendation
+
+**Stage 0: GREEN, complete, $0.** Retrieval is live and strong, and the miss profile names the
+lever (ranking, not packing).
+
+**Stage 1 (~$40): proceed, but re-scope it.** Its value is no longer ψ estimation for a stage 2 that
+should not happen. Its value is (a) the Claude Code + MemPhant integration round trip, which has
+never been done and is the largest unpriced risk in the plan, and (b) the same-arm re-run leg that
+measures how much of ψ is pure agent noise — which is the number that would settle §6 empirically
+rather than by argument.
+
+**Stage 2 ($504): recommend CANCEL as scoped, independently of s4-controls.** The gate the brief
+placed on s4 ("if we cannot beat grep for $40 we will not beat no-memory for $545") is sound, but it
+is no longer the binding constraint: even a *perfect* MemPhant cannot produce a resolvable effect on
+this split's `Resolved` endpoint at n=357.
+
+**What to do instead, in priority order:**
+
+1. **Re-scope the primary endpoint to FAIL_TO_PASS test rate.** Table 4 moves F2P 19.64 → 55.95
+   while moving Resolved only 26.26 → 30.30. It is ~10× the effect and measured per test rather than
+   per task, so it is the endpoint this instrument can actually resolve. It is already preregistered
+   here as secondary; promoting it is a decision the owner should take explicitly, not a drift.
+2. **Publish the retrieval result.** Stage 0 is a neutral, public, high-mindshare instrument measured
+   against published per-method comparators, at $0, on the endpoint MemPhant actually claims. It is
+   the strongest coding-memory evidence this programme holds, and it cost nothing.
+3. **Publish the instrument audit.** 376→357, 1,100→1,007, the two `created_at` formats, the
+   unreliable Related `created_at`, and the 37.2% gold-patch answer leak are findings the benchmark's
+   own authors would want, and they establish neutral-instrument competence better than a
+   non-significant $504 number would.
