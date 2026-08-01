@@ -412,6 +412,21 @@ inverted the verdict, out of pure base drift. **Both halves of a paired test mus
 be re-measured on the tree under test.** That is what the lineage stamp is for,
 and this run is the first on this lane to carry one on both arms.
 
+**And 0.6237 is not the new constant.** The correction above replaces a stale
+ceiling with a fresher one; it does not make the fresher one stable. This number
+moved 4.4pp in a single day on coverage alone and has no reason to have stopped,
+so a reader who banks it is committing the same error one tree-generation later —
+which is exactly the trap §8.6 was written about. Cite it as *"0.6237, ceiling
+measured 2026-08-01 on `5d7b9d5a`"*, and re-cut it on whatever tree a claim is
+being made against rather than carrying this one forward.
+
+The durable quantities on this lane are the **deltas** — +0.0301 LSW,
+−0.0245 misapplication, each with a CI and a discordant-pair count, both arms on
+one tree and one binary. Those are properties of the *comparison*, which is why
+they survive base drift that moves either arm's absolute rate. Any *share* or
+*fraction-of-headroom* computed from an absolute rate is context with a date on
+it, not a result. A corrected number is not automatically a stable one.
+
 ### 8.7 Reproduce
 
 ```bash
