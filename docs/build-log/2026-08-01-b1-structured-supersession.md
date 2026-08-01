@@ -691,24 +691,82 @@ subsystem:
    value does not depend on any of the above being significant: it removes a
    guard that made targeted supersession unusable. Nothing here argues for
    reverting it.
-2. **Re-calibrate τ from the banked ledger before running anything else.** Free,
-   $0, no ingest. §9.1 — the threshold was chosen on a distribution that turned
-   out not to be the live one. This is the highest expected value per unit of
-   cost on the list.
-3. **Then re-run S against R3 only** — S0 is now redundant as a comparator,
+2. **Change the similarity UNIT before touching τ** — see §10.1. This
+   supersedes what this section originally recommended, on someone else's
+   measurement, and the correction is the more valuable of the two.
+3. **Then re-calibrate τ on the new distribution.** Free, $0, no ingest. §9.1
+   stands — the threshold was chosen on a distribution that is not the live one
+   — but re-calibrating *first* would optimise the diluted scale and bake it in.
+4. **Then re-run S against R3 only** — S0 is now redundant as a comparator,
    since R3 dominates it as a baseline. One arm pair, and the decision is
-   whether the semantic increment clears zero at a τ chosen on the right
-   distribution.
-4. **Do not invest in a smarter extractor yet.** A model-based extractor is a
-   paid-call bet on an increment that is currently +0.025 ± 0.028 over a random
-   policy. Buy the free re-calibration first and see whether the increment
-   survives it.
-5. **Session segmentation (§2.4) is where the remaining four fifths lives**, not
+   whether the semantic increment clears zero.
+5. **Do not invest in a model-based extractor yet.** It is a paid-call bet on an
+   increment that is currently +0.025 ± 0.028 over a random policy, and there
+   are two $0 moves ahead of it that attack the same quantity.
+6. **Session segmentation (§2.4) is where the remaining four fifths lives**, not
    in extractor quality. If anything gets a redesign budget, it is that.
+
+### 10.1 The unit, not the threshold — a correction from the key-production lane
+
+§9.1 and this section's original recommendation #2 both read arm S's compressed
+live distribution (median 0.194, p95 0.283, max 0.521) as "τ was miscalibrated;
+re-calibrate it". The key-production workstream (`w1-keyprod` @ `3fda9537`,
+artifact `docs/build-log/artifacts/2026-08-01-key-production/ledger-rescored.json`,
+`decisional: false`) tested a different reading **on this log's own banked
+ledger**, and it is better supported.
+
+Hold all 7,890 candidate pairs fixed — exactly the pairs arm S's ranker chose —
+and change only the compared object: whole session body → best-matching
+directive sentence. Precision is the fraction of fired pairs that genuinely
+co-declare a convention, at a matched number of firings:
+
+| firings | body | sentence |
+|---:|---:|---:|
+| 100 | 0.460 | 1.000 |
+| 500 | 0.402 | 0.972 |
+| **1,091** (arm S's operating point) | **0.341** | **0.765** |
+| 2,000 | 0.296 | 0.556 |
+
+**Precision at arm S's actual operating point more than doubles, 0.341 →
+0.765.** The body column independently reproduces §3.1's "precision never
+exceeds 0.34", which is a useful check that the two lanes are measuring the same
+object.
+
+The diagnosis: a MemoryCode session is ~2,300 characters of mentor small talk
+wrapped around one directive sentence, so a whole-body Jaccard is dominated by
+filler that every session shares. That is why the live distribution tops out at
+0.521 and why the adapter default τ = 0.35 fires 32 times in 7,890. **The
+extractor is starved by its unit, not by its threshold**, and re-calibrating τ
+would optimise the diluted scale rather than fix it — which is precisely what
+this section originally told the reader to do.
+
+**Verified here rather than taken on trust**, since it rewrites this log's top
+recommendation: the scorer uses no gold. `literal_sentences` is a pure heuristic
+over body text (sentences carrying a quoted literal); `gold_structure` supplies
+only the `co_declaring` *label*, never a score; and the `max` is taken over all
+sentence pairs of the two bodies, which a live extractor can compute at runtime
+without knowing which pair is right. Corpus sha256 pinned and checked, upstream
+lineage names arm S's artifact and its binary sha256s, `paid_model_calls: 0`.
+
+**Carried caveats, at that lane's request and because they are correct.** It
+re-scores pairs the live ranker *already returned as top-1*, so it says nothing
+about what a sentence-level scorer would **retrieve**; it is a precision
+comparison at matched cost, not latest-state-wins; only a live arm can carry
+LSW, and `decisional: false` is the right flag.
+
+**One caution this log adds, from §8.3.** Doubling precision does not double the
+gain, because roughly half of arm S's +0.0506 is retirement that owes nothing to
+semantics. The quantity a unit swap must move is the **semantic increment over
+R3** (+0.0247, CI [−0.0033, +0.0532]). The thing to watch is precision *in
+excess of what a random policy achieves*, which on this ledger is the
+co-declaring base rate 1,174 / 7,890 = **0.149**: body clears that baseline by
+0.192, sentence by 0.616. That ordering is the reason to run the swap. **It is
+not a prediction of an LSW number, and none is offered here** — the increment is
+measured by re-running S against R3, or it is not measured.
 
 **What this log establishes for the register, stated so it cannot be over-read:**
 naming a unit id makes bitemporal supersession fire on a real corpus and buys
-~19% of the oracle headroom; roughly half of that is available to a policy that
+≈16% of the oracle headroom (ceiling re-measured 2026-08-01, and drifting); roughly half of that is available to a policy that
 understands nothing; and the semantic half of it has not been demonstrated at
 the preregistered bar.
 
