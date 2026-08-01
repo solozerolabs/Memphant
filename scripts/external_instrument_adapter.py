@@ -611,6 +611,125 @@ def jaccard(left: set, right: set) -> float:
     return len(left & right) / len(union) if union else 0.0
 
 
+# --------------------------------------------------------------------------
+# THE DIRECTIVE-SENTENCE SIMILARITY UNIT (S1).
+#
+# These four constants and two functions were written for
+# `measure_key_recovery.py` and were moved here, not copied, when the live B1
+# extractor needed the same unit. `measure_key_recovery` imports them back
+# under their original names. One definition, so an offline census and a live
+# arm can never be measuring two different objects.
+#
+# GOLD-INDEPENDENT BY CONSTRUCTION: every input is `body` text. No `topic`, no
+# `declarations`, no probe, no gold field of any kind is reachable from here.
+# --------------------------------------------------------------------------
+
+# A quoted literal in *prose*. The gold rule's `QUOTED` runs over the clean
+# `topic` field; a body is full of apostrophes ("I'm", "team's"), so the quote
+# delimiters must be bounded by non-alphanumerics or every contraction pair
+# becomes a "literal". Verified against the corpus: this finds 'q_' and not
+# "'s a pleasure to finally meet you. I'".
+DIRECTIVE_LITERAL = re.compile(
+    r"(?<![A-Za-z0-9])['\"`]([^'\"`\n]{1,40})['\"`](?![A-Za-z0-9])"
+)
+DIRECTIVE_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+DIRECTIVE_WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+
+# Ordinary English function words plus the conversational filler this corpus is
+# padded with. Chosen once, before any rule was scored, and shared by every
+# rule so no rule is advantaged by its own stoplist.
+DIRECTIVE_STOPWORDS = frozenset(
+    """
+    a an the and or but if then than that this these those there here it its it's
+    is are was were be been being am do does did doing done have has had having
+    i you he she we they me him her us them my your his our their mine yours
+    to of in on at by for with from into onto about as up out over under again
+    further once all any both each few more most other some such no nor not only
+    own same so too very can will just should now s t don don't shall may might
+    must would could ll re ve d m o y ain aren couldn didn doesn hadn hasn haven
+    isn ma mightn mustn needn shan shouldn wasn weren won wouldn
+    please make sure let lets going go want need needs like also going forward
+    ok okay yes yeah sounds good great thanks thank hi hello sure well right
+    when where what which who whom while because since during before after
+    """.split()
+)
+
+
+def directive_content_words(text: str) -> list[str]:
+    return [
+        w
+        for w in (m.group(0).lower() for m in DIRECTIVE_WORD.finditer(text))
+        if w not in DIRECTIVE_STOPWORDS and len(w) > 1
+    ]
+
+
+def literal_sentences(body: str) -> list[tuple[str, str]]:
+    """(sentence, sentence-with-quoted-literals-blanked) for each sentence
+    carrying a quoted literal. That is this corpus's directive shape; a rule
+    family anchored on it is the honest deterministic ceiling."""
+    out = []
+    for raw in DIRECTIVE_SENTENCE_SPLIT.split(body):
+        s = raw.strip()
+        if not s or not DIRECTIVE_LITERAL.search(s):
+            continue
+        out.append((s, DIRECTIVE_LITERAL.sub(" <X> ", s)))
+    return out
+
+
+_DIRECTIVE_SETS: dict[str, tuple[frozenset, ...]] = {}
+
+
+def directive_sets(body: str) -> tuple[frozenset, ...]:
+    """Content-word sets of a body's directive sentences, literals blanked.
+
+    Blanking the quoted literal is deliberate and is the same choice every
+    key-production rule makes: two sessions that state the SAME convention
+    about DIFFERENT literals ("prefix with 'q_'" then "prefix with 'x_'") are
+    the co-declaring pair supersession exists to catch, and leaving the literal
+    in would push them apart rather than together.
+
+    Cached on the body itself: recall hands the same prior body back many
+    times, and re-tokenising ~2,300 characters per candidate is the only part
+    of this unit that is not free.
+    """
+    hit = _DIRECTIVE_SETS.get(body)
+    if hit is None:
+        hit = tuple(
+            frozenset(directive_content_words(blanked))
+            for _, blanked in literal_sentences(body)
+        )
+        _DIRECTIVE_SETS[body] = hit
+    return hit
+
+
+def structured_similarity(left_body: str, right_body: str, unit: str) -> float:
+    """The B1 extractor's similarity, under either unit.
+
+    ``body``     -- whole-body content-word Jaccard. B1's original unit. A
+                    MemoryCode session is ~2,300 characters of mentor small
+                    talk wrapped around one directive, so this is dominated by
+                    filler every session shares: live median 0.194, max 0.521.
+    ``sentence`` -- max content-word Jaccard over all directive-sentence pairs
+                    of the two bodies. Same information, filler removed.
+
+    Deterministic, offline, no model call. The max is over every pair, which a
+    live extractor can compute at write time without knowing which pair is
+    right.
+    """
+    if unit == "body":
+        return jaccard(content_words(left_body), content_words(right_body))
+    if unit != "sentence":
+        raise ValueError(f"unknown structured similarity unit: {unit!r}")
+    return max(
+        (
+            jaccard(left, right)
+            for left in directive_sets(left_body)
+            for right in directive_sets(right_body)
+        ),
+        default=0.0,
+    )
+
+
 def _fires(session_id: str, rate: float) -> bool:
     """Deterministic per-session draw. Reproducible from the id alone, so a
     rate-matched ablation is a re-run rather than a re-roll."""
@@ -709,8 +828,21 @@ def ingest_group_structured(client, group: dict, args) -> tuple:
                 if item.get("kind") != "preference":
                     continue
                 considered += 1
-                similarity = jaccard(
-                    content_words(unit["body"]), content_words(item.get("body", ""))
+                # THE SIMILARITY UNIT (S1). `body` is B1's original whole-body
+                # Jaccard; `sentence` compares the best-matching directive
+                # sentences instead. Both scores are banked on every arm so a
+                # later calibration never has to re-run an arm to see the other
+                # distribution.
+                body_similarity = structured_similarity(
+                    unit["body"], item.get("body", ""), "body"
+                )
+                sentence_similarity = structured_similarity(
+                    unit["body"], item.get("body", ""), "sentence"
+                )
+                similarity = (
+                    body_similarity
+                    if args.structured_unit == "body"
+                    else sentence_similarity
                 )
                 if similarity >= args.structured_threshold:
                     target = item["unit_id"]
@@ -723,7 +855,13 @@ def ingest_group_structured(client, group: dict, args) -> tuple:
                     {
                         "session": unit["unit_id"],
                         "target_session": session_of.get(item["unit_id"]),
+                        # `jaccard` is the DECIDING score under this arm's unit
+                        # -- the field name is kept so every downstream reader
+                        # of B1's ledger keeps working -- and both units are
+                        # recorded alongside it.
                         "jaccard": round(similarity, 6),
+                        "body_jaccard": round(body_similarity, 6),
+                        "sentence_jaccard": round(sentence_similarity, 6),
                         "named": target is not None,
                     }
                 )
@@ -1047,6 +1185,16 @@ def build_parser() -> argparse.ArgumentParser:
              "id-named supersession (see ingest_group_structured)",
     )
     parser.add_argument(
+        "--structured-unit", default="body", choices=("body", "sentence"),
+        help="structured arm: the SIMILARITY UNIT. body = B1's original "
+             "whole-body content-word Jaccard; sentence = max Jaccard over the "
+             "two bodies' directive sentences, literals blanked. Both are "
+             "deterministic, gold-independent and free. The threshold is NOT "
+             "unit-free: the two units live on different scales, so a "
+             "--structured-threshold chosen for one is meaningless on the "
+             "other.",
+    )
+    parser.add_argument(
         "--structured-threshold", type=float, default=0.35,
         help="structured arm: content-word Jaccard a top-ranked prior unit must "
              "clear before it is named as a supersession target. >1.0 disables "
@@ -1231,7 +1379,10 @@ def main() -> int:
         args.database_url,
         args.port,
         args.embed_model,
-        log_path=out_path.parent / f"server-{args.instrument}.log",
+        # Per-ARM log name. Four arms sharing one artifact directory otherwise
+        # interleave into one `server-memorycode.log`, and the only copy of a
+        # crash reason belongs to whichever arm truncated it last.
+        log_path=out_path.parent / f"server-{args.instrument}-{out_path.stem}.log",
     )
     try:
         server.start()
@@ -1292,6 +1443,7 @@ def main() -> int:
                 # MECHANISM LIVENESS. An inert arm and a neutral arm produce the
                 # same score; only these counts tell them apart.
                 diagnostics["structured_extractor"] = {
+                    "unit": args.structured_unit,
                     "threshold": args.structured_threshold,
                     "ablation": args.structured_ablation,
                     "fire_rate": args.structured_fire_rate,
