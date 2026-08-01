@@ -1,0 +1,234 @@
+{
+  "corpus_lineage": {
+    "current_pin": {
+      "corpus_git_commit": "96a26f1f842a4f76eb46c2e7c5385b1ec835238e",
+      "file_count": 114,
+      "generator_model": "google/gemini-3.1-pro-preview",
+      "golden_v1_sha256": "8cb21da4ec3c5215dbe04f0f23eba8ab07a8bb0c3134bc2482cbd0695d68fd64",
+      "mining_candidate_section_count": 3299,
+      "section_count": 4920
+    },
+    "v1": {
+      "haystack_sections_at_scoring_time": 3257,
+      "question_id_also_in_current_bank": 14,
+      "same_question_and_gold_answer": 0,
+      "scored_against_golden_sha256": "c424b08f02608510445007a5d75dcf5903c8ac34d31c073c629717db9a0f0c83",
+      "scored_rows": 60
+    },
+    "v2": {
+      "haystack_sections_at_scoring_time": 3257,
+      "question_id_also_in_current_bank": 14,
+      "same_question_and_gold_answer": 0,
+      "scored_against_golden_sha256": "30b354c55c830abed8bfcedd3c659610f813aedc2bab63fc0f6b37cb80ce365b",
+      "scored_rows": 60
+    },
+    "verdict": "NOT POOLABLE. Zero of the 120 r15-scored rows exist as the same question in the currently pinned bank; the C2 re-pin re-mined both sets against a different corpus revision. Usable sets on the current pin: 0, not 2."
+  },
+  "decision": "R6 \u2014 the docs-lane unlock (best arm L1XC vs the Syndai incumbent, pooled)",
+  "evidence_contract": {
+    "claim": "R6 is not decidable at $0: reaching a homogeneous n=370 costs $57.72-$121.39, and the 120 rows already scored are on a retired corpus pin and cannot be pooled with new ones.",
+    "corpus": {
+      "currently_pinned_snapshot_id": "syndai-docs @ 96a26f1f",
+      "n_items": 120,
+      "poolable_with_current_pin": false,
+      "retired_golden_sha256_v2": "30b354c55c830abed8bfcedd3c659610f813aedc2bab63fc0f6b37cb80ce365b",
+      "sha256": "c424b08f02608510445007a5d75dcf5903c8ac34d31c073c629717db9a0f0c83",
+      "snapshot_id": "syndai-docs @ fb650da (retired), r15 golden bank v1"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 8192,
+      "command": "python3 scripts/derive_r6_docs_packet.py",
+      "embed_model": "modernbert",
+      "flags": [
+        "MEMPHANT_CROSS_RERANK=1 (bge-reranker-base, 64-pool)",
+        "MEMPHANT_RESOURCE_CHUNKS=1",
+        "recall_pool_depth=64"
+      ],
+      "k": 10,
+      "note": "the harness above is the r15 L1XC arm's, as recorded in its provenance.json; this packet re-derives from those rows and runs no arm of its own",
+      "scorer": "normalized containment first, one claude-sonnet-5 judge call on non-match; reader openai/gpt-5.6-terra"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "per_question.correct": 120,
+        "per_question.question_id": 120
+      },
+      "license_evidence": "private corpus, no LICENSE blob exists to pin; used read-only and no body is committed",
+      "license_id": "private (Syndai product documentation, owner's own)",
+      "license_source": "unverified",
+      "rows_counted": 120,
+      "shipped_rows_verified": true
+    },
+    "leakage": null,
+    "power": {
+      "b": 18,
+      "c": 8,
+      "computed_by": "scripts/instrument_power.py",
+      "mde_at_80": 0.12278198272727933,
+      "n": 120,
+      "n_d": 26,
+      "psi_observed": 0.21666666666666667,
+      "source": "docs/build-log/artifacts/r15-docs/L1XC/{v1,v2}/reader.json vs docs/build-log/artifacts/syndai-gate/reader-syndai.json and docs/build-log/artifacts/r1-docs/syndai/v2/reader.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "schema_version": 1
+  },
+  "lineage": {
+    "evidence_root": "/Users/sidsharma/Memphant",
+    "instrument_power_sha256": "1a2ffbe1949e891889c85b3c783e6fc7f0814bb84498a0d99bac333bed31da58",
+    "memphant_git_head": "d01affad6eb159768ff6e10fddfc824047ddfd3d",
+    "no_rust_binary_involved": true,
+    "this_script_sha256": "95a1c2f0988860c83ef3aa31491f18b536490850ec6daae14c38cb15ea0d23f8"
+  },
+  "observed": {
+    "homogeneity": {
+      "discordance_rate_fisher_p": 0.11986082576097508,
+      "effect_direction_fisher_p": 0.19015026163767582,
+      "note": "Neither test rejects at alpha=0.05, but neither is powered to detect heterogeneity at these counts. Non-rejection here is not evidence of homogeneity; it is absence of evidence either way."
+    },
+    "per_set": {
+      "v1": {
+        "arm_label": "r15-L1XC-v1",
+        "arm_only_b": 8,
+        "baseline_label": "syndai-gate-syndai",
+        "baseline_only_c": 1,
+        "both": 12,
+        "delta": 0.11666666666666667,
+        "n": 60,
+        "n_d": 9,
+        "neither": 39,
+        "p_exact": 0.0390625,
+        "psi": 0.15
+      },
+      "v2": {
+        "arm_label": "r15-L1XC-v2",
+        "arm_only_b": 10,
+        "baseline_label": "r1-syndai-v2",
+        "baseline_only_c": 7,
+        "both": 9,
+        "delta": 0.05,
+        "n": 60,
+        "n_d": 17,
+        "neither": 34,
+        "p_exact": 0.629058837890625,
+        "psi": 0.2833333333333333
+      }
+    },
+    "pooled": {
+      "arm_only_b": 18,
+      "baseline_only_c": 8,
+      "delta": 0.08333333333333333,
+      "n": 120,
+      "n_d": 26,
+      "p_exact": 0.07551869750022888,
+      "psi": 0.21666666666666667,
+      "psi_ci95_wilson": [
+        0.152367235628652,
+        0.2985436253499406
+      ]
+    }
+  },
+  "power": {
+    "by_psi": {
+      "psi_ci_high": {
+        "mde_at_80_on_current_n": 0.1440636919033758,
+        "psi": 0.2985436253499406,
+        "required_n_for_7pt": 500,
+        "required_n_for_observed_delta": 355
+      },
+      "psi_ci_low": {
+        "mde_at_80_on_current_n": 0.10157163826216623,
+        "psi": 0.152367235628652,
+        "required_n_for_7pt": 260,
+        "required_n_for_observed_delta": 185
+      },
+      "realized": {
+        "mde_at_80_on_current_n": 0.12278198272727933,
+        "psi": 0.21666666666666667,
+        "required_n_for_7pt": 370,
+        "required_n_for_observed_delta": 260
+      }
+    },
+    "d_min": 0.07,
+    "planning_n_at_psi_ci_high": 500,
+    "power_at_current_n_and_observed_delta": 0.42408358634486515,
+    "required_n": 370,
+    "test": "two-sided exact conditional-binomial McNemar, alpha=0.05, target power 0.80"
+  },
+  "price": {
+    "convention": "derive_phase2_packet.py: one byte per prompt token at the widest MEASURED row, 1024 completion tokens, recorded provider maxima, times an enumerated call budget",
+    "goldens_already_mined_on_current_pin": 120,
+    "goldens_to_mine": 250,
+    "independent_cross_check": "the r15 wave itself settled ~$25-35 reader/judge for 4 arms x 120 rows plus a chat pair; this packet's floor is the same order for 2 arms x required_n",
+    "measured_evidence_widths": {
+      "memphant_arm": {
+        "max_bytes": 18975,
+        "measured": true,
+        "median_bytes": 10595,
+        "missing": [],
+        "rows": 120
+      },
+      "syndai_arm": {
+        "max_bytes": 7763,
+        "measured": true,
+        "median_bytes": 4035,
+        "missing": [],
+        "rows": 60
+      }
+    },
+    "provider_max_price_usd_per_million": {
+      "completion": 16.5,
+      "prompt": 2.75
+    },
+    "required_n": 370,
+    "stages": [
+      {
+        "calls_ceiling": 1667,
+        "calls_floor": 250,
+        "model": "google/gemini-3.1-pro-preview (OpenRouter)",
+        "price_source": "no gemini price is recorded in this repo; bounded at the recorded gpt-5.6-terra maxima, same convention as the register's STATE-Bench row",
+        "prompt_token_bound": 8000,
+        "stage": "A_mine_new_goldens",
+        "usd_ceiling": 64.839632,
+        "usd_floor": 9.724
+      },
+      {
+        "calls_ceiling": 370,
+        "calls_floor": 370,
+        "model": "openai/gpt-5.6-terra",
+        "price_source": "widest measured MemPhant docs evidence row 18975 B, one byte per prompt token",
+        "prompt_token_bound": 19000,
+        "stage": "B_reader_memphant_arm",
+        "usd_ceiling": 25.58402,
+        "usd_floor": 25.58402
+      },
+      {
+        "calls_ceiling": 370,
+        "calls_floor": 370,
+        "model": "openai/gpt-5.6-terra",
+        "price_source": "widest measured Syndai docs evidence row 7763 B, one byte per prompt token",
+        "prompt_token_bound": 8000,
+        "stage": "C_reader_syndai_incumbent_arm",
+        "usd_ceiling": 14.39152,
+        "usd_floor": 14.39152
+      },
+      {
+        "calls_ceiling": 740,
+        "calls_floor": 358,
+        "model": "anthropic/claude-sonnet-5",
+        "price_source": "judge prompt width never measured on this lane; bounded at 2000 tokens. Fire rate measured at 29/60 on r15 L1XC v1; ceiling assumes every row",
+        "prompt_token_bound": 2000,
+        "stage": "D_judge",
+        "usd_ceiling": 16.57304,
+        "usd_floor": 8.017768
+      }
+    ],
+    "total_usd_ceiling": 121.388212,
+    "total_usd_floor": 57.717308,
+    "unpriced_inputs": [
+      "Syndai incumbent ingest embeddings (text-embedding-3-small over ~9,890 chunks): no OpenAI embedding price is recorded in this repo \u2014 UNVERIFIED, and small relative to the stages above",
+      "Jina rerank calls inside search_knowledge_detached: price UNVERIFIED"
+    ]
+  }
+}

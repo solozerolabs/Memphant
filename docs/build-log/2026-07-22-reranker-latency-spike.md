@@ -1,5 +1,42 @@
 # Reranker latency-cut spike — 2026-07-22
 
+> **SUPERSEDED, 2026-08-01 — the 449 ms figure and the "3× headroom" claim are
+> RETRACTED. Do not cite either.**
+>
+> Re-measured on 2026-08-01 by the same `#[ignore]`d test in this document
+> (`rerank_byo_model_latency_matrix`), same model directory, same
+> `--release` profile, same host, four consecutive samples at the same
+> **64 × 512** configuration:
+>
+> | sample | 1 | 2 | 3 | 4 | median |
+> |---|---:|---:|---:|---:|---:|
+> | `elapsed_ms` | 1140 | 1871 | 1448 | 1472 | **~1460** |
+>
+> Against the pre-registered **1500 ms** ceiling that is **0.97× headroom, not
+> 3×**, and **two of four samples breach the ceiling outright**. The recorded
+> 449 ms is not reproducible here. The honest reading is that MiniLM-L6-int8 at
+> the full 64 × 512 pool sits *on* the ceiling on this machine, not comfortably
+> under it — and this matrix is **body granularity on synthetic ~1.5 KB docs**,
+> the cheapest case. Under `MEMPHANT_RERANK_GRANULARITY=chunk` each candidate
+> flattens into several scored docs, so the real arm can only be slower.
+>
+> Two caveats kept, because they cut both ways: the host was under concurrent
+> load from sibling worktrees when re-measured, and a single-run matrix is a
+> small sample either way. Neither rescues a 3× headroom claim — the point of
+> the retraction is that **the margin was never measured with enough care to
+> carry a spend decision**, and a figure quoted as 3× that measures 0.97× is
+> exactly the kind of number that propagates into one.
+>
+> Authoritative replacement: the per-question `cross_rerank_ms` distribution
+> from a real arm on the real corpus, recorded in
+> `docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json` and
+> discussed in `docs/build-log/2026-08-01-r6-docs-decision.md` §K.
+>
+> What still stands from this spike: the *model-swap* conclusion (bge-base is
+> the wrong model, MiniLM-L6-int8 is ~an order of magnitude faster), the
+> licence findings, and the fastembed/ort knob map. It is the absolute number
+> and the headroom claim that do not survive.
+
 The cross-encoder rerank seam is the campaign's largest single QA lever (+0.158,
 `2026-07-12-r15-rank-compression.md`) but was **latency-retired at 12.9–13.6 s/query**
 (9× the pre-registered 1.5 s p95 ceiling), so it ships flag-gated, default OFF.
@@ -14,6 +51,11 @@ Swapping to **`ms-marco-MiniLM-L-6-v2` int8 ONNX (22M params, Apache-2.0)** rera
 the **full 64-candidate pool at 512 tokens in 449 ms** on this CPU — **~13× faster**,
 under the ceiling with 3× headroom, no candidate cut, no truncation — at comparable
 BEIR accuracy (MiniLM-L12 52.0 vs bge-base 51.6; L6 ~1 pt below L12).
+
+> **[2026-08-01] The 449 ms and the "3× headroom" in the paragraph above are
+> RETRACTED — see the banner at the top of this file. Re-measurement gives a
+> median ~1460 ms at 64 × 512, i.e. 0.97× the ceiling, with 2 of 4 samples over
+> it. The model-swap conclusion stands; the margin does not.**
 
 ## Web research (2026 landscape, verified)
 
