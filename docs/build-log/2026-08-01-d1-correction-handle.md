@@ -1,8 +1,9 @@
 # 2026-08-01 — D1: the correction handle, and a caller that can name its own key
 
-Branch `s3-d1handle` off `main@0e874da0`. Commits `41dc9fc4`, `4df4e23f`,
-`33541d75`. **Not merged, not pushed. `paid_model_calls: 0`. No measurement was
-run; no paid arm is requested.**
+Branch `s3-d1handle` off `main@0e874da0`. Feature commits `41dc9fc4`,
+`4df4e23f`, `33541d75`; plus `f1c17f3f` (refactor), `d91303c5` (shared-script
+fix, §7a) and docs. **Not merged, not pushed. `paid_model_calls: 0`. No
+measurement was run; no paid arm is requested.**
 
 Plan of record: `docs/superpowers/plans/2026-07-31-one-plan.md` §3 Phase D.
 
@@ -185,6 +186,13 @@ machine. **No latency claim is made here.**
 
 Mechanically, the change adds one struct construction per recalled item from
 columns already in memory, and clones four `Option<String>`s.
+
+**Re-run on the final committed tree** (`e206fb41`, with the fixed
+`with_scratch_db.sh`): **90 passed, 1 failed**, the same single SLO threshold, at
+p50 590.6 ms under **load average 168.2** — fourteen times the twelve cores this
+box has. Four independent readings of that test today span 291–662 ms and track
+load monotonically; the threshold is 200 ms. On this host, on this day, the test
+measures the queue, not the query.
 
 An earlier attempt aborted before any test ran with `database
 "memphant_scratch_23140_…" does not exist`. See §7a — that was almost certainly

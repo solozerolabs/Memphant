@@ -163,7 +163,7 @@ null delta, and I did not.
 | `cargo test --workspace` | **0 failed** |
 | `cargo clippy --all-targets --all-features` | clean |
 | `cargo fmt --check` | clean |
-| Postgres `--ignored --test-threads=1 --no-fail-fast` under `with_scratch_db.sh` | **90 passed, 1 failed** — `pg_store_contract` 53/53 (52 before + the new shared scenario). The failure is `hot_path_slo_pg`'s wall-clock 200 ms p50, which **the baseline breaches too** (291/334/602 ms baseline vs 309/476/662 ms HEAD, load 45 → 126 on 12 cores). Pre-existing under this load; no latency claim made — see build log §7. |
+| Postgres `--ignored --test-threads=1 --no-fail-fast` under `with_scratch_db.sh` | **90 passed, 1 failed** — `pg_store_contract` 53/53 (52 before + the new shared scenario). The failure is `hot_path_slo_pg`'s wall-clock 200 ms p50, which **the baseline breaches too** (291/334/602 ms baseline vs 309/476/662 ms HEAD, load 45 → 126 on 12 cores). Pre-existing under this load; no latency claim made — see build log §7. Re-run on the final tree: same 90/1 at p50 590.6 ms under **load average 168** on 12 cores. |
 | `python3 -m pytest -q tests/` | 736 passed, 12 skipped, **1 pre-existing failure** (`test_spec_drift_check_passes_against_linked_syndai_docs`, sibling-repo state, out of scope — identical before and after) |
 
 Schema artifacts regenerated, never hand-edited; their three staleness tests are
