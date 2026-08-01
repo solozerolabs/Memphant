@@ -903,3 +903,31 @@ each carrying its own `evidence_contract` with `n`, `b`, `c`, `n_d`,
 `psi_observed` and an `mde_at_80` recomputed by
 `instrument_power.min_detectable_effect` rather than asserted. The `*_q1.json`
 files are the §8.2 exploratory cells on the rescued arm's 1/4 slice.
+
+---
+
+## §9.9 — the corpus COMPRESSES the effect, so "more probes" is the wrong spend
+
+Recorded by the coordinator after the lane stood down; drafted by the lane and
+reported rather than committed. It corrects a recommendation above.
+
+§9.8 says retirement is nearly free money here. **The other half is that *wrong*
+retirement is nearly free too — and that half bounds what any better extractor
+could ever demonstrate on this instrument.** From §3.1's own committed table at
+τ = 0.25: of 309 edges, **16 retire a gold (5.2%)** and **293 retire a distractor
+or nothing (94.8%)**. Naming the wrong prior unit costs almost nothing, so the
+metric distance between a careless selector and a careful one is structurally
+small *whatever either one understands*. That alone explains S − R3 = +0.0247,
+with no appeal to the extractor being weak.
+
+**Therefore §10's "underpowered positive — the fix is more probes" is WRONG.**
+That phrasing assumes a fixed effect obscured by noise. If the corpus
+*compresses* the effect, more probes buys a tighter interval around a compressed
+number and may never separate the arms. **Powering this instrument harder is the
+wrong next spend.**
+
+This sharpens the program's open item: the missing corpus is not only one whose
+gold is not recency-identified, it is one where **retiring the wrong rule is
+EXPENSIVE**. Only there does target selection have room to pay. It also gives the
+free similarity-unit swap a second justification — costing nothing, it is the
+cheapest way to learn whether the ceiling is the corpus or the extractor.

@@ -566,3 +566,29 @@ Two near-inversions in one evening — this lane's from a stale banked ceiling
 (§8.6), theirs from a mis-specified ablation — were each caught only by re-running
 a control rather than citing one. **A banked ceiling is not a constant, and a
 baseline that moves in the gold's direction is not neutral.**
+
+---
+
+## §8.9 — a warning for whoever closes the corpus gap
+
+Recorded by the coordinator after the lane stood down.
+
+The dataset gap named in §8.8 is real, but there is a trap in closing it. **A
+corpus whose gold is NOT recency-identified will make BOTH arms score worse**,
+and the tempting read will be that supersession regressed. It will not have: the
++3.01pp reported here is measured where both arms already encode the right
+answer, so it sits near a ceiling by construction.
+
+**Whoever runs that corpus must preregister that a DROP is the expected outcome,
+and that the question is the GAP BETWEEN ARMS, not either level.** Otherwise the
+third near-inversion of this program gets committed on the very instrument built
+to prevent it.
+
+One attribution correction the lane asked to have stated plainly: the gold-rule
+finding in §8.8 did not come from this lane's own attention. It was banked,
+merged and reported twice before a peer working the same corpus from a different
+arm pair surfaced it — while §3(b) of this lane's own preregistration had said
+the valid axis was degenerate the whole time. **§3(b) was not too vague, it was
+too far upstream.** A correct caveat written before the arms ran, and a verdict
+that did not carry it, is indistinguishable in effect from never having written
+it. Distance from the claim is the failure mode; prose quality is not.
