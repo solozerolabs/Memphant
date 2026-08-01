@@ -252,3 +252,199 @@ and this result would **not** carry. Anyone citing the number at production
 scope must either re-measure or move the collapse into the store query. The
 finding below is about the *rule*, at a scale where the rule is what is being
 compared.
+
+---
+
+## 8. Results — the edifice earns its keep on this instrument, by about three points
+
+**Both arms ran on `w1-arecency` @ `5d7b9d5a`, from the same two binaries**
+(server `3822e4f9…`, worker `cf985707…`, sha256 stamped into both artifacts).
+No paid model call on either path. `paid_model_calls: 0` in both.
+
+### 8.1 Mechanism liveness — read from each arm's own scratch DB, before any score
+
+| check | prereg expects (bitemporal / control) | **measured** (bitemporal / control) | |
+|---|---|---|---|
+| `supersedes` edges | > 0 / **0** | **7198** / **0** | PASS |
+| `superseded` units | > 0 / **0** | **3599** / **0** | PASS |
+| valid-closed rows | > 0 / **0** | **3599** / **0** | PASS |
+| open rows sharing a subject key with **overlapping** valid ranges (self-join) | **0** / > 0 | **0** / **10294** | PASS |
+| subject keys carrying more than one live row | 0 / > 0 | **1060** / **1060** | see §8.2 |
+
+`superseded_with_open_transaction` is 0 in both arms and `remainders_recalled`
+is 0 in both, so no retired row and no remainder ever reached a recall result.
+The compilation gate is clean on both sides: 3394/3394 episodes compiled, 0
+failed, 0 pending, 0 dead.
+
+**The gate passes.** Each arm proved from the database which one it is, in both
+directions: the edifice demonstrably fired in arm A and was demonstrably absent —
+not merely unexercised — in arm B, where 10294 pairs of open rows genuinely
+overlap on a subject key and the read side therefore had to choose between them.
+
+### 8.2 The prereg's fifth gate row is wrong, and the measurement is what shows it
+
+The table in §4 expects **0** subject keys with more than one live row on the
+bitemporal arm. Measured: **1060**, the same as the control.
+
+This is a defect in the preregistration, not in the run, and §4's own adjacent
+paragraph is where the contradiction lives: *"the bitemporal model correctly
+leaves the historical remainder open beside the current generation — remainders
+**tile**, they do not overlap."* A tiled remainder is by construction a second
+live row on the key. So the bitemporal arm **must** show >1 live row per key, and
+the row-5 expectation of 0 restates precisely the naive `open <= 1` assertion
+that §4 spends a paragraph explaining is the wrong test.
+
+The decisive cell is row 4, the self-join, and it separates the arms exactly as
+designed: **0 overlapping open pairs on the bitemporal arm against 10294 on the
+control**, from the same 1060 multi-row keys. Same number of competing rows,
+opposite answer on whether they conflict — which is the whole content of "they
+tile rather than overlap", computed rather than trusted.
+
+Nothing was weakened to obtain this. Rows 1–4 are reported as preregistered and
+all pass; row 5 is reported as **failing as written on the bitemporal arm**, with
+the reason it should never have been written that way.
+
+### 8.3 Both arms saw the same corpus — checked, because the row counts differ
+
+The arms do not carry the same number of rows, and that is worth pinning down
+rather than assuming, because a 3599-row gap is 25% of the store:
+
+| | bitemporal | A-recency |
+|---|---|---|
+| `preference` units | 10694 | **7095** |
+| `episodic` units | 3394 | 3394 |
+| total rows | 14088 | 10489 |
+| of which `superseded` | 3599 | 0 |
+
+`7095 + 3599 = 10694`. **Both arms retained the same 7095 preference assertions
+and the same 3394 episodes**; the bitemporal arm's extra rows are the 3599
+closed generations the machinery materialises. The control did not silently drop
+a third of the corpus — corroborated independently by its 1060 subject keys
+carrying competing live rows, which is ~every probe key: restatements did append.
+
+### 8.4 Primary endpoint — latest-state-wins
+
+Brackets are **cluster-bootstrap 95% CIs over the 257 instances**, 10,000
+resamples, seed `20260801`. Arm A = full bitemporal, Arm B = A-recency.
+
+| | **A — bitemporal** | **B — A-recency** | **Δ (A − B)** |
+|---|---|---|---|
+| **Latest-state-wins** | **0.6237** [0.5938, 0.6546] | **0.5936** [0.5629, 0.6256] | **+0.0301** [+0.0170, +0.0443] |
+| **Misapplication** | **0.3396** [0.3118, 0.3672] | **0.3641** [0.3350, 0.3927] | **−0.0245** [−0.0376, −0.0125] |
+| Neither returned | 0.0292 [0.0185, 0.0396] | 0.0348 [0.0220, 0.0473] | −0.0056 [−0.0124, +0.0010] |
+
+| test (primary endpoint) | value |
+|---|---|
+| discordant pairs | **b = 47** (A only) / **c = 15** (B only), **n_d = 62** |
+| exact two-sided McNemar | **p = 5.78 × 10⁻⁵** |
+| cluster permutation (instance-level label flip, 10,000 perms) | **p = 1.00 × 10⁻⁴** |
+| realized psi (this run's own cells) | **0.0583** |
+| MDE at 80% power, n = 1063, realized psi | **0.0213** |
+
+**n_d = 62, comfortably above the n_d ≥ 6 structural floor.** This is a
+measurement, not an arithmetic null.
+
+The two p-values agree to within a factor of two, so nothing is hiding in the
+clustering; the bootstrap CI remains the verdict by prereg, and it excludes zero.
+
+Secondary, descriptive, no test: `hit@1` 0.3857 vs 0.3810, `hit@10` 0.9247 vs
+0.9087.
+
+### 8.5 Verdict
+
+**The bitemporal supersession machinery beats a plain `ORDER BY observed_at DESC`
+recency tiebreak, given an identical correct subject key, by +3.01 points of
+latest-state-wins (95% CI [+1.70, +4.43]) and −2.45 points of misapplication
+(95% CI [−3.76, −1.25]), on 1063 probes over 257 instances.**
+
+Both endpoints move the same way, both CIs exclude zero, and the effect is
+roughly 1.4× the instrument's 80%-power MDE — so this is a real effect, and a
+small one. The ~20-line control does **not** tie the edifice and does not beat
+it. The question §1 posed is answered in the edifice's favour.
+
+Three things that verdict does *not* say, all of which bound it:
+
+1. **It is a comparison of resolution rules, not of MemPhant against anything.**
+   Both arms are oracle-keyed off the same `topic` field the gold labels are
+   built from. Neither number is comparable to the lexical baseline, and neither
+   is evidence of retrieval quality.
+2. **The margin is three points, against an edifice that costs a breaking
+   migration to remove** (§5) and is the single largest source of complexity in
+   the substrate (§1). "Earns its keep" is a measured *sign*, not a measured
+   *cost-benefit*. Anyone deciding whether the complexity is worth paying for
+   should weigh +3.0pp against §5's exit price, not treat significance as
+   sufficiency.
+3. **The transfer bound from §7 stands, and it cuts against the control.** The
+   bitemporal arm prunes retired rows in SQL and never loads them; the control
+   loads everything and prunes after fusion. That asymmetry is harmless *only*
+   because no recall family truncates at this corpus's scale (~42 preference
+   units per scope against a tightest cap of 100). At a production scope carrying
+   200+ units per subject the most-recent-100 family truncates, the control
+   spends pool slots on rows it is about to discard, and it would be handicapped
+   by *where the prune sits* rather than by the recency rule. **This result does
+   not carry to that regime.** It also means the measured +3.0pp is, if anything,
+   the control's best case: the confound runs in the control's favour here and
+   would run against it at scale. Anyone citing this number at production scope
+   must re-measure or move the collapse into the store query.
+
+### 8.6 A finding about the base, not about either arm
+
+Arm A is the same oracle-keyed configuration as the 2026-07-31 Arm P, and it
+reproduces that run's mechanism counts **exactly** — 7198 supersedes + 3599
+contradicts edges, 3599 superseded units. Its score does not match:
+
+| | Arm P (2026-07-31, `accuracy-first`) | Arm A (this run, `5d7b9d5a`) |
+|---|---|---|
+| latest-state-wins | 0.5795 | **0.6237** |
+| misapplication | 0.3405 | **0.3396** |
+| neither returned | 0.0734 | **0.0292** |
+| `hit@10` | 0.840 | **0.925** |
+| stale-outranks-current | 362 | 361 |
+
+Misapplication and stale-outranks-current are unchanged. **The entire +4.4pp is
+retrieval coverage**: the base got materially better at surfacing the rule at all
+and no better at telling live from retired.
+
+This is why re-running the ceiling arm was load-bearing rather than ceremonial.
+Pairing today's control against the prereg's cited 0.5795 — measured on a
+different tree — would have reported Δ ≈ −1.4pp *in the control's favour* and
+inverted the verdict, out of pure base drift. **Both halves of a paired test must
+be re-measured on the tree under test.** That is what the lineage stamp is for,
+and this run is the first on this lane to carry one on both arms.
+
+### 8.7 Reproduce
+
+```bash
+cd /Users/sidsharma/Memphant-w1-arecency          # branch w1-arecency @ 5d7b9d5a
+docker start memphant-postgres-1
+cargo build --release --bin memphant-server --bin memphant-worker --bin memphant-cli
+OUT=docs/build-log/artifacts/2026-08-01-a-recency
+SRC=~/.memphant-private/w7-instruments/memorycode/data/test-00000-of-00001-a45d1855e46f30cb.parquet
+
+# Arm A -- full bitemporal. ~54 min. Run DETACHED; see the note below.
+<venv-with-pyarrow>/bin/python scripts/external_instrument_adapter.py \
+  --instrument memorycode --arm preference --diagnostics --source $SRC \
+  --out $OUT/arm-bitemporal.json --port 39541
+
+# Arm B -- A-RECENCY CONTROL. ~43 min. Drops the subject exclusion constraint
+# on its own scratch DB; see 2 and 5.
+<venv-with-pyarrow>/bin/python scripts/external_instrument_adapter.py \
+  --instrument memorycode --arm preference --a-recency --diagnostics --source $SRC \
+  --out $OUT/arm-arecency.json --port 39542
+
+python3 scripts/preference_lane_analysis.py \
+  --arm-a $OUT/arm-bitemporal.json --arm-b $OUT/arm-arecency.json \
+  --out $OUT/analysis-bitemporal-vs-arecency.json
+python3 scripts/check_evidence_contract.py \
+  --file $OUT/analysis-bitemporal-vs-arecency.json   # exits 0
+```
+
+**Operational note, because it cost 55 minutes.** A first attempt at arm A was
+killed at ~90% of ingest by background-task eviction in the agent harness: a
+stack of accumulated waiter tasks caused the oldest background task — the run
+itself — to be reaped. Long benches must be launched fully detached
+(`nohup caffeinate -is … &`) so nothing in the orchestration layer can reap them,
+and their output must go to a file rather than through a buffering pipe, or the
+diagnostics die with the process. Sibling lanes on this box lost time to the same
+shape.
+
