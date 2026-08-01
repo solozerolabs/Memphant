@@ -1,11 +1,15 @@
 # A4′ — key production: the frontier, and the regime that was hiding it
 
 **Date:** 2026-08-01 · **Worktree:** `Memphant-w1-keyprod` · **Branch:** `w1-keyprod`
-**Base:** `main` @ `5d7b9d5a` · **Cost:** `paid_model_calls: 0`. No model, no
-network, no database, no server, no binary.
-**Artifacts:** `docs/build-log/artifacts/2026-08-01-key-production/recovery.json`
-(passing `evidence_contract`, `decisional: false`, full lineage) and
-`…/ledger-rescored.json` (§3.4a).
+**Base:** `main` @ `5d7b9d5a` for §§1–3; **all live arms (§4b) ran on `d6a39fb0`**
+with server `4ee109ab…`, worker `5f449e6f…`, cli `6b55748b…`.
+**Cost:** `paid_model_calls: 0` throughout. No model call and no network on any
+path; §§1–3 additionally touch no database, server or binary.
+**Artifacts:** `docs/build-log/artifacts/2026-08-01-key-production/` —
+`recovery.json` (§2), `ledger-rescored.json` (§3.4a), `arm-a-prime-ontree.json`,
+`arm-k-derived.json`, `arm-p-oracle-ontree.json`, `analysis-k-vs-aprime.json`,
+`analysis-p-vs-aprime.json` (§4b). Both analyses carry a **passing**
+`evidence_contract` with a computed MDE.
 **Amended 2026-08-01 after `w1-b1arm` and `w1-arecency` reported.** Four
 corrections, all verified by me from their banked artifacts rather than their
 summaries: the B1 row (§3.4), the τ-scale error in my prior (§3.4a), a policy
@@ -350,6 +354,86 @@ it is precisely the failure standing rule 1 exists for. **The ceiling figure
 should be re-pinned in `2026-07-31-one-plan.md` §7 to 0.6237 with its lineage**,
 rather than left as a bare number that three sessions are now dividing by.
 
+## 4b. ARM K RAN. The frontier row, measured.
+
+**All three arms on ONE tree (`d6a39fb0`), same binaries** (server `4ee109ab…`,
+worker `5f449e6f…`, cli `6b55748b…`), 1063 probes / 257 instances, corpus sha
+verified before any DB was minted. Every delta below is within-run, so none of
+it depends on a cross-tree denominator.
+
+### Liveness gates FIRST — K is live, not inert
+
+Preregistered as a hard gate: *if K's edge count is zero, "inert" is the whole
+report.* Read from the arm's own scratch DB on the bench superuser credential
+**before** any score:
+
+| gate | Arm K | Arm P | Arm A′ |
+|---|---:|---:|---:|
+| `supersedes` edges | **4,162** | 7,198 | **0** |
+| `contradicts` edges | 2,081 | 3,599 | 0 |
+| units superseded | 2,081 | 3,599 | 0 |
+| preference units | 9,462 | 10,694 | 0 |
+| `remainders_recalled` | **0** | **0** | **0** |
+| compilation verified | 3880/3880 | 3394/3394 | 8147/8147 |
+
+**Gate passes.** K mints **57.8% of the oracle's supersede edges** from a key
+that never sees a gold field. `remainders_recalled: 0` on all three: no
+valid-time-closed row ever reached a recall result, so the bitemporal exclusion
+holds and the scoring identity is exact.
+
+### Primary endpoint
+
+| endpoint | A′ | **K** | P (ceiling) |
+|---|---:|---:|---:|
+| **latest-state-wins** | 0.314205 | **0.372531** | 0.622766 |
+| misapplication | 0.673565 | **0.598307** | 0.340546 |
+| neither returned | 0.006585 | 0.023518 | 0.029163 |
+| hit@1 | 0.240828 | 0.282220 | 0.384760 |
+| **hit@k** | **0.842897** | **0.776105** | **0.924741** |
+
+| comparison | ΔLSW | cluster CI95 | b / c | n_d | exact McNemar | perm p |
+|---|---:|---|---:|---:|---:|---:|
+| **K − A′** | **+0.058325** | **[+0.0382, +0.0791]** | 92 / 30 | **122** | 1.65e-08 | 1.0e-4 |
+| P − A′ | +0.308561 | [+0.2813, +0.3363] | 334 / 6 | 340 | 1.87e-90 | 1.0e-4 |
+
+Cluster bootstrap over the 257 instances, 10,000 resamples, seed 20260801.
+Realized ψ = 0.11477, **computed** MDE at 80% power = 0.029824
+(`scripts/instrument_power.py`). n_d = 122 is far above the structural floor of
+6. Misapplication moves with it: **−0.075259 [−0.0960, −0.0552]**, n_d 134.
+
+**By the preregistered decision rule this is a POSITIVE.** The CI excludes 0 and
+the effect is about twice the computed MDE.
+
+**K closes 0.058325 / 0.308561 = 18.9% of the on-tree oracle headroom.**
+
+### The finding that runs AGAINST K, and it is the interesting one
+
+**K buys staleness handling with retrieval coverage.** hit@k falls
+**0.842897 → 0.776105**, −0.0668, while LSW rises. And `neither_returned` rises
++0.016933 with **b = 18, c = 0** — perfectly one-directional: 18 probes where K
+returns nothing and A′ returned something. Part of K's misapplication drop is
+the retired rule being suppressed *without* the live one taking its place.
+
+**But this is not a cost of keying — it is a cost of keying *wrongly*.** Arm P
+has a perfect key and its hit@k goes **up**, 0.842897 → 0.924741. So the
+mechanism does not trade coverage for staleness; **a lossy key does**, by
+retiring live rules that then leave the pool.
+
+That is exactly what the offline frontier predicted. §2 measured
+`pre3_content_words` as wrongly retiring the gold of **44 of 1063** groups
+(4.1%); the observed hit@k loss is 6.7pp. Same sign, same order of magnitude,
+reached by two independent routes — an offline census of the rule and a live
+end-to-end arm. Recorded as a **coherence check**, not as a prediction: nothing
+here converts one into the other.
+
+### The ceiling has settled
+
+P on-tree at `d6a39fb0` is **0.622766**, against `w1-arecency`'s **0.6237** at
+`5d7b9d5a` — a move of ~0.001 across the 138-line recall-path delta. The ceiling
+has now been measured twice, on two trees, by two sessions, and agrees to the
+third decimal. **The +4.4pp jump from the banked 0.5795 was real and has
+settled**; it is base drift that has stopped drifting, not noise.
+
 ## 5. What is **not** claimed
 
 **Key recovery is not latest-state-wins, and nothing here converts one into the
@@ -377,8 +461,15 @@ honest floor for the same rule family is **net 0.514**. §7 of the plan should b
 amended: the gap to close is `0.514 → 1.0` in key recovery, not `0.008 → 1.0`,
 and the LSW consequence of that is unmeasured.
 
-**2. Do the unit swap on B1's extractor first — it is free and it outranks
-Arm K.** §3.4a shows B1's similarity signal doubles in precision at its own
+**2. Arm K is a measured POSITIVE and the first gold-independent key that
+moves the number.** +0.058325 LSW [+0.0382, +0.0791], n_d 122, 4,162 supersede
+edges from a key that never sees a gold field. It closes **18.9%** of the
+on-tree oracle headroom. That retires the open question in §1 of the plan: a
+deterministic body-derived key is worth something real, and it is worth about a
+fifth of what a perfect key is worth.
+
+**3. But do the unit swap on B1's extractor before spending anything — it is
+free.** §3.4a shows B1's similarity signal doubles in precision at its own
 operating point (0.341 → 0.765) when the compared object changes from the
 session body to the directive sentence. That is a re-scoring of already-banked
 data, costs nothing, requires no ingest, and it attacks the one result B1 could
@@ -387,27 +478,23 @@ preregistered NEGATIVE). If the semantics are real, a better unit is what will
 show it. **This displaces B1's own recommendation #2 (re-calibrate τ), which
 optimises a scale that tops out at 0.52 and mixes filler into every score.**
 
-**3. Then run Arm K.** $0, ~30 minutes, already written, and the only thing that
-converts the §2 frontier into a decision. It is also a genuine kill gate: if K
-lands at LSW ≈ A′ despite recovering half the groups, then key *recovery* is not
-the binding quantity and the whole A4′ framing is wrong — worth knowing far more
-than another rule variant.
+**3b. The next lever is precision, not coverage.** K's own failure mode is now
+measured: it loses 6.7pp of hit@k by retiring live rules, while the oracle key
+*gains* coverage. So the way to convert more of the remaining 81% is a **more
+precise key, not a broader one** — which is the same conclusion §3.4a reaches
+from B1's side, by a different route.
 
-**2b. Re-pin the ceiling before anyone divides by it again.** §4a: 0.5795 →
-0.6237. Three sessions are currently computing "fraction of headroom closed"
-against a stale denominator.
-
-**4. Do not adapt `extract_facts` to second-person directives.** Its ceiling is
+**5. Do not adapt `extract_facts` to second-person directives.** Its ceiling is
 already measured here (§3.1) and it is below the free rules.
 
-**5. The deterministic band ends at roughly where the third-party number says it
+**6. The deterministic band ends at roughly where the third-party number says it
 does.** arXiv:2606.15903's deterministic primitives sit at 63.4–68.3%; the
 supersession-regime recall column in §2 tops out at 0.899 with unusable precision
 and the best *net* point is 0.52. Nothing free is going to reach the 91.7–93.2%
 that a mutation-time control-plane hook reaches at ~$0.17 per 385 mutations. **A
 deterministic answer will not close this. Plan for the hook.**
 
-**6. The cheapest path to a good key is not extraction at all — it is the
+**7. The cheapest path to a good key is not extraction at all — it is the
 caller.** §3.2 shows the caller-authored-key path is already live and already
 proven at scale by Arm P's 7,198 edges. The missing piece is a caller that knows
 what the write is about, and in production that caller is an LLM agent that just
@@ -415,9 +502,46 @@ read the directive. **D1 (the correction handle bound to Syndai's existing chip)
 and caller-authored keys are the same bet, and this measurement is an argument to
 promote it above further extractor work.**
 
-**No paid arm is requested.** The free gate that could make a spend worthless —
-Arm K — has not reported. Per the necessity test, nothing should be authorised
-until it does.
+**No paid arm is requested.** Arm K has now reported and is a positive, but the
+two free moves ahead of it in the owner's stated order are **still unrun**:
+
+- **the similarity-unit swap — UNRUN.** §3.4a is an offline re-scoring of banked
+  data, not an arm.
+- **the τ re-calibration on the true distribution — UNRUN.**
+
+**Arm K ran out of the owner's stated order** (swap → τ → K) because the
+coordinator opened a window when the box drained. That was a scheduling
+decision, not a re-prioritisation, and neither free move is blocked by K's
+result. Per the necessity test, nothing paid should be authorised while two $0
+gates that could change the decision remain unreported.
+
+## 7a. Process failures in this lane, recorded because they recurred
+
+Three, all mine, all in the harness rather than the mechanism:
+
+1. **`echo "DONE rc=$?"` captured the echo's status, not the arm's.** Three
+   arms that produced zero artifacts were logged DONE and the chain marched on.
+   Fixed by capturing rc first and asserting a non-empty artifact.
+2. **Concurrent scratch-DB creation races.** Two arms launched in parallel both
+   died in `20260703_001_wsa_bootstrap.sql` with `ERROR: tuple concurrently
+   updated`. **Scratch DBs are isolated; their creation is not** — the
+   bootstraps contend on a shared catalog. Arms are now serialized. This is
+   worth knowing repo-wide: "ephemeral Postgres per harness" reads as though it
+   makes runs independent, and at creation time it does not.
+3. **A mid-bootstrap death leaked two servers that held ports 39561/39571 for
+   8h21m**, reparented to launchd, serving databases that had already been
+   dropped. Fixed with a preflight that reports *all* busy ports and an
+   EXIT/INT/TERM trap that reaps them.
+
+**And the failure that cost the most wall-clock was none of those: it was
+monitoring.** This lane stalled silently three times — once on a clean abort,
+once on clean completion — because the watch expression matched only the states
+I expected. A monitor that greps for the happy path cannot distinguish "still
+running" from "finished" or "died". Each time, the coordinator noticed before I
+did. The transferable rule: **a watch must match every terminal state, and
+silence must never be a valid outcome.** This is the same shape as failure 1 —
+a wrapper that assumes the happy path and leaves no evidence when it does not
+happen.
 
 ---
 
