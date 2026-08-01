@@ -194,6 +194,147 @@ def coverage_at(gold_ranks: dict[str, list[int]], order: list[str], n: int) -> i
     return sum(1 for q in order if any(rank <= n for rank in gold_ranks[q]))
 
 
+def evidence_contract(headline_row: dict, pool_report: dict) -> dict:
+    """The `evidence_contract` block for the headline contrast, generated here
+    and never hand-edited.
+
+    `decisional` is **false**, and not as a formality: the paraphrase bank fails
+    its OWN preregistered headline leakage bar (`leak_concentration_le_1_50`
+    false at 2.018, `bar_passed` false in
+    `benchmarks/data/track_r_paraphrase_golden.lock.json`) and its corpus licence
+    is a HuggingFace card assertion with no LICENSE blob pinned. The bank is used
+    deliberately with those failures declared, because it is still the least
+    lexically confounded coding bank we own — a reason to use it, not to promote
+    off it.
+    """
+    headline = headline_row["contrasts"]["vs_memphant_fused_at_10"]
+    return {
+        "schema_version": 1,
+        "decisional": False,
+        "claim": (
+            f"On the Track R paraphrase bank (n={headline['n']}), at one shared "
+            "endpoint (gate_common.provenance_hit@10 over top-10 bodies) and one "
+            "query string, handing anthropic/claude-opus-5 MemPhant's first "
+            f"N={headline_row['N']} fused candidates AND NOTHING ELSE to re-rank "
+            f"scores {headline['treatment_hits']}/{headline['n']} against "
+            f"{headline['control_hits']}/{headline['n']} for MemPhant's own "
+            f"fused top-10 on the same pool: b={headline['treatment_only_b']} / "
+            f"c={headline['control_only_c']}, n_d={headline['n_discordant']}, "
+            f"delta={headline['delta_pp']}pp, two-sided exact McNemar "
+            f"p={headline['mcnemar_exact_p']:.4g}. The arm's ceiling at that N is "
+            f"Coverage(N)={headline_row['coverage_ceiling_hits']}/{headline['n']}, "
+            f"so its ranking accuracy is {headline_row['rank_accuracy']}, at "
+            f"${headline_row['usd_per_question']}/question against the agentic "
+            f"grep control's measured ${GREP_USD_PER_QUESTION}/question."
+        ),
+        "power": {
+            "test": "two-sided exact (conditional binomial) McNemar",
+            "n": headline["n"],
+            "b": headline["treatment_only_b"],
+            "c": headline["control_only_c"],
+            "n_d": headline["n_discordant"],
+            "psi_observed": headline["realized_psi"],
+            "mde_at_80": min_detectable_effect(headline["n"], headline["realized_psi"]),
+            "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+            "source": (
+                "docs/build-log/artifacts/s8-hybrid/analysis-confirm.json "
+                "sweep[].contrasts['vs_memphant_fused_at_10']"
+            ),
+        },
+        "harness": {
+            "embed_model": (
+                "small (bge-small-en-v1.5) — the retriever half of the hybrid; the "
+                "ranking half uses no embeddings at all"
+            ),
+            "scorer": (
+                "retriever: lexical=bm25-code + weighted-RRF fusion, recall "
+                "mode=fast, its pool banked with bodies via --dump-pool. ranker: "
+                "anthropic/claude-opus-5 in a bounded list_pool/grep_pool/"
+                "read_item loop over that pool ONLY, provider pinned "
+                "only=[anthropic] allow_fallbacks=false, max_price 5.0/25.0 USD "
+                "per million."
+            ),
+            "k": 10,
+            "budget": pool_report.get("budget_tokens"),
+            "flags": [
+                f"pool depth N={headline_row['N']}",
+                "ranker caps identical to S4's agentic control: 12 tool calls, 16 "
+                "turns, 24000 completion tokens per question, grep<=25 matches, "
+                "read_item<=6000 chars",
+                "pool containment asserted per returned body; the runner refuses "
+                "to score on any mismatch",
+            ],
+            "command": (
+                "scripts/s8_hybrid_run.sh pool && scripts/s8_hybrid_run.sh stub && "
+                "scripts/s8_hybrid_run.sh sweep N && scripts/s8_hybrid_run.sh confirm N"
+            ),
+        },
+        "corpus": {
+            "sha256": pool_report.get("corpus_sha256", "unverified"),
+            "snapshot_id": (
+                "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921 "
+                "(nebius/SWE-rebench-openhands-trajectories@35455389, 495 sampled "
+                "attempts, 64055 content events)"
+            ),
+            "n_items": headline["n"],
+            "path_note": (
+                "benchmarks/data/track_r_paraphrase_golden.jsonl is not tracked in "
+                "this repo (only its lock), so the checker cannot recompute the "
+                "golden sha here"
+            ),
+        },
+        "leakage": {
+            "unit_definition": "one content event of the attempt, 4000-char clip",
+            "absolute_target_coverage": 0.1346,
+            "floor": 0.0667,
+            "floor_kind": "exhaustive",
+            "concentration": 2.018,
+            "provenance_class": "machine_generated",
+            "source": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+            "negative_selection": (
+                "same-attempt hard negatives — for this arm, literally the other "
+                "N-1 candidates MemPhant's own fusion ranked alongside the gold"
+            ),
+        },
+        "mechanism_enabled": True,
+        "mechanism_evidence": (
+            "Retriever half: lexical_scorer='bm25-code' and embed_model='small' in "
+            "the pool run's own provenance. Ranker half: every scored row carries "
+            "an executed tool call and a selection that resolves inside the pool; "
+            "pool_containment_violations=0 is asserted by matching EVERY returned "
+            "body against the exact set that question's agent was handed, and the "
+            "runner exits non-zero rather than writing a score on a mismatch. "
+            "rows_with_errors must be 0 before the arm is reported."
+        ),
+        "probe_kind": "gate",
+        "attribution": {
+            "method": "unverified",
+            "note": (
+                "No bisect and none applicable: this contrasts two ways of cutting "
+                "ten items out of ONE retrieval pool — the shipped fuser's rank "
+                "order against an agent's judgement — not two commits of one "
+                "system. Both arms read the same banked pool from the same run."
+            ),
+        },
+        "notes": (
+            "decisional=false for the two reasons carried by every artifact on "
+            "this bank and neither fixable by re-reading: (1) the bank FAILS its "
+            "own preregistered headline leakage bar — concentration 2.018 against "
+            "<=1.50, bar_passed=false in the lock; (2) the corpus licence "
+            "CC-BY-4.0 is a HuggingFace card assertion with no LICENSE blob "
+            "pinned. Two further bounds are specific to THIS artifact and are "
+            "stated ahead of its numbers rather than after them: the arm's ceiling "
+            "at every N is Coverage(N), which tops out at 169/180=0.9389 — BELOW "
+            "the agentic grep control's realized 174/180, so this arm cannot beat "
+            "grep on this bank at any N and was never expected to; and the "
+            "haystack is ONE coding attempt at a pool median of 122.5 units, so "
+            "any operating point derived here is measured AT that haystack size "
+            "and is not extrapolated to repo or cross-session scale, where "
+            "enumeration has no analogue."
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pool-dump", required=True, type=Path)
@@ -207,6 +348,13 @@ def main() -> int:
     )
     parser.add_argument("--grep", type=Path, required=True, help="S4's banked agentic arm")
     parser.add_argument("--stage", choices=("sweep", "confirm"), required=True)
+    parser.add_argument(
+        "--headline-label",
+        default=None,
+        help="which arm carries the evidence contract at --stage confirm; "
+        "defaults to the highest-scoring one",
+    )
+    parser.add_argument("--pool-provenance", type=Path, default=None)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
@@ -354,6 +502,18 @@ def main() -> int:
             }
         ),
     }
+    if args.stage == "confirm":
+        if args.pool_provenance is None:
+            raise SystemExit("--pool-provenance is required at --stage confirm")
+        headline_row = (
+            next(row for row in rows if row["label"] == args.headline_label)
+            if args.headline_label
+            else max(rows, key=lambda row: row["hits_at_10"])
+        )
+        analysis["headline_arm"] = headline_row["label"]
+        analysis["evidence_contract"] = evidence_contract(
+            headline_row, json.loads(args.pool_provenance.read_text())
+        )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(analysis, indent=2) + "\n")
     for row in rows:
