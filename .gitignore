@@ -12,11 +12,6 @@ __pycache__/
 .venv/
 venv/
 
-# Web dependencies and browser test artifacts
-node_modules/
-playwright-report/
-test-results/
-
 # Local secrets and machine-specific config
 .env
 .env.*
