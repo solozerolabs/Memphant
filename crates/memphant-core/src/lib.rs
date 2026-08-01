@@ -10103,7 +10103,18 @@ fn channel_candidates(
                 ChannelPass::Bm25 => bm25_scores
                     .and_then(|scores| scores.get(&unit.id).copied())
                     .unwrap_or(0.0),
-                ChannelPass::Temporal => temporal_score(unit, &request.query, temporal_window),
+                // The recall clock, not a fresh `now()`: a temporal channel
+                // must be evaluated at the SAME instant the rest of the recall
+                // is, or a `transaction_as_of` replay silently scores recency
+                // against wall-clock time and stops being reproducible.
+                ChannelPass::Temporal => temporal_score(
+                    unit,
+                    &request.query,
+                    temporal_window,
+                    time.transaction_as_of
+                        .parse()
+                        .unwrap_or(jiff::Timestamp::UNIX_EPOCH),
+                ),
                 ChannelPass::Edge => edge_score(
                     unit,
                     units,
@@ -10741,11 +10752,58 @@ fn is_historical_query(query: &str) -> bool {
     })
 }
 
+/// The SEMANTIC tokens of a fact key — the curated subject the Exact channel is
+/// supposed to be scoring — with the structural scaffolding removed.
+///
+/// `derive_fact_key` emits `{scope_uuid}:{subject}:{predicate}` or
+/// `{scope_uuid}:auto:{sha256[..16]}`. `tokenize` splits a UUID into FIVE
+/// alphanumeric runs, and before 2026-08-01 all five landed in `exact_score`'s
+/// denominator, where no query can ever match them. Full coverage of the
+/// curated subject therefore scored **0.375**, not 1.0, on a function whose own
+/// doc calls it "a calibrated 0..1"; and an auto-derived key — five UUID runs,
+/// the literal `auto`, and a content hash — scored exactly **0.0** and was
+/// dropped from the channel entirely by the `score > 0.0` filter, at any
+/// relevance. Since `3fc4eede` scales the channel's fusion contribution BY this
+/// score, the deflation attenuated the whole channel rather than just
+/// misreporting it.
+///
+/// Keys that carry no scope prefix (`timezone:value`, `profile:{id}`, and the
+/// extractor's own `candidate.fact_key`) are unaffected: a segment is dropped
+/// only when it actually parses as a UUID, or is the literal `auto` marker
+/// immediately following one, or is that marker's content hash.
+fn fact_key_subject_tokens(fact_key: &str) -> Vec<String> {
+    let mut segments = fact_key.split(':').peekable();
+    let mut kept: Vec<&str> = Vec::new();
+    let mut scoped = false;
+    if let Some(first) = segments.peek()
+        && first.parse::<Uuid>().is_ok()
+    {
+        segments.next();
+        scoped = true;
+    }
+    let mut rest: Vec<&str> = segments.collect();
+    // `{scope}:auto:{hash}` carries no curated subject at all: the marker and
+    // the body hash are structural. Dropping them is what makes the remaining
+    // score honest — an auto-keyed unit has nothing for the Exact channel to
+    // match, which is a true statement about the unit rather than an artifact
+    // of a diluted denominator. Its body is already scored by the lexical
+    // family, so synthesising an Exact vote from it would double-count one
+    // signal across two channels.
+    if scoped && rest.first() == Some(&"auto") {
+        rest.clear();
+    }
+    kept.append(&mut rest);
+    kept.iter().flat_map(|segment| tokenize(segment)).collect()
+}
+
 fn exact_score(unit: &StoredMemoryUnit, query_tokens: &[String]) -> f32 {
     let Some(fact_key) = unit.fact_key.as_deref() else {
         return 0.0;
     };
-    let subject_tokens = tokenize(fact_key);
+    let subject_tokens = fact_key_subject_tokens(fact_key);
+    if subject_tokens.is_empty() {
+        return 0.0;
+    }
     let matches = subject_tokens
         .iter()
         .filter(|token| {
@@ -10928,30 +10986,73 @@ fn tokens_related(left: &str, right: &str) -> bool {
                 .all(|(left, right)| left == right))
 }
 
-/// Temporal-channel score. The existing recency-INTENT signal (an explicit
-/// `current`/`latest`/`now` token favouring active semantic units) is unchanged.
-/// W5 adds a SOFT date-window boost: when `temporal_window` is `Some` (the query
-/// carried a date AND the temporal-grounding flag is on) a recallable unit whose
-/// grounded `valid_from` falls inside the queried period also scores `1.0`.
-/// `temporal_window == None` (flag off, or no query date) reproduces today's
-/// behaviour exactly — the boost never fires and no clock is read.
+/// Age in days of `stamp` relative to `now`, clamped at zero. `None` when the
+/// stamp is absent or unparseable — the caller must decide what that means
+/// rather than silently scoring it as brand new.
+fn age_days(stamp: Option<&str>, now: jiff::Timestamp) -> Option<f32> {
+    let parsed: jiff::Timestamp = stamp?.parse().ok()?;
+    let seconds = now.as_second() - parsed.as_second();
+    Some((seconds as f32 / 86_400.0).max(0.0))
+}
+
+/// Age at which a recency-query score falls to half. Not fitted — no lane that
+/// can express this channel has been run (see the build log): Track R is 100%
+/// episodic, so the recency branch is unreachable there and this constant
+/// cannot be measured on it. 30 days is a declared placeholder; retune it on a
+/// lane with real semantic units.
+const TEMPORAL_RECENCY_HALF_LIFE_DAYS: f32 = 30.0;
+
+/// Score for a unit whose timestamp cannot be read. Deliberately small but
+/// NON-ZERO: `channel_candidates` drops anything scoring `0.0`, and a missing
+/// timestamp should make a unit uncompetitive on recency, not invisible.
+const TEMPORAL_UNDATED_SCORE: f32 = 0.05;
+
+/// Temporal-channel score.
+///
+/// **Rewritten 2026-08-01. It previously returned a flat `1.0` for EVERY active
+/// semantic unit under a `current`/`latest`/`now` query and read no clock at
+/// all.** Because `channel_candidates` sorts by score and breaks ties on
+/// `body`, a universal constant meant the channel's vote order was
+/// ALPHABETICAL BY BODY TEXT — and it casts that vote at
+/// `TEMPORAL_RECENCY_CHANNEL_WEIGHT = 2.5`, more than the Vector channel's 2.0,
+/// on the single most common shape of memory query. It was not a recency
+/// function; it was a weight-2.5 alphabetical sort.
+///
+/// Now: a real monotonic decay in the unit's age, `1 / (1 + age / half_life)`,
+/// measured from the recall clock against `valid_from` (when the fact became
+/// true) and falling back to `transaction_from` then `observed_at` (when we
+/// learned it). Newest scores ~1.0 and every older unit scores strictly less,
+/// so the channel finally ranks by recency. Still strictly positive, so no unit
+/// is dropped from the channel by the `score > 0.0` filter for being old.
+///
+/// The W5 date-window boost is unchanged and still takes precedence: an
+/// explicit queried period is a stronger statement of intent than "current".
 fn temporal_score(
     unit: &StoredMemoryUnit,
     query: &str,
     temporal_window: Option<&DateWindow>,
+    now: jiff::Timestamp,
 ) -> f32 {
-    let query_tokens = tokenize(query);
-    let recency_query = query_tokens
-        .iter()
-        .any(|token| matches!(token.as_str(), "current" | "latest" | "now"));
-    if recency_query && unit.kind == MemoryKind::Semantic && unit.state == UnitState::Active {
-        return 1.0;
-    }
     if let Some(window) = temporal_window
         && let Some(valid_from) = unit.valid_from.as_deref()
         && valid_from_in_window(valid_from, window)
     {
         return 1.0;
+    }
+    let query_tokens = tokenize(query);
+    let recency_query = query_tokens
+        .iter()
+        .any(|token| matches!(token.as_str(), "current" | "latest" | "now"));
+    if recency_query && unit.kind == MemoryKind::Semantic && unit.state == UnitState::Active {
+        let stamp = unit
+            .valid_from
+            .as_deref()
+            .or(unit.transaction_from.as_deref())
+            .or(Some(unit.observed_at.as_str()));
+        return match age_days(stamp, now) {
+            Some(age) => 1.0 / (1.0 + age / TEMPORAL_RECENCY_HALF_LIFE_DAYS),
+            None => TEMPORAL_UNDATED_SCORE,
+        };
     }
     0.0
 }
@@ -15884,19 +15985,21 @@ mod deep_call_routing_tests {
     }
 }
 
-/// Characterisation tests for two ranking components that are provably INERT on
-/// the Track R coding bank (episodic-only corpus, `MEMPHANT_FACT_EXTRACTION=0`)
-/// and LIVE under the shipped production configuration (fact extraction
-/// default-ON since `40ba26cf`, mixed-kind store). A bank that cannot express a
-/// defect systematically flatters the system it measures, so these are pinned
-/// here rather than left as prose.
+/// The two ranking components that were BROKEN until 2026-08-01 and that the
+/// Track R coding bank structurally could not see: it is 100% episodic and runs
+/// with `MEMPHANT_FACT_EXTRACTION=0`, so both channels were dropped whole by the
+/// `score > 0.0` filter, while production runs with extraction default-ON
+/// (`40ba26cf`) and a mixed-kind store.
 ///
-/// **These tests assert the CURRENT, WRONG behaviour on purpose.** They exist to
-/// fail loudly when someone fixes it. See
-/// `docs/build-log/2026-08-01-rerank-channel.md` §7.
+/// These began as characterisation tests asserting the WRONG behaviour so they
+/// would fail loudly when it was fixed. It is fixed, so they are inverted: they
+/// now assert the corrected behaviour and pin the specific defect each one
+/// found. See `docs/build-log/2026-08-01-rerank-channel.md` §7.
 #[cfg(test)]
-mod inert_on_the_bank_live_in_prod_tests {
+mod ranking_channels_fixed_tests {
     use super::*;
+
+    const SCOPE: &str = "550e8400-e29b-41d4-a716-446655440000";
 
     fn semantic_unit(id: u128, body: &str, fact_key: Option<&str>) -> StoredMemoryUnit {
         StoredMemoryUnit {
@@ -15936,45 +16039,69 @@ mod inert_on_the_bank_live_in_prod_tests {
         }
     }
 
-    /// `exact_score`'s own doc calls it "a calibrated 0..1 -- the fraction of
-    /// the unit's curated `fact_key` tokens the query covers". It is not.
-    /// `derive_fact_key` prefixes every key with the scope UUID, and `tokenize`
-    /// splits that UUID into five alphanumeric runs that land in the
-    /// DENOMINATOR and that no query can ever match.
-    ///
-    /// Since `3fc4eede` the Exact channel's fusion contribution is scaled by
-    /// this very score (`magnitude = score`), so the deflation is not cosmetic:
-    /// it attenuates the whole channel.
+    fn now() -> jiff::Timestamp {
+        "2026-08-01T00:00:00Z".parse().unwrap()
+    }
+
+    // ---- exact_score ----
+
+    /// WAS 0.375, because `tokenize` split the scope UUID into five runs that
+    /// landed in the denominator and no query could ever match. The function's
+    /// doc calls it "a calibrated 0..1"; now it is one.
     #[test]
-    fn exact_score_can_never_reach_one_because_the_scope_uuid_is_in_the_denominator() {
-        let scope = "550e8400-e29b-41d4-a716-446655440000";
+    fn full_coverage_of_the_curated_subject_now_scores_one() {
         let unit = semantic_unit(
             1,
             "deploy target is fly.io",
-            Some(&format!("{scope}:deploy_target:is")),
+            Some(&format!("{SCOPE}:deploy_target:is")),
         );
-        // A query covering EVERY semantic component of the key.
-        let query = tokenize("deploy target is");
-        let score = exact_score(&unit, &query);
-        // Three matched tokens over eight, five of which are UUID runs.
+        let score = exact_score(&unit, &tokenize("deploy target is"));
         assert!(
-            (score - 0.375).abs() < 1e-6,
-            "full semantic coverage scores {score}, not 1.0"
+            (score - 1.0).abs() < 1e-6,
+            "full coverage of `deploy_target:is` should score 1.0, got {score}"
         );
     }
 
-    /// Worse than attenuation: an AUTO-derived key (the branch
-    /// `derive_fact_key` takes whenever the extractor supplies no explicit
-    /// subject AND predicate) contains nothing a query can match -- five UUID
-    /// runs, the literal "auto", and a sha256 prefix. `channel_candidates`
-    /// keeps a unit only when `score > 0.0`, so these units are EXCLUDED from
-    /// the Exact channel entirely, however relevant they are. Which units get
-    /// an Exact vote is therefore decided by key FORMATTING, not relevance.
+    /// Partial coverage must still be partial — the fix must not simply
+    /// saturate the channel. Two of three subject tokens matched.
     #[test]
-    fn auto_derived_fact_keys_score_zero_and_are_dropped_from_the_exact_channel() {
-        let scope = "550e8400-e29b-41d4-a716-446655440000";
+    fn partial_coverage_is_still_partial() {
+        let unit = semantic_unit(
+            1,
+            "deploy target is fly.io",
+            Some(&format!("{SCOPE}:deploy_target:is")),
+        );
+        let score = exact_score(&unit, &tokenize("deploy target"));
+        assert!(
+            (score - 2.0 / 3.0).abs() < 1e-6,
+            "two of three subject tokens should score 0.667, got {score}"
+        );
+    }
+
+    /// The scope UUID must not be MATCHABLE either. A query that happens to
+    /// contain a UUID run must not earn an Exact vote off the scaffolding.
+    #[test]
+    fn the_scope_uuid_is_not_matchable() {
+        let unit = semantic_unit(
+            1,
+            "deploy target is fly.io",
+            Some(&format!("{SCOPE}:auto:9f2b")),
+        );
+        assert_eq!(
+            exact_score(&unit, &tokenize("550e8400 e29b 41d4")),
+            0.0,
+            "the scope UUID is scaffolding, not content"
+        );
+    }
+
+    /// An auto-derived key carries no curated subject, so it legitimately earns
+    /// no Exact vote — but for the RIGHT reason now. Its body is scored by the
+    /// lexical family; synthesising an Exact vote from the same text would
+    /// double-count one signal across two channels.
+    #[test]
+    fn auto_derived_keys_earn_no_exact_vote_because_they_carry_no_subject() {
         let key = derive_fact_key(
-            scope.parse().unwrap(),
+            SCOPE.parse().unwrap(),
             None,
             None,
             "the deploy target is fly.io",
@@ -15984,48 +16111,128 @@ mod inert_on_the_bank_live_in_prod_tests {
             "expected the auto branch, got {key}"
         );
         let unit = semantic_unit(1, "the deploy target is fly.io", Some(&key));
-        let query = tokenize("the deploy target is fly.io");
         assert_eq!(
-            exact_score(&unit, &query),
-            0.0,
-            "an auto-keyed unit cannot earn an Exact vote at any relevance"
+            exact_score(&unit, &tokenize("the deploy target is fly.io")),
+            0.0
         );
     }
 
-    /// `temporal_score` returns a flat `1.0` for EVERY active semantic unit
-    /// under a `current`/`latest`/`now` query -- it reads no timestamp at all.
-    /// The channel then sorts by that constant and breaks the universal tie on
-    /// `body`, so the vote order is ALPHABETICAL BY BODY TEXT. That vote
-    /// carries `TEMPORAL_RECENCY_CHANNEL_WEIGHT = 2.5`, more than the Vector
-    /// channel's 2.0, on the single most common shape of memory query.
+    /// Keys with no scope prefix must be untouched: the extractor emits its own
+    /// `candidate.fact_key`, and `timezone:value` / `profile:{id}` are shipped
+    /// shapes. Stripping is conditional on a segment actually parsing as a UUID.
     #[test]
-    fn temporal_score_is_a_constant_so_the_recency_channel_votes_alphabetically() {
-        let newest = semantic_unit(1, "zebra: set in 2026", None);
-        let oldest = semantic_unit(2, "apple: set in 1999", None);
+    fn unscoped_fact_keys_are_unaffected() {
+        let unit = semantic_unit(1, "timezone is CET", Some("timezone:value"));
+        assert!((exact_score(&unit, &tokenize("timezone value")) - 1.0).abs() < 1e-6);
+        assert!((exact_score(&unit, &tokenize("timezone")) - 0.5).abs() < 1e-6);
+    }
+
+    // ---- temporal_score ----
+
+    /// WAS a flat 1.0 for every active semantic unit, with no clock read, so
+    /// the channel's tie-break on `body` made its weight-2.5 vote ALPHABETICAL.
+    /// Now the newer unit strictly outranks the older one.
+    #[test]
+    fn the_recency_channel_now_ranks_by_age_not_alphabetically() {
+        // `zebra` is newer but sorts LAST alphabetically, so under the old
+        // constant-scoring implementation it lost. It must now win.
+        let mut newer = semantic_unit(1, "zebra: set recently", None);
+        newer.valid_from = Some("2026-07-25T00:00:00Z".to_string());
+        let mut older = semantic_unit(2, "apple: set long ago", None);
+        older.valid_from = Some("2024-01-01T00:00:00Z".to_string());
+
         let query = "what is my current setting";
-        assert_eq!(temporal_score(&newest, query, None), 1.0);
-        assert_eq!(
-            temporal_score(&oldest, query, None),
-            1.0,
-            "the 27-year-older unit scores identically -- no clock is read"
+        let new_score = temporal_score(&newer, query, None, now());
+        let old_score = temporal_score(&older, query, None, now());
+        assert!(
+            new_score > old_score,
+            "newer {new_score} must outrank older {old_score}"
         );
-        // The channel's own tie-break is `body` ascending, so "apple..." leads
-        // "zebra..." purely on spelling.
-        assert!("apple: set in 1999" < "zebra: set in 2026");
+        assert!(new_score <= 1.0 && old_score > 0.0, "scores stay in (0, 1]");
     }
 
-    /// The bank cannot see either defect: the Track R corpus is 100% episodic
-    /// and runs with fact extraction off, so `exact_score` returns on its first
-    /// line and `temporal_score`'s only reachable branch requires a SEMANTIC
-    /// unit. Both channels are then dropped whole by the `score > 0.0` filter.
+    /// Strictly positive for any age: `channel_candidates` drops `0.0`, and an
+    /// old unit should be uncompetitive on recency, not invisible.
     #[test]
-    fn both_components_are_structurally_inert_on_an_episodic_corpus() {
+    fn an_ancient_unit_is_uncompetitive_but_not_dropped() {
+        let mut ancient = semantic_unit(1, "set in the distant past", None);
+        ancient.valid_from = Some("1999-01-01T00:00:00Z".to_string());
+        let score = temporal_score(&ancient, "what is current", None, now());
+        assert!(
+            score > 0.0,
+            "must survive the score > 0.0 filter, got {score}"
+        );
+        assert!(score < 0.02, "but must be uncompetitive, got {score}");
+    }
+
+    /// A unit with no usable timestamp must not score as brand new.
+    #[test]
+    fn an_undated_unit_does_not_score_as_new() {
+        let mut undated = semantic_unit(1, "no timestamps at all", None);
+        undated.observed_at = "not-a-timestamp".to_string();
+        let score = temporal_score(&undated, "what is current", None, now());
+        assert_eq!(score, TEMPORAL_UNDATED_SCORE);
+        let mut fresh = semantic_unit(2, "fresh", None);
+        fresh.valid_from = Some("2026-08-01T00:00:00Z".to_string());
+        assert!(temporal_score(&fresh, "what is current", None, now()) > score);
+    }
+
+    /// The channel is evaluated at the RECALL clock, so a `transaction_as_of`
+    /// replay scores recency reproducibly instead of against wall-clock time.
+    #[test]
+    fn recency_is_measured_from_the_supplied_clock() {
+        let mut unit = semantic_unit(1, "dated", None);
+        unit.valid_from = Some("2026-07-01T00:00:00Z".to_string());
+        let at_once = temporal_score(
+            &unit,
+            "current",
+            None,
+            "2026-07-01T00:00:00Z".parse().unwrap(),
+        );
+        let a_year_later = temporal_score(
+            &unit,
+            "current",
+            None,
+            "2027-07-01T00:00:00Z".parse().unwrap(),
+        );
+        assert!(
+            (at_once - 1.0).abs() < 1e-6,
+            "age zero scores 1.0, got {at_once}"
+        );
+        assert!(
+            a_year_later < at_once,
+            "the same unit is older at a later clock"
+        );
+    }
+
+    /// The W5 explicit date-window boost still takes precedence over the
+    /// recency curve: a queried period is a stronger statement of intent.
+    #[test]
+    fn the_explicit_date_window_boost_still_wins() {
+        let mut unit = semantic_unit(1, "old but inside the queried window", None);
+        unit.valid_from = Some("2024-03-05T00:00:00Z".to_string());
+        // Bounds are RFC3339 instants, as `midnight_utc` produces them --
+        // `valid_from_in_window` compares parsed timestamps, not date strings.
+        let window = DateWindow {
+            start: "2024-03-01T00:00:00Z".to_string(),
+            end: "2024-04-01T00:00:00Z".to_string(),
+        };
+        assert_eq!(
+            temporal_score(&unit, "what happened in march 2024", Some(&window), now()),
+            1.0
+        );
+    }
+
+    /// Unchanged and load-bearing: both channels stay inert on an episodic
+    /// corpus, which is exactly why Track R could never see either defect.
+    #[test]
+    fn both_components_remain_inert_on_an_episodic_corpus() {
         let mut episodic = semantic_unit(1, "user: what is the current build target", None);
         episodic.kind = MemoryKind::Episodic;
         let query = tokenize("what is the current build target");
         assert_eq!(exact_score(&episodic, &query), 0.0, "no fact_key");
         assert_eq!(
-            temporal_score(&episodic, "what is the current build target", None),
+            temporal_score(&episodic, "what is the current build target", None, now()),
             0.0,
             "the recency branch requires MemoryKind::Semantic"
         );

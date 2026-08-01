@@ -662,3 +662,53 @@ class _RecordingBinder:
 
     def bind_context(self, context_ref, **refs):
         return {"context_ref": context_ref, **refs}
+
+
+_CHANNEL_TRACE = {
+    "id": "trace-2",
+    "candidates": [
+        # One unit, two channel votes -- the shape a real trace emits (one row
+        # per unit-per-channel), which `channel_table` has to fold back to one
+        # row per unit carrying both votes.
+        {
+            "unit_id": "unit-gold", "fused_rank": 2, "fused_score": 0.8,
+            "channel": "lexical", "channel_rank": 3, "channel_score": 1.25,
+            "decay_retrievability": 0.9,
+        },
+        {
+            "unit_id": "unit-gold", "fused_rank": 2, "fused_score": 0.8,
+            "channel": "vector", "channel_rank": 7, "channel_score": 0.61,
+            "decay_retrievability": 0.9,
+        },
+        {
+            "unit_id": "unit-other", "fused_rank": 1, "fused_score": 0.9,
+            "channel": "lexical", "channel_rank": 1, "channel_score": 2.0,
+            "decay_retrievability": 0.9,
+        },
+    ],
+    "dropped_items": [],
+}
+
+
+def test_channel_table_folds_per_channel_votes_and_flags_the_gold(clr):
+    """The offline fusion sweep is a pure function of these rows, so the fold
+    has to be right: one row per UNIT, every channel vote kept, the gold
+    flagged, and the decay multiplier carried."""
+    table = clr.channel_table(_CHANNEL_TRACE, {"unit-gold"})
+
+    assert [row["unit_id"] for row in table] == ["unit-other", "unit-gold"], "sorted by fused_rank"
+    gold = next(row for row in table if row["unit_id"] == "unit-gold")
+    assert gold["is_gold"] is True
+    assert gold["decay_retrievability"] == 0.9
+    assert sorted(gold["channels"]) == [["lexical", 3, 1.25], ["vector", 7, 0.61]]
+    assert next(r for r in table if r["unit_id"] == "unit-other")["is_gold"] is False
+
+
+def test_channel_table_skips_incomplete_rows_rather_than_raising(clr):
+    """`channel`/`channel_rank`/`channel_score` are non-Option on
+    RecallCandidateTrace, so a real trace always carries them. A capture that
+    only ADDS a diagnostic must not take down a run when they are absent -- and
+    it cannot hide a regression, because fusion_sweep.py refuses to report
+    unless it can reproduce the shipped fusion from these rows."""
+    partial = {"candidates": [{"unit_id": "u", "fused_rank": 1, "fused_score": 0.5}]}
+    assert clr.channel_table(partial, set()) == []

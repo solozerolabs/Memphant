@@ -318,6 +318,15 @@ def channel_table(trace: dict, gold_ids: set[str]) -> list[dict]:
     from these rows, which is checkable and must be checked."""
     rows: dict[str, dict] = {}
     for candidate in trace.get("candidates") or []:
+        # `channel`/`channel_rank`/`channel_score` are non-Option on
+        # `RecallCandidateTrace`, so a real trace always carries the triple.
+        # Skipping an incomplete row rather than raising keeps this capture from
+        # taking down a run over a diagnostic it only ADDS -- and it cannot hide
+        # a regression, because `fusion_sweep.py` refuses to report unless it can
+        # reproduce the shipped fusion from these rows, which an empty or partial
+        # table cannot do.
+        if not all(key in candidate for key in ("channel", "channel_rank", "channel_score")):
+            continue
         unit_id = candidate["unit_id"]
         row = rows.setdefault(
             unit_id,
