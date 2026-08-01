@@ -1545,6 +1545,17 @@
             "predicate": {
               "type": "string"
             },
+            "target_unit_ids": {
+              "default": null,
+              "description": "Structured-state supersession by exact prior unit id. `None` is an\nordinary keyed write; `Some([])` asserts the subject key is absent;\n`Some([id, ..])` closes those exact active units' generations without\nrequiring the caller to reproduce their subject key. Rank-0 trust only —\nthe compiler fails the write closed for any lower tier.",
+              "items": {
+                "$ref": "#/$defs/UnitId"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
             "valid_from": {
               "default": null,
               "type": [
@@ -1574,6 +1585,10 @@
           "type": "string"
         },
         "SubjectId": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "UnitId": {
           "format": "uuid",
           "type": "string"
         }

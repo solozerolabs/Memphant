@@ -1752,6 +1752,13 @@ pub struct RetainUnitPayload {
     pub valid_from: Option<String>,
     #[serde(default)]
     pub valid_to: Option<String>,
+    /// Structured-state supersession by exact prior unit id. `None` is an
+    /// ordinary keyed write; `Some([])` asserts the subject key is absent;
+    /// `Some([id, ..])` closes those exact active units' generations without
+    /// requiring the caller to reproduce their subject key. Rank-0 trust only —
+    /// the compiler fails the write closed for any lower tier.
+    #[serde(default)]
+    pub target_unit_ids: Option<Vec<UnitId>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

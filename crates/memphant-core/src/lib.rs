@@ -11631,11 +11631,32 @@ async fn prepare_compiled_write_from_snapshot_inner(
         // arm owns no supersession and the candidate can only append.
         let supersedable_kind = supersedes_own_kind(structured_target_kind);
 
+        let high_trust = matches!(
+            candidate.trust_level,
+            TrustLevel::TrustedUser | TrustLevel::TrustedSystem
+        );
+
         let targeted_indices = if let Some(target_ids) = &candidate.target_unit_ids {
             let unique_targets = target_ids.iter().copied().collect::<HashSet<_>>();
             if unique_targets.len() != target_ids.len() {
                 return Err(CoreError::ProviderInvalid(
                     "structured-state target ids are duplicated".to_string(),
+                ));
+            }
+            // B1 TRUST RULE. Naming another row's id is a directed mutation of
+            // a unit this candidate did not author, so it is gated on the
+            // actor, not on the candidate's own claim. `Some([])` is only a
+            // create precondition and mutates nothing, so it stays open to any
+            // caller; a non-empty list is rank-0 trust ONLY, and it fails
+            // closed rather than degrading. RW-7 degrades a *kind hint*
+            // (a claim about the candidate itself) to a belief; that is the
+            // right answer there and the wrong one here, because silently
+            // dropping a supersession directive and appending instead is
+            // exactly the shape that produced the 20260731_007 exclusion
+            // crash. An untrusted extractor must be told it was refused.
+            if !target_ids.is_empty() && !high_trust {
+                return Err(CoreError::ProviderInvalid(
+                    "structured-state target ids require a trusted actor".to_string(),
                 ));
             }
             let indices = working
@@ -11644,11 +11665,29 @@ async fn prepare_compiled_write_from_snapshot_inner(
                 .filter(|(_, unit)| {
                     unique_targets.contains(&unit.id)
                         && unit.scope_id == input.scope_id
-                        && unit.fact_key.as_deref() == Some(fact_key.as_str())
+                        // B1: the named target need NOT share this candidate's
+                        // subject key. That equality was the whole reason
+                        // naming an id did not actually bypass key production —
+                        // the caller still had to mint a key that matched the
+                        // incumbent's. Identity by uuid replaces it. Every
+                        // other guard is kept: same scope, still active, still
+                        // transaction-open, own-kind only (RW-3), and
+                        // bitemporally overlapping the candidate.
                         && unit.state == UnitState::Active
                         && unit.kind == structured_target_kind
                         && unit.transaction_to.is_none()
                         && candidate_targets_unit(&candidate, unit, &now)
+                        // Trust dominance: a candidate may not close a unit
+                        // more trusted than itself. Vacuous today — the tier
+                        // gate above already restricts this path to rank 0, and
+                        // `trust_risk_rank` puts TrustedUser and TrustedSystem
+                        // in one tier, so this repo has no intra-tier ordering
+                        // to appeal to. Kept because it is the invariant the
+                        // gate is an approximation of, and it is what stops a
+                        // future lower-trust caller from being handed this
+                        // capability by a one-line change to the gate.
+                        && trust_risk_rank(candidate.trust_level)
+                            <= trust_risk_rank(unit.trust_level)
                 })
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
@@ -11657,13 +11696,22 @@ async fn prepare_compiled_write_from_snapshot_inner(
                     "structured-state mutation did not match every exact active target for subject key {fact_key}"
                 )));
             }
-            if target_ids.is_empty()
+            // The named targets no longer have to be the incumbents on this
+            // candidate's own key, so the create-collision check has to widen
+            // with them: any open own-kind row on THIS key that the candidate
+            // did not name would still be open after the write, and on the
+            // kinds `supersedes_own_kind` owns that is precisely what
+            // `memphant_memory_unit_subject_valid_excl` rejects. Fail here,
+            // with the key named, rather than in the persist transaction.
+            if supersedable_kind.is_some()
                 && working.iter().any(|unit| {
-                    unit.scope_id == input.scope_id
+                    !unique_targets.contains(&unit.id)
+                        && unit.scope_id == input.scope_id
                         && unit.fact_key.as_deref() == Some(fact_key.as_str())
                         && unit.state == UnitState::Active
                         && unit.kind == structured_target_kind
                         && unit.transaction_to.is_none()
+                        && candidate_targets_unit(&candidate, unit, &now)
                 })
             {
                 return Err(CoreError::ProviderInvalid(format!(
@@ -11674,11 +11722,6 @@ async fn prepare_compiled_write_from_snapshot_inner(
         } else {
             Vec::new()
         };
-
-        let high_trust = matches!(
-            candidate.trust_level,
-            TrustLevel::TrustedUser | TrustLevel::TrustedSystem
-        );
 
         let action = if let Some(existing_index) = working.iter().position(|unit| {
             unit.scope_id == input.scope_id

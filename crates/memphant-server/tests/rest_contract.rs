@@ -424,6 +424,7 @@ async fn canonical_projection_is_a_dedicated_unranked_visible_snapshot() {
                 confidence: 1.0,
                 valid_from: Some("2026-07-01T00:00:00Z".to_string()),
                 valid_to: Some("2026-08-01T00:00:00Z".to_string()),
+                target_unit_ids: None,
             }),
         }),
     )

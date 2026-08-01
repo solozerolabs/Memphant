@@ -104,6 +104,7 @@ fn direct_request(context: &ResolvedMemoryContext) -> RetainEpisodeHttpRequest {
             confidence: 1.0,
             valid_from: None,
             valid_to: None,
+            target_unit_ids: None,
         }),
     }
 }
