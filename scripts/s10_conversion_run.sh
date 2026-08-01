@@ -120,9 +120,9 @@ for endpoint in answer_correct correct; do
     --stage-manifest "$EQ/stage-equalization.json" \
     --bank "track-r-paraphrase-$TAG" --endpoint "$endpoint" \
     --claim "$CLAIM" --leakage "$LEAKAGE" \
-    --provenance-class "model-paraphrased from the target event; identifier surfaces banned (coverage 0.1346)" \
+    --provenance-class authored_from_target \
     --corpus-snapshot-id "$SNAPSHOT" --corpus-n-items "$N_ITEMS" \
-    --license-id CC-BY-4.0 --license-source HF_DATASET_CARD \
+    --license-id CC-BY-4.0 --license-source RECORD_METADATA \
     --license-evidence "nebius/SWE-rebench-openhands-trajectories dataset card, pinned in benchmarks/data/track_r_paraphrase_golden.lock.json corpus block" \
     --out "docs/build-log/artifacts/s10-conversion/s10-$TAG-$endpoint.json"
 done

@@ -98,7 +98,13 @@ def leakage_five_tuple(path: Path, provenance_class: str) -> dict:
         ),
         "absolute_target_coverage": leak["target"]["mean"],
         "floor": leak["non_target_exhaustive"]["mean"],
-        "floor_kind": leak["non_target_exhaustive_definition"],
+        # `floor_kind` is an enum the contract checker validates against
+        # {exhaustive, sampled, unverified} — naming WHICH floor is carried. The
+        # prose definition is preserved beside it rather than in it, because
+        # putting the sentence in the enum field failed the checker and lost the
+        # distinction the field exists to make.
+        "floor_kind": "exhaustive",
+        "floor_definition": leak["non_target_exhaustive_definition"],
         "concentration": leak["concentration_vs_exhaustive"],
         "provenance_class": provenance_class,
     }
@@ -618,7 +624,13 @@ def main() -> int:
             )
             + " of rows."
         ),
-        "attribution": {"method": "paired arm contrast at one lineage"},
+        # `method` is a checker-validated enum {bisect, unverified}. This is a
+        # paired arm contrast at one lineage, not a bisect, so the honest value
+        # is `unverified` with the actual method recorded beside it.
+        "attribution": {
+            "method": "unverified",
+            "actual_method": "paired arm contrast at one lineage",
+        },
         "bar": None,
         "notes": (
             "Reader-QA, not retrieval@k. Every arm was packed by one packer at "
