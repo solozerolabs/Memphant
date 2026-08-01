@@ -141,25 +141,82 @@ hand-edited. Their three staleness tests pass. No migration: `source_span`
 already rides in `memory_unit.payload` jsonb, so `MIGRATIONS`, `MIGRATION_HEAD`
 and `SCHEMA_COMPAT_REVISION` are untouched.
 
-### Postgres leg, and a machine-load caveat that matters
+### Postgres leg: 90 passed, one load-bound SLO threshold
 
-`bash scripts/with_scratch_db.sh … cargo test -p memphant-store-postgres --
---ignored --test-threads=1`.
+`bash scripts/with_scratch_db.sh … cargo test -p memphant-store-postgres
+--no-fail-fast -- --ignored --test-threads=1`.
 
-**Record the load with the number, per the standing rule.** `hw.ncpu = 12`,
-`load average 30.9–39.5` throughout — this host was running several sibling
-worktrees concurrently, ~3× oversubscribed. On the first attempt
-`hot_path_slo_pg::fast_mode_recall_holds_release_hot_path_slo_on_postgres`
-breached its 200 ms debug-build p50 under that load. It is a wall-clock
-threshold test on a 3×-oversubscribed 12-core box; the change it is measuring
-adds one struct construction per recalled item, reading columns already in
-memory. Treat any latency figure taken on this host today as uninterpretable —
-that is the same standing conclusion §4 of the plan already records for this
-machine.
+**90 passed, 1 failed.** `--no-fail-fast` matters here: without it the run stops
+at the first failing binary and the other legs are never reported at all, which
+is how a single threshold breach can masquerade as a broken suite.
+`pg_store_contract` reports **53 passed** — the 52 that passed before, plus the
+new shared scenario. Nothing regressed.
+
+The one failure is
+`hot_path_slo_pg::fast_mode_recall_holds_release_hot_path_slo_on_postgres`, a
+wall-clock 200 ms debug-build p50 threshold.
+
+**Paired reading, because an absolute latency on this host is worthless.**
+Baseline (`main@0e874da0`) and HEAD alternated back to back on the same box so
+the shared load partly cancels. `hw.ncpu = 12`:
+
+| arm | p50 | load (1 min) |
+|---|---:|---:|
+| baseline-1 | 291.2 ms | 45.3 |
+| head-1 | 309.1 ms | 56.5 |
+| baseline-2 | 334.3 ms | 63.8 |
+| head-2 | 475.6 ms | 81.8 |
+| baseline-3 | 601.7 ms | 85.4 |
+| head-3 | 662.0 ms | 125.9 |
+
+**The load-bound conclusion, stated with its own limitation.** The baseline
+breaches the same 200 ms threshold in all three of its own runs — by 3× in
+baseline-3 — so the gate is failing for reasons that exist without this change.
+That is the fact the gate needed and it is solid.
+
+What this reading does **not** establish is a null delta. Load climbed
+monotonically from 45 to 126 across the sequence and HEAD always ran second in
+each pair, so arm order is confounded with the load trend; the 6–42% head-over-
+baseline gaps are not separable from it. `baseline-3` (601.7 ms) exceeding
+`head-1` (309.1 ms) shows the between-run load term dominates any within-pair
+difference. A real latency claim needs a quiet host and interleaved repeats,
+which is the standing conclusion §4 of the plan already records for this
+machine. **No latency claim is made here.**
+
+Mechanically, the change adds one struct construction per recalled item from
+columns already in memory, and clones four `Option<String>`s.
 
 An earlier attempt aborted before any test ran with `database
-"memphant_scratch_23140_…" does not exist` — a scratch-DB provisioning failure
-under load, not a product failure; it reproduced neither on rerun.
+"memphant_scratch_23140_…" does not exist`. See §7a — that was almost certainly
+the unserialized-bootstrap defect, not a product failure.
+
+### 7a. A cross-lane defect found while running this gate
+
+Six lanes share this host. `scripts/with_scratch_db.sh` serializes scratch-DB
+bootstrap behind a `mkdir` mutex because `create role` touches cluster-wide
+`pg_authid`, and two concurrent bootstraps die inside migration 001 with `tuple
+concurrently updated`.
+
+Two defects, both fixed in `d91303c5`:
+
+1. **The lock was held for the whole command,** not just bootstrap — its own
+   comment says otherwise. Taken verbatim from `6fdcaf9d` on `main`.
+2. **The lock is keyed by `sha256(url_prefix)`, so it did not cover this lane at
+   all.** Five lanes spell the host `localhost`; this lane's gate command
+   spells it `127.0.0.1`. Same cluster, same `pg_authid`, **two different lock
+   files and no mutex between them.** Verified directly: the two spellings
+   hashed to `5672171746…` and `165e553dfe…`. That is the exact collision the
+   lock exists to prevent, and it is the most plausible cause of the
+   unexplained `database … does not exist` abort above.
+
+Collapsed with shell parameter expansion, not `sed`: BSD `sed` has no `\?`, so
+the obvious optional-group pattern matches on Linux, silently fails on macOS,
+and leaves the bug in place while looking fixed. Over-sharing a lock only
+serializes more; under-sharing corrupts a bootstrap.
+
+This lane binds no ports, starts no servers, and contains no `pkill`,
+`killall`, or pattern-based `drop database` anywhere in `scripts/` — audited,
+not assumed. The only `DROP` is the script's own `$NAME`.
 
 ## 8. Syndai integration — what the other repo needs
 

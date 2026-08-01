@@ -1,8 +1,9 @@
 # S3 — D1 correction handle, caller-authored keys, D2 file-plane legibility
 
 Branch `s3-d1handle`, worktree `/Users/sidsharma/Memphant-s3-d1handle`, off
-`main@0e874da0`. Three commits, `41dc9fc4` / `4df4e23f` / `33541d75`, none
-merged, none pushed. **`paid_model_calls: 0`. No measurement was run and none is
+`main@0e874da0`. Six commits — three feature (`41dc9fc4`, `4df4e23f`,
+`33541d75`), one refactor (`f1c17f3f`), one shared-script fix (`d91303c5`), and
+docs. **None merged, none pushed.** **`paid_model_calls: 0`. No measurement was run and none is
 requested.**
 
 ---
@@ -141,7 +142,16 @@ and the test says so in its name. The Episodic write-router arm maps to
 prefix. The supersedable caller-key path is the unit payload. Overclaiming here
 would have been the exact mismatched-stage error the plan warns about.
 
-**Any paid arm.** None warranted from this lane. See the note below.
+**Any paid arm.** None warranted from this lane. Nothing here produces a number;
+the two things that could be measured next (does a caller-authored key move LSW
+on a lane whose corpus carries real subjects; is a mutation-time model hook
+worth its $0.17/385) are separate preregistrations with their own controls.
+
+**A latency claim.** The Postgres SLO gate failed, and the paired reading shows
+the baseline failing it too — but load climbed monotonically during the run and
+HEAD always ran second, so the arms are confounded with the trend. That is
+enough to say the gate is not measuring this change; it is not enough to claim a
+null delta, and I did not.
 
 ---
 
@@ -153,7 +163,7 @@ would have been the exact mismatched-stage error the plan warns about.
 | `cargo test --workspace` | **0 failed** |
 | `cargo clippy --all-targets --all-features` | clean |
 | `cargo fmt --check` | clean |
-| Postgres `--ignored --test-threads=1` under `with_scratch_db.sh` | see build log |
+| Postgres `--ignored --test-threads=1 --no-fail-fast` under `with_scratch_db.sh` | **90 passed, 1 failed** — `pg_store_contract` 53/53 (52 before + the new shared scenario). The failure is `hot_path_slo_pg`'s wall-clock 200 ms p50, which **the baseline breaches too** (291/334/602 ms baseline vs 309/476/662 ms HEAD, load 45 → 126 on 12 cores). Pre-existing under this load; no latency claim made — see build log §7. |
 | `python3 -m pytest -q tests/` | 736 passed, 12 skipped, **1 pre-existing failure** (`test_spec_drift_check_passes_against_linked_syndai_docs`, sibling-repo state, out of scope — identical before and after) |
 
 Schema artifacts regenerated, never hand-edited; their three staleness tests are

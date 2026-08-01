@@ -1893,13 +1893,29 @@ generators. **No migration** — `source_span` already rides in
 `SCHEMA_COMPAT_REVISION` are untouched. No new `MemoryKind`; the RW-1 kind lists
 already derive from `MemoryKind::ALL` in this tree.
 
-**Latency caveat, recorded rather than hidden.** `hw.ncpu = 12`, load average
-**30.9–39.5** throughout (several sibling worktrees building concurrently, ~3×
-oversubscribed). `hot_path_slo_pg`'s 200 ms debug-build p50 threshold breached
-at 306.7 ms under that load. See the build log for the paired
-baseline-vs-HEAD reading; treat any absolute latency figure from this host today
-as uninterpretable, which is the standing conclusion the plan of record already
-records for this machine.
+**Postgres leg: 90 passed, 1 failed** under `--no-fail-fast` (without which the
+run stops at the first failing binary and the rest are never reported).
+`pg_store_contract` reports **53 passed** — the 52 from before plus the new
+shared scenario. The one failure is `hot_path_slo_pg`'s 200 ms debug-build p50
+threshold, and **the baseline breaches it too**: alternating baseline and HEAD
+back to back gave baseline 291/334/602 ms against HEAD 309/476/662 ms while
+1-minute load climbed 45 → 126 on 12 cores. Baseline-3 alone exceeds the
+threshold 3×, so the gate is failing for reasons that predate this change.
+**That is all it shows** — HEAD always ran second, so arm order is confounded
+with the monotonic load trend and the within-pair gaps are not separable from
+it. No latency claim is made.
+
+**A cross-lane defect fell out of running that gate** (`d91303c5`).
+`with_scratch_db.sh` keys its bootstrap mutex on `sha256(url_prefix)`, so
+`localhost:5432` and `127.0.0.1:5432` — one cluster, one cluster-wide
+`pg_authid` — hash to **two different lock files**. Five sibling lanes spell it
+`localhost`; this lane's prescribed gate command spells it `127.0.0.1`. So this
+lane's bootstraps ran with no mutex against five others, which is exactly the
+concurrent `create role` collision the lock exists to prevent, and the likely
+cause of an unexplained `database "memphant_scratch_…" does not exist` abort
+here. Fixed alongside `6fdcaf9d` (early lock release, taken from trunk).
+Collapsed with parameter expansion, not `sed` — BSD `sed` has no `\?`, so the
+obvious pattern silently no-ops on macOS and leaves the bug looking fixed.
 
 Report: `.superpowers/sdd/s3-d1handle-report.md`. Build log:
 `docs/build-log/2026-08-01-d1-correction-handle.md`. **No checkbox, default,
