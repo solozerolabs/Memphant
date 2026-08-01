@@ -55,7 +55,18 @@ def assert_same_stage(name: str, report: dict) -> None:
     )
 
 
-def assert_pool_containment(name: str, report: dict) -> None:
+# The one error class the pinned provider produces deterministically and that no
+# re-run can clear: S4 saw three questions return finish_reason='content_filter'
+# with an empty message on every retry at temperature 0, including under two
+# protocol nudges and tool_choice='required'. Unpinning the provider to clear
+# them would break a preregistered guard, so the standing "errors are not
+# results" rule is honoured the other way -- such a row is scored a MISS for the
+# arm that could not produce it, which is the assumption LEAST favourable to the
+# hybrid, and the complete-case analysis is reported beside it.
+PROVIDER_REFUSAL = "finish_reason=content_filter"
+
+
+def assert_pool_containment(name: str, report: dict, *, allow_refusals: bool = False) -> None:
     """An Arm H report that cannot prove its agent stayed inside the pool is S4
     re-run under a different label, and pairing it would be a lie about what was
     varied."""
@@ -68,10 +79,19 @@ def assert_pool_containment(name: str, report: dict) -> None:
     if liveness.get("raw_event_access") is not False:
         raise SystemExit(f"{name}: raw_event_access is not proven false")
     if liveness.get("rows_with_errors"):
-        raise SystemExit(
-            f"{name}: {liveness['rows_with_errors']} errored rows — errors are not "
-            "results; re-run them before scoring"
-        )
+        kinds = liveness.get("error_kinds") or []
+        refusals_only = kinds and all(PROVIDER_REFUSAL in kind for kind in kinds)
+        if not (allow_refusals and refusals_only):
+            raise SystemExit(
+                f"{name}: {liveness['rows_with_errors']} errored rows {kinds} — "
+                "errors are not results; re-run them before scoring"
+                + (
+                    ""
+                    if refusals_only
+                    else " (and these are not the provider refusal class, so "
+                    "--refusals-as-miss would not apply either)"
+                )
+            )
 
 
 def paired(treatment: dict[str, bool], control: dict[str, bool], order: list[str]) -> dict:
@@ -355,6 +375,15 @@ def main() -> int:
         "defaults to the highest-scoring one",
     )
     parser.add_argument("--pool-provenance", type=Path, default=None)
+    parser.add_argument(
+        "--refusals-as-miss",
+        action="store_true",
+        help="admit rows the PINNED PROVIDER refuses deterministically "
+        "(finish_reason=content_filter, empty message on every retry at "
+        "temperature 0), scoring them a MISS for the hybrid — the assumption "
+        "least favourable to it. Applies to no other error class, and every "
+        "affected question_id is listed in the analysis",
+    )
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
@@ -363,7 +392,7 @@ def main() -> int:
         label, _, path = spec.partition("=")
         report = json.loads(Path(path).read_text())
         assert_same_stage(label, report)
-        assert_pool_containment(label, report)
+        assert_pool_containment(label, report, allow_refusals=args.refusals_as_miss)
         arms[label] = {"path": Path(path), "report": report}
     if not arms:
         raise SystemExit("no arms given")
@@ -413,6 +442,17 @@ def main() -> int:
                 "misses_out_of_view": decomposition["out_of_view"],
                 "misses_in_view_ranked_out": decomposition["in_view_but_ranked_out"],
                 "mean_tool_calls": report["liveness"]["mean_tool_calls"],
+                # Named, not summarised: a refused row is scored a MISS for this
+                # arm, so the reader can see exactly which questions the number
+                # is being charged for.
+                "provider_refused_question_ids": sorted(
+                    row["question_id"]
+                    for row in report["transcript"]
+                    if row.get("error") and PROVIDER_REFUSAL in row["error"]
+                ),
+                "errored_question_ids": sorted(
+                    row["question_id"] for row in report["transcript"] if row.get("error")
+                ),
                 "prompt_tokens_per_question": usage["prompt_tokens_per_question"],
                 "completion_tokens_per_question": usage["completion_tokens_per_question"],
                 "usd_per_question": report["spend_usd_per_question"],

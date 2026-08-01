@@ -180,3 +180,30 @@ def test_runner_refuses_a_pool_dump_missing_goldens(tmp_path: Path):
         text=True,
     )
     assert result.returncode != 0  # it never reaches a score with no inputs
+
+
+def test_provider_refusals_are_admitted_only_under_an_explicit_flag():
+    report = {
+        "liveness": {
+            "pool_containment_violations": 0,
+            "raw_event_access": False,
+            "rows_with_errors": 3,
+            "error_kinds": ["no tool call after 2 nudges (finish_reason=content_filter)"],
+        }
+    }
+    with pytest.raises(SystemExit, match="errors are not"):
+        analyze.assert_pool_containment("h64", report)
+    analyze.assert_pool_containment("h64", report, allow_refusals=True)  # explicit
+
+
+def test_the_refusal_flag_does_not_launder_any_other_error():
+    report = {
+        "liveness": {
+            "pool_containment_violations": 0,
+            "raw_event_access": False,
+            "rows_with_errors": 1,
+            "error_kinds": ["turn ceiling reached before `select`"],
+        }
+    }
+    with pytest.raises(SystemExit, match="would not apply either"):
+        analyze.assert_pool_containment("h64", report, allow_refusals=True)
