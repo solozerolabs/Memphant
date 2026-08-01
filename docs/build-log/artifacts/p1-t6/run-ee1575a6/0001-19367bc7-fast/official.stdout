@@ -1,2 +1,0 @@
-All questions share the same haystack, building shared memory once for all questions.
-Truncated memory context for 19367bc7: original_tokens=69393 truncated_tokens=0 original_items=2 truncated_items=0
