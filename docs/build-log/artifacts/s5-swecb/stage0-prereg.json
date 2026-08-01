@@ -7,46 +7,50 @@
   "classification": "retrieval_measurement_not_task_success",
   "model_calls": 0,
   "cost_usd": 0.0,
-
   "question": "Can MemPhant retrieve the official SWE-ContextBench Relationship parent for a target task, when the whole experience pool is the haystack?",
-
   "why_this_gate_exists": "Every downstream paid stage assumes the memory arm can surface the gold prior experience. If it cannot, no amount of agent spend can produce an effect and stages 1 and 2 are cancelled for $0. This is the cheapest possible kill.",
-
   "haystack": {
     "rule": "ONE tenant, ONE subject, ONE scope. Every experience row is bound to the same context and every query is issued against that same context.",
     "why": "The retained n=12 rehearsal (scripts/run_swe_contextbench_memphant.py) bound a fresh scope per (target, arm), so recall ranked over a pool of ONE and the citation assertion was trivially satisfiable. That is not a retrieval measurement. The pool must be the whole corpus or the number is meaningless.",
     "pool_source": "SWEContextBench_Experience.parquet at pinned revision 5bec275a2095768a53ac804ae4fdf90b1723b8af",
     "pool_dedup": "The parquet has 1,100 rows but only 1,007 distinct instance_ids; all 93 duplicate groups are BYTE-IDENTICAL. Ingest the 1,007 distinct rows. Ingesting the 93 duplicates would create dedup-collapsed or double-weighted units and is not a fair haystack. Duplicate multiplicity is asserted byte-identical at load time and the run ABORTS if that ever stops holding."
   },
-
   "queries": {
     "source": "SWEContextBench_Related.parquet, all 376 rows, census-complete, no selection",
     "query_text": "the row's problem_statement, verbatim and alone",
-    "hidden_from_the_query": ["patch", "test_patch", "FAIL_TO_PASS", "PASS_TO_PASS"],
+    "hidden_from_the_query": [
+      "patch",
+      "test_patch",
+      "FAIL_TO_PASS",
+      "PASS_TO_PASS"
+    ],
     "duplicate_target_handling": "The 376 rows contain only 357 distinct instance_ids; the 19 duplicated ids are NOT byte-identical (they differ in version, problem_statement, FAIL_TO_PASS, PASS_TO_PASS and in one case patch/test_patch/base_commit). Both the row-level census (n=376) and the distinct-task view (n=357) are reported. The distinct-task view is the PRIMARY one, because a duplicated instance is not an independent pair.",
     "primary_n": 357,
     "secondary_n": 376
   },
-
   "gold": {
     "source": "SWEContextBench_Relationship.parquet, 376 edges, 357 distinct related ids, 229 distinct parents",
     "rule": "ANY-PARENT. A query is a hit at k if at least one of its 1-2 official experience parents appears at rank <= k.",
     "also_reported": "ALL-PARENT (every parent within top-k) for the 19 two-parent targets, reported separately and never as the headline.",
     "self_retrieval_guard": "Related INTERSECT Experience = exactly 1 instance_id. If a query retrieves its own instance that hit is recorded as a self-retrieval and EXCLUDED from the ranking; it is not counted as a gold hit."
   },
-
   "endpoints": {
     "primary": "retrieval recall@k of the gold parent, taken from the recall trace's candidate fused_rank -- i.e. did the retriever rank it, independent of packing",
     "secondary": "packed recall@k, taken from the ranked /v1/recall items -- i.e. did the gold parent survive into the context the agent would actually see",
     "why_both": "The rung-7 render-cap verdict established that in-pool-but-unpacked misses are budget drops, not retrieval failures. Reporting only one of these two numbers hides which subsystem is at fault. The AGENT sees the packed one; the RETRIEVER is graded by the trace one.",
-    "k_values": [1, 3, 5, 10, 25],
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      25
+    ],
     "miss_taxonomy": [
       "absent_from_candidates -- the retriever never surfaced the parent at any rank",
       "ranked_below_cut -- the parent has a fused_rank greater than k",
       "dropped -- the parent was a candidate and was discarded, with the trace's RecallDropReason recorded verbatim"
     ]
   },
-
   "decision_rule": {
     "committed_before_any_cell_exists": true,
     "primary_statistic": "packed recall@5 of the gold parent over the 357 distinct targets, ANY-PARENT",
@@ -56,7 +60,6 @@
     "no_post_hoc_threshold_movement": "These three bands are fixed at commit time. A result landing 1pp under a band boundary is that band.",
     "floor_note": "This is a retrieval proportion over 357 independent queries, not a paired McNemar contrast, so the n_d >= 6 discordant-pair floor does not apply to it. The floor applies to stages 1 and 2 and is untouched."
   },
-
   "mechanism_liveness": {
     "rule": "MECHANISM LIVENESS BEFORE ACCURACY. No recall number may be reported unless all of the following hold, each asserted in code with the run aborting on failure.",
     "assertions": [
@@ -69,21 +72,95 @@
     ],
     "silence_is_not_a_valid_outcome": "Any assertion failure aborts the chain at the first failure and the artifact records ABORTED, never a partial number."
   },
-
   "lineage": {
-    "required_in_artifact": ["git_head", "git_branch", "git_dirty", "binary_sha256 for server/worker/cli", "rustc_version", "cargo_lock_sha256", "migration_head", "every parquet sha256 re-verified on disk against the lock", "runner_sha256", "embed_model", "lexical_scorer"]
+    "required_in_artifact": [
+      "git_head",
+      "git_branch",
+      "git_dirty",
+      "binary_sha256 for server/worker/cli",
+      "rustc_version",
+      "cargo_lock_sha256",
+      "migration_head",
+      "every parquet sha256 re-verified on disk against the lock",
+      "runner_sha256",
+      "embed_model",
+      "lexical_scorer"
+    ]
   },
-
   "known_confounds_declared_up_front": [
     "The ingested body is the Option-A direct-row body (problem_statement + hints_text + patch + created_at). This is NOT the paper's pool, which is agent trajectories (avg 25,633.7 tokens) or gold summaries (avg 217.1 tokens). Our memory is different from, and probably stronger than, Table 3's oracle-summary arm. This must be labelled on every downstream claim.",
     "Gold patches predate their targets by construction, so there is no target leakage; but the patch is nevertheless a stronger signal than a summary and inflates retrievability relative to the paper's construction.",
     "The pool is global and unfiltered by time. Some pool rows postdate a given target. The count of such rows is reported but they are NOT removed, because the memory arm at stage 2 would hold the same global pool.",
     "15 of the 376 relationship edges are cross-repo. Same-repo pool size per target has median 57, min 0, max 345, so per-target haystack difficulty varies by an order of magnitude and the aggregate recall rate averages over that."
   ],
-
   "what_this_gate_does_not_measure": [
     "task resolution -- no agent runs, no Docker, no grader",
     "whether retrieving the parent helps -- Table 4 shows memory can find the right code and then break the patch",
     "any effect size, any comparison to a published arm"
-  ]
+  ],
+  "amendment_1": {
+    "amended_on": "2026-08-01",
+    "amended_before_any_cell_existed": true,
+    "what_changed": "The ingested experience body changes from Option A (problem_statement + hints_text + gold merged patch) to Option A-prime, PATCH-FREE (identity + problem_statement + hints_text). The with-patch body is retained only as a clearly-labelled DIAGNOSTIC arm that may never support a claim.",
+    "why": "The task brief and the retranche build log both assert that gold patches 'predate their targets by construction, so no target leakage'. That assertion is FALSE and was measured to be false before any cell existed.",
+    "measured_evidence": {
+      "temporal": {
+        "claim_tested": "gold experience predates its related target",
+        "edges_where_parent_predates_target": 172,
+        "edges_where_parent_postdates_or_ties_target": 204,
+        "of_total_edges": 376,
+        "verdict": "FALSE for 54.3% of edges. The Relationship edges are topical/code-overlap relations, not temporal ones. For the majority of targets the 'prior experience' is a fix merged AFTER the target's own PR."
+      },
+      "patch_overlap": {
+        "gold_parent_touches_at_least_one_target_patch_file": {
+          "count": 284,
+          "pct": 75.5
+        },
+        "gold_parent_touches_all_target_patch_files": {
+          "count": 130,
+          "pct": 34.6
+        },
+        "identical_touched_file_set": {
+          "count": 122,
+          "pct": 32.4
+        },
+        "gold_parent_contains_an_exact_target_added_line_over_20_chars": {
+          "count": 140,
+          "pct": 37.2
+        },
+        "gold_parent_shares_at_least_half_the_target_added_lines": {
+          "count": 112,
+          "pct": 29.8
+        },
+        "mean_target_added_line_overlap": 0.2856,
+        "same_repo_random_non_parent_control": {
+          "touches_a_target_patch_file_pct": 9.1,
+          "mean_file_coverage": 0.04,
+          "mean_added_line_overlap": 0.0013
+        },
+        "verdict": "The gold patch is not a neighbouring artefact, it is substantially the answer. Overlap runs 8x the same-repo random control on files and 220x on added lines."
+      },
+      "patch_free_body_is_clean": {
+        "edges_where_parent_prose_contains_an_exact_target_added_line": {
+          "count": 34,
+          "pct": 9.0
+        },
+        "mean_fraction_of_target_added_lines_present": 0.0306,
+        "instrument_noise_floor": {
+          "what": "the TARGET's OWN problem_statement+hints containing an exact line of its own gold patch",
+          "count": 26,
+          "pct": 6.9
+        },
+        "verdict": "9.0% against a 6.9% floor. SWE-bench issue text routinely quotes code; the patch-free body adds essentially nothing above what the instrument already leaks to itself. ADMISSIBLE."
+      }
+    },
+    "consequence_for_stage_2": "The $0 direct-row gold-patch pool that the staging plan costed at $0 is INADMISSIBLE for a published claim. The admissible $0 pool is patch-free prose. If a code-bearing pool is judged necessary, it must be the paper's trajectory construction at ~$737, which would move the programme total from ~$545 to ~$1,280.",
+    "what_did_not_change": "Every decision band, the primary statistic, the haystack rule, the gold rule, the mechanism-liveness assertions and the n_d floor are untouched."
+  },
+  "correction_1": {
+    "corrects": "docs/build-log/2026-08-01-swe-contextbench-retranche.md section 3, and the same claim repeated in the task brief",
+    "claimed": "the edge table has 376 rows over 357 distinct related ids (19 tasks have 2 parents)",
+    "measured": "376 edges over 357 distinct related ids, but only 360 distinct (target, parent) PAIRS. Only THREE targets have two DISTINCT parents: django__django-27910, scikit-learn__scikit-learn-25763, scikit-learn__scikit-learn-25365. The other 16 surplus edges are the same (target, parent) pair repeated, 14 of them byte-identical rows.",
+    "why_it_matters": "The ANY-PARENT vs ALL-PARENT scoring choice, which looked like it governed 19 of 357 tasks, actually governs 3. It is very nearly a non-decision."
+  }
 }
