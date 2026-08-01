@@ -33,7 +33,6 @@ REQUIRED_TABLES = {
     "belief_observation",
     "review_event",
     "review_event_unit",
-    "scope_block",
     "schema_migrations",
     "api_key",
     "forgotten_source",

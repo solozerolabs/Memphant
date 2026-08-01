@@ -904,8 +904,6 @@
     },
     "UnitState": {
       "enum": [
-        "captured",
-        "extracted",
         "candidate",
         "active",
         "superseded",
@@ -913,8 +911,7 @@
         "deleted",
         "quarantined",
         "expired",
-        "validated",
-        "retired"
+        "validated"
       ],
       "type": "string"
     }

@@ -8421,7 +8421,7 @@ fn trace_filter_drops(
                     UnitState::Deleted => Some(RecallDropReason::Deleted),
                     UnitState::Invalidated => Some(RecallDropReason::Invalidated),
                     UnitState::Superseded if unit.transaction_to.is_some() => None,
-                    UnitState::Superseded | UnitState::Expired | UnitState::Retired => {
+                    UnitState::Superseded | UnitState::Expired => {
                         Some(RecallDropReason::Stale)
                     }
                     UnitState::Quarantined => Some(RecallDropReason::Trust),
@@ -8485,7 +8485,6 @@ fn procedure_validation_state(unit: &StoredMemoryUnit) -> &'static str {
         UnitState::Validated => "validated",
         UnitState::Candidate => "candidate",
         UnitState::Active => "active",
-        UnitState::Retired => "retired",
         _ => "not_validated",
     }
 }

@@ -89,7 +89,7 @@ fn new_episode_and_unit_shapes_require_tenant_and_scope_ids() {
         agent_node_id: memphant_types::AgentNodeId::from_u128(episode.scope_id.as_uuid().as_u128()),
         subject_generation: 0,
         kind: MemoryKind::Episodic,
-        state: UnitState::Captured,
+        state: UnitState::Candidate,
         fact_key: None,
         predicate: None,
         body: episode.body.clone(),

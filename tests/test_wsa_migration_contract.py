@@ -54,7 +54,6 @@ REQUIRED_TABLES = {
     "blob_ledger",
     "belief_observation",
     "review_event",
-    "scope_block",
     "mutation_ledger",
     "schema_migrations",
 }
@@ -85,7 +84,6 @@ SUBJECT_OWNED_ROOTS = {
     "review_event",
     "api_key",
     "forgotten_source",
-    "scope_block",
 }
 
 
@@ -677,8 +675,7 @@ def test_auxiliary_data_plane_tables_are_subject_context_owned() -> None:
         "blob_ledger",
         "belief_observation",
         "forgotten_source",
-        "scope_block",
-    }
+        }
 
     for table in owned:
         block = " ".join(_table_block(sql, table).split())
