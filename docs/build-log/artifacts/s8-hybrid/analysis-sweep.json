@@ -1,0 +1,726 @@
+{
+  "instrument": "track_r_paraphrase n=60",
+  "stage": "sweep",
+  "decisive": false,
+  "endpoint": "gate_common.provenance_hit@10 over top-10 bodies",
+  "preregistration": "docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md#part-a",
+  "planning_mde_pp": 9.38,
+  "n_d_structural_floor": 6,
+  "not_a_measurement_note": "STAGE 2. Reduced n by preregistered subset; this stage locates the knee and decides nothing. Its p-values are reported for shape only and no verdict is drawn from them.",
+  "comparators": {
+    "memphant_fused_at_10": {
+      "hits_at_10": 39,
+      "rate": 0.65,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s8/pool-dump.jsonl",
+      "llm_calls_at_recall": 0,
+      "usd_per_question": 0.0,
+      "note": "Arm H's stage-matched retriever comparator: plain ranked bodies"
+    },
+    "memphant_packed_at_10": {
+      "hits_at_10": 37,
+      "rate": 0.616667,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s8/pool-dump.jsonl",
+      "llm_calls_at_recall": 0,
+      "usd_per_question": 0.0,
+      "note": "the shipped default; reported beside, never the paired headline vs H"
+    },
+    "agentic_grep": {
+      "hits_at_10": 57,
+      "rate": 0.95,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s4/agentic-final-provenance.json",
+      "usd_per_question": 0.144,
+      "haystack": "the attempt's raw events \u2014 a SUPERSET of Arm H's pool"
+    }
+  },
+  "coverage_curve": {
+    "1": {
+      "hits": 8,
+      "rate": 0.133333
+    },
+    "2": {
+      "hits": 13,
+      "rate": 0.216667
+    },
+    "4": {
+      "hits": 19,
+      "rate": 0.316667
+    },
+    "5": {
+      "hits": 22,
+      "rate": 0.366667
+    },
+    "8": {
+      "hits": 33,
+      "rate": 0.55
+    },
+    "10": {
+      "hits": 39,
+      "rate": 0.65
+    },
+    "16": {
+      "hits": 43,
+      "rate": 0.716667
+    },
+    "24": {
+      "hits": 45,
+      "rate": 0.75
+    },
+    "32": {
+      "hits": 48,
+      "rate": 0.8
+    },
+    "48": {
+      "hits": 51,
+      "rate": 0.85
+    },
+    "64": {
+      "hits": 54,
+      "rate": 0.9
+    },
+    "96": {
+      "hits": 56,
+      "rate": 0.933333
+    },
+    "128": {
+      "hits": 56,
+      "rate": 0.933333
+    },
+    "200": {
+      "hits": 56,
+      "rate": 0.933333
+    }
+  },
+  "ceiling_note": "Arm H cannot exceed Coverage(N) at any N, and Coverage tops out below agentic grep's realized rate. Each N is scored against its own ceiling; rank_accuracy is that ratio.",
+  "sweep": [
+    {
+      "label": "n4",
+      "N": 4,
+      "n": 60,
+      "hits_at_10": 19,
+      "rate": 0.316667,
+      "coverage_ceiling_hits": 19,
+      "coverage_ceiling_rate": 0.316667,
+      "rank_accuracy": 1.0,
+      "random_ranker_expected_hits": 19.0,
+      "misses_out_of_view": 41,
+      "misses_in_view_ranked_out": 0,
+      "mean_tool_calls": 5.783,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 15488.1,
+      "completion_tokens_per_question": 943.0,
+      "usd_per_question": 0.10101,
+      "usd_per_question_vs_grep": 0.7015,
+      "hits_per_dollar": 3.1,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 19,
+          "control_hits": 39,
+          "both": 19,
+          "neither": 21,
+          "treatment_only_b": 0,
+          "control_only_c": 20,
+          "n_discordant": 20,
+          "delta": -0.333333,
+          "delta_pp": -33.33,
+          "mcnemar_exact_p": 1.9073486328125e-06,
+          "realized_psi": 0.333333,
+          "realized_mde_pp": 21.21,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 19,
+          "control_hits": 37,
+          "both": 19,
+          "neither": 23,
+          "treatment_only_b": 0,
+          "control_only_c": 18,
+          "n_discordant": 18,
+          "delta": -0.3,
+          "delta_pp": -30.0,
+          "mcnemar_exact_p": 7.62939453125e-06,
+          "realized_psi": 0.3,
+          "realized_mde_pp": 20.05,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 19,
+          "control_hits": 57,
+          "both": 19,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 38,
+          "n_discordant": 38,
+          "delta": -0.633333,
+          "delta_pp": -63.33,
+          "mcnemar_exact_p": 7.275957614183426e-12,
+          "realized_psi": 0.633333,
+          "realized_mde_pp": 29.47,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    },
+    {
+      "label": "n8",
+      "N": 8,
+      "n": 60,
+      "hits_at_10": 32,
+      "rate": 0.533333,
+      "coverage_ceiling_hits": 33,
+      "coverage_ceiling_rate": 0.55,
+      "rank_accuracy": 0.969697,
+      "random_ranker_expected_hits": 33.0,
+      "misses_out_of_view": 27,
+      "misses_in_view_ranked_out": 1,
+      "mean_tool_calls": 7.233,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_058",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_058",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 21286.7,
+      "completion_tokens_per_question": 1433.5,
+      "usd_per_question": 0.14227,
+      "usd_per_question_vs_grep": 0.988,
+      "hits_per_dollar": 3.7,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 32,
+          "control_hits": 39,
+          "both": 32,
+          "neither": 21,
+          "treatment_only_b": 0,
+          "control_only_c": 7,
+          "n_discordant": 7,
+          "delta": -0.116667,
+          "delta_pp": -11.67,
+          "mcnemar_exact_p": 0.015625,
+          "realized_psi": 0.116667,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 32,
+          "control_hits": 37,
+          "both": 30,
+          "neither": 21,
+          "treatment_only_b": 2,
+          "control_only_c": 7,
+          "n_discordant": 9,
+          "delta": -0.083333,
+          "delta_pp": -8.33,
+          "mcnemar_exact_p": 0.1796875,
+          "realized_psi": 0.15,
+          "realized_mde_pp": 13.88,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 32,
+          "control_hits": 57,
+          "both": 32,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 25,
+          "n_discordant": 25,
+          "delta": -0.416667,
+          "delta_pp": -41.67,
+          "mcnemar_exact_p": 5.960464477539063e-08,
+          "realized_psi": 0.416667,
+          "realized_mde_pp": 23.97,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    },
+    {
+      "label": "n16",
+      "N": 16,
+      "n": 60,
+      "hits_at_10": 43,
+      "rate": 0.716667,
+      "coverage_ceiling_hits": 43,
+      "coverage_ceiling_rate": 0.716667,
+      "rank_accuracy": 1.0,
+      "random_ranker_expected_hits": 32.78,
+      "misses_out_of_view": 17,
+      "misses_in_view_ranked_out": 0,
+      "mean_tool_calls": 6.817,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 21014.7,
+      "completion_tokens_per_question": 1305.6,
+      "usd_per_question": 0.13771,
+      "usd_per_question_vs_grep": 0.9563,
+      "hits_per_dollar": 5.2,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 43,
+          "control_hits": 39,
+          "both": 39,
+          "neither": 17,
+          "treatment_only_b": 4,
+          "control_only_c": 0,
+          "n_discordant": 4,
+          "delta": 0.066667,
+          "delta_pp": 6.67,
+          "mcnemar_exact_p": 0.125,
+          "realized_psi": 0.066667,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 43,
+          "control_hits": 37,
+          "both": 37,
+          "neither": 17,
+          "treatment_only_b": 6,
+          "control_only_c": 0,
+          "n_discordant": 6,
+          "delta": 0.1,
+          "delta_pp": 10.0,
+          "mcnemar_exact_p": 0.03125,
+          "realized_psi": 0.1,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 43,
+          "control_hits": 57,
+          "both": 43,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 14,
+          "n_discordant": 14,
+          "delta": -0.233333,
+          "delta_pp": -23.33,
+          "mcnemar_exact_p": 0.0001220703125,
+          "realized_psi": 0.233333,
+          "realized_mde_pp": 17.62,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    },
+    {
+      "label": "n32",
+      "N": 32,
+      "n": 60,
+      "hits_at_10": 46,
+      "rate": 0.766667,
+      "coverage_ceiling_hits": 48,
+      "coverage_ceiling_rate": 0.8,
+      "rank_accuracy": 0.958333,
+      "random_ranker_expected_hits": 23.59,
+      "misses_out_of_view": 12,
+      "misses_in_view_ranked_out": 2,
+      "mean_tool_calls": 6.517,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 24747.5,
+      "completion_tokens_per_question": 1483.7,
+      "usd_per_question": 0.16083,
+      "usd_per_question_vs_grep": 1.1169,
+      "hits_per_dollar": 4.8,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 46,
+          "control_hits": 39,
+          "both": 39,
+          "neither": 14,
+          "treatment_only_b": 7,
+          "control_only_c": 0,
+          "n_discordant": 7,
+          "delta": 0.116667,
+          "delta_pp": 11.67,
+          "mcnemar_exact_p": 0.015625,
+          "realized_psi": 0.116667,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 46,
+          "control_hits": 37,
+          "both": 37,
+          "neither": 14,
+          "treatment_only_b": 9,
+          "control_only_c": 0,
+          "n_discordant": 9,
+          "delta": 0.15,
+          "delta_pp": 15.0,
+          "mcnemar_exact_p": 0.00390625,
+          "realized_psi": 0.15,
+          "realized_mde_pp": 13.88,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 46,
+          "control_hits": 57,
+          "both": 46,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 11,
+          "n_discordant": 11,
+          "delta": -0.183333,
+          "delta_pp": -18.33,
+          "mcnemar_exact_p": 0.0009765625,
+          "realized_psi": 0.183333,
+          "realized_mde_pp": 15.45,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    },
+    {
+      "label": "n64",
+      "N": 64,
+      "n": 60,
+      "hits_at_10": 51,
+      "rate": 0.85,
+      "coverage_ceiling_hits": 54,
+      "coverage_ceiling_rate": 0.9,
+      "rank_accuracy": 0.944444,
+      "random_ranker_expected_hits": 16.02,
+      "misses_out_of_view": 6,
+      "misses_in_view_ranked_out": 3,
+      "mean_tool_calls": 5.833,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 27478.5,
+      "completion_tokens_per_question": 1266.2,
+      "usd_per_question": 0.16905,
+      "usd_per_question_vs_grep": 1.174,
+      "hits_per_dollar": 5.0,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 51,
+          "control_hits": 39,
+          "both": 39,
+          "neither": 9,
+          "treatment_only_b": 12,
+          "control_only_c": 0,
+          "n_discordant": 12,
+          "delta": 0.2,
+          "delta_pp": 20.0,
+          "mcnemar_exact_p": 0.00048828125,
+          "realized_psi": 0.2,
+          "realized_mde_pp": 16.21,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 51,
+          "control_hits": 37,
+          "both": 37,
+          "neither": 9,
+          "treatment_only_b": 14,
+          "control_only_c": 0,
+          "n_discordant": 14,
+          "delta": 0.233333,
+          "delta_pp": 23.33,
+          "mcnemar_exact_p": 0.0001220703125,
+          "realized_psi": 0.233333,
+          "realized_mde_pp": 17.62,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 51,
+          "control_hits": 57,
+          "both": 51,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 6,
+          "n_discordant": 6,
+          "delta": -0.1,
+          "delta_pp": -10.0,
+          "mcnemar_exact_p": 0.03125,
+          "realized_psi": 0.1,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    },
+    {
+      "label": "n128",
+      "N": 128,
+      "n": 60,
+      "hits_at_10": 52,
+      "rate": 0.866667,
+      "coverage_ceiling_hits": 56,
+      "coverage_ceiling_rate": 0.933333,
+      "rank_accuracy": 0.928571,
+      "random_ranker_expected_hits": 10.19,
+      "misses_out_of_view": 4,
+      "misses_in_view_ranked_out": 4,
+      "mean_tool_calls": 6.15,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 39171.7,
+      "completion_tokens_per_question": 1493.0,
+      "usd_per_question": 0.23318,
+      "usd_per_question_vs_grep": 1.6193,
+      "hits_per_dollar": 3.7,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 52,
+          "control_hits": 39,
+          "both": 39,
+          "neither": 8,
+          "treatment_only_b": 13,
+          "control_only_c": 0,
+          "n_discordant": 13,
+          "delta": 0.216667,
+          "delta_pp": 21.67,
+          "mcnemar_exact_p": 0.000244140625,
+          "realized_psi": 0.216667,
+          "realized_mde_pp": 16.93,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 52,
+          "control_hits": 37,
+          "both": 37,
+          "neither": 8,
+          "treatment_only_b": 15,
+          "control_only_c": 0,
+          "n_discordant": 15,
+          "delta": 0.25,
+          "delta_pp": 25.0,
+          "mcnemar_exact_p": 6.103515625e-05,
+          "realized_psi": 0.25,
+          "realized_mde_pp": 18.27,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 52,
+          "control_hits": 57,
+          "both": 52,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 5,
+          "n_discordant": 5,
+          "delta": -0.083333,
+          "delta_pp": -8.33,
+          "mcnemar_exact_p": 0.0625,
+          "realized_psi": 0.083333,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    },
+    {
+      "label": "n0",
+      "N": "all",
+      "n": 60,
+      "hits_at_10": 52,
+      "rate": 0.866667,
+      "coverage_ceiling_hits": 56,
+      "coverage_ceiling_rate": 0.933333,
+      "rank_accuracy": 0.928571,
+      "random_ranker_expected_hits": 9.3,
+      "misses_out_of_view": 4,
+      "misses_in_view_ranked_out": 4,
+      "mean_tool_calls": 5.983,
+      "provider_refused_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_057",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 37846.1,
+      "completion_tokens_per_question": 1403.3,
+      "usd_per_question": 0.22431,
+      "usd_per_question_vs_grep": 1.5577,
+      "hits_per_dollar": 3.9,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 60,
+          "treatment_hits": 52,
+          "control_hits": 39,
+          "both": 39,
+          "neither": 8,
+          "treatment_only_b": 13,
+          "control_only_c": 0,
+          "n_discordant": 13,
+          "delta": 0.216667,
+          "delta_pp": 21.67,
+          "mcnemar_exact_p": 0.000244140625,
+          "realized_psi": 0.216667,
+          "realized_mde_pp": 16.93,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 60,
+          "treatment_hits": 52,
+          "control_hits": 37,
+          "both": 37,
+          "neither": 8,
+          "treatment_only_b": 15,
+          "control_only_c": 0,
+          "n_discordant": 15,
+          "delta": 0.25,
+          "delta_pp": 25.0,
+          "mcnemar_exact_p": 6.103515625e-05,
+          "realized_psi": 0.25,
+          "realized_mde_pp": 18.27,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        },
+        "vs_agentic_grep": {
+          "n": 60,
+          "treatment_hits": 52,
+          "control_hits": 57,
+          "both": 52,
+          "neither": 3,
+          "treatment_only_b": 0,
+          "control_only_c": 5,
+          "n_discordant": 5,
+          "delta": -0.083333,
+          "delta_pp": -8.33,
+          "mcnemar_exact_p": 0.0625,
+          "realized_psi": 0.083333,
+          "realized_mde_pp": 0,
+          "planning_mde_pp": 9.38,
+          "verdict": "NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n",
+          "reason": "the coarse sweep locates the knee; it does not test a hypothesis"
+        }
+      }
+    }
+  ],
+  "lineage": {
+    "git_head": "fcec85b8d9934c1be5e11b70780146d102e4ec27",
+    "git_branch": "s8-hybrid",
+    "git_dirty": false,
+    "git_dirty_paths": [],
+    "input_sha256": {
+      "pool_dump": "bdfa1fa00d6c990766f6f18bc896f5f23813178506b6c581f9a01db624a26d49",
+      "golden": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+      "grep_arm": "3df4eca46a2c3601abbe0829d4f9ba8743a8acd4dc17421984934724f8bca4cd",
+      "arm:n4": "f957627f574f36c088ce95ecc1499729a56c4c7d5d75a16db904fcc904dfc8a0",
+      "arm:n8": "fba57688e56196c62e3be0dbdb3e21f68c57d18653815136019d8ba2108b8537",
+      "arm:n16": "8a853a7f8c9855321a3000c5d0715da95b656048b808b97819b9dab308d01e69",
+      "arm:n32": "b3a3599af8a06fee319f08ecd689f0ad4ceb08993ec45a92ba5309aa9f8993d6",
+      "arm:n64": "737c569eceb2e4dacd0e29206bee697ad054a910ad871b75353a28b52281874f",
+      "arm:n128": "71e5434bda4afaf2d80ab2a47dc236f520c8bfa018adc5a902b4893d90005e80",
+      "arm:n0": "8d7f67022bb8421aca1ff800ce6d19bd396fa5002a05cbaa7ef33bda39eea4b4"
+    },
+    "preregistration": "docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md#part-a"
+  }
+}

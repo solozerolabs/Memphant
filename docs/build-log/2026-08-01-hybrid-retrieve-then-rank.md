@@ -252,3 +252,40 @@ identity. An artifact without lineage did not happen.
 # PART B — RESULTS (appended after the runs; Part A above is unedited)
 
 *Not yet written. No paid cell has been seen at the time Part A was committed.*
+
+---
+
+# PART A2 — STAGE-3 SELECTION (committed after the sweep, before any n=180 cell)
+
+The coarse sweep (n=60, `docs/build-log/artifacts/s8-hybrid/analysis-sweep.json`,
+**NOT A MEASUREMENT** per §A.6) landed for $70.10:
+
+| N | hits@10 /60 | ceiling = Coverage(N) | **RankAcc** | random-ranker floor | $/question |
+|---:|---:|---:|---:|---:|---:|
+| 4 | 19 | 19 | **1.000** | 19.0 | 0.101 |
+| 8 | 32 | 33 | 0.970 | 33.0 | 0.142 |
+| 16 | 43 | 43 | **1.000** | 32.8 | 0.138 |
+| 32 | 46 | 48 | 0.958 | 23.6 | 0.161 |
+| 64 | 51 | 54 | 0.944 | 16.0 | 0.169 |
+| 128 | 52 | 56 | 0.929 | 10.2 | 0.233 |
+| all | 52 | 56 | 0.929 | 9.3 | 0.224 |
+
+Comparators on the same 60: MemPhant fused@10 **39**, packed@10 **37**, agentic
+`grep` **57**.
+
+§A.6 fixed stage 3 as *"the best 2 values of N from the sweep, plus N=64 as the
+pre-committed anchor."* The two arms nominated, and the rule used to nominate
+them — **the two curves §A.1 named as the deliverable, applied before any n=180
+cell was seen**:
+
+* **N=128 — the accuracy maximum.** 52/60 is the highest hit@10 on the sweep. It
+  ties with `all`, and `all` is not a separate mechanism (the pool's median is
+  124.5, so for most questions `all` *is* ~128); confirming both would buy one
+  number twice. N=128 is taken and `all` is not.
+* **N=16 — the accuracy-per-token maximum.** 5.2 hits per dollar against 5.0 at
+  N=64 and 3.7 at N=128, at **$0.138/question**, and it is the only N besides 4
+  where the agent recovered its ceiling **exactly**.
+* **N=64 — the pre-committed anchor**, carried unchanged so stage 2 and stage 3
+  are tied together and the result stays comparable to S4's arms.
+
+Budget: $70.10 spent, ~$65 projected for stage 3, against the $180 ceiling.
