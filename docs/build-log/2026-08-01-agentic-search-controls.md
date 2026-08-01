@@ -338,6 +338,25 @@ the treatment — and the complete-case analysis is reported beside it.
 The headline is the *smaller* of the two margins. Nothing in the verdict turns
 on the handling.
 
+## B.4b Robustness: even at MemPhant's most generous stage, it still loses
+
+The headline pairs like with like — both arms at ten bodies. MemPhant also has a
+*pre-packing* quantity, `gold_fused_rank <= 10`, which is **113/180** and which
+the arms review quotes. Packing costs it 7 questions. That number is **not**
+stage-matched to the control and must not be the headline — this program voided
+a result for exactly that mismatch — but it bounds how much of the deficit
+packing could possibly explain:
+
+| contrast | T | C1 | b | c | n_d | Δ | p | realized MDE |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| headline, stage-matched (packed@10) | 106 | 174 | 1 | 69 | 70 | −37.78pp | 1.20e−19 | 13.34pp |
+| **generous to T, stage-MISMATCHED** (fused@10 vs packed@10) | **113** | 174 | 1 | 62 | 63 | **−33.89pp** | 1.39e−17 | 12.66pp |
+
+**Handing MemPhant its own best pre-packing number and comparing it against the
+control's honest one still loses by 33.9 points, and the b-cell is still 1.**
+Packing is not the explanation, and no packing fix reaches this gap: the whole
+of rung 7 is worth 7 questions against a 68-question deficit.
+
 ## B.5 A 2-question dead zone in the instrument, found free and verified symmetric
 
 `track_r_par_028` and `track_r_par_066` carry required spans that appear in **no
