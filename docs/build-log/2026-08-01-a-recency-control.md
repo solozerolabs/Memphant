@@ -352,15 +352,25 @@ Secondary, descriptive, no test: `hit@1` 0.3857 vs 0.3810, `hit@10` 0.9247 vs
 
 ### 8.5 Verdict
 
-**The bitemporal supersession machinery beats a plain `ORDER BY observed_at DESC`
-recency tiebreak, given an identical correct subject key, by +3.01 points of
-latest-state-wins (95% CI [+1.70, +4.43]) and −2.45 points of misapplication
-(95% CI [−3.76, −1.25]), on 1063 probes over 257 instances.**
+**At this corpus's scale — ~3.4 assertions per subject key, where no recall
+family truncates — and given an identical correct subject key: the bitemporal
+supersession machinery beats a plain `ORDER BY observed_at DESC` recency
+tiebreak by +3.01 points of latest-state-wins (95% CI [+1.70, +4.43]) and
+−2.45 points of misapplication (95% CI [−3.76, −1.25]), on 1063 probes over
+257 instances. It is not established at any larger per-key scale, and the
+asymmetry that makes it safe here runs the other way there (§7).**
 
 Both endpoints move the same way, both CIs exclude zero, and the effect is
 roughly 1.4× the instrument's 80%-power MDE — so this is a real effect, and a
 small one. The ~20-line control does **not** tie the edifice and does not beat
 it. The question §1 posed is answered in the edifice's favour.
+
+The scale bound leads the verdict rather than trailing it, deliberately. It was
+previously point 3 of the list below — and a bound that sits after the CI is a
+bound that gets dropped in the retelling, which for this result is the
+difference between a true claim and a false one. The three notes below expand
+what the sentence already carries; none of them is load-bearing for the first
+time.
 
 Three things that verdict does *not* say, all of which bound it:
 
