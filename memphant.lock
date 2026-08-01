@@ -2,7 +2,7 @@
   "engine_version": "0.1.0-ws0",
   "compiler_version": "compiler-0.1.0-ws0",
   "trace_schema_version": "trace-0.1.0-ws0",
-  "schema_compat_revision": "20260731_006_preference_memory_kind",
+  "schema_compat_revision": "20260801_009_drop_dead_schema",
   "methodology_version": "memphant-methodology-2026-07-03",
   "export_schema_version": "export-0.1.0-ws0"
 }

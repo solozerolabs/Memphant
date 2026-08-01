@@ -25,10 +25,14 @@ const PREFERENCE_MEMORY_KIND_SQL: &str =
 const SEMANTIC_ONLY_SUBJECT_EXCLUSION_SQL: &str = include_str!(
     "../../../memphant_migrations/versions/20260731_007_semantic_only_subject_exclusion.sql"
 );
+const DROP_RETENTION_TIER_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260801_008_drop_retention_tier.sql");
+const DROP_DEAD_SCHEMA_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260801_009_drop_dead_schema.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260731_007_semantic_only_subject_exclusion";
+pub const MIGRATION_HEAD: &str = "20260801_009_drop_dead_schema";
 
 /// Bundled migrations in apply order.
 ///
@@ -60,7 +64,12 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "20260731_006_preference_memory_kind",
         PREFERENCE_MEMORY_KIND_SQL,
     ),
-    (MIGRATION_HEAD, SEMANTIC_ONLY_SUBJECT_EXCLUSION_SQL),
+    (
+        "20260731_007_semantic_only_subject_exclusion",
+        SEMANTIC_ONLY_SUBJECT_EXCLUSION_SQL,
+    ),
+    ("20260801_008_drop_retention_tier", DROP_RETENTION_TIER_SQL),
+    (MIGRATION_HEAD, DROP_DEAD_SCHEMA_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[
@@ -175,7 +184,24 @@ pub fn lint_migrations(provider: Provider) -> Result<(), LintError> {
             .collect::<Vec<_>>()
             .join("\n"),
     );
-    let mut findings = lint_sql(&sql, provider);
+    // Per-migration first: each migration's drops are judged against its OWN
+    // header, which the concatenated pass below structurally cannot see.
+    let mut findings: Vec<String> = MIGRATIONS
+        .iter()
+        .flat_map(|(name, migration)| {
+            let normalized = normalize(migration);
+            let rewrite = declares_rewrite(&normalized);
+            let mut per = Vec::new();
+            if normalized.contains("drop table") && !rewrite {
+                per.push(format!("{name}:boundary:drop_table"));
+            }
+            if normalized.contains("drop index") && !rewrite {
+                per.push(format!("{name}:boundary:drop_index"));
+            }
+            per
+        })
+        .collect();
+    findings.extend(lint_sql(&sql, provider, false));
     for table in REQUIRED_TABLES {
         if !sql.contains(&format!("create table if not exists memphant.{table}")) {
             findings.push(format!("{table}:missing_table"));
@@ -216,7 +242,7 @@ pub fn lint_migrations(provider: Provider) -> Result<(), LintError> {
 }
 
 pub fn lint_migration_sql(sql: &str, provider: Provider) -> Result<(), LintError> {
-    finish(lint_sql(&normalize(sql), provider))
+    finish(lint_sql(&normalize(sql), provider, true))
 }
 
 /// Drops are allowed only when the migration declares
@@ -227,13 +253,24 @@ fn declares_rewrite(sql: &str) -> bool {
         .any(|line| line.trim() == "-- migration_kind: rewrite")
 }
 
-fn lint_sql(sql: &str, provider: Provider) -> Vec<String> {
+/// `check_drops` is false for the corpus pass. The drop gate is a PER-MIGRATION
+/// rule — it asks whether the migration doing the dropping declared itself a
+/// rewrite — but the corpus pass lints every migration concatenated, where
+/// `declares_rewrite` can only ever see the FIRST migration's header. So a
+/// migration that correctly declares `-- migration_kind: rewrite` still tripped
+/// the gate, and the concatenated pass could never pass once any migration
+/// contained a drop. It went unnoticed only because no embedded migration had
+/// one until `20260801_008`/`_009` — which were themselves not embedded, so the
+/// lint had never seen them. `lint_migrations` now runs this gate per migration
+/// and leaves the corpus pass to the structural checks that genuinely need the
+/// whole concatenation.
+fn lint_sql(sql: &str, provider: Provider, check_drops: bool) -> Vec<String> {
     let mut findings = Vec::new();
     let rewrite = declares_rewrite(sql);
-    if sql.contains("drop table") && !rewrite {
+    if check_drops && sql.contains("drop table") && !rewrite {
         findings.push("boundary:drop_table".to_string());
     }
-    if sql.contains("drop index") && !rewrite {
+    if check_drops && sql.contains("drop index") && !rewrite {
         findings.push("boundary:drop_index".to_string());
     }
     if sql.contains("public.") {

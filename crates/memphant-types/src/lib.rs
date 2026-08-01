@@ -1612,7 +1612,7 @@ pub const TRACE_SCHEMA_VERSION: &str = "trace-0.1.0-ws0";
 /// `MIGRATION_HEAD` and this value, so a correctly-migrated database reported
 /// as incompatible and the server never became ready. Pinned by
 /// `migrations_manifest.rs::schema_compat_revision_matches_the_newest_migration`.
-pub const SCHEMA_COMPAT_REVISION: &str = "20260731_006_preference_memory_kind";
+pub const SCHEMA_COMPAT_REVISION: &str = "20260801_009_drop_dead_schema";
 pub const METHODOLOGY_VERSION: &str = "memphant-methodology-2026-07-03";
 pub const EXPORT_SCHEMA_VERSION: &str = "export-0.1.0-ws0";
 

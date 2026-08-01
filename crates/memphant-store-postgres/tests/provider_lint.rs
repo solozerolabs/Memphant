@@ -10,29 +10,36 @@ fn bundled_wsa_migration_passes_all_provider_lints() {
     }
 }
 
-/// The compatibility floor must be strictly older than the head — a binary
-/// whose floor IS its head refuses every database but the one it just shipped.
+/// The compatibility floor may never be NEWER than the head.
 ///
-/// This test used to hardcode the full migration list and the literal value of
-/// `SCHEMA_COMPAT_REVISION`. That did not merely go stale, it PINNED A BUG:
-/// migration `20260731_006` moved the floor to itself, and this assertion kept
-/// claiming the floor was still `002`, so the mismatch that made `ping` reject
-/// a correctly-migrated database read as intentional. Hardcoding a second copy
-/// of a list is how the first copy stops being checked.
+/// Equality is legitimate and expected: a breaking migration moves the floor to
+/// itself, so immediately after one the binary genuinely can read only that
+/// schema. `PgStore::ping` agrees — it tests `compatibility_floor <=
+/// MIGRATION_HEAD`. This assertion previously demanded a STRICT inequality,
+/// which held only by accident while the newest migration happened not to be
+/// breaking; `20260801_009` is, and the floor now equals the head.
+///
+/// This test also used to hardcode the full migration list and the literal
+/// value of `SCHEMA_COMPAT_REVISION`. That did not merely go stale, it PINNED A
+/// BUG: migration `20260731_006` moved the floor to itself, and the assertion
+/// kept claiming the floor was still `002`, so the mismatch that made `ping`
+/// reject a correctly-migrated database read as intentional. Hardcoding a
+/// second copy of a list is how the first copy stops being checked.
 ///
 /// The list, the head, and the floor's value are now derived from
 /// `memphant_migrations/versions/` and from the migrations' own SQL in
 /// `tests/migrations_manifest.rs`. Only the relational invariant lives here.
 #[test]
-fn the_compatibility_floor_is_older_than_the_migration_head() {
+fn the_compatibility_floor_is_not_newer_than_the_migration_head() {
     assert_eq!(
         MIGRATIONS.last().expect("MIGRATIONS is non-empty").0,
         MIGRATION_HEAD
     );
     assert!(
-        MIGRATION_HEAD > SCHEMA_COMPAT_REVISION,
-        "MIGRATION_HEAD {MIGRATION_HEAD:?} must be strictly newer than \
-         SCHEMA_COMPAT_REVISION {SCHEMA_COMPAT_REVISION:?}"
+        SCHEMA_COMPAT_REVISION <= MIGRATION_HEAD,
+        "SCHEMA_COMPAT_REVISION {SCHEMA_COMPAT_REVISION:?} is NEWER than \
+         MIGRATION_HEAD {MIGRATION_HEAD:?}; readiness requires \
+         compatibility_floor <= head, so this binary would reject every database"
     );
 }
 
