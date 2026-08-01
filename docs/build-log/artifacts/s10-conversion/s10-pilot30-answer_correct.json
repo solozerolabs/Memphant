@@ -1,0 +1,581 @@
+{
+  "schema": "memphant.eval.code-lane-reader-qa.v1",
+  "bank": "track-r-paraphrase-pilot30",
+  "n_paired": 30,
+  "control_arm": "agenticgrep",
+  "endpoint": "answer_correct",
+  "endpoint_meaning": "judge verdict that the reader's ANSWER is correct against the gold answer -- end behaviour, not retrieval@k",
+  "test": "two-sided exact (conditional binomial) McNemar, alpha=0.05",
+  "n_d_structural_floor": 6,
+  "arm_accuracy": {
+    "memphant": 0.8,
+    "agenticgrep": 0.9666666666666667,
+    "nomemory": 0.26666666666666666
+  },
+  "arm_correct_counts": {
+    "memphant": 24,
+    "agenticgrep": 29,
+    "nomemory": 8
+  },
+  "contrasts": {
+    "memphant_vs_agenticgrep": {
+      "n": 30,
+      "both_correct": 23,
+      "b_left_only": 1,
+      "c_right_only": 6,
+      "neither": 0,
+      "n_discordant": 7,
+      "realized_psi": 0.23333333333333334,
+      "delta": -0.16666666666666666,
+      "left_accuracy": 0.8,
+      "right_accuracy": 0.9666666666666667,
+      "mcnemar_exact_p": 0.125,
+      "mde_at_80_power": null,
+      "achieved_power_at_observed_delta": 0.31874627621546586,
+      "required_n_for_observed_delta": 68,
+      "significant_at_0_05": false,
+      "verdict": "null (see achieved power)"
+    },
+    "nomemory_vs_agenticgrep": {
+      "n": 30,
+      "both_correct": 8,
+      "b_left_only": 0,
+      "c_right_only": 21,
+      "neither": 1,
+      "n_discordant": 21,
+      "realized_psi": 0.7,
+      "delta": -0.7,
+      "left_accuracy": 0.26666666666666666,
+      "right_accuracy": 0.9666666666666667,
+      "mcnemar_exact_p": 9.5367431640625e-07,
+      "mde_at_80_power": 0.4333363730752958,
+      "achieved_power_at_observed_delta": 0.9999999977922799,
+      "required_n_for_observed_delta": 10,
+      "significant_at_0_05": true,
+      "verdict": "significant"
+    },
+    "memphant_vs_nomemory": {
+      "n": 30,
+      "both_correct": 7,
+      "b_left_only": 17,
+      "c_right_only": 1,
+      "neither": 5,
+      "n_discordant": 18,
+      "realized_psi": 0.6,
+      "delta": 0.5333333333333333,
+      "left_accuracy": 0.8,
+      "right_accuracy": 0.26666666666666666,
+      "mcnemar_exact_p": 0.00014495849609375,
+      "mde_at_80_power": 0.3967344636642161,
+      "achieved_power_at_observed_delta": 0.9928847741147683,
+      "required_n_for_observed_delta": 16,
+      "significant_at_0_05": true,
+      "verdict": "significant"
+    }
+  },
+  "judge_accounting": {
+    "memphant": {
+      "n": 30,
+      "judge_method_counts": {
+        "rag_supported_llm_judge": 28,
+        "abstention_exact": 2
+      },
+      "judge_parse_status_counts": {
+        "strict_valid": 28,
+        "not_called": 2
+      },
+      "judge_fire_rate": 0.9333333333333333,
+      "reader_abstentions": 2,
+      "reader_abstention_rate": 0.06666666666666667,
+      "reader_provider_refusals": 0,
+      "reader_provider_refusal_rate": 0.0,
+      "rows_with_error": 0,
+      "reader_errors": 0,
+      "parse_errors": 0,
+      "judge_errors": 0,
+      "errors_block": {
+        "reader": 0,
+        "parse": 0,
+        "judge": 0
+      },
+      "fresh_calls": 58,
+      "cached_calls": 0,
+      "reported_spend_usd": "2.959755",
+      "unsettled_liability_usd": "0.000000",
+      "complete": true,
+      "aborted": null,
+      "smoke_only": false
+    },
+    "agenticgrep": {
+      "n": 30,
+      "judge_method_counts": {
+        "rag_supported_llm_judge": 30
+      },
+      "judge_parse_status_counts": {
+        "strict_valid": 30
+      },
+      "judge_fire_rate": 1.0,
+      "reader_abstentions": 0,
+      "reader_abstention_rate": 0.0,
+      "reader_provider_refusals": 0,
+      "reader_provider_refusal_rate": 0.0,
+      "rows_with_error": 0,
+      "reader_errors": 0,
+      "parse_errors": 0,
+      "judge_errors": 0,
+      "errors_block": {
+        "reader": 0,
+        "parse": 0,
+        "judge": 0
+      },
+      "fresh_calls": 60,
+      "cached_calls": 0,
+      "reported_spend_usd": "0.985680",
+      "unsettled_liability_usd": "0.000000",
+      "complete": true,
+      "aborted": null,
+      "smoke_only": false
+    },
+    "nomemory": {
+      "n": 30,
+      "judge_method_counts": {
+        "abstention_exact": 6,
+        "provider_refusal": 8,
+        "rag_supported_llm_judge": 15,
+        "None": 1
+      },
+      "judge_parse_status_counts": {
+        "not_called": 15,
+        "strict_valid": 15
+      },
+      "judge_fire_rate": 0.5,
+      "reader_abstentions": 14,
+      "reader_abstention_rate": 0.4666666666666667,
+      "reader_provider_refusals": 8,
+      "reader_provider_refusal_rate": 0.26666666666666666,
+      "rows_with_error": 1,
+      "reader_errors": 0,
+      "parse_errors": 1,
+      "judge_errors": 0,
+      "errors_block": {
+        "reader": 0,
+        "parse": 1,
+        "judge": 0
+      },
+      "fresh_calls": 45,
+      "cached_calls": 0,
+      "reported_spend_usd": "0.453605",
+      "unsettled_liability_usd": "0.000000",
+      "complete": true,
+      "aborted": null,
+      "smoke_only": false
+    }
+  },
+  "gold_span_decomposition": {
+    "memphant": {
+      "n": 30,
+      "gold_span_in_pack": 19,
+      "correct": 24,
+      "correct_gold_present": 19,
+      "correct_span_absent_text_present": 0,
+      "correct_span_absent_text_absent": 5,
+      "incorrect_gold_present": 0,
+      "abstained_gold_present": 0,
+      "a_hit_correct": 19,
+      "b_hit_wrong": 0,
+      "c_miss_correct": 5,
+      "d_miss_wrong": 6,
+      "retrieval_report_available": true,
+      "joint_2x2": {
+        "a_hit_correct": 19,
+        "b_hit_wrong": 0,
+        "c_miss_correct": 5,
+        "d_miss_wrong": 6
+      },
+      "p_correct_given_gold_present_ci": {
+        "k": 19,
+        "n": 19,
+        "point": 1.0,
+        "lo": 0.8318207759473837,
+        "hi": 1.0,
+        "method": "Wilson score, 95%"
+      },
+      "p_correct_given_gold_absent_ci": {
+        "k": 5,
+        "n": 11,
+        "point": 0.45454545454545453,
+        "lo": 0.21271271622459764,
+        "hi": 0.719908462590678,
+        "method": "Wilson score, 95%"
+      },
+      "conditional_rate_difference": {
+        "diff": 0.5454545454545454,
+        "z": 3.5992423445143915,
+        "p_two_sided": 0.0003191456676109645,
+        "test": "two-proportion z, pooled SE, two-sided"
+      },
+      "hit_vs_correct_phi": 0.6571287406727709,
+      "hit_vs_correct_agreement": 0.8333333333333334,
+      "retrieval_hit_at_10": 0.6333333333333333,
+      "answer_accuracy": 0.8,
+      "p_correct_given_gold_present": 1.0,
+      "p_correct_given_gold_absent": 0.45454545454545453,
+      "correct_without_gold_span": 5,
+      "text_check": "normalized substring of the gold answer in the packed bodies; crude, so text_present is an UPPER bound and text_absent a LOWER bound"
+    },
+    "agenticgrep": {
+      "n": 30,
+      "gold_span_in_pack": 28,
+      "correct": 29,
+      "correct_gold_present": 28,
+      "correct_span_absent_text_present": 1,
+      "correct_span_absent_text_absent": 0,
+      "incorrect_gold_present": 0,
+      "abstained_gold_present": 0,
+      "a_hit_correct": 28,
+      "b_hit_wrong": 0,
+      "c_miss_correct": 1,
+      "d_miss_wrong": 1,
+      "retrieval_report_available": true,
+      "joint_2x2": {
+        "a_hit_correct": 28,
+        "b_hit_wrong": 0,
+        "c_miss_correct": 1,
+        "d_miss_wrong": 1
+      },
+      "p_correct_given_gold_present_ci": {
+        "k": 28,
+        "n": 28,
+        "point": 1.0,
+        "lo": 0.8793566952341543,
+        "hi": 0.9999999999999998,
+        "method": "Wilson score, 95%"
+      },
+      "p_correct_given_gold_absent_ci": {
+        "k": 1,
+        "n": 2,
+        "point": 0.5,
+        "lo": 0.09453120573423074,
+        "hi": 0.9054687942657693,
+        "method": "Wilson score, 95%"
+      },
+      "conditional_rate_difference": {
+        "diff": 0.5,
+        "z": 3.805621975536937,
+        "p_two_sided": 0.0001414482838656371,
+        "test": "two-proportion z, pooled SE, two-sided"
+      },
+      "hit_vs_correct_phi": 0.6948083337796511,
+      "hit_vs_correct_agreement": 0.9666666666666667,
+      "retrieval_hit_at_10": 0.9333333333333333,
+      "answer_accuracy": 0.9666666666666667,
+      "p_correct_given_gold_present": 1.0,
+      "p_correct_given_gold_absent": 0.5,
+      "correct_without_gold_span": 1,
+      "text_check": "normalized substring of the gold answer in the packed bodies; crude, so text_present is an UPPER bound and text_absent a LOWER bound"
+    },
+    "nomemory": {
+      "n": 30,
+      "gold_span_in_pack": 0,
+      "correct": 8,
+      "correct_gold_present": 0,
+      "correct_span_absent_text_present": 0,
+      "correct_span_absent_text_absent": 8,
+      "incorrect_gold_present": 0,
+      "abstained_gold_present": 0,
+      "a_hit_correct": 0,
+      "b_hit_wrong": 0,
+      "c_miss_correct": 8,
+      "d_miss_wrong": 22,
+      "retrieval_report_available": false,
+      "joint_2x2": {
+        "a_hit_correct": 0,
+        "b_hit_wrong": 0,
+        "c_miss_correct": 8,
+        "d_miss_wrong": 22
+      },
+      "p_correct_given_gold_present_ci": null,
+      "p_correct_given_gold_absent_ci": {
+        "k": 8,
+        "n": 30,
+        "point": 0.26666666666666666,
+        "lo": 0.14182663319596317,
+        "hi": 0.4444796169518888,
+        "method": "Wilson score, 95%"
+      },
+      "conditional_rate_difference": null,
+      "hit_vs_correct_phi": null,
+      "hit_vs_correct_agreement": 0.7333333333333333,
+      "retrieval_hit_at_10": 0.0,
+      "answer_accuracy": 0.26666666666666666,
+      "p_correct_given_gold_present": null,
+      "p_correct_given_gold_absent": 0.26666666666666666,
+      "correct_without_gold_span": 8,
+      "text_check": "normalized substring of the gold answer in the packed bodies; crude, so text_present is an UPPER bound and text_absent a LOWER bound"
+    }
+  },
+  "arm_binding": {
+    "memphant": {
+      "equalized_evidence_sha256": "bcbfc2c89cd6b237082a4b49a0d47468d40b75bb6708578cb935f0e885d848a4",
+      "evaluated_evidence_sha256": "bcbfc2c89cd6b237082a4b49a0d47468d40b75bb6708578cb935f0e885d848a4",
+      "tokens_mean": 2104.8,
+      "items_mean": 9.333333333333334,
+      "reader_model_id": "anthropic/claude-opus-5",
+      "judge_model_id": "anthropic/claude-opus-5",
+      "prompt_version": 3,
+      "reader_profile": "evidence",
+      "openrouter_stub_url": null,
+      "promotion_ineligible": false,
+      "evaluator_sha256": "94e90310c51a4fc8e299ebc284adf23a39ac52a96e5058ef6547aeb39d51349a"
+    },
+    "agenticgrep": {
+      "equalized_evidence_sha256": "e8327f4b0a72297ff12b31ae9dcc81b65316328b37fd606f1aab0a228e4dbc77",
+      "evaluated_evidence_sha256": "e8327f4b0a72297ff12b31ae9dcc81b65316328b37fd606f1aab0a228e4dbc77",
+      "tokens_mean": 498.3333333333333,
+      "items_mean": 4.833333333333333,
+      "reader_model_id": "anthropic/claude-opus-5",
+      "judge_model_id": "anthropic/claude-opus-5",
+      "prompt_version": 3,
+      "reader_profile": "evidence",
+      "openrouter_stub_url": null,
+      "promotion_ineligible": false,
+      "evaluator_sha256": "8f2b4e96cec750d0ea5e625f0fb1a9b48fac9975ae475fd4ddaeb2018754e1f5"
+    },
+    "nomemory": {
+      "equalized_evidence_sha256": "bb4eeaab8c9bfad15dda5120628492e8ba76d2b06274c8433c1a82af51ef137d",
+      "evaluated_evidence_sha256": "bb4eeaab8c9bfad15dda5120628492e8ba76d2b06274c8433c1a82af51ef137d",
+      "tokens_mean": 0.0,
+      "items_mean": 0.0,
+      "reader_model_id": "anthropic/claude-opus-5",
+      "judge_model_id": "anthropic/claude-opus-5",
+      "prompt_version": 3,
+      "reader_profile": "closed-book",
+      "openrouter_stub_url": null,
+      "promotion_ineligible": true,
+      "evaluator_sha256": "c134e52237dd2ba6481fa5bffc4c3222aaa9466ef4afdfaeb831d8dfe3545e9b"
+    }
+  },
+  "questions_dropped_from_pairing": {},
+  "per_question_vectors": {
+    "order": [
+      "track_r_par_001",
+      "track_r_par_002",
+      "track_r_par_003",
+      "track_r_par_004",
+      "track_r_par_005",
+      "track_r_par_006",
+      "track_r_par_007",
+      "track_r_par_008",
+      "track_r_par_009",
+      "track_r_par_010",
+      "track_r_par_011",
+      "track_r_par_012",
+      "track_r_par_013",
+      "track_r_par_014",
+      "track_r_par_015",
+      "track_r_par_016",
+      "track_r_par_017",
+      "track_r_par_018",
+      "track_r_par_019",
+      "track_r_par_020",
+      "track_r_par_021",
+      "track_r_par_022",
+      "track_r_par_023",
+      "track_r_par_024",
+      "track_r_par_025",
+      "track_r_par_026",
+      "track_r_par_027",
+      "track_r_par_028",
+      "track_r_par_029",
+      "track_r_par_030"
+    ],
+    "arms": {
+      "memphant": [
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "agenticgrep": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "nomemory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "stage_equalization": {
+    "manifest_path": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s10/equalized-pilot30/stage-equalization.json",
+    "manifest_sha256": "6d65a691060b8780e38a72b186998b90d63b32a09752ff3972eb54248a0b45fa",
+    "k": 10,
+    "budget_tokens": 8192,
+    "tokens_mean_by_arm": {
+      "memphant": 2104.8,
+      "agenticgrep": 498.3333333333333
+    },
+    "tokens_mean_spread": 1606.466666666667
+  },
+  "lineage": {
+    "git_head": "74924d4948c5517ec11563e1c75c3ca08533236e",
+    "git_dirty": true,
+    "worktree": "/Users/sidsharma/Memphant-s10-conversion",
+    "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+    "golden_sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+    "binaries": {},
+    "harness_env": {
+      "reader_prompt_version": "3",
+      "bank": "track-r-paraphrase",
+      "arms": "banked-packs-no-retrieval-rerun"
+    },
+    "prepare_script_sha256": "21dd4396407d15a837ba83cee346b83a4cf52e7df7ac9136963ccf846c21888c",
+    "pack_evidence_source_sha256": "581a74dbbee328ec7070ff80ef4c47dfb13c52020cb997352dc89d310763503f"
+  },
+  "compare_script_sha256": "b4b3828f07f093a54afeb7c45343cf8089c95526fea1708fd38ba6bb991b65fd",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "On the Track-R paraphrase bank, answer correctness under a fixed reader is measured jointly with gold-span retrieval@10 for a MemPhant fused pack, an agentic-grep pack and an empty pack, to test whether hit@k predicts the outcome it is used as a proxy for.",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 30,
+      "b": 1,
+      "c": 6,
+      "n_d": 7,
+      "psi_observed": 0.23333333333333334,
+      "mde_at_80": null,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "source": "docs/build-log/artifacts/s10-conversion/s10-pilot30-answer_correct.json"
+    },
+    "harness": {
+      "embed_model": "fastembed:bge-small-en-v1.5 (shipped default)",
+      "scorer": "memphant recall mode=fast lexical=bm25-code (shipped default) vs an agentic grep/read loop over the attempt's raw events (no index, no embeddings, no memory state); reader anthropic/claude-opus-5, judge anthropic/claude-opus-5, judge_profile rag-supported-v1",
+      "k": 10,
+      "budget": 8192,
+      "flags": [
+        "endpoint=answer_correct",
+        "prompt_versions=['3']",
+        "reader_profiles=['closed-book', 'evidence']",
+        "provider_only=anthropic",
+        "one packer, one k, one budget on every arm"
+      ],
+      "command": "scripts/code_lane_reader_run.sh"
+    },
+    "corpus": {
+      "sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+      "snapshot_id": "nebius/SWE-rebench-openhands-trajectories@35455389ab51bf5e2306bfd436ef72d0f98bf882",
+      "n_items": 64055
+    },
+    "instrument_verification": {
+      "shipped_rows_verified": true,
+      "rows_counted": 30,
+      "fields_counted": {
+        "goldens_scored": 30,
+        "arms": 3,
+        "reader_calls": 163
+      },
+      "license_id": "CC-BY-4.0",
+      "license_source": "HF_DATASET_CARD",
+      "license_evidence": "nebius/SWE-rebench-openhands-trajectories dataset card, pinned in benchmarks/data/track_r_paraphrase_golden.lock.json corpus block"
+    },
+    "leakage": {
+      "unit_definition": "one unit = one content event of the attempt; coverage(question, event) = |T(question) & T(event)| / |T(question)|, T(s) = set(re.findall(r'[a-z0-9_]{3,}', s.lower()))",
+      "absolute_target_coverage": 0.1346,
+      "floor": 0.0667,
+      "floor_kind": "per golden, the mean coverage over EVERY non-target event of the same attempt; no seed, no draw",
+      "concentration": 2.018,
+      "provenance_class": "model-paraphrased from the target event; identifier surfaces banned (coverage 0.1346)"
+    },
+    "probe_kind": "lever",
+    "mechanism_enabled": true,
+    "mechanism_evidence": "The lever is MemPhant recall itself. Liveness is the arms' own measured divergence rather than an assertion: the arms disagree on 7 of 30 questions at the reader endpoint, their packs differ in mean tokens ({'memphant': 2104.8, 'agenticgrep': 498.3333333333333}), and the judge fired on memphant 0.93, agenticgrep 1.00, nomemory 0.50 of rows.",
+    "attribution": {
+      "method": "paired arm contrast at one lineage"
+    },
+    "bar": null,
+    "notes": "Reader-QA, not retrieval@k. Every arm was packed by one packer at one k and one budget before reaching the reader; the comparison script refuses arms not bound by sha256 to the same equalization manifest. The no-memory arm uses a closed-book reader prompt and is a saturation probe, never the paired comparator for a memory claim."
+  }
+}

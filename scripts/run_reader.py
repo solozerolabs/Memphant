@@ -560,6 +560,11 @@ class CallBudgetExceeded(Exception):
     pass
 
 
+def choice_of(data: dict) -> dict:
+    """The first choice of an OpenRouter response, or an empty dict."""
+    return (data.get("choices") or [{}])[0]
+
+
 class ProviderRefusal(RuntimeError):
     """The provider declined to answer (finish_reason content_filter/refusal).
 
@@ -1301,6 +1306,28 @@ class ReaderCli:
                             f"provider refused to answer "
                             f"(finish_reason={finish}, native={native})"
                         )
+                    continue
+                # `{}` satisfies "not empty" but violates every schema we send
+                # under strict: true. Observed live on this reader. Caught here
+                # rather than at the parser because here the existing retry loop
+                # can act on it — a parse failure downstream is terminal for the
+                # row, and a terminal row scores incorrect, so a provider that
+                # returns an empty object would be recorded as a reader that got
+                # the answer wrong.
+                if content.strip() in ("{}", "[]"):
+                    last_error = RuntimeError(
+                        f"openrouter returned a schema-violating empty object "
+                        f"(attempt {attempt + 1}/4)"
+                    )
+                    error_payload = {
+                        "error": "schema_violation_empty_object",
+                        "elapsed_seconds": time.monotonic() - attempt_started,
+                        "retry_index": attempt,
+                        "finish_reason": choice_of(data).get("finish_reason"),
+                        "usage": data.get("usage"),
+                    }
+                    self.provider_attempt_log.append(error_payload)
+                    self._provider_attempt_event("error", error_payload)
                     continue
                 self.provider_attempt_log.append({"response": metadata})
                 self._provider_attempt_event("result", {"response": metadata})
