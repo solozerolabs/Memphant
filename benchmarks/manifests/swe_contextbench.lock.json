@@ -1,0 +1,346 @@
+{
+  "benchmark": "SWE-ContextBench",
+  "track": "repo/code lane external instrument -- the only public, neutral, third-party coding-memory instrument MemPhant holds",
+  "supersedes": {
+    "file": "benchmarks/manifests/swe_contextbench.kill.n12.json",
+    "status": "RETAINED AS PROVENANCE -- do not delete",
+    "what_it_records": "the n=12 (4 targets x 3 arms) hand-selected tranche that was declared BROKEN (baseline-saturated) on 2026-07-24",
+    "why_that_verdict_was_wrong_about_the_INSTRUMENT": "the tranche resolved 3 of 4 no-memory baselines and the register generalised that to the instrument. n=4 cannot establish a baseline rate at all, and the tranche was HAND-SELECTED on relationship-edge and patch-overlap criteria. The instrument's own published no-memory baseline is 26.26% (Lite Related, n=99) and 19.68% (Related, n=376). Under p=0.2626, P(>=3 of 4 resolve) ~ 0.058 -- the tranche was an unlucky and/or selection-biased draw, not a saturated instrument. The saturation verdict is CORRECT for that tranche and VOID for the instrument."
+  },
+  "license": {
+    "license_id": "MIT",
+    "license_source": "RECORD_METADATA",
+    "verified": false,
+    "verdict": "DECLARED-ONLY. NOT LICENSE-FILE VERIFIED. This is weaker than the memorycode.lock.json standard and the owner must accept it explicitly before any redistribution.",
+    "what_was_actually_fetched": [
+      "HuggingFace dataset record metadata at the pinned revision: GET https://huggingface.co/api/datasets/jiayuanz3/SWEContextBench/revision/5bec275a2095768a53ac804ae4fdf90b1723b8af returns cardData.license = \"mit\" and tag \"license:mit\". This is the platform's structured record field, not a shields.io badge and not README prose.",
+      "The dataset card README.md at the pinned revision carries YAML frontmatter `license: mit`; that file is pinned below by sha256 be87da6dbc9c3096b6af26946d18d4f8a0e2fbe7f604aecc95462c6e45a4ca51, so the declaration itself is content-addressed."
+    ],
+    "what_does_not_exist": [
+      "There is NO LICENSE file in the HuggingFace dataset repo. Only 6 files ship (siblings list at the pinned revision); a direct GET of /resolve/<rev>/LICENSE returns HTTP 404.",
+      "There is NO LICENSE file in the code repo github.com/jiayuanz3/SWEContextBench. The recursive git-tree API returns 1095 entries with truncated=false and zero paths matching /licen/i; GET https://api.github.com/repos/jiayuanz3/SWEContextBench/license returns 404.",
+      "Therefore NO MIT licence text was read. No claim is made that the terms are unmodified MIT, because there are no terms to read."
+    ],
+    "code_license": "NO_LICENSE_FILE_OBSERVED (unchanged from the kill manifest; independently re-confirmed 2026-08-01 against the full recursive tree, not just the licence API)",
+    "paper_license": "The arXiv HTML of 2602.08316v3 states \"License: CC BY 4.0\". That governs the PAPER, not the dataset and not the code.",
+    "redistribution_boundary": "No upstream code and no upstream data is copied into this repo. The parquets live only in the out-of-repo private mirror. Local execution only. Do not vendor, redistribute, or re-publish any upstream artifact under the asserted MIT until a real LICENSE file exists upstream.",
+    "recommended_owner_action": "Open an issue on github.com/jiayuanz3/SWEContextBench asking the author to add the LICENSE file the card already declares. Until then this instrument is usable for local measurement and for citation, and is NOT clearable for redistribution."
+  },
+  "attribution": {
+    "dataset": "https://huggingface.co/datasets/jiayuanz3/SWEContextBench",
+    "code": "https://github.com/jiayuanz3/SWEContextBench",
+    "docker": "https://hub.docker.com/r/jiayuanz3/swecontextbench/tags",
+    "paper": "https://arxiv.org/abs/2602.08316",
+    "citation": "SWE Context Bench: A Benchmark for Context Learning in Coding, arXiv:2602.08316 (v3, 06 May 2026)",
+    "declared_license": "MIT (record metadata only -- see license block)"
+  },
+  "dataset": {
+    "revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
+    "last_modified": "2026-05-02T20:07:59.000Z",
+    "created_at": "2026-05-01T23:27:43.000Z",
+    "mirror": "~/.memphant-private/w7-instruments/swe-contextbench",
+    "acquired_on": "2026-08-01",
+    "acquisition_method": "curl of https://huggingface.co/datasets/jiayuanz3/SWEContextBench/resolve/5bec275a2095768a53ac804ae4fdf90b1723b8af/<path>; every byte count and sha256 below computed on disk after download, none copied from a card",
+    "files": {
+      "README.md": {
+        "bytes": 4661,
+        "sha256": "be87da6dbc9c3096b6af26946d18d4f8a0e2fbe7f604aecc95462c6e45a4ca51",
+        "new_in_this_lock": true
+      },
+      "data/SWEContextBench_Experience.parquet": {
+        "bytes": 4027938,
+        "sha256": "384aa65247255b4b95323d039f701b7ed9198570029c503a881f48ba73dfa7b9",
+        "new_in_this_lock": true,
+        "note": "NEVER hashed by the kill manifest -- the full 1,100-task experience pool was not even acquired for tranche 1"
+      },
+      "data/SWEContextBench_Lite_Experience.parquet": {
+        "bytes": 1119540,
+        "sha256": "7a21f37b8bc179c7db5beeb14e88ac538ba283455c776e6b2535bbfb6e3551b4",
+        "matches_kill_manifest": true
+      },
+      "data/SWEContextBench_Related.parquet": {
+        "bytes": 2250460,
+        "sha256": "890aaf0fc82a739e5031232d81e208b82d71798c86d1960725055ffdeaeca2ad",
+        "new_in_this_lock": true,
+        "note": "NEVER hashed by the kill manifest -- the RECOMMENDED evaluation split was not acquired for tranche 1"
+      },
+      "data/SWEContextBench_Related_Lite.parquet": {
+        "bytes": 538469,
+        "sha256": "1930b392f7beb17a0d87c2e79d1eb889af2c5996b23a003386651ba64a68b8f3",
+        "matches_kill_manifest": true
+      },
+      "data/SWEContextBench_Relationship.parquet": {
+        "bytes": 24385,
+        "sha256": "4bcbe81657a58ad3349ae97c8ff836ed154d3e30d98de2207b1bc5309843ce93",
+        "matches_kill_manifest": true
+      }
+    },
+    "hash_verification": {
+      "verified_on": "2026-08-01",
+      "recorded_hashes_rechecked": 3,
+      "recorded_hashes_matching": 3,
+      "recorded_hashes_mismatching": 0,
+      "verdict": "EXACT MATCH on all three files the kill manifest pinned, including byte counts. The pinned revision is intact upstream and the acquisition is reproducible."
+    }
+  },
+  "splits": {
+    "enumeration_note": "This is the COMPLETE file list at the pinned revision. There are five parquets and nothing else. Prior MemPhant artifacts named `SWEContextBench Full`, `Multilingual` and `Lite Past Experience` as untested splits: NO SUCH FILES EXIST. Multilingual content is not a split -- it is mixed INSIDE SWEContextBench_Related.parquet (28 of its 40 repos are absent from the Lite split, spanning Go/Rust/JS/PHP/Java/Ruby/C). `Full` and `Lite Past Experience` are informal names for the Experience pools.",
+    "SWEContextBench_Experience": {
+      "rows": 1100,
+      "role": "context/experience POOL -- memory source, not a scoring target",
+      "repos": 53,
+      "scorable": false
+    },
+    "SWEContextBench_Lite_Experience": {
+      "rows": 300,
+      "role": "context/experience POOL for the Lite split",
+      "repos": 12,
+      "subset_of_Experience": true,
+      "scorable": false
+    },
+    "SWEContextBench_Related": {
+      "rows": 376,
+      "role": "EVALUATION TARGETS -- the full related-task split",
+      "repos": 40,
+      "languages": "9 (paper); non-Python repos include jqlang/jq, sharkdp/bat, axios/axios, gin-gonic/gin, redis/redis, tokio-rs/tokio, laravel/framework, google/gson, projectlombok/lombok, vuejs/core, rubocop/rubocop, apache/lucene",
+      "scorable": true,
+      "overlap_with_Experience_pool": 1
+    },
+    "SWEContextBench_Related_Lite": {
+      "rows": 99,
+      "role": "EVALUATION TARGETS -- Python-only Lite related split",
+      "repos": 12,
+      "subset_of_Related": true,
+      "scorable": true
+    },
+    "SWEContextBench_Relationship": {
+      "rows": 376,
+      "role": "edge table related_instance_id -> experience_instance_id",
+      "distinct_related_ids": 357,
+      "distinct_experience_ids": 229,
+      "related_ids_equal_Related_split": true,
+      "experience_ids_subset_of_Experience": true,
+      "related_tasks_with_two_parents": 19,
+      "max_parents_per_related_task": 2,
+      "scorable": false
+    },
+    "measured_on_disk": "All row counts, repo counts and set relations above were counted from the pinned parquets with pyarrow on 2026-08-01. No figure is taken from the card or the paper except where explicitly attributed.",
+    "trap_recorded": "The 99 Lite related tasks have 72 distinct experience parents, and ONE of those 72 is NOT in SWEContextBench_Lite_Experience (300). Running Lite against only the Lite experience pool silently starves one target of its gold parent. Ingest the parents from the full Experience pool."
+  },
+  "saturation_screen": {
+    "verdict": "NOT SATURATED. Both scorable splits have published no-memory baselines far below ceiling. The instrument is LIVE.",
+    "screened_on": "2026-08-01",
+    "method": "$0. No agent was run. Every figure is a published number from the benchmark's own paper, fetched and independently re-extracted from the arXiv HTML (arxiv.org/html/2602.08316v3, retrieved 2026-08-01, sha256 ff7720e930184f165db2033b25a16978ffcb32bd69ee60c4f4610d2471ef1cef of the fetched HTML).",
+    "dataset_baseline_columns": "NONE. The parquets ship no resolve/baseline column. Saturation is NOT derivable from the data; it had to come from published results.",
+    "per_instance_results_published": false,
+    "per_instance_results_note": "No arm's per-instance resolved-id list is published anywhere. github.com/jiayuanz3/SWEContextBench has a predictions/ directory containing only .DS_Store and no results/ or logs/ directory. CONSEQUENCE: we cannot pair against any published arm. Every MemPhant arm must be paired only against a MemPhant arm we run ourselves on the same instances.",
+    "splits": [
+      {
+        "split": "SWEContextBench_Related",
+        "n": 376,
+        "no_memory_resolve_rate_pct": 19.68,
+        "source": "arXiv:2602.08316v3 Table 3, row `Claude Sonnet 4.5 / Claude Code`, Closed-source Baseline block. Caption does not restate n; n=376 is scoped by Sections 2.2.5 and 3.1.",
+        "reference_ceiling_pct": 23.40,
+        "reference_ceiling_label": "Oracle Summary (gold summary of the true parent) -- the paper's own upper reference, +3.72pp over baseline",
+        "other_baselines_pct": {"GPT-5.3 Codex / Codex": 22.60, "Qwen3.5-plus / Qwen Code": 16.22, "GLM-5 / Qwen Code": 18.35, "MiniMax 2.7 / Claude Code": 19.68},
+        "memory_vendor_arms_published": 0,
+        "can_express_memory_effect_at_our_MDE": true,
+        "headroom_pp": 80.32
+      },
+      {
+        "split": "SWEContextBench_Related_Lite",
+        "n": 99,
+        "no_memory_resolve_rate_pct": 26.26,
+        "source": "arXiv:2602.08316v3 Table 4, row `No-Context (Baseline)`. Caption verbatim: \"on 99 related tasks from SWE-ContextBench Lite\".",
+        "reference_ceiling_pct": 34.34,
+        "reference_ceiling_label": "Oracle Summary Learning, +8.08pp over baseline -- the largest effect anyone has published on this instrument",
+        "memory_vendor_arms_published": 3,
+        "memory_vendor_arms": {"Supermemory": 30.30, "OpenViking": 29.20, "Mem0": 24.24},
+        "other_arms": {"Free Context Learning": 26.26, "Oracle Context Learning": 27.27, "Free Summary Learning": 22.22},
+        "can_express_memory_effect_at_our_MDE": false,
+        "why_not": "n=99 is UNDERPOWERED. Paired exact McNemar MDE at n=99 is 7.93pp (psi=0.08) to 15.93pp (psi=0.30) -- larger than the paper's own best oracle effect (8.08pp) and 2-4x the Supermemory margin (4.04pp). See power block.",
+        "headroom_pp": 73.74
+      },
+      {
+        "split": "SWEContextBench_Experience / _Lite_Experience",
+        "n": "1100 / 300",
+        "no_memory_resolve_rate_pct": null,
+        "source": "NOT APPLICABLE -- these are the memory POOL, not scoring targets. The paper runs them only to generate trajectories.",
+        "can_express_memory_effect_at_our_MDE": false
+      }
+    ],
+    "third_party_status": {
+      "claim_checked": "that 26.26/30.30/24.24 came from a published THIRD-PARTY n=99 run",
+      "finding": "FALSE. All three figures are rows of Table 4 of the benchmark authors' OWN paper. There is no Supermemory blog post, no vendor-run reproduction, and no leaderboard for SWE-ContextBench. supermemory.ai/research does not mention the benchmark. Nine citing papers were fetched and grepped: every mention is a related-work sentence, none reports a run.",
+      "consequence_for_the_sota_claim": "This is BETTER for us, not worse. The comparator rows are author-run under one fixed scaffold, published, and citable, and NOBODY has taken the first-mover slot. It also means our own number will be the second run of this instrument in existence, so the scaffold must match the paper's exactly or the comparison is void.",
+      "do_not_conflate": "contextbench.github.io / arXiv 2602.05892 is a DIFFERENT benchmark (\"ContextBench\", Li et al.). Search engines blend them."
+    }
+  },
+  "power": {
+    "test": "two-sided exact McNemar, alpha=0.05, target power 0.80, computed by scripts/instrument_power.py (sha256 1a2ffbe1949e891889c85b3c783e6fc7f0814bb84498a0d99bac333bed31da58) at HEAD 89cc22c45bac2cda20129c1efa6427f08a2dbf8b",
+    "psi_status": "UNVERIFIED. MemPhant has never run a paired arm on this instrument, so its discordance rate is unknown. Per the script's own rule, no psi is borrowed from another lane. The table below is a GRID over psi, not a point estimate.",
+    "psi_lower_bound": 0.0404,
+    "psi_lower_bound_basis": "psi >= |delta|; the largest published memory-vs-baseline margin on Lite is Supermemory 30.30 - 26.26 = 4.04pp",
+    "psi_upper_bound_under_independence": 0.4065,
+    "mde_pp": {
+      "psi_0.08": {"n_99": 7.93, "n_376": 4.23, "n_1100": 2.46},
+      "psi_0.10": {"n_99": 8.88, "n_376": 4.72, "n_1100": 2.74},
+      "psi_0.15": {"n_99": 11.05, "n_376": 5.74, "n_1100": 3.34},
+      "psi_0.20": {"n_99": 12.83, "n_376": 6.64, "n_1100": 3.85},
+      "psi_0.30": {"n_99": 15.93, "n_376": 8.11, "n_1100": 4.70},
+      "psi_0.05": {"n_99": "UNREACHABLE at any effect size", "n_376": 3.30, "n_1100": 1.94}
+    },
+    "power_at_program_D_MIN_0.07": {"n_99": {"psi_0.10": 0.503, "psi_0.15": 0.348, "psi_0.20": 0.268, "psi_0.30": 0.186}, "n_376": {"psi_0.10": 0.994, "psi_0.15": 0.936, "psi_0.20": 0.843, "psi_0.30": 0.669}},
+    "required_n_for_D_MIN_0.07": {"psi_0.10": 166, "psi_0.15": 260, "psi_0.20": 340, "psi_0.30": 505},
+    "required_n_for_supermemory_margin_0.0404": {"psi_0.10": 510, "psi_0.15": 760, "psi_0.20": 1005, "psi_0.30": 1485},
+    "structural_floor_check_n_d_ge_6": {"n_99": "E[n_d] = 8-30 across psi 0.08-0.30 -- clears the floor in expectation but only just at low psi", "n_376": "E[n_d] = 30-113 -- clears comfortably"},
+    "published_table_4_is_not_a_measurement": "At n=99, detecting the 4.04pp Supermemory-over-baseline margin has power 0.08-0.15. Supermemory 30/99 vs baseline 26/99 is a 4-instance difference. Table 4's memory-framework ranking is NOT a measurement by this program's own structural floor. We must not cite it as one, and we must not try to beat it at n=99 -- a win there would be equally meaningless."
+  },
+  "recommended_tranche": {
+    "split": "SWEContextBench_Related",
+    "n": 376,
+    "selection": "ALL 376 rows. NO SELECTION IS PERFORMED.",
+    "why_no_selection": "Hand-selection produced the saturated n=12 tranche. The census-complete split is the only selection rule that is trivially reproducible from the lock and cannot be gamed: the instance list IS sha256 890aaf0fc82a739e5031232d81e208b82d71798c86d1960725055ffdeaeca2ad.",
+    "why_not_lite_99": "Underpowered (MDE 7.93-15.93pp). A number there could not distinguish us from Supermemory even if we won.",
+    "mde_at_this_n": "4.23pp (psi=0.08) to 8.11pp (psi=0.30); 4.72pp at psi=0.10",
+    "primary_endpoint": "Resolved (%) by the official grader: evaluation.sh -> swebench_memory.harness.run_evaluation, FAIL_TO_PASS and PASS_TO_PASS as shipped.",
+    "secondary_endpoint": "FAIL_TO_PASS test rate. Preregistered as SECONDARY, never as the headline. Rationale: Table 4 shows F2P 19.64 -> 55.95 for Supermemory against a resolve move of only 26.26 -> 30.30, i.e. memory moves targeted tests far more than it moves resolution, because Patch-N/A rises 3.03 -> 10.10 and P2P falls 94.91 -> 90.23. A higher-powered secondary endpoint is worth banking, but the SOTA claim is Resolved.",
+    "arms": [
+      {"name": "no_memory", "description": "identical scaffold, empty memory. MUST be run by us -- no published per-instance list exists to pair against."},
+      {"name": "memphant_memory", "description": "same scaffold, MemPhant recall over the ingested experience pool"}
+    ],
+    "same_haystack_requirement": "Both arms run the SAME 376 instances, the SAME scaffold, the SAME model, the SAME grader invocation, and both retrieve at the SAME pipeline stage. A headline number in this program was already voided for scoring one arm after packing against another's plain ranked top-10.",
+    "scaffold_pin": {
+      "agent": "Claude Code",
+      "model": "Claude Sonnet 4.5",
+      "why": "the paper's Table 3 baseline row is Claude Sonnet 4.5 / Claude Code. Any other scaffold makes our number incomparable to the only published baseline and forfeits the neutrality of the claim. This is a DEVIATION from the program's usual OpenRouter engine and must be authorized as such.",
+      "unverified": "we have never round-tripped this scaffold. Stage 0 exists to prove it."
+    },
+    "decision_rule_preregistered": "Reject H0 iff two-sided exact McNemar p <= 0.05 on the 376 paired outcomes AND n_d >= 6 AND every scored instance carries a mechanism-liveness receipt. If n_d < 6, the artifact says NOT A MEASUREMENT and states the required n. No arm is scored until both arms are complete. No instance is dropped post hoc for any reason other than a grader-infrastructure failure that is logged and applied to BOTH arms.",
+    "sota_claim_shape_if_it_lands": "A public, neutral, reproducible number on a benchmark whose only published memory-framework results (Mem0/OpenViking/Supermemory) sit on a 99-row split that cannot support a measurement. We would be the first powered run of SWE-ContextBench and the first on its 376-row split."
+  },
+  "experience_pool_options": {
+    "option_A_free": {
+      "name": "direct-row ingest",
+      "cost_usd": 0.0,
+      "what": "ingest the 1,100 Experience rows' problem_statement + patch + hints_text + created_at directly as MemPhant episodes",
+      "leakage_check": "SAFE with respect to the TARGET. Experience patches are merged PRs that predate their related target and are shipped as the pool by construction. The target's own patch, test_patch, FAIL_TO_PASS and PASS_TO_PASS must remain hidden from the agent (as in the kill manifest's hidden_target_fields).",
+      "caveat": "This is NOT the paper's pool. The paper's pool is agent trajectories (avg 25,633.7 tokens) or gold summaries (avg 217.1 tokens). Ingesting gold patches is a DIFFERENT and probably STRONGER memory than either. It must be labelled as such and it makes our arm non-identical to Table 3's oracle-summary row. It remains a legitimate memory arm because it uses only past, public, pre-dating artifacts.",
+      "recommended": true
+    },
+    "option_B_faithful": {
+      "name": "trajectory pool, as the paper builds it",
+      "cost_usd_estimate": 737.0,
+      "cost_basis": "1,100 experience tasks x $0.67/task (Table 3 measured Claude Sonnet 4.5 / Claude Code baseline cost)",
+      "recommended": false,
+      "why_not": "it triples the price to buy fidelity to a pool construction we are not claiming to reproduce"
+    }
+  },
+  "staging": [
+    {
+      "stage": 0,
+      "name": "$0 adapter contract round-trip",
+      "cost_usd": 0.0,
+      "model_calls": 0,
+      "must_complete_before": "any paid authorization -- program rule 7: three adapters failed at first contact, two after money was authorized",
+      "acceptance": [
+        "pull 3 jiayuanz3/swecontextbench Docker images for Related instances and record their digests",
+        "run the official grader on the SHIPPED GOLD PATCH for those 3: must report resolved",
+        "run the official grader on an EMPTY patch for those 3: must report unresolved",
+        "ingest the 1,100 Experience rows into an ephemeral MemPhant DB (with_scratch_db) with local fastembed and recall each of the 376 target problem_statements: record recall@k of the true Relationship parent. $0, local only, and it is a real retrieval measurement in its own right.",
+        "drive the pinned scaffold end-to-end on ONE instance with a hard token cap to prove the harness, the memory tool surface and the grader round-trip -- this is the only sub-dollar model call in stage 0 and it is a liveness probe, NOT a measurement"
+      ]
+    },
+    {
+      "stage": 1,
+      "name": "paid psi pilot -- NOT A MEASUREMENT",
+      "cost_usd_estimate": 40.0,
+      "cost_basis": "30 instances x 2 arms x $0.67/task (Table 3 measured)",
+      "n": 30,
+      "purpose": "measure psi and prove mechanism liveness on both arms. It CANNOT test the hypothesis: at n=30 the MDE exceeds 14pp at any plausible psi.",
+      "artifact_must_say": "NOT A MEASUREMENT, plus the required n implied by the observed psi",
+      "selection": "preregistered, seeded, committed in this lock BEFORE any scoring -- see pilot_selection"
+    },
+    {
+      "stage": 2,
+      "name": "the measurement",
+      "cost_usd_estimate": 504.0,
+      "cost_basis": "376 instances x 2 arms x $0.67/task (Table 3 measured Claude Sonnet 4.5 / Claude Code cost). Table 4's Lite costs ranged $0.53-$0.98/task, so a $400-$740 band is the honest spread. The full Related split includes non-Python repos absent from the Lite cost basis, so the upper end is the safer plan.",
+      "n": 376,
+      "authorization": "NOT AUTHORIZED. Requires stage 0 green and stage 1 psi.",
+      "docker_runs": 752
+    }
+  ],
+  "pilot_selection": {
+    "purpose": "stage 1 only. Preregistered and committed BEFORE any scoring, per program rule 5.",
+    "population": "the 376 instance_ids of SWEContextBench_Related at the pinned revision",
+    "procedure": "ids = sorted(unique instance_id); random.Random(20260801).sample(ids, 30); sorted()",
+    "seed": 20260801,
+    "n": 30,
+    "list_sha256": "00b986164ea604c19d503ed74213df1b63d2fc6899034c4b33c1158a6dd17e7d",
+    "list_sha256_basis": "sha256 of json.dumps(<the list below>) with default separators",
+    "instance_ids": [
+      "astropy__astropy-7167",
+      "caddyserver__caddy-5770",
+      "django__django-1891",
+      "django__django-27995",
+      "django__django-28916",
+      "django__django-29124",
+      "django__django-30399",
+      "django__django-31051",
+      "django__django-33018",
+      "django__django-33216",
+      "django__django-33829",
+      "django__django-34176",
+      "gohugoio__hugo-12449",
+      "google__gson-1290",
+      "hashicorp__terraform-35573",
+      "matplotlib__matplotlib-15087",
+      "matplotlib__matplotlib-24818",
+      "mwaskom__seaborn-3091",
+      "pydata__xarray-3891",
+      "sharkdp__bat-1630",
+      "sharkdp__bat-1846",
+      "sharkdp__bat-915",
+      "sphinx-doc__sphinx-11620",
+      "sphinx-doc__sphinx-8052",
+      "sympy__sympy-11286",
+      "sympy__sympy-19235",
+      "sympy__sympy-5786",
+      "sympy__sympy-7229",
+      "sympy__sympy-9123",
+      "sympy__sympy-9384"
+    ]
+  },
+  "official_code": {
+    "repository": "https://github.com/jiayuanz3/SWEContextBench",
+    "commit": "31bb04155f52b184bf31b220e3cff0607ac9c953",
+    "commit_provenance": "carried forward from swe_contextbench.kill.n12.json (verified there on 2026-07-24); per-file sha256 for README.md, evaluation.sh and swebench_memory/harness/{combine_instances,run_evaluation}.py are recorded in that manifest and are NOT re-asserted here",
+    "tree_observed_2026_08_01": {"entries": 1095, "truncated": false, "has_results_dir": false, "has_logs_dir": false, "predictions_dir_contents": [".DS_Store"], "has_license": false},
+    "grader": "evaluation.sh lite -> swebench_memory.harness.run_evaluation",
+    "redistribution_boundary": "No upstream code is copied into MemPhant; local execution only pending a real upstream LICENSE."
+  },
+  "lineage": {
+    "recorded_on": "2026-08-01",
+    "git_head": "89cc22c45bac2cda20129c1efa6427f08a2dbf8b",
+    "branch": "w1-swecb",
+    "dirty": false,
+    "dirty_note": "clean at the moment of acquisition and hashing; this lock is the first file added on the branch",
+    "scripts_sha256": {
+      "scripts/instrument_power.py": "1a2ffbe1949e891889c85b3c783e6fc7f0814bb84498a0d99bac333bed31da58",
+      "scripts/check_evidence_contract.py": "cfd102dd3d8813b717f298055caab0be49ab728c544d57316691aa5c12be94d5"
+    },
+    "no_binary_sha256": "no MemPhant binary was built or run for this lock; it contains no MemPhant-produced measurement",
+    "model_calls_executed": 0,
+    "settled_cost_usd": 0.0
+  },
+  "primary_sources": [
+    "https://huggingface.co/datasets/jiayuanz3/SWEContextBench/tree/5bec275a2095768a53ac804ae4fdf90b1723b8af",
+    "https://huggingface.co/api/datasets/jiayuanz3/SWEContextBench/revision/5bec275a2095768a53ac804ae4fdf90b1723b8af",
+    "https://arxiv.org/abs/2602.08316",
+    "https://arxiv.org/html/2602.08316v3",
+    "https://github.com/jiayuanz3/SWEContextBench",
+    "https://hub.docker.com/r/jiayuanz3/swecontextbench/tags"
+  ],
+  "schema_version": 1
+}

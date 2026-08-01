@@ -307,29 +307,50 @@
     {
       "id": "repo-code-swe-contextbench",
       "memory_type": "repo/code",
-      "instrument": "SWE-ContextBench tranche 1",
+      "instrument": "SWE-ContextBench",
       "license": {
-        "claim": "unverified",
+        "claim": "MIT",
         "verified": false,
-        "evidence": "no LICENSE blob pinned"
+        "license_source": "RECORD_METADATA",
+        "evidence": "HF record metadata at the pinned revision (cardData.license=\"mit\", tag license:mit) plus card README.md YAML frontmatter pinned at sha256 be87da6dbc9c3096b6af26946d18d4f8a0e2fbe7f604aecc95462c6e45a4ca51. NO LICENSE FILE EXISTS: HF /resolve/<rev>/LICENSE 404s and the GitHub recursive tree (1095 entries, truncated=false) has zero /licen/i paths. Declared-only; NOT redistribution-clear.",
+        "amended": "2026-08-01"
       },
       "pinned": {
-        "pinned": true
+        "pinned": true,
+        "dataset_revision": "5bec275a2095768a53ac804ae4fdf90b1723b8af",
+        "lock": "benchmarks/manifests/swe_contextbench.lock.json",
+        "all_five_parquets_hashed_on_disk": true
       },
       "n": {
-        "targets": 12,
-        "baselines_resolved": 3,
-        "baselines_attempted": 4
+        "tranche_1_targets": 12,
+        "tranche_1_baselines_resolved": 3,
+        "tranche_1_baselines_attempted": 4,
+        "scorable_split_related": 376,
+        "scorable_split_related_lite": 99,
+        "experience_pool": 1100
       },
       "provenance_class": "upstream",
       "leakage": "not applicable",
       "ever_run": true,
-      "last_result": "3/4 no-memory baselines resolve; maximum achievable gain 1 against a required 2",
-      "mde_at_80_power": "cannot express the effect at any n",
-      "cost_per_run": "sunk",
-      "verdict": "BROKEN (baseline-saturated)",
+      "ever_validly_run": false,
+      "last_result": "TRANCHE 1 ONLY: 3/4 no-memory baselines resolved in a hand-selected n=4 draw. No paired run on any census-complete split has ever been attempted.",
+      "published_no_memory_baseline": {
+        "Related_n376_pct": 19.68,
+        "Related_Lite_n99_pct": 26.26,
+        "source": "arXiv:2602.08316v3 Table 3 (Claude Sonnet 4.5 / Claude Code) and Table 4 (No-Context), fetched and re-extracted 2026-08-01",
+        "screened_at_cost_usd": 0.0
+      },
+      "mde_at_80_power": "Related n=376: 4.23pp (psi=0.08) to 8.11pp (psi=0.30). Related Lite n=99: 7.93-15.93pp, REFUSED as underpowered. psi is UNVERIFIED -- no paired run exists.",
+      "cost_per_run": "$0 to acquire and screen (done). ~$545 to a powered neutral number: $0 stage-0 contract round-trip, ~$40 psi pilot (n=30), ~$504 measurement (n=376 x 2 arms x $0.67/task, Table 3 measured cost). NOT AUTHORIZED.",
+      "verdict": "LIVE, NEVER VALIDLY RUN (was: BROKEN (baseline-saturated) -- that verdict is CORRECT for tranche 1 and VOID for the instrument)",
       "evidence": [
-        "Arithmetically incapable of expressing the required effect. Terminal for this tranche."
+        "The saturation verdict was generalised from a HAND-SELECTED n=4 baseline draw. n=4 cannot establish a baseline rate; under the instrument's published p=0.2626, P(>=3 of 4 resolve) ~ 0.058.",
+        "Tranche 1 never even acquired the recommended split: swe_contextbench.kill.n12.json hashes 3 of 5 parquets and omits both SWEContextBench_Related (376 targets) and the full 1,100-row Experience pool.",
+        "SATURATION SCREEN 2026-08-01, $0, no agent run: no-memory resolves 19.68% on Related (n=376) and 26.26% on Related Lite (n=99). 80pp of headroom. Not saturated.",
+        "NO PER-INSTANCE RESULTS EXIST for any published arm (upstream predictions/ contains only .DS_Store; no results/ or logs/). We cannot pair against a published arm; both arms must be ours.",
+        "The published Table 4 memory-framework ranking (Supermemory 30.30 vs no-context 26.26 at n=99) has power 0.08-0.15 for its own margin and required n 510-1485. It is NOT a measurement and must not be cited as one, nor targeted at n=99.",
+        "The 26.26/30.30/24.24 figures are the benchmark authors' own Table 4, not a third-party run. No leaderboard and no vendor reproduction of this benchmark exists -- the first-mover slot is open.",
+        "RECOMMENDED TRANCHE: SWEContextBench_Related, all 376 rows, no selection (the census-complete split is the only trivially reproducible selection rule). See docs/build-log/2026-08-01-swe-contextbench-retranche.md."
       ]
     },
     {
