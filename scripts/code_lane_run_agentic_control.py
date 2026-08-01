@@ -185,7 +185,22 @@ class AttemptTools:
         else:
             result = f"ERROR: unknown tool {name!r}"
         self.calls.append(
-            {"tool": name, "arguments": arguments, "result_chars": len(result)}
+            {
+                "tool": name,
+                "arguments": arguments,
+                "result_chars": len(result),
+                # Which event numbers this call put in front of the agent. Kept
+                # so a miss can be attributed to search vs ranking after the
+                # fact; it is never shown to the agent.
+                "surfaced_sequences": sorted(
+                    {
+                        int(match.group(1) or match.group(2))
+                        for match in re.finditer(
+                            r"^event (\d+)|^(\d+)\t", result, re.M
+                        )
+                    }
+                ),
+            }
         )
         return result
 
@@ -465,6 +480,19 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
 
     # --- mechanism liveness, from the agent's OWN trace (A.5) ---------------
     executed = [call for call in tools.calls if call["tool"] != "select"]
+    # Post-hoc only. The gold sequence is read AFTER the episode ends and never
+    # enters the agent's context; it separates "the search never surfaced the
+    # evidence" from "the search surfaced it and the agent ranked it away",
+    # which are different failures with different fixes.
+    gold_sequence = golden["provenance"][0].get("event_sequence")
+    # `list_events` surfaces every sequence by construction, so counting it
+    # would make this metric trivially true and useless. Only a search result
+    # counts as having put the evidence in front of the agent.
+    gold_surfaced = any(
+        call["tool"] in {"grep", "read_event"}
+        and gold_sequence in (call.get("surfaced_sequences") or [])
+        for call in tools.calls
+    )
     resolved = [
         sequence for sequence in (selection or []) if sequence in tools.by_sequence
     ]
@@ -482,6 +510,13 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
         "resolved_sequences": resolved,
         "unresolved_sequences": unresolved,
         "completion_tokens": completion_tokens,
+        "gold_event_sequence": gold_sequence,
+        "gold_surfaced_by_a_tool_call": gold_surfaced,
+        "gold_rank_in_selection": (
+            (selection or []).index(gold_sequence) + 1
+            if gold_sequence in (selection or [])
+            else None
+        ),
         "error": error,
         "bodies": [tools.by_sequence[sequence]["text"] for sequence in resolved],
     }
@@ -639,6 +674,25 @@ def main() -> int:
             ),
             "mean_tool_calls": round(
                 sum(row["tool_calls"] for row in rows) / max(len(rows), 1), 3
+            ),
+        },
+        "miss_attribution": {
+            "gold_surfaced_by_a_tool_call": sum(
+                1 for row in rows if row.get("gold_surfaced_by_a_tool_call")
+            ),
+            "gold_selected": sum(
+                1 for row in rows if row.get("gold_rank_in_selection")
+            ),
+            "surfaced_but_not_selected": sum(
+                1
+                for row in rows
+                if row.get("gold_surfaced_by_a_tool_call")
+                and not row.get("gold_rank_in_selection")
+            ),
+            "note": (
+                "Post-hoc, from the transcript. Separates a search failure "
+                "(never surfaced) from a ranking failure (surfaced, dropped). "
+                "The gold sequence never entered the agent's context."
             ),
         },
         "usage": {
