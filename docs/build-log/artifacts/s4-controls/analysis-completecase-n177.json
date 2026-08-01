@@ -90,13 +90,11 @@
     }
   },
   "lineage": {
-    "git_head": "b143755071eb3e4c1923dffafdfc67294cd4dd3a",
+    "git_head": "2fff3261f3cde6176ab26106825b55a52b4baa2d",
     "git_branch": "s4-controls",
     "git_dirty": true,
     "git_dirty_paths": [
-      "docs/build-log/artifacts/s4-controls/analysis.json",
-      "scripts/s4_controls_common.py",
-      "scripts/s4_controls_compare.py"
+      "docs/build-log/artifacts/s4-controls/analysis.json"
     ],
     "input_sha256": {
       "treatment_provenance": "c7f3d3118c95627e461c32b812427f22bb9f4558ad1aea6e8485463467a8003b",

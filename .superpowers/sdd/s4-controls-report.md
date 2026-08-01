@@ -68,8 +68,9 @@ one from the program's current claim.
 Handled honestly rather than smoothed: three provider content-filter refusals
 scored as misses for the control (with an n=177 complete-case sensitivity,
 −38.42pp, same verdict); a 2-question dead zone in the bank verified symmetric
-across arms; an ONCU probe at 2/20 whose bias inflates the control; and three
-preregistration deviations listed in Part B §B.8.
+across arms; an ONCU probe at 2/20 whose bias inflates the control; and four
+preregistration deviations listed in Part B §B.8, including a liveness gate of
+mine that was wrong and is corrected there rather than quietly restated.
 
 Full numbers, transcripts and lineage: `docs/build-log/2026-08-01-agentic-search-controls.md`
 Part B and `docs/build-log/artifacts/s4-controls/analysis.json`.
@@ -107,8 +108,10 @@ which raises if the gold answer appears in the query.
 
 **Mechanism liveness from each arm's own trace, never from the flag.** T must
 show both `lexical` and `vector` channels present in its per-candidate
-`channel_table`; C2 must produce 384-dim, ≥99%-distinct vectors; C1 must show an
-executed tool call and a selection that resolves to real event sequences.
+`channel_table`; C1 must show an executed tool call and a selection that
+resolves to real event sequences. C2's gate was written wrong and is corrected
+in §B.9 — it asserted a distinct-vector share that the corpus's own duplication
+capped below the bar, so it destroyed the run it existed to certify.
 
 **Power computed, not inherited.** The instrument register lists Track R at
 6.73pt; that ψ belongs to the **original** bank. The paraphrase bank's realized
