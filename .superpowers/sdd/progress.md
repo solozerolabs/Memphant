@@ -1890,9 +1890,17 @@ that inflates the **control**. (4) Three preregistration deviations are listed i
 Part B §B.8, including that §A.8's "free arm first" ordering was **not** followed
 — and why, on inspection, it could never have saved money.
 
-**Arm 2 (no-memory dense RAG, $0)** was still embedding at ~3 docs/s on a host at
-load ~150 when this was written. It tests a weaker claim and changes no verdict;
-its artifact will be appended.
+**Arm 2 (no-memory dense RAG, $0) did NOT land, and no number is reported for it.**
+Its own preregistered liveness gate killed it after ~90 minutes of embedding --
+and the gate was wrong: it asserted distinct_vectors/N >= 0.99, but 1,330 of the
+21,629 events are byte-identical to another event, so **0.9385 was the ceiling
+before a single vector was computed**. Fixed to ask the question it was for
+(distinct vectors / distinct TEXTS >= 0.95, measured 0.9594 -- stricter on that
+axis than the original) and, more importantly, **vectors are now checkpointed
+before they are gated**: ninety minutes of compute was judged before it was
+saved. Recorded as deviation 4. The re-run was ~2h from finishing on a host at
+load 100-165; C2 is an open cheap follow-up and no C2 value changes the T-vs-C1
+verdict or the $545 gate.
 
 Report: `.superpowers/sdd/s4-controls-report.md`. Build log:
 `docs/build-log/2026-08-01-agentic-search-controls.md`. Artifacts:

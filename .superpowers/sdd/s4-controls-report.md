@@ -74,8 +74,13 @@ preregistration deviations listed in Part B §B.8.
 Full numbers, transcripts and lineage: `docs/build-log/2026-08-01-agentic-search-controls.md`
 Part B and `docs/build-log/artifacts/s4-controls/analysis.json`.
 
-**Arm 2 (dense RAG, $0)** was still embedding when this was written; it tests a
-weaker claim and changes no verdict above.
+**Arm 2 (dense RAG, $0) did not land** and no number is reported for it. Its own
+preregistered liveness gate killed it after ~90 minutes of embedding, and the
+gate was wrong: it measured corpus duplication (1,330 byte-identical events
+capped it at 0.9385) rather than embedder health. Fixed to be stricter on the
+property it was written to protect, and vectors are now checkpointed before they
+are gated. See Part B §B.9 and deviation 4. It tests a weaker claim and no C2
+value changes the verdict above.
 
 **Total spend: $25.98** against an $80 ceiling (ONCU $0.0512 + agentic $25.93).
 Figures are pinned-price × reported tokens — an upper bound, not settled cost;

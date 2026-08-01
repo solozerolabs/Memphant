@@ -426,16 +426,57 @@ after the pilot showed prose turns. Both are outcome-independent, carry no task
 information, and apply identically to any row that hits them. Neither rescued
 the three refusals.
 
-## B.9 Arm 2 (no-memory dense RAG) — status
+**4. §A.5's dense-arm liveness threshold was changed after it fired** — from
+"≥99% distinct vectors in the haystack" to "distinct vectors ≥ 95% of distinct
+texts". §B.9 gives the arithmetic showing the original could not have passed at
+any embedder quality, because the corpus's own duplication capped it at 0.9385.
+A gate being wrong is not a licence to quietly restate it, so it is recorded
+here as a deviation; the replacement is **stricter** on the property the gate
+was written to protect, and it affects **no arm that reported a number** — C2
+did not land.
 
-Still running at the time this section was written: `bge-small-en-v1.5` over
-21,629 raw events, in-process, at ~3 documents/second on a host at load ~150.
-It is $0 and its result changes no verdict above — C1 already answers the
-question the lane was opened for. Its artifact and contrast will be appended to
-`docs/build-log/artifacts/s4-controls/` when it lands. Reporting the lane's
-answer without it is not a shortcut: C2 tests a different and weaker claim
-("the substrate beats a 60-line script"), and the arm that tests the claim the
-program actually rests on has reported.
+## B.9 Arm 2 (no-memory dense RAG) — NOT LANDED, and the reason is worth more than the arm
+
+**Status: did not complete. No number is reported for C2, and none is guessed.**
+
+The arm is `bge-small-en-v1.5` over the same 21,629 attempt-scoped raw events,
+in-process. On this host — six sibling lanes, load 100–165 for the whole window —
+it ran at **3–8 documents/second**, a ~90-minute pass.
+
+**Then its own liveness gate killed it after that 90 minutes, and the gate was
+wrong.** §A.5 preregistered *"≥99% distinct vectors in the haystack (a constant
+embedder would score as a neutral one)"*. It tripped at **0.9004**. But that
+ratio measures how duplicated the **corpus** is, not whether the embedder
+discriminates: **1,330 of the 21,629 events are byte-identical to another
+event**, so **0.9385 was the ceiling before a single vector was computed.** The
+gate could not have passed at any embedder quality. It destroyed the run it
+existed to certify.
+
+Two things were fixed, and only one of them is the interesting one:
+
+1. The gate now asks the question it was for — `distinct_vectors /
+   distinct_TEXTS ≥ 0.95`, plus a constant-embedder check and a
+   distinct-query-vector check. **On the axis it was meant to test this is
+   stricter than the original**, which is the test of whether a gate change is a
+   correction or a convenience. The measured value was 19,475 distinct vectors
+   over 20,299 distinct texts = **0.9594**: the 824 collisions are pairs that
+   differ only past `bge-small`'s 512-token truncation, which is honest
+   behaviour of the arm and not degeneracy.
+2. **Vectors are now checkpointed to an npz keyed by corpus+golden sha256 before
+   anything is asserted about them.** This is the real lesson. Ninety minutes of
+   compute was *judged before it was saved*, so a one-line threshold error cost
+   the whole arm. Any expensive stage should be durable before it is gated.
+
+The re-run was relaunched with both fixes and was still ~2 hours from finishing
+when this lane reported, so **C2 is left as an open, cheap follow-up**: the
+vector cache means the second attempt pays the embedding cost once, and
+`scripts/s4_controls_run.sh compare` folds it in without touching any other arm.
+
+**Reporting without it is not a shortcut.** C2 tests a weaker claim — *"the
+substrate beats a 60-line script"* — and the arm that tests the claim the
+program actually rests on has reported at n=180 with p=1.2e−19. No C2 value in
+[0, 180] changes the T-vs-C1 verdict or the $545 gate, because C2 is not in
+that contrast.
 
 ## B.10 Spend ledger
 
