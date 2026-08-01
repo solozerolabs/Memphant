@@ -1,0 +1,2 @@
+arm=base start=2026-08-01T05:49:17Z cpu_count=12
+22:49  up  2:05, 1 user, load averages: 21.83 38.42 59.11
