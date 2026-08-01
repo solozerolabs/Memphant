@@ -24,6 +24,8 @@
     "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_conf.json",
     "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_dev.json",
     "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_full.json",
+    "docs/build-log/artifacts/2026-08-01-key-production/analysis-k-vs-aprime.json",
+    "docs/build-log/artifacts/2026-08-01-key-production/analysis-p-vs-aprime.json",
     "docs/build-log/artifacts/2026-08-01-key-production/recovery.json",
     "docs/build-log/artifacts/null-review-ledger.json",
     "docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json",
