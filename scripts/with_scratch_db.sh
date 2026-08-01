@@ -55,6 +55,12 @@ SCRATCH_URL="$PREFIX/$NAME"
 # overlap for all but their first ~10s.
 LOCK_DIR="${TMPDIR:-/tmp}/memphant-scratch-bootstrap-$(printf '%s' "$PREFIX" | shasum -a 256 | cut -c1-16).lock"
 LOCK_HELD=""
+#
+# THE WAIT CAP IS A DEADLINE, NOT A BAR. It was 300s hardcoded, chosen when two
+# arms contended. Four concurrent arms on a loaded machine queue longer than
+# that, and a bench that dies at the queue rather than at the work is a wasted
+# hour. Overridable, default unchanged.
+LOCK_WAIT_SECONDS="${MEMPHANT_SCRATCH_LOCK_WAIT_SECONDS:-300}"
 acquire_bootstrap_lock() {
   local waited=0
   until mkdir "$LOCK_DIR" 2>/dev/null; do
@@ -63,7 +69,7 @@ acquire_bootstrap_lock() {
       rm -rf "$LOCK_DIR"
       continue
     fi
-    if [ "$waited" -ge 300 ]; then
+    if [ "$waited" -ge "$LOCK_WAIT_SECONDS" ]; then
       echo "with_scratch_db.sh: timed out waiting for $LOCK_DIR" >&2
       exit 3
     fi
@@ -92,6 +98,16 @@ psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "create database \"$NAME\"" >/dev/nul
 # warnings/errors still surface.
 PGOPTIONS='-c client-min-messages=warning' \
   python3 "$ROOT/scripts/apply_memphant_migrations.py" --database-url "$SCRATCH_URL" >/dev/null
+
+# RELEASE HERE, NOT ON EXIT. Bootstrap is over: the database exists and is
+# migrated, and every cluster-wide `create role` the lock exists to serialize
+# has run. Until this line the lock was only ever dropped by the EXIT trap,
+# which meant the *whole command* ran inside it -- so two concurrent benches
+# were fully serialized and the second died at the wait cap without ever
+# touching Postgres, exactly the failure the block above says the lock does not
+# cause. The comment was right; the code did not implement it. `cleanup` still
+# calls this, and it is idempotent, so a crash before this point is unchanged.
+release_bootstrap_lock
 
 export "$ENV_VAR=$SCRATCH_URL"
 "$@"
