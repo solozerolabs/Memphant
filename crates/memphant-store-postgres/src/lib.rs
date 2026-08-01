@@ -86,7 +86,6 @@ const REQUIRED_TABLES: &[&str] = &[
     "blob_ledger",
     "belief_observation",
     "review_event",
-    "scope_block",
     "mutation_ledger",
     "schema_migrations",
 ];

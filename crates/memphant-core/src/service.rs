@@ -166,15 +166,12 @@ mod canonical_projection_store_tests {
             (MemoryKind::Episodic, UnitState::Active, "episodic-active"),
             (MemoryKind::Belief, UnitState::Active, "belief-active"),
             (MemoryKind::Resource, UnitState::Active, "resource-active"),
-            (MemoryKind::Semantic, UnitState::Captured, "captured"),
-            (MemoryKind::Semantic, UnitState::Extracted, "extracted"),
             (MemoryKind::Semantic, UnitState::Candidate, "candidate"),
             (MemoryKind::Semantic, UnitState::Superseded, "superseded"),
             (MemoryKind::Semantic, UnitState::Invalidated, "invalidated"),
             (MemoryKind::Semantic, UnitState::Deleted, "deleted"),
             (MemoryKind::Semantic, UnitState::Quarantined, "quarantined"),
             (MemoryKind::Semantic, UnitState::Expired, "expired"),
-            (MemoryKind::Semantic, UnitState::Retired, "retired"),
         ] {
             store
                 .stage_memory_unit(&mut tx, unit(&context, kind, state, body))

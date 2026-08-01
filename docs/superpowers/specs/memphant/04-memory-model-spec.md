@@ -99,9 +99,9 @@ Invariant #1 keeps raw episodes as *recoverable* ground truth — but unbounded 
 - Cold-tiering **never** drops the raw episode or its citation path; it only drops the *Postgres-resident derived index* whose cost is the problem. This is why invariant #1 reads "recoverable," not "always hot."
 - A provider sunset (an embedding model deprecated mid-corpus) is survivable precisely because re-embedding runs offline from the raw episode (`14` §10) — a direct payoff of keeping ground truth recoverable.
 
-`episode.retention_tier` is **frozen now**. Storage-growth-per-tenant is a first-class SLI with an alarm threshold (`22` §SLIs).
+`episode.retention_tier` was frozen here and **deleted 2026-07-31** (see below). Storage-growth-per-tenant is a first-class SLI with an alarm threshold (`22` §SLIs).
 
-> **UNBUILT (verified 2026-07-30).** This section froze the vocabulary and named the job; it never said who writes the column or on what predicate. As a result `episode.retention_tier` (`20260703_001_wsa_bootstrap.sql:278`) has **0 readers and 0 writers** in `crates/` and every episode is `'hot'` forever, and `tier_episode` **does not exist in code**. The transition table, writers, invariants, and conformance tests are in **§13.3**; the demotion-vs-deletion distinction is **§13.4**.
+> **DELETED (2026-07-31, `20260801_008_drop_retention_tier.sql`).** Previously recorded as UNBUILT: the section froze the vocabulary and named the job but never said who writes the column or on what predicate, so `episode.retention_tier` reached production with **0 readers and 0 writers** and a partial index that matched zero rows for its entire life. Both are now dropped, and §13.3/§13.4 are **withdrawn** (one-plan §4). Do not re-add scored tiering: eviction-under-budget is the measured week-9 failure mode (arXiv:2607.21962) and no OSS peer ships it. If demotion returns it is a recall-time predicate needing no schema.
 
 ## 3. Semantic Memory
 
@@ -319,7 +319,7 @@ episode (
   source_trust    text NOT NULL,              -- see trust_event vocabulary
   dedup_key       text NOT NULL,              -- hash(subject + source_kind + normalized_content)
   observation_count int NOT NULL DEFAULT 1,
-  retention_tier  text NOT NULL DEFAULT 'hot' CHECK (retention_tier IN ('hot','warm','cold')),
+  -- retention_tier: DELETED 2026-07-31 (20260801_008). 0 readers, 0 writers.
   blob_hash       text,                        -- content-addressed; raw lives in object store
   body            text,                        -- inline only while small/hot
   first_observed_at timestamptz NOT NULL,
@@ -331,7 +331,7 @@ episode (
   PRIMARY KEY (tenant_id, id),                 -- tenant_id in PK: hash-partition key (§7.0)
   UNIQUE (tenant_id, scope_id, dedup_key),
   INDEX (tenant_id, scope_id, source_kind, last_observed_at),
-  INDEX (tenant_id, retention_tier) WHERE retention_tier <> 'hot'
+  -- partial retention_tier index: DELETED 2026-07-31; it matched zero rows always
 ) PARTITION BY HASH (tenant_id)
 
 -- Derived knowledge of all five kinds. Lifecycle + bitemporal + trust.
@@ -759,7 +759,7 @@ Every row was re-verified against the working tree at the time of writing.
 | episodic = decay-to-cold | **absent.** Decay is a recall-time score multiplier only: `candidate.fused_score *= candidate.decay.retrievability` (`lib.rs:7364`) plus a composite term (`lib.rs:9290`). It reorders; **nothing changes state** |
 | procedural = evidence-gated | **read-gate only.** `UnitState::Validated` is required at `lib.rs:8362` (and in the recall-eligibility predicates `lib.rs:3284-3285`, `store.rs:3724`, `:3765`); **no write path in `crates/*/src/` ever transitions a unit into `Validated`** — every non-test occurrence is a read or a serialization arm |
 | preference = chain-head → hot | **absent and inexpressible.** No `Preference` variant (`crates/memphant-types/src/lib.rs:968`); no `chain_head` anywhere in the tree |
-| hot plane | **absent.** `episode.retention_tier` (`hot\|warm\|cold`, `memphant_migrations/versions/20260703_001_wsa_bootstrap.sql:278`, partial index `:826`) has **0 readers and 0 writers** in `crates/` (`grep -rn retention_tier crates --include='*.rs'` → 0 hits). Every episode is `'hot'` forever. The `tier_episode` job named in §2.4, `14` §3, and `02` §6 **does not exist in code** |
+| hot plane | **DELETED 2026-07-31** (`20260801_008`). Was: **absent.** `episode.retention_tier` (`hot\|warm\|cold`, `memphant_migrations/versions/20260703_001_wsa_bootstrap.sql:278`, partial index `:826`) has **0 readers and 0 writers** in `crates/` (`grep -rn retention_tier crates --include='*.rs'` → 0 hits). Every episode is `'hot'` forever. The `tier_episode` job named in §2.4, `14` §3, and `02` §6 **does not exist in code** |
 | cold plane / demotion | **absent.** `demote`/`demotion`/`cold` appear in **no** Rust file under `crates/`. What exists is the inverse — hard `forget` with tombstones (`crates/memphant-store-postgres/src/store.rs:1325`, `:1628`) |
 | `MemoryKind` | **`Episodic \| Semantic \| Procedural \| Belief \| Resource \| Preference`** (`crates/memphant-types/src/lib.rs:968`, `ALL: [Self; 6]`) since 2026-07-31. No `Knowledge` (§13.2c) and no working-state kind. **Row kept, not deleted:** the five-kind reading above is what §13.0 verified on 2026-07-30, and the delta is the point |
 

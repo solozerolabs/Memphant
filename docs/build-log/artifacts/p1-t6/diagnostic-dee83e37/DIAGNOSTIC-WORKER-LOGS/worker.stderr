@@ -1,2 +1,0 @@
-memphant-worker: store=postgres
-memphant-worker: job 019f7fa7-4d9a-7ef1-99d0-b7b0d44a8f52 failed (attempt 1): conflict: contextual chunk span does not match its source body

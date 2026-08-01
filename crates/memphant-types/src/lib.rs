@@ -1021,8 +1021,11 @@ impl MemoryKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UnitState {
-    Captured,
-    Extracted,
+    // `Captured`, `Extracted` and `Retired` were removed 2026-07-31
+    // (`20260801_009_drop_dead_schema.sql`): no write path in the tree ever
+    // produced them. They existed only in test fixtures and in read-path match
+    // arms that could not fire. The `memory_unit.state` CHECK constraint was
+    // narrowed to exactly this set in the same commit; keep the two in step.
     Candidate,
     Active,
     Superseded,
@@ -1031,7 +1034,6 @@ pub enum UnitState {
     Quarantined,
     Expired,
     Validated,
-    Retired,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

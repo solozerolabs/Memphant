@@ -6778,37 +6778,6 @@ pub async fn recall_with_pool<S>(
 where
     S: MemoryStore,
 {
-    recall_with_pool_and_selection(
-        store,
-        request,
-        vector_query,
-        clock,
-        recall_pool_depth,
-        pack_levers,
-        lexical_scorer,
-        temporal_grounding_enabled,
-        cross_reranker,
-        CrossRerankCandidateSelection::FusedHead,
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn recall_with_pool_and_selection<S>(
-    store: &S,
-    request: RecallRequest,
-    vector_query: Option<VectorQuery<'_>>,
-    clock: &dyn Clock,
-    recall_pool_depth: usize,
-    pack_levers: PackLevers,
-    lexical_scorer: LexicalScorer,
-    temporal_grounding_enabled: bool,
-    cross_reranker: Option<&dyn CrossReranker>,
-    cross_rerank_candidate_selection: CrossRerankCandidateSelection,
-) -> Result<RecallResponse, CoreError>
-where
-    S: MemoryStore,
-{
     recall_with_pool_and_selection_impl(
         store,
         request,
@@ -6819,7 +6788,7 @@ where
         lexical_scorer,
         temporal_grounding_enabled,
         cross_reranker,
-        cross_rerank_candidate_selection,
+        CrossRerankCandidateSelection::FusedHead,
         CrossRerankGranularity::default(),
         None,
         None,
@@ -8421,9 +8390,7 @@ fn trace_filter_drops(
                     UnitState::Deleted => Some(RecallDropReason::Deleted),
                     UnitState::Invalidated => Some(RecallDropReason::Invalidated),
                     UnitState::Superseded if unit.transaction_to.is_some() => None,
-                    UnitState::Superseded | UnitState::Expired | UnitState::Retired => {
-                        Some(RecallDropReason::Stale)
-                    }
+                    UnitState::Superseded | UnitState::Expired => Some(RecallDropReason::Stale),
                     UnitState::Quarantined => Some(RecallDropReason::Trust),
                     UnitState::Candidate
                         if unit.kind == MemoryKind::Belief && !request.include_beliefs =>
@@ -8485,7 +8452,6 @@ fn procedure_validation_state(unit: &StoredMemoryUnit) -> &'static str {
         UnitState::Validated => "validated",
         UnitState::Candidate => "candidate",
         UnitState::Active => "active",
-        UnitState::Retired => "retired",
         _ => "not_validated",
     }
 }
@@ -8834,7 +8800,6 @@ struct PackCtx<'a> {
     /// set.
     live_candidate_ids: HashSet<UnitId>,
     /// Exact structured goal promoted beside an authoritative quantity rollup.
-    goal_companion_id: Option<UnitId>,
     /// Rung-7 per-item render cap threaded from `PackLevers`. `None` off-path.
     pack_render_cap: Option<usize>,
 }
@@ -8893,49 +8858,34 @@ impl PackAccumulator {
     }
 }
 
-fn goal_companion_id(
-    candidates: &[CandidateAccumulator],
-    query_tokens: &[String],
-) -> Option<UnitId> {
-    if !query_tokens
-        .iter()
-        .any(|token| matches!(token.as_str(), "goal" | "budget"))
-        || !candidates
-            .iter()
-            .any(|candidate| candidate.unit.source_kind.as_deref() == Some("quantity_rollup"))
-    {
-        return None;
-    }
-    let generic = ["am", "i", "my", "meeting", "goal", "budget"];
-    candidates
-        .iter()
-        .filter_map(|candidate| {
-            let body_tokens = tokenize(&candidate.unit.body);
-            let structured =
-                candidate.unit.body.contains(" item ") && candidate.unit.body.contains(": {");
-            let goal_like = body_tokens.iter().any(|token| {
-                matches!(
-                    token.as_str(),
-                    "goal" | "goals" | "budget" | "target" | "limit"
-                )
-            });
-            if candidate.unit.kind != MemoryKind::Semantic || !structured || !goal_like {
-                return None;
-            }
-            let overlap = query_tokens
-                .iter()
-                .filter(|token| !generic.contains(&token.as_str()))
-                .filter(|token| body_tokens.contains(token))
-                .count();
-            (overlap > 0).then_some((overlap, candidate.unit.body.len(), candidate.unit.id))
-        })
-        .max_by(|left, right| {
-            left.0
-                .cmp(&right.0)
-                .then_with(|| right.1.cmp(&left.1))
-                .then_with(|| right.2.as_uuid().cmp(&left.2.as_uuid()))
-        })
-        .map(|(_, _, id)| id)
+/// The one place a quarantine hint becomes a unit. Both admission branches — the
+/// high-trust arm and the low-trust arm — mint exactly this: a `belief` in
+/// `quarantined` state, never a semantic claim, regardless of the caller's kind
+/// hint. It was written out twice, verbatim, which is the shape that lets one
+/// copy drift. The two call sites keep their own control flow (the high-trust
+/// arm still checks dedup and invalidate first); only the body is shared.
+#[allow(clippy::too_many_arguments)]
+fn mint_quarantined_belief(
+    input: &ReflectInput,
+    fact_key: String,
+    candidate: &memphant_types::ReflectCandidate,
+    now: &str,
+    working: &mut Vec<StoredMemoryUnit>,
+    new_ids: &mut HashSet<UnitId>,
+) -> AdmissionAction {
+    let new_id = UnitId::new();
+    let unit = minted_unit(
+        new_id,
+        input,
+        MemoryKind::Belief,
+        UnitState::Quarantined,
+        fact_key,
+        candidate,
+        now,
+    );
+    working.push(unit);
+    new_ids.insert(new_id);
+    AdmissionAction::Quarantine
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -8952,7 +8902,6 @@ fn pack_recall_context(
     let mut acc = PackAccumulator::default();
     let mut seen_subjects: HashMap<String, Vec<UnitId>> = HashMap::new();
     let live_candidate_ids = fused.iter().map(|candidate| candidate.unit.id).collect();
-    let goal_companion_id = goal_companion_id(&fused, query_tokens);
 
     if request.context_packing_abstention_enabled {
         fused.sort_by(|left, right| {
@@ -8999,20 +8948,12 @@ fn pack_recall_context(
             0
         } else if is_authoritative_projection(&candidate.unit) {
             1
-        } else if Some(candidate.unit.id) == goal_companion_id {
-            2
         } else {
-            3
+            2
         }
     });
     if request.context_packing_abstention_enabled && pack_levers.submodular_ordering_enabled {
-        fused = submodular_pack_order(
-            fused,
-            request,
-            query_tokens,
-            pack_levers.pack_render_cap,
-            goal_companion_id,
-        );
+        fused = submodular_pack_order(fused, request, query_tokens, pack_levers.pack_render_cap);
     }
 
     let ctx = PackCtx {
@@ -9022,7 +8963,6 @@ fn pack_recall_context(
         output_limit: request.k.max(1),
         temporal_grounding_enabled,
         live_candidate_ids,
-        goal_companion_id,
         pack_render_cap: pack_levers.pack_render_cap,
     };
 
@@ -9133,9 +9073,7 @@ fn admit_or_drop(
     let candidate_id = candidate.unit.id;
     // The projection and its exact goal are authoritative packet structure.
     // Protect only those items; ordinary candidates must keep competing.
-    let candidate_score = if is_authoritative_projection(&candidate.unit)
-        || Some(candidate_id) == ctx.goal_companion_id
-    {
+    let candidate_score = if is_authoritative_projection(&candidate.unit) {
         f32::INFINITY
     } else {
         packing_relevance_score(&candidate, ctx.query_tokens)
@@ -9431,7 +9369,6 @@ fn submodular_pack_order(
     request: &RecallRequest,
     query_tokens: &[String],
     render_cap: Option<usize>,
-    goal_companion_id: Option<UnitId>,
 ) -> Vec<CandidateAccumulator> {
     const ALPHA: f64 = 0.3;
     let query_terms = content_terms(query_tokens.iter().map(String::as_str));
@@ -9439,9 +9376,7 @@ fn submodular_pack_order(
         .iter()
         .enumerate()
         .filter_map(|(index, candidate)| {
-            (is_authoritative_projection(&candidate.unit)
-                || Some(candidate.unit.id) == goal_companion_id)
-                .then_some(index)
+            is_authoritative_projection(&candidate.unit).then_some(index)
         })
         .collect::<Vec<_>>();
     let protected_set = protected.iter().copied().collect::<HashSet<_>>();
@@ -11896,19 +11831,14 @@ async fn prepare_compiled_write_from_snapshot_inner(
                 }
                 AdmissionAction::Invalidate
             } else if candidate.admission_hint == Some(AdmissionAction::Quarantine) {
-                let new_id = UnitId::new();
-                let unit = minted_unit(
-                    new_id,
+                mint_quarantined_belief(
                     &input,
-                    MemoryKind::Belief,
-                    UnitState::Quarantined,
                     fact_key,
                     &candidate,
                     &now,
-                );
-                working.push(unit);
-                new_ids.insert(new_id);
-                AdmissionAction::Quarantine
+                    &mut working,
+                    &mut new_ids,
+                )
             } else {
                 let new_id = UnitId::new();
                 let mut action = AdmissionAction::Append;
@@ -11960,19 +11890,14 @@ async fn prepare_compiled_write_from_snapshot_inner(
                 action
             }
         } else if candidate.admission_hint == Some(AdmissionAction::Quarantine) {
-            let new_id = UnitId::new();
-            let unit = minted_unit(
-                new_id,
+            mint_quarantined_belief(
                 &input,
-                MemoryKind::Belief,
-                UnitState::Quarantined,
                 fact_key,
                 &candidate,
                 &now,
-            );
-            working.push(unit);
-            new_ids.insert(new_id);
-            AdmissionAction::Quarantine
+                &mut working,
+                &mut new_ids,
+            )
         } else {
             let new_id = UnitId::new();
             // Untrusted callers never mint semantic units — a kind hint is
@@ -14591,7 +14516,10 @@ mod pack_cost_tests {
         retain_most_recent_per_subject(&mut fused);
 
         let bodies: Vec<&str> = fused.iter().map(|c| c.unit.body.as_str()).collect();
-        assert_eq!(bodies, vec!["current rule", "other subject", "unkeyed evidence"]);
+        assert_eq!(
+            bodies,
+            vec!["current rule", "other subject", "unkeyed evidence"]
+        );
     }
 
     fn channel_candidate(id: u128, channel: RecallChannel, rank: usize) -> CandidateAccumulator {
@@ -14823,26 +14751,6 @@ mod pack_cost_tests {
                 .collect::<Vec<_>>(),
             vec![UnitId::from_u128(1), UnitId::from_u128(3)]
         );
-    }
-
-    #[test]
-    fn submodular_ordering_keeps_complete_tail_when_protected_item_uses_budget() {
-        let query_tokens = tokenize("quantum");
-        let mut tiny_request = request(1);
-        tiny_request.context_packing_abstention_enabled = true;
-        let ordered = submodular_pack_order(
-            vec![
-                candidate(unit(2, "quantum ordinary evidence", Vec::new()), 4.0),
-                candidate(unit(1, "quantum protected goal", Vec::new()), 5.0),
-            ],
-            &tiny_request,
-            &query_tokens,
-            None,
-            Some(UnitId::from_u128(1)),
-        );
-        assert_eq!(ordered.len(), 2);
-        assert_eq!(ordered[0].unit.id, UnitId::from_u128(1));
-        assert_eq!(ordered[1].unit.id, UnitId::from_u128(2));
     }
 
     /// Rung-7 per-item render cap: without a cap, a big chunk-matched item's

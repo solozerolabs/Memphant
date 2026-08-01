@@ -1,9 +1,0 @@
-{
-  "audit_status": "pending",
-  "completion_token_upper_bound": 20000,
-  "dispatch_count": 1,
-  "input_token_upper_bound": 832,
-  "max_liability_micros": 3084,
-  "provider_policy_sha256": "dbd1302c34ff5ef3e979a55b59ddc4b24cd29f202dd183e218b69eaa42f581cc",
-  "request_contract_sha256": "7262b7a2174056865f018dcc81de69d8843b8eb42eebcf0ea390f23912c95227"
-}

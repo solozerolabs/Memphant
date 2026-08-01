@@ -2702,17 +2702,14 @@
         },
         "UnitState": {
           "enum": [
-            "captured",
-            "extracted",
-            "candidate",
+                "candidate",
             "active",
             "superseded",
             "invalidated",
             "deleted",
             "quarantined",
             "expired",
-            "validated",
-            "retired"
+            "validated"
           ],
           "type": "string"
         }

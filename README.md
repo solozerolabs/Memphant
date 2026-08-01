@@ -14,6 +14,13 @@ This repository is the public product boundary. It owns the Rust crates, Postgre
 
 Build state is tracked in `docs/superpowers/specs/memphant/STATUS.md`. WS-0 has an exit artifact, and the R83 Rust-vs-Python two-language spike kept the Rust-first posture: warm no-recompile Rust policy iteration measured at `0.073x` Python.
 
+## Quickstart
+
+[`docs/quickstart.md`](docs/quickstart.md) walks the HTTP surface end to end:
+bring up Postgres and the server, bind a context, retain, recall, read the
+trace, correct, forget. There is no dashboard — the `web/` launch surface was a
+committed fixture and was deleted on 2026-07-31.
+
 ## File-plane quickstart
 
 The file plane is an editable projection; Postgres remains canonical. Start with

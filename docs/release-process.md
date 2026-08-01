@@ -22,7 +22,6 @@ cargo run -p memphant-eval -- security examples/evals/security-smoke.yaml
 cargo run -p memphant-cli -- db bootstrap-check --provider plain-postgres
 cargo run -p memphant-cli -- db bootstrap-check --provider supabase
 cargo run -p memphant-cli -- db bootstrap-check --provider neon
-cd web && npm test
 ```
 
 For local cross-repo dogfood work, also run:
@@ -36,15 +35,19 @@ have the private Syndai worktree.
 
 ## Release Checklist
 
-1. Confirm `docs/launch/public-launch-scorecard.json` points to a current
-   public benchmark profile with archived traces, harness configuration,
-   p95 latency, cost, security, and deletion results.
+1. Confirm a current public benchmark profile exists with archived traces,
+   harness configuration, p95 latency, cost, security, and deletion results,
+   produced by the packaged Postgres-backed runtime. There is deliberately no
+   scorecard JSON in `docs/launch/` to point at: the 2026-07-03/04 scorecards
+   were fabricated fixtures and were deleted — see
+   `docs/launch/RETRACTED-2026-07-03-fixture-scorecards.md`. A replacement
+   scorecard may only be written from a real run.
 2. Confirm `SECURITY.md`, `CONTRIBUTING.md`, self-host docs, API/MCP schemas,
-   CLI help, Python SDK examples, and the web launch surface are present.
+   CLI help, Python SDK examples, and `docs/quickstart.md` are present.
 3. Run the provider bootstrap checks for plain Postgres, Supabase, and Neon.
    Supabase profile checks must keep `memphant` out of exposed PostgREST
    schemas and require advisory/lint review with warning-level failure.
-4. Confirm no public API, SDK, MCP, CLI, or web surface contains hidden
+4. Confirm no public API, SDK, MCP, or CLI surface contains hidden
    Syndai-only fields or behavior.
 5. Confirm the release notes do not claim SOTA unless the scorecard names the
    exact winning axis, baseline, benchmark version, trace archive, cost,
