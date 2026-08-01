@@ -271,7 +271,21 @@ add_lane(
 add_lane(
     "repo/code", "SWE-ContextBench tranche 1", None, None, None,
     f"RUN 2026-07-24 but UNPAIRABLE: {A}/next-evidence/coding/swe-contextbench-first-tranche-result.json", None,
-    "Baseline-saturated: 3/4 no-memory baselines resolve, max possible gain 1 < required 2.",
+    "TRANCHE saturated, INSTRUMENT is not: 3/4 no-memory baselines resolved in a HAND-SELECTED "
+    "n=4 draw, so max gain 1 < required 2 -- for that tranche only. n=4 cannot establish a "
+    "baseline rate. The instrument's published no-memory baselines are 19.68% (Related, n=376, "
+    "arXiv:2602.08316v3 Table 3) and 26.26% (Related Lite, n=99, Table 4). See "
+    "benchmarks/manifests/swe_contextbench.lock.json and "
+    "docs/build-log/2026-08-01-swe-contextbench-retranche.md.",
+)
+add_lane(
+    "repo/code", "SWE-ContextBench Related (n=376) -- recommended", None, None, None,
+    "NO PAIRED RUN: benchmarks/manifests/swe_contextbench.lock.json, saturation screened at $0 "
+    "from arXiv:2602.08316v3; psi UNVERIFIED and deliberately not borrowed", D_MIN,
+    "Census-complete 376-row split, no selection. MDE 4.23pp (psi=0.08) to 8.11pp (psi=0.30); "
+    "power at D_MIN=7pp is 0.99/0.94/0.84/0.67 at psi 0.10/0.15/0.20/0.30. The Lite n=99 split is "
+    "REFUSED as underpowered (MDE 7.93-15.93pp), which also means the published Table 4 framework "
+    "ranking (Supermemory 30.30 vs baseline 26.26, power 0.08-0.15) is NOT a measurement.",
 )
 add_lane(
     "repo/code", "SWE-Explore", None, None, None,
