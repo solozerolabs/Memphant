@@ -1539,7 +1539,7 @@ fn render_memory(scope_id: Uuid, fingerprint: &str, entries: &[ManifestEntry]) -
             "| [{}]({}) | {} | {} | {} | {} |\n",
             escape_link_text(title),
             entry.path,
-            escape_cell(&serde_json::to_string(&entry.state).unwrap_or_default()),
+            escape_cell(&state_label(entry.state)),
             escape_cell(entry.valid_from.as_deref().unwrap_or("—")),
             escape_cell(entry.valid_to.as_deref().unwrap_or("—")),
             entry
@@ -1550,12 +1550,21 @@ fn render_memory(scope_id: Uuid, fingerprint: &str, entries: &[ManifestEntry]) -
     memory.into_bytes()
 }
 
+/// The wire name of a unit state, taken from its own `Serialize` impl rather
+/// than a hand-written match: a second mapping would drift from the enum's
+/// `rename_all = "snake_case"` the first time a variant is added or renamed,
+/// and the footer already writes states under those exact names.
+fn state_label(state: UnitState) -> String {
+    serde_json::to_string(&state)
+        .map(|quoted| quoted.trim_matches('"').to_string())
+        .unwrap_or_default()
+}
+
 /// A table cell may not contain a `|` or a newline, or it splits the row. The
 /// projection's own validators already reject newlines in these fields; the
 /// pipe escape is belt-and-braces for values that arrive from a store.
 fn escape_cell(value: &str) -> String {
     value
-        .trim_matches('"')
         .replace('\\', "\\\\")
         .replace('|', "\\|")
         .replace(['\n', '\r'], " ")
