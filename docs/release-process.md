@@ -36,9 +36,13 @@ have the private Syndai worktree.
 
 ## Release Checklist
 
-1. Confirm `docs/launch/public-launch-scorecard.json` points to a current
-   public benchmark profile with archived traces, harness configuration,
-   p95 latency, cost, security, and deletion results.
+1. Confirm a current public benchmark profile exists with archived traces,
+   harness configuration, p95 latency, cost, security, and deletion results,
+   produced by the packaged Postgres-backed runtime. There is deliberately no
+   scorecard JSON in `docs/launch/` to point at: the 2026-07-03/04 scorecards
+   were fabricated fixtures and were deleted — see
+   `docs/launch/RETRACTED-2026-07-03-fixture-scorecards.md`. A replacement
+   scorecard may only be written from a real run.
 2. Confirm `SECURITY.md`, `CONTRIBUTING.md`, self-host docs, API/MCP schemas,
    CLI help, Python SDK examples, and the web launch surface are present.
 3. Run the provider bootstrap checks for plain Postgres, Supabase, and Neon.

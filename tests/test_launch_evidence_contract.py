@@ -1,16 +1,24 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATUS = ROOT / "docs/superpowers/specs/memphant/STATUS.md"
-PUBLIC_SCORECARD = ROOT / "docs/launch/public-launch-scorecard.json"
-RESTRAINT_SCORECARD = ROOT / "docs/launch/restraint-launch-scorecard.json"
-GATEMEM_SCORECARD = ROOT / "docs/launch/gatemem-conditional-scorecard.json"
-GATE_SCORECARDS = [PUBLIC_SCORECARD, RESTRAINT_SCORECARD, GATEMEM_SCORECARD]
+RETRACTION = ROOT / "docs/launch/RETRACTED-2026-07-03-fixture-scorecards.md"
+LAUNCH_DIR = ROOT / "docs/launch"
 PUBLIC_LOG = ROOT / "docs/build-log/2026-07-03-public-launch-gate.md"
 RESTRAINT_LOG = ROOT / "docs/build-log/2026-07-03-restraint-launch-gate.md"
+
+# The three 2026-07-03/04 gate scorecards were deleted on 2026-07-31 (one-plan
+# Phase C): every number in them came from answer-seeded synthetic fixtures and
+# a fabricated scorecard in-repo is a liability. The RETRACTION receipt replaces
+# them; the invariants they enforced are re-expressed below against STATUS.md,
+# which is where they were actually load-bearing.
+RETRACTED_SCORECARDS = [
+    "public-launch-scorecard.json",
+    "restraint-launch-scorecard.json",
+    "gatemem-conditional-scorecard.json",
+]
 
 REOPENED_GATE_LABELS = [
     "Public launch gate",
@@ -20,28 +28,22 @@ REOPENED_GATE_LABELS = [
 ]
 
 
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def checked(label: str) -> bool:
     return f"- [x] **{label}**" in STATUS.read_text(encoding="utf-8")
 
 
-def test_launch_scorecards_are_invalidated_as_synthetic_fixtures() -> None:
-    for path in GATE_SCORECARDS:
-        scorecard = read_json(path)
-        assert scorecard["status"] == "invalid_synthetic_fixture", path.name
-        assert scorecard["source_status"] == "fabricated_fixture_20260703", path.name
+def test_retracted_fixture_scorecards_do_not_return() -> None:
+    receipt = RETRACTION.read_text(encoding="utf-8")
 
+    for name in RETRACTED_SCORECARDS:
+        assert not (LAUNCH_DIR / name).exists(), name
+        assert name in receipt, name
+    assert "fabricated_fixture_20260703" in receipt
+    assert "invalid_synthetic_fixture" in receipt
 
-def test_no_gate_scorecard_passes_without_postgres_runtime() -> None:
-    # A launch/gate scorecard may only claim "pass" when its evidence was
-    # produced by the packaged Postgres-backed runtime (promotion-provenance rule).
-    for path in GATE_SCORECARDS:
-        scorecard = read_json(path)
-        if scorecard["status"] == "pass":
-            assert scorecard.get("runtime") == "postgres", path.name
+    # No surviving artifact in docs/launch/ may carry the fixture marker.
+    for path in LAUNCH_DIR.glob("*.json"):
+        assert "fabricated_fixture" not in path.read_text(encoding="utf-8"), path.name
 
 
 def test_status_ledger_reopened_synthetic_promotions() -> None:
@@ -88,20 +90,17 @@ def test_status_ledger_reopened_synthetic_promotions() -> None:
 
 
 def test_launch_build_logs_remain_as_audit_trail() -> None:
-    public = read_json(PUBLIC_SCORECARD)
-    restraint = read_json(RESTRAINT_SCORECARD)
-    public_log = PUBLIC_LOG.read_text(encoding="utf-8")
-    restraint_log = RESTRAINT_LOG.read_text(encoding="utf-8")
+    # The build logs of the invalidated 2026-07-03/04 run stay on disk, and so
+    # do the artifacts they cite. Their recorded statuses no longer govern; the
+    # retraction receipt says so explicitly and names both.
+    receipt = RETRACTION.read_text(encoding="utf-8")
 
-    # The build logs stay as audit trail for the invalidated 2026-07-03/04 run:
-    # their referenced artifacts must still resolve, but their recorded statuses
-    # no longer govern (the scorecards are invalid_synthetic_fixture).
-    assert public["profile"]["path"] in public_log
-    assert public["profile"]["sample_manifest"] in public_log
-    for trace_ref in public["profile"]["public_sampled_trace_refs"]:
-        assert trace_ref in public_log
-    assert restraint["profile_path"] in restraint_log
-    assert restraint["trace_refs"][0] in restraint_log
+    assert PUBLIC_LOG.read_text(encoding="utf-8").strip()
+    assert RESTRAINT_LOG.read_text(encoding="utf-8").strip()
+    assert PUBLIC_LOG.name in receipt
+    assert RESTRAINT_LOG.name in receipt
+    assert "real-launch-evidence-20260704-v1" in receipt
+    assert (ROOT / "docs/build-log/artifacts/real-launch-evidence-20260704-v1").is_dir()
 
 
 def test_done_definition_explains_dormant_activation_gates() -> None:
