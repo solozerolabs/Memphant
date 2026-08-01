@@ -1831,3 +1831,76 @@ Report: `docs/build-log/2026-07-31-preference-writepath.md`. Artifacts:
 `af-w11-writepath`, **none pushed**. `paid_model_calls: 0`. **No checkbox,
 default, cutover or SOTA claim moves** except `MEMPHANT_FACT_EXTRACTION`, which
 is measured at exactly zero effect on this instrument.
+
+## 2026-08-01 — D1 correction handle + caller-authored keys + D2 file plane (`s3-d1handle`, $0)
+
+**Phase D is plumbing, not invention, and that is the finding.** Every mechanism
+D1 needs was already compiled in: `RetainUnitPayload.fact_key` has always been
+mandatory, `ReflectJob` has always carried `subject`/`predicate`, the episodic
+candidate has always read them (`service.rs:5384`), and `source_span` has
+shipped end to end with real byte offsets. What was missing was a **surface**.
+The public payload had no subject field, so two hardcoded `None`s at the
+enqueue site were the entire break between a caller that knows what it is
+writing and a supersedable key — and `context_item_for` dropped the chunks, so
+`source_span` had zero readers. Good sign about the architecture; bad sign about
+how the public surfaces were reviewed.
+
+**Shipped**, three commits on `s3-d1handle` off `main@0e874da0`, **none merged,
+none pushed**, `paid_model_calls: 0`, no measurement run and none requested:
+
+- `41dc9fc4` — `CorrectionHandle {unit_id, subject_generation, fact_key,
+  valid_from, valid_to, source_span, episode_id}` on every `RecallContextItem`.
+- `4df4e23f` — `subject`/`predicate` on both public retain payloads;
+  `RetainUnitPayload.fact_key` relaxed to optional and still **wins** when
+  present.
+- `33541d75` — unit footer gains `state`/`valid_from`/`valid_to`/`source_span`;
+  `MEMORY.md` becomes a State/Since/Until/Confidence table; `SCHEMA_VERSION`
+  1 → 2.
+
+**The design call worth keeping: `source_span` is a property of the ROW, not of
+the query.** Recall's chunk mask was available and tempting, but selected chunks
+need not be contiguous, so a covering span over a subset would name bytes we did
+not render — a provenance value that is *wrong* is worse than one that is
+absent. And D2 needs the same value with no query in sight. So
+`covering_source_span` is defined once in memphant-types with exactly two
+callers (`CorrectionHandle::for_unit`, `projection_items`), and the invariant is
+asserted directly: the same unit recalled chunk-rendered and whole-body yields
+byte-identical handles. A span shape neither chunker mints degrades to `None`,
+never to a wrong range.
+
+**The claim NOT made.** The episode-payload subject keys the compiled episodic
+unit; it does **not** make episodes supersede — `supersedes_own_kind` maps the
+Episodic arm to `None` on purpose, which is the cross-kind bug `ffa640b8` fixed.
+The supersedable caller-key path is the *unit* payload. The test carries that in
+its name (`an_episode_payload_subject_keys_the_compiled_unit_without_superseding`)
+so the two stages cannot be collapsed into one headline later.
+
+**Non-regression is a test, not an intention.** `derive_fact_key`'s fallback is
+untouched and pinned by asserting against the primitive itself; a pre-D1 caller
+that composed its own key is byte-for-byte unaffected; blank subjects are
+refused rather than minting `{scope}::{predicate}` and collapsing a whole scope
+onto one generation. The positive path is a **shared testkit scenario**
+(`caller_subject_key_supersedes_without_client_derivation`) registered in both
+`store_contract.rs` and `pg_store_contract.rs`, so InMemory and Postgres cannot
+diverge on the new write path.
+
+**Verification.** `cargo build/test --workspace` 0 failed; clippy and
+`fmt --check` clean; `pytest -q tests/` 736 passed with the one pre-existing
+`test_spec_drift_check_passes_against_linked_syndai_docs` failure (sibling-repo
+state, identical before and after). Schema artifacts regenerated from their
+generators. **No migration** — `source_span` already rides in
+`memory_unit.payload` jsonb, so `MIGRATIONS`, `MIGRATION_HEAD` and
+`SCHEMA_COMPAT_REVISION` are untouched. No new `MemoryKind`; the RW-1 kind lists
+already derive from `MemoryKind::ALL` in this tree.
+
+**Latency caveat, recorded rather than hidden.** `hw.ncpu = 12`, load average
+**30.9–39.5** throughout (several sibling worktrees building concurrently, ~3×
+oversubscribed). `hot_path_slo_pg`'s 200 ms debug-build p50 threshold breached
+at 306.7 ms under that load. See the build log for the paired
+baseline-vs-HEAD reading; treat any absolute latency figure from this host today
+as uninterpretable, which is the standing conclusion the plan of record already
+records for this machine.
+
+Report: `.superpowers/sdd/s3-d1handle-report.md`. Build log:
+`docs/build-log/2026-08-01-d1-correction-handle.md`. **No checkbox, default,
+cutover or SOTA claim moves.**
