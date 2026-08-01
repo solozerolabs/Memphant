@@ -560,3 +560,66 @@ under the MDE kills it from above.** Both are properties of the instrument rathe
 under test, both are checkable for $0 before any spend, and neither is visible from a baseline rate
 alone. The retranche analysis checked the baseline and stopped there; the ceiling check is the one
 that should have been paired with it.
+
+## 12. Stage 2 CANCELLED by s4-controls — and the honest reading of the comparator table
+
+**s4-controls reported while this lane was finishing, and the gate fired against us.** On the Track R
+paraphrase bank, n=180: agentic `grep` hits@10 **96.67%** (174/180) against MemPhant `bm25code_dense`
+**58.89%** (106/180) and scoped BM25 25.56% (46/180). Paired: b=1, c=69, n_d=70,
+**McNemar p = 1.2e-19**, delta **−37.78pp** against a realized MDE of 13.34pp. The packing objection
+is pre-closed — MemPhant's pre-packing fused@10 against the control's honest packed@10 still loses
+33.89pp, because packing costs 7 questions against a 68-question deficit.
+
+**Stage 2 is cancelled. Total spend on this lane: $0.00.** The ~$1–5 scaffold liveness probe was
+approved but never started, and is skipped rather than spent: its only value was retiring execution
+risk for a run that will not happen.
+
+### What this does and does not do to §2's comparator table
+
+The like-for-like table stands — MemPhant retrieves the gold parent more often than every published
+memory framework at matched or smaller k. **But it must be stated with its companion sentence:**
+
+> MemPhant beats other memory systems at retrieving the gold parent — **and all of them are losing to
+> an agent with a shell.**
+
+Without that clause the table reads as a stronger claim than the evidence supports. Mem0 scores
+*below* no-context on this very benchmark (24.24 vs 26.26 Resolved); on SWE-Explore an agent with
+`grep` gets HitFile@5 0.667 against dense-RAG's 0.088; plain bash beats every embedding system on
+ContextBench. Winning a comparison among memory systems is not the same as winning the task.
+
+### Three lanes, one conclusion
+
+| lane | how the instrument or substrate fails | direction |
+| --- | --- | --- |
+| S6 / S7 | gold is computable from the fact statements, so a short rule saturates the baseline (a 20-line `scoped_interval` rule scores 1.0000; as-of saturates at 0.9064) | **from below** |
+| S5 (this lane) | baseline wide open at 19.68%, but the headroom a memory system can address is 3.72pp — under the instrument's own MDE at max n | **from above** |
+| S4 | the substrate loses to a shell loop by 37.78pp on repo-recoverable facts | **the substrate itself** |
+
+All three point the same way. **Track R and SWE-ContextBench both test facts that are recoverable
+from files, and an agent with `grep` is extremely good at that.** The niche the substrate actually
+wins is what is *not* in the repo — corrections, preferences, rejected approaches, rationale. A
+retrieval win on file-recoverable gold is a real engineering result and a weak commercial one.
+
+## 13. Recommendation to the plan of record: pair a ceiling check with every baseline check
+
+**At instrument acquisition, a baseline rate alone is not sufficient evidence that an instrument can
+express an effect.** Two independent, free checks are needed:
+
+1. **Baseline check (already standard).** Is the no-memory baseline far from ceiling? Guards against
+   saturation — the S6/S7 failure mode.
+2. **Ceiling check (proposed, new).** Take the largest *published* effect any comparable system
+   achieves on the instrument — ideally an oracle arm, which upper-bounds retrieval-based memory —
+   and compare it against the instrument's own MDE at its **maximum available n**. If the addressable
+   headroom is below the MDE, the instrument cannot express the effect **at any budget**, and no
+   tranche fixes it.
+
+This lane is the worked example. The retranche analysis performed check 1 correctly — 19.68% baseline
+leaves 80pp of headroom, so "not saturated" was right — and scoped $545 on it. Check 2 takes about
+ten minutes: the oracle-summary arm is in the same table as the baseline (23.40 vs 19.68 → 3.72pp),
+and `scripts/instrument_power.py` gives MDE 3.38–8.32pp at n=357. **The ceiling is below the MDE, and
+that was knowable before a dollar was scoped.**
+
+Concretely: `benchmarks/manifests/*.lock.json` should carry an `effect_ceiling` block alongside the
+existing `power` block — the largest published effect, its source, and the ratio of ceiling to MDE at
+max n — and `scripts/instrument_power.py` should refuse to emit a staging plan when that ratio is
+below 1.
