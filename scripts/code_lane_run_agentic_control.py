@@ -66,6 +66,7 @@ READ_EVENT_CHARS = 6_000
 LIST_EVENTS_MAX = 200
 LIST_EVENT_PREVIEW_CHARS = 120
 SELECT_MAX = 10
+MAX_PROSE_NUDGES = 2
 
 SYSTEM_PROMPT = """You are a code-search agent with shell-style search over the \
 raw event transcript of ONE coding-agent attempt on ONE repository.
@@ -418,6 +419,7 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
     ]
     selection: list[int] | None = None
     error: str | None = None
+    nudges = 0
     completion_tokens = 0
     turns = 0
     while turns < MAX_TURNS:
@@ -440,8 +442,27 @@ def run_question(engine, golden: dict, events: list[dict]) -> dict:
             else {"role": "assistant", "content": message.get("content") or ""}
         )
         if not calls:
-            error = "model returned prose instead of calling a tool"
-            break
+            # A prose turn is not a result, it is a protocol miss. Nudge once
+            # per occurrence and keep going, up to a small cap: an errored row
+            # scores incorrect, so aborting here would report a deficit the arm
+            # did not measure. The nudge carries no task information and is
+            # outcome-independent, so it cannot favour either arm.
+            nudges += 1
+            if nudges > MAX_PROSE_NUDGES:
+                error = "model returned prose instead of calling a tool"
+                break
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "You must respond with a tool call, not prose. Call "
+                        "`grep`, `read_event` or `list_events` to search, or "
+                        "`select` with your ranked event sequence numbers to "
+                        "finish."
+                    ),
+                }
+            )
+            continue
         finished = False
         for call in calls:
             name = call["function"]["name"]
