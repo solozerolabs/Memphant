@@ -305,6 +305,46 @@ def gold_bearing_units(golden: dict, unit_bodies: dict[str, str]) -> set[str]:
     }
 
 
+def channel_table(trace: dict, gold_ids: set[str]) -> list[dict]:
+    """Every candidate's per-channel `(channel, rank, score)` votes, plus the
+    decay multiplier and the gold flag.
+
+    This is what makes the fuser's constants auditable OFFLINE. Weighted RRF is
+    a pure function of these rows -- `sum(weight[c] / (K + rank))` scaled by
+    `decay_retrievability` -- so one instrumented run lets every candidate
+    weighting, every `K`, and score-normalised alternatives be swept and paired
+    against the shipped fusion without re-ingesting a corpus per arm. The
+    simulator is only trustworthy if it reproduces the shipped ranking exactly
+    from these rows, which is checkable and must be checked."""
+    rows: dict[str, dict] = {}
+    for candidate in trace.get("candidates") or []:
+        # `channel`/`channel_rank`/`channel_score` are non-Option on
+        # `RecallCandidateTrace`, so a real trace always carries the triple.
+        # Skipping an incomplete row rather than raising keeps this capture from
+        # taking down a run over a diagnostic it only ADDS -- and it cannot hide
+        # a regression, because `fusion_sweep.py` refuses to report unless it can
+        # reproduce the shipped fusion from these rows, which an empty or partial
+        # table cannot do.
+        if not all(key in candidate for key in ("channel", "channel_rank", "channel_score")):
+            continue
+        unit_id = candidate["unit_id"]
+        row = rows.setdefault(
+            unit_id,
+            {
+                "unit_id": unit_id,
+                "is_gold": unit_id in gold_ids,
+                "fused_rank": candidate.get("fused_rank"),
+                "fused_score": candidate.get("fused_score"),
+                "decay_retrievability": candidate.get("decay_retrievability"),
+                "channels": [],
+            },
+        )
+        row["channels"].append(
+            [candidate["channel"], candidate["channel_rank"], candidate["channel_score"]]
+        )
+    return sorted(rows.values(), key=lambda row: row["fused_rank"] or 10**9)
+
+
 def pack_drop_diagnosis(
     golden: dict,
     trace: dict,
@@ -352,6 +392,12 @@ def pack_drop_diagnosis(
         "gold_in_pool": bool(gold_ids),
         "gold_fused_rank": best["fused_rank"] if best is not None else None,
         "gold_fused_score": best.get("fused_score") if best is not None else None,
+        # Post-rerank rank of the SAME unit `gold_fused_rank` describes, so a
+        # reranked arm's misses split into "outside the scored head" (None) and
+        # "scored and still below the cut" (a number > k).
+        "gold_cross_rerank_rank": (
+            best.get("cross_rerank_rank") if best is not None else None
+        ),
         "gold_drop_reason": drop_reason,
         # Phase-1d displacement forensics: a gold pool unit that is neither
         # packed nor in `dropped_items` is a DIFFERENT failure from one the pack
@@ -379,6 +425,51 @@ def pack_drop_diagnosis(
         # the cap-OFF and cap-N arms. Identical values ⇒ the cap did not run on
         # this corpus (a null about the run), NOT that the cap does not help.
         "packed_body_chars": [len(body) for body in packed_bodies],
+        # W8 cross-encoder liveness, read off the server's own trace.
+        "cross_rerank_ms": trace.get("cross_rerank_ms"),
+        "cross_rerank": trace.get("cross_rerank"),
+        "channel_table": channel_table(trace, gold_ids),
+    }
+
+
+def cross_rerank_liveness(rows: list[dict]) -> dict:
+    """Run-level proof that the W8 cross-encoder actually FIRED, taken from the
+    server's own recall traces rather than from the flag the harness passed.
+
+    ``queries_with_cross_rerank_trace == 0`` on an arm that asked for the
+    reranker is an INERT pass and must not be read as a neutral result. The
+    ``failure`` histogram matters for the same reason: the seam fails OPEN to
+    the pre-rerank order, so an all-``error`` arm is byte-identical to the
+    control while claiming to be a reranked arm."""
+    traced = [row for row in rows if row.get("cross_rerank")]
+    latencies = sorted(
+        row["cross_rerank_ms"] for row in rows if row.get("cross_rerank_ms") is not None
+    )
+    failures: dict[str, int] = {}
+    docs = []
+    for row in traced:
+        block = row["cross_rerank"]
+        key = str(block.get("failure"))
+        failures[key] = failures.get(key, 0) + 1
+        docs.append(block.get("docs_scored"))
+    def pct(fraction: float) -> int | None:
+        if not latencies:
+            return None
+        return latencies[min(len(latencies) - 1, int(fraction * len(latencies)))]
+    return {
+        "queries": len(rows),
+        "queries_with_cross_rerank_trace": len(traced),
+        "failure_histogram": dict(sorted(failures.items())),
+        "provider": traced[0]["cross_rerank"].get("provider") if traced else None,
+        "model": traced[0]["cross_rerank"].get("model") if traced else None,
+        "candidate_count_mean": (
+            sum(row["cross_rerank"]["candidate_count"] for row in traced) / len(traced)
+            if traced else None
+        ),
+        "docs_scored_total": sum(value for value in docs if value is not None),
+        "cross_rerank_ms_p50": pct(0.50),
+        "cross_rerank_ms_p95": pct(0.95),
+        "cross_rerank_ms_max": latencies[-1] if latencies else None,
     }
 
 
@@ -684,6 +775,24 @@ def build_parser():
              "--pack-render-cap it is selected here and nowhere else, and "
              "gate_runtime.Server closes the inherited variable",
     )
+    parser.add_argument(
+        "--cross-rerank", action="store_true",
+        help="MEMPHANT_CROSS_RERANK=1 for the server arm: reorder the top "
+             "recall_pool_depth fused candidates with the W8 cross-encoder "
+             "before packing. Same select-here-and-nowhere-else contract as "
+             "--pack-render-cap; gate_runtime.Server closes the inherited var",
+    )
+    parser.add_argument(
+        "--reranker", default="fastembed",
+        choices=("fastembed", "byo"),
+        help="MEMPHANT_RERANKER for the --cross-rerank arm. Local, self-hosted "
+             "models only: the hosted arms (voyage/cohere) are deliberately NOT "
+             "offered here because this lane's harness runs under a $0 budget",
+    )
+    parser.add_argument(
+        "--rerank-candidate-limit", type=int, default=None,
+        help="MEMPHANT_RERANK_CANDIDATE_LIMIT for the --cross-rerank arm",
+    )
     return parser
 
 
@@ -738,6 +847,8 @@ def main() -> int:
         args.server_bin, args.database_url, args.port, args.embed_model,
         log_path=server_log_path, pack_render_cap=args.pack_render_cap,
         lexical_scorer=args.lexical_scorer,
+        cross_rerank=args.cross_rerank, reranker=args.reranker,
+        rerank_candidate_limit=args.rerank_candidate_limit,
     )
     # Symmetric cleanup: start() and the ingest/recall body are both inside
     # this try so the server child is always killed on any exception path,
@@ -861,6 +972,13 @@ def main() -> int:
             "budget_tokens": args.budget_tokens,
             "pack_render_cap": args.pack_render_cap,
             "lexical_scorer": args.lexical_scorer or "overlap",
+            "cross_rerank": args.cross_rerank,
+            "reranker": args.reranker if args.cross_rerank else None,
+            "rerank_candidate_limit": args.rerank_candidate_limit,
+            # Mechanism liveness: an inert reranker and a neutral reranker
+            # produce the same recall number and mean opposite things. These
+            # come from the server's OWN trace, not from the flag we passed.
+            "cross_rerank_liveness": cross_rerank_liveness(provenance_rows),
             "ingested_attempts": len(ingest_rows),
             "ingested_events": evaluation_events + isolation_sentinel_events,
             "evaluation_events": evaluation_events,

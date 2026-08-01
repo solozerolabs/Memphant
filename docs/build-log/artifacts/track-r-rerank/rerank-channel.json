@@ -1,0 +1,1295 @@
+{
+ "arms": {
+  "rerank_bge": {
+   "fused_at_10": 113,
+   "miss_composition": {
+    "buckets": {
+     "absent_from_pool": 11,
+     "hit": 95,
+     "in_pool_unpacked": 74
+    },
+    "budget_share_of_in_pool_unpacked": 0.013513513513513514,
+    "gold_rank_within_k_unpacked": 32,
+    "in_pool_unpacked": 74,
+    "in_pool_unpacked_gold_drop_reasons": {
+     "budget": 1,
+     "not_in_dropped_items": 6,
+     "rerank": 67
+    },
+    "in_pool_unpacked_with_gold_unit_packed": 1,
+    "packed_item_chars_max": 8560,
+    "packed_item_chars_mean": 1773.1748538011695,
+    "packed_item_chars_total": 3032129,
+    "packed_items_mean": 9.5,
+    "packed_items_total": 1710
+   },
+   "packed_at_10": 95,
+   "packed_at_5": 71
+  },
+  "rerank_off": {
+   "fused_at_10": 113,
+   "miss_composition": {
+    "buckets": {
+     "absent_from_pool": 11,
+     "hit": 106,
+     "in_pool_unpacked": 63
+    },
+    "budget_share_of_in_pool_unpacked": 0.1111111111111111,
+    "gold_rank_within_k_unpacked": 8,
+    "in_pool_unpacked": 63,
+    "in_pool_unpacked_gold_drop_reasons": {
+     "budget": 7,
+     "not_in_dropped_items": 6,
+     "rerank": 50
+    },
+    "in_pool_unpacked_with_gold_unit_packed": 1,
+    "packed_item_chars_max": 7919,
+    "packed_item_chars_mean": 2072.8076023391814,
+    "packed_item_chars_total": 3544501,
+    "packed_items_mean": 9.5,
+    "packed_items_total": 1710
+   },
+   "packed_at_10": 106,
+   "packed_at_5": 73
+  }
+ },
+ "bank_sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+ "contrasts": {
+  "gold_at_10__crossencoder_order_vs_fused_order__within_bge_arm": {
+   "b": 12,
+   "c": 46,
+   "delta": -0.18888888888888888,
+   "exact_p": 8.219663963332513e-06,
+   "is_a_measurement": true,
+   "mde_at_80": 0.12150148025607287,
+   "n_d": 58,
+   "power": 0.9959959369811267,
+   "psi": 0.32222222222222224
+  },
+  "packed_at_10__bge_vs_off": {
+   "b": 16,
+   "c": 27,
+   "delta": -0.06111111111111111,
+   "exact_p": 0.12628947438543037,
+   "is_a_measurement": true,
+   "mde_at_80": 0.10477474999173253,
+   "n_d": 43,
+   "power": 0.33700081999438725,
+   "psi": 0.2388888888888889
+  },
+  "packed_at_5__bge_vs_off": {
+   "b": 26,
+   "c": 28,
+   "delta": -0.011111111111111112,
+   "exact_p": 0.8919231511047494,
+   "is_a_measurement": true,
+   "mde_at_80": 0.11721041292431414,
+   "n_d": 54,
+   "power": 0.0439272591479012,
+   "psi": 0.3
+  }
+ },
+ "corpus_sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+ "cross_rerank_latency_ms_CONTENDED_UPPER_BOUND": {
+  "max": 53593,
+  "note": "loadavg1 ~120-140 from four other worktrees; NOT a clean measurement. Independent uncontended figure on this host is ~1460ms median at 64x512.",
+  "p50": 22166,
+  "p95": 34399
+ },
+ "evidence_contract": {
+  "attribution": {
+   "method": "unverified",
+   "note": "no bisect. Attribution is by single-variable paired arms (cross-encoder present vs absent at one HEAD and one binary) and, for the decisive contrast, two orderings read out of the SAME trace, which admits no between-run confound at all."
+  },
+  "bar": null,
+  "claim": "A local bge-reranker-base cross-encoder over the 64-deep fused head is compared against the shipped weighted-RRF order on the 180-golden Track R paraphrase bank. The decisive contrast is WITHIN one arm -- same recall, same pool, two orderings -- so no lineage, corpus or run-to-run confound can enter it.",
+  "corpus": {
+   "n_items": 180,
+   "sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+   "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921"
+  },
+  "decisional": false,
+  "harness": {
+   "budget": 8192,
+   "command": "scripts/run_rerank_arms.sh",
+   "embed_model": "fastembed:bge-small-en-v1.5",
+   "flags": [
+    "MEMPHANT_FACT_EXTRACTION=0",
+    "--limit-attempts 1"
+   ],
+   "k": 10,
+   "scorer": "memphant recall mode=fast, lexical=bm25-code"
+  },
+  "instrument_verification": {
+   "fields_counted": {
+    "goldens": 180,
+    "questions_scored": 180
+   },
+   "license_evidence": "corpus license recorded in benchmarks/data/track_r_paraphrase_golden.lock.json",
+   "license_id": "CC-BY-4.0",
+   "license_note": "CC-BY-4.0 asserted by the HuggingFace dataset card and recorded in track_r_paraphrase_golden.lock.json; no LICENSE blob is pinned and the card was not re-fetched, so this is unverified rather than wrong (instrument-register \u00a78, the ClawArena badge pattern)",
+   "license_source": "unverified",
+   "rows_counted": 180,
+   "shipped_rows_verified": true
+  },
+  "leakage": {
+   "absolute_target_coverage": 0.1346,
+   "concentration": 2.018,
+   "floor": 0.0667,
+   "floor_kind": "exhaustive",
+   "floor_scope_note": "mean over every non-target event of the same attempt; no seed, no draw",
+   "negative_selection": "same-attempt hard negatives -- every non-target content event of the bound attempt, which is also exactly the retrieval haystack",
+   "provenance_class": "machine_generated",
+   "provenance_note": "paraphrase: agent-generated with the target identifiers withheld (mean 19.45 withheld terms/query), 180/180 with adjudicated distractors",
+   "unit_definition": "one content event of the attempt, 4000-char clip"
+  },
+  "mechanism_enabled": true,
+  "mechanism_evidence": "Two-sided, from the server's OWN traces and not from the flag passed: the reranked arm carries a cross_rerank trace on 180/180 queries with failure histogram {none: 180} and 10,944 docs scored; the control carries 0/180 and docs_scored=0. This matters because the seam FAILS OPEN to the pre-rerank order, so an all-error arm would be byte-identical to the control while calling itself reranked.",
+  "notes": "NOT PROMOTION-GRADE, and decisional=false for two independent reasons: the bank fails its own preregistered leakage bar (2.018 vs <=1.50), and the corpus licence is a HuggingFace dataset-card assertion with no pinned LICENSE blob. DIAGNOSTIC, not promotion-grade: the bank fails its own preregistered leakage bar (2.018 vs <=1.50), used deliberately on the standing finding that the bar sits below the 1.79 achievable floor. Retrieval and packing only -- no reader, no judge, $0 paid spend. The endpoint contrast (packed@10, b=16/c=27, n_d=43, p=0.126, power 0.34) is UNDERPOWERED and does not carry the conclusion; the within-arm ordering contrast (power 0.996) does. Control reproduces the banked 495-attempt arm on all 180 questions at both k.",
+  "power": {
+   "b": 12,
+   "c": 46,
+   "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+   "mde_at_80": 0.12150148025607287,
+   "n": 180,
+   "n_d": 58,
+   "psi_observed": 0.32222222222222224,
+   "source": "docs/build-log/artifacts/track-r-rerank/rerank-channel.json",
+   "test": "two-sided exact (conditional binomial) McNemar"
+  },
+  "probe_kind": "lever",
+  "schema_version": 1
+ },
+ "lineage": {
+  "git_head": {
+   "rerank_bge": "88b6e5f80a99e060c6d00c18910bfb3db61bb4a3",
+   "rerank_off": "88b6e5f80a99e060c6d00c18910bfb3db61bb4a3"
+  },
+  "harness_env": {
+   "MEMPHANT_FACT_EXTRACTION": "0"
+  },
+  "ingest_restriction": "limit_attempts=1 (155 gold-referenced attempts); INERT -- 0/180 gold_fused_rank mismatches vs the banked 495-attempt arm",
+  "server_sha256": {
+   "rerank_bge": "15d11d19fac426086ec2e69dce3c03476dd1c575df15b4bdcc2c22d65df7b84f",
+   "rerank_off": "15d11d19fac426086ec2e69dce3c03476dd1c575df15b4bdcc2c22d65df7b84f"
+  },
+  "tracked_dirty": {
+   "rerank_bge": false,
+   "rerank_off": true
+  }
+ },
+ "liveness": {
+  "rerank_bge": {
+   "candidate_count_mean": 60.8,
+   "cross_rerank_ms_max": 53593,
+   "cross_rerank_ms_p50": 22166,
+   "cross_rerank_ms_p95": 34399,
+   "docs_scored_total": 10944,
+   "failure_histogram": {
+    "none": 180
+   },
+   "model": "fastembed:bge-reranker-base",
+   "provider": "fastembed",
+   "queries": 180,
+   "queries_with_cross_rerank_trace": 180
+  },
+  "rerank_off": {
+   "candidate_count_mean": null,
+   "cross_rerank_ms_max": 0,
+   "cross_rerank_ms_p50": 0,
+   "cross_rerank_ms_p95": 0,
+   "docs_scored_total": 0,
+   "failure_histogram": {},
+   "model": null,
+   "provider": null,
+   "queries": 180,
+   "queries_with_cross_rerank_trace": 0
+  }
+ },
+ "min_nd_for_rejection": 6,
+ "n": 180,
+ "paid_api_spend_usd": 0,
+ "per_question": {
+  "track_r_par_001": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_002": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 20,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_003": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 19,
+   "gold_fused_rank": 26,
+   "off_hit_at_10": false
+  },
+  "track_r_par_004": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 62,
+   "gold_fused_rank": 60,
+   "off_hit_at_10": false
+  },
+  "track_r_par_005": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 13,
+   "gold_fused_rank": 16,
+   "off_hit_at_10": false
+  },
+  "track_r_par_006": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_007": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 27,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_008": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_009": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 21,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_010": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_011": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 8,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_012": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 46,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_013": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 58,
+   "gold_fused_rank": 14,
+   "off_hit_at_10": false
+  },
+  "track_r_par_014": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_015": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": 131,
+   "off_hit_at_10": false
+  },
+  "track_r_par_016": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 17,
+   "off_hit_at_10": false
+  },
+  "track_r_par_017": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_018": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 33,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_019": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 12,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_020": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 4,
+   "off_hit_at_10": true
+  },
+  "track_r_par_021": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 17,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_022": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 12,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_023": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 25,
+   "gold_fused_rank": 54,
+   "off_hit_at_10": false
+  },
+  "track_r_par_024": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 16,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_025": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 11,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_026": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_027": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 7,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_028": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_029": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": 75,
+   "off_hit_at_10": false
+  },
+  "track_r_par_030": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_031": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_032": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 39,
+   "gold_fused_rank": 17,
+   "off_hit_at_10": false
+  },
+  "track_r_par_033": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 16,
+   "gold_fused_rank": 41,
+   "off_hit_at_10": false
+  },
+  "track_r_par_034": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 11,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": false
+  },
+  "track_r_par_035": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 5,
+   "gold_fused_rank": 8,
+   "off_hit_at_10": true
+  },
+  "track_r_par_036": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_037": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 30,
+   "gold_fused_rank": 29,
+   "off_hit_at_10": false
+  },
+  "track_r_par_038": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 14,
+   "off_hit_at_10": false
+  },
+  "track_r_par_039": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_040": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_041": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_042": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 10,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_043": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 15,
+   "gold_fused_rank": 45,
+   "off_hit_at_10": false
+  },
+  "track_r_par_044": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 31,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_045": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 12,
+   "off_hit_at_10": true
+  },
+  "track_r_par_046": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 11,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_047": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 10,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_048": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 4,
+   "off_hit_at_10": true
+  },
+  "track_r_par_049": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 58,
+   "gold_fused_rank": 35,
+   "off_hit_at_10": false
+  },
+  "track_r_par_050": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_051": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 18,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_052": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 12,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_053": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 19,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_054": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 29,
+   "gold_fused_rank": 8,
+   "off_hit_at_10": false
+  },
+  "track_r_par_055": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_056": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 50,
+   "gold_fused_rank": 16,
+   "off_hit_at_10": false
+  },
+  "track_r_par_057": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 14,
+   "gold_fused_rank": 31,
+   "off_hit_at_10": false
+  },
+  "track_r_par_058": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_059": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_060": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 36,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_061": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_062": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_063": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 12,
+   "gold_fused_rank": 52,
+   "off_hit_at_10": false
+  },
+  "track_r_par_064": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_065": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 21,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_066": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_067": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 6,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_068": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 5,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_069": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 11,
+   "gold_fused_rank": 28,
+   "off_hit_at_10": false
+  },
+  "track_r_par_070": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 53,
+   "gold_fused_rank": 16,
+   "off_hit_at_10": false
+  },
+  "track_r_par_071": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 52,
+   "gold_fused_rank": 26,
+   "off_hit_at_10": false
+  },
+  "track_r_par_072": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 11,
+   "off_hit_at_10": false
+  },
+  "track_r_par_073": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 22,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_074": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 53,
+   "gold_fused_rank": 22,
+   "off_hit_at_10": false
+  },
+  "track_r_par_075": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 42,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": false
+  },
+  "track_r_par_076": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 17,
+   "off_hit_at_10": false
+  },
+  "track_r_par_077": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 4,
+   "off_hit_at_10": true
+  },
+  "track_r_par_078": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 29,
+   "off_hit_at_10": false
+  },
+  "track_r_par_079": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_080": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 41,
+   "gold_fused_rank": 40,
+   "off_hit_at_10": false
+  },
+  "track_r_par_081": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 19,
+   "gold_fused_rank": 16,
+   "off_hit_at_10": false
+  },
+  "track_r_par_082": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 12,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_083": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 54,
+   "gold_fused_rank": 23,
+   "off_hit_at_10": false
+  },
+  "track_r_par_084": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_085": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 6,
+   "gold_fused_rank": 20,
+   "off_hit_at_10": false
+  },
+  "track_r_par_086": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_087": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 53,
+   "gold_fused_rank": 17,
+   "off_hit_at_10": false
+  },
+  "track_r_par_088": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 49,
+   "gold_fused_rank": 15,
+   "off_hit_at_10": false
+  },
+  "track_r_par_089": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 4,
+   "off_hit_at_10": true
+  },
+  "track_r_par_090": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_091": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_092": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 29,
+   "gold_fused_rank": 21,
+   "off_hit_at_10": false
+  },
+  "track_r_par_093": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 6,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_094": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 6,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_095": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 37,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_096": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 15,
+   "gold_fused_rank": 12,
+   "off_hit_at_10": false
+  },
+  "track_r_par_097": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 25,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_098": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 36,
+   "gold_fused_rank": 27,
+   "off_hit_at_10": false
+  },
+  "track_r_par_099": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_100": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_101": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 5,
+   "gold_fused_rank": 4,
+   "off_hit_at_10": true
+  },
+  "track_r_par_102": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 17,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_103": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_104": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": 82,
+   "off_hit_at_10": false
+  },
+  "track_r_par_105": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 25,
+   "gold_fused_rank": 17,
+   "off_hit_at_10": false
+  },
+  "track_r_par_106": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 21,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": false
+  },
+  "track_r_par_107": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 56,
+   "gold_fused_rank": 63,
+   "off_hit_at_10": false
+  },
+  "track_r_par_108": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 24,
+   "gold_fused_rank": 24,
+   "off_hit_at_10": false
+  },
+  "track_r_par_109": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 11,
+   "gold_fused_rank": 14,
+   "off_hit_at_10": false
+  },
+  "track_r_par_110": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 28,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_111": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 17,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_112": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 46,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": false
+  },
+  "track_r_par_113": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_114": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 29,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_115": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 31,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_116": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 32,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_117": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 49,
+   "gold_fused_rank": 8,
+   "off_hit_at_10": true
+  },
+  "track_r_par_118": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 39,
+   "gold_fused_rank": 24,
+   "off_hit_at_10": false
+  },
+  "track_r_par_119": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": false
+  },
+  "track_r_par_120": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 13,
+   "gold_fused_rank": 12,
+   "off_hit_at_10": false
+  },
+  "track_r_par_121": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 11,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_122": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_123": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 51,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_124": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 29,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_125": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_126": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 25,
+   "gold_fused_rank": 19,
+   "off_hit_at_10": false
+  },
+  "track_r_par_127": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 10,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_128": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_129": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 18,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_130": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 24,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_131": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_132": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_133": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 13,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_134": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 20,
+   "gold_fused_rank": 28,
+   "off_hit_at_10": false
+  },
+  "track_r_par_135": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_136": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_137": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 15,
+   "gold_fused_rank": 59,
+   "off_hit_at_10": false
+  },
+  "track_r_par_138": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 5,
+   "gold_fused_rank": 8,
+   "off_hit_at_10": false
+  },
+  "track_r_par_139": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 57,
+   "gold_fused_rank": 44,
+   "off_hit_at_10": false
+  },
+  "track_r_par_140": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 9,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_141": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 7,
+   "gold_fused_rank": 22,
+   "off_hit_at_10": false
+  },
+  "track_r_par_142": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_143": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 40,
+   "gold_fused_rank": 21,
+   "off_hit_at_10": false
+  },
+  "track_r_par_144": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_145": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_146": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_147": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 6,
+   "gold_fused_rank": 45,
+   "off_hit_at_10": false
+  },
+  "track_r_par_148": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_149": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 23,
+   "gold_fused_rank": 24,
+   "off_hit_at_10": false
+  },
+  "track_r_par_150": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 17,
+   "off_hit_at_10": false
+  },
+  "track_r_par_151": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 39,
+   "gold_fused_rank": 13,
+   "off_hit_at_10": false
+  },
+  "track_r_par_152": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 13,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_153": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 29,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_154": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_155": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": 93,
+   "off_hit_at_10": false
+  },
+  "track_r_par_156": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_157": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 6,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_158": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 15,
+   "gold_fused_rank": 8,
+   "off_hit_at_10": true
+  },
+  "track_r_par_159": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_160": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 4,
+   "gold_fused_rank": 10,
+   "off_hit_at_10": true
+  },
+  "track_r_par_161": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_162": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 3,
+   "gold_fused_rank": 19,
+   "off_hit_at_10": false
+  },
+  "track_r_par_163": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_164": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  },
+  "track_r_par_165": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 1,
+   "off_hit_at_10": true
+  },
+  "track_r_par_166": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_167": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_168": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 10,
+   "gold_fused_rank": 12,
+   "off_hit_at_10": false
+  },
+  "track_r_par_169": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 30,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_170": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 23,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": true
+  },
+  "track_r_par_171": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 30,
+   "gold_fused_rank": 7,
+   "off_hit_at_10": true
+  },
+  "track_r_par_172": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_173": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 5,
+   "off_hit_at_10": false
+  },
+  "track_r_par_174": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 2,
+   "gold_fused_rank": 3,
+   "off_hit_at_10": true
+  },
+  "track_r_par_175": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 48,
+   "gold_fused_rank": 34,
+   "off_hit_at_10": false
+  },
+  "track_r_par_176": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 7,
+   "gold_fused_rank": 9,
+   "off_hit_at_10": true
+  },
+  "track_r_par_177": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": 17,
+   "gold_fused_rank": 6,
+   "off_hit_at_10": true
+  },
+  "track_r_par_178": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": 70,
+   "off_hit_at_10": false
+  },
+  "track_r_par_179": {
+   "bge_hit_at_10": true,
+   "gold_cross_rerank_rank": 1,
+   "gold_fused_rank": 2,
+   "off_hit_at_10": true
+  },
+  "track_r_par_180": {
+   "bge_hit_at_10": false,
+   "gold_cross_rerank_rank": null,
+   "gold_fused_rank": null,
+   "off_hit_at_10": false
+  }
+ },
+ "schema": "memphant.eval.track-r-rerank-channel.v1"
+}

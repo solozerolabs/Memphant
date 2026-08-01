@@ -253,6 +253,7 @@ class Server:
         log_path: Path | None = None,
         cross_rerank: bool = False,
         reranker: str = "fastembed",
+        rerank_candidate_limit: int | None = None,
         pack_render_cap: int | None = None,
         pack_session_quota: int | None = None,
         pack_submodular_ordering: bool = False,
@@ -269,6 +270,7 @@ class Server:
         self.log_path = log_path
         self.cross_rerank = cross_rerank
         self.reranker = reranker
+        self.rerank_candidate_limit = rerank_candidate_limit
         self.pack_render_cap = pack_render_cap
         self.pack_session_quota = pack_session_quota
         self.pack_submodular_ordering = pack_submodular_ordering
@@ -282,6 +284,7 @@ class Server:
         env.pop("DATABASE_URL", None)
         env.pop("MEMPHANT_CROSS_RERANK", None)
         env.pop("MEMPHANT_RERANKER", None)
+        env.pop("MEMPHANT_RERANK_CANDIDATE_LIMIT", None)
         env.pop("MEMPHANT_PACK_RENDER_CAP", None)
         env.pop("MEMPHANT_PACK_SESSION_QUOTA", None)
         env.pop("MEMPHANT_PACK_SUBMODULAR_ORDERING", None)
@@ -295,6 +298,8 @@ class Server:
         if self.cross_rerank:
             env["MEMPHANT_CROSS_RERANK"] = "1"
             env["MEMPHANT_RERANKER"] = self.reranker
+            if self.rerank_candidate_limit is not None:
+                env["MEMPHANT_RERANK_CANDIDATE_LIMIT"] = str(self.rerank_candidate_limit)
         if self.pack_render_cap is not None:
             env["MEMPHANT_PACK_RENDER_CAP"] = str(self.pack_render_cap)
         if self.pack_session_quota is not None:
@@ -574,13 +579,25 @@ def drain_worker(
             out = sh([worker_bin], env=env)
             if out.returncode != 0:
                 raise RuntimeError(f"worker drain failed: {out.stderr.strip()[:300]}")
-            # `memphant-worker/src/main.rs:124` prints the failure counts on the
-            # drain line, deliberately, so "completed zero" is distinguishable
-            # from "failed everything". This parser only accepted the bare
-            # `completed=N` form, so EVERY harness on this drain path raised
-            # "malformed" on the current worker. The richer fields are now read
-            # and, more to the point, ASSERTED -- printing them and then
-            # discarding them was the same defect one layer up.
+            # The worker's tick-honesty change made the three outcome counts
+            # unconditional (`memphant-worker/src/main.rs:124`); the bare
+            # `completed=N` form is kept optional so an older binary still
+            # parses. The FAILED count is ASSERTED rather than discarded — the
+            # worker prints it precisely so "drained nothing" stays
+            # distinguishable from "failed everything", and a partially
+            # compiled corpus silently inflates the absent-from-pool bucket of
+            # every retrieval measurement taken against it. Printing the counts
+            # and then throwing them away was the same defect one layer up.
+            #
+            # THIS FIX WAS WRITTEN FOUR TIMES, INDEPENDENTLY, ON FOUR BRANCHES
+            # (af-rerank, af-phase3-reader, af-arecency, af-b1-structured), and
+            # a fifth harness lost a 53-minute ingest to it. All four landed on
+            # the same regex; only the comments differed, and it was the ONLY
+            # merge conflict across the whole integration. That is the cost of
+            # measuring on long-lived worktrees instead of one trunk — the
+            # defect is cheap, rediscovering it four times is not. Shared
+            # harness plumbing belongs on trunk before a lane branches off it.
+
             match = re.fullmatch(
                 r"memphant-worker: drain completed=(0|[1-9]\d*)"
                 r"(?: failed=(0|[1-9]\d*) retried=(0|[1-9]\d*) deferred=(0|[1-9]\d*))?\n?",
@@ -589,6 +606,11 @@ def drain_worker(
             if match is None:
                 raise RuntimeError(
                     f"worker drain completion output is malformed: {out.stdout[:300]!r}"
+                )
+            if match.group(2) is not None and int(match.group(2)):
+                raise RuntimeError(
+                    f"worker drain reported {match.group(2)} FAILED jobs -- the "
+                    f"corpus is only partially compiled: {out.stdout.strip()!r}"
                 )
             completed = int(match.group(1))
             if match.group(2) is not None and int(match.group(2)):

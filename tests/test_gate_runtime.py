@@ -832,6 +832,46 @@ def test_drain_worker_rejects_malformed_drain_completion(
         grt.drain_worker("worker", "postgres://fixture")
 
 
+def test_drain_worker_accepts_the_four_field_tick_honesty_line(grt, monkeypatch):
+    """The worker prints `completed/failed/retried/deferred` since the
+    tick-honesty change (memphant-worker/src/main.rs:124). Matching only the
+    bare `completed=N` form made every drain-path harness raise before any
+    probe ran."""
+    def fake_sh(command, **_kwargs):
+        if command == ["worker"]:
+            return grt.subprocess.CompletedProcess(
+                command,
+                0,
+                "memphant-worker: drain completed=7 failed=0 retried=0 deferred=0\n",
+                "",
+            )
+        return grt.subprocess.CompletedProcess(command, 0, "0\n", "")
+
+    monkeypatch.setattr(grt, "sh", fake_sh)
+    assert grt.drain_worker("worker", "postgres://fixture") == 7
+
+
+def test_drain_worker_refuses_a_drain_that_reports_failed_jobs(grt, monkeypatch):
+    """`failed` is asserted, not discarded. A partially compiled corpus
+    silently inflates the absent-from-pool bucket of every retrieval
+    measurement taken against it, so a ranking problem reads as a retrieval
+    problem. The queue can even be empty afterwards — failure is not
+    pendency — so this must fail on the counts, not on the pending probe."""
+    def fake_sh(command, **_kwargs):
+        if command == ["worker"]:
+            return grt.subprocess.CompletedProcess(
+                command,
+                0,
+                "memphant-worker: drain completed=7 failed=3 retried=0 deferred=0\n",
+                "",
+            )
+        return grt.subprocess.CompletedProcess(command, 0, "0\n", "")
+
+    monkeypatch.setattr(grt, "sh", fake_sh)
+    with pytest.raises(RuntimeError, match="3 FAILED jobs"):
+        grt.drain_worker("worker", "postgres://fixture")
+
+
 def test_portable_runtime_identity_never_records_machine_absolute_paths(grt) -> None:
     argv, command = grt.portable_command(
         [

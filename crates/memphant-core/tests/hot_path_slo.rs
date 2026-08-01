@@ -15,6 +15,24 @@ fn tenant(value: u128) -> TenantId {
     TenantId::from_u128(value)
 }
 
+/// A RELEASE-calibrated latency bar, as the name says. Nothing used to enforce
+/// that, so `cargo test --workspace` — the documented pre-commit command, and
+/// CI's own `Rust tests` step — ran it in DEBUG, where the same work takes
+/// 12–17s against 2.56s in release and p50 lands on top of the 200ms bar.
+///
+/// MEASURED 2026-08-01, same binary, three consecutive runs at host loadavg
+/// ~34: pass, pass, then `p50 206.409ms breached 200ms`. An earlier run under
+/// heavier load failed at 269ms. A latency assertion with a 3% margin on a
+/// shared machine is not measuring the code, and a suite that goes red at
+/// random is how a real regression gets waved through.
+///
+/// So: skipped in debug (visibly, as `ignored` — not silently compiled out),
+/// and run in release. CI runs it explicitly via the `Hot-path SLO (release)`
+/// step; the bar is only meaningful against optimized code.
+#[cfg_attr(
+    debug_assertions,
+    ignore = "release-calibrated SLO bar; run with --release"
+)]
 #[tokio::test]
 async fn fast_mode_recall_holds_release_hot_path_slo() {
     let store = InMemoryStore::default();

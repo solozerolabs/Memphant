@@ -8,7 +8,9 @@
     "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-b.json",
     "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-p-vs-a.json",
     "docs/build-log/artifacts/null-review-ledger.json",
-    "docs/build-log/artifacts/r6-docs-decision/packet.json"
+    "docs/build-log/artifacts/r6-docs-decision/packet.json",
+    "docs/build-log/artifacts/track-r-rerank/fusion-sweep.json",
+    "docs/build-log/artifacts/track-r-rerank/rerank-channel.json"
   ],
   "pending": [
     {
