@@ -113,6 +113,8 @@ fn retain_body(_tenant_id: TenantId, scope_id: ScopeId, actor_id: ActorId) -> Va
         payload: RetainPayload::Episode(RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: "Auth contract fact body.".to_string(),
+            subject: None,
+            predicate: None,
         }),
     })
     .expect("serialize")

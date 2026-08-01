@@ -186,15 +186,47 @@ mod context_binding_contract_tests {
         });
         assert!(serde_json::from_value::<RetainEpisodeHttpRequest>(unit).is_err());
 
-        let missing_fact_key = serde_json::json!({
+        // D1: a unit may name its subject instead of pre-composing a fact key,
+        // so `fact_key` is no longer a wire-level requirement. Requiring ONE of
+        // the two is a service-level rule (it needs the scope to compose the
+        // key) and is asserted in `memphant-core/tests/retain_validation.rs`.
+        // The wire contract here is only that both shapes decode and neither
+        // field admits unknown neighbours.
+        let unit_request = |payload: serde_json::Value| {
+            serde_json::json!({
+                "subject_id": SubjectId::new(), "scope_id": ScopeId::new(),
+                "actor_id": ActorId::new(), "agent_node_id": AgentNodeId::new(),
+                "subject_generation": 0, "source_ref": "source:1",
+                "observed_at": "2030-01-01T00:00:00Z",
+                "payload": {"unit": payload}
+            })
+        };
+        for payload in [
+            serde_json::json!({"kind": "semantic", "subject": "profile",
+                "predicate": "lives_in", "body": "Lives in Lima", "confidence": 0.5}),
+            serde_json::json!({"kind": "semantic", "predicate": "is",
+                "body": "A complete unit body", "confidence": 0.5}),
+        ] {
+            assert!(
+                serde_json::from_value::<RetainEpisodeHttpRequest>(unit_request(payload)).is_ok()
+            );
+        }
+        let unknown_unit_field = unit_request(serde_json::json!({
+            "kind": "semantic", "subject": "profile", "predicate": "is",
+            "body": "A complete unit body", "confidence": 0.5, "subject_hint": "legacy"
+        }));
+        assert!(serde_json::from_value::<RetainEpisodeHttpRequest>(unknown_unit_field).is_err());
+
+        // The episode payload gained the same caller-authored key fields.
+        let keyed_episode = serde_json::json!({
             "subject_id": SubjectId::new(), "scope_id": ScopeId::new(),
             "actor_id": ActorId::new(), "agent_node_id": AgentNodeId::new(),
             "subject_generation": 0, "source_ref": "source:1",
             "observed_at": "2030-01-01T00:00:00Z",
-            "payload": {"unit": {"kind": "semantic", "predicate": "is",
-                "body": "A complete unit body", "confidence": 0.5}}
+            "payload": {"episode": {"source_kind": "user", "body": "Use tabs.",
+                "subject": "style", "predicate": "indentation"}}
         });
-        assert!(serde_json::from_value::<RetainEpisodeHttpRequest>(missing_fact_key).is_err());
+        assert!(serde_json::from_value::<RetainEpisodeHttpRequest>(keyed_episode).is_ok());
     }
 }
 
@@ -1832,16 +1864,38 @@ pub struct RetainResourcePayload {
 pub struct RetainEpisodePayload {
     pub source_kind: String,
     pub body: String,
+    /// What this episode is *about*, supplied by the caller that authored the
+    /// write — typically the agent that just read the directive it is
+    /// recording. With `predicate` it makes the compiled unit's fact key
+    /// explicit, which is the only thing that lets it supersede a prior rule
+    /// on the same subject; absent either, `derive_fact_key` falls back to the
+    /// content-hash auto key exactly as before. Never an LLM call on this
+    /// path — the caller already knows the subject or it does not.
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub predicate: Option<String>,
 }
 
 /// Direct pre-compiled unit payload for trusted callers (spec 08 §209 `unit`
-/// shape). Requires an explicit fact key, predicate, confidence, and kind; the admission
-/// trust policy still applies.
+/// shape). Requires a predicate, confidence, kind, and a subject key — as
+/// either an explicit `subject` (the server composes the scope-qualified key)
+/// or a pre-composed `fact_key`. The admission trust policy still applies.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RetainUnitPayload {
     pub kind: MemoryKind,
-    pub fact_key: String,
+    /// A pre-composed `{scope_id}:{subject}:{predicate}` key. Optional since
+    /// D1: prefer `subject`, which lets the server apply `derive_fact_key` and
+    /// spares the caller from reimplementing that primitive. When both are
+    /// present `fact_key` wins, so callers that supplied one before are
+    /// byte-for-byte unaffected.
+    #[serde(default)]
+    pub fact_key: Option<String>,
+    /// The subject this assertion is about. Composed server-side with
+    /// `predicate` into the fact key when `fact_key` is absent.
+    #[serde(default)]
+    pub subject: Option<String>,
     pub predicate: String,
     pub body: String,
     pub confidence: f32,

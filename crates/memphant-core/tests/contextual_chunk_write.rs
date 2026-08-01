@@ -46,6 +46,8 @@ fn retain_request(context: &memphant_types::ResolvedMemoryContext) -> RetainEpis
         payload: memphant_types::RetainPayload::Episode(memphant_types::RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: EPISODE_BODY.to_string(),
+            subject: None,
+            predicate: None,
         }),
     }
 }

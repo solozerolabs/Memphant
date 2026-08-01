@@ -120,7 +120,8 @@ fn unit_retain(
         observed_at: "2026-08-01T00:00:00Z".to_string(),
         payload: RetainPayload::Unit(RetainUnitPayload {
             kind: MemoryKind::Preference,
-            fact_key: fact_key.to_string(),
+            fact_key: Some(fact_key.to_string()),
+            subject: None,
             predicate: "prefers".to_string(),
             body: body.to_string(),
             confidence: 1.0,
@@ -138,7 +139,7 @@ async fn retain(
 ) -> Result<(Vec<UnitId>, String), String> {
     let idempotency = request.source_ref.clone();
     let fact_key = match &request.payload {
-        RetainPayload::Unit(unit) => unit.fact_key.clone(),
+        RetainPayload::Unit(unit) => unit.fact_key.clone().expect("this file composes fact keys"),
         _ => unreachable!("this file only retains units"),
     };
     let response = app

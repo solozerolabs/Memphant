@@ -104,6 +104,8 @@ fn retain_request(context: &ResolvedMemoryContext, body: &str) -> RetainEpisodeH
         payload: memphant_types::RetainPayload::Episode(memphant_types::RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: body.to_string(),
+            subject: None,
+            predicate: None,
         }),
     }
 }
@@ -440,7 +442,8 @@ async fn recomposed_inferred_belief_does_not_double_open_its_object_key() {
             observed_at: "2026-07-09T00:00:00Z".to_string(),
             payload: memphant_types::RetainPayload::Unit(memphant_types::RetainUnitPayload {
                 kind: memphant_types::MemoryKind::Semantic,
-                fact_key: format!("observation:{tag}"),
+                fact_key: Some(format!("observation:{tag}")),
+                subject: None,
                 predicate: "coffee shops".to_string(),
                 body: format!("The user prefers {descriptor} coffee shops."),
                 confidence: 0.9,

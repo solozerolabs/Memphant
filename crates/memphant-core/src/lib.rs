@@ -282,6 +282,16 @@ pub fn resolve_recall_time(
     })
 }
 
+/// An owned copy of `value` when it holds non-whitespace, else `None`. Used on
+/// the retain path so a caller sending `""` or `"  "` for a subject or fact key
+/// is treated as having sent nothing at all, rather than minting a blank key.
+pub fn non_blank(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
 pub fn validate_valid_interval(
     valid_from: Option<&str>,
     valid_to: Option<&str>,

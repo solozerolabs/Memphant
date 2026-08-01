@@ -250,6 +250,8 @@ fn episode_request(
         payload: RetainPayload::Episode(RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: body.to_string(),
+            subject: None,
+            predicate: None,
         }),
     }
 }
@@ -418,7 +420,8 @@ async fn canonical_projection_is_a_dedicated_unranked_visible_snapshot() {
             observed_at: "2026-07-22T00:00:00Z".to_string(),
             payload: RetainPayload::Unit(RetainUnitPayload {
                 kind: MemoryKind::Semantic,
-                fact_key: "projection:visible".to_string(),
+                fact_key: Some("projection:visible".to_string()),
+                subject: None,
                 predicate: "states".to_string(),
                 body: "This is the visible canonical fact.".to_string(),
                 confidence: 1.0,
@@ -1416,6 +1419,8 @@ async fn episode_retain_rejects_source_kinds_outside_the_database_contract() {
     request.payload = RetainPayload::Episode(RetainEpisodePayload {
         source_kind: "memora-dialogue".to_string(),
         body: "hello".to_string(),
+        subject: None,
+        predicate: None,
     });
 
     let (status, body) = error_json_request(&app, "POST", "/v1/episodes", Some(request)).await;

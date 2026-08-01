@@ -63,6 +63,8 @@ fn episode_request(context: &ResolvedMemoryContext) -> RetainEpisodeHttpRequest 
         payload: RetainPayload::Episode(RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: "postgres atomic episode body".to_string(),
+            subject: None,
+            predicate: None,
         }),
     }
 }
@@ -98,7 +100,8 @@ fn direct_request(context: &ResolvedMemoryContext) -> RetainEpisodeHttpRequest {
         observed_at: CLOCK.0.to_string(),
         payload: RetainPayload::Unit(RetainUnitPayload {
             kind: MemoryKind::Semantic,
-            fact_key: "profile:timezone".to_string(),
+            fact_key: Some("profile:timezone".to_string()),
+            subject: None,
             predicate: "timezone".to_string(),
             body: "timezone is pacific time".to_string(),
             confidence: 1.0,

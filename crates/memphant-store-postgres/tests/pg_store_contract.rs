@@ -1692,6 +1692,8 @@ async fn retain_persists_subject_context_and_rejects_mixed_bindings() {
                 payload: RetainPayload::Episode(RetainEpisodePayload {
                     source_kind: "user".to_string(),
                     body: "subject-bound Postgres memory".to_string(),
+                    subject: None,
+                    predicate: None,
                 }),
             },
         )
@@ -1746,6 +1748,8 @@ async fn retain_persists_subject_context_and_rejects_mixed_bindings() {
                 payload: RetainPayload::Episode(RetainEpisodePayload {
                     source_kind: "user".to_string(),
                     body: "must not cross subjects".to_string(),
+                    subject: None,
+                    predicate: None,
                 }),
             },
         )
@@ -1878,6 +1882,7 @@ pg_contract_test!(forget_source_cascades_to_composed_dependent);
 pg_contract_test!(forget_by_unit_closes_and_purges);
 pg_contract_test!(fetch_episodes_honors_large_limit);
 pg_contract_test!(semantic_update_supersedes_unit_aged_past_recall_window);
+pg_contract_test!(caller_subject_key_supersedes_without_client_derivation);
 pg_contract_test!(scope_memory_page_paginates_without_overlap);
 
 #[tokio::test]
@@ -3334,7 +3339,8 @@ async fn direct_unit_retain_returns_unit_id_past_scope_page_clamp() {
                 observed_at: CLOCK.0.to_string(),
                 payload: RetainPayload::Unit(RetainUnitPayload {
                     kind: MemoryKind::Semantic,
-                    fact_key: "direct-subject".to_string(),
+                    fact_key: Some("direct-subject".to_string()),
+                    subject: None,
                     predicate: "records".to_string(),
                     body: direct_body.clone(),
                     confidence: 1.0,
@@ -3748,6 +3754,8 @@ async fn structured_exact_recurrence_replaces_every_overlapping_postgres_rectang
                 payload: RetainPayload::Episode(RetainEpisodePayload {
                     source_kind: "user".to_string(),
                     body: (*body).to_string(),
+                    subject: None,
+                    predicate: None,
                 }),
             },
         )

@@ -189,6 +189,8 @@ fn retain_request(
         payload: memphant_types::RetainPayload::Episode(memphant_types::RetainEpisodePayload {
             source_kind: "user".to_string(),
             body: body.to_string(),
+            subject: None,
+            predicate: None,
         }),
     }
 }

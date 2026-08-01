@@ -1058,6 +1058,8 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
                             payload: RetainPayload::Episode(RetainEpisodePayload {
                                 source_kind: "user".to_string(),
                                 body,
+                                subject: None,
+                                predicate: None,
                             }),
                         },
                     )

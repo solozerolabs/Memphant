@@ -55,6 +55,7 @@ contract_test!(forget_source_cascades_to_composed_dependent);
 contract_test!(forget_by_unit_closes_and_purges);
 contract_test!(fetch_episodes_honors_large_limit);
 contract_test!(semantic_update_supersedes_unit_aged_past_recall_window);
+contract_test!(caller_subject_key_supersedes_without_client_derivation);
 contract_test!(scope_memory_page_paginates_without_overlap);
 
 /// Pure type-shape check (no store): the staged-write structs carry the tenant

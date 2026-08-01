@@ -2299,8 +2299,23 @@
           "body": {
             "type": "string"
           },
+          "predicate": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "source_kind": {
             "type": "string"
+          },
+          "subject": {
+            "default": null,
+            "description": "What this episode is *about*, supplied by the caller that authored the\nwrite — typically the agent that just read the directive it is\nrecording. With `predicate` it makes the compiled unit's fact key\nexplicit, which is the only thing that lets it supersede a prior rule\non the same subject; absent either, `derive_fact_key` falls back to the\ncontent-hash auto key exactly as before. Never an LLM call on this\npath — the caller already knows the subject or it does not.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -2399,7 +2414,7 @@
       },
       "RetainUnitPayload": {
         "additionalProperties": false,
-        "description": "Direct pre-compiled unit payload for trusted callers (spec 08 §209 `unit`\nshape). Requires an explicit fact key, predicate, confidence, and kind; the admission\ntrust policy still applies.",
+        "description": "Direct pre-compiled unit payload for trusted callers (spec 08 §209 `unit`\nshape). Requires a predicate, confidence, kind, and a subject key — as\neither an explicit `subject` (the server composes the scope-qualified key)\nor a pre-composed `fact_key`. The admission trust policy still applies.",
         "properties": {
           "body": {
             "type": "string"
@@ -2409,13 +2424,26 @@
             "type": "number"
           },
           "fact_key": {
-            "type": "string"
+            "default": null,
+            "description": "A pre-composed `{scope_id}:{subject}:{predicate}` key. Optional since\nD1: prefer `subject`, which lets the server apply `derive_fact_key` and\nspares the caller from reimplementing that primitive. When both are\npresent `fact_key` wins, so callers that supplied one before are\nbyte-for-byte unaffected.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "kind": {
             "$ref": "#/components/schemas/MemoryKind"
           },
           "predicate": {
             "type": "string"
+          },
+          "subject": {
+            "default": null,
+            "description": "The subject this assertion is about. Composed server-side with\n`predicate` into the fact key when `fact_key` is absent.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "target_unit_ids": {
             "default": null,
@@ -2445,7 +2473,6 @@
         },
         "required": [
           "kind",
-          "fact_key",
           "predicate",
           "body",
           "confidence"
