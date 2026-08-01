@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "lane": "s5-swecb",
+  "artifact": "SWE-ContextBench stage 0 analysis and gate verdict",
+  "date": "2026-08-01",
+  "model_calls": 0,
+  "cost_usd": 0.0,
+  "prereg": "docs/build-log/artifacts/s5-swecb/stage0-prereg.json",
+  "runs": {
+    "full": {
+      "path": "docs/build-log/artifacts/s5-swecb/stage0-recall-patchfree.json",
+      "git_head": "0809249de6e28bb5e3bbe9766f8ba6539ed55947",
+      "runner_sha256": "fb863c0308d83ec98d54e0f7f026ddc0fc7c52c3efdb8908b307619a396d4d3d"
+    },
+    "lite": {
+      "path": "docs/build-log/artifacts/s5-swecb/stage0-recall-lite-patchfree.json",
+      "git_head": "7507fce50f5f2d4cf19cf5d0463d64e43ca97740",
+      "runner_sha256": "75deca839738e16dfdf1e9ef5dd739b219e5f9644bcaa2330adcf172f39d56b8"
+    }
+  },
+  "verdict": {
+    "gate": "GREEN",
+    "primary_statistic": "packed recall@5 of the official Relationship parent, 357 distinct targets, ANY-PARENT, whole 1,007-row pool as one haystack",
+    "value": 0.7591,
+    "exact_binomial_95_ci": [
+      0.7128,
+      0.8013
+    ],
+    "hits": 271,
+    "n": 357,
+    "preregistered_bands": {
+      "GREEN": ">= 0.50",
+      "AMBER": "0.20 - 0.50",
+      "RED": "< 0.20"
+    },
+    "consequence": "Stage 1 proceeds. Retrieval is not the reason to cancel anything."
+  },
+  "full_scope": {
+    "n_distinct_tasks": 357,
+    "pool": 1007,
+    "packed_recall_at_k": {
+      "1": 0.5602,
+      "10": 0.8291,
+      "25": 0.8824,
+      "3": 0.7143,
+      "5": 0.7591
+    },
+    "retrieval_recall_at_k": {
+      "1": 0.5602,
+      "10": 0.8459,
+      "25": 0.9048,
+      "3": 0.7283,
+      "5": 0.7787
+    },
+    "miss_taxonomy_at_k5": {
+      "absent_from_candidates": 4,
+      "hit": 271,
+      "ranked_below_cut": 74,
+      "ranked_within_k_but_not_packed": 8
+    },
+    "latency_ms": {
+      "max": 29876,
+      "p50": 1398,
+      "p95": 4368
+    }
+  },
+  "lite_scope": {
+    "n_distinct_tasks": 99,
+    "pool": 300,
+    "packed_recall_at_k": {
+      "1": 0.5455,
+      "10": 0.798,
+      "25": 0.8788,
+      "3": 0.6869,
+      "5": 0.7273
+    },
+    "retrieval_recall_at_k": {
+      "1": 0.5758,
+      "10": 0.8182,
+      "25": 0.9394,
+      "3": 0.7172,
+      "5": 0.7677
+    },
+    "miss_taxonomy_at_k5": {
+      "hit": 72,
+      "ranked_below_cut": 23,
+      "ranked_within_k_but_not_packed": 4
+    },
+    "latency_ms": {
+      "max": 17945,
+      "p50": 2228,
+      "p95": 6513
+    }
+  },
+  "like_for_like_vs_published_table_5": {
+    "metric": "Overall Matched (%) -- a task counts once if the gold parent appears anywhere in the top-k. Verified to be a union rather than a sum: Mem0's per-rank cells 25.25+15.15+9.09 = 49.49 exceed its Overall 39.39, so Overall is ANY-PARENT recall@k, the same statistic reported here.",
+    "configuration": "99 Lite targets against the 300-row Lite experience pool -- the published configuration, reproduced exactly",
+    "rows": [
+      {
+        "method": "Free Context Learning",
+        "k": "self-determine",
+        "matched_pct": 18.18
+      },
+      {
+        "method": "Free Summary Learning",
+        "k": "self-determine",
+        "matched_pct": 36.36
+      },
+      {
+        "method": "Mem0",
+        "k": 3,
+        "matched_pct": 39.39,
+        "memphant_at_same_k": 68.69
+      },
+      {
+        "method": "OpenViking",
+        "k": 3,
+        "matched_pct": 51.52,
+        "memphant_at_same_k": 68.69
+      },
+      {
+        "method": "LangMem",
+        "k": 10,
+        "matched_pct": 73.34,
+        "memphant_at_same_k": 79.8
+      },
+      {
+        "method": "Supermemory",
+        "k": 15,
+        "matched_pct": 59.6,
+        "memphant_at_same_k": "not measured at k=15; 79.80 at k=10 and 87.88 at k=25 bracket it"
+      }
+    ],
+    "verdict": "MemPhant leads every published method at matched or SMALLER k.",
+    "caveats_that_must_travel_with_this_table": [
+      "n=99. A 10pp gap is ten instances. This is a ranking, not a measurement, by this programme's own n_d >= 6 floor.",
+      "These are the benchmark authors' own runs of other people's systems. No per-instance results are published for any arm, so nothing can be paired and NO significance test is possible.",
+      "Supermemory's k=15 is not reproduced here; its row is bracketed, not matched.",
+      "The exact retrieval-unit definition each vendor used is not published. 'Matched' is assumed to mean the gold parent instance, which is the only reading consistent with the arithmetic above.",
+      "One gold parent (scikit-learn__scikit-learn-26323) is outside the 300-row Lite pool and is recorded UNREACHABLE here. It is unknown whether the published numbers account for it."
+    ]
+  },
+  "stage_2_power": {
+    "instrument_ceiling_pp": 3.72,
+    "ceiling_source": "Table 3, Claude Sonnet 4.5 / Claude Code on Related: no-memory 19.68 -> oracle-summary 23.40",
+    "max_available_n": 357,
+    "expected_memphant_effect_pp": 2.82,
+    "expected_effect_derivation": "packed recall@5 (0.7591) x ceiling (3.72pp). UPPER bound: assumes a retrieved parent helps exactly as much as an oracle-supplied one.",
+    "two_sided_exact_mcnemar_alpha_0.05": [
+      {
+        "psi": 0.05,
+        "power_for_ceiling": 0.887,
+        "power_for_expected": 0.609,
+        "mde_at_357_pp": 3.38
+      },
+      {
+        "psi": 0.1,
+        "power_for_ceiling": 0.546,
+        "power_for_expected": 0.33,
+        "mde_at_357_pp": 4.85
+      },
+      {
+        "psi": 0.15,
+        "power_for_ceiling": 0.395,
+        "power_for_expected": 0.239,
+        "mde_at_357_pp": 5.89
+      },
+      {
+        "psi": 0.2,
+        "power_for_ceiling": 0.308,
+        "power_for_expected": 0.189,
+        "mde_at_357_pp": 6.81
+      },
+      {
+        "psi": 0.25,
+        "power_for_ceiling": 0.255,
+        "power_for_expected": 0.159,
+        "mde_at_357_pp": 7.61
+      },
+      {
+        "psi": 0.3,
+        "power_for_ceiling": 0.22,
+        "power_for_expected": 0.14,
+        "mde_at_357_pp": 8.32
+      }
+    ],
+    "psi_independence_bound": 0.339,
+    "computed_by": "scripts/instrument_power.py",
+    "verdict": "The expected effect (2.82pp) is BELOW the MDE at every psi, including 0.05. At a realistic psi of 0.15-0.30 the power to detect it is 0.14-0.24. The instrument cannot resolve the effect it measures on the Resolved endpoint at its maximum available n -- a conclusion that applies equally to Table 4's own ranking and to Supermemory's 4.04pp margin at n=99.",
+    "recommendation": "CANCEL stage 2 as scoped, independently of s4-controls. If a paid run is still wanted, promote FAIL_TO_PASS to primary (Table 4 moves it 19.64 -> 55.95 versus Resolved's 26.26 -> 30.30) -- roughly ten times the effect, measured per test rather than per task."
+  },
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "MemPhant retrieves the official SWE-ContextBench Relationship parent for 75.91% of 357 targets at packed rank<=5 against the whole 1,007-row experience pool, clearing the preregistered GREEN band of 0.50; and the instrument's own published ceiling of 3.72pp sits below its minimum detectable effect at its maximum available n of 357.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 357,
+      "b": 0,
+      "c": 0,
+      "n_d": 0,
+      "psi_observed": null,
+      "mde_at_80": null,
+      "computed_by": "scripts/instrument_power.py",
+      "source": "docs/build-log/artifacts/s5-swecb/stage0-recall-patchfree.json"
+    },
+    "harness": {
+      "command": "scripts/swecb_stage0_run.sh patchfree <port> <python> <output> full",
+      "embed_model": "small",
+      "scorer": "memphant recall mode=fast, gold-parent id match at packed rank and at trace fused_rank",
+      "k": 25,
+      "budget": 32768,
+      "flags": [
+        "--body patchfree",
+        "--scope full",
+        "lexical_scorer=default",
+        "cross_rerank=off"
+      ]
+    },
+    "corpus": {
+      "snapshot_id": "jiayuanz3/SWEContextBench@5bec275a2095768a53ac804ae4fdf90b1723b8af",
+      "sha256": "384aa65247255b4b95323d039f701b7ed9198570029c503a881f48ba73dfa7b9",
+      "n_items": 1007,
+      "note": "sha256 is SWEContextBench_Experience.parquet, the ingested pool, re-verified on disk at run time against benchmarks/manifests/swe_contextbench.lock.json. 1,100 rows deduplicate to 1,007 distinct byte-identical-grouped instances."
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Retrieval fired and is proven from the run's own scratch DB, not from a self-report: 1,007/1,007 experiences carry a compiled memory_unit, 1,053 embeddings exist, the worker completed 1,007 jobs and the queue was asserted empty (pending=0, dead=0) on the BENCH superuser credential, all 376 recalls returned degraded=false, and all 376 traces were fetched and carry ~550 ranked candidates each. The single-haystack construction is the mechanism under test: one subject and one scope for all 1,007 experiences, so recall ranks over the whole corpus rather than over a pool of one as the retained n=12 rehearsal did.",
+    "leakage": {
+      "unit_definition": "One memory unit is one experience task rendered as identity + repository + base commit + observed-at + problem_statement + hints_text. The gold merged patch is DELIBERATELY EXCLUDED.",
+      "absolute_target_coverage": 0.0306,
+      "floor": 0.069,
+      "floor_kind": "exhaustive",
+      "concentration": 1.0,
+      "provenance_class": "human_published",
+      "note": "Measured, not assumed. Parent problem_statement+hints contains an exact target added line (>20 chars) on 9.0% of 376 edges with mean coverage 0.0306, against a 6.9% floor produced by the TARGET's own problem statement quoting its own patch. The rejected with-patch pool measured 37.2% / 0.2856 against a same-repo random control of 9.1% / 0.0013, and was ruled inadmissible before any cell existed.",
+      "floor_kind_note": "exhaustive: all 376 relationship edges were checked, not sampled.",
+      "provenance_class_note": "human_published: every memory unit is upstream GitHub issue/PR prose written by third-party contributors years before this lane existed. It is emphatically NOT authored_from_target -- the with-patch variant, which WOULD have approached that class at 37.2% exact-added-line overlap, was rejected before any cell existed."
+    },
+    "bar": null,
+    "attribution": {
+      "method": "unverified"
+    },
+    "instrument_verification": {
+      "shipped_rows_verified": true,
+      "rows_counted": 1007,
+      "fields_counted": {
+        "experience_rows": 1100,
+        "experience_distinct": 1007,
+        "related_rows": 376,
+        "related_distinct": 357,
+        "relationship_edges": 376,
+        "distinct_target_parent_pairs": 360,
+        "targets_with_two_distinct_parents": 3
+      },
+      "license_id": "MIT",
+      "license_source": "RECORD_METADATA",
+      "license_evidence": "HuggingFace record metadata at the pinned revision declares cardData.license=mit and the card README.md is pinned by sha256. NO LICENSE FILE EXISTS in either the dataset or the code repo -- independently re-confirmed. Local measurement and citation only; NOT redistribution-clear.",
+      "note": "The paper states 1,100 base and 376 related tasks. Measured distinct counts are 1,007 and 357. The 357 figure is corroborated independently by 357 Docker instance tags on jiayuanz3/swecontextbench and by 357 case files in cases/SWEContextBench Full/ at code rev 31bb0415."
+    }
+  }
+}

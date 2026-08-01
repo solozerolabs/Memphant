@@ -162,5 +162,41 @@
     "claimed": "the edge table has 376 rows over 357 distinct related ids (19 tasks have 2 parents)",
     "measured": "376 edges over 357 distinct related ids, but only 360 distinct (target, parent) PAIRS. Only THREE targets have two DISTINCT parents: django__django-27910, scikit-learn__scikit-learn-25763, scikit-learn__scikit-learn-25365. The other 16 surplus edges are the same (target, parent) pair repeated, 14 of them byte-identical rows.",
     "why_it_matters": "The ANY-PARENT vs ALL-PARENT scoring choice, which looked like it governed 19 of 357 tasks, actually governs 3. It is very nearly a non-decision."
+  },
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "This artifact preregisters the stage 0 decision rule and pool definition; it contains no measurement and may not be cited for one. The cells live in stage0-analysis.json.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 357,
+      "b": 0,
+      "c": 0,
+      "n_d": 0,
+      "source": "none -- this document was committed BEFORE the first ingest and deliberately contains no cell"
+    },
+    "harness": {
+      "command": "scripts/swecb_stage0_run.sh",
+      "embed_model": "small",
+      "scorer": "n/a -- preregistration only",
+      "k": 25,
+      "budget": 32768,
+      "flags": [
+        "preregistration, not a run"
+      ]
+    },
+    "corpus": {
+      "snapshot_id": "jiayuanz3/SWEContextBench@5bec275a2095768a53ac804ae4fdf90b1723b8af",
+      "sha256": "384aa65247255b4b95323d039f701b7ed9198570029c503a881f48ba73dfa7b9",
+      "n_items": 1007
+    },
+    "mechanism_enabled": false,
+    "mechanism_evidence": "No mechanism ran. This is a preregistration document, committed at fd2ebd7c before the first ingest and amended at 0e137b54 before any cell existed. decisional=false because it carries no result, NOT because a mechanism was off during a probe.",
+    "leakage": null,
+    "bar": null,
+    "attribution": {
+      "method": "unverified"
+    },
+    "instrument_verification": null
   }
 }
