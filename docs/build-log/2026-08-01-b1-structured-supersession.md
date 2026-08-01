@@ -15,7 +15,10 @@
 > zero** on the confirmatory slice. Positive mechanism, unproven semantics —
 > **as implemented**, meaning a whole-body content-word Jaccard at τ = 0.25,
 > which §10.1 shows is the wrong unit and is the only selector anyone has run
-> live. This is not a verdict on semantic selection in general.
+> live, **on MemoryCode**, whose distractors are always earlier declarations of
+> the same key — a structure that supplies part of the effect and is not
+> guaranteed off this corpus (§9.8). This is not a verdict on semantic selection
+> in general, and the accuracy figures do not transfer unexamined.
 
 ## 1. The problem B1 attacks
 
@@ -657,6 +660,25 @@ job. It just did not produce the answer that was hoped for.
    different branch, and it belongs in the same paragraph as this log's result
    rather than inside its tables.
 
+8. **The instrument's structure supplies part of the result, and nothing here
+   measures a corpus without it.** This is the bound with the widest blast
+   radius, and it was missing from this list entirely until the A-recency lane's
+   §8.5 fix prompted a re-read — the same defect they had, one list further
+   down. MemoryCode's distractors are always *earlier* declarations of the same
+   key and the gold is always the latest declarer, so "retire the older row"
+   approximates the scoring rule directly. That is why the random ablation earns
+   +0.0259 while reading nothing, and it means **the split between "retirement"
+   and "semantics" in §8.3 is a property of this corpus, not of supersession.**
+   Two regimes would break it and neither has been run: a corpus where a retired
+   convention is later **re-asserted** — the latest declarer is then the correct
+   target, and retiring it is exactly the error R2 was punished for — and one
+   where currency is signalled by something other than recency. Read at
+   production scope, "id-named supersession buys ≈16% of the headroom" is a
+   claim this data cannot support. *What would settle it:* an instrument
+   carrying re-assertion, or a second corpus whose gold is not
+   recency-identified. Until one exists, the transferable claim in this log is
+   the **mechanism** result of §5, not the accuracy result of §6.
+
 ## 10. Verdict
 
 **Did the mechanism work?** Yes, unambiguously. `supersede by exact prior unit
@@ -667,8 +689,18 @@ production from the supersession decision converts a mechanism that recovered
 **0.8% of groups** into one that fires on **13.8% of sessions**. That is the
 engineering result and it is solid.
 
-**Did it pay?** Yes, but less than the headline says, and for a reason that is
-half boring. Arm S beats its own no-op isolator by **+0.0506** on the
+**Did it pay?** **On MemoryCode, and the instrument is doing part of the work.**
+That bound goes ahead of the number because the number is misleading without it:
+MemoryCode's distractors are *always earlier declarations of the same key* and
+the gold is *always* the latest declarer, so on this corpus "retire the old row"
+is close to a restatement of the scoring rule (§8, §8.1). A corpus where a
+retired convention is later re-asserted, or where the current rule is not the
+most recent one stated, removes the mechanism by which **both** arm S and the
+ablations earn their points. Nothing here measures that case, and §9.8 says what
+would.
+
+Within that bound: yes, but less than the headline says, and for a reason that
+is half boring. Arm S beats its own no-op isolator by **+0.0506** on the
 confirmatory slice, CI [+0.0269, +0.0753] — **≈16% of the oracle headroom,
 ceiling re-measured 2026-08-01** (§7.1; 18.9% against the preregistered
 cross-tree constant, which is stale). That denominator moved 4.4pp in a day;
@@ -790,7 +822,9 @@ naming a unit id makes bitemporal supersession fire on a real corpus and buys
 roughly half of that is available to a policy that understands nothing; and the
 semantic half of it has not been demonstrated at the preregistered bar **by the
 one selector that has been run live — a whole-body Jaccard at τ = 0.25, which
-§10.1 shows is the wrong unit.**
+§10.1 shows is the wrong unit.** All of it is **on MemoryCode**, whose distractor
+structure supplies part of the effect (§9.8); the durable, corpus-independent
+claim in this log is the *mechanism* result of §5, not the accuracy result.
 
 ## 11. Reproduce
 
