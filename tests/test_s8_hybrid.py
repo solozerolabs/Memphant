@@ -207,3 +207,18 @@ def test_the_refusal_flag_does_not_launder_any_other_error():
     }
     with pytest.raises(SystemExit, match="would not apply either"):
         analyze.assert_pool_containment("h64", report, allow_refusals=True)
+
+
+def test_random_ranker_floor_is_exact_and_bounded():
+    gold_ranks = {"q1": [1], "q2": [50], "q3": []}
+    pool_sizes = {"q1": 100, "q2": 100, "q3": 100}
+    order = ["q1", "q2", "q3"]
+    # At N<=10 the whole view is returned, so it is a hit iff gold is in view.
+    assert analyze.random_ranker_baseline(gold_ranks, pool_sizes, order, 10) == 1.0
+    # At N=20 with one gold in view, exactly 10/20.
+    assert round(analyze.random_ranker_baseline(gold_ranks, pool_sizes, order, 20), 6) == 0.5
+    # It can never exceed coverage: a random ranker cannot find what it was not shown.
+    for n in (4, 16, 64, 128):
+        assert analyze.random_ranker_baseline(
+            gold_ranks, pool_sizes, order, n
+        ) <= analyze.coverage_at(gold_ranks, order, n) + 1e-9

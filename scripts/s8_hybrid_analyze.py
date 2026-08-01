@@ -355,6 +355,30 @@ def evidence_contract(headline_row: dict, pool_report: dict) -> dict:
     }
 
 
+def random_ranker_baseline(gold_ranks: dict[str, list[int]], pool_sizes: dict[str, int],
+                           order: list[str], n: int, k: int = 10) -> float:
+    """Expected hits@k for drawing k of the N shown items uniformly at random.
+
+    The floor the agent must clear to have done any ranking at all. Without it
+    a RankAcc of, say, 0.55 at N=64 is uninterpretable: it could be judgement or
+    it could be that 10 of 64 is already a 1-in-6 shot. Exact, not simulated:
+    P(hit) = 1 - C(N-g, k) / C(N, k) for g gold units among N shown.
+    """
+    from math import comb
+
+    total = 0.0
+    for question in order:
+        shown = min(n, pool_sizes[question])
+        gold = sum(1 for rank in gold_ranks[question] if rank <= shown)
+        if shown <= 0:
+            continue
+        if shown <= k:
+            total += 1.0 if gold else 0.0
+            continue
+        total += 1.0 - (comb(shown - gold, k) / comb(shown, k) if gold <= shown - k else 0.0)
+    return total
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pool-dump", required=True, type=Path)
@@ -411,6 +435,10 @@ def main() -> int:
 
     retriever = retriever_arms(args.pool_dump, args.golden, order)
     gold_ranks = retriever["gold_pool_ranks"]
+    pool_sizes = {
+        question_id: len(row["pool"])
+        for question_id, row in s8.load_pool_dump(args.pool_dump).items()
+    }
     pool_full = max(
         (max(ranks) for ranks in gold_ranks.values() if ranks), default=0
     )
@@ -439,6 +467,13 @@ def main() -> int:
                 # actually handed over, what fraction did the agent rank into its
                 # top ten?
                 "rank_accuracy": round(realized / ceiling, 6) if ceiling else None,
+                # The floor: what picking ten of the N at random would score.
+                "random_ranker_expected_hits": round(
+                    random_ranker_baseline(
+                        gold_ranks, pool_sizes, order, n_requested if n_requested > 0 else 10**9
+                    ),
+                    2,
+                ),
                 "misses_out_of_view": decomposition["out_of_view"],
                 "misses_in_view_ranked_out": decomposition["in_view_but_ranked_out"],
                 "mean_tool_calls": report["liveness"]["mean_tool_calls"],
