@@ -3,8 +3,14 @@
 **Date:** 2026-08-01 · **Worktree:** `Memphant-w1-keyprod` · **Branch:** `w1-keyprod`
 **Base:** `main` @ `5d7b9d5a` · **Cost:** `paid_model_calls: 0`. No model, no
 network, no database, no server, no binary.
-**Artifact:** `docs/build-log/artifacts/2026-08-01-key-production/recovery.json`
-(carries a passing `evidence_contract`, `decisional: false`, and full lineage).
+**Artifacts:** `docs/build-log/artifacts/2026-08-01-key-production/recovery.json`
+(passing `evidence_contract`, `decisional: false`, full lineage) and
+`…/ledger-rescored.json` (§3.4a).
+**Amended 2026-08-01 after `w1-b1arm` and `w1-arecency` reported.** Four
+corrections, all verified by me from their banked artifacts rather than their
+summaries: the B1 row (§3.4), the τ-scale error in my prior (§3.4a), a policy
+conclusion of mine that their ablations falsify (§2), and a stale ceiling that
+changes my own decision rule (§4a).
 
 ---
 
@@ -35,7 +41,8 @@ That does not mean the problem is solved, because §4 measured only recall and
 recall alone is maximised by a constant key. **The binding quantity is a
 precision/recall frontier, and the best measured net operating point is
 `pre3_content_words`: 0.5353 recovery at pair-precision 0.898, costing 44 of
-1,063 golds.** Where that lands on latest-state-wins is **not measured** — see §5.
+1,063 golds.** Where that lands on latest-state-wins is **not measured** — see §5. (The
+ceiling to compare against is **0.6237**, not the plan's 0.5795; see §4a.)
 
 ---
 
@@ -106,13 +113,25 @@ gold-independence is enforced, not promised.
 recovery reported alone is not interpretable, and §4 reported it alone. It is
 kept permanently in the artifact so that cannot recur.
 
-**Wrong merges are asymmetric, and B1 §3.1 was right about it.** Across every
-rule the ratio of *harmless* wrong merges (retiring a session that is nobody's
-gold) to *harmful* ones runs **6.1:1 to 8.5:1**. Supersession points backwards
-and this instrument's distractors are always earlier declarations, so a
-semantically-wrong edge usually retires something already dead. That is a
-property of *this corpus*, not a general law, and it is the reason a rule at
-precision 0.62 is not obviously unusable.
+**Wrong merges are asymmetric — but the strong reading of that is now
+falsified.** Across every rule the ratio of *harmless* wrong merges (retiring a
+session that is nobody's gold) to *harmful* ones runs **6.1:1 to 8.5:1**.
+Supersession points backwards and this instrument's distractors are always
+earlier declarations, so a semantically-wrong edge usually retires something
+already dead. That is a property of *this corpus*, not a general law.
+
+**Corrected after B1 reported (§4a).** I originally read this as strengthening
+B1 §3.1's claim that indiscriminate retirement is *valuable*. It does not, and
+B1's ablations settle it empirically. The asymmetry supports only the weaker
+claim that a keying rule's **errors are cheap** — which is what the ratio
+actually measures. Whether retiring things *indiscriminately* pays is a separate
+question, and the answer is "partly": B1's uniformly-random ablation is worth
+**+0.0259**, real but half of B1's total. Decisively, the asymmetry argument
+predicts that a **recency** policy should be the best uninformative rule (retire
+the most recent live prior, which is most likely already dead) — and B1 measured
+recency as the **worst** arm of the set (LSW 0.3284 vs random's 0.3330), because
+the most recent live prior is the row most likely to be a *current gold*. The
+asymmetry is real; the policy conclusion I drew from it was wrong.
 
 ---
 
@@ -173,22 +192,79 @@ matches its net recovery (0.5136 vs 0.4976) at higher precision (0.898 vs 0.735)
 half the golds lost (44 vs 88), and **no write-path read at all**. Per KISS, the
 zero-dependency rule wins.
 
-### 3.4 Supersede by exact prior unit id (`e165b4b9`) — **not mine to report**
+### 3.4 Supersede by exact prior unit id (`e165b4b9`) — **B1 landed; row below**
 
-This is B1, owned by the `w1-b1arm` session, which confirms Arm S and Arm S0 had
-**never been run** and are in flight now. There is **no citable B1 treatment
-number**, and I have not manufactured one. What exists is the BM25 control
-(LSW 0.3199) and a recency *ablation* at the wrong threshold, which is not B1.
+Owned by `w1-b1arm`, which landed while this log was being written
+(`ff022d2c`, `a7f3e550`, branch `w1-b1arm`, lineage `0ecf8cb2`, server
+sha256 `a06f3a29…`). **I verified every figure below directly from their banked
+artifacts rather than from their summary**, including the confirmatory analysis
+JSONs.
 
-The mechanism reasoning stands on its own and is worth stating: `e165b4b9`
-**bypasses key matching, not key production**. The candidate still needs a
-`fact_key` (mandatory in the payload) and still needs to decide *which prior unit
-to name* — and B1 makes that decision with a content-word Jaccard against a
-recall pool, i.e. **the same similarity signal as `jaccard_canonicalisation`,
-applied at the same point.** So it should be expected to land in the same band
-this table measures, not beyond it. Its genuine advantage is different and real:
-naming a uuid **cannot collide**, so a wrong edge is a wrong *choice* rather than
-a systematic merge of two conventions that happen to hash alike.
+| arm | LSW | full-bank |
+|---|---:|---|
+| S — B1 extractor, τ=0.25 | **0.3622** | hit@1 0.2709, hit@k 0.8071 |
+| S0 — same arm, supersession off | 0.3142 | the isolator |
+| R3 — uniformly random live prior | 0.3330 | reads **no bodies at all** |
+| R — recency (most recent live prior) | 0.3284 | the **worst** arm |
+
+Confirmatory slice: **S − S0 = +0.0506**, CI95 [+0.0269, +0.0753], n_d 117.
+
+**Cite it with the caveat, because the naive row overstates it roughly 2×.**
+R3 proposes 1,098 edges against S's 1,091 while comparing zero bodies, and
+captures **+0.0259** of S's +0.0506 (n_d 59). B1's *semantic* increment over a
+rate-matched coin flip is **+0.0247 with n_d 146 and exact McNemar p = 0.116** —
+which by B1's own preregistration is a **NEGATIVE**. The honest frontier row is:
+**the edge mechanism pays; the semantics are not established.**
+
+The mechanism reasoning I wrote before B1 reported still holds and is worth
+keeping: `e165b4b9` **bypasses key matching, not key production**. The candidate
+still needs a `fact_key` (mandatory in the payload) and still needs to decide
+*which prior unit to name*. Its genuine advantage is that naming a uuid **cannot
+collide**, so a wrong edge is a wrong *choice* rather than a systematic merge of
+two conventions that hash alike.
+
+### 3.4a My τ=0.7 prior was on an incommensurable scale — and why that matters
+
+I offered `jaccard_canonicalisation` at τ=0.7 (recovery 0.5691) as a prior for
+where B1 would land. **The live distribution is on a completely different
+scale**, and I verified this from B1's banked ledger myself: 7,890 live candidate
+scores, **median 0.194, p95 0.283, max 0.5213**. Nothing in the live pool ever
+reaches 0.7; τ=0.35 would have fired **32 times in 7,890**.
+
+The cause is not that my rule is optimistic — it is that **we were comparing
+different objects.** My rule takes the Jaccard between *directive sentences*;
+B1's takes it between *whole session bodies*. A MemoryCode session is ~2,300
+characters of mentor small talk around one directive, so a body-level Jaccard is
+dominated by filler every session shares and the discriminating tokens are a
+rounding error. **The two τ scales are not comparable, and no τ on one transfers
+to the other.**
+
+**So I tested the substitution on B1's own ledger** — same 7,890 candidate pairs,
+same pairs their ranker chose, changing only what is compared
+(`scripts/rescore_structured_ledger.py`, $0, no ingest,
+`ledger-rescored.json`):
+
+| firings | body Jaccard (B1 live) | directive-sentence Jaccard |
+|---:|---:|---:|
+| 100 | 0.460 | **1.000** |
+| 250 | 0.416 | **0.992** |
+| 500 | 0.402 | **0.972** |
+| **1091** (B1's operating point) | **0.341** | **0.765** |
+| 2000 | 0.296 | 0.556 |
+
+Precision here is the fraction of fired pairs that genuinely co-declare a
+convention. **At B1's actual operating point, changing the similarity unit from
+the body to the directive sentence more than doubles precision, 0.341 → 0.765.**
+
+This says B1's extractor is starved by its **unit**, not by its **threshold** —
+which reframes B1's own recommendation #2. Re-calibrating τ on the true body-level
+distribution optimises a scale that tops out at 0.52 and mixes filler into every
+score; swapping the unit changes the distribution being calibrated. Both are
+free, and the unit swap should come first.
+
+**What this is not.** It re-scores pairs the live ranker already returned as
+top-1. It does not tell us what a sentence-level scorer would *retrieve*, and it
+is not latest-state-wins. The artifact is `decisional: false` and says so.
 
 ---
 
@@ -212,9 +288,13 @@ haystack.
   `scripts/preference_lane_analysis.py` unchanged: cluster bootstrap over the 257
   instances, 10,000 resamples, seed 20260801, plus exact two-sided McNemar and a
   cluster permutation test.
-- **Decision rule:** the fraction of the oracle's +0.2672 that K closes,
-  `(LSW_K − 0.3123) / 0.2672`. A cluster-bootstrap CI on ΔLSW including 0 is a
-  **NEGATIVE** and will be reported as one.
+- **Decision rule:** the fraction of the oracle's headroom that K closes,
+  `(LSW_K − 0.3123) / 0.3114` — see §4a: the denominator is **0.3114, not
+  0.2672**. A cluster-bootstrap CI on ΔLSW including 0 is a **NEGATIVE** and
+  will be reported as one.
+- **Comparator:** Arm A′ must be the **on-tree** re-run, not the banked
+  `af-w11-writepath` figure. Comparing K on `main@5d7b9d5a` against an arm
+  measured two merges behind is the lineage-drift failure A1 exists to stop.
 - **Power floor:** below `n_d = 6` discordant pairs, write "NOT A MEASUREMENT"
   and the required n. Never "a tie".
 - **Mechanism liveness gates the score:** `memory_edge` supersede count > 0,
@@ -247,6 +327,29 @@ python3 scripts/check_evidence_contract.py --file $OUT/analysis-k-vs-a.json
 
 ---
 
+## 4a. The 0.5795 ceiling is stale — it is 0.6237 on-tree
+
+Reported by `w1-arecency` and **verified by me from their artifact**
+(`Memphant-w1-arecency/docs/build-log/artifacts/2026-08-01-a-recency/arm-bitemporal.json`,
+commit `baa267fa`): the oracle-keyed configuration re-run on `main@5d7b9d5a`
+scores **LSW 0.6237**, misapplication 0.3396, hit@k **0.9247**.
+
+| | banked (`af-w11-writepath`) | on-tree (`main@5d7b9d5a`) |
+|---|---:|---:|
+| oracle-keyed LSW | 0.5795 | **0.6237** |
+| hit@k | 0.840 | **0.9247** |
+| headroom over A′ 0.3123 | +0.2672 | **+0.3114** |
+
+The whole +4.4pp is **retrieval coverage**, not mechanism — same edge counts,
+same misapplication shape. So every "fraction of the oracle's headroom closed"
+computed against 0.2672 carries ~4pp of base drift and **overstates itself by
+about 14% relative**. My Arm K decision rule is corrected above.
+
+This is the plan's own §7 table going stale within a day of being written, and
+it is precisely the failure standing rule 1 exists for. **The ceiling figure
+should be re-pinned in `2026-07-31-one-plan.md` §7 to 0.6237 with its lineage**,
+rather than left as a bare number that three sessions are now dividing by.
+
 ## 5. What is **not** claimed
 
 **Key recovery is not latest-state-wins, and nothing here converts one into the
@@ -274,23 +377,37 @@ honest floor for the same rule family is **net 0.514**. §7 of the plan should b
 amended: the gap to close is `0.514 → 1.0` in key recovery, not `0.008 → 1.0`,
 and the LSW consequence of that is unmeasured.
 
-**2. Ship nothing yet. Run Arm K.** It is $0, ~30 minutes, already written, and
-it is the only thing that converts this frontier into a decision. It is also a
-genuine kill gate: if K lands at LSW ≈ A′ despite recovering half the groups,
-then key *recovery* is not the binding quantity and the whole A4′ framing is
-wrong — which is worth knowing far more than another rule variant.
+**2. Do the unit swap on B1's extractor first — it is free and it outranks
+Arm K.** §3.4a shows B1's similarity signal doubles in precision at its own
+operating point (0.341 → 0.765) when the compared object changes from the
+session body to the directive sentence. That is a re-scoring of already-banked
+data, costs nothing, requires no ingest, and it attacks the one result B1 could
+not establish: its semantic increment over a coin flip (+0.0247, p = 0.116, a
+preregistered NEGATIVE). If the semantics are real, a better unit is what will
+show it. **This displaces B1's own recommendation #2 (re-calibrate τ), which
+optimises a scale that tops out at 0.52 and mixes filler into every score.**
 
-**3. Do not adapt `extract_facts` to second-person directives.** Its ceiling is
+**3. Then run Arm K.** $0, ~30 minutes, already written, and the only thing that
+converts the §2 frontier into a decision. It is also a genuine kill gate: if K
+lands at LSW ≈ A′ despite recovering half the groups, then key *recovery* is not
+the binding quantity and the whole A4′ framing is wrong — worth knowing far more
+than another rule variant.
+
+**2b. Re-pin the ceiling before anyone divides by it again.** §4a: 0.5795 →
+0.6237. Three sessions are currently computing "fraction of headroom closed"
+against a stale denominator.
+
+**4. Do not adapt `extract_facts` to second-person directives.** Its ceiling is
 already measured here (§3.1) and it is below the free rules.
 
-**4. The deterministic band ends at roughly where the third-party number says it
+**5. The deterministic band ends at roughly where the third-party number says it
 does.** arXiv:2606.15903's deterministic primitives sit at 63.4–68.3%; the
 supersession-regime recall column in §2 tops out at 0.899 with unusable precision
 and the best *net* point is 0.52. Nothing free is going to reach the 91.7–93.2%
 that a mutation-time control-plane hook reaches at ~$0.17 per 385 mutations. **A
 deterministic answer will not close this. Plan for the hook.**
 
-**5. The cheapest path to a good key is not extraction at all — it is the
+**6. The cheapest path to a good key is not extraction at all — it is the
 caller.** §3.2 shows the caller-authored-key path is already live and already
 proven at scale by Arm P's 7,198 edges. The missing piece is a caller that knows
 what the write is about, and in production that caller is an LLM agent that just
