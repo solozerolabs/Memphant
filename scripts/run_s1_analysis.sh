@@ -24,7 +24,7 @@ src, dst = sys.argv[1], sys.argv[2]
 report = json.loads(open(src).read())
 h = lambda g: int(hashlib.sha256(g.encode()).hexdigest(), 16) % 4
 report["rows"] = [r for r in report["rows"] if h(r["group_id"]) != 0]
-report["slice"] = "confirmatory (sha256(group_id) %% 4 != 0)"
+report["slice"] = "confirmatory (sha256(group_id) % 4 != 0)"
 open(dst, "w").write(json.dumps(report))
 print(f"{dst}: {len(report['rows'])} probes / "
       f"{len({r['group_id'] for r in report['rows']})} instances")

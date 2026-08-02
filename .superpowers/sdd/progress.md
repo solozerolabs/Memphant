@@ -1831,3 +1831,96 @@ Report: `docs/build-log/2026-07-31-preference-writepath.md`. Artifacts:
 `af-w11-writepath`, **none pushed**. `paid_model_calls: 0`. **No checkbox,
 default, cutover or SOTA claim moves** except `MEMPHANT_FACT_EXTRACTION`, which
 is measured at exactly zero effect on this instrument.
+
+## 2026-08-01 — S1: the similarity UNIT swap pays, and the semantic increment is finally demonstrated ($0)
+
+**Headline, with its bound first.** MemoryCode's gold is recency-identified and
+wrong retirement is nearly free here (16 of 309 edges cost a gold, 5.2%), so
+**this corpus COMPRESSES the effect** — a policy that reads nothing earns
++0.0292. Within that: swapping B1's similarity unit from whole session body to
+**best-matching directive sentence** takes latest-state-wins **0.362183 →
+0.405456**, ΔLSW **+0.0395, CI95 [+0.0129, +0.0669]** on the confirmatory slice
+(**+0.0433 [+0.0197, +0.0677]** full bank), n_d 112, cluster-permutation
+p 5.2e-03, **computed** MDE 0.0375. Misapplication −0.0469 [−0.0756, −0.0190].
+POSITIVE on the preregistered rule, on both slices. Branch `s1-unitswap`
+@ `ca60e4c4`, four arms, one tree / one binary pair / one corpus / one probe
+bank, all deltas within-run. `paid_model_calls: 0`.
+
+**The result worth more than the headline.** B1 could not show its extractor's
+*semantics* bought anything over a rate-matched policy that reads no bodies:
+S − R3 = +0.0247, CI [−0.0033, +0.0532] — a NEGATIVE by its own rule. This run
+**reproduces that cell exactly, on a different tree and binary pair**, then
+clears it with the sentence unit: **U − R3 = +0.0642, CI [+0.0319, +0.0982]**
+(full +0.0724 [+0.0435, +0.1027]). *Semantic target selection buys something
+over retirement-by-rate* is now demonstrated where it previously was not. B1
+§10's `as implemented` qualifier was right — the negative was a fact about one
+Jaccard at one τ, not about semantic selection.
+
+**Liveness before any score.** U minted **2042 supersede / 1021 contradict**
+edges; N (no-op isolator) **0 edges of any kind**, which is its definition;
+`remainders_recalled` 0, `superseded_with_open_transaction` 0 and
+`open_subject_key_range_overlaps` 0 on all four; compilation verified from the
+DB on the bench superuser credential. **U fires FEWER edges than either
+comparator (1,021 vs S 1,091, R3 1,098) and gains more on every endpoint — the
+improvement is precision, not aggression**, which is exactly the lever Arm K
+predicted.
+
+**Retrieval, reported because it could have gone the other way.** `hit_at_k` now
+carries the same paired instance-clustered statistics as the primary (it was a
+bare descriptive rate before). **Arm S pays a real retrieval tax: −0.0357, CI
+[−0.0532, −0.0175] — and B1 never reported this**, because the endpoint had no
+interval there; re-analysing B1's own banked arms reproduces it at −0.0358.
+U's tax is **not** distinguishable from zero (−0.0151, CI [−0.0350, +0.0047]).
+But **U − S on hit@k is a NEGATIVE** — full-bank interval lower bound exactly
+0.0000 — so "the swap halves the retrieval tax" is a point estimate this
+experiment did not demonstrate, and it is not claimed.
+
+**The offline prediction landed, stated because the prereg committed to stating
+it either way.** Predicted live extractor precision body 0.341 / sentence 0.765;
+realized **0.3410** at 1,091 fired and **0.7640** at 1,021 fired — three decimal
+places on both arms, from a census that never ran a server. Base rate 0.1488.
+
+**τ_sentence = 0.42 was RATE-MATCHED, not tuned** — the threshold reproducing
+S's measured 0.13828 on S's own banked ledger, using no gold field, committed at
+`2cec397a` before any arm launched. **S1b (τ re-calibration) should now proceed
+against the SENTENCE distribution**: every arm's ledger banks `body_jaccard` AND
+`sentence_jaccard` for all 7,890 candidate pairs, so the sweep is free and needs
+no ingest. Report realized firing count beside every candidate τ (the
+distribution is lumpy, plateaus are real), and gate on `neither_returned` — U
+already carries the highest of the four arms at 0.015992.
+
+**Two harness defects fixed, both host-wide.** (1) `with_scratch_db.sh` released
+its bootstrap lock only from the EXIT trap, so it held a **cross-worktree** lock
+for the entire run rather than for bootstrap — the opposite of what its own
+comment documented; a second bench died at the 300s cap having never touched
+Postgres. Landed on trunk as `6fdcaf9d` (from `22e0644e`); this worktree now
+carries trunk's bytes verbatim. (2) A server reaper matching bare
+`memphant-server` kills **every worktree's** binary; scoped to absolute worktree
+path plus own ports (`ca60e4c4`).
+
+**Three runs and ~2h were lost to cross-lane process reaping, and I caused half
+of it** — I dropped a sibling's live scratch database with a blanket
+`memphant_scratch%` pattern match. Conventions agreed with the sibling lane and
+relayed: **reap by absolute worktree binary path, never bare process name; never
+drop a database by name pattern** (with_scratch_db.sh drops its own on exit, so
+one you did not mint is someone's live measurement); **never edit
+`with_scratch_db.sh` while a shell is inside it** — bash reads by byte offset and
+the remainder of that file is the trap that drops the DB. I violated that last
+one myself within five minutes of relaying it and got away with it; recorded
+rather than quietly reverted.
+
+**A real harness defect this exposed and did NOT fix.** The adapter prints
+nothing between "loaded groups" and "corpus verified" — hours apart — so a
+healthy mid-ingest arm is byte-identical to a dead one. This produced a
+false-positive stall diagnosis that, if acted on, would have destroyed 40
+minutes of four-arm progress. **A progress heartbeat is owed**; it was
+deliberately not added mid-run because lineage is stamped at report-write time
+and committing would have made four arms stamp a HEAD whose adapter is not the
+code they ran.
+
+Report: `.superpowers/sdd/s1-unitswap-report.md`. Log:
+`docs/build-log/2026-08-01-similarity-unit-swap.md`. Artifacts:
+`docs/build-log/artifacts/2026-08-01-similarity-unit-swap/` (4 arms, liveness
+gate, 10 paired analyses, all 10 registered and `evidence_contract_ok
+contracted=42`). Commits `2cec397a`, `22e0644e`, `ca60e4c4` on `s1-unitswap`,
+**not merged to main**. **No checkbox, default, cutover or SOTA claim moves.**

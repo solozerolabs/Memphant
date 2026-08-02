@@ -1,0 +1,228 @@
+{
+  "arm_a": {
+    "name": "structured",
+    "report": "/Users/sidsharma/Memphant-s1-unitswap/docs/build-log/artifacts/2026-08-01-similarity-unit-swap/slices/arm-u-sentence.confirmatory.json"
+  },
+  "arm_b": {
+    "name": "structured",
+    "report": "/Users/sidsharma/Memphant-s1-unitswap/docs/build-log/artifacts/2026-08-01-similarity-unit-swap/slices/arm-s-body.confirmatory.json"
+  },
+  "endpoints": {
+    "appropriate_application": {
+      "arm_a_rate": 0.4074074074074074,
+      "arm_b_rate": 0.36790123456790125,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.3686746987951807,
+          0.4496551724137931
+        ],
+        "arm_b_ci95": [
+          0.3380614657210402,
+          0.4002607561929596
+        ],
+        "clusters": 203,
+        "delta_ci95": [
+          0.012853470437017955,
+          0.06690561529271205
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.0051994800519948,
+      "delta_a_minus_b": 0.03950617283950614,
+      "discordant_a_only": 72,
+      "discordant_b_only": 40,
+      "endpoint": "appropriate_application",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.0032169399516518344,
+      "n_instances": 203,
+      "n_probes": 810
+    },
+    "misapplication": {
+      "arm_a_rate": 0.5679012345679012,
+      "arm_b_rate": 0.6148148148148148,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.5257861635220126,
+          0.6072607260726073
+        ],
+        "arm_b_ci95": [
+          0.5819070904645477,
+          0.6450060168471721
+        ],
+        "clusters": 203,
+        "delta_ci95": [
+          -0.07557354925775972,
+          -0.01904761904761909
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.001999800019998,
+      "delta_a_minus_b": -0.04691358024691361,
+      "discordant_a_only": 37,
+      "discordant_b_only": 75,
+      "endpoint": "misapplication",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.0004209679285168772,
+      "n_instances": 203,
+      "n_probes": 810
+    },
+    "neither_returned": {
+      "arm_a_rate": 0.018518518518518517,
+      "arm_b_rate": 0.011111111111111112,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.009422850412249705,
+          0.02910360884749709
+        ],
+        "arm_b_ci95": [
+          0.003745318352059925,
+          0.01992966002344666
+        ],
+        "clusters": 203,
+        "delta_ci95": [
+          -0.0024360535931790515,
+          0.018181818181818184
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.23417658234176583,
+      "delta_a_minus_b": 0.007407407407407406,
+      "discordant_a_only": 11,
+      "discordant_b_only": 5,
+      "endpoint": "neither_returned",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.210113525390625,
+      "n_instances": 203,
+      "n_probes": 810
+    }
+  },
+  "evidence_contract": {
+    "attribution": {
+      "method": "bisect"
+    },
+    "bar": null,
+    "claim": "The similarity UNIT swapped from whole session body to best-matching directive sentence, at a rate-matched threshold, holding everything else fixed. (slice: confirmatory)",
+    "corpus": {
+      "n_items": 8147,
+      "sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "snapshot_id": "CohereLabsCommunity/memorycode@32d888b11c73c67be91414e571dfe98c5c20feac"
+    },
+    "decisional": true,
+    "harness": {
+      "budget": 8192,
+      "command": "scripts/external_instrument_adapter.py --instrument memorycode",
+      "embed_model": "fastembed-default",
+      "flags": [],
+      "k": 10,
+      "scorer": "memphant recall mode=fast"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "sessions": 360,
+        "topic": 8400,
+        "type": 8400
+      },
+      "license_evidence": "Cohere-Labs-Community/MemoryCode LICENSE file, recorded in benchmarks/manifests/memorycode.lock.json",
+      "license_id": "Apache-2.0",
+      "license_source": "LICENSE_FILE",
+      "rows_counted": 360,
+      "shipped_rows_verified": true
+    },
+    "leakage": null,
+    "mechanism_enabled": true,
+    "mechanism_evidence": "S1 similarity-unit swap. Same tree, same server/worker/cli sha256, same corpus sha256, same probe bank, same stage; the delta is within-run. MemoryCode's gold is recency-identified and wrong retirement costs a gold only 5.2% of the time, so this corpus COMPRESSES the effect: a positive is a lower bound and a null does not establish the swap is worthless.",
+    "notes": "S1 similarity-unit swap. Same tree, same server/worker/cli sha256, same corpus sha256, same probe bank, same stage; the delta is within-run. MemoryCode's gold is recency-identified and wrong retirement costs a gold only 5.2% of the time, so this corpus COMPRESSES the effect: a positive is a lower bound and a null does not establish the swap is worthless.",
+    "power": {
+      "b": 72,
+      "c": 40,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "mde_at_80": 0.037528186459102046,
+      "n": 810,
+      "n_d": 112,
+      "psi_observed": 0.1382716049382716,
+      "source": "/Users/sidsharma/Memphant-s1-unitswap/docs/build-log/artifacts/2026-08-01-similarity-unit-swap/slices/arm-u-sentence.confirmatory.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "suppression",
+    "schema_version": 1
+  },
+  "paid_model_calls": 0,
+  "prereg": "docs/build-log/2026-08-01-preference-lane-prereg.md",
+  "primary_endpoint": "appropriate_application (latest-state-wins)",
+  "probes": 810,
+  "retrieval_endpoints": {
+    "hit_at_1": {
+      "arm_a_rate": 0.30493827160493825,
+      "arm_b_rate": 0.28271604938271605,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.2702702702702703,
+          0.3437945791726106
+        ],
+        "arm_b_ci95": [
+          0.2493975903614458,
+          0.31950207468879666
+        ],
+        "clusters": 203,
+        "delta_ci95": [
+          0.0,
+          0.04509283819628651
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.06179382061793821,
+      "delta_a_minus_b": 0.0222222222222222,
+      "discordant_a_only": 46,
+      "discordant_b_only": 28,
+      "endpoint": "hit_at_1",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.04739297550405179,
+      "n_instances": 203,
+      "n_probes": 810
+    },
+    "hit_at_k": {
+      "arm_a_rate": 0.825925925925926,
+      "arm_b_rate": 0.8049382716049382,
+      "cluster_bootstrap": {
+        "arm_a_ci95": [
+          0.7941176470588235,
+          0.8582574772431729
+        ],
+        "arm_b_ci95": [
+          0.7738927738927739,
+          0.838150289017341
+        ],
+        "clusters": 203,
+        "delta_ci95": [
+          -0.0012330456226881115,
+          0.04289215686274517
+        ],
+        "resamples": 10000,
+        "seed": 20260801
+      },
+      "cluster_permutation_p_two_sided": 0.0964903509649035,
+      "delta_a_minus_b": 0.020987654320987703,
+      "discordant_a_only": 48,
+      "discordant_b_only": 31,
+      "endpoint": "hit_at_k",
+      "mcnemar_caveat": "assumes probe-level independence; probes nest in instances, so this p is ANTI-CONSERVATIVE. The cluster bootstrap CI is the primary inference.",
+      "mcnemar_exact_p_two_sided": 0.07116340869529117,
+      "n_instances": 203,
+      "n_probes": 810
+    }
+  },
+  "secondary_descriptive": {
+    "hit_at_1": {
+      "arm_a": 0.30493827160493825,
+      "arm_b": 0.28271604938271605
+    },
+    "hit_at_k": {
+      "arm_a": 0.825925925925926,
+      "arm_b": 0.8049382716049382
+    }
+  }
+}

@@ -1,358 +1,368 @@
 {
-  "schema_version": 1,
-  "purpose": "The enforcement surface of scripts/check_evidence_contract.py. `contracted` artifacts MUST carry a valid `evidence_contract` block. `pending` is the retrofit debt ledger: promotion-capable artifacts that predate the contract and whose missing fields were NOT backfilled, because they cannot be verified. The ratchet is the point: any NEW decisional artifact that appears in neither list fails CI.",
-  "ratchet": "scripts/check_evidence_contract.py scans every tracked JSON under docs/build-log/artifacts/ for a decision key at depth <= 4. A match in neither list is a hard failure. To clear debt, write a contract and move the path from `pending` to `contracted` -- never by deleting the entry.",
-  "contracted": [
-    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-a-vs-b.json",
-    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-a.json",
-    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-b.json",
-    "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-p-vs-a.json",
-    "docs/build-log/artifacts/2026-08-01-a-recency/analysis-bitemporal-vs-arecency.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/abl_vs_s0_q1.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r2_vs_s0_conf.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r2_vs_s0_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_r2_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_s0_conf.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_s0_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_a_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_abl_q1.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_b_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r2_conf.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r2_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r3_conf.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r3_full.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_conf.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_dev.json",
-    "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_full.json",
-    "docs/build-log/artifacts/2026-08-01-key-production/analysis-k-vs-aprime.json",
-    "docs/build-log/artifacts/2026-08-01-key-production/analysis-p-vs-aprime.json",
-    "docs/build-log/artifacts/2026-08-01-key-production/recovery.json",
-    "docs/build-log/artifacts/null-review-ledger.json",
-    "docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json",
-    "docs/build-log/artifacts/r6-docs-decision/packet.json",
-    "docs/build-log/artifacts/sibling-gather-deletion/sibling_gather_deletion.json",
-    "docs/build-log/artifacts/track-r-paraphrase/w02-trunk-arms.json",
-    "docs/build-log/artifacts/track-r-paraphrase/z1-ladder-power.json",
-    "docs/build-log/artifacts/track-r-rerank/fusion-sweep.json",
-    "docs/build-log/artifacts/track-r-rerank/rerank-channel.json"
-  ],
-  "pending": [
-    {
-      "path": "docs/build-log/artifacts/b4-verified-receipts/gate-summary.json",
-      "decision_keys": [
-        "verdict"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/b5-recall-stage-retirement/gate-summary.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/github-lane/leakage.json",
-      "decision_keys": [
-        "bar",
-        "verdict"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/lme-cleaned-split/paired-comparison-n100-seed20260710.json",
-      "decision_keys": [
-        "delta"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/next-evidence/authorization-request.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/next-evidence/packing/sufficiency-authorization-request.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/BUILD-ONCE-EXECUTION-AUTHORIZATION.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/CONTEXT-PREFLIGHT-REUSE-AUTHORIZATION.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-129928d8.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-65981e4f.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-d2f4fcb3.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-e511c817.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/PRE-DISPATCH-EFFICIENCY-CHECKPOINT-12.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/STREAM-DIAGNOSTIC-2-AUTHORIZATION-1a847f94.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/STREAM-DIAGNOSTIC-AUTHORIZATION-63be29d1.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/live-deep-route-diagnostic-3ae5833f/PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-3ae5833f/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-408363c9/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-9a0ef780/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-b3bc244d/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-b8dbf0a7/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-d10ee907/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-ee1575a6/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/p1-t6/run-f7c6c0f7/INVALIDATION-PROOF.json",
-      "decision_keys": [
-        "conclusion"
-      ],
-      "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung10-procedural-memory-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung11-dsr-decay-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung12-l4-exhaustive-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung13-learned-rerank-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung14-external-engine-retirement-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung15-inferred-belief-composition-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung4-contextual-chunks-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung5-temporal-validity-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung6-edge-expansion-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung7-packing-abstention-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.v3.json",
-      "decision_keys": [
-        "bar"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung8-bounded-rerank-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/rung9-query-decomposition-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    },
-    {
-      "path": "docs/build-log/artifacts/spot-check-receipts/2026-07-31-track-r-owner-review.json",
-      "decision_keys": [
-        "verdict"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-MANIFEST.qwen-construction-luna-deep.json",
-      "decision_keys": [
-        "mcnemar"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/FEASIBILITY.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/state-memory-sota/stale-pilot/AUTHORIZATION-2-CLOSURE.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
-    },
-    {
-      "path": "docs/build-log/artifacts/syndai-gate/gate_compare.json",
-      "decision_keys": [
-        "decision",
-        "verdict"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/ws0-two-language-spike.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
-    },
-    {
-      "path": "docs/build-log/artifacts/wsi-local-sota-profile.json",
-      "decision_keys": [
-        "decision"
-      ],
-      "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
-    }
-  ]
+ "schema_version": 1,
+ "purpose": "The enforcement surface of scripts/check_evidence_contract.py. `contracted` artifacts MUST carry a valid `evidence_contract` block. `pending` is the retrofit debt ledger: promotion-capable artifacts that predate the contract and whose missing fields were NOT backfilled, because they cannot be verified. The ratchet is the point: any NEW decisional artifact that appears in neither list fails CI.",
+ "ratchet": "scripts/check_evidence_contract.py scans every tracked JSON under docs/build-log/artifacts/ for a decision key at depth <= 4. A match in neither list is a hard failure. To clear debt, write a contract and move the path from `pending` to `contracted` -- never by deleting the entry.",
+ "contracted": [
+  "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-a-vs-b.json",
+  "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-a.json",
+  "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-f-vs-b.json",
+  "docs/build-log/artifacts/2026-07-31-preference-writepath/analysis-p-vs-a.json",
+  "docs/build-log/artifacts/2026-08-01-a-recency/analysis-bitemporal-vs-arecency.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/abl_vs_s0_q1.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r2_vs_s0_conf.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r2_vs_s0_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_r2_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_s0_conf.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/r3_vs_s0_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_a_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_abl_q1.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_b_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r2_conf.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r2_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r3_conf.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_r3_full.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_conf.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_dev.json",
+  "docs/build-log/artifacts/2026-08-01-b1-structured/analysis/s_vs_s0_full.json",
+  "docs/build-log/artifacts/2026-08-01-key-production/analysis-k-vs-aprime.json",
+  "docs/build-log/artifacts/2026-08-01-key-production/analysis-p-vs-aprime.json",
+  "docs/build-log/artifacts/2026-08-01-key-production/recovery.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/s-vs-n.confirmatory.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/s-vs-n.full.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/s-vs-r3.confirmatory.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/s-vs-r3.full.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/u-vs-n.confirmatory.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/u-vs-n.full.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/u-vs-r3.confirmatory.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/u-vs-r3.full.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/u-vs-s.confirmatory.json",
+  "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/analysis/u-vs-s.full.json",
+  "docs/build-log/artifacts/null-review-ledger.json",
+  "docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json",
+  "docs/build-log/artifacts/r6-docs-decision/packet.json",
+  "docs/build-log/artifacts/sibling-gather-deletion/sibling_gather_deletion.json",
+  "docs/build-log/artifacts/track-r-paraphrase/w02-trunk-arms.json",
+  "docs/build-log/artifacts/track-r-paraphrase/z1-ladder-power.json",
+  "docs/build-log/artifacts/track-r-rerank/fusion-sweep.json",
+  "docs/build-log/artifacts/track-r-rerank/rerank-channel.json"
+ ],
+ "pending": [
+  {
+   "path": "docs/build-log/artifacts/b4-verified-receipts/gate-summary.json",
+   "decision_keys": [
+    "verdict"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/b5-recall-stage-retirement/gate-summary.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/github-lane/leakage.json",
+   "decision_keys": [
+    "bar",
+    "verdict"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/lme-cleaned-split/paired-comparison-n100-seed20260710.json",
+   "decision_keys": [
+    "delta"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/next-evidence/authorization-request.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/next-evidence/coding/swe-contextbench-first-tranche-result.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/next-evidence/packing/sufficiency-authorization-request.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/BUILD-ONCE-EXECUTION-AUTHORIZATION.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/CONTEXT-PREFLIGHT-REUSE-AUTHORIZATION.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-129928d8.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-65981e4f.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-d2f4fcb3.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/DISPATCH-AUTHORIZATION-e511c817.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/PRE-DISPATCH-EFFICIENCY-CHECKPOINT-12.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/STREAM-DIAGNOSTIC-2-AUTHORIZATION-1a847f94.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/STREAM-DIAGNOSTIC-AUTHORIZATION-63be29d1.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/live-deep-route-diagnostic-3ae5833f/PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-3ae5833f/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-408363c9/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-9a0ef780/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-b3bc244d/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-b8dbf0a7/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-d10ee907/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-ee1575a6/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/p1-t6/run-f7c6c0f7/INVALIDATION-PROOF.json",
+   "decision_keys": [
+    "conclusion"
+   ],
+   "reason": "invalidation record for an abandoned LongMemEval-V2 attempt; it carries a `conclusion` but no scored comparison. Needs reclassification as a non-result, or a contract, before anything cites it."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung10-procedural-memory-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung11-dsr-decay-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung12-l4-exhaustive-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung13-learned-rerank-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung14-external-engine-retirement-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung15-inferred-belief-composition-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung4-contextual-chunks-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung5-temporal-validity-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung6-edge-expansion-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung7-packing-abstention-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung7-packing-reader-gate/authorization-request.v3.json",
+   "decision_keys": [
+    "bar"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung8-bounded-rerank-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/rung9-query-decomposition-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  },
+  {
+   "path": "docs/build-log/artifacts/spot-check-receipts/2026-07-31-track-r-owner-review.json",
+   "decision_keys": [
+    "verdict"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/CAMPAIGN-MANIFEST.qwen-construction-luna-deep.json",
+   "decision_keys": [
+    "mcnemar"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/state-memory-sota/longmemeval-v2-pilot/FEASIBILITY.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/state-memory-sota/stale-pilot/AUTHORIZATION-2-CLOSURE.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "spend/dispatch authorization record, not a scored result. Carries a decision key with no power, harness, or corpus block; nothing in it was measured."
+  },
+  {
+   "path": "docs/build-log/artifacts/syndai-gate/gate_compare.json",
+   "decision_keys": [
+    "decision",
+    "verdict"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/ws0-two-language-spike.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "predates the evidence contract: power cells, harness settings, corpus snapshot identity, and mechanism_enabled were not recorded at run time and cannot be verified now without a re-run. Not backfilled."
+  },
+  {
+   "path": "docs/build-log/artifacts/wsi-local-sota-profile.json",
+   "decision_keys": [
+    "decision"
+   ],
+   "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+  }
+ ]
 }

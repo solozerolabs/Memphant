@@ -214,3 +214,289 @@ one is structurally small here *whatever either one understands*. So:
   recency. No such corpus exists in this program yet.
 
 ---
+
+> Sections 4 onward are the measurement. They were written after the arms ran
+> and they change nothing in §1–3.8 above.
+
+## 4. Mechanism liveness — checked before any accuracy number was read
+
+`artifacts/2026-08-01-similarity-unit-swap/liveness-gate.json`. The gate ran
+first and gates everything below it; had the treatment arm shown zero supersede
+edges, "inert" would have been the whole report.
+
+| arm | unit | τ | supersede edges | superseded units | open txn | key overlaps | remainders recalled |
+|---|---|---:|---:|---:|---:|---:|---:|
+| N no-op | — | 2.0 | **0** | 0 | 0 | 0 | 0 |
+| S body | body | 0.25 | 2182 | 1091 | 0 | 0 | 0 |
+| **U sentence** | sentence | 0.42 | **2042** | **1021** | 0 | 0 | 0 |
+| R3 random | — | 0.25 | 2196 | 1098 | 0 | 0 | 0 |
+
+**U is live, not inert.** N is exactly the isolator it claims to be: zero edges
+of any kind, which is its definition rather than a result.
+
+`paid_model_calls: 0` on all four. Corpus compilation verified from the DB on
+the bench superuser credential, zero pending and zero failed jobs on every arm.
+
+**One tree, one binary set, one corpus, one bank** — asserted by the gate, which
+refuses to pass if any of them differ:
+
+```
+git_head    ca60e4c4  (git_dirty: true — see §9.1)
+server      ba11520e0404…   worker  39f24332c553…
+corpus      1edb12380ea3…   probes 1063 / instances 257 on all four arms
+```
+
+### 4.1 The realized firing rate — the preregistered caveat, resolved
+
+§3.2 fixed τ_sentence = 0.42 by rate-matching on arm S's banked ledger and said
+the match would not hold exactly live. It held better than promised:
+
+| arm | candidates seen | fired | realized rate |
+|---|---:|---:|---:|
+| S body | 7,890 | 1,091 | 0.13828 |
+| **U sentence** | 7,890 | **1,021** | **0.12940** |
+| R3 random | — | 1,098 | 0.13924 |
+
+**U fires FEWER edges than either comparator and gains more on every endpoint.**
+It is not winning by retiring more aggressively. It is retiring more
+accurately — which is the mechanism the swap predicted, stated here rather than
+left to be inferred.
+
+## 5. The offline prediction, checked against the live arms
+
+§2 carried a precision prediction from the offline census and refused to convert
+it into an LSW number. It can now be checked directly: score each arm's *live*
+fired pairs against the gold co-declaration partition.
+
+| | predicted (offline, at 1,091 firings) | **realized (live)** |
+|---|---:|---:|
+| body unit | 0.341 | **0.3410** at 1,091 fired |
+| sentence unit | 0.765 | **0.7640** at 1,021 fired |
+
+**The offline census predicted live extractor precision to three decimal
+places**, on both arms, having never run a server. Base rate for a policy that
+understands nothing is 1,174 / 7,890 = 0.1488.
+
+Stated because §2 committed to stating it either way: **the prediction landed.**
+It was still right to refuse to project an LSW number from it — precision is not
+latest-state-wins, and §6 is where that question is actually answered.
+
+## 6. The primary result
+
+Full bank 1,063 probes / 257 instances; confirmatory 810 / 203. Cluster
+bootstrap over instances, 10,000 resamples, seed 20260801. Every MDE **computed**
+from that cell's own realized ψ by `instrument_power.min_detectable_effect`.
+
+| arm | LSW | misapplication | hit@k |
+|---|---:|---:|---:|
+| N no-op isolator | 0.314205 | 0.673565 | 0.842897 |
+| S body, τ 0.25 | 0.362183 | 0.620884 | 0.807150 |
+| **U sentence, τ 0.42** | **0.405456** | **0.572907** | 0.827846 |
+| R3 random, rate-matched | 0.333020 | 0.646284 | 0.825024 |
+
+**Latest-state-wins.** Decisional slice named per §3.6.
+
+| comparison | slice | ΔLSW | cluster CI95 | b/c | n_d | perm p | ψ | computed MDE |
+|---|---|---:|---|---:|---:|---:|---:|---:|
+| **U − S** | full | **+0.0433** | **[+0.0197, +0.0677]** | 100/54 | 154 | 5.0e-04 | 0.1449 | 0.0334 |
+| **U − S** | **confirmatory** | **+0.0395** | **[+0.0129, +0.0669]** | 72/40 | 112 | 5.2e-03 | 0.1383 | 0.0375 |
+| **U − R3** | full | **+0.0724** | **[+0.0435, +0.1027]** | 146/69 | 215 | 1.0e-04 | 0.2023 | 0.0394 |
+| **U − R3** | confirmatory | **+0.0642** | **[+0.0319, +0.0982]** | 108/56 | 164 | 1.0e-04 | 0.2025 | 0.0453 |
+| U − N | full | +0.0913 | [+0.0637, +0.1195] | 136/39 | 175 | 1.0e-04 | 0.1646 | 0.0356 |
+| U − N | confirmatory | +0.0901 | [+0.0604, +0.1216] | 104/31 | 135 | 1.0e-04 | 0.1667 | 0.0411 |
+| S − R3 | full | +0.0292 | [+0.0047, +0.0534] | 110/79 | 189 | 2.3e-02 | 0.1778 | 0.0370 |
+| S − R3 | confirmatory | +0.0247 | **[−0.0033, +0.0532]** | 83/63 | 146 | 9.5e-02 | 0.1802 | 0.0427 |
+| S − N | full | +0.0480 | [+0.0262, +0.0693] | 102/51 | 153 | 1.0e-04 | 0.1439 | 0.0333 |
+| S − N | confirmatory | +0.0506 | [+0.0269, +0.0753] | 79/38 | 117 | 2.0e-04 | 0.1444 | 0.0383 |
+
+**Every n_d is ≥ 79, far above the structural floor of 6.** No cell in this log
+is a "NOT A MEASUREMENT".
+
+**POSITIVE on the preregistered rule, on both slices.** U − S excludes zero on
+the confirmatory slice (the decisional one for any comparison involving S) and
+on the full bank, with an effect above the computed MDE in both.
+
+### 6.1 The finding that matters most: the semantic increment is now demonstrated
+
+B1 could not show that its extractor's *semantics* bought anything over a policy
+that reads no bodies at all. Its confirmatory S − R3 was **+0.0247, CI
+[−0.0033, +0.0532]** — an interval containing zero, which its own preregistration
+defines as a NEGATIVE.
+
+**This run reproduces that number exactly — +0.0247, CI [−0.0033, +0.0532], on a
+different tree and a different binary pair** — and then clears it with the
+sentence unit: **U − R3 = +0.0642, CI [+0.0319, +0.0982]** confirmatory,
+**+0.0724 [+0.0435, +0.1027]** full.
+
+That bit-for-bit reproduction is worth more than the headline. It says the
+difference between the two lanes is the unit and not the weather.
+
+**So the negative in B1 §10 was a fact about one Jaccard at one τ, exactly as
+that section's `as implemented` qualifier insisted — and not a fact about
+semantic target selection.** The qualifier earned its keep.
+
+## 7. The retrieval endpoint — reported because it could have gone the other way
+
+Arm K raised LSW while `hit@k` FELL, so a key change can pay on the primary and
+charge for it in retrieval. Same paired machinery as the primary.
+
+| comparison | slice | Δhit@k | cluster CI95 | b/c | n_d | perm p |
+|---|---|---:|---|---:|---:|---:|
+| **S − N** | full | **−0.0357** | **[−0.0532, −0.0175]** | 50/88 | 138 | 1.0e-04 |
+| **S − N** | confirmatory | **−0.0420** | **[−0.0636, −0.0208]** | 35/69 | 104 | 2.0e-04 |
+| **U − N** | full | **−0.0151** | **[−0.0350, +0.0047]** | 59/75 | 134 | 1.6e-01 |
+| **U − N** | confirmatory | −0.0210 | [−0.0430, +0.0012] | 41/58 | 99 | 7.6e-02 |
+| U − S | full | +0.0207 | [**0.0000**, +0.0409] | 62/40 | 102 | 6.2e-02 |
+| U − S | confirmatory | +0.0210 | [−0.0012, +0.0429] | 48/31 | 79 | 9.7e-02 |
+
+**Arm S pays a retrieval tax and it is established: −0.0357, CI clear of zero on
+both slices.** This is the same direction Arm K found, and — recorded because it
+is a correction to a banked log — **B1 never reported it**, because `hit_at_k`
+carried no interval there. Re-analysing B1's own banked arms through the paired
+machinery added here reproduces it: −0.0358, CI [−0.0532, −0.0175], n_d 138.
+
+**U's retrieval tax is NOT established: −0.0151, CI [−0.0350, +0.0047], which
+includes zero.** The honest reading is *the tax is not distinguishable from zero
+for the sentence unit at this n*, not *there is no tax*. The point estimate is
+negative and about 40% the size of S's.
+
+**U − S on hit@k is a NEGATIVE by the preregistered rule.** The full-bank
+interval's lower bound is exactly **0.0000** and the confirmatory interval
+contains zero. U recovers roughly half of S's retrieval loss on the point
+estimate, and **this experiment did not demonstrate that recovery at the bar.**
+Stated as a negative rather than rounded up to a win.
+
+**Misapplication moves with the primary and is unambiguous**: U − N −0.1007
+[−0.1288, −0.0732], U − S −0.0480 [−0.0734, −0.0235], U − R3 −0.0734
+[−0.1037, −0.0441]; all clear of zero on both slices.
+
+## 8. How much of the headroom, and against what
+
+**Cross-lineage, therefore context and not evidence.** The oracle ceiling
+0.622766 was measured at `d6a39fb0`; this lane ran at `ca60e4c4`. Under the
+shelf-life rule an absolute rate not differenced within a single run may not be
+treated as a cell of this experiment.
+
+Against headroom N → P of 0.308561: S closes **15.6%**, U closes **29.6%**.
+The unit swap roughly doubles the fraction of the oracle gap that
+gold-independent supersession recovers. **Re-cut the ceiling on this tree before
+leaning on either ratio.**
+
+## 9. Limitations
+
+1. **`git_dirty: true` on all four arms, and what it is.** The stamp is taken
+   when each report is written. One tracked file differed from `ca60e4c4`
+   throughout: an 8-line COMMENT block in `scripts/with_scratch_db.sh`, since
+   discarded in favour of trunk's bytes at `6fdcaf9d`. No executable line
+   differed, and all four arms ran from one commit and one binary pair — which
+   is the claim the lineage rule exists to protect. Recorded rather than
+   explained away.
+2. **τ_sentence was rate-matched, not optimised.** 0.42 is the best available
+   match to S's firing rate on a lumpy distribution, not the best-performing
+   threshold. **Re-calibrating τ on the sentence distribution is untouched
+   headroom and is S1b.** Nothing here estimates its size.
+3. **One unit per session**, inherited whole. Still the largest known cause of
+   the remaining gap; the swap does not address it.
+4. **One target, top-ranked only.** Unchanged and out of scope.
+5. **U's `neither_returned` is the highest of the four** (0.015992 vs N's
+   0.006585). Small, and consistent with a more aggressive-per-edge policy
+   removing rows, but it is the cost line to watch if the unit is tuned harder.
+6. **This is not a measurement of the LLM structured-state subsystem.**
+   `MEMPHANT_STRUCTURED_STATE` stayed dark.
+
+### 9.1 THE BOUND, restated where the verdict is read
+
+§3.8 stated it before the measurement and it is repeated here because a bound
+placed only ahead of a number gets dropped in the retelling just as reliably as
+one placed only behind it.
+
+**MemoryCode's gold is recency-identified, and wrong retirement is nearly free —
+16 of 309 edges cost a gold, 5.2%. This corpus COMPRESSES the effect this lane
+measures.** A random policy that reads nothing earns +0.0292 here.
+
+Consequences for how §6 may be read:
+
+- **U's +0.0642 over R3 is a LOWER BOUND on what the unit swap is worth**, not an
+  estimate of it. On an instrument where naming the wrong prior costs almost
+  nothing, a selector that names the right one has little room to show it.
+- The sibling as-of lane has since shown this cannot be fixed by re-cutting the
+  same corpus: **a corpus whose gold is computable from its own statements is
+  always saturated by a short rule.** The missing instrument is one where
+  retiring the wrong rule is EXPENSIVE, and it does not exist in this program.
+- **Nothing here transfers to a corpus where a retired convention is later
+  re-asserted**, or where currency is signalled by something other than recency.
+
+The transferable claim is the **relative ordering** — sentence beats body beats
+random, at matched firing cost, with the semantic increment clearing zero for
+the first time. The absolute magnitudes belong to MemoryCode.
+
+## 10. Verdict
+
+**Did the unit swap pay? YES, at the preregistered bar, on both slices, subject
+to §9.1's compression bound stated ahead of it.**
+
+`ΔLSW U − S = +0.0395, CI [+0.0129, +0.0669]` confirmatory (`+0.0433
+[+0.0197, +0.0677]` full), n_d 112, computed MDE 0.0375. Misapplication moves
+with it, −0.0469 [−0.0756, −0.0190].
+
+**The more valuable result is §6.1.** B1's semantic increment over a random
+rate-matched policy was an underpowered positive whose interval contained zero,
+and this run reproduces that cell exactly before clearing it: **U − R3 = +0.0642,
+CI [+0.0319, +0.0982]**. *Semantic target selection buys something over
+retirement-by-rate* is now demonstrated, where it previously was not.
+
+**The cost side is honest and it is mixed.** Arm S's retrieval tax is real and
+established (−0.0357, clear of zero). U's is not distinguishable from zero
+(−0.0151, CI [−0.0350, +0.0047]) — but **U − S on hit@k did not clear the bar
+either**, so "the swap halves the retrieval tax" is a point estimate this
+experiment did not demonstrate, and it is recorded as a NEGATIVE.
+
+**U fires 1,021 edges against S's 1,091 and R3's 1,098 — fewer edges, more gain.
+The improvement is precision, not aggression**, which is exactly what Arm K
+predicted the next lever would have to be.
+
+**Should τ be re-calibrated now (S1b)? YES — and against the SENTENCE
+distribution, not the body one.** The reasoning is now measured rather than
+argued: τ = 0.42 was chosen to reproduce a firing rate, and it lands at live
+precision 0.7640 against a base rate of 0.1488. The banked ledger for every arm
+now carries `body_jaccard` AND `sentence_jaccard` on all 7,890 candidate pairs,
+so the re-calibration is free, offline, and needs no new ingest. Two things S1b
+must respect:
+
+1. **Precision at 1,021 firings is 0.764 and at 2,000 it was 0.556 offline** —
+   the distribution is lumpy and the plateau structure is real, so a τ sweep
+   must report the realized firing count beside every candidate τ, not just the
+   threshold.
+2. **`neither_returned` is the endpoint to watch** (§9.5). U already carries the
+   highest of the four arms; a τ tuned for LSW alone can push rules out of the
+   pool entirely, which is the failure Arm K's `hit@k` drop was.
+
+**Do NOT buy a model-based extractor on the strength of this.** The remaining
+gap is dominated by session segmentation (one unit per session), not by target
+selection, and the $0 lever that just paid has a second free move left in it.
+
+## 11. Reproduce
+
+```bash
+cd /Users/sidsharma/Memphant-s1-unitswap        # branch s1-unitswap @ ca60e4c4
+docker start memphant-postgres-1
+cargo build --release --bin memphant-server --bin memphant-worker --bin memphant-cli
+#   server ba11520e0404…   worker 39f24332c553…
+PY=<venv-with-pyarrow>/bin/python PY=$PY bash scripts/run_s1_unitswap.sh
+python3 scripts/s1_liveness_gate.py --dir $OUT --out $OUT/liveness-gate.json   # BEFORE any score
+bash scripts/run_s1_analysis.sh
+```
+
+Launch detached (`setsid`/`nohup caffeinate`); a full four-arm run is ~3.5h
+wall on a shared box. `pyarrow` is the only extra dependency.
+
+## 12. Artifacts
+
+| artifact | contents | lineage |
+|---|---|:--:|
+| `arm-u-sentence.json` | **Arm U**, sentence unit τ 0.42, 1,063 rows, 7,890-pair dual-unit ledger | ✅ |
+| `arm-s-body.json` | **Arm S**, body unit τ 0.25, on-tree replication | ✅ |
+| `arm-n-noop.json` | **Arm N**, no-op isolator, zero edges by construction | ✅ |
+| `arm-r3-random.json` | **Arm R3**, rate-matched random ablation | ✅ |
+| `liveness-gate.json` | the gate, run before any score was read | ✅ |
+| `analysis/{u-vs-s,u-vs-r3,u-vs-n,s-vs-r3,s-vs-n}.{full,confirmatory}.json` | 10 paired analyses, each with its own computed `evidence_contract` | ✅ |
