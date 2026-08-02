@@ -514,11 +514,11 @@
     "prepare_script_sha256": "21dd4396407d15a837ba83cee346b83a4cf52e7df7ac9136963ccf846c21888c",
     "pack_evidence_source_sha256": "581a74dbbee328ec7070ff80ef4c47dfb13c52020cb997352dc89d310763503f"
   },
-  "compare_script_sha256": "b4b3828f07f093a54afeb7c45343cf8089c95526fea1708fd38ba6bb991b65fd",
+  "compare_script_sha256": "c936ed78a6d1a89b9a96779022c9e08a797aee041bc2d4a9b1bb7ceadecd8f3e",
   "evidence_contract": {
     "schema_version": 1,
     "decisional": false,
-    "claim": "On the Track-R paraphrase bank, answer correctness under a fixed reader is measured jointly with gold-span retrieval@10 for a MemPhant fused pack, an agentic-grep pack and an empty pack, to test whether hit@k predicts the outcome it is used as a proxy for.",
+    "claim": "pilot saturation slice, prompt v3",
     "power": {
       "test": "two-sided exact (conditional binomial) McNemar",
       "n": 30,
@@ -558,22 +558,24 @@
         "reader_calls": 163
       },
       "license_id": "CC-BY-4.0",
-      "license_source": "HF_DATASET_CARD",
+      "license_source": "RECORD_METADATA",
       "license_evidence": "nebius/SWE-rebench-openhands-trajectories dataset card, pinned in benchmarks/data/track_r_paraphrase_golden.lock.json corpus block"
     },
     "leakage": {
       "unit_definition": "one unit = one content event of the attempt; coverage(question, event) = |T(question) & T(event)| / |T(question)|, T(s) = set(re.findall(r'[a-z0-9_]{3,}', s.lower()))",
       "absolute_target_coverage": 0.1346,
       "floor": 0.0667,
-      "floor_kind": "per golden, the mean coverage over EVERY non-target event of the same attempt; no seed, no draw",
+      "floor_kind": "exhaustive",
+      "floor_definition": "per golden, the mean coverage over EVERY non-target event of the same attempt; no seed, no draw",
       "concentration": 2.018,
-      "provenance_class": "model-paraphrased from the target event; identifier surfaces banned (coverage 0.1346)"
+      "provenance_class": "authored_from_target"
     },
     "probe_kind": "lever",
     "mechanism_enabled": true,
     "mechanism_evidence": "The lever is MemPhant recall itself. Liveness is the arms' own measured divergence rather than an assertion: the arms disagree on 10 of 30 questions at the reader endpoint, their packs differ in mean tokens ({'memphant': 2104.8, 'agenticgrep': 498.3333333333333}), and the judge fired on memphant 0.93, agenticgrep 1.00, nomemory 0.50 of rows.",
     "attribution": {
-      "method": "paired arm contrast at one lineage"
+      "method": "unverified",
+      "actual_method": "paired arm contrast at one lineage"
     },
     "bar": null,
     "notes": "Reader-QA, not retrieval@k. Every arm was packed by one packer at one k and one budget before reaching the reader; the comparison script refuses arms not bound by sha256 to the same equalization manifest. The no-memory arm uses a closed-book reader prompt and is a saturation probe, never the paired comparator for a memory claim."

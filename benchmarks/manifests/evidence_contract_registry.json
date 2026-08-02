@@ -33,6 +33,8 @@
     "docs/build-log/artifacts/r6-docs-decision/packet.json",
     "docs/build-log/artifacts/s10-conversion/s10-full180-answer_correct.json",
     "docs/build-log/artifacts/s10-conversion/s10-full180-correct.json",
+    "docs/build-log/artifacts/s10-conversion/s10-pilot30-answer_correct.json",
+    "docs/build-log/artifacts/s10-conversion/s10-pilot30-correct.json",
     "docs/build-log/artifacts/sibling-gather-deletion/sibling_gather_deletion.json",
     "docs/build-log/artifacts/track-r-paraphrase/w02-trunk-arms.json",
     "docs/build-log/artifacts/track-r-paraphrase/z1-ladder-power.json",
