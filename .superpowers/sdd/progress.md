@@ -1960,3 +1960,56 @@ default, checkbox, cutover or SOTA claim moves. `paid_model_calls: 0`.**
 Report: `.superpowers/sdd/s2-instrument-report.md`. Survey:
 `docs/build-log/2026-08-01-discriminating-instrument-survey.md`. Branch
 `s2-instrument`, **not merged, not pushed.**
+
+## 2026-08-01 — S6: the MemoryCode as-of re-cut ($0)
+
+**Neither banked win survives a corpus that does not flatter recency.**
+
+The re-cut worked: on the as-of cut `max(observed_at)` scores **exactly
+0.000000** LSW (0.5936 on the original cut), so the corpus no longer answers the
+question for us. It then replaced one identity with another. **`max(observed_at
+≤ t)` — a ~20-line read rule, no substrate, no database — scores 0.9064 LSW with
+misapplication of exactly 0.000000**, and §3.2 proves it *cannot* rank a
+distractor first on a corpus with zero re-assertions.
+
+**Every substrate arm loses to it.** Bitemporal P 0.7399 (**Δ = −0.1664**,
+cluster CI95 [−0.1902, −0.1435], 6.3× the MDE at design effect 8); Arm K 0.5520
+(**−0.3543**); A′ 0.1989. n = 3,599 probes / 257 instances, one tree
+(`12b4ebe1`), same two binaries, same stage, same haystack.
+
+- **The +3.01pp** becomes **+0.0117** [+0.0053, +0.0182], n_d 162, McNemar
+  p=1.2e-3. **Significant AND negligible — both words required:** 1.17pp against
+  a computed MDE of 1.01pp flat, and **below** the 2.87pp MDE at DEFF 8. On
+  hit@1 it is **null**: +0.0031 [−0.0053, +0.0116].
+- **The +0.0583** measures +0.3531 here, but **A′ is inert** (0 supersede
+  edges), so it is keyed-vs-unkeyed, not key quality. Against the honest
+  baseline **K − trivial = −0.3543**.
+
+**Liveness gate passed with one row inverted: `remainders_recalled` = 9,617 (P)
+and 5,657 (K) — the first non-zero in this program.** Bounded supersession tiles
+the valid axis and returns the historical rectangle as the as-of answer. This is
+the only instrument in the repo that exercises valid-time at all.
+
+**Two corrections to S2's spec, measured before adoption:** its
+`valid_at = observed_at(j_r) + ε` is **degenerate** (trivial rule = gold on
+3,599/3,599); and there are **3,599** as-of probes, not 3,608.
+
+**Prereg miss, recorded as one:** P⁻ was predicted near 0.0000 and measured
+0.7283 — `store.rs:2298` applies `valid_from <= valid_at` unconditionally, so
+the control inherits as-of truncation for free.
+
+**What the substrate wins:** hit@1, decisively — P 0.4718 vs 0.1853
+(**+0.2865**). And **hit@k 0.9475 vs LSW 0.7399 is a 21.1pp ranking loss, not a
+retrieval loss** — the fourth independent instance today (S4, S8).
+
+**The conclusion, preregistered before the arms and confirmed harder than
+predicted:** *a corpus whose gold is computable from the fact statements
+themselves will always be saturated by a short rule.* S7 closes it from the
+other side — MDN has 705 real re-assertion arcs and a 20-line `scoped_interval`
+rule still scores 1.0000. **Re-assertion is not the missing ingredient.** The
+falsification condition, and the spec any future instrument spend must meet
+first: **the gold must depend on evidence outside the statement set.**
+
+**No default, checkbox, cutover or SOTA claim moves. `paid_model_calls: 0`. No
+paid arm requested.** Report: `.superpowers/sdd/s6-asof-report.md`. Build log:
+`docs/build-log/2026-08-01-asof-recut.md`. Branch `s6-asof`, **not merged.**

@@ -273,9 +273,258 @@ here as the conclusion to test rather than discovered afterwards:**
 > *which* short rule wins; it cannot make the gold uncomputable from the
 > statements, and no amount of probes or power changes that.
 
-**What would falsify it:** an instrument whose gold depends on evidence outside
+**What would falsify it (see §12 — it did not):** an instrument whose gold depends on evidence outside
 the statement set — execution, external authority, or scope the statements do
 not carry — such that no rule over the statements alone recovers it. That is a
 property of the *source of truth*, not of the temporal construction, and it is
 the specification any future instrument spend must satisfy **before** it is
 bought.
+
+---
+
+## 7. Results
+
+**All four substrate arms ran on ONE tree (`12b4ebe1`) from the SAME two
+binaries** — server `dcf570b5068d…`, worker `5d15575663e2…`, sha256 stamped into
+every artifact — over the same 3,599 probes / 257 instances, at the same stage,
+on the same haystack. `paid_model_calls: 0` in all ten reports.
+
+### 7.1 Mechanism liveness — from each arm's own scratch DB, before any score
+
+| check | prereg expects | **A′** | **P** | **P⁻** | **K** |
+|---|---|---:|---:|---:|---:|
+| `supersedes` edges | >0 (P,K) / 0 (P⁻) | **0** | **7,198** | **0** | **4,162** |
+| valid-closed rows | >0 (P,K) / 0 (P⁻) | 0 | **3,599** | **0** | **2,081** |
+| open rows sharing a key with **overlapping** valid ranges | 0 (P,K) / >0 (P⁻) | 0 | **0** | **10,294** | **0** |
+| **`remainders_recalled`** | **>0** (P,K) / 0 (P⁻) | 0 | **9,617** | **0** | **5,657** |
+| compilation asserted from the DB | clean | clean | clean | clean | clean |
+
+**The gate passes in both directions, and the inverted row is the one that
+matters.** `remainders_recalled` is **9,617** on P and **5,657** on K — the
+first non-zero in this program's history, against `0` in every prior lane. The
+historical rectangle `[obs(j_r), obs(j_{r+1}))`, carrying the prior body, is
+being minted by bounded supersession and **returned as the as-of answer**. The
+valid-time machinery is live, not inert, and this instrument is the first thing
+built here that exercises it.
+
+**A′ is INERT and that bounds what K − A′ means.** `MEMPHANT_FACT_EXTRACTION`
+defaults ON, so on-tree A′ is configurationally the old **Arm F** — and it
+minted **zero** supersede edges, zero keyed units, zero valid-closed rows. So
+**K − A′ is "keyed writes versus no keyed writes at all", not "a good key versus
+a worse key."** It is a much coarser contrast than its banked +0.0583 ancestor,
+and must not be quoted as the same comparison.
+
+### 7.2 Levels — every arm, every baseline, one table
+
+Per §5(4): **a level is not a result here, and both banked MemoryCode levels are
+shown beside them so no reader can quote one in isolation.**
+
+| | **LSW** | **hit@1** | hit@k | misapp | neither | (banked, original cut) |
+|---|---:|---:|---:|---:|---:|---|
+| **`t-recency`** `max(observed_at)` | **0.000000** | 0.000000 | 0.163101 | 0.575993 | 0.424007 | A-recency was 0.5936 |
+| `t-constant` session order | 0.145040 | 0.037788 | 0.298972 | 0.383162 | 0.471798 | — |
+| `t-bm25` no time signal | 0.198944 | 0.163101 | 0.896916 | 0.800500 | 0.000556 | — |
+| **A′** default ingest (= old Arm F) | 0.198944 | 0.152820 | 0.766602 | 0.797444 | 0.003612 | 0.3142 |
+| `t-mode_oracle` **oracle, not comparable** | 0.294526 | 0.294526 | 1.000000 | 0.705474 | 0.000000 | — |
+| `t-bm25_asof` relevance then truncate | 0.509308 | 0.412059 | 0.973882 | 0.487635 | 0.003056 | — |
+| **K** derived keys | 0.552098 | 0.366491 | 0.871909 | 0.414282 | 0.033620 | 0.3725 |
+| **P⁻** A-recency control | 0.728258 | 0.468741 | 0.948319 | 0.240067 | 0.031675 | 0.5936 |
+| **P** bitemporal | 0.739928 | **0.471798** | 0.947485 | 0.228675 | 0.031398 | 0.6237 |
+| **`t-asof_truncation`** `max(observed_at ≤ t)` | **0.906363** | 0.185329 | 0.906363 | **0.000000** | 0.093637 | — |
+
+*(2026-08-02. Absolute rates have a shelf life; the deltas below are the durable part.)*
+
+**A′ and `t-bm25` agree to six decimal places and that is a coincidence, checked
+rather than assumed:** 512 probes disagree, at **b = 256 / c = 256** — perfectly
+balanced discordance, not an identical ranking.
+
+### 7.3 The decision quantity — preregistered in §5(2) as `P − asof_truncation`
+
+Cluster bootstrap over the 257 instances, 10,000 resamples, seed `20260801`.
+Realized ψ and MDE computed from **this run's own cells**; nothing inherited.
+
+| comparison | endpoint | **Δ** | cluster CI95 | b / c | n_d | ψ | **MDE80 flat** | **MDE80 @DEFF 8** |
+|---|---|---:|---|---:|---:|---:|---:|---:|
+| **P − `asof_truncation`** | **LSW** | **−0.166435** | **[−0.1902, −0.1435]** | 268 / 867 | 1,135 | 0.3154 | 0.0265 | 0.0759 |
+| P − `asof_truncation` | hit@1 | **+0.286468** | [+0.2628, +0.3115] | 1314 / 283 | 1,597 | — | — | — |
+| P − `asof_truncation` | misapp | +0.228675 | [+0.2106, +0.2468] | 823 / **0** | 823 | — | — | — |
+| **P − P⁻** | **LSW** | **+0.011670** | **[+0.0053, +0.0182]** | 102 / 60 | 162 | 0.0450 | **0.0101** | **0.0287** |
+| P − P⁻ | hit@1 | +0.003056 | **[−0.0053, +0.0116]** | 123 / 112 | 235 | — | — | — |
+| K − A′ | LSW | +0.353154 | [+0.3335, +0.3745] | 1306 / 35 | 1,341 | 0.3726 | 0.0288 | 0.0824 |
+| K − `asof_truncation` | LSW | −0.354265 | [−0.3796, −0.3288] | 189 / 1464 | 1,653 | 0.4593 | 0.0319 | 0.0914 |
+
+**Every n_d is far above the n_d ≥ 6 floor. Every cell here is a measurement.**
+
+## 8. Verdict
+
+### 8.1 The substrate loses to a 20-line read rule, and not narrowly
+
+**At n = 3,599 over 257 instances, on a cut where `max(observed_at)` is provably
+wrong on every probe: the full bitemporal supersession machinery scores
+0.7399 latest-state-wins against 0.9064 for `max(observed_at ≤ t)` — a ~20-line
+read rule with no substrate, no supersession, no valid-time columns and no
+database. Δ = −0.1664, cluster CI95 [−0.1902, −0.1435], 6.3× the computed MDE
+even at design effect 8.**
+
+Every substrate arm loses to it: P by 16.6pp, K by 35.4pp, A′ by 70.7pp. And the
+trivial rule's **misapplication is exactly 0.000000, with c = 0 discordant pairs
+against P** — there is not one probe in 3,599 where it ranks a retired rule above
+the live one, because §3.2 says it *cannot*. **The trivial rule does not tie the
+substrate. It beats it decisively, and it beats it for a structural reason.**
+
+### 8.2 The bitemporal machinery buys ~1pp over its own control — significant and negligible, and both words are required
+
+**P − P⁻ = +0.0117 LSW, cluster CI95 [+0.0053, +0.0182], exact McNemar
+p = 1.2 × 10⁻³, n_d = 162.** The CI excludes zero, so by the preregistered rule
+this is a **positive**.
+
+**It is also substantively negligible, and the power arithmetic is what shows
+it.** The effect is 1.17pp against a computed MDE of **1.01pp flat** — it clears
+significance by a hair — and it sits **below the 2.87pp MDE at design effect 8**,
+which is the regime this instrument actually lives in (probes nest at mean 14.0
+per instance). On **hit@1 the same comparison is null**: +0.0031, CI
+**[−0.0053, +0.0116]**, spanning zero.
+
+**"Statistically significant" and "matters" diverge here and must not be
+conflated.** The honest sentence is: *supersession beats its own recency control
+by about one point of LSW and by nothing at all on hit@1, on 3,599 probes.*
+Anyone reporting the p-value without the magnitude, or the magnitude without the
+DEFF-8 MDE, is reporting half of it.
+
+### 8.3 Do the banked wins survive? — the direct answer
+
+**The +3.01pp: it does not survive as the claim it was made as.** On the as-of
+cut the same comparison is **+1.17pp**, and it is dwarfed by a trivial rule that
+beats the winning arm by 16.6pp. The banked figure was never wrong arithmetically
+— it is the residual between two implementations of the same correct rule, exactly
+as `a-recency` §8.5 said. **What S6 adds is that removing the flattery does not
+rescue it: it shrinks it to ~1pp and simultaneously reveals that the whole
+contest was being held below a baseline nobody had run.**
+
+**The +0.0583: it does not survive as the same comparison.** K − A′ measures
+**+0.3531** here, but that is *larger* for a disqualifying reason — A′ is **inert**
+on this tree (§7.1: zero edges), so the contrast is keyed-versus-unkeyed, not
+key-quality. Against the honest baseline, **K − `asof_truncation` = −0.3543**
+[−0.3796, −0.3288]. **Arm K loses to the 20-line rule by 35 points.**
+
+**Neither banked win survives contact with a corpus that does not flatter
+recency and with a baseline set that was run in full.**
+
+### 8.4 What the substrate does win, reported because it is real
+
+**P beats every trivial rule on hit@1**: 0.4718 vs 0.4121 for `bm25_asof`
+(+0.0597) and vs 0.1853 for `asof_truncation` (**+0.2865**, CI [+0.2628,
++0.3115]). The truncation rule ranks by time, so it puts the gold at rank
+*(number of intervening sessions)* — it gets the *ordering* of gold-before-stale
+right by construction while burying the gold below noise. P ranks by relevance
+*within* what is valid at t, and puts the right session first far more often.
+
+**This is a genuine and preregistered-secondary win, and it does not rescue
+§8.1.** A system that answers correctly at rank 1 more often, while losing the
+primary endpoint by 16.6pp to a rule you could write in an afternoon, has not
+earned an edifice that costs a breaking migration to remove
+(`a-recency` §5).
+
+### 8.5 The prereg miss, reported as a miss
+
+**§5 predicted P⁻ would land near the trivial `recency` rule's 0.0000. It
+measured 0.7283 — the prediction was wrong, and the reason is mechanical.**
+`crates/memphant-store-postgres/src/store.rs:2298` applies
+
+```sql
+and coalesce(valid_from, '-infinity'::timestamptz) <= $9::timestamptz
+```
+
+**unconditionally — the filter is not gated on `MEMPHANT_A_RECENCY_CONTROL`.**
+So with bounded ingest the control inherits as-of truncation *for free* from the
+store, and P⁻ is not "A-recency"; it is **A-recency + as-of truncation realized
+inside the substrate**, which is precisely S2 §4.2's "arm 2" sharing an identical
+retrieval stack with P.
+
+That accident produced a **better** pairing than the one designed — the honest
+baseline and the edifice differing only in whether generations close — and it is
+what makes §8.2's +1.17pp the cleanly interpretable number it is. **The
+prediction was still wrong and is recorded as wrong.** The untruncated control is
+the `t-recency` row, which measures the predicted **0.000000**.
+
+## 9. The ranking-not-retrieval finding — the fourth independent instance today
+
+**Arm P retrieves the answer far more often than it answers with it: hit@k
+0.9475 against LSW 0.7399.** The gold is in the returned pool for 94.8% of
+probes and wins the probe for 74.0% — **a ~21-point gap that is a ranking loss,
+not a retrieval loss.** Three sibling lanes hit the same wall today from three
+different directions:
+
+| lane | in-pool | ranked/answered | gap |
+|---|---:|---:|---:|
+| **S6 (here)**, arm P, as-of MemoryCode | hit@k **0.9475** | LSW **0.7399** | **21.1pp** |
+| S4, repo-recoverable facts | gold in pool **93.9%** | at rank ≤10 **62.8%** | 31.1pp |
+| S8, LLM ranker over our own pool | perfect ranker **0.911** | RankAcc **1.000** at $0 | — |
+
+**Four independent instances, on different corpora and different endpoints, all
+saying the retrieval stage is not the binding constraint.** For this lane it is
+sharper still: P's pool is *better* than the trivial rule's (hit@k 0.9475 vs
+0.9064) and its answer is *worse* (0.7399 vs 0.9064). **We are retrieving the
+right thing and then ranking it away.** That is where the next engineering pound
+belongs, and it is cheap — S8 measured a perfect ranker at $0 over the pool we
+already have.
+
+## 10. What this instrument cost and what it is worth
+
+**$0.** No paid model call on any path, in any of the ten reports. Build was one
+loader, `valid_at` threaded into recall, `valid_from` on the unit payload, a
+remainder-attribution rule, and six trivial baselines.
+
+**Keep it.** It is the only instrument in this repo that exercises valid-time at
+all (`remainders_recalled` 9,617 vs 0 everywhere else), and it is the only place
+the bitemporal machinery can be shown to fire end-to-end on the construct it
+exists for. **But do not run a decision on it**: §3.2 is structural, and the
+primary endpoint is saturated.
+
+## 11. What must NOT be concluded
+
+1. **Not "supersession regressed."** §5(1) preregistered the level drop. P went
+   0.6237 → 0.7399; the levels are on different cuts and **are not comparable**.
+   Only Δ is.
+2. **Not "the edifice is worthless."** It is worth ~1pp of LSW over its own
+   control on this corpus (§8.2), and it wins hit@1 (§8.4). What is established
+   is that **it does not earn a breaking-migration exit price here**, and that
+   the contest was being run below an unrun baseline.
+3. **Not "MemPhant loses to BM25."** `asof_truncation` is not a retrieval system;
+   it is a time filter over a bound instance haystack of ~32 sessions. It does
+   not scale, has no notion of relevance (hit@1 0.1853), and would be useless at
+   production scope. **What it proves is about the INSTRUMENT, not the product.**
+4. **Not a scale claim.** `a-recency` §7's caveat binds unchanged: at ~32–42
+   units per scope no recall family truncates. None of this transfers to a scope
+   carrying 200+ units per subject.
+
+## 12. The conclusion this lane exists to support — preregistered in §6b, confirmed harder than predicted
+
+> **A corpus whose gold is computable from the fact statements themselves will
+> always be saturated by a short rule.**
+
+MemoryCode's gold is a function of the declaration sequence: latest on the
+original cut, latest-before-t on the as-of cut. A ~20-line rule computes it
+either way — 0.5936 then, **0.9064** now. **Re-cutting changed which short rule
+wins; it did not make the gold uncomputable from the statements.** §6b predicted
+a small-or-null gap between substrate and trivial rule; the measured gap is
+**−16.6pp against the substrate**, so the conclusion is confirmed in a stronger
+form than predicted — the trivial rule does not tie, it wins.
+
+**S7 closes the argument from the opposite direction.** MDN browser-compat-data
+is CC0, carries **705 genuine re-assertion arcs** — regime (a), which MemoryCode
+structurally lacks (§2: zero) — and a ~20-line `scoped_interval` rule scores
+**1.0000 on every band**. **So re-assertion and non-recency currency are NOT the
+missing ingredients.** Both are present there; neither is sufficient. The
+missing ingredient is not a temporal construction at all.
+
+**The falsification condition, restated as the specification any future
+instrument spend must satisfy BEFORE it is bought:** the gold must depend on
+evidence **outside the statement set** — execution, external authority, or scope
+the statements do not carry — such that no rule over the statements alone
+recovers it. S4's result points the same way: an agent with `grep` beat MemPhant
+96.67% to 58.89% (p = 1.2 × 10⁻¹⁹) on facts recoverable from the repo, because
+the repo *is* the evidence outside the statements.
+
+**No default, checkbox, cutover or SOTA claim moves on this result.
+`paid_model_calls: 0`.**
