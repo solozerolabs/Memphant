@@ -2144,7 +2144,9 @@ Report: `.superpowers/sdd/s7-bcd-report.md`. Build log:
 
 ---
 
-## 2026-08-01 — S5 SWE-ContextBench stage 0 (`s5-swecb`, branch point `0e874da0`, not merged)
+## 2026-08-01 — S5 SWE-ContextBench stage 0 (`s5-swecb`, branch point `0e874da0`)
+
+**Integration status (2026-08-02): locally merged into integration `main` at `a3f4fe51`; not pushed.**
 
 **Stage 0 gate: GREEN. `paid_model_calls: 0`, settled cost $0.00.** Preregistered primary statistic —
 packed recall@5 of the official Relationship parent over 357 distinct targets, ANY-PARENT, with the
@@ -2360,9 +2362,9 @@ pushed.**
 
 ## 2026-08-01 — S4: the controls we never ran. `grep` beats MemPhant by 37.8 points.
 
-**Branch `s4-controls` (base `main` @ `0e874da0`), not merged. Spend $25.98 of an
-$80 ceiling.** Preregistration committed at `6912e35f` **before any cell was
-seen**; Part B appended afterwards and never edits Part A.
+**Source branch `s4-controls` (base `main` @ `0e874da0`). Locally merged into integration `main`
+at `248195d8`; not pushed. Spend $25.98 of an $80 ceiling.** Preregistration committed at `6912e35f`
+**before any cell was seen**; Part B appended afterwards and never edits Part A.
 
 **The question and the answer.** *Can MemPhant, at its shipped default, beat a
 competent coding agent that has `grep` and nothing else?* **No.** On the Track R
@@ -2657,4 +2659,5 @@ first: **the gold must depend on evidence outside the statement set.**
 
 **No default, checkbox, cutover or SOTA claim moves. `paid_model_calls: 0`. No
 paid arm requested.** Report: `.superpowers/sdd/s6-asof-report.md`. Build log:
-`docs/build-log/2026-08-01-asof-recut.md`. Branch `s6-asof`, **not merged.**
+`docs/build-log/2026-08-01-asof-recut.md`. Source branch `s6-asof`; **locally
+merged into integration `main` at `1358088b`; not pushed.**

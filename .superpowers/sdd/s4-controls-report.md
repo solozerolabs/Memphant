@@ -1,6 +1,7 @@
 # SDD S4 — agentic-`grep` and dense-RAG controls
 
-**Branch:** `s4-controls` (base `main` @ `0e874da0`, **not merged**) ·
+**Source branch:** `s4-controls` (base `main` @ `0e874da0`) · **locally merged into
+integration `main` at `248195d8`; not pushed** ·
 **Preregistration:** `docs/build-log/2026-08-01-agentic-search-controls.md` §A,
 committed at `6912e35f` **before any cell was seen**.
 

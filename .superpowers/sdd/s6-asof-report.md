@@ -1,6 +1,7 @@
 # S6 — the MemoryCode as-of re-cut
 
-**Branch `s6-asof` · 2026-08-01 · $0, no paid model call on any path · NOT merged.**
+**Source branch `s6-asof` · 2026-08-01 · $0, no paid model call on any path · locally merged into
+integration `main` at `1358088b`; not pushed.**
 Build log: `docs/build-log/2026-08-01-asof-recut.md`.
 Artifacts: `docs/build-log/artifacts/2026-08-01-asof-recut/` (10 arm reports, 4
 paired analyses, all four analyses registered as `contracted`).

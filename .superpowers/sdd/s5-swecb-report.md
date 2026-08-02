@@ -1,6 +1,7 @@
 # S5 — SWE-ContextBench stage 0 report
 
-- Branch: `s5-swecb`, branch point `0e874da0`. **Not merged to main.**
+- Source branch: `s5-swecb`, branch point `0e874da0`. **Locally merged into integration `main` at
+  `a3f4fe51`; not pushed.**
 - Paid model calls: **0**. Settled cost: **$0.00**. Unsettled: **$0.00**.
 - Preregistration: `docs/build-log/artifacts/s5-swecb/stage0-prereg.json` — committed at `fd2ebd7c`
   **before the first ingest**, amended at `0e137b54` **before any cell existed**.
@@ -179,7 +180,8 @@ taxonomy separating never-retrieved from retrieved-but-unpacked; the 357/1,007 c
 configuration; an out-of-pool gold parent recorded as unreachable rather than scored as a miss; and
 that the committed decision bands still partition the unit interval.
 
-Scratch DBs only, dropped on exit. No STATUS, ledger, default, or SOTA claim moves. No merge to main.
+Scratch DBs only, dropped on exit. No STATUS, ledger, default, or SOTA claim moves. Local integration
+does not promote the result or make it a shipped claim.
 
 ## Artifacts
 
