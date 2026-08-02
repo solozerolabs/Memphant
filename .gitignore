@@ -218,3 +218,4 @@ docs/build-log/artifacts/s10-conversion/*/attempts-*.jsonl*
 # $0 stub round-trip artifacts are promotion hazards: they carry the same
 # decision keys as a paid run. The build log records the round trip instead.
 docs/build-log/artifacts/s10-conversion/s10-stub*.json
+.venv-s6/
