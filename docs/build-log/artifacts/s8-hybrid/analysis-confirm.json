@@ -1,0 +1,483 @@
+{
+  "instrument": "track_r_paraphrase n=180",
+  "stage": "confirm",
+  "decisive": true,
+  "endpoint": "gate_common.provenance_hit@10 over top-10 bodies",
+  "preregistration": "docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md#part-a",
+  "planning_mde_pp": 9.38,
+  "n_d_structural_floor": 6,
+  "not_a_measurement_note": null,
+  "comparators": {
+    "memphant_fused_at_10": {
+      "hits_at_10": 112,
+      "rate": 0.622222,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s8/pool-dump.jsonl",
+      "llm_calls_at_recall": 0,
+      "usd_per_question": 0.0,
+      "note": "Arm H's stage-matched retriever comparator: plain ranked bodies"
+    },
+    "memphant_packed_at_10": {
+      "hits_at_10": 105,
+      "rate": 0.583333,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s8/pool-dump.jsonl",
+      "llm_calls_at_recall": 0,
+      "usd_per_question": 0.0,
+      "note": "the shipped default; reported beside, never the paired headline vs H"
+    },
+    "agentic_grep": {
+      "hits_at_10": 174,
+      "rate": 0.966667,
+      "source": "/Users/sidsharma/.memphant-private/track-r-paraphrase/run-s4/agentic-final-provenance.json",
+      "usd_per_question": 0.144,
+      "haystack": "the attempt's raw events \u2014 a SUPERSET of Arm H's pool"
+    }
+  },
+  "coverage_curve": {
+    "1": {
+      "hits": 30,
+      "rate": 0.166667
+    },
+    "2": {
+      "hits": 46,
+      "rate": 0.255556
+    },
+    "4": {
+      "hits": 68,
+      "rate": 0.377778
+    },
+    "5": {
+      "hits": 78,
+      "rate": 0.433333
+    },
+    "8": {
+      "hits": 99,
+      "rate": 0.55
+    },
+    "10": {
+      "hits": 112,
+      "rate": 0.622222
+    },
+    "16": {
+      "hits": 127,
+      "rate": 0.705556
+    },
+    "24": {
+      "hits": 144,
+      "rate": 0.8
+    },
+    "32": {
+      "hits": 152,
+      "rate": 0.844444
+    },
+    "48": {
+      "hits": 159,
+      "rate": 0.883333
+    },
+    "64": {
+      "hits": 164,
+      "rate": 0.911111
+    },
+    "96": {
+      "hits": 168,
+      "rate": 0.933333
+    },
+    "128": {
+      "hits": 168,
+      "rate": 0.933333
+    },
+    "200": {
+      "hits": 169,
+      "rate": 0.938889
+    }
+  },
+  "ceiling_note": "Arm H cannot exceed Coverage(N) at any N, and Coverage tops out below agentic grep's realized rate. Each N is scored against its own ceiling; rank_accuracy is that ratio.",
+  "sweep": [
+    {
+      "label": "n16",
+      "N": 16,
+      "n": 180,
+      "hits_at_10": 120,
+      "rate": 0.666667,
+      "coverage_ceiling_hits": 127,
+      "coverage_ceiling_rate": 0.705556,
+      "rank_accuracy": 0.944882,
+      "random_ranker_expected_hits": 94.29,
+      "misses_out_of_view": 53,
+      "misses_in_view_ranked_out": 7,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 7,
+      "mean_tool_calls": 7.117,
+      "provider_refused_question_ids": [
+        "track_r_par_002",
+        "track_r_par_007",
+        "track_r_par_022",
+        "track_r_par_024",
+        "track_r_par_057",
+        "track_r_par_084",
+        "track_r_par_092",
+        "track_r_par_101",
+        "track_r_par_118",
+        "track_r_par_123",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_002",
+        "track_r_par_007",
+        "track_r_par_022",
+        "track_r_par_024",
+        "track_r_par_057",
+        "track_r_par_084",
+        "track_r_par_092",
+        "track_r_par_101",
+        "track_r_par_118",
+        "track_r_par_123",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 23469.5,
+      "completion_tokens_per_question": 1331.6,
+      "usd_per_question": 0.15064,
+      "usd_per_question_vs_grep": 1.0461,
+      "hits_per_dollar": 4.4,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 180,
+          "treatment_hits": 120,
+          "control_hits": 112,
+          "both": 105,
+          "neither": 53,
+          "treatment_only_b": 15,
+          "control_only_c": 7,
+          "n_discordant": 22,
+          "delta": 0.044444,
+          "delta_pp": 4.44,
+          "mcnemar_exact_p": 0.13380050659179688,
+          "realized_psi": 0.122222,
+          "realized_mde_pp": 7.49,
+          "planning_mde_pp": 9.38,
+          "verdict": "no detectable difference at this power",
+          "reason": "the instrument cannot resolve an effect smaller than 7.49pp; effects inside that band are unmeasured, not absent"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 180,
+          "treatment_hits": 120,
+          "control_hits": 105,
+          "both": 98,
+          "neither": 53,
+          "treatment_only_b": 22,
+          "control_only_c": 7,
+          "n_discordant": 29,
+          "delta": 0.083333,
+          "delta_pp": 8.33,
+          "mcnemar_exact_p": 0.008130058646202087,
+          "realized_psi": 0.161111,
+          "realized_mde_pp": 8.67,
+          "planning_mde_pp": 9.38,
+          "verdict": "no detectable difference at this power",
+          "reason": "the instrument cannot resolve an effect smaller than 8.67pp; effects inside that band are unmeasured, not absent"
+        },
+        "vs_agentic_grep": {
+          "n": 180,
+          "treatment_hits": 120,
+          "control_hits": 174,
+          "both": 120,
+          "neither": 6,
+          "treatment_only_b": 0,
+          "control_only_c": 54,
+          "n_discordant": 54,
+          "delta": -0.3,
+          "delta_pp": -30.0,
+          "mcnemar_exact_p": 1.1102230246251565e-16,
+          "realized_psi": 0.3,
+          "realized_mde_pp": 11.72,
+          "planning_mde_pp": 9.38,
+          "verdict": "the comparator wins",
+          "reason": "delta <= -realized MDE and p < 0.05"
+        }
+      }
+    },
+    {
+      "label": "n64",
+      "N": 64,
+      "n": 180,
+      "hits_at_10": 154,
+      "rate": 0.855556,
+      "coverage_ceiling_hits": 164,
+      "coverage_ceiling_rate": 0.911111,
+      "rank_accuracy": 0.939024,
+      "random_ranker_expected_hits": 48.82,
+      "misses_out_of_view": 16,
+      "misses_in_view_ranked_out": 10,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 10,
+      "mean_tool_calls": 6.461,
+      "provider_refused_question_ids": [
+        "track_r_par_002",
+        "track_r_par_007",
+        "track_r_par_024",
+        "track_r_par_057",
+        "track_r_par_084",
+        "track_r_par_101",
+        "track_r_par_118",
+        "track_r_par_123",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "errored_question_ids": [
+        "track_r_par_002",
+        "track_r_par_007",
+        "track_r_par_024",
+        "track_r_par_057",
+        "track_r_par_084",
+        "track_r_par_101",
+        "track_r_par_118",
+        "track_r_par_123",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155"
+      ],
+      "prompt_tokens_per_question": 31377.1,
+      "completion_tokens_per_question": 1348.3,
+      "usd_per_question": 0.19059,
+      "usd_per_question_vs_grep": 1.3235,
+      "hits_per_dollar": 4.5,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 180,
+          "treatment_hits": 154,
+          "control_hits": 112,
+          "both": 106,
+          "neither": 20,
+          "treatment_only_b": 48,
+          "control_only_c": 6,
+          "n_discordant": 54,
+          "delta": 0.233333,
+          "delta_pp": 23.33,
+          "mcnemar_exact_p": 3.256530156647841e-09,
+          "realized_psi": 0.3,
+          "realized_mde_pp": 11.72,
+          "planning_mde_pp": 9.38,
+          "verdict": "H wins",
+          "reason": "delta >= realized MDE and p < 0.05"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 180,
+          "treatment_hits": 154,
+          "control_hits": 105,
+          "both": 99,
+          "neither": 20,
+          "treatment_only_b": 55,
+          "control_only_c": 6,
+          "n_discordant": 61,
+          "delta": 0.272222,
+          "delta_pp": 27.22,
+          "mcnemar_exact_p": 5.380614009897755e-11,
+          "realized_psi": 0.338889,
+          "realized_mde_pp": 12.46,
+          "planning_mde_pp": 9.38,
+          "verdict": "H wins",
+          "reason": "delta >= realized MDE and p < 0.05"
+        },
+        "vs_agentic_grep": {
+          "n": 180,
+          "treatment_hits": 154,
+          "control_hits": 174,
+          "both": 154,
+          "neither": 6,
+          "treatment_only_b": 0,
+          "control_only_c": 20,
+          "n_discordant": 20,
+          "delta": -0.111111,
+          "delta_pp": -11.11,
+          "mcnemar_exact_p": 1.9073486328125e-06,
+          "realized_psi": 0.111111,
+          "realized_mde_pp": 7.11,
+          "planning_mde_pp": 9.38,
+          "verdict": "the comparator wins",
+          "reason": "delta <= -realized MDE and p < 0.05"
+        }
+      }
+    },
+    {
+      "label": "n128",
+      "N": 128,
+      "n": 180,
+      "hits_at_10": 155,
+      "rate": 0.861111,
+      "coverage_ceiling_hits": 168,
+      "coverage_ceiling_rate": 0.933333,
+      "rank_accuracy": 0.922619,
+      "random_ranker_expected_hits": 31.86,
+      "misses_out_of_view": 12,
+      "misses_in_view_ranked_out": 13,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 13,
+      "mean_tool_calls": 6.206,
+      "provider_refused_question_ids": [
+        "track_r_par_002",
+        "track_r_par_007",
+        "track_r_par_024",
+        "track_r_par_057",
+        "track_r_par_084",
+        "track_r_par_092",
+        "track_r_par_101",
+        "track_r_par_118",
+        "track_r_par_123",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155",
+        "track_r_par_174"
+      ],
+      "errored_question_ids": [
+        "track_r_par_002",
+        "track_r_par_007",
+        "track_r_par_024",
+        "track_r_par_057",
+        "track_r_par_084",
+        "track_r_par_092",
+        "track_r_par_101",
+        "track_r_par_118",
+        "track_r_par_123",
+        "track_r_par_126",
+        "track_r_par_139",
+        "track_r_par_155",
+        "track_r_par_174"
+      ],
+      "prompt_tokens_per_question": 39272.9,
+      "completion_tokens_per_question": 1345.7,
+      "usd_per_question": 0.23001,
+      "usd_per_question_vs_grep": 1.5973,
+      "hits_per_dollar": 3.7,
+      "contrasts": {
+        "vs_memphant_fused_at_10": {
+          "n": 180,
+          "treatment_hits": 155,
+          "control_hits": 112,
+          "both": 105,
+          "neither": 18,
+          "treatment_only_b": 50,
+          "control_only_c": 7,
+          "n_discordant": 57,
+          "delta": 0.238889,
+          "delta_pp": 23.89,
+          "mcnemar_exact_p": 4.236709844063213e-09,
+          "realized_psi": 0.316667,
+          "realized_mde_pp": 12.04,
+          "planning_mde_pp": 9.38,
+          "verdict": "H wins",
+          "reason": "delta >= realized MDE and p < 0.05"
+        },
+        "vs_memphant_packed_at_10": {
+          "n": 180,
+          "treatment_hits": 155,
+          "control_hits": 105,
+          "both": 98,
+          "neither": 18,
+          "treatment_only_b": 57,
+          "control_only_c": 7,
+          "n_discordant": 64,
+          "delta": 0.277778,
+          "delta_pp": 27.78,
+          "mcnemar_exact_p": 7.638141345540223e-11,
+          "realized_psi": 0.355556,
+          "realized_mde_pp": 12.76,
+          "planning_mde_pp": 9.38,
+          "verdict": "H wins",
+          "reason": "delta >= realized MDE and p < 0.05"
+        },
+        "vs_agentic_grep": {
+          "n": 180,
+          "treatment_hits": 155,
+          "control_hits": 174,
+          "both": 155,
+          "neither": 6,
+          "treatment_only_b": 0,
+          "control_only_c": 19,
+          "n_discordant": 19,
+          "delta": -0.105556,
+          "delta_pp": -10.56,
+          "mcnemar_exact_p": 3.814697265625e-06,
+          "realized_psi": 0.105556,
+          "realized_mde_pp": 6.92,
+          "planning_mde_pp": 9.38,
+          "verdict": "the comparator wins",
+          "reason": "delta <= -realized MDE and p < 0.05"
+        }
+      }
+    }
+  ],
+  "lineage": {
+    "git_head": "b8d6ce02af547d9f4a903304e0d2bc00ef2aa957",
+    "git_branch": "s8-hybrid",
+    "git_dirty": true,
+    "git_dirty_paths": [
+      "scripts/s8_hybrid_analyze.py"
+    ],
+    "input_sha256": {
+      "pool_dump": "bdfa1fa00d6c990766f6f18bc896f5f23813178506b6c581f9a01db624a26d49",
+      "golden": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+      "grep_arm": "3df4eca46a2c3601abbe0829d4f9ba8743a8acd4dc17421984934724f8bca4cd",
+      "arm:n16": "126f9478fb55542cbfc6a10809583cbb5236b0062e49f8c46ac8c3c48842d9a3",
+      "arm:n64": "a691115903c28f3235861e17f5263198fe7731eb09cbc0b27ff17328e4379f50",
+      "arm:n128": "4abc33f78f969b6cf62c24411ce2e40aabb97ba1a74ac6b9f6a6a05fe4daec86"
+    },
+    "preregistration": "docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md#part-a"
+  },
+  "headline_arm": "n64",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "On the Track R paraphrase bank (n=180), at one shared endpoint (gate_common.provenance_hit@10 over top-10 bodies) and one query string, handing anthropic/claude-opus-5 MemPhant's first N=64 fused candidates AND NOTHING ELSE to re-rank scores 154/180 against 112/180 for MemPhant's own fused top-10 on the same pool: b=48 / c=6, n_d=54, delta=23.33pp, two-sided exact McNemar p=3.257e-09. The arm's ceiling at that N is Coverage(N)=164/180, so its ranking accuracy is 0.939024, at $0.19059/question against the agentic grep control's measured $0.144/question.",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 180,
+      "b": 48,
+      "c": 6,
+      "n_d": 54,
+      "psi_observed": 0.3,
+      "mde_at_80": 0.11721041292431414,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "source": "docs/build-log/artifacts/s8-hybrid/analysis-confirm.json sweep[].contrasts['vs_memphant_fused_at_10']"
+    },
+    "harness": {
+      "embed_model": "small (bge-small-en-v1.5) \u2014 the retriever half of the hybrid; the ranking half uses no embeddings at all",
+      "scorer": "retriever: lexical=bm25-code + weighted-RRF fusion, recall mode=fast, its pool banked with bodies via --dump-pool. ranker: anthropic/claude-opus-5 in a bounded list_pool/grep_pool/read_item loop over that pool ONLY, provider pinned only=[anthropic] allow_fallbacks=false, max_price 5.0/25.0 USD per million.",
+      "k": 10,
+      "budget": 8192,
+      "flags": [
+        "pool depth N=64",
+        "ranker caps identical to S4's agentic control: 12 tool calls, 16 turns, 24000 completion tokens per question, grep<=25 matches, read_item<=6000 chars",
+        "pool containment asserted per returned body; the runner refuses to score on any mismatch"
+      ],
+      "command": "scripts/s8_hybrid_run.sh pool && scripts/s8_hybrid_run.sh stub && scripts/s8_hybrid_run.sh sweep N && scripts/s8_hybrid_run.sh confirm N"
+    },
+    "corpus": {
+      "sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+      "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921 (nebius/SWE-rebench-openhands-trajectories@35455389, 495 sampled attempts, 64055 content events)",
+      "n_items": 180,
+      "path_note": "benchmarks/data/track_r_paraphrase_golden.jsonl is not tracked in this repo (only its lock), so the checker cannot recompute the golden sha here"
+    },
+    "leakage": {
+      "unit_definition": "one content event of the attempt, 4000-char clip",
+      "absolute_target_coverage": 0.1346,
+      "floor": 0.0667,
+      "floor_kind": "exhaustive",
+      "concentration": 2.018,
+      "provenance_class": "machine_generated",
+      "source": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+      "negative_selection": "same-attempt hard negatives \u2014 for this arm, literally the other N-1 candidates MemPhant's own fusion ranked alongside the gold"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Retriever half: lexical_scorer='bm25-code' and embed_model='small' in the pool run's own provenance. Ranker half: every scored row carries an executed tool call and a selection that resolves inside the pool; pool_containment_violations=0 is asserted by matching EVERY returned body against the exact set that question's agent was handed, and the runner exits non-zero rather than writing a score on a mismatch. rows_with_errors must be 0 before the arm is reported.",
+    "probe_kind": "gate",
+    "attribution": {
+      "method": "unverified",
+      "note": "No bisect and none applicable: this contrasts two ways of cutting ten items out of ONE retrieval pool \u2014 the shipped fuser's rank order against an agent's judgement \u2014 not two commits of one system. Both arms read the same banked pool from the same run."
+    },
+    "notes": "decisional=false for the two reasons carried by every artifact on this bank and neither fixable by re-reading: (1) the bank FAILS its own preregistered headline leakage bar \u2014 concentration 2.018 against <=1.50, bar_passed=false in the lock; (2) the corpus licence CC-BY-4.0 is a HuggingFace card assertion with no LICENSE blob pinned. Two further bounds are specific to THIS artifact and are stated ahead of its numbers rather than after them: the arm's ceiling at every N is Coverage(N), which tops out at 169/180=0.9389 \u2014 BELOW the agentic grep control's realized 174/180, so this arm cannot beat grep on this bank at any N and was never expected to; and the haystack is ONE coding attempt at a pool median of 122.5 units, so any operating point derived here is measured AT that haystack size and is not extrapolated to repo or cross-session scale, where enumeration has no analogue."
+  }
+}

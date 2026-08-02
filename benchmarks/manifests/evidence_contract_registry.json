@@ -49,6 +49,8 @@
     "docs/build-log/artifacts/s4-controls/analysis.json",
     "docs/build-log/artifacts/s5-swecb/stage0-analysis.json",
     "docs/build-log/artifacts/s5-swecb/stage0-prereg.json",
+    "docs/build-log/artifacts/s8-hybrid/analysis-confirm.json",
+    "docs/build-log/artifacts/s8-hybrid/analysis-sweep.json",
     "docs/build-log/artifacts/sibling-gather-deletion/sibling_gather_deletion.json",
     "docs/build-log/artifacts/track-r-paraphrase/w02-trunk-arms.json",
     "docs/build-log/artifacts/track-r-paraphrase/z1-ladder-power.json",
