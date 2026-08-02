@@ -38,6 +38,17 @@ EQ="$RUN/equalized-$TAG"
 mkdir -p "$OUT"
 
 echo "[1/4] stage-equalizing every arm through one packer  $(date -u +%FT%TZ)"
+# On a resume the manifest must NOT be regenerated. Its lineage block carries
+# git_head and git_dirty, so regenerating it after any commit changes its
+# sha256 — and the minted no-memory arm uses the manifest AS its retrieval
+# report, so that sha is inside the packet's frozen_inputs and therefore inside
+# the authorization hash. The ledger then refuses to reopen with
+# "provider-attempt ledger authorization mismatch" and the arm cannot resume at
+# all. Observed exactly this way. The arms whose retrieval report is a static
+# provenance file resumed fine, which is what made the cause non-obvious.
+if [ "${RESUME:-0}" = "1" ] && [ -f "$EQ/stage-equalization.json" ]; then
+  echo "RESUME=1: reusing the existing stage-equalization manifest (regenerating it would change the authorization hash)"
+else
 python3 scripts/code_lane_reader_prepare.py \
   --arm memphant="$MEM_EV" --arm agenticgrep="$GREP_EV" \
   --out-dir "$EQ" --k 10 --budget-tokens 8192 \
@@ -46,6 +57,7 @@ python3 scripts/code_lane_reader_prepare.py \
   --harness-env "bank=track-r-paraphrase" \
   --harness-env "arms=banked-packs-no-retrieval-rerun" \
   ${LIMIT:+--limit "$LIMIT"}
+fi
 
 mint_arm() {  # arm retrieval
   local arm="$1" retrieval="$2"

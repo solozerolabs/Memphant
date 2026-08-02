@@ -5,7 +5,7 @@
     "reader_runner_sha256": "1cdfd9aefb9377d3026e0d3aa4c1884c2f86d42dd25091a7fea55aaa159ad2f2",
     "provider_attempts_sha256": "833d8782dd54a8f9937ddb7ca65544be470c8e5bb38c790424ae4b4eca52d04a",
     "nomemory_evidence_sha256": "4b33a6523198f8ad2abf0844011caa4797195c02ae6a1362d053ec0dcaab7172",
-    "nomemory_retrieval_sha256": "4f300a7dfc0bee26c2b7585e8291b0f178b6080d7610c7c03c7d879cb851ed94"
+    "nomemory_retrieval_sha256": "24282a115bc7d431d5422033dcb6ecf145579f2bbae25c0c99f6831338daf2d3"
   },
   "models": {
     "provider": "OpenRouter",
@@ -45,6 +45,6 @@
   "authorization": {
     "authorized_by": "owner standing authority, ceiling $150: S10 endpoint validity",
     "authorized_at": "2026-08-01T00:00:00-07:00",
-    "authorization_scope_sha256": "5e33a96112de011949efe139b79ee0b9077bd769157cd8b75ae20bcc3abc4f4a"
+    "authorization_scope_sha256": "c4e69cdc17d08cd3cbc75f01e82cf9d67e9350fd6cecd321fda4d1b744637b8d"
   }
 }
