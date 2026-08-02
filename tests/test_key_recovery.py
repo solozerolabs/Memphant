@@ -72,6 +72,33 @@ def test_a_body_with_no_directive_yields_no_key() -> None:
         assert rule(filler) == set(), name
 
 
+class _Args:
+    """A CLI-args stand-in that tolerates flags this test does not care about.
+
+    The previous stub was `type("Args", (), {"derived_rule": ...})()`, which
+    raised `AttributeError` the moment the adapter read any option it did not
+    list. `--bounded` was added for the as-of re-cut and broke this file — a
+    GOLD-INDEPENDENCE guard, disarmed by an unrelated flag. A guard that a new
+    option can turn red is a guard that will eventually be deleted for being
+    noisy, and this one is the reason Arm K may claim `decisional: true`.
+
+    Unset attributes read as None (falsey, which is every flag's off state).
+    That cannot mask a leak: the assertions are on observable behaviour — the
+    oracle field being gone from the units the arm touched — so a wrong default
+    would surface as a behaviour change, not a silent pass.
+    """
+
+    def __init__(self, **fields: object) -> None:
+        self.__dict__.update(fields)
+
+    def __getattr__(self, _name: str) -> None:
+        return None
+
+
+def _args(**fields: object) -> _Args:
+    return _Args(**fields)
+
+
 def test_the_derived_arm_deletes_the_oracle_field_before_keying() -> None:
     """Arm K is Arm P with one variable changed. If it could see
     `declarations` it would be Arm P with extra steps, and `decisional: true`
@@ -116,11 +143,13 @@ def test_the_derived_arm_deletes_the_oracle_field_before_keying() -> None:
         ],
         "probes": [],
     }
-    args = type("Args", (), {"derived_rule": "pre3_content_words"})()
+    args = _args(derived_rule="pre3_content_words")
     client = StubClient()
-    _context, identity, episodes, _deduped = adapter.ingest_group_derived(
-        client, group, args
-    )
+    # Unpacked by name rather than by arity: the as-of re-cut added a fifth
+    # element (`remainders`) and the old 4-tuple unpack turned this
+    # gold-independence guard red for a reason unrelated to gold independence.
+    result = adapter.ingest_group_derived(client, group, args)
+    _context, identity, episodes, _deduped = result[0], result[1], result[2], result[3]
 
     # The oracle field is gone from the units the arm touched.
     assert all("declarations" not in unit for unit in group["units"])
@@ -136,6 +165,6 @@ def test_the_derived_arm_deletes_the_oracle_field_before_keying() -> None:
 
 
 def test_the_derived_arm_refuses_an_unknown_rule() -> None:
-    args = type("Args", (), {"derived_rule": "no_such_rule"})()
+    args = _args(derived_rule="no_such_rule")
     with pytest.raises(KeyError):
         adapter.ingest_group_derived(None, {"group_id": "x", "units": []}, args)

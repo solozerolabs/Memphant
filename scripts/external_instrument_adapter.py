@@ -755,7 +755,9 @@ def ingest_group_preference(client, group: dict, bounded: bool = False) -> tuple
     return context, identity, episodes, deduped, remainders
 
 
-def ingest_group_derived(client, group: dict, args) -> tuple[dict, dict, int, int]:
+def ingest_group_derived(
+    client, group: dict, args
+) -> tuple[dict, dict, int, int, int]:
     """Arm K. IDENTICAL to Arm P in every respect except where the key comes
     from — which is the whole point of running it.
 
