@@ -484,6 +484,25 @@ def main() -> int:
                 ),
                 "misses_out_of_view": decomposition["out_of_view"],
                 "misses_in_view_ranked_out": decomposition["in_view_but_ranked_out"],
+                # A refused row is scored a miss, so it lands in
+                # `in_view_but_ranked_out` whenever its gold was in view -- and
+                # reading that as a RANKING failure would blame the agent for a
+                # turn it was never allowed to take. Both counts are reported;
+                # the headline uses the first, which is the harsher one.
+                "misses_in_view_ranked_out_excluding_refusals": sum(
+                    1
+                    for row in report["transcript"]
+                    if row.get("gold_in_view")
+                    and not row.get("gold_rank_in_selection")
+                    and not (row.get("error") and PROVIDER_REFUSAL in row["error"])
+                ),
+                "refusals_with_gold_in_view": sum(
+                    1
+                    for row in report["transcript"]
+                    if row.get("gold_in_view")
+                    and row.get("error")
+                    and PROVIDER_REFUSAL in row["error"]
+                ),
                 "mean_tool_calls": report["liveness"]["mean_tool_calls"],
                 # Named, not summarised: a refused row is scored a MISS for this
                 # arm, so the reader can see exactly which questions the number
@@ -585,18 +604,40 @@ def main() -> int:
             }
         ),
     }
-    if args.stage == "confirm":
-        if args.pool_provenance is None:
-            raise SystemExit("--pool-provenance is required at --stage confirm")
-        headline_row = (
-            next(row for row in rows if row["label"] == args.headline_label)
-            if args.headline_label
-            else max(rows, key=lambda row: row["hits_at_10"])
-        )
-        analysis["headline_arm"] = headline_row["label"]
-        analysis["evidence_contract"] = evidence_contract(
-            headline_row, json.loads(args.pool_provenance.read_text())
-        )
+    if args.pool_provenance is None:
+        raise SystemExit("--pool-provenance is required: the contract names its corpus")
+    headline_row = (
+        next(row for row in rows if row["label"] == args.headline_label)
+        if args.headline_label
+        else max(rows, key=lambda row: row["hits_at_10"])
+    )
+    analysis["headline_arm"] = headline_row["label"]
+    analysis["evidence_contract"] = evidence_contract(
+        headline_row, json.loads(args.pool_provenance.read_text())
+    )
+    if args.stage == "sweep":
+        # The screening artifact carries a contract too, because the scanner is
+        # mechanical and a `verdict` key is a `verdict` key. Its contract says
+        # what the stage says: reduced n by preregistered subset, nothing here
+        # decides anything, and no p-value in it was used to draw a conclusion.
+        analysis["evidence_contract"] |= {
+            "claim": (
+                "SCREENING ONLY, NOT A MEASUREMENT. A coarse N-sweep on a "
+                f"preregistered {len(order)}-question subset drawn by committed "
+                "seed, run to locate the knee of Coverage(N) x RankAcc(N) and to "
+                "nominate the values of N confirmed at full n=180. No verdict is "
+                "drawn from this artifact; every contrast in it is stamped "
+                "'NOT A MEASUREMENT — stage-2 sweep, reduced n'."
+            ),
+            "probe_kind": None,
+            "notes": (
+                "decisional=false because this stage was preregistered as "
+                "non-decisional, INDEPENDENTLY of the two bank-level reasons that "
+                "would make it so anyway (the bank fails its own leakage bar; the "
+                "corpus licence is a card assertion). Read the confirmation "
+                "artifact, analysis-confirm.json, for anything that decides."
+            ),
+        }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(analysis, indent=2) + "\n")
     for row in rows:

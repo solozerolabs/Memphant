@@ -104,6 +104,8 @@
       "random_ranker_expected_hits": 19.0,
       "misses_out_of_view": 41,
       "misses_in_view_ranked_out": 0,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 0,
       "mean_tool_calls": 5.783,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -191,6 +193,8 @@
       "random_ranker_expected_hits": 33.0,
       "misses_out_of_view": 27,
       "misses_in_view_ranked_out": 1,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 1,
       "mean_tool_calls": 7.233,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -280,6 +284,8 @@
       "random_ranker_expected_hits": 32.78,
       "misses_out_of_view": 17,
       "misses_in_view_ranked_out": 0,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 0,
       "mean_tool_calls": 6.817,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -367,6 +373,8 @@
       "random_ranker_expected_hits": 23.59,
       "misses_out_of_view": 12,
       "misses_in_view_ranked_out": 2,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 2,
       "mean_tool_calls": 6.517,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -454,6 +462,8 @@
       "random_ranker_expected_hits": 16.02,
       "misses_out_of_view": 6,
       "misses_in_view_ranked_out": 3,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 3,
       "mean_tool_calls": 5.833,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -541,6 +551,8 @@
       "random_ranker_expected_hits": 10.19,
       "misses_out_of_view": 4,
       "misses_in_view_ranked_out": 4,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 4,
       "mean_tool_calls": 6.15,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -628,6 +640,8 @@
       "random_ranker_expected_hits": 9.3,
       "misses_out_of_view": 4,
       "misses_in_view_ranked_out": 4,
+      "misses_in_view_ranked_out_excluding_refusals": 0,
+      "refusals_with_gold_in_view": 4,
       "mean_tool_calls": 5.983,
       "provider_refused_question_ids": [
         "track_r_par_057",
@@ -705,10 +719,13 @@
     }
   ],
   "lineage": {
-    "git_head": "fcec85b8d9934c1be5e11b70780146d102e4ec27",
+    "git_head": "b8d6ce02af547d9f4a903304e0d2bc00ef2aa957",
     "git_branch": "s8-hybrid",
-    "git_dirty": false,
-    "git_dirty_paths": [],
+    "git_dirty": true,
+    "git_dirty_paths": [
+      "docs/build-log/artifacts/s8-hybrid/analysis-confirm.json",
+      "scripts/s8_hybrid_analyze.py"
+    ],
     "input_sha256": {
       "pool_dump": "bdfa1fa00d6c990766f6f18bc896f5f23813178506b6c581f9a01db624a26d49",
       "golden": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
@@ -722,5 +739,58 @@
       "arm:n0": "8d7f67022bb8421aca1ff800ce6d19bd396fa5002a05cbaa7ef33bda39eea4b4"
     },
     "preregistration": "docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md#part-a"
+  },
+  "headline_arm": "n128",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "SCREENING ONLY, NOT A MEASUREMENT. A coarse N-sweep on a preregistered 60-question subset drawn by committed seed, run to locate the knee of Coverage(N) x RankAcc(N) and to nominate the values of N confirmed at full n=180. No verdict is drawn from this artifact; every contrast in it is stamped 'NOT A MEASUREMENT \u2014 stage-2 sweep, reduced n'.",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 60,
+      "b": 13,
+      "c": 0,
+      "n_d": 13,
+      "psi_observed": 0.216667,
+      "mde_at_80": 0.16934068955533488,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "source": "docs/build-log/artifacts/s8-hybrid/analysis-confirm.json sweep[].contrasts['vs_memphant_fused_at_10']"
+    },
+    "harness": {
+      "embed_model": "small (bge-small-en-v1.5) \u2014 the retriever half of the hybrid; the ranking half uses no embeddings at all",
+      "scorer": "retriever: lexical=bm25-code + weighted-RRF fusion, recall mode=fast, its pool banked with bodies via --dump-pool. ranker: anthropic/claude-opus-5 in a bounded list_pool/grep_pool/read_item loop over that pool ONLY, provider pinned only=[anthropic] allow_fallbacks=false, max_price 5.0/25.0 USD per million.",
+      "k": 10,
+      "budget": 8192,
+      "flags": [
+        "pool depth N=128",
+        "ranker caps identical to S4's agentic control: 12 tool calls, 16 turns, 24000 completion tokens per question, grep<=25 matches, read_item<=6000 chars",
+        "pool containment asserted per returned body; the runner refuses to score on any mismatch"
+      ],
+      "command": "scripts/s8_hybrid_run.sh pool && scripts/s8_hybrid_run.sh stub && scripts/s8_hybrid_run.sh sweep N && scripts/s8_hybrid_run.sh confirm N"
+    },
+    "corpus": {
+      "sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+      "snapshot_id": "track_r_paraphrase_golden@4aed8e99dbf1 over corpus c008142e9921 (nebius/SWE-rebench-openhands-trajectories@35455389, 495 sampled attempts, 64055 content events)",
+      "n_items": 60,
+      "path_note": "benchmarks/data/track_r_paraphrase_golden.jsonl is not tracked in this repo (only its lock), so the checker cannot recompute the golden sha here"
+    },
+    "leakage": {
+      "unit_definition": "one content event of the attempt, 4000-char clip",
+      "absolute_target_coverage": 0.1346,
+      "floor": 0.0667,
+      "floor_kind": "exhaustive",
+      "concentration": 2.018,
+      "provenance_class": "machine_generated",
+      "source": "benchmarks/data/track_r_paraphrase_golden.lock.json",
+      "negative_selection": "same-attempt hard negatives \u2014 for this arm, literally the other N-1 candidates MemPhant's own fusion ranked alongside the gold"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Retriever half: lexical_scorer='bm25-code' and embed_model='small' in the pool run's own provenance. Ranker half: every scored row carries an executed tool call and a selection that resolves inside the pool; pool_containment_violations=0 is asserted by matching EVERY returned body against the exact set that question's agent was handed, and the runner exits non-zero rather than writing a score on a mismatch. rows_with_errors must be 0 before the arm is reported.",
+    "probe_kind": null,
+    "attribution": {
+      "method": "unverified",
+      "note": "No bisect and none applicable: this contrasts two ways of cutting ten items out of ONE retrieval pool \u2014 the shipped fuser's rank order against an agent's judgement \u2014 not two commits of one system. Both arms read the same banked pool from the same run."
+    },
+    "notes": "decisional=false because this stage was preregistered as non-decisional, INDEPENDENTLY of the two bank-level reasons that would make it so anyway (the bank fails its own leakage bar; the corpus licence is a card assertion). Read the confirmation artifact, analysis-confirm.json, for anything that decides."
   }
 }

@@ -289,3 +289,264 @@ cell was seen**:
   are tied together and the result stays comparable to S4's arms.
 
 Budget: $70.10 spent, ~$65 projected for stage 3, against the $180 ceiling.
+
+---
+
+# PART B — RESULTS (appended after the runs; Parts A and A2 above are unedited)
+
+## B.0 Two bounds, first, because they decide how far this travels
+
+**1. This is one attempt at a pool median of 124.5 units.** MemPhant's whole
+candidate pool is already nearly the whole attempt, which is exactly what makes
+S4's `list_events` brute force affordable at ~4 tool calls and $0.144/question.
+**Every `N*` below is `N*` measured at a 124-item haystack.** At repo scale or
+across sessions `list_events` has no analogue and enumeration is infeasible —
+that is the regime in which a narrowing retriever would pay for itself, and
+**this bank cannot test it.** Nothing here is extrapolated past it.
+
+**2. The bank withholds the identifier surfaces a `grep` control feeds on**
+(q→target coverage 0.1346 against human 0.175–0.287). S4's rule carries over
+unchanged: **any margin `grep` holds here is a LOWER bound**, and it holds one
+below.
+
+## B.1 The answer, in one table
+
+**Instrument:** Track R paraphrase, n=180. **Endpoint:**
+`gate_common.provenance_hit@10 over top-10 bodies` — the identical string S4's
+arms declare. **Query:** `retrieval_query(golden)`, banked per question in the
+pool dump and identical for every arm.
+
+| arm | hits@10 | rate | **its own ceiling** | **RankAcc** | random-ranker floor | $/question |
+|---|---:|---:|---:|---:|---:|---:|
+| agentic `grep` (S4, banked; haystack = raw events, a SUPERSET) | **174** | .9667 | 178 | — | — | $0.144 |
+| **H(N=128)** | **155** | .8611 | 168 | .9226 | 31.9 | $0.230 |
+| **H(N=64)** | **154** | .8556 | 164 | .9390 | 48.8 | $0.191 |
+| **H(N=16)** | **120** | .6667 | 127 | .9449 | 94.3 | $0.151 |
+| MemPhant fused@10 (stage-matched retriever comparator) | 112 | .6222 | 169 | — | — | **$0** |
+| MemPhant packed@10 (shipped default) | 105 | .5833 | 169 | — | — | **$0** |
+
+| contrast | b | c | n_d | Δ | exact McNemar p | realized MDE | **verdict** |
+|---|---:|---:|---:|---:|---:|---:|---|
+| **H(64) vs MemPhant fused@10** | **48** | 6 | 54 | **+23.33pp** | **3.26e−09** | 11.72pp | **H wins** |
+| H(64) vs MemPhant packed@10 | 55 | 6 | 61 | +27.22pp | 5.38e−11 | 12.46pp | H wins |
+| H(128) vs MemPhant fused@10 | 50 | 7 | 57 | +23.89pp | 4.24e−09 | 12.04pp | H wins |
+| H(16) vs MemPhant fused@10 | 15 | 7 | 22 | +4.44pp | 0.134 | 7.49pp | no detectable difference at this power |
+| **H(64) vs agentic `grep`** | **0** | 20 | 20 | −11.11pp | 1.91e−06 | 7.11pp | the comparator wins |
+| H(128) vs agentic `grep` | 0 | 19 | 19 | −10.56pp | 3.81e−06 | 6.92pp | the comparator wins |
+
+**Agent ranking recovers essentially all of the ranking headroom.** MemPhant's
+own fuser converts a pool containing the gold on 164/180 questions (at N=64) into
+112 hits. The same pool, re-ranked by an agent, yields **154**. That is 42 of the
+52 available questions, b=48 against c=6, p=3.3e−9.
+
+**And it still loses to `grep`, by 20 questions, at 1.32× `grep`'s cost.** The
+b-cell is **0**: across 180 questions there is not one on which the hybrid
+retrieves the gold and the `grep` agent does not.
+
+## B.2 RankAcc does not fall with N. It is 1.000, everywhere.
+
+§A.1 predicted RankAcc would decline with N through attention dilution, giving
+`hit@10(N) = Coverage(N) × RankAcc(N)` an interior maximum. **The prediction is
+wrong, and the reason it looked right is a confound worth naming.**
+
+Decomposing every miss at every confirmed N:
+
+| N | misses | out-of-view (retriever) | in-view but ranked out | of those, provider refusals | **genuine ranking failures** |
+|---:|---:|---:|---:|---:|---:|
+| 16 | 60 | 53 | 7 | 7 | **0** |
+| 64 | 26 | 16 | 10 | 10 | **0** |
+| 128 | 25 | 12 | 13 | 13 | **0** |
+
+**Conditional on being allowed to answer at all, the agent placed the gold in its
+top ten on 100% of the questions where MemPhant handed it the gold — at N=16, at
+N=64 and at N=128 alike.** Every single apparent ranking failure is a row the
+pinned provider refused (§B.4). The apparent RankAcc decline from .945 to .923 is
+**entirely** the refusal count rising with N, and it rises with N only because
+coverage rises with N: more questions have gold in view, so more refusals land on
+a question that had gold in view.
+
+There is therefore **no cliff and no slope** up to N=128 on this haystack — and
+this is the one finding here with a chance of transferring, because it is a
+statement about how many candidates an agent can usefully judge rather than about
+this corpus. What it says is: **at 128 candidates of ~1,077 characters each, the
+limit has not been reached.** It does not say where the limit is. Nothing was
+measured past 128, and the pool's own median of 124.5 is why.
+
+The random-ranker floor is what makes this readable. At N=64 a uniform draw of
+ten from the sixty-four scores **48.8**; the agent scored 154 of a possible 164.
+At N=128 the floor is 31.9. The agent is ranking, not sampling.
+
+## B.3 So `N*` is a cost question, not an accuracy question
+
+Because RankAcc is flat at 1.000, `hit@10(N) = Coverage(N)` exactly (less
+refusals), and **Coverage is free to compute and already saturating**. The
+interior maximum §A.1 hoped for does not exist: accuracy is monotone in N and
+flattens where coverage does.
+
+| N | hits@10 | Coverage(N) | prompt tokens/q | $/q | ×`grep` | hits per dollar |
+|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 120 | 127 | 23,470 | 0.151 | 1.05× | 4.4 |
+| **64** | **154** | 164 | 31,377 | **0.191** | 1.32× | **4.5** |
+| 128 | 155 | 168 | 39,273 | 0.230 | 1.60× | 3.7 |
+
+**N=64 is the operating point on this haystack.** N=128 buys **one** additional
+question for 21% more cost per question; N=16 saves 21% and gives up 34
+questions. The knee is at 64 because that is where MemPhant's coverage curve
+flattens — 164 → 168 between N=64 and N=128 — not because of anything about the
+ranker.
+
+**The accuracy-per-token peak and the accuracy peak coincide at N=64**, which is
+not what §A.1 expected and follows directly from RankAcc being flat.
+
+## B.4 The refusals — 14 questions, and they cost this arm ~10 of them
+
+`finish_reason="content_filter"`, empty message, on every retry at temperature 0
+including under two protocol nudges and `tool_choice="required"`. **11 questions
+refuse at all three confirmed N, and the union across all runs is 14.** S4's
+three (`track_r_par_057`, `_126`, `_155`) are a **subset** of this lane's 14.
+
+They are scored **MISSES for the hybrid** — the assumption least favourable to
+it — under an explicit `--refusals-as-miss` that launders no other error class
+and names every affected `question_id` in the analysis artifact. Unpinning the
+provider would clear them and would also break a preregistered guard, so the
+"errors are not results" rule is honoured the other way rather than by weakening
+the pin.
+
+**This is a real deviation and it runs against this arm.** S4's agentic control
+saw 3 refusals on the same bank, same model, same provider pin; this arm sees 14.
+The arms differ only in prompt and tool surface, so the extra 11 are this
+harness's, not the bank's. At S4's refusal rate H(64) would score roughly
+**161–164/180** rather than 154 — still short of `grep`'s 174, so **no verdict in
+§B.1 turns on it**, but the gap to `grep` is overstated by about half its size
+and that is said here rather than left for a reader to find.
+
+## B.5 Where the residual gap to `grep` actually lives
+
+At N=64, H misses 26 questions. **Not one of them is a ranking failure.**
+
+* **16 — out-of-view.** Gold is not in MemPhant's top 64. Fixable only by better
+  retrieval; no ranker, at any budget, can select what it was not shown. Of
+  these, **11 are out of MemPhant's pool entirely at any rank** — the hard
+  ceiling of §A.2, unmovable without changing recall itself.
+* **10 — provider refusals** (§B.4). Not a search failure and not a ranking
+  failure.
+* **0 — ranking failures.**
+
+**§A.2's question 3 is answered, and the answer is clean: the residual gap to
+`grep` is not the agent's ranking. It is entirely retrieval coverage plus a
+provider limit.**
+
+## B.6 The verdict on "MemPhant narrows, the agent ranks"
+
+**As a fix for MemPhant's ranking: it works, decisively, and it is the largest
+retrieval gain this program has measured on this bank.** +23.33pp over the
+stage-matched fused top-10, +27.22pp over the shipped default, b=48 / c=6,
+p=3.3e−9. The fuser is leaving 42 questions on the table that are already in its
+own pool, and an agent recovers all of them.
+
+**As a product, on this haystack: no.** It costs $0.191/question against `grep`'s
+$0.144 and scores 154 against 174, with a b-cell of **0**. On a 124-item
+haystack there is no reason to narrow first, because not narrowing is cheaper and
+strictly better.
+
+**The two findings are not in tension, and the honest reading is the third one:**
+what this lane actually measured is that **MemPhant's recall is good and its
+fusion is bad.** Coverage is 0.9389 — within 2.8pp of what `grep` realizes — and
+the shipped fuser converts that into 0.5833. An LLM re-ranker closes 81% of that
+gap but costs more per question than the brute force it was meant to replace,
+*at this scale*. The interesting quantity is therefore not the agent at all:
+**it is that a perfect ranker over MemPhant's existing pool would score
+164/180 = 0.911 at $0**, and the shipped fuser gets 105. That is a cheap-ranker
+problem — a cross-encoder, a better fusion, a learned reranker — and this lane
+has now bounded exactly how much such a thing is worth: **+59 questions, and not
+one point more**, because 164 is the pool's ceiling at N=64.
+
+**What this lane does NOT license.** It does not authorize the hybrid as a
+shipped architecture — the cost comparison that would justify it cannot be made
+on a 124-item haystack, and §B.0 says so ahead of the number. It does not move
+any default. It does not measure answer accuracy, latency, or anything at repo
+scale. And it does not rescue S4's verdict: `grep` still wins, by 20 questions
+instead of 68.
+
+## B.7 Mechanism liveness — pool containment, proved from each arm's own output
+
+| check | N=16 | N=64 | N=128 |
+|---|---:|---:|---:|
+| `pool_containment_violations` | **0** | **0** | **0** |
+| rows with an unresolved selection | 0 | 0 | 0 |
+| out-of-range `read_item` requests | 0 | 0 | 0 |
+| `raw_event_access` | false | false | false |
+| tools offered | `grep_pool`, `list_pool`, `read_item`, `select` | — | — |
+| mean tool calls | 7.12 | 6.9 | 6.4 |
+
+Containment is checked per **returned body**, not per tool call: every body each
+arm returned was matched against the exact set of bodies that question's agent
+was handed, and the runner exits non-zero rather than writing a score on any
+mismatch. There is no `list_events`, no filesystem, and no tool that can name an
+event, a sequence or a path. **If the agent could have reached past the pool this
+would be S4 re-run and the comparison void; it could not, and that is asserted
+rather than assumed.**
+
+The retriever half is live from its own run's provenance: `lexical_scorer =
+bm25-code`, `embed_model = small`, 21,630 events compiled, and this run's own
+packed top-10 reproduces the banked shipped-default arm at **105/180 against
+106/180** — a one-question difference across independent scratch databases and
+two different heads, with the **coverage curve reproducing exactly**
+(169/180 in-pool, 164 at N≤64, 127 at N≤16).
+
+## B.8 Preregistration deviations — disclosed, not smoothed
+
+1. **§A.1's central prediction was wrong.** RankAcc does not fall with N; it is
+   1.000 at every N tested. Part A is unedited and the disagreement is §B.2.
+2. **`--refusals-as-miss` is a mid-lane addition** (§B.4). It admits exactly one
+   deterministic provider error class, scores it against the hybrid, names every
+   affected question, and is refused for any other error kind — pinned by a test.
+3. **§A.6 said "the best 2 values of N plus the N=64 anchor".** The two best by
+   raw hit@10 were N=128 and N=`all`, which tie and are not distinct mechanisms
+   at a pool median of 124.5. The selection rule actually used — accuracy maximum
+   plus accuracy-per-token maximum — is recorded in **Part A2, committed after
+   the sweep and before any n=180 cell was seen**, together with why.
+4. **The pool-dump run was killed and relaunched** after it was found sitting in
+   the launching shell's process group (PGID ≠ PID) eight minutes before a
+   60-minute lifecycle boundary that had already destroyed a sibling lane's
+   multi-hour chain. It was relaunched under `scripts/detach_run.py`; ~25 minutes
+   of ingest was re-done. No cell was affected — no paid call had been made.
+5. **A comment in `s8_hybrid_analyze.py` wrongly attributed a `required_n`
+   argument-transposition to S4's compare script.** S4 does not contain that
+   defect; I inferred it from a truncated read. Corrected in `dde3a949`, and the
+   hazard is now pinned by a test at this lane's own call site instead of
+   asserted in prose about someone else's file.
+
+## B.9 Spend ledger
+
+| stage | what | reported | incremental |
+|---|---|---:|---:|
+| 0 | pool dump — local server, local embedder, 21,630 events | $0 | $0 |
+| 1 | stub round trip — full arm contract, no network | $0 | $0 |
+| 2 | coarse sweep, 7 values of N × 60 questions | $70.10 | $70.10 |
+| 3 | confirm N=16 (56 rows carried from the sweep, not re-billed) | $27.11 | **$18.94** |
+| 3 | confirm N=64 (″) | $34.31 | **$24.26** |
+| 3 | confirm N=128 (″) | $41.40 | **$27.50** |
+| | **total actually spent** | | **$140.80** |
+
+Ceiling $180. The `reported` column double-counts carried rows by construction —
+each confirmation's total includes the sweep tokens it inherited — so the
+`incremental` column is the ledger and the difference is stated rather than
+netted silently. Basis: **pinned catalogue price × reported tokens**, an upper
+bound, not settled cost; generation ids are banked for reconciliation. The price
+pin (`anthropic/claude-opus-5`, prompt 0.000005, completion 0.000025) was
+re-fetched live from the OpenRouter catalogue before the first paid call and
+matched. `only: ["anthropic"]`, `allow_fallbacks: false`,
+`max_price = {prompt: 5.0, completion: 25.0}` held for every paid call.
+
+## B.10 Artifacts
+
+* `docs/build-log/artifacts/s8-hybrid/analysis-confirm.json` — the decisive
+  analysis, n=180, with its generated `evidence_contract` (`decisional: false`).
+* `docs/build-log/artifacts/s8-hybrid/analysis-sweep.json` — the screening
+  sweep, stamped NOT A MEASUREMENT on every contrast.
+* `docs/build-log/artifacts/s8-hybrid/sweep-subset.json` — the 60 question ids,
+  their seed and their draw method, committed before any cell.
+* Private, gitignored: `~/.memphant-private/track-r-paraphrase/run-s8/` — the
+  pool dump (31 MB), every arm's provenance and evidence, and the per-question
+  checkpoints.
