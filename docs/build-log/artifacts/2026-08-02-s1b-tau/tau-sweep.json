@@ -1,0 +1,493 @@
+{
+  "arm_u_realized": {
+    "firings": 1021,
+    "precision": 0.763957,
+    "recall": 0.695187,
+    "tau": 0.42,
+    "true_positives": 780
+  },
+  "co_declaring_pairs": 1122,
+  "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+  "decisional": false,
+  "measurement": "s1b_tau_recalibration_sentence_unit",
+  "paid_model_calls": 0,
+  "pairs_scored": 7890,
+  "reachable_operating_points": [
+    {
+      "firings": 2461,
+      "precision": 0.451443,
+      "recall": 0.990196,
+      "tau": 0.038462,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2460,
+      "precision": 0.451626,
+      "recall": 0.990196,
+      "tau": 0.041667,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2457,
+      "precision": 0.452177,
+      "recall": 0.990196,
+      "tau": 0.043478,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2455,
+      "precision": 0.452546,
+      "recall": 0.990196,
+      "tau": 0.045455,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2454,
+      "precision": 0.45273,
+      "recall": 0.990196,
+      "tau": 0.047619,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2453,
+      "precision": 0.452915,
+      "recall": 0.990196,
+      "tau": 0.05,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2452,
+      "precision": 0.4531,
+      "recall": 0.990196,
+      "tau": 0.052632,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2448,
+      "precision": 0.45384,
+      "recall": 0.990196,
+      "tau": 0.055556,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2447,
+      "precision": 0.454025,
+      "recall": 0.990196,
+      "tau": 0.058824,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2440,
+      "precision": 0.455328,
+      "recall": 0.990196,
+      "tau": 0.0625,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2434,
+      "precision": 0.45645,
+      "recall": 0.990196,
+      "tau": 0.066667,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2427,
+      "precision": 0.457767,
+      "recall": 0.990196,
+      "tau": 0.071429,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2416,
+      "precision": 0.459851,
+      "recall": 0.990196,
+      "tau": 0.076923,
+      "true_positives": 1111
+    },
+    {
+      "firings": 2393,
+      "precision": 0.463853,
+      "recall": 0.989305,
+      "tau": 0.083333,
+      "true_positives": 1110
+    },
+    {
+      "firings": 2359,
+      "precision": 0.470114,
+      "recall": 0.988414,
+      "tau": 0.086957,
+      "true_positives": 1109
+    },
+    {
+      "firings": 2358,
+      "precision": 0.470314,
+      "recall": 0.988414,
+      "tau": 0.090909,
+      "true_positives": 1109
+    },
+    {
+      "firings": 2333,
+      "precision": 0.474496,
+      "recall": 0.986631,
+      "tau": 0.095238,
+      "true_positives": 1107
+    },
+    {
+      "firings": 2332,
+      "precision": 0.4747,
+      "recall": 0.986631,
+      "tau": 0.1,
+      "true_positives": 1107
+    },
+    {
+      "firings": 2294,
+      "precision": 0.481255,
+      "recall": 0.983957,
+      "tau": 0.105263,
+      "true_positives": 1104
+    },
+    {
+      "firings": 2293,
+      "precision": 0.481465,
+      "recall": 0.983957,
+      "tau": 0.111111,
+      "true_positives": 1104
+    },
+    {
+      "firings": 2229,
+      "precision": 0.493495,
+      "recall": 0.980392,
+      "tau": 0.117647,
+      "true_positives": 1100
+    },
+    {
+      "firings": 2228,
+      "precision": 0.493716,
+      "recall": 0.980392,
+      "tau": 0.125,
+      "true_positives": 1100
+    },
+    {
+      "firings": 2158,
+      "precision": 0.505097,
+      "recall": 0.97148,
+      "tau": 0.130435,
+      "true_positives": 1090
+    },
+    {
+      "firings": 2157,
+      "precision": 0.505331,
+      "recall": 0.97148,
+      "tau": 0.133333,
+      "true_positives": 1090
+    },
+    {
+      "firings": 2155,
+      "precision": 0.505336,
+      "recall": 0.970588,
+      "tau": 0.142857,
+      "true_positives": 1089
+    },
+    {
+      "firings": 2048,
+      "precision": 0.521484,
+      "recall": 0.951872,
+      "tau": 0.153846,
+      "true_positives": 1068
+    },
+    {
+      "firings": 2038,
+      "precision": 0.523553,
+      "recall": 0.95098,
+      "tau": 0.157895,
+      "true_positives": 1067
+    },
+    {
+      "firings": 2036,
+      "precision": 0.523576,
+      "recall": 0.950089,
+      "tau": 0.166667,
+      "true_positives": 1066
+    },
+    {
+      "firings": 1912,
+      "precision": 0.544979,
+      "recall": 0.928699,
+      "tau": 0.181818,
+      "true_positives": 1042
+    },
+    {
+      "firings": 1883,
+      "precision": 0.549655,
+      "recall": 0.92246,
+      "tau": 0.190476,
+      "true_positives": 1035
+    },
+    {
+      "firings": 1882,
+      "precision": 0.549416,
+      "recall": 0.921569,
+      "tau": 0.2,
+      "true_positives": 1034
+    },
+    {
+      "firings": 1765,
+      "precision": 0.573938,
+      "recall": 0.902852,
+      "tau": 0.214286,
+      "true_positives": 1013
+    },
+    {
+      "firings": 1762,
+      "precision": 0.57378,
+      "recall": 0.90107,
+      "tau": 0.222222,
+      "true_positives": 1011
+    },
+    {
+      "firings": 1711,
+      "precision": 0.584454,
+      "recall": 0.891266,
+      "tau": 0.230769,
+      "true_positives": 1000
+    },
+    {
+      "firings": 1701,
+      "precision": 0.585538,
+      "recall": 0.887701,
+      "tau": 0.25,
+      "true_positives": 996
+    },
+    {
+      "firings": 1597,
+      "precision": 0.599875,
+      "recall": 0.853832,
+      "tau": 0.266667,
+      "true_positives": 958
+    },
+    {
+      "firings": 1594,
+      "precision": 0.599122,
+      "recall": 0.851159,
+      "tau": 0.272727,
+      "true_positives": 955
+    },
+    {
+      "firings": 1579,
+      "precision": 0.60038,
+      "recall": 0.84492,
+      "tau": 0.285714,
+      "true_positives": 948
+    },
+    {
+      "firings": 1481,
+      "precision": 0.623228,
+      "recall": 0.822638,
+      "tau": 0.294118,
+      "true_positives": 923
+    },
+    {
+      "firings": 1480,
+      "precision": 0.622973,
+      "recall": 0.821747,
+      "tau": 0.3,
+      "true_positives": 922
+    },
+    {
+      "firings": 1455,
+      "precision": 0.628866,
+      "recall": 0.815508,
+      "tau": 0.307692,
+      "true_positives": 915
+    },
+    {
+      "firings": 1453,
+      "precision": 0.629043,
+      "recall": 0.814617,
+      "tau": 0.3125,
+      "true_positives": 914
+    },
+    {
+      "firings": 1452,
+      "precision": 0.628788,
+      "recall": 0.813725,
+      "tau": 0.333333,
+      "true_positives": 913
+    },
+    {
+      "firings": 1251,
+      "precision": 0.670663,
+      "recall": 0.747772,
+      "tau": 0.363636,
+      "true_positives": 839
+    },
+    {
+      "firings": 1242,
+      "precision": 0.672303,
+      "recall": 0.744207,
+      "tau": 0.375,
+      "true_positives": 835
+    },
+    {
+      "firings": 1187,
+      "precision": 0.68155,
+      "recall": 0.721034,
+      "tau": 0.384615,
+      "true_positives": 809
+    },
+    {
+      "firings": 1186,
+      "precision": 0.681282,
+      "recall": 0.720143,
+      "tau": 0.4,
+      "true_positives": 808
+    },
+    {
+      "firings": 1022,
+      "precision": 0.764188,
+      "recall": 0.696078,
+      "tau": 0.416667,
+      "true_positives": 781
+    },
+    {
+      "firings": 1021,
+      "precision": 0.763957,
+      "recall": 0.695187,
+      "tau": 0.428571,
+      "true_positives": 780
+    },
+    {
+      "firings": 941,
+      "precision": 0.777896,
+      "recall": 0.652406,
+      "tau": 0.4375,
+      "true_positives": 732
+    },
+    {
+      "firings": 940,
+      "precision": 0.778723,
+      "recall": 0.652406,
+      "tau": 0.444444,
+      "true_positives": 732
+    },
+    {
+      "firings": 930,
+      "precision": 0.778495,
+      "recall": 0.645276,
+      "tau": 0.454545,
+      "true_positives": 724
+    },
+    {
+      "firings": 927,
+      "precision": 0.777778,
+      "recall": 0.642602,
+      "tau": 0.461538,
+      "true_positives": 721
+    },
+    {
+      "firings": 925,
+      "precision": 0.777297,
+      "recall": 0.64082,
+      "tau": 0.466667,
+      "true_positives": 719
+    },
+    {
+      "firings": 924,
+      "precision": 0.777056,
+      "recall": 0.639929,
+      "tau": 0.5,
+      "true_positives": 718
+    },
+    {
+      "firings": 654,
+      "precision": 0.911315,
+      "recall": 0.531194,
+      "tau": 0.545455,
+      "true_positives": 596
+    },
+    {
+      "firings": 652,
+      "precision": 0.912577,
+      "recall": 0.530303,
+      "tau": 0.555556,
+      "true_positives": 595
+    },
+    {
+      "firings": 648,
+      "precision": 0.912037,
+      "recall": 0.526738,
+      "tau": 0.571429,
+      "true_positives": 591
+    },
+    {
+      "firings": 612,
+      "precision": 0.916667,
+      "recall": 0.5,
+      "tau": 0.6,
+      "true_positives": 561
+    },
+    {
+      "firings": 494,
+      "precision": 0.961538,
+      "recall": 0.423351,
+      "tau": 0.625,
+      "true_positives": 475
+    },
+    {
+      "firings": 490,
+      "precision": 0.961224,
+      "recall": 0.419786,
+      "tau": 0.666667,
+      "true_positives": 471
+    },
+    {
+      "firings": 463,
+      "precision": 0.974082,
+      "recall": 0.401961,
+      "tau": 0.714286,
+      "true_positives": 451
+    },
+    {
+      "firings": 459,
+      "precision": 0.973856,
+      "recall": 0.398396,
+      "tau": 0.75,
+      "true_positives": 447
+    },
+    {
+      "firings": 298,
+      "precision": 0.979866,
+      "recall": 0.26025,
+      "tau": 0.777778,
+      "true_positives": 292
+    },
+    {
+      "firings": 297,
+      "precision": 0.979798,
+      "recall": 0.259358,
+      "tau": 0.8,
+      "true_positives": 291
+    },
+    {
+      "firings": 258,
+      "precision": 0.976744,
+      "recall": 0.224599,
+      "tau": 0.833333,
+      "true_positives": 252
+    },
+    {
+      "firings": 253,
+      "precision": 0.976285,
+      "recall": 0.220143,
+      "tau": 0.857143,
+      "true_positives": 247
+    },
+    {
+      "firings": 252,
+      "precision": 0.97619,
+      "recall": 0.219251,
+      "tau": 1.0,
+      "true_positives": 246
+    }
+  ]
+}
