@@ -477,7 +477,7 @@ instead of 68.
 | out-of-range `read_item` requests | 0 | 0 | 0 |
 | `raw_event_access` | false | false | false |
 | tools offered | `grep_pool`, `list_pool`, `read_item`, `select` | — | — |
-| mean tool calls | 7.12 | 6.9 | 6.4 |
+| mean tool calls | 7.12 | 6.46 | 6.21 |
 
 Containment is checked per **returned body**, not per tool call: every body each
 arm returned was matched against the exact set of bodies that question's agent

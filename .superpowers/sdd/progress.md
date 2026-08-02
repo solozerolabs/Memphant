@@ -2141,3 +2141,35 @@ Report: `.superpowers/sdd/s7-bcd-report.md`. Build log:
 `docs/build-log/2026-08-01-bcd-instrument.md`. Lock:
 `benchmarks/manifests/browser_compat_data.lock.json`. Branch `s7-bcd`,
 **not merged, not pushed.**
+
+## 2026-08-01 — S8 retrieve-then-rank (`s8-hybrid`, not merged)
+
+- Worktree: `/Users/sidsharma/Memphant-s8-hybrid`, branch `s8-hybrid`, base `main` @ `a43cd574`
+- Report: `.superpowers/sdd/s8-hybrid-report.md`
+- Build log: `docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md` (Part A prereg → Part A2 selection → Part B results)
+- Artifacts: `docs/build-log/artifacts/s8-hybrid/{analysis-confirm,analysis-sweep,sweep-subset}.json`, both analyses registered `contracted` and `decisional: false`
+- Spend: **$140.80** of a $180 ceiling
+- Tests: `tests/test_s8_hybrid.py`, 21 passing
+
+**Result.** Handing an agent MemPhant's top-64 fused pool and nothing else scores
+**154/180** against the shipped fuser's own top-10 at **112** (b=48, c=6, n_d=54,
+Δ=+23.33pp, exact McNemar p=3.26e−09) — agent ranking recovers 42 of the 52
+questions the fuser was leaving inside its own pool. It still loses to S4's
+agentic `grep` control, **154 vs 174 at 1.32× the cost per question, b-cell 0**.
+
+**The preregistration's central prediction was falsified and Part A is unedited.**
+RankAcc does not decline with N: excluding rows the pinned provider refuses, it is
+**1.000 at N=16, 64 and 128**. No gold the retriever handed over was ever ranked
+away. `hit@10(N) = Coverage(N)`, there is no interior maximum, and `N* = 64` is a
+cost knee rather than an attention limit.
+
+**What it hands the next lane.** MemPhant's recall is good (coverage 0.9389,
+within 2.8pp of `grep`'s realized rate) and its fusion is bad (0.5833). A perfect
+ranker over the pool MemPhant already retrieves would score **164/180 = 0.911 at
+$0**. That **bounds every cheap-reranker investment at +59 questions and not one
+more.**
+
+**Not licensed:** no default moves, the hybrid is not authorized as an
+architecture, and nothing here transfers past a 124-item haystack. `decisional:
+false` — the bank fails its own leakage bar and its corpus licence is a card
+assertion.
