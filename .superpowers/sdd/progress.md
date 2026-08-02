@@ -2526,3 +2526,51 @@ Report: `.superpowers/sdd/s1-unitswap-report.md`. Log:
 gate, 10 paired analyses, all 10 registered and `evidence_contract_ok
 contracted=42`). Commits `2cec397a`, `22e0644e`, `ca60e4c4` on `s1-unitswap`,
 **not merged to main**. **No checkbox, default, cutover or SOTA claim moves.**
+
+## 2026-08-01 — S10: `hit@k` is valid but conservative, and the Phase-3 anomaly closes
+
+**The endpoint every number in this program is denominated in was never
+validated. It is now, and it survives.** Reader-QA over already-banked packs
+(no retrieval re-run, so the 2x2's retrieval column is the banked metric
+itself), n=180, `claude-opus-5` reader and judge, `rag-supported-v1`, prompt v3,
+provider pinned.
+
+**P(correct | gold retrieved) = 1.0000 [0.9650, 1.0000] vs
+P(correct | gold NOT retrieved) = 0.4459 [0.3382, 0.5591]** on the MemPhant arm,
+separation 0.554 at **p = 2.76e-18**. The two rates are as far apart as this
+instrument can resolve, so **`hit@k` is NOT a broken endpoint** and no retrieval
+result in the program is invalidated.
+
+**But it understates.** MemPhant hit@10 0.5889 → answer accuracy **0.7722**, an
+18.3-point gap, because 33 of 74 gold-misses are answered correctly anyway. The
+gold span is *sufficient* — **b = 0, the reader is never wrong in 106 chances
+when the span is packed** — but not *necessary*. Every coding-lane `hit@k`
+figure is a **floor**, not an estimate, and quoting them as outcome numbers
+understates our own system.
+
+**The 37.8pp retrieval gap converts, at 44%.** Answer gap +0.1667, **conversion
+ratio 0.441 [0.286, 0.587]** by paired bootstrap over question ids — the CI
+excludes 1.0, so **~56% of a retrieval point does not arrive at the outcome**.
+Arm-pair-specific: the arms differ 4.4x in mean packed tokens with zero rows
+changed by equalization, so this must not be generalized to sweeps of one
+retriever's variants. Primary contrast p = 9.25e-06, achieved power 0.996.
+
+**The Phase-3 anomaly closes, and boringly.** BM25 at 0.4667 QA against hit@10
+0.2556 was flagged as the repo's biggest unresolved finding. It is not a broken
+proxy; it is `P(correct | not retrieved) ≈ 0.45` doing exactly what these cells
+predict. An unmeasured constant, now measured.
+
+**Open, and new:** grep answers wrong 7 times with the gold retrieved;
+MemPhant 0 (Fisher p = 0.0471, not preregistered, hypothesis only). Not
+distractor density — the *larger* pack has zero such failures. If a grep "hit"
+and a MemPhant "hit" are not the same object, **`hit@k` is not commensurable
+across retrieval mechanisms**, which this program compares routinely.
+
+**Cost $27.05 headline (+~$9 pilots/re-run) against a $150 ceiling.** Reader
+errors driven to zero on both comparator arms before any figure was read; three
+live-API defects fixed with evidence, plus four evidence-contract enum fields
+that had been failing the checker on every artifact the script ever produced.
+Shared plumbing split out as `plumbing-detach-run` @ `f1f1ccfd` and taken by two
+sibling lanes. Report: `.superpowers/sdd/s10-conversion-report.md`. Build log:
+`docs/build-log/2026-08-01-endpoint-validity-conversion.md`. Branch
+`s10-conversion`, **not merged, not pushed.**

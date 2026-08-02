@@ -1,0 +1,15 @@
+{
+  "packet": "/Users/sidsharma/Memphant-s10-conversion/docs/build-log/artifacts/s10-conversion/pilot30/authorization-memphant.json",
+  "ledger": "/Users/sidsharma/Memphant-s10-conversion/docs/build-log/artifacts/s10-conversion/pilot30/attempts-memphant.jsonl",
+  "total_derived_ceiling_usd": "13.16",
+  "derivation": {
+    "memphant": {
+      "n_rows": 30,
+      "logical_calls": 60,
+      "widest_prompt_bytes_measured": 24749,
+      "per_call_ceiling_usd": "0.219225",
+      "arm_ceiling_usd": "13.16",
+      "hard_max_spend_usd": "13.16"
+    }
+  }
+}

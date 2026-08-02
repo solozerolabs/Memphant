@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+  "frozen_inputs": {
+    "reader_runner_sha256": "56b441850f0e80ba48de0c67989af2569aad482195ca360220393332c9562b83",
+    "provider_attempts_sha256": "833d8782dd54a8f9937ddb7ca65544be470c8e5bb38c790424ae4b4eca52d04a",
+    "nomemory_evidence_sha256": "bb4eeaab8c9bfad15dda5120628492e8ba76d2b06274c8433c1a82af51ef137d",
+    "nomemory_retrieval_sha256": "6d65a691060b8780e38a72b186998b90d63b32a09752ff3972eb54248a0b45fa"
+  },
+  "models": {
+    "provider": "OpenRouter",
+    "reader": "anthropic/claude-opus-5",
+    "reader_reasoning_effort": null,
+    "judge": "anthropic/claude-opus-5",
+    "judge_profile": "rag-supported-v1",
+    "prompt_version": 3,
+    "max_output_tokens_per_request": 3000,
+    "provider_max_price_usd_per_million": {
+      "prompt": "5",
+      "completion": "25"
+    }
+  },
+  "hard_limits": {
+    "nomemory": {
+      "max_logical_calls": 60,
+      "max_provider_attempts": 240,
+      "max_spend_usd": "5.86"
+    }
+  },
+  "execution": {
+    "nomemory": {
+      "run_id": "nomemory",
+      "attempt_ledger": "docs/build-log/artifacts/s10-conversion/pilot30/attempts-nomemory.jsonl",
+      "cache_dir": "docs/build-log/artifacts/s10-conversion/pilot30/cache-nomemory",
+      "output": "docs/build-log/artifacts/s10-conversion/pilot30/reader-nomemory.json"
+    }
+  },
+  "campaign": {
+    "journal_path": "attempts-nomemory.jsonl",
+    "hard_ceiling_nanos": 200000000000,
+    "unallocated_reserve_nanos": 10000000000,
+    "opening_liability_nanos": 0,
+    "opening_reservations": []
+  },
+  "authorization": {
+    "authorized_by": "owner standing authority, ceiling $150: S10 endpoint validity",
+    "authorized_at": "2026-08-01T00:00:00-07:00",
+    "authorization_scope_sha256": "962496bb6f046a04d920295b695a66b82aeed2ac91ffc87e14f07f9ef980c585"
+  }
+}

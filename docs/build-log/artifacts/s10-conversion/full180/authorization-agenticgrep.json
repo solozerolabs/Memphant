@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+  "frozen_inputs": {
+    "reader_runner_sha256": "1cdfd9aefb9377d3026e0d3aa4c1884c2f86d42dd25091a7fea55aaa159ad2f2",
+    "provider_attempts_sha256": "833d8782dd54a8f9937ddb7ca65544be470c8e5bb38c790424ae4b4eca52d04a",
+    "agenticgrep_evidence_sha256": "2964230b0214e6b8759b0e79318d5bad0aefd4341a3e0587441222aefbe2066e",
+    "agenticgrep_retrieval_sha256": "3df4eca46a2c3601abbe0829d4f9ba8743a8acd4dc17421984934724f8bca4cd"
+  },
+  "models": {
+    "provider": "OpenRouter",
+    "reader": "anthropic/claude-opus-5",
+    "reader_reasoning_effort": null,
+    "judge": "anthropic/claude-opus-5",
+    "judge_profile": "rag-supported-v1",
+    "prompt_version": 3,
+    "max_output_tokens_per_request": 3000,
+    "provider_max_price_usd_per_million": {
+      "prompt": "5",
+      "completion": "25"
+    }
+  },
+  "hard_limits": {
+    "agenticgrep": {
+      "max_logical_calls": 360,
+      "max_provider_attempts": 1440,
+      "max_spend_usd": "65.16"
+    }
+  },
+  "execution": {
+    "agenticgrep": {
+      "run_id": "agenticgrep",
+      "attempt_ledger": "docs/build-log/artifacts/s10-conversion/full180/attempts-agenticgrep.jsonl",
+      "cache_dir": "docs/build-log/artifacts/s10-conversion/full180/cache-agenticgrep",
+      "output": "docs/build-log/artifacts/s10-conversion/full180/reader-agenticgrep.json"
+    }
+  },
+  "campaign": {
+    "journal_path": "attempts-agenticgrep.jsonl",
+    "hard_ceiling_nanos": 200000000000,
+    "unallocated_reserve_nanos": 10000000000,
+    "opening_liability_nanos": 0,
+    "opening_reservations": []
+  },
+  "authorization": {
+    "authorized_by": "owner standing authority, ceiling $150: S10 endpoint validity",
+    "authorized_at": "2026-08-01T00:00:00-07:00",
+    "authorization_scope_sha256": "4853743ea21ad6e1ecdb1fed03bc8fc18788a3b72ae73b3445c384f9a7bf2ba7"
+  }
+}
