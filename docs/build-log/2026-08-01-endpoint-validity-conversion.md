@@ -179,3 +179,189 @@ the comparison is VOID — checked before the full spend.
 
 ---
 <!-- RESULTS APPENDED BELOW THIS LINE AFTER THE PAID RUN -->
+
+# RESULTS — n = 180, endpoint `answer_correct`
+
+**Verdict: `hit@k` is VALID BUT CONSERVATIVE. It is not a broken endpoint.**
+
+The hypothesis this lane was commissioned to test — that `hit@k` does not track
+the outcome — is **refused by the data**. The two conditional rates are not
+close; they are as far apart as this instrument can resolve.
+
+| arm | answer accuracy | banked hit@10 | abstentions | provider refusals | errored rows |
+|---|---:|---:|---:|---:|---:|
+| `memphant` | **0.7722** (139/180) | 0.5889 | 10 | 0 | **0** |
+| `agenticgrep` | **0.9389** (169/180) | 0.9667 | 3 | 3 | **0** |
+| `nomemory` | **0.1278** (23/180) | — | 108 | 53 | 3 |
+
+**These accuracies are LOWER BOUNDS, stated here and not in a footnote.** A
+provider refusal is scored as a non-answer, so those rows are
+guaranteed-incorrect for a reason that is not the pack: `agenticgrep` +3,
+`nomemory` +53. Each arm's true ceiling is its figure plus its refusal count.
+`memphant` has no refusals, so its 0.7722 is exact — and note that the bound
+runs *against* our own arm's apparent advantage, not for it.
+
+## 1. The joint distribution — the deliverable
+
+**`memphant`** (fused pack, hit@10 0.5889)
+
+|  | answer_correct | answer_wrong |
+|---|---:|---:|
+| **gold retrieved** | a = **106** | b = **0** |
+| **gold NOT retrieved** | **c = 33** | d = 41 |
+
+* P(correct \| gold retrieved) = **1.0000** [0.9650, 1.0000] (106/106)
+* P(correct \| gold NOT retrieved) = **0.4459** [0.3382, 0.5591] (33/74)
+* difference +0.5541, z = 8.721, two-sided **p = 2.76e-18**
+* phi(hit@10, answer_correct) = 0.6500 · raw agreement = 0.8167
+
+**`agenticgrep`** (agentic grep/read pack, hit@10 0.9667)
+
+|  | answer_correct | answer_wrong |
+|---|---:|---:|
+| **gold retrieved** | a = **167** | b = **7** |
+| **gold NOT retrieved** | **c = 2** | d = 4 |
+
+* P(correct \| gold retrieved) = **0.9598** [0.9193, 0.9804] (167/174)
+* P(correct \| gold NOT retrieved) = **0.3333** [0.0968, 0.7000] (2/6)
+* difference +0.6264, z = 6.298, two-sided **p = 3.01e-10**
+* phi(hit@10, answer_correct) = 0.4694 · raw agreement = 0.9500
+
+The two rates are separated by more than half the scale on both arms, at
+p < 1e-9. **`hit@k` measures something real.**
+
+What it does *not* do is measure it without bias. `memphant`'s hit@10 is 0.5889
+and its answer accuracy is **0.7722** — the retrieval metric understates the
+outcome by **18.3 points**, because 33 of its 74 gold-misses are answered
+correctly anyway. The gold span is *sufficient* (b = 0: when it is in the pack
+the reader is never wrong) but it is **not necessary**. Every coding-lane
+`hit@k` figure this program has published is therefore a **floor** on the
+behaviour that matters, not an estimate of it.
+
+The text check bounds where those 33 came from: the gold answer STRING was
+absent from the pack on **at least 33 of 33**. So they are not "the fact was in
+the pack under a different span" — on this bank that bucket is empty. They are
+inference over the pack, or the reader's priors, and the no-memory arm sizes the
+priors channel at **0.1278**.
+
+## 2. Reconciliation with the Phase-3 anomaly — and it is undramatic
+
+Phase 3 observed the scoped BM25 control answering correctly on 0.4667 of 30
+rows while its hit@10 was 0.2556, and flagged it as "a bigger finding than the
+primary contrast". **It is not a broken proxy. It is P(correct | gold not
+retrieved) ≈ 0.45, doing exactly what these cells predict.**
+
+Put the two numbers side by side: this lane measures P(correct | gold not
+retrieved) = **0.4459** on `memphant` and 0.3333 on `agenticgrep`. A control at
+hit@10 0.2556 whose misses are answerable at ~0.45 lands at roughly
+0.26 + 0.74x0.45 ≈ 0.59 in expectation, of the same order as the 0.4667 observed
+on 30 rows. The anomaly was never evidence that retrieval metrics are invalid;
+it was an unmeasured constant, and it is now measured.
+
+The open item closes, and it closes boringly. That is worth saying plainly,
+because the finding was cited as the biggest unresolved item in the repo and a
+quiet resolution is easy to mistake for an unfinished one.
+
+## 3. Does the retrieval gap convert? Yes — at 44%
+
+| quantity | value |
+|---|---:|
+| hit@10 gap (`agenticgrep` − `memphant`) | **+0.3778** |
+| answer-accuracy gap, same 180 questions | **+0.1667** |
+| **conversion ratio** | **0.441** [0.286, 0.587] |
+
+Paired bootstrap over question ids, 20,000 draws, seed 20260801, percentile CI;
+0 draws dropped as undefined. Computed by `scripts/s10_report_tables.py` from
+the artifact's own per-question vectors, not by dividing two point estimates.
+
+**A retrieval point is worth about 0.44 of an answer point here, and the CI
+excludes 1.0 comfortably — 55.9% of this retrieval gap does not arrive at the
+outcome.** The mechanism is not mysterious: roughly 45% of gold-misses are
+answerable anyway, so closing a miss only converts when it was one of the ~55%
+that was not.
+
+**This ratio is arm-pair-specific and must not be generalized.** The two arms
+differ **4.4x in mean packed tokens** (2177.5 vs 495.5), with **zero rows
+changed by the equalization pass on either** — so that spread is the arms' own
+behaviour, not a stage artifact. This is "what *this* gap converts to *between
+these two arms*". Extrapolating it to a sweep whose arms are variants of one
+retriever at similar pack sizes is not supported by anything measured here.
+
+## 4. The primary contrast, and an asymmetry that runs our way
+
+`memphant` vs `agenticgrep`, endpoint `answer_correct`:
+b = 8, c = 38, **n_d = 46**, delta = **−0.1667**, two-sided exact McNemar
+**p = 9.25e-06**, realized psi 0.2556, MDE@80% 0.1082, **achieved power 0.996**,
+required n 75. Well clear of the n_d >= 6 floor. **The agentic-grep arm's
+retrieval win converts into a real answer-correctness win**, at 44% of its
+nominal size.
+
+On the stricter secondary endpoint `correct` (answer correct AND fully
+supported) the gap widens to delta = −0.3111 (b = 6, c = 62, p = 8.18e-13):
+`memphant` 0.6278 vs `agenticgrep` 0.9389. The no-memory arm is 0.0000 there by
+construction, which is precisely why it is not the primary endpoint.
+
+**The asymmetry, which is the one place our arm looks better.** `agenticgrep`
+retrieves the gold span and still answers wrong **7 times**; `memphant` does so
+**0 times**. Fisher exact on 0/106 against 7/174 gives **p = 0.0471** — over the
+line by a hair, on a comparison that was **not preregistered**. Treat it as
+hypothesis-generating, not as a result. It shows up again as phi: 0.6500 for
+`memphant` against 0.4694 for `agenticgrep`, i.e. `hit@10` predicts the outcome
+*better* on our pack than on grep's.
+
+Candidate mechanisms, none adjudicated here, and note the obvious one is ruled
+out: it is **not** distractor density from a larger pack, because the arm with
+the 4.4x *larger* pack is the one with zero such failures. What remains is that
+a grep "hit" and a MemPhant "hit" are not the same object — grep returns
+6000-character excerpts around a match, so the adjudicated span can be present
+while the context that makes it answerable is clipped, whereas MemPhant packs
+whole episodic units with provenance headers. If that is right, `hit@k` is not
+even commensurable across retrieval mechanisms, which would matter for every
+cross-arm comparison in the program. Testing it needs a span-completeness
+measurement this lane did not run.
+
+## 5. Instrument honesty
+
+Reader errors were driven to zero on **both comparator arms** (`memphant` 0/180,
+`agenticgrep` 0/180) before any figure above was read. Getting there required
+three fixes made *during* the run and committed with their evidence: attributing
+`empty_content` (it was `length` — reasoning tokens consuming a 1024 budget),
+not retrying deterministic `content_filter` refusals four times, and retrying
+schema-violating `{}` replies in the transport where the retry loop can act
+rather than at the parser where the row is already lost.
+
+Three residual errors sit on the `nomemory` arm. It is the saturation probe and
+never the paired comparator for a memory claim; its 0.1278 is already a lower
+bound by 53 refusals, and 3 rows cannot move a saturation verdict that clears
+its nearest arm by 64 points.
+
+Lineage caveat, stated rather than buried: the stage-equalization manifest
+carries `git_dirty: true`. The lane's own harness commits landed while the
+campaign ran; the packer, the prepare script and the equalized evidence files
+were not among the files changed, and every arm is bound to the manifest by
+sha256, which is the gate that matters. But the dirty flag is real and is not
+being explained away.
+
+**Settled spend: $27.05** across the three arms ($18.34 memphant, $6.31
+agenticgrep, $2.39 nomemory), plus ~$2.40 to re-run the saturation arm and ~$7
+in pilots and aborted pilots — well inside the $150 ceiling. The $0 stub round
+trip caught nothing new this time, which is the outcome a governance control is
+supposed to have once it is working.
+
+## 6. What this changes
+
+1. **`hit@k` stays.** It is a valid, conservative, directionally correct
+   endpoint. No retrieval result in this program is invalidated.
+2. **Every coding-lane `hit@k` figure is a floor, not an estimate.** MemPhant's
+   0.5889 corresponds to 0.7722 answer accuracy on this bank. Quoting retrieval
+   numbers as if they were outcome numbers understates our own system.
+3. **Retrieval points are discounted ~56% at the outcome, between these two
+   arms.** Any lane trading effort for retrieval points should price them at
+   roughly 0.44 — and should measure its own conversion rather than borrow this
+   one.
+4. **b = 0 means the reader is not the bottleneck on this bank.** When the gold
+   span is packed, `claude-opus-5` answers correctly every time in 106 chances.
+   Reader-side work has no headroom here; the headroom is all in retrieval.
+5. **Open, unresolved:** whether a "hit" is commensurable across retrieval
+   mechanisms (§4). If it is not, cross-mechanism `hit@k` comparisons — which
+   this program makes routinely — need a commensurability check first.
