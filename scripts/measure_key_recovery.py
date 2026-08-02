@@ -55,38 +55,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from external_instrument_adapter import load_memorycode, sha256_file  # noqa: E402
+# The directive-sentence primitives were DEFINED here first, then moved into
+# `external_instrument_adapter` when the live B1 extractor needed the same unit
+# (S1, `docs/build-log/2026-08-01-similarity-unit-swap.md`). They are imported
+# back under their original names so every rule below is byte-identical in
+# behaviour, and so an offline rule and the live extractor can never drift onto
+# two different stoplists -- which is the whole reason the move went in this
+# direction rather than the copy-paste one.
+from external_instrument_adapter import (  # noqa: E402
+    DIRECTIVE_LITERAL as LITERAL,
+    DIRECTIVE_SENTENCE_SPLIT as SENTENCE,
+    DIRECTIVE_STOPWORDS as STOPWORDS,
+    DIRECTIVE_WORD as WORD,
+    directive_content_words as content_words,
+    literal_sentences,
+    load_memorycode,
+    sha256_file,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 LOCK = REPO / "benchmarks" / "manifests" / "memorycode.lock.json"
-
-# A quoted literal in *prose*. The gold rule's `QUOTED` runs over the clean
-# `topic` field; a body is full of apostrophes ("I'm", "team's"), so the quote
-# delimiters must be bounded by non-alphanumerics or every contraction pair
-# becomes a "literal". Verified against the corpus: this finds 'q_' and not
-# "'s a pleasure to finally meet you. I'".
-LITERAL = re.compile(r"(?<![A-Za-z0-9])['\"`]([^'\"`\n]{1,40})['\"`](?![A-Za-z0-9])")
-SENTENCE = re.compile(r"(?<=[.!?])\s+")
-WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
-
-# Ordinary English function words plus the conversational filler this corpus is
-# padded with. Chosen once, before any rule was scored, and shared by every
-# rule so no rule is advantaged by its own stoplist.
-STOPWORDS = frozenset(
-    """
-    a an the and or but if then than that this these those there here it its it's
-    is are was were be been being am do does did doing done have has had having
-    i you he she we they me him her us them my your his our their mine yours
-    to of in on at by for with from into onto about as up out over under again
-    further once all any both each few more most other some such no nor not only
-    own same so too very can will just should now s t don don't shall may might
-    must would could ll re ve d m o y ain aren couldn didn doesn hadn hasn haven
-    isn ma mightn mustn needn shan shouldn wasn weren won wouldn
-    please make sure let lets going go want need needs like also going forward
-    ok okay yes yeah sounds good great thanks thank hi hello sure well right
-    when where what which who whom while because since during before after
-    """.split()
-)
 
 # The imperative heads this corpus's directives actually open with. Used ONLY by
 # the `verb_head` rule, which is labelled corpus-shaped for that reason.
@@ -94,27 +82,6 @@ IMPERATIVES = frozenset(
     "start begin end prefix suffix name use write add append avoid never always "
     "keep set follow ensure include prepend terminate finish".split()
 )
-
-
-def content_words(text: str) -> list[str]:
-    return [
-        w
-        for w in (m.group(0).lower() for m in WORD.finditer(text))
-        if w not in STOPWORDS and len(w) > 1
-    ]
-
-
-def literal_sentences(body: str) -> list[tuple[str, str]]:
-    """(sentence, sentence-with-quoted-literals-blanked) for each sentence
-    carrying a quoted literal. That is this corpus's directive shape; a rule
-    family anchored on it is the honest deterministic ceiling."""
-    out = []
-    for raw in SENTENCE.split(body):
-        s = raw.strip()
-        if not s or not LITERAL.search(s):
-            continue
-        out.append((s, LITERAL.sub(" <X> ", s)))
-    return out
 
 
 # --------------------------------------------------------------------------

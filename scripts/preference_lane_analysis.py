@@ -29,6 +29,16 @@ SEED = 20260801
 RESAMPLES = 10000
 ENDPOINTS = ("appropriate_application", "misapplication", "neither_returned")
 
+# RETRIEVAL ENDPOINTS, PAIRED (added by S1). These were reported as bare
+# descriptive rates in `secondary_descriptive`, which is not enough: Arm K
+# (`docs/superpowers/plans/2026-07-31-one-plan.md` §7) moved LSW UP and hit@k
+# DOWN in the same run, so a key change can pay on the primary endpoint while
+# costing retrieval, and a difference with no interval cannot say whether that
+# cost is real. Same paired, instance-clustered machinery as the primary.
+# `secondary_descriptive` is left in place unchanged so older readers still
+# resolve.
+RETRIEVAL_ENDPOINTS = ("hit_at_1", "hit_at_k")
+
 
 def load_arm(path: Path) -> tuple[str, dict[str, dict]]:
     report = json.loads(path.read_text())
@@ -230,12 +240,16 @@ def main() -> int:
             name: analyse_endpoint(name, rows_a, rows_b, shared)
             for name in ENDPOINTS
         },
+        "retrieval_endpoints": {
+            name: analyse_endpoint(name, rows_a, rows_b, shared)
+            for name in RETRIEVAL_ENDPOINTS
+        },
         "secondary_descriptive": {
             name: {
                 "arm_a": sum(rows_a[p][name] for p in shared) / len(shared),
                 "arm_b": sum(rows_b[p][name] for p in shared) / len(shared),
             }
-            for name in ("hit_at_1", "hit_at_k")
+            for name in RETRIEVAL_ENDPOINTS
         },
         "paid_model_calls": 0,
     }

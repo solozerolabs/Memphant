@@ -44,16 +44,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import measure_key_recovery as kr  # noqa: E402
-from external_instrument_adapter import load_memorycode, sha256_file  # noqa: E402
+from external_instrument_adapter import (  # noqa: E402
+    load_memorycode,
+    sha256_file,
+    structured_similarity,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 LOCK = REPO / "benchmarks" / "manifests" / "memorycode.lock.json"
 FIRING_POINTS = (100, 250, 500, 1091, 2000)
-
-
-def jaccard(left: frozenset, right: frozenset) -> float:
-    union = len(left | right)
-    return len(left & right) / union if union else 0.0
 
 
 def main() -> int:
@@ -81,16 +80,6 @@ def main() -> int:
         for index, unit in enumerate(group["units"]):
             bodies[f"{group['group_id']}-s{index}"] = unit["body"]
 
-    cache: dict[str, list[frozenset]] = {}
-
-    def directive_sentences(uid: str) -> list[frozenset]:
-        if uid not in cache:
-            cache[uid] = [
-                frozenset(kr.content_words(blanked))
-                for _, blanked in kr.literal_sentences(bodies[uid])
-            ]
-        return cache[uid]
-
     rows = []
     for entry in ledger:
         left, right = entry["session"], entry["target_session"]
@@ -100,14 +89,12 @@ def main() -> int:
         ri = right.rsplit("-s", 1)[1]
         pair = tuple(sorted((int(li), int(ri))))
         co_declaring = pair in gold[gid]["gold_pairs"]
-        best = max(
-            (
-                jaccard(a, b)
-                for a in directive_sentences(left)
-                for b in directive_sentences(right)
-            ),
-            default=0.0,
-        )
+        # THE SAME FUNCTION THE LIVE ARM CALLS (S1). This was an inline max
+        # over sentence pairs; it now calls
+        # `external_instrument_adapter.structured_similarity`, so this offline
+        # precision census and the live extractor cannot diverge. Verified
+        # behaviour-preserving against this script's own banked artifact.
+        best = structured_similarity(bodies[left], bodies[right], "sentence")
         rows.append(
             {
                 "body": entry["jaccard"],

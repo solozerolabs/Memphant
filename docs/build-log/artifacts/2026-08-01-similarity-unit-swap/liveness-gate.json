@@ -1,0 +1,161 @@
+{
+  "arms": {
+    "n-noop": {
+      "ablation": "none",
+      "artifact": "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/arm-n-noop.json",
+      "candidate_pairs_seen": 7890,
+      "compilation_verified": {
+        "episodes": 0,
+        "episodes_with_units": 0,
+        "expected_episodes": 0,
+        "failed_jobs": 0,
+        "memory_units": 8147,
+        "pending_jobs": 0
+      },
+      "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "fire_rate": 0.0,
+      "instances": 257,
+      "lineage": {
+        "git_branch": "s1-unitswap",
+        "git_dirty": true,
+        "git_head": "ca60e4c47ce1d1eb35de8d43f83436d6f256bc17",
+        "server_bin_sha256": "ba11520e0404b4977ae1ebea9be4b9e161e0e3989208972afceec9408c2b6aea",
+        "worker_bin_sha256": "39f24332c5539066d097eb6a16cd2e3855365837c13aead4ac19a1f52f61c6ce",
+        "worktree": "/Users/sidsharma/Memphant-s1-unitswap"
+      },
+      "open_subject_key_range_overlaps": 0,
+      "paid_model_calls": 0,
+      "probes": 1063,
+      "realized_firing_rate": 0.0,
+      "remainders_recalled": 0,
+      "supersede_edges_expected_positive": false,
+      "superseded_units": 0,
+      "superseded_with_open_transaction": 0,
+      "supersedes_edges": 0,
+      "targets_proposed": 0,
+      "threshold": 2.0,
+      "unit": "sentence"
+    },
+    "r3-random": {
+      "ablation": "random",
+      "artifact": "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/arm-r3-random.json",
+      "candidate_pairs_seen": 0,
+      "compilation_verified": {
+        "episodes": 0,
+        "episodes_with_units": 0,
+        "expected_episodes": 0,
+        "failed_jobs": 0,
+        "memory_units": 9245,
+        "pending_jobs": 0
+      },
+      "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "fire_rate": 0.13828,
+      "instances": 257,
+      "lineage": {
+        "git_branch": "s1-unitswap",
+        "git_dirty": true,
+        "git_head": "ca60e4c47ce1d1eb35de8d43f83436d6f256bc17",
+        "server_bin_sha256": "ba11520e0404b4977ae1ebea9be4b9e161e0e3989208972afceec9408c2b6aea",
+        "worker_bin_sha256": "39f24332c5539066d097eb6a16cd2e3855365837c13aead4ac19a1f52f61c6ce",
+        "worktree": "/Users/sidsharma/Memphant-s1-unitswap"
+      },
+      "open_subject_key_range_overlaps": 0,
+      "paid_model_calls": 0,
+      "probes": 1063,
+      "realized_firing_rate": null,
+      "remainders_recalled": 0,
+      "supersede_edges_expected_positive": true,
+      "superseded_units": 1098,
+      "superseded_with_open_transaction": 0,
+      "supersedes_edges": 2196,
+      "targets_proposed": 1098,
+      "threshold": 0.25,
+      "unit": "body"
+    },
+    "s-body": {
+      "ablation": "none",
+      "artifact": "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/arm-s-body.json",
+      "candidate_pairs_seen": 7890,
+      "compilation_verified": {
+        "episodes": 0,
+        "episodes_with_units": 0,
+        "expected_episodes": 0,
+        "failed_jobs": 0,
+        "memory_units": 9238,
+        "pending_jobs": 0
+      },
+      "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "fire_rate": 0.0,
+      "instances": 257,
+      "lineage": {
+        "git_branch": "s1-unitswap",
+        "git_dirty": true,
+        "git_head": "ca60e4c47ce1d1eb35de8d43f83436d6f256bc17",
+        "server_bin_sha256": "ba11520e0404b4977ae1ebea9be4b9e161e0e3989208972afceec9408c2b6aea",
+        "worker_bin_sha256": "39f24332c5539066d097eb6a16cd2e3855365837c13aead4ac19a1f52f61c6ce",
+        "worktree": "/Users/sidsharma/Memphant-s1-unitswap"
+      },
+      "open_subject_key_range_overlaps": 0,
+      "paid_model_calls": 0,
+      "probes": 1063,
+      "realized_firing_rate": 0.138276,
+      "remainders_recalled": 0,
+      "supersede_edges_expected_positive": true,
+      "superseded_units": 1091,
+      "superseded_with_open_transaction": 0,
+      "supersedes_edges": 2182,
+      "targets_proposed": 1091,
+      "threshold": 0.25,
+      "unit": "body"
+    },
+    "u-sentence": {
+      "ablation": "none",
+      "artifact": "docs/build-log/artifacts/2026-08-01-similarity-unit-swap/arm-u-sentence.json",
+      "candidate_pairs_seen": 7890,
+      "compilation_verified": {
+        "episodes": 0,
+        "episodes_with_units": 0,
+        "expected_episodes": 0,
+        "failed_jobs": 0,
+        "memory_units": 9168,
+        "pending_jobs": 0
+      },
+      "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "fire_rate": 0.0,
+      "instances": 257,
+      "lineage": {
+        "git_branch": "s1-unitswap",
+        "git_dirty": true,
+        "git_head": "ca60e4c47ce1d1eb35de8d43f83436d6f256bc17",
+        "server_bin_sha256": "ba11520e0404b4977ae1ebea9be4b9e161e0e3989208972afceec9408c2b6aea",
+        "worker_bin_sha256": "39f24332c5539066d097eb6a16cd2e3855365837c13aead4ac19a1f52f61c6ce",
+        "worktree": "/Users/sidsharma/Memphant-s1-unitswap"
+      },
+      "open_subject_key_range_overlaps": 0,
+      "paid_model_calls": 0,
+      "probes": 1063,
+      "realized_firing_rate": 0.129404,
+      "remainders_recalled": 0,
+      "supersede_edges_expected_positive": true,
+      "superseded_units": 1021,
+      "superseded_with_open_transaction": 0,
+      "supersedes_edges": 2042,
+      "targets_proposed": 1021,
+      "threshold": 0.42,
+      "unit": "sentence"
+    }
+  },
+  "failures": [],
+  "gate": "s1_mechanism_liveness",
+  "paid_model_calls": 0,
+  "passed": true,
+  "rule": "Checked before any accuracy number is read. A treatment arm with zero supersede edges is INERT and 'inert' is the whole report. remainders_recalled must be 0. Compilation is verified from the DB on the bench superuser credential.",
+  "shared": {
+    "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+    "git_head": "ca60e4c47ce1d1eb35de8d43f83436d6f256bc17",
+    "instances": 257,
+    "probes": 1063,
+    "server_bin_sha256": "ba11520e0404b4977ae1ebea9be4b9e161e0e3989208972afceec9408c2b6aea",
+    "worker_bin_sha256": "39f24332c5539066d097eb6a16cd2e3855365837c13aead4ac19a1f52f61c6ce"
+  }
+}
