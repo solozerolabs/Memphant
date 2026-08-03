@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "status": "PREREGISTERED_BEFORE_RUNTIME",
+  "registered_at": "2026-08-03T17:15:17Z",
+  "instrument": {
+    "dataset": "stellalisy/HorizonBench",
+    "revision": "50941f00f90c03a5a60219d76393869b757b835a",
+    "config": "sample",
+    "split": "test",
+    "rows": 10,
+    "independent_user_clusters": 10,
+    "sessions": 943,
+    "source_jsonl_sha256": "0e3004b70e03d2fd02a01fbfe184709f8ad8aaeb0749c2682240c983de0b2815",
+    "expected_ids_sha256": "9b05f799b1931a94ab381f584ea0a4cb475ead9b207449e9aed16ce70d4ce995",
+    "lock_sha256": "5080511bf8ab4f07afaea39db3db2ffeb5b00e5938a85a0dcec8d43244428fb9"
+  },
+  "gold_quarantine": {
+    "runtime_fields": [
+      "id",
+      "user_id",
+      "generator",
+      "conversation",
+      "options"
+    ],
+    "scoring_only_fields": [
+      "correct_letter",
+      "distractor_letter",
+      "has_evolved",
+      "preference_domain",
+      "preference_evolution"
+    ],
+    "mental_state_graph_acquired": false
+  },
+  "zero_spend_gate": {
+    "arm": "fast",
+    "k": 20,
+    "budget_tokens": 16384,
+    "embedder": "existing local sentence-unit default",
+    "fact_extraction": false,
+    "deep": false,
+    "advance_only_if": [
+      "source revision, bytes, IDs, and users match the committed lock",
+      "all 943 sessions fit the retain boundary and compile",
+      "all 10 expected IDs produce a terminal Fast row",
+      "all 10 rows are non-degraded with non-empty evidence",
+      "no scoring-only field enters retain or recall"
+    ]
+  },
+  "lineage": {
+    "runner_sha256": "baf7e13a9bd68197a0a74f484a270c887d56b344ddbe81ef79a7014649b6e2a0",
+    "test_sha256": "b4f9df8736809bd765c9a837c55b4fbba2ff40b95af4f6d96c4102a9c0329733",
+    "server_sha256": "fec11a1257bc3a1a53ae72f8189e419ad27889833f5fa22cc76feb65563f5860",
+    "worker_sha256": "7c27b28a45df02e4d5b800a52891091e55dd4594314183966634e55f4f03d188",
+    "cli_sha256": "1b43f89c495b03ba7e0efaa2503c6e858de4341747d289d09227af70297b0da7"
+  },
+  "claim_boundary": "Construction-only diagnostic. This sample cannot promote a mechanism, default, or SOTA claim."
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -114,3 +115,90 @@ def test_source_revision_must_match_pin() -> None:
     module.validate_source_revision(module.DATASET_REVISION)
     with pytest.raises(ValueError, match="revision drift"):
         module.validate_source_revision("0" * 40)
+
+
+def test_runtime_inputs_are_item_isolated_chronological_and_gold_blind() -> None:
+    module = load_module()
+    row = sample_row(3)
+
+    runtime = module.runtime_item(row)
+
+    assert runtime["context_ref"] == "horizon-item-3"
+    assert len(runtime["episodes"]) == 2
+    assert [episode["source_ref"] for episode in runtime["episodes"]] == [
+        "horizon:item-3:session:0",
+        "horizon:item-3:session:1",
+    ]
+    observed = [datetime.fromisoformat(episode["observed_at"].replace("Z", "+00:00")) for episode in runtime["episodes"]]
+    assert observed == sorted(observed)
+    assert all(len(episode["body"].encode()) <= module.MAX_EPISODE_BYTES for episode in runtime["episodes"])
+    encoded = json.dumps(runtime, sort_keys=True)
+    for field in module.SCORING_ONLY_FIELDS:
+        assert field not in encoded
+        assert str(row[field]) not in encoded
+    for letter in "ABCDE":
+        assert f"response {letter}" in runtime["question"]
+
+
+def test_evidence_completion_rejects_missing_duplicate_degraded_and_empty() -> None:
+    module = load_module()
+    expected = ["one", "two"]
+    rows = [
+        {"id": "one", "arm": "fast", "degraded": False, "evidence": [{"body": "a"}]},
+        {"id": "two", "arm": "fast", "degraded": False, "evidence": [{"body": "b"}]},
+    ]
+
+    module.validate_evidence_rows(rows, expected, "fast")
+    with pytest.raises(ValueError, match="expected IDs"):
+        module.validate_evidence_rows(rows[:-1], expected, "fast")
+    with pytest.raises(ValueError, match="duplicate"):
+        module.validate_evidence_rows([rows[0], rows[0]], expected, "fast")
+    with pytest.raises(ValueError, match="degraded"):
+        module.validate_evidence_rows([{**rows[0], "degraded": True}, rows[1]], expected, "fast")
+    with pytest.raises(ValueError, match="empty evidence"):
+        module.validate_evidence_rows([{**rows[0], "evidence": []}, rows[1]], expected, "fast")
+
+
+def test_runtime_calls_public_retain_then_gold_blind_recall() -> None:
+    module = load_module()
+    row = sample_row(0)
+
+    class Client:
+        def __init__(self):
+            self.posts = []
+
+        def bind_context(self, client_ref, **kwargs):
+            assert client_ref == "horizon-item-0"
+            assert kwargs["subject_ref"] == "horizon-item-0"
+            return {
+                "subject_id": "subject",
+                "scope_id": "scope",
+                "actor_id": "actor",
+                "agent_node_id": "agent",
+                "subject_generation": 1,
+            }
+
+        def post(self, path, payload):
+            self.posts.append((path, payload))
+            if path == "/v1/episodes":
+                return {"episode_id": f"episode-{len(self.posts)}", "unit_ids": []}
+            assert path == "/v1/recall"
+            return {
+                "items": [{"unit_id": "unit", "body": "relevant memory", "kind": "episodic"}],
+                "degraded": False,
+                "trace_id": "trace",
+            }
+
+    client = Client()
+    items = [module.runtime_item(row)]
+    bound, retained = module.retain_runtime_items(client, items)
+    evidence = module.recall_runtime_items(client, items, bound, "fast", 20, 16384)
+
+    assert retained == 2
+    assert [path for path, _ in client.posts] == ["/v1/episodes", "/v1/episodes", "/v1/recall"]
+    assert evidence[0]["trace_id"] == "trace"
+    assert evidence[0]["evidence"][0]["body"] == "relevant memory"
+    serialized_calls = json.dumps(client.posts, sort_keys=True)
+    for field in module.SCORING_ONLY_FIELDS:
+        assert field not in serialized_calls
+        assert str(row[field]) not in serialized_calls

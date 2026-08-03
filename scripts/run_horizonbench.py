@@ -7,10 +7,21 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPTS_DIR.parent
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+import gate_runtime as gr  # noqa: E402
 
 
 DATASET_ID = "stellalisy/HorizonBench"
@@ -25,6 +36,8 @@ SCORING_ONLY_FIELDS = (
     "preference_evolution",
 )
 PROMPT_FIELDS = ("id", "user_id", "generator", "conversation", "options")
+MAX_EPISODE_BYTES = 120_000
+RECALL_QUERY_CHARS = 8_000
 
 
 def parse_options(value: str | list[dict]) -> list[dict]:
@@ -92,6 +105,163 @@ def prompt_item(row: dict) -> dict:
     }
 
 
+def build_question(options: list[dict]) -> str:
+    lines = ["Which of the following responses would align with the user's preferences the most?"]
+    lines.extend(f"{option['letter']}: {option['option']}" for option in options)
+    lines.append(
+        "Please respond with the letter of the option that aligns with the user's preferences the most and nothing else."
+    )
+    return "\n".join(lines)
+
+
+def _safe_ref(value: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", value).strip("-")[:72]
+    if safe == value and safe:
+        return safe
+    suffix = hashlib.sha256(value.encode()).hexdigest()[:12]
+    return f"{safe or 'item'}-{suffix}"
+
+
+def _observed_times(sessions: list[dict]) -> list[str]:
+    values = []
+    previous: datetime | None = None
+    for session in sessions:
+        try:
+            parsed = datetime.fromisoformat(session["date"].replace("Z", "+00:00"))
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"invalid HorizonBench session date: {session['date']!r}") from error
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.astimezone(timezone.utc)
+        if previous is not None and parsed <= previous:
+            parsed = previous + timedelta(microseconds=1)
+        values.append(parsed.isoformat().replace("+00:00", "Z"))
+        previous = parsed
+    return values
+
+
+def _session_body(session: dict) -> str:
+    lines = [f"Date: {session['date']}"]
+    if session["scenario"]:
+        lines.append(f"Scenario: {session['scenario']}")
+    for turn in session["turns"]:
+        label = "User" if turn["role"] == "user" else "Assistant"
+        lines.append(f"{label}: {turn['content']}")
+    body = "\n".join(lines)
+    if not body.strip() or len(body.encode()) > MAX_EPISODE_BYTES:
+        raise ValueError("HorizonBench session body is empty or exceeds retain boundary")
+    return body
+
+
+def runtime_item(row: dict) -> dict:
+    view = prompt_item(row)
+    sessions = parse_sessions(view["conversation"])
+    if not sessions:
+        raise ValueError(f"HorizonBench row {view['id']} has no conversation sessions")
+    ref = _safe_ref(view["id"])
+    times = _observed_times(sessions)
+    episodes = [
+        {
+            "source_ref": f"horizon:{ref}:session:{index}",
+            "observed_at": times[index],
+            "body": _session_body(session),
+        }
+        for index, session in enumerate(sessions)
+    ]
+    question = build_question(view["options"])
+    return {
+        "id": view["id"],
+        "user_id": view["user_id"],
+        "generator": view["generator"],
+        "context_ref": f"horizon-{ref}",
+        "episodes": episodes,
+        "question": question,
+        "recall_query": question[:RECALL_QUERY_CHARS],
+        "options": view["options"],
+    }
+
+
+def validate_evidence_rows(rows: list[dict], expected_ids: list[str], arm: str) -> None:
+    ids = [row.get("id") for row in rows]
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"HorizonBench {arm} evidence has a duplicate id")
+    if set(ids) != set(expected_ids) or len(ids) != len(expected_ids):
+        raise ValueError(f"HorizonBench {arm} evidence does not match expected IDs")
+    for row in rows:
+        if row.get("arm") != arm:
+            raise ValueError(f"HorizonBench evidence row has wrong arm: {row.get('arm')!r}")
+        if row.get("degraded") is not False:
+            raise ValueError(f"HorizonBench {arm} evidence is degraded for {row.get('id')}")
+        evidence = row.get("evidence")
+        if not isinstance(evidence, list) or not evidence:
+            raise ValueError(f"HorizonBench {arm} has empty evidence for {row.get('id')}")
+
+
+def retain_runtime_items(client, items: list[dict]) -> tuple[dict[str, dict], int]:
+    bound = {}
+    retained = 0
+    for item in items:
+        context = client.bind_context(
+            item["context_ref"],
+            subject_ref=item["context_ref"],
+            actor_ref="horizonbench-runner",
+            scope_ref=item["context_ref"],
+            agent_node_ref="horizonbench-runner",
+        )
+        bound[item["id"]] = context
+        for episode in item["episodes"]:
+            payload = gr.episode_retain_payload(
+                context,
+                source_ref=episode["source_ref"],
+                observed_at=episode["observed_at"],
+                source_kind="user",
+                body=episode["body"],
+            )
+            client.post("/v1/episodes", payload)
+            retained += 1
+    return bound, retained
+
+
+def recall_runtime_items(
+    client,
+    items: list[dict],
+    bound: dict[str, dict],
+    arm: str,
+    k: int,
+    budget_tokens: int,
+) -> list[dict]:
+    mode = "deep" if arm == "deep" else "fast"
+    rows = []
+    for item in items:
+        started = time.monotonic()
+        response = client.post(
+            "/v1/recall",
+            {
+                **bound[item["id"]],
+                "query": item["recall_query"],
+                "limit": k,
+                "budget_tokens": budget_tokens,
+                "mode": mode,
+            },
+        )
+        rows.append(
+            {
+                "id": item["id"],
+                "user_id": item["user_id"],
+                "generator": item["generator"],
+                "arm": arm,
+                "question": item["question"],
+                "options": item["options"],
+                "evidence": response.get("items", []),
+                "degraded": bool(response.get("degraded", False)),
+                "trace_id": response.get("trace_id"),
+                "deep": response.get("deep"),
+                "latency_ms": round((time.monotonic() - started) * 1000, 3),
+            }
+        )
+    return rows
+
+
 def validate_sample_rows(rows: list[dict]) -> dict:
     if len(rows) != 10:
         raise ValueError(f"HorizonBench sample must contain exactly 10 rows, got {len(rows)}")
@@ -131,6 +301,25 @@ def atomic_write(path: Path, content: bytes) -> None:
         handle.write(content)
         temporary = Path(handle.name)
     os.replace(temporary, path)
+
+
+def atomic_write_json(path: Path, value: dict) -> None:
+    atomic_write(path, json.dumps(value, indent=2, sort_keys=True).encode() + b"\n")
+
+
+def load_locked_sample(source: Path, lock_path: Path) -> tuple[list[dict], dict]:
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    raw = source.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != lock.get("jsonl_sha256"):
+        raise ValueError("HorizonBench sample bytes do not match the lock")
+    validate_source_revision(lock.get("dataset_revision"))
+    rows = [json.loads(line) for line in raw.split(b"\n") if line.strip()]
+    census = validate_sample_rows(rows)
+    if census["expected_ids"] != lock.get("expected_ids"):
+        raise ValueError("HorizonBench sample IDs do not match the lock")
+    if census["expected_user_ids"] != lock.get("expected_user_ids"):
+        raise ValueError("HorizonBench sample users do not match the lock")
+    return rows, lock
 
 
 def validate_source_revision(actual: str) -> None:
@@ -186,12 +375,111 @@ def fetch_sample(output: Path) -> dict:
     }
 
 
+def build_fast_evidence(args) -> dict:
+    source = args.source.expanduser().resolve()
+    rows, lock = load_locked_sample(source, args.lock.resolve())
+    items = [runtime_item(row) for row in rows]
+    gr.reexec_through_scratch_db(args.database_url)
+    database_url = os.environ["DATABASE_URL"]
+    os.environ["MEMPHANT_FACT_EXTRACTION"] = "0"
+    os.environ["MEMPHANT_DEEP"] = "off"
+    tenant_id, api_key = gr.provision_tenant(
+        args.cli_bin, database_url, name_prefix="horizon-sample"
+    )
+    server = gr.Server(
+        args.server_bin,
+        database_url,
+        args.port,
+        log_path=args.out.parent / "server-fast.log",
+    )
+    started = time.monotonic()
+    try:
+        server.start()
+        client = gr.ApiClient(args.port, api_key, tenant_id)
+        bound, retained = retain_runtime_items(client, items)
+        compiled = gr.drain_worker(args.worker_bin, database_url)
+        evidence = recall_runtime_items(
+            client, items, bound, "fast", args.k, args.budget_tokens
+        )
+    finally:
+        server.stop()
+    validate_evidence_rows(evidence, lock["expected_ids"], "fast")
+    evidence_raw = canonical_jsonl_bytes(evidence)
+    atomic_write(args.out, evidence_raw)
+    report = {
+        "schema_version": 1,
+        "status": "passed",
+        "decisional": False,
+        "claim": "The pinned ten-row HorizonBench sample completed the gold-blind Fast construction gate.",
+        "source": {
+            "dataset": DATASET_ID,
+            "dataset_revision": DATASET_REVISION,
+            "jsonl_sha256": lock["jsonl_sha256"],
+            "expected_ids_sha256": hashlib.sha256(
+                json.dumps(lock["expected_ids"], separators=(",", ":")).encode()
+            ).hexdigest(),
+        },
+        "runtime": {
+            "arm": "fast",
+            "items": len(items),
+            "sessions_retained": retained,
+            "jobs_compiled": compiled,
+            "nonempty_evidence_rows": sum(bool(row["evidence"]) for row in evidence),
+            "degraded_rows": sum(bool(row["degraded"]) for row in evidence),
+            "k": args.k,
+            "budget_tokens": args.budget_tokens,
+            "latency_ms": [row["latency_ms"] for row in evidence],
+        },
+        "gold_quarantine": {
+            "runtime_fields": list(PROMPT_FIELDS),
+            "scoring_only_fields": list(SCORING_ONLY_FIELDS),
+            "mental_state_graph_acquired": False,
+        },
+        "evidence_jsonl_sha256": hashlib.sha256(evidence_raw).hexdigest(),
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "lineage": {
+            "repository": gr.repository_identity(REPO_ROOT),
+            "migrations": gr.migration_identity(REPO_ROOT),
+            "server_sha256": gr.sha256_file(Path(args.server_bin)),
+            "worker_sha256": gr.sha256_file(Path(args.worker_bin)),
+            "cli_sha256": gr.sha256_file(Path(args.cli_bin)),
+        },
+    }
+    atomic_write_json(args.report_out, report)
+    return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     fetch = subparsers.add_parser("fetch-sample")
     fetch.add_argument("--out", required=True, type=Path)
     fetch.add_argument("--lock-out", type=Path)
+    evidence = subparsers.add_parser("build-fast-evidence")
+    evidence.add_argument("--source", required=True, type=Path)
+    evidence.add_argument(
+        "--lock",
+        default=REPO_ROOT / "benchmarks/manifests/horizonbench.sample.v1.json",
+        type=Path,
+    )
+    evidence.add_argument("--out", required=True, type=Path)
+    evidence.add_argument("--report-out", required=True, type=Path)
+    evidence.add_argument("--k", type=int, default=20)
+    evidence.add_argument("--budget-tokens", type=int, default=16384)
+    evidence.add_argument("--port", type=int, default=39483)
+    evidence.add_argument(
+        "--database-url",
+        default="postgres://memphant:memphant@localhost:5432/memphant",
+    )
+    evidence.add_argument(
+        "--server-bin", default=str(REPO_ROOT / "target/release/memphant-server")
+    )
+    evidence.add_argument(
+        "--worker-bin", default=str(REPO_ROOT / "target/release/memphant-worker")
+    )
+    evidence.add_argument(
+        "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
+    )
     args = parser.parse_args()
     if args.command == "fetch-sample":
         lock = fetch_sample(args.out)
@@ -200,6 +488,9 @@ def main() -> int:
             atomic_write(args.lock_out, encoded)
         else:
             print(encoded.decode(), end="")
+    elif args.command == "build-fast-evidence":
+        report = build_fast_evidence(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
 
