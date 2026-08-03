@@ -1338,8 +1338,6 @@ class ReaderCli:
                         "native_finish_reason": native,
                         "usage": data.get("usage"),
                     }
-                    self.provider_attempt_log.append(error_payload)
-                    self._provider_attempt_event("error", error_payload)
                     if refused:
                         # An upstream refusal is deterministic: the same prompt
                         # refuses again. Retrying it three more times buys
@@ -1349,10 +1347,19 @@ class ReaderCli:
                         # its own exception rather than folded into the generic
                         # error class where it would be counted as an instrument
                         # failure the arm did not have.
+                        metadata["refusal"] = {
+                            "finish_reason": finish,
+                            "native_finish_reason": native,
+                        }
+                        self.provider_attempt_log.append({"response": metadata})
+                        self._provider_attempt_event("result", {"response": metadata})
+                        self.last_call_metadata = metadata
                         raise ProviderRefusal(
                             f"provider refused to answer "
                             f"(finish_reason={finish}, native={native})"
                         )
+                    self.provider_attempt_log.append(error_payload)
+                    self._provider_attempt_event("error", error_payload)
                     continue
                 # `{}` satisfies "not empty" but violates every schema we send
                 # under strict: true. Observed live on this reader. Caught here

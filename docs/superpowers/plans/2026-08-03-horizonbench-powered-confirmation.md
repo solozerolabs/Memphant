@@ -11,6 +11,11 @@ Its first response then exposed a separate 256-token output-cap failure after
 one $1.3563 settled call; an interrupted second attempt retains a $10.252875
 unsettled upper bound. The final authorization raises only output headroom to
 1,024 and stops immediately on any parse failure.
+That authorization exposed one last shared-boundary bug after 52 valid rows:
+a content-filter refusal was treated as an unpriced instrument error. Those
+partial rows remain unscored. The final runner records refusals as priced-at-$0
+terminal abstentions, binds `run_reader.py` into authorization lineage, and
+starts from a clean authorization.
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision

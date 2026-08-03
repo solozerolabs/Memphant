@@ -672,6 +672,33 @@ def test_confirmation_cost_preflight_requires_cache_savings_and_usage_proof() ->
         )
 
 
+def test_confirmation_counts_provider_refusal_as_completed_abstention() -> None:
+    module = load_module()
+    metadata = {
+        "parse_status": "provider_response_validated",
+        "requested_model": module.CONFIRMATION_READER_MODEL,
+        "provider": module.READER_PROVIDER,
+        "usage": {"cost": 0},
+        "refusal": {
+            "finish_reason": "content_filter",
+            "native_finish_reason": "refusal",
+        },
+    }
+
+    row = module.confirmation_refusal_terminal("item", "full_context", metadata)
+
+    assert row == {
+        "id": "item",
+        "arm": "full_context",
+        "status": "completed",
+        "answer": None,
+        "abstain": True,
+        "notes": "provider_refusal",
+        "provider_refusal": True,
+        "provider": metadata,
+    }
+
+
 def test_selective_routing_uses_fast_answer_or_requires_completed_deep() -> None:
     module = load_module()
 

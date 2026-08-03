@@ -2009,16 +2009,34 @@ def validate_confirmation_cache_usage(metadata: dict, cache_role: str) -> None:
 def _validate_reader_metadata(
     metadata: dict | None, *, expected_model: str = READER_MODEL
 ) -> None:
+    cost = (metadata.get("usage") or {}).get("cost") if isinstance(metadata, dict) else None
     if (
         not isinstance(metadata, dict)
         or metadata.get("parse_status") != "provider_response_validated"
         or metadata.get("requested_model") != expected_model
         or str(metadata.get("provider", "")).lower() != READER_PROVIDER
         or not isinstance(metadata.get("usage"), dict)
-        or not isinstance(metadata["usage"].get("cost"), (int, float))
-        or metadata["usage"]["cost"] <= 0
+        or not isinstance(cost, (int, float))
+        or cost < 0
+        or (cost == 0 and not isinstance(metadata.get("refusal"), dict))
     ):
         raise RuntimeError("reader provider/model/price provenance mismatch")
+
+
+def confirmation_refusal_terminal(item_id: str, arm: str, metadata: dict) -> dict:
+    _validate_reader_metadata(metadata, expected_model=CONFIRMATION_READER_MODEL)
+    if not isinstance(metadata.get("refusal"), dict):
+        raise RuntimeError("provider refusal metadata is missing")
+    return {
+        "id": item_id,
+        "arm": arm,
+        "status": "completed",
+        "answer": None,
+        "abstain": True,
+        "notes": "provider_refusal",
+        "provider_refusal": True,
+        "provider": metadata,
+    }
 
 
 def reader_terminal(
@@ -2091,6 +2109,7 @@ def _expected_confirmation_frozen(args) -> dict:
         "fast_evidence_sha256": gr.sha256_file(args.fast_evidence.resolve()),
         "fast_gate_sha256": gr.sha256_file(args.fast_gate.resolve()),
         "runner_sha256": gr.sha256_file(Path(__file__)),
+        "run_reader_sha256": gr.sha256_file(SCRIPTS_DIR / "run_reader.py"),
         "provider_attempts_sha256": gr.sha256_file(
             SCRIPTS_DIR / "provider_attempts.py"
         ),
@@ -2220,21 +2239,26 @@ def run_paid_confirmation(args) -> dict:
             if key in by_key:
                 continue
             try:
-                row = reader_terminal(
-                    cli,
-                    request["id"],
-                    request["arm"],
-                    request["prompt"],
-                    cache_prefix=request["cache_prefix"],
-                    expected_model=CONFIRMATION_READER_MODEL,
-                )
+                try:
+                    row = reader_terminal(
+                        cli,
+                        request["id"],
+                        request["arm"],
+                        request["prompt"],
+                        cache_prefix=request["cache_prefix"],
+                        expected_model=CONFIRMATION_READER_MODEL,
+                    )
+                except ProviderRefusal:
+                    row = confirmation_refusal_terminal(
+                        request["id"], request["arm"], cli.last_call_metadata or {}
+                    )
                 if row["status"] != "completed":
                     raise RuntimeError(row.get("error") or "reader row did not complete")
                 if request["cache_role"] is not None:
                     validate_confirmation_cache_usage(
                         row.get("provider") or {}, request["cache_role"]
                     )
-            except (CallBudgetExceeded, ProviderRefusal, RuntimeError) as error:
+            except (CallBudgetExceeded, RuntimeError) as error:
                 _append_terminal(
                     terminal_rows,
                     raw_output,

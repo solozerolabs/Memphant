@@ -131,7 +131,7 @@ def _cost_nanos(response: Any) -> int | None:
         decimal = Decimal(str(value))
     except InvalidOperation:
         return None
-    if not decimal.is_finite() or decimal <= 0:
+    if not decimal.is_finite() or decimal < 0:
         return None
     return int(
         (decimal * Decimal(1_000_000_000)).to_integral_value(

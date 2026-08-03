@@ -48,6 +48,7 @@
     "docs/build-log/artifacts/horizonbench-confirmation/context-limit-failure.json",
     "docs/build-log/artifacts/horizonbench-confirmation/selection.json",
     "docs/build-log/artifacts/horizonbench-confirmation-v2/output-limit-failure.json",
+    "docs/build-log/artifacts/horizonbench-confirmation-v3/refusal-boundary-failure.json",
     "docs/build-log/artifacts/horizonbench-pilot/fast-gate.json",
     "docs/build-log/artifacts/horizonbench-pilot/result.json",
     "docs/build-log/artifacts/null-review-ledger.json",

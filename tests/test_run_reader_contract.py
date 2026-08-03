@@ -1550,6 +1550,67 @@ def test_openrouter_call_captures_and_caches_served_model_provider_usage_and_cos
     assert cached.provider_attempts == 0
 
 
+def test_openrouter_refusal_is_a_priced_terminal_model_result(tmp_path, monkeypatch) -> None:
+    reader = _load_run_reader()
+    attempts = _load_provider_attempts()
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
+    payload = {
+        "id": "gen-refusal",
+        "model": "reader",
+        "provider": "Anthropic",
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 1,
+            "total_tokens": 11,
+            "cost": 0,
+        },
+        "choices": [
+            {
+                "finish_reason": "content_filter",
+                "native_finish_reason": "refusal",
+                "message": {"content": ""},
+            }
+        ],
+    }
+
+    def open_response(request, timeout=None):
+        if request.full_url == reader.OPENROUTER_URL:
+            return _FakeHttpResponse(payload)
+        return _FakeHttpResponse(
+            {
+                "data": {
+                    "model": "reader-snapshot",
+                    "provider_name": "Anthropic",
+                    "total_cost": 0,
+                }
+            }
+        )
+
+    monkeypatch.setattr(reader.urllib.request, "urlopen", open_response)
+    cli = reader.ReaderCli(
+        "openrouter",
+        "reader",
+        "reader",
+        tmp_path / "cache",
+        1,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("5"), "completion": Decimal("25")},
+    )
+    ledger = _open_test_ledger(attempts, tmp_path / "attempts.jsonl")
+    cli.set_provider_attempt_ledger(ledger)
+
+    with pytest.raises(reader.ProviderRefusal):
+        cli.call("reader", "sys", "prompt")
+
+    snapshot = ledger.snapshot()
+    assert snapshot["priced_provider_attempts"] == 1
+    assert snapshot["attempts"][0]["status"] == "result"
+    assert cli.last_call_metadata["refusal"] == {
+        "finish_reason": "content_filter",
+        "native_finish_reason": "refusal",
+    }
+
+
 def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
     tmp_path, monkeypatch
 ) -> None:

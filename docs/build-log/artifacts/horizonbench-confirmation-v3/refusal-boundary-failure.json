@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "status": "failed_closed",
+  "claim": "The third authorization stopped before scoring after 52 valid rows because a deterministic Anthropic content-filter refusal was incorrectly classified as an unpriced instrument error.",
+  "failure": {
+    "completed_terminal_rows": 52,
+    "scored_rows": 0,
+    "failing_row": 53,
+    "arm": "full_context",
+    "cache_role": "write",
+    "finish_reason": "content_filter",
+    "native_finish_reason": "refusal",
+    "provider_reported_cost_usd": "0"
+  },
+  "accounting": {
+    "provider_attempts": 53,
+    "priced_provider_attempts": 52,
+    "reported_cost_usd": "41.27204175",
+    "unsettled_cost_usd_upper_bound": "2.77913",
+    "total_liability_usd_upper_bound": "44.05117175"
+  },
+  "replacement_boundary": "Record a provider refusal as a priced-at-zero terminal model result and a completed abstention, bind run_reader.py into authorization lineage, and start a clean authorization. Do not score or reuse the partial rows.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The third authorization is a provider-refusal classification failure and its partial rows are not benchmark evidence.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "local sentence-unit embedder",
+      "scorer": "not reached",
+      "k": 20,
+      "budget": 16384,
+      "flags": [
+        "full_context",
+        "reader=anthropic/claude-opus-4.6",
+        "max_output_tokens=1024",
+        "anthropic_explicit_prompt_cache"
+      ]
+    },
+    "corpus": {
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1",
+      "n_items": 0
+    },
+    "notes": "Instrument failure only; all 52 partial rows remain score-quarantined."
+  },
+  "lineage": {
+    "git_head": "b79587be7e3dc0c27f436fdb18d106785d94da39",
+    "authorization_sha256": "7d8f39be275f5e4837c6fd954d0959ed3a70daa350ee2d1d8b23f11fd2e8b50f",
+    "authorization_scope_sha256": "d7dc7aaacaefea083a4c872f603f54b56ac94cfc130c52d8da042cab1d8c57ed",
+    "reader_attempts_sha256": "f1123360e2c2c87e45e39f74ba47820283ba5e6b6b5cbbbaa8602b727a717a7d",
+    "paid_rows_sha256": "34562b5f9c19395bb5c2648b270118fba6120cdf1f8a6a3f6918bed45ba7c099"
+  }
+}
