@@ -19,6 +19,7 @@ Stdlib only. No model call, no network, $0.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -47,10 +48,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--arm", action="append", dest="arm_names",
+        help="live treatment arm name (repeatable); defaults to the original S1 arms",
+    )
     args = parser.parse_args()
 
     arms, failures = {}, []
-    for name, expect in EXPECT_EDGES.items():
+    expected_edges = (
+        {name: True for name in args.arm_names} if args.arm_names else EXPECT_EDGES
+    )
+    for name, expect in expected_edges.items():
         path = args.dir / f"arm-{name}.json"
         if not path.exists() or path.stat().st_size == 0:
             failures.append(f"{name}: artifact missing or empty ({path})")
@@ -59,6 +67,9 @@ def main() -> int:
         diagnostics = report.get("diagnostics") or {}
         extractor = diagnostics.get("structured_extractor") or {}
         ledger = extractor.get("ledger") or []
+        rows = report.get("rows") or []
+        probe_bank = [(row.get("probe_id"), row.get("group_id")) for row in rows]
+        missing_neither = sum("neither_returned" not in row for row in rows)
         edges = scalar(diagnostics, "supersedes_edges")
         remainders = int(diagnostics.get("remainders_recalled", -1))
         compiled = diagnostics.get("compilation_verified") or {}
@@ -66,8 +77,15 @@ def main() -> int:
             "artifact": str(path),
             "lineage": report.get("lineage"),
             "corpus_sha256": (report.get("source") or {}).get("sha256"),
-            "probes": len(report.get("rows") or []),
-            "instances": len({r["group_id"] for r in report.get("rows") or []}),
+            "probes": len(rows),
+            "instances": len({r["group_id"] for r in rows}),
+            "probe_bank_sha256": hashlib.sha256(
+                json.dumps(sorted(probe_bank), separators=(",", ":")).encode()
+            ).hexdigest(),
+            "neither_returned_rate": (
+                sum(bool(row.get("neither_returned")) for row in rows) / len(rows)
+                if rows and not missing_neither else None
+            ),
             "unit": extractor.get("unit"),
             "threshold": extractor.get("threshold"),
             "ablation": extractor.get("ablation"),
@@ -92,6 +110,12 @@ def main() -> int:
             "paid_model_calls": report.get("paid_model_calls"),
         }
         row = arms[name]
+        if len(set(probe_bank)) != len(probe_bank):
+            failures.append(f"{name}: duplicate probe identity -- pairing is ambiguous")
+        if missing_neither:
+            failures.append(
+                f"{name}: {missing_neither} probes missing neither_returned"
+            )
         if expect and edges <= 0:
             failures.append(
                 f"{name}: INERT -- supersedes_edges = {edges}. The arm never "
@@ -133,6 +157,7 @@ def main() -> int:
         "corpus_sha256": distinct(lambda a: a["corpus_sha256"]),
         "probes": distinct(lambda a: a["probes"]),
         "instances": distinct(lambda a: a["instances"]),
+        "probe_bank_sha256": distinct(lambda a: a["probe_bank_sha256"]),
     }
     for key, values in checks.items():
         if len(values) != 1:

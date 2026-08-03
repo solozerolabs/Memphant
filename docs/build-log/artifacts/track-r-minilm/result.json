@@ -1,0 +1,158 @@
+{
+  "schema": "memphant.eval.track-r-minilm-screen.v1",
+  "generated_at": "2026-08-02T17:05:59.881266+00:00",
+  "stage": "gate_common.provenance_hit@10 over top-10 bodies",
+  "n": 180,
+  "pool_depth": 64,
+  "k": 10,
+  "arms": {
+    "minilm": {
+      "hits_at_10": 99,
+      "rate": 0.55
+    },
+    "shipped_fuser": {
+      "hits_at_10": 112,
+      "rate": 0.6222222222222222
+    },
+    "in_pool_ceiling": {
+      "hits_at_10": 164,
+      "rate": 0.9111111111111111
+    }
+  },
+  "paired_vs_shipped_fuser": {
+    "n": 180,
+    "b": 15,
+    "c": 28,
+    "n_d": 43,
+    "delta": -0.07222222222222222,
+    "psi_observed": 0.2388888888888889,
+    "mcnemar_exact_p": 0.0659940344557981,
+    "mde_at_80": 0.10477474999173253
+  },
+  "ceiling": {
+    "recovered_fraction": -0.25,
+    "remaining_hits": 65
+  },
+  "latency_ms": {
+    "p50": 1358.0151250000001,
+    "p95": 1520.242041,
+    "max": 1667.264458,
+    "questions_timed": 171
+  },
+  "containment": {
+    "pool_containment_violations": 0,
+    "raw_event_access": false,
+    "gold_labels_in_model_input": false,
+    "score_rows": 171,
+    "empty_pool_rows": 9,
+    "docs_scored": 10944
+  },
+  "paid_api_spend_usd": 0,
+  "lineage": {
+    "git_head": "f68bdae5b644e30aa01337075a741741fd056091",
+    "git_branch": "main",
+    "git_dirty": true,
+    "git_dirty_paths": [
+      "L.txt",
+      "benchmarks/manifests/evidence_contract_registry.json",
+      "docs/build-log/artifacts/evidence-contract-retrofit.json",
+      "docs/build-log/artifacts/track-r-minilm/",
+      "docs/superpowers/specs/memphant/STATUS.md",
+      "rw.csv",
+      "rwl.txt",
+      "scripts/gate_run_memphant.py",
+      "scripts/preference_lane_analysis.py",
+      "scripts/run_s1b_tau_live.sh",
+      "scripts/s1_liveness_gate.py",
+      "scripts/track_r_minilm_screen.py",
+      "tests/test_gate_r15_cross_rerank.py",
+      "tests/test_s1_liveness_gate.py",
+      "tests/test_track_r_minilm_screen.py"
+    ],
+    "input_sha256": {
+      "pool_dump": "bdfa1fa00d6c990766f6f18bc896f5f23813178506b6c581f9a01db624a26d49",
+      "golden": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+      "preregistration": "e44e5f42a0ea99bd7a8c0ebdb038c274054b771d49f24ad3483b64d04a6a5212",
+      "candidates": "80896b761bf0a7b413d31df4d979584df6103bfe4ebfe863827cf600df4ed40b",
+      "scores": "1905929f32e055dd4fcfe6cebdfedbc0ce164504a7ed90a28dd958317b3c941b",
+      "model_onnx": "e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe",
+      "model_tokenizer": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+      "memphant_eval_binary": "fc8bb8bb00ce296eb099bb29dc2cc62984aa7a97251b907b429113d310ac2078",
+      "runner": "988835ff8a3b42fe193f15323cbaa1d4574bcf2d9ebfbbd719b530c6fc342735",
+      "s8_contract": "bf9d27625a3bdd4775c0939364b37d0ac8278481781f18bb15fd4c4a57e9b2a4",
+      "production_seam": "457094bf9ac87803b4bf9702ff3e77ef8b60b6d643477a58ae62fa73d929888e"
+    },
+    "preregistration": "docs/build-log/2026-08-01-hybrid-retrieve-then-rank.md#part-a"
+  },
+  "decision": {
+    "accuracy_rule_met": false,
+    "latency_rule_met": false,
+    "instrument_promotion_eligible": false,
+    "default_change_eligible": false,
+    "default_changed": false,
+    "reason": "Track R paraphrase is diagnostic-only: its preregistered leakage bar failed and its licence is not pinned by an actual licence artifact.",
+    "preregistration_sha256": "e44e5f42a0ea99bd7a8c0ebdb038c274054b771d49f24ad3483b64d04a6a5212"
+  },
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "On the frozen S8 Track R top-64 pool, local MiniLM scores 99/180 at stage-equalized hit@10 versus the shipped fused order's 112/180 and the in-pool ceiling's 164/180; paid API spend is $0.",
+    "power": {
+      "test": "two-sided exact (conditional binomial) McNemar",
+      "n": 180,
+      "b": 15,
+      "c": 28,
+      "n_d": 43,
+      "psi_observed": 0.2388888888888889,
+      "mde_at_80": 0.10477474999173253,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "source": "docs/build-log/artifacts/track-r-minilm/result.json"
+    },
+    "harness": {
+      "embed_model": "small (bge-small-en-v1.5), inherited in the frozen S8 pool",
+      "scorer": "local Xenova ms-marco-MiniLM-L-6-v2 int8 through memphant_runtime::build_cross_reranker",
+      "k": 10,
+      "budget": 8192,
+      "flags": [
+        "pool depth 64",
+        "granularity=doc",
+        "max_length=512",
+        "batch_size=256"
+      ],
+      "command": "python3 scripts/track_r_minilm_screen.py run"
+    },
+    "corpus": {
+      "sha256": "c008142e992179e8caf69822961330ccf285ba5741b9de79522402ea914c9669",
+      "snapshot_id": "S8 pool dump bdfa1fa00d6c over track_r_paraphrase_golden@4aed8e99dbf1",
+      "n_items": 180
+    },
+    "leakage": {
+      "unit_definition": "one content event of the attempt, 4000-char clip",
+      "absolute_target_coverage": 0.1346,
+      "floor": 0.0667,
+      "floor_kind": "exhaustive",
+      "concentration": 2.018,
+      "provenance_class": "machine_generated"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "The production BYO seam produced 171 score rows and 10944 finite candidate scores from model sha256 e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe; every score id matched its handed top-64 pool.",
+    "probe_kind": "lever",
+    "attribution": {
+      "method": "unverified",
+      "note": "No bisect; this is an offline same-pool ordering contrast, not a commit attribution."
+    },
+    "instrument_verification": {
+      "rows_counted": 180,
+      "fields_counted": {
+        "goldens": 180,
+        "questions_scored": 180
+      },
+      "shipped_rows_verified": true,
+      "license_id": "CC-BY-4.0",
+      "license_source": "unverified",
+      "license_evidence": "HuggingFace dataset-card assertion only",
+      "license_note": "No pinned LICENSE blob."
+    },
+    "notes": "Diagnostic only. The bank fails its own preregistered leakage bar (2.018 > 1.50), and its licence is not pinned by a licence artifact. Retrieval/reranking only; no reader, judge, or paid call. No default changes from this result."
+  }
+}

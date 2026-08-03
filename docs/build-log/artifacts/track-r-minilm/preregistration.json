@@ -1,0 +1,23 @@
+{
+  "schema": "memphant.eval.track-r-minilm-preregistration.v1",
+  "created_at": "2026-08-02T16:50:43Z",
+  "status": "frozen before MiniLM scores were produced",
+  "inputs": {
+    "pool_dump_sha256": "bdfa1fa00d6c990766f6f18bc896f5f23813178506b6c581f9a01db624a26d49",
+    "golden_sha256": "4aed8e99dbf13d942d0e1d79b637ca5ee37b3dc30707a65ea3e9ffcd22bf4326",
+    "model_quantized_onnx_sha256": "e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe"
+  },
+  "contract": {
+    "pool_depth": 64,
+    "k": 10,
+    "granularity": "doc",
+    "max_length": 512,
+    "endpoint": "gate_common.provenance_hit@10 over top-10 bodies",
+    "stage_control": "the first ten bodies in the same S8 fused pool",
+    "expected_control_hits": 112,
+    "expected_pool_ceiling_hits": 164
+  },
+  "accuracy_rule": "MiniLM must beat the fused control by at least its observed 80%-power MDE with two-sided exact McNemar p < 0.05 and n_d >= 6",
+  "latency_rule": "local rerank latency p50 must be <= 200 ms per question",
+  "default_rule": "change no default unless the accuracy and latency rules pass, containment and lineage are complete, paid spend is zero, and the instrument is promotion-eligible"
+}

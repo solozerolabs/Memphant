@@ -16,6 +16,7 @@ Stdlib only. No model call, no network, $0.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import random
@@ -46,6 +47,24 @@ ENDPOINTS = ("appropriate_application", "misapplication", "neither_returned",
 # `secondary_descriptive` is left in place unchanged so older readers still
 # resolve.
 RETRIEVAL_ENDPOINTS = ("hit_at_1", "hit_at_k")
+
+
+def require_liveness_gate(path: Path, arm_a: Path, arm_b: Path) -> dict:
+    gate = json.loads(path.read_text())
+    if not gate.get("passed"):
+        raise SystemExit(f"liveness gate did not pass: {path}")
+    gated = {
+        Path(row["artifact"]).resolve()
+        for row in (gate.get("arms") or {}).values()
+        if row.get("artifact")
+    }
+    requested = {arm_a.resolve(), arm_b.resolve()}
+    if gated != requested:
+        raise SystemExit(
+            f"liveness gate does not bind the requested arm pair: "
+            f"gated={sorted(map(str, gated))} requested={sorted(map(str, requested))}"
+        )
+    return gate
 
 
 def load_arm(path: Path) -> tuple[str, dict[str, dict]]:
@@ -220,6 +239,13 @@ def main() -> int:
     parser.add_argument("--arm-a", required=True, type=Path, help="MemPhant report")
     parser.add_argument("--arm-b", required=True, type=Path, help="lexical report")
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--prereg", default="docs/build-log/2026-08-01-preference-lane-prereg.md",
+    )
+    parser.add_argument(
+        "--liveness-gate", type=Path,
+        help="passed same-lineage mechanism gate binding exactly these two arms",
+    )
     parser.add_argument("--claim", default=None,
                         help="the one sentence the artifact is cited for")
     parser.add_argument("--notes", default=None,
@@ -228,6 +254,11 @@ def main() -> int:
                         help="set when the arms are not comparable (e.g. an "
                              "oracle-keyed mechanism arm)")
     args = parser.parse_args()
+
+    gate = (
+        require_liveness_gate(args.liveness_gate, args.arm_a, args.arm_b)
+        if args.liveness_gate else None
+    )
 
     name_a, rows_a = load_arm(args.arm_a)
     name_b, rows_b = load_arm(args.arm_b)
@@ -239,7 +270,7 @@ def main() -> int:
         )
 
     report = {
-        "prereg": "docs/build-log/2026-08-01-preference-lane-prereg.md",
+        "prereg": args.prereg,
         "arm_a": {"name": name_a, "report": str(args.arm_a)},
         "arm_b": {"name": name_b, "report": str(args.arm_b)},
         "probes": len(shared),
@@ -261,6 +292,12 @@ def main() -> int:
         },
         "paid_model_calls": 0,
     }
+    if gate is not None:
+        report["liveness_gate"] = {
+            "path": str(args.liveness_gate),
+            "sha256": hashlib.sha256(args.liveness_gate.read_bytes()).hexdigest(),
+            "passed": True,
+        }
     report_a = json.loads(args.arm_a.read_text())
     report_a["_path"] = str(args.arm_a)
     report["evidence_contract"] = evidence_contract(

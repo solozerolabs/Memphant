@@ -1,0 +1,94 @@
+{
+  "arms": {
+    "t53-sentence": {
+      "ablation": "none",
+      "artifact": "/Users/sidsharma/Memphant/docs/build-log/artifacts/2026-08-02-s1b-tau-live/arm-t53-sentence.json",
+      "candidate_pairs_seen": 7890,
+      "compilation_verified": {
+        "episodes": 0,
+        "episodes_with_units": 0,
+        "expected_episodes": 0,
+        "failed_jobs": 0,
+        "memory_units": 8807,
+        "pending_jobs": 0
+      },
+      "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "fire_rate": 0.0,
+      "instances": 257,
+      "lineage": {
+        "git_branch": "main",
+        "git_dirty": true,
+        "git_head": "840b907355ae22f794908a81351848e04651af7b",
+        "server_bin_sha256": "fec11a1257bc3a1a53ae72f8189e419ad27889833f5fa22cc76feb65563f5860",
+        "worker_bin_sha256": "7c27b28a45df02e4d5b800a52891091e55dd4594314183966634e55f4f03d188",
+        "worktree": "/Users/sidsharma/Memphant"
+      },
+      "neither_returned_rate": 0.00940733772342427,
+      "open_subject_key_range_overlaps": 0,
+      "paid_model_calls": 0,
+      "probe_bank_sha256": "e909d2e79a8286cfb3192c88a19c262ae1502a471b38a20450725202a9003331",
+      "probes": 1063,
+      "realized_firing_rate": 0.08365,
+      "remainders_recalled": 0,
+      "supersede_edges_expected_positive": true,
+      "superseded_units": 660,
+      "superseded_with_open_transaction": 0,
+      "supersedes_edges": 1320,
+      "targets_proposed": 660,
+      "threshold": 0.53,
+      "unit": "sentence"
+    },
+    "u42-sentence": {
+      "ablation": "none",
+      "artifact": "/Users/sidsharma/Memphant/docs/build-log/artifacts/2026-08-02-s1b-tau-live/arm-u42-sentence.json",
+      "candidate_pairs_seen": 7890,
+      "compilation_verified": {
+        "episodes": 0,
+        "episodes_with_units": 0,
+        "expected_episodes": 0,
+        "failed_jobs": 0,
+        "memory_units": 9168,
+        "pending_jobs": 0
+      },
+      "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+      "fire_rate": 0.0,
+      "instances": 257,
+      "lineage": {
+        "git_branch": "main",
+        "git_dirty": true,
+        "git_head": "840b907355ae22f794908a81351848e04651af7b",
+        "server_bin_sha256": "fec11a1257bc3a1a53ae72f8189e419ad27889833f5fa22cc76feb65563f5860",
+        "worker_bin_sha256": "7c27b28a45df02e4d5b800a52891091e55dd4594314183966634e55f4f03d188",
+        "worktree": "/Users/sidsharma/Memphant"
+      },
+      "neither_returned_rate": 0.01599247412982126,
+      "open_subject_key_range_overlaps": 0,
+      "paid_model_calls": 0,
+      "probe_bank_sha256": "e909d2e79a8286cfb3192c88a19c262ae1502a471b38a20450725202a9003331",
+      "probes": 1063,
+      "realized_firing_rate": 0.129404,
+      "remainders_recalled": 0,
+      "supersede_edges_expected_positive": true,
+      "superseded_units": 1021,
+      "superseded_with_open_transaction": 0,
+      "supersedes_edges": 2042,
+      "targets_proposed": 1021,
+      "threshold": 0.42,
+      "unit": "sentence"
+    }
+  },
+  "failures": [],
+  "gate": "s1_mechanism_liveness",
+  "paid_model_calls": 0,
+  "passed": true,
+  "rule": "Checked before any accuracy number is read. A treatment arm with zero supersede edges is INERT and 'inert' is the whole report. remainders_recalled must be 0. Compilation is verified from the DB on the bench superuser credential.",
+  "shared": {
+    "corpus_sha256": "1edb12380ea3410c888fffa795f6ddd3251e4e634b84a7142c8386e7c2869733",
+    "git_head": "840b907355ae22f794908a81351848e04651af7b",
+    "instances": 257,
+    "probe_bank_sha256": "e909d2e79a8286cfb3192c88a19c262ae1502a471b38a20450725202a9003331",
+    "probes": 1063,
+    "server_bin_sha256": "fec11a1257bc3a1a53ae72f8189e419ad27889833f5fa22cc76feb65563f5860",
+    "worker_bin_sha256": "7c27b28a45df02e4d5b800a52891091e55dd4594314183966634e55f4f03d188"
+  }
+}

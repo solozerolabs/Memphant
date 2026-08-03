@@ -279,6 +279,8 @@ def _trace(*, failure="none"):
             "model": "BAAI/bge-reranker-base",
             "candidate_limit": 32,
             "candidate_count": 24,
+            "granularity": "contextual_chunks",
+            "docs_scored": 61,
             "max_length": 512,
             "batch_size": 8,
             "input_chars_p50": 900,
@@ -314,7 +316,7 @@ CTX = {
 }
 
 
-def test_recall_fetches_trace_and_returns_exact_reranker_facts(gr, monkeypatch):
+def test_recall_propagates_actual_rerank_docs_and_granularity(gr, monkeypatch):
     trace = _trace()
     client = _Client(
         {
@@ -330,7 +332,8 @@ def test_recall_fetches_trace_and_returns_exact_reranker_facts(gr, monkeypatch):
     bodies, trace_id, facts, post_ms, trace_read_ms, recall_e2e_ms = gr.recall(
         client, CTX, "question", 10, 8192, "deep", cross_rerank=True,
         expected_rerank_config={
-            "candidate_limit": 32, "max_length": 512, "batch_size": 8,
+            "candidate_limit": 32, "granularity": "contextual_chunks",
+            "max_length": 512, "batch_size": 8,
         },
     )
 
@@ -477,6 +480,7 @@ def test_provenance_report_aggregates_reranker_facts_and_fingerprints_config(gr)
         "provider": "fastembed",
         "model": "fastembed:bge-reranker-base",
         "candidate_limit": 32,
+        "granularity": "contextual_chunks",
         "max_length": 512,
         "batch_size": 8,
     }

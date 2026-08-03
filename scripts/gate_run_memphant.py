@@ -427,8 +427,9 @@ def _cross_rerank_facts(
         raise RuntimeError("requested config is required for a cross-rerank arm")
 
     required = {
-        "provider", "model", "candidate_limit", "candidate_count", "max_length",
-        "batch_size", "input_chars_p50", "input_chars_p95", "input_chars_max", "failure",
+        "provider", "model", "candidate_limit", "candidate_count", "granularity",
+        "docs_scored", "max_length", "batch_size", "input_chars_p50",
+        "input_chars_p95", "input_chars_max", "failure",
     }
     missing = sorted(required - facts.keys())
     if missing:
@@ -440,12 +441,24 @@ def _cross_rerank_facts(
         _non_negative_int(facts[field], field, positive=True)
     if facts["batch_size"] is not None:
         _non_negative_int(facts["batch_size"], "batch_size", positive=True)
-    for field in ("candidate_count", "input_chars_p50", "input_chars_p95", "input_chars_max"):
+    for field in (
+        "candidate_count", "docs_scored", "input_chars_p50", "input_chars_p95",
+        "input_chars_max",
+    ):
         _non_negative_int(facts[field], field)
     if facts["candidate_count"] > facts["candidate_limit"]:
         raise RuntimeError("trace cross_rerank candidate_count exceeds candidate_limit")
     if facts["candidate_count"] == 0:
         raise RuntimeError("trace cross_rerank candidate_count must be positive")
+    if facts["granularity"] not in ("unit_body", "contextual_chunks"):
+        raise RuntimeError("trace cross_rerank.granularity is invalid")
+    if facts["docs_scored"] < facts["candidate_count"]:
+        raise RuntimeError("trace cross_rerank docs_scored is below candidate_count")
+    if (
+        facts["granularity"] == "unit_body"
+        and facts["docs_scored"] != facts["candidate_count"]
+    ):
+        raise RuntimeError("trace unit_body rerank must score one doc per candidate")
     if any(facts[field] != expected_config.get(field) for field in expected_config):
         raise RuntimeError("trace cross_rerank facts do not match requested config")
     if not (
@@ -632,7 +645,10 @@ def build_provenance_report(
     r10 = sum(r["hit_at_10"] for r in provenance_rows) / n if n else 0.0
     reranker_config = None
     if cross_rerank and provenance_rows:
-        static_fields = ("provider", "model", "candidate_limit", "max_length", "batch_size")
+        static_fields = (
+            "provider", "model", "candidate_limit", "granularity", "max_length",
+            "batch_size",
+        )
         configs = {
             tuple(row.get(field) for field in static_fields) for row in provenance_rows
         }
@@ -1084,6 +1100,9 @@ def main() -> int:
                 "max_length": args.rerank_max_length,
                 "batch_size": args.rerank_batch_size,
             }
+        requested_rerank_config["granularity"] = (
+            "contextual_chunks" if args.rerank_granularity == "chunk" else "unit_body"
+        )
         negative_summary = None
         if negative_cases:
             negative_evidence = []
