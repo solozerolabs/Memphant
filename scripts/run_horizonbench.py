@@ -14,6 +14,7 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -22,6 +23,19 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import gate_runtime as gr  # noqa: E402
+from provider_attempts import (  # noqa: E402
+    CAMPAIGN_HARD_CEILING_NANOS,
+    CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
+    open_campaign_ledger,
+    provider_attempt_ledger_is_complete,
+)
+from run_reader import (  # noqa: E402
+    CallBudgetExceeded,
+    ProviderRefusal,
+    ReaderCli,
+    parse_reader_output,
+    restore_spend_from_attempts,
+)
 
 
 DATASET_ID = "stellalisy/HorizonBench"
@@ -39,6 +53,151 @@ PROMPT_FIELDS = ("id", "user_id", "generator", "conversation", "options")
 MAX_EPISODE_BYTES = 120_000
 RECALL_QUERY_CHARS = 8_000
 ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
+PAID_ARMS = ("full_context", "fast", "selective_deep")
+READER_MODEL = "anthropic/claude-opus-4.5"
+READER_PROVIDER = "anthropic"
+READER_MAX_SPEND_USD = Decimal("22")
+DEEP_MODEL = "openai/gpt-5.6-luna-20260709"
+DEEP_PROVIDER = "azure"
+DEEP_MAX_SPEND_USD = Decimal("3")
+COMBINED_MAX_SPEND_USD = Decimal("25")
+READER_SYSTEM_PROMPT = (
+    "Choose the response A-E that best matches the user's current preference using "
+    "only the supplied evidence. If the evidence is insufficient, set abstain=true "
+    "and answer=null. Otherwise set abstain=false and answer to exactly one uppercase "
+    "letter A-E. Return the required JSON object; notes must be brief."
+)
+
+
+def sha256_json(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def authorization_packet(
+    frozen_inputs: dict, *, authorized_by: str, authorized_at: str
+) -> dict:
+    packet = {
+        "schema_version": 1,
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        "frozen_inputs": frozen_inputs,
+        "models": {
+            "reader": READER_MODEL,
+            "reader_provider": READER_PROVIDER,
+            "reader_prompt_sha256": hashlib.sha256(
+                READER_SYSTEM_PROMPT.encode()
+            ).hexdigest(),
+            "temperature": 0,
+            "max_output_tokens": 256,
+            "reader_price_usd_per_million": {
+                "prompt": "5",
+                "completion": "25",
+            },
+            "deep": DEEP_MODEL,
+            "deep_provider": DEEP_PROVIDER,
+            "deep_price_usd_per_million": {
+                "prompt": "1.1",
+                "completion": "6.6",
+            },
+        },
+        "hard_limits": {
+            "reader": {
+                "max_logical_calls": 30,
+                "max_provider_attempts": 60,
+                "max_spend_usd": str(READER_MAX_SPEND_USD),
+            },
+            "deep": {
+                "max_calls": 10,
+                "max_spend_per_call_usd": "0.30",
+                "max_spend_usd": str(DEEP_MAX_SPEND_USD),
+            },
+            "combined_max_spend_usd": str(COMBINED_MAX_SPEND_USD),
+        },
+        "execution": {
+            "journal_path": "reader-attempts.jsonl",
+            "cache_dir": "reader-cache",
+            "raw_rows": "paid-rows.jsonl",
+            "deep_cache": "deep-evidence.jsonl",
+            "closure": "reader-closure.json",
+            "census": "paid-census.json",
+        },
+        "campaign": {
+            "journal_path": "reader-attempts.jsonl",
+            "hard_ceiling_nanos": CAMPAIGN_HARD_CEILING_NANOS,
+            "unallocated_reserve_nanos": CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
+            "opening_liability_nanos": 0,
+            "opening_reservations": [],
+        },
+        "claim_boundary": "Ten-row diagnostic only; no SOTA or default promotion.",
+    }
+    scope = {
+        key: value
+        for key, value in packet.items()
+        if key not in {"schema_version", "status", "authorization"}
+    }
+    packet["authorization"] = {
+        "authorized_by": authorized_by,
+        "authorized_at": authorized_at,
+        "authorization_scope_sha256": sha256_json(scope),
+    }
+    return packet
+
+
+def validate_pilot_authorization(packet: dict, expected_frozen: dict) -> None:
+    authorization = packet.get("authorization") if isinstance(packet, dict) else None
+    if (
+        not isinstance(authorization, dict)
+        or not isinstance(authorization.get("authorized_by"), str)
+        or not authorization["authorized_by"].strip()
+        or not isinstance(authorization.get("authorized_at"), str)
+        or not authorization["authorized_at"].strip()
+    ):
+        raise ValueError("paid authorization is missing owner approval")
+    expected = authorization_packet(
+        expected_frozen,
+        authorized_by=authorization["authorized_by"],
+        authorized_at=authorization["authorized_at"],
+    )
+    if packet != expected:
+        raise ValueError("paid authorization scope or frozen input drift")
+
+
+def selective_route(fast_row: dict) -> str:
+    if fast_row.get("status") != "completed":
+        raise ValueError("selective routing requires a completed Fast reader row")
+    if fast_row.get("abstain") is True and fast_row.get("answer") is None:
+        return "deep"
+    answer = fast_row.get("answer")
+    if fast_row.get("abstain") is False and answer in list("ABCDE"):
+        return "fast"
+    raise ValueError("selective routing received an invalid Fast reader row")
+
+
+def validate_deep_completion(row: dict) -> None:
+    deep = row.get("deep")
+    if (
+        row.get("degraded") is not False
+        or not isinstance(row.get("evidence"), list)
+        or not row["evidence"]
+        or not isinstance(deep, dict)
+        or deep.get("status") != "completed"
+        or type(deep.get("settled_micros")) is not int
+        or not 0 <= deep["settled_micros"] <= 300_000
+        or deep.get("unsettled_micros_upper_bound") != 0
+    ):
+        raise ValueError("Deep result is not completed, settled, non-degraded evidence")
+
+
+def validate_terminal_rows(rows: list[dict], expected_ids: list[str]) -> None:
+    keys = [(row.get("id"), row.get("arm")) for row in rows]
+    if len(keys) != len(set(keys)):
+        raise ValueError("paid terminal rows contain a duplicate id/arm")
+    expected = {(item_id, arm) for item_id in expected_ids for arm in PAID_ARMS}
+    if set(keys) != expected or len(keys) != len(expected):
+        raise ValueError("paid terminal rows do not match expected IDs and arms")
+    if any(row.get("status") not in {"completed", "error"} for row in rows):
+        raise ValueError("paid terminal rows contain a non-terminal status")
 
 
 def normalize_source_text(value: str) -> str:
@@ -325,6 +484,392 @@ def atomic_write_json(path: Path, value: dict) -> None:
     atomic_write(path, json.dumps(value, indent=2, sort_keys=True).encode() + b"\n")
 
 
+def load_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_bytes().splitlines() if line.strip()]
+
+
+def write_jsonl(path: Path, rows: list[dict]) -> None:
+    atomic_write(path, canonical_jsonl_bytes(rows))
+
+
+def evidence_prompt(evidence: list[dict], question: str) -> str:
+    bodies = []
+    for rank, item in enumerate(evidence, start=1):
+        body = item.get("body") if isinstance(item, dict) else None
+        if not isinstance(body, str) or not body.strip():
+            raise ValueError("reader evidence contains an empty body")
+        bodies.append(f"[{rank}] {body}")
+    if not bodies:
+        raise ValueError("reader evidence is empty")
+    return "Evidence:\n" + "\n\n".join(bodies) + "\n\nQuestion:\n" + question
+
+
+def full_context_prompt(row: dict) -> str:
+    view = prompt_item(row)
+    return (
+        "Evidence:\n"
+        + normalize_source_text(view["conversation"])
+        + "\n\nQuestion:\n"
+        + build_question(view["options"])
+    )
+
+
+def _validate_reader_metadata(metadata: dict | None) -> None:
+    if (
+        not isinstance(metadata, dict)
+        or metadata.get("parse_status") != "provider_response_validated"
+        or metadata.get("requested_model") != READER_MODEL
+        or str(metadata.get("provider", "")).lower() != READER_PROVIDER
+        or not isinstance(metadata.get("usage"), dict)
+        or not isinstance(metadata["usage"].get("cost"), (int, float))
+        or metadata["usage"]["cost"] <= 0
+    ):
+        raise RuntimeError("reader provider/model/price provenance mismatch")
+
+
+def reader_terminal(cli: ReaderCli, item_id: str, arm: str, prompt: str) -> dict:
+    reply = cli.call("reader", READER_SYSTEM_PROMPT, prompt)
+    metadata = cli.last_call_metadata
+    _validate_reader_metadata(metadata)
+    try:
+        parsed = parse_reader_output(reply)
+        answer = parsed["answer"]
+        if answer is not None:
+            answer = answer.strip().upper()
+        if not parsed["abstain"] and answer not in list("ABCDE"):
+            raise ValueError("reader answer must be exactly one letter A-E")
+        return {
+            "id": item_id,
+            "arm": arm,
+            "status": "completed",
+            "answer": answer,
+            "abstain": parsed["abstain"],
+            "notes": parsed["notes"],
+            "provider": metadata,
+        }
+    except (json.JSONDecodeError, ValueError, TypeError) as error:
+        return {
+            "id": item_id,
+            "arm": arm,
+            "status": "error",
+            "answer": None,
+            "abstain": False,
+            "error": f"reader_parse: {error}",
+            "provider": metadata,
+        }
+
+
+def _append_terminal(
+    rows: list[dict], output: Path, authorization_sha256: str, row: dict
+) -> None:
+    row["authorization_sha256"] = authorization_sha256
+    rows.append(row)
+    write_jsonl(output, rows)
+
+
+def _expected_paid_frozen(args) -> dict:
+    return {
+        "source_jsonl_sha256": gr.sha256_file(args.source.resolve()),
+        "lock_sha256": gr.sha256_file(args.lock.resolve()),
+        "fast_evidence_sha256": gr.sha256_file(args.fast_evidence.resolve()),
+        "fast_gate_sha256": gr.sha256_file(args.fast_gate.resolve()),
+        "runner_sha256": gr.sha256_file(Path(__file__)),
+        "provider_attempts_sha256": gr.sha256_file(
+            SCRIPTS_DIR / "provider_attempts.py"
+        ),
+    }
+
+
+def _configure_deep_runtime() -> None:
+    os.environ.update(
+        {
+            "MEMPHANT_FACT_EXTRACTION": "0",
+            "MEMPHANT_DEEP": "on",
+            "MEMPHANT_DEEP_MODEL": DEEP_MODEL,
+            "MEMPHANT_DEEP_RESPONSE_MODEL": DEEP_MODEL,
+            "MEMPHANT_DEEP_PROVIDERS": DEEP_PROVIDER,
+            "MEMPHANT_DEEP_INPUT_PRICE_MICROS_PER_MILLION": "1100000",
+            "MEMPHANT_DEEP_OUTPUT_PRICE_MICROS_PER_MILLION": "6600000",
+            "MEMPHANT_DEEP_PROMPT_PATH": str(
+                REPO_ROOT / "config" / "deep-recall-v1.txt"
+            ),
+        }
+    )
+
+
+def run_paid_pilot(args) -> dict:
+    source_rows, lock = load_locked_sample(args.source.resolve(), args.lock.resolve())
+    expected_ids = lock["expected_ids"]
+    fast_rows = load_jsonl(args.fast_evidence.resolve())
+    validate_evidence_rows(fast_rows, expected_ids, "fast")
+    fast_gate = json.loads(args.fast_gate.read_text(encoding="utf-8"))
+    if (
+        fast_gate.get("status") != "passed"
+        or fast_gate.get("evidence_jsonl_sha256")
+        != gr.sha256_file(args.fast_evidence.resolve())
+    ):
+        raise ValueError("paid pilot requires the matching passed Fast gate")
+
+    packet = json.loads(args.authorization.read_text(encoding="utf-8"))
+    frozen = _expected_paid_frozen(args)
+    validate_pilot_authorization(packet, frozen)
+    authorization_sha = packet["authorization"]["authorization_scope_sha256"]
+    execution = packet["execution"]
+    artifact_dir = args.authorization.resolve().parent
+    journal = artifact_dir / execution["journal_path"]
+    cache_dir = artifact_dir / execution["cache_dir"]
+    raw_output = artifact_dir / execution["raw_rows"]
+    deep_cache_path = artifact_dir / execution["deep_cache"]
+    closure_path = artifact_dir / execution["closure"]
+    census_path = artifact_dir / execution["census"]
+    if args.output.resolve() != raw_output.resolve():
+        raise ValueError("paid output differs from the authorized path")
+
+    gr.reexec_through_scratch_db(args.database_url)
+    database_url = os.environ["DATABASE_URL"]
+    _configure_deep_runtime()
+    items = [runtime_item(row) for row in source_rows]
+    tenant_id, api_key = gr.provision_tenant(
+        args.cli_bin, database_url, name_prefix="horizon-paid"
+    )
+    server = gr.Server(
+        args.server_bin,
+        database_url,
+        args.port,
+        log_path=artifact_dir / "server-paid.log",
+    )
+    ledger = None
+    try:
+        server.start()
+        client = gr.ApiClient(args.port, api_key, tenant_id)
+        bound, retained = retain_runtime_items(client, items)
+        compiled = gr.drain_worker(args.worker_bin, database_url)
+        if retained != 943 or compiled != 943:
+            raise RuntimeError(
+                f"paid runtime lineage mismatch: retained={retained} compiled={compiled}"
+            )
+
+        ledger = open_campaign_ledger(
+            args.authorization,
+            screen_id="horizonbench-pilot",
+            expected_journal_path=journal,
+        )
+        snapshot = ledger.snapshot()
+        reported, unsettled = restore_spend_from_attempts(snapshot["attempts"])
+        cli = ReaderCli(
+            "openrouter",
+            READER_MODEL,
+            READER_MODEL,
+            cache_dir,
+            max_calls=30,
+            max_spend_usd=READER_MAX_SPEND_USD,
+            max_price_per_million={
+                "prompt": Decimal("5"),
+                "completion": Decimal("25"),
+            },
+            max_output_tokens=256,
+        )
+        cli.provider_only = [READER_PROVIDER]
+        cli.set_provider_attempt_ledger(ledger)
+        cli.provider_attempts = len(snapshot["attempts"])
+        cli.set_provider_attempt_limit(60)
+        cli.restore_spend_state(
+            reported_spend_usd=reported, unsettled_liability_usd=unsettled
+        )
+
+        terminal_rows = load_jsonl(raw_output)
+        terminal_keys = [(row.get("id"), row.get("arm")) for row in terminal_rows]
+        if len(terminal_keys) != len(set(terminal_keys)):
+            raise ValueError("paid resume contains duplicate terminal rows")
+        if any(
+            row.get("authorization_sha256") != authorization_sha
+            or row.get("id") not in expected_ids
+            or row.get("arm") not in PAID_ARMS
+            for row in terminal_rows
+        ):
+            raise ValueError("paid resume row is outside the authorized scope")
+        by_key = {(row["id"], row["arm"]): row for row in terminal_rows}
+        source_by_id = {row["id"]: row for row in source_rows}
+        fast_by_id = {row["id"]: row for row in fast_rows}
+
+        for item_id in expected_ids:
+            if (item_id, "full_context") not in by_key:
+                try:
+                    row = reader_terminal(
+                        cli,
+                        item_id,
+                        "full_context",
+                        full_context_prompt(source_by_id[item_id]),
+                    )
+                except (CallBudgetExceeded, ProviderRefusal, RuntimeError) as error:
+                    _append_terminal(
+                        terminal_rows,
+                        raw_output,
+                        authorization_sha,
+                        {
+                            "id": item_id,
+                            "arm": "full_context",
+                            "status": "error",
+                            "answer": None,
+                            "abstain": False,
+                            "error": f"{type(error).__name__}: {error}",
+                        },
+                    )
+                    raise
+                _append_terminal(terminal_rows, raw_output, authorization_sha, row)
+                by_key[(item_id, "full_context")] = row
+
+        for item_id in expected_ids:
+            if (item_id, "fast") not in by_key:
+                try:
+                    row = reader_terminal(
+                        cli,
+                        item_id,
+                        "fast",
+                        evidence_prompt(
+                            fast_by_id[item_id]["evidence"],
+                            fast_by_id[item_id]["question"],
+                        ),
+                    )
+                except (CallBudgetExceeded, ProviderRefusal, RuntimeError) as error:
+                    _append_terminal(
+                        terminal_rows,
+                        raw_output,
+                        authorization_sha,
+                        {
+                            "id": item_id,
+                            "arm": "fast",
+                            "status": "error",
+                            "answer": None,
+                            "abstain": False,
+                            "error": f"{type(error).__name__}: {error}",
+                        },
+                    )
+                    raise
+                _append_terminal(terminal_rows, raw_output, authorization_sha, row)
+                by_key[(item_id, "fast")] = row
+
+        deep_rows = load_jsonl(deep_cache_path)
+        if len({row.get("id") for row in deep_rows}) != len(deep_rows):
+            raise ValueError("Deep resume cache contains duplicate IDs")
+        deep_by_id = {row["id"]: row for row in deep_rows}
+        for row in deep_rows:
+            if (
+                row.get("authorization_sha256") != authorization_sha
+                or row.get("id") not in expected_ids
+            ):
+                raise ValueError("Deep resume cache authorization or ID mismatch")
+            validate_deep_completion(row)
+
+        for item in items:
+            item_id = item["id"]
+            if (item_id, "selective_deep") in by_key:
+                continue
+            fast_answer = by_key[(item_id, "fast")]
+            if fast_answer.get("status") != "completed":
+                row = {
+                    "id": item_id,
+                    "arm": "selective_deep",
+                    "status": "error",
+                    "answer": None,
+                    "abstain": False,
+                    "route": "fast_error",
+                    "error": "Fast reader row unavailable for selective routing",
+                }
+            elif selective_route(fast_answer) == "fast":
+                row = {
+                    "id": item_id,
+                    "arm": "selective_deep",
+                    "status": "completed",
+                    "answer": fast_answer["answer"],
+                    "abstain": False,
+                    "route": "fast",
+                    "provider": fast_answer["provider"],
+                }
+            else:
+                deep_row = deep_by_id.get(item_id)
+                if deep_row is None:
+                    deep_row = recall_runtime_items(
+                        client, [item], bound, "deep", args.k, args.budget_tokens
+                    )[0]
+                    deep_row["authorization_sha256"] = authorization_sha
+                    validate_deep_completion(deep_row)
+                    deep_rows.append(deep_row)
+                    write_jsonl(deep_cache_path, deep_rows)
+                    deep_by_id[item_id] = deep_row
+                if len(deep_rows) > 10:
+                    raise RuntimeError("Deep call ceiling exceeded")
+                deep_micros = sum(row["deep"]["settled_micros"] for row in deep_rows)
+                if deep_micros > 3_000_000:
+                    raise RuntimeError("Deep spend ceiling exceeded")
+                row = reader_terminal(
+                    cli,
+                    item_id,
+                    "selective_deep",
+                    evidence_prompt(deep_row["evidence"], deep_row["question"]),
+                )
+                row["route"] = "deep"
+                row["deep"] = deep_row["deep"]
+            _append_terminal(terminal_rows, raw_output, authorization_sha, row)
+            by_key[(item_id, "selective_deep")] = row
+
+        validate_terminal_rows(terminal_rows, expected_ids)
+        snapshot = ledger.snapshot()
+        if not provider_attempt_ledger_is_complete(snapshot):
+            raise RuntimeError("paid reader ledger is incomplete or unpriced")
+        reader_cost = Decimal(str(snapshot["reported_cost_usd"]))
+        deep_cost = Decimal(
+            sum(row["deep"]["settled_micros"] for row in deep_rows)
+        ) / Decimal(1_000_000)
+        if reader_cost + deep_cost > COMBINED_MAX_SPEND_USD:
+            raise RuntimeError("combined paid pilot spend ceiling exceeded")
+        closure = ledger.close_campaign(closure_path)
+        census = {
+            "schema_version": 1,
+            "status": "complete",
+            "authorization_scope_sha256": authorization_sha,
+            "terminal_rows": len(terminal_rows),
+            "completed_rows": sum(row["status"] == "completed" for row in terminal_rows),
+            "error_rows": sum(row["status"] == "error" for row in terminal_rows),
+            "reader": {
+                "model": READER_MODEL,
+                "provider": READER_PROVIDER,
+                "provider_attempts": snapshot["provider_attempts"],
+                "priced_provider_attempts": snapshot["priced_provider_attempts"],
+                "reported_cost_usd": str(reader_cost),
+                "attempts_sha256": snapshot["attempts_sha256"],
+            },
+            "deep": {
+                "model": DEEP_MODEL,
+                "provider": DEEP_PROVIDER,
+                "calls": len(deep_rows),
+                "settled_cost_usd": str(deep_cost),
+                "unsettled_cost_usd": "0",
+            },
+            "combined_cost_usd": str(reader_cost + deep_cost),
+            "raw_rows_sha256": gr.sha256_file(raw_output),
+            "deep_cache_sha256": (
+                gr.sha256_file(deep_cache_path) if deep_cache_path.exists() else None
+            ),
+            "journal_closure": closure,
+            "lineage": {
+                "repository": gr.repository_identity(REPO_ROOT),
+                **frozen,
+                "server_sha256": gr.sha256_file(Path(args.server_bin)),
+                "worker_sha256": gr.sha256_file(Path(args.worker_bin)),
+                "cli_sha256": gr.sha256_file(Path(args.cli_bin)),
+            },
+        }
+        atomic_write_json(census_path, census)
+        return census
+    finally:
+        if ledger is not None:
+            ledger.close()
+        server.stop()
+
+
 def load_locked_sample(source: Path, lock_path: Path) -> tuple[list[dict], dict]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     raw = source.read_bytes()
@@ -548,6 +1093,43 @@ def main() -> int:
     evidence.add_argument(
         "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
     )
+    paid = subparsers.add_parser("run-paid-pilot")
+    paid.add_argument("--source", required=True, type=Path)
+    paid.add_argument(
+        "--lock",
+        default=REPO_ROOT / "benchmarks/manifests/horizonbench.sample.v1.json",
+        type=Path,
+    )
+    paid.add_argument(
+        "--fast-evidence",
+        default=REPO_ROOT
+        / "docs/build-log/artifacts/horizonbench-pilot/fast-evidence.jsonl",
+        type=Path,
+    )
+    paid.add_argument(
+        "--fast-gate",
+        default=REPO_ROOT
+        / "docs/build-log/artifacts/horizonbench-pilot/fast-gate.json",
+        type=Path,
+    )
+    paid.add_argument("--authorization", required=True, type=Path)
+    paid.add_argument("--output", required=True, type=Path)
+    paid.add_argument("--k", type=int, default=20)
+    paid.add_argument("--budget-tokens", type=int, default=16384)
+    paid.add_argument("--port", type=int, default=39484)
+    paid.add_argument(
+        "--database-url",
+        default="postgres://memphant:memphant@localhost:5432/memphant",
+    )
+    paid.add_argument(
+        "--server-bin", default=str(REPO_ROOT / "target/release/memphant-server")
+    )
+    paid.add_argument(
+        "--worker-bin", default=str(REPO_ROOT / "target/release/memphant-worker")
+    )
+    paid.add_argument(
+        "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
+    )
     args = parser.parse_args()
     if args.command == "fetch-sample":
         lock = fetch_sample(args.out)
@@ -558,6 +1140,9 @@ def main() -> int:
             print(encoded.decode(), end="")
     elif args.command == "build-fast-evidence":
         report = build_fast_evidence(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "run-paid-pilot":
+        report = run_paid_pilot(args)
         print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

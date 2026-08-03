@@ -232,3 +232,72 @@ def test_fast_gate_carries_nondecisional_evidence_contract() -> None:
     assert contract["harness"]["k"] == 20
     assert contract["corpus"]["sha256"] == "a" * 64
     assert contract["instrument_verification"]["rows_counted"] == 10
+
+
+def test_paid_authorization_is_hash_bound_and_capped_at_25_dollars() -> None:
+    module = load_module()
+    frozen = {
+        "source_jsonl_sha256": "a" * 64,
+        "lock_sha256": "b" * 64,
+        "fast_evidence_sha256": "c" * 64,
+        "fast_gate_sha256": "d" * 64,
+        "runner_sha256": "e" * 64,
+        "provider_attempts_sha256": "f" * 64,
+    }
+    packet = module.authorization_packet(
+        frozen, authorized_by="owner", authorized_at="2026-08-03T00:00:00Z"
+    )
+
+    module.validate_pilot_authorization(packet, frozen)
+    assert packet["hard_limits"]["reader"]["max_spend_usd"] == "22"
+    assert packet["hard_limits"]["deep"]["max_spend_usd"] == "3"
+    assert packet["hard_limits"]["combined_max_spend_usd"] == "25"
+
+    packet["frozen_inputs"]["source_jsonl_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="authorization scope"):
+        module.validate_pilot_authorization(packet, frozen)
+
+
+def test_selective_routing_uses_fast_answer_or_requires_completed_deep() -> None:
+    module = load_module()
+
+    assert module.selective_route({"status": "completed", "answer": "B", "abstain": False}) == "fast"
+    assert module.selective_route({"status": "completed", "answer": None, "abstain": True}) == "deep"
+    module.validate_deep_completion(
+        {
+            "degraded": False,
+            "evidence": [{"body": "current preference"}],
+            "deep": {
+                "status": "completed",
+                "settled_micros": 10,
+                "unsettled_micros_upper_bound": 0,
+            },
+        }
+    )
+    with pytest.raises(ValueError, match="completed"):
+        module.validate_deep_completion(
+            {
+                "degraded": False,
+                "evidence": [{"body": "partial"}],
+                "deep": {
+                    "status": "partial",
+                    "settled_micros": 10,
+                    "unsettled_micros_upper_bound": 0,
+                },
+            }
+        )
+
+
+def test_terminal_rows_reject_duplicates_and_missing_arms() -> None:
+    module = load_module()
+    rows = [
+        {"id": item_id, "arm": arm, "status": "completed"}
+        for item_id in ("one", "two")
+        for arm in module.PAID_ARMS
+    ]
+
+    module.validate_terminal_rows(rows, ["one", "two"])
+    with pytest.raises(ValueError, match="duplicate"):
+        module.validate_terminal_rows([*rows, rows[0]], ["one", "two"])
+    with pytest.raises(ValueError, match="terminal rows"):
+        module.validate_terminal_rows(rows[:-1], ["one", "two"])
