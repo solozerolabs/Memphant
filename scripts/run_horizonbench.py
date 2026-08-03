@@ -859,7 +859,7 @@ def confirmation_runtime_items(rows: list[dict]) -> list[dict]:
                 body = [f"Date: {session['date']}"]
                 if session["scenario"]:
                     body.append(f"Scenario: {session['scenario']}")
-                body.append(f"{label}: {turn['content']}")
+                body.append(f"{label}: {turn['content'].rstrip()}")
                 episodes.append(
                     {
                         "source_ref": (
@@ -1520,7 +1520,7 @@ def census_full(args) -> dict:
             "claim": "The pinned HorizonBench benchmark release completed a full schema, identity, and integrity census.",
             "power": {
                 "test": "descriptive-only (no test)",
-                "n": 4_245,
+                "n": 0,
                 "b": 0,
                 "c": 0,
                 "n_d": 0,
@@ -1643,7 +1643,7 @@ def select_confirmation(args) -> dict:
             "claim": "A deterministic gold-blind 60-user, 120-item HorizonBench confirmation tranche was frozen.",
             "power": {
                 "test": "descriptive-only (no test)",
-                "n": 120,
+                "n": 0,
                 "b": 0,
                 "c": 0,
                 "n_d": 0,
@@ -2324,7 +2324,7 @@ def confirmation_fast_gate_contract(
         ),
         "power": {
             "test": "construction gate only (no answer scoring)",
-            "n": 120,
+            "n": 0,
             "b": 0,
             "c": 0,
             "n_d": 0,

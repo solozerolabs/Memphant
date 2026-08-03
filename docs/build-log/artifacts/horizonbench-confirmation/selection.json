@@ -36,7 +36,7 @@
     "power": {
       "b": 0,
       "c": 0,
-      "n": 120,
+      "n": 0,
       "n_d": 0,
       "test": "descriptive-only (no test)"
     },
@@ -231,7 +231,7 @@
     "sonnet-4.5/user_90",
     "sonnet-4.5/user_98"
   ],
-  "full_lock_sha256": "85cf0a304f1bc4a71e9291609f322389d53c4cdcf61dabd0b106ca92108dc912",
+  "full_lock_sha256": "af992d557bf4deece8aa4c764aa5072f2af41521fee9d6c7cf735450bacde71d",
   "gold_quarantine": {
     "mental_state_graphs_acquired": false,
     "selection_fields": [

@@ -419,6 +419,7 @@ def test_runtime_calls_public_retain_then_gold_blind_recall() -> None:
 def test_confirmation_reuses_one_retained_timeline_per_user() -> None:
     module = load_module()
     rows = benchmark_fixture_rows()[:2]
+    rows[0] = {**rows[0], "conversation": rows[0]["conversation"] + "\n\n"}
     rows[1] = {
         **rows[1],
         "conversation": rows[1]["conversation"]
