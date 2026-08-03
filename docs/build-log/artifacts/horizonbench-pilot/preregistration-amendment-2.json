@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "status": "AMENDED_BEFORE_RERUN",
+  "amended_at": "2026-08-03T17:24:46Z",
+  "supersedes_runner_sha256": "75d979b56055f79084e9ed5137d48318d5c73447feab7370dd470b6c988c390f",
+  "provider_calls": 0,
+  "spend_usd": 0,
+  "single_change": "Attach the repository evidence_contract block and runner/test hashes to the compact Fast gate report.",
+  "scientific_effect": "Reporting-only. Runtime, source normalization, expected IDs, k, budget, model plan, prompts, evidence, and gates are unchanged.",
+  "lineage": {
+    "runner_sha256": "37c3165048adfd8f54215c140f9688f215cfca28707adcbe94fb12485a5c3c6a",
+    "test_sha256": "dfda17b7c9e4e7bcc8a3d899a2cca917f599f92e27f147eca3b4d06f3a578219"
+  }
+}

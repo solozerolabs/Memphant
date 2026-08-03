@@ -214,3 +214,21 @@ def test_control_character_normalization_is_lossless_and_postgres_safe() -> None
     assert "\x00" not in normalized
     assert "\x07" not in normalized
     assert module.restore_source_text(normalized) == source
+
+
+def test_fast_gate_carries_nondecisional_evidence_contract() -> None:
+    module = load_module()
+
+    contract = module.fast_gate_evidence_contract(
+        source_sha="a" * 64,
+        k=20,
+        budget_tokens=16384,
+    )
+
+    assert contract["schema_version"] == 1
+    assert contract["decisional"] is False
+    assert contract["power"]["test"] == "descriptive-only (no test)"
+    assert contract["power"]["n"] == 10
+    assert contract["harness"]["k"] == 20
+    assert contract["corpus"]["sha256"] == "a" * 64
+    assert contract["instrument_verification"]["rows_counted"] == 10

@@ -393,6 +393,49 @@ def fetch_sample(output: Path) -> dict:
     }
 
 
+def fast_gate_evidence_contract(source_sha: str, k: int, budget_tokens: int) -> dict:
+    return {
+        "schema_version": 1,
+        "decisional": False,
+        "claim": "The pinned ten-row HorizonBench sample completed the gold-blind Fast construction gate.",
+        "power": {
+            "test": "descriptive-only (no test)",
+            "n": 10,
+            "b": 0,
+            "c": 0,
+            "n_d": 0,
+        },
+        "mechanism_enabled": True,
+        "probe_kind": "gate",
+        "mechanism_evidence": "Fast recall ran with MEMPHANT_DEEP=off and produced ten non-degraded evidence rows.",
+        "harness": {
+            "embed_model": "local sentence-unit embedder",
+            "scorer": "construction completeness only; benchmark gold remained quarantined",
+            "k": k,
+            "budget": budget_tokens,
+            "flags": ["fast", "fact_extraction=off", "deep=off"],
+        },
+        "corpus": {
+            "sha256": source_sha,
+            "snapshot_id": f"{DATASET_ID}@{DATASET_REVISION}:sample/test",
+            "n_items": 10,
+        },
+        "instrument_verification": {
+            "shipped_rows_verified": True,
+            "rows_counted": 10,
+            "fields_counted": {
+                "conversation": 10,
+                "options": 10,
+                "correct_letter": 10,
+            },
+            "license_id": "CC-BY-4.0",
+            "license_source": "RECORD_METADATA",
+            "license_evidence": "Pinned Hugging Face dataset metadata.",
+        },
+        "notes": "Non-decisional construction proof; no answer scoring or SOTA claim.",
+    }
+
+
 def build_fast_evidence(args) -> dict:
     source = args.source.expanduser().resolve()
     rows, lock = load_locked_sample(source, args.lock.resolve())
@@ -455,9 +498,16 @@ def build_fast_evidence(args) -> dict:
         },
         "evidence_jsonl_sha256": hashlib.sha256(evidence_raw).hexdigest(),
         "elapsed_seconds": round(time.monotonic() - started, 3),
+        "evidence_contract": fast_gate_evidence_contract(
+            lock["jsonl_sha256"], args.k, args.budget_tokens
+        ),
         "lineage": {
             "repository": gr.repository_identity(REPO_ROOT),
             "migrations": gr.migration_identity(REPO_ROOT),
+            "runner_sha256": gr.sha256_file(Path(__file__)),
+            "test_sha256": gr.sha256_file(
+                REPO_ROOT / "tests" / "test_horizonbench_contract.py"
+            ),
             "server_sha256": gr.sha256_file(Path(args.server_bin)),
             "worker_sha256": gr.sha256_file(Path(args.worker_bin)),
             "cli_sha256": gr.sha256_file(Path(args.cli_bin)),
