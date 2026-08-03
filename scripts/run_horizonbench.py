@@ -38,6 +38,21 @@ SCORING_ONLY_FIELDS = (
 PROMPT_FIELDS = ("id", "user_id", "generator", "conversation", "options")
 MAX_EPISODE_BYTES = 120_000
 RECALL_QUERY_CHARS = 8_000
+ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
+
+
+def normalize_source_text(value: str) -> str:
+    """Losslessly escape Postgres-forbidden controls and literal backslashes."""
+    return "".join(
+        f"\\u{ord(character):04x}"
+        if character == "\\" or (ord(character) < 32 and character not in "\n\r\t")
+        else character
+        for character in value
+    )
+
+
+def restore_source_text(value: str) -> str:
+    return ESCAPED_CODEPOINT.sub(lambda match: chr(int(match.group(1), 16)), value)
 
 
 def parse_options(value: str | list[dict]) -> list[dict]:
@@ -107,7 +122,10 @@ def prompt_item(row: dict) -> dict:
 
 def build_question(options: list[dict]) -> str:
     lines = ["Which of the following responses would align with the user's preferences the most?"]
-    lines.extend(f"{option['letter']}: {option['option']}" for option in options)
+    lines.extend(
+        f"{option['letter']}: {normalize_source_text(option['option'])}"
+        for option in options
+    )
     lines.append(
         "Please respond with the letter of the option that aligns with the user's preferences the most and nothing else."
     )
@@ -155,7 +173,7 @@ def _session_body(session: dict) -> str:
 
 def runtime_item(row: dict) -> dict:
     view = prompt_item(row)
-    sessions = parse_sessions(view["conversation"])
+    sessions = parse_sessions(normalize_source_text(view["conversation"]))
     if not sessions:
         raise ValueError(f"HorizonBench row {view['id']} has no conversation sessions")
     ref = _safe_ref(view["id"])

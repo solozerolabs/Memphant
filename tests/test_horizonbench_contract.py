@@ -202,3 +202,15 @@ def test_runtime_calls_public_retain_then_gold_blind_recall() -> None:
     for field in module.SCORING_ONLY_FIELDS:
         assert field not in serialized_calls
         assert str(row[field]) not in serialized_calls
+
+
+def test_control_character_normalization_is_lossless_and_postgres_safe() -> None:
+    module = load_module()
+    source = "Clock\x0027s\x07 ticking\nnext\tline"
+
+    normalized = module.normalize_source_text(source)
+
+    assert normalized == "Clock\\u000027s\\u0007 ticking\nnext\tline"
+    assert "\x00" not in normalized
+    assert "\x07" not in normalized
+    assert module.restore_source_text(normalized) == source

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "status": "AMENDED_BEFORE_SCORE",
+  "amended_at": "2026-08-03T17:18:00Z",
+  "supersedes_runner_sha256": "baf7e13a9bd68197a0a74f484a270c887d56b344ddbe81ef79a7014649b6e2a0",
+  "failure": {
+    "stage": "first episode retain before worker compilation or recall",
+    "http_status": 503,
+    "provider_calls": 0,
+    "spend_usd": 0,
+    "database_evidence": "PostgreSQL rejected parameter $12 with invalid byte sequence for UTF8: 0x00",
+    "source_census": {
+      "rows_with_nul": 1,
+      "nul_codepoints": 49,
+      "other_non_whitespace_c0_codepoints_present": true
+    }
+  },
+  "root_cause": "The released sample contains C0 control codepoints, including NUL, which PostgreSQL text cannot represent.",
+  "single_change": "Losslessly encode literal backslashes and non-whitespace C0 codepoints as visible \\uXXXX sequences before both MemPhant ingest and reader prompting; the inverse transform is contract-tested.",
+  "scientific_effect": "No source character is dropped or guessed, and all future arms consume the identical normalized text. Gold quarantine, expected IDs, k, budget, model plan, and gates are unchanged.",
+  "lineage": {
+    "runner_sha256": "75d979b56055f79084e9ed5137d48318d5c73447feab7370dd470b6c988c390f",
+    "test_sha256": "c711ff62883e840b3397340b1e1aad5bb8aee86be7185a3d49d18074b9a1cd11"
+  }
+}
