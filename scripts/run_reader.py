@@ -799,21 +799,6 @@ def openrouter_provider_preferences(
     return preferences
 
 
-def openrouter_user_content(prompt: str, cache_prefix: str | None) -> str | list[dict]:
-    if cache_prefix is None:
-        return prompt
-    if not cache_prefix or not prompt.startswith(cache_prefix):
-        raise ValueError("OpenRouter cache prefix must be a non-empty prompt prefix")
-    return [
-        {
-            "type": "text",
-            "text": cache_prefix,
-            "cache_control": {"type": "ephemeral"},
-        },
-        {"type": "text", "text": prompt[len(cache_prefix) :]},
-    ]
-
-
 class ReaderCli:
     """Serialized, cached headless CLI calls with a hard budget shared across
     reader and judge (which may use different models on the same engine)."""
@@ -893,7 +878,6 @@ class ReaderCli:
         kind: str,
         system_prompt: str,
         prompt: str,
-        cache_prefix: str | None = None,
     ) -> Path:
         contract_identity = {
             "response": self.response_contract_for(kind),
@@ -906,11 +890,6 @@ class ReaderCli:
         if self.engine == "openrouter":
             contract_identity["provider"] = openrouter_provider_preferences(
                 self.model_for(kind), self.max_price_per_million, self.provider_only
-            )
-            contract_identity["cache_prefix_sha256"] = (
-                hashlib.sha256(cache_prefix.encode()).hexdigest()
-                if cache_prefix is not None
-                else None
             )
         contract = json.dumps(contract_identity, sort_keys=True, separators=(",", ":"))
         key = hashlib.sha256(
@@ -932,11 +911,7 @@ class ReaderCli:
         kind: str,
         system_prompt: str,
         prompt: str,
-        *,
-        cache_prefix: str | None = None,
     ) -> str:
-        if cache_prefix is not None and self.engine != "openrouter":
-            raise ValueError("prompt caching is openrouter-only")
         if self.engine == "openrouter":
             if self.provider_attempt_ledger is None:
                 raise RuntimeError(
@@ -944,7 +919,7 @@ class ReaderCli:
                 )
             self.provider_attempt_ledger.assert_open()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = self._cache_path(kind, system_prompt, prompt, cache_prefix)
+        cache_path = self._cache_path(kind, system_prompt, prompt)
         if cache_path.exists():
             cached = json.loads(cache_path.read_text())
             if self.engine == "openrouter":
@@ -964,9 +939,7 @@ class ReaderCli:
             elif self.engine == "codex":
                 reply = self._call_codex(kind, system_prompt, prompt)
             else:
-                reply = self._call_openrouter(
-                    kind, system_prompt, prompt, cache_prefix=cache_prefix
-                )
+                reply = self._call_openrouter(kind, system_prompt, prompt)
         finally:
             self._active_cache_key = None
         cache_entry = {
@@ -1168,8 +1141,6 @@ class ReaderCli:
         kind: str,
         system_prompt: str,
         prompt: str,
-        *,
-        cache_prefix: str | None = None,
     ) -> str:
         self.last_call_metadata = None
         model = self.model_for(kind)
@@ -1179,10 +1150,7 @@ class ReaderCli:
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": openrouter_user_content(prompt, cache_prefix),
-                },
+                {"role": "user", "content": prompt},
             ],
             **decoding,
             "response_format": self.response_contract_for(kind)["response_format"],

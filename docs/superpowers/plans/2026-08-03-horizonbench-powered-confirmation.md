@@ -1,9 +1,7 @@
 # HorizonBench powered confirmation plan
 
 **Status:** owner authorized gates 1-2 on 2026-08-03 and explicitly removed the
-original $92 constraint. The runner retains a $120 fail-safe ceiling and uses
-Anthropic explicit prompt caching; its pilot-calibrated estimate is $86.11
-before a 5% planning buffer ($90.41 buffered).
+original $92 constraint. The runner retains a $140 fail-safe ceiling.
 The first authorization failed closed at $0 before any score when Opus 4.5
 rejected a 268,591-token input against its 200k window. The replacement uses
 Opus 4.6's 1M window for both arms; truncation and compression remain forbidden.
@@ -16,6 +14,12 @@ a content-filter refusal was treated as an unpriced instrument error. Those
 partial rows remain unscored. The final runner records refusals as priced-at-$0
 terminal abstentions, binds `run_reader.py` into authorization lineage, and
 starts from a clean authorization.
+That clean cached authorization produced five valid rows, then a transient
+retry outlived the five-minute cache and the required read was absent. Its rows
+also remain unscored. The final authorization uses ordinary independent,
+uncached prompts: with one reuse per prefix the one-hour cache tier costs more
+than two uncached reads, while the five-minute tier cannot survive long calls
+and retries.
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision
@@ -42,9 +46,8 @@ engine. PostgreSQL remains the authority and the product path remains Fast.
    timeline prefixes incrementally, then run the same Opus 4.6 snapshot on full
    context and Fast.
    The authorization permits 240 logical reader calls, at most 480 provider
-   attempts, no Deep, and at most $120 combined spend. Exact shared
-   full-context prefixes must produce an observed cache write then read for
-   every user pair; a missing cache event stops the run. Require complete
+   attempts, no Deep, and at most $140 combined spend. Send each prompt as an
+   independent uncached request. Require complete
    priced rows, user-clustered intervals, non-negative overall delta, positive
    evolved delta, no increase in evolved distractor selections, and at least
    six discordant pairs.

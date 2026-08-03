@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "status": "failed_closed",
+  "claim": "The fourth authorization stopped before scoring after five valid rows because a transient retry outlived the five-minute Anthropic cache and the required paired cache read was absent.",
+  "failure": {
+    "completed_terminal_rows": 5,
+    "error_terminal_rows": 1,
+    "scored_rows": 0,
+    "failing_row": 6,
+    "arm": "full_context",
+    "cache_role": "read",
+    "error": "RuntimeError: required Anthropic cache read was not observed"
+  },
+  "accounting": {
+    "provider_attempts": 8,
+    "priced_provider_attempts": 6,
+    "unpriced_provider_attempts": 2,
+    "reported_cost_usd": "9.2974445",
+    "unsettled_cost_usd_upper_bound": "19.26522",
+    "total_liability_usd_upper_bound": "28.5626645"
+  },
+  "replacement_boundary": "Remove the campaign-only cache protocol. Each prefix is reused only once, so a one-hour 2x write plus 0.1x read costs more than two uncached reads, while the five-minute tier cannot survive long requests and retries. Start a clean uncached authorization and do not score or reuse these partial rows.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The fourth authorization is a prompt-cache lifetime failure and its partial rows are not benchmark evidence.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "local sentence-unit embedder",
+      "scorer": "not reached",
+      "k": 20,
+      "budget": 16384,
+      "flags": [
+        "full_context",
+        "reader=anthropic/claude-opus-4.6",
+        "max_output_tokens=1024",
+        "anthropic_explicit_prompt_cache"
+      ]
+    },
+    "corpus": {
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1",
+      "n_items": 0
+    },
+    "notes": "Instrument failure only; all five completed partial rows remain score-quarantined."
+  },
+  "lineage": {
+    "git_head": "fc53750d22a6afbb90f5b516332985f59e915a98",
+    "authorization_sha256": "024718a7f7daa2ada59b08b29ca9ee10a5b130fe1fc5cb97a10b602c89e58e30",
+    "authorization_scope_sha256": "edcf342b174b098902c277eae631812da001fe71240b132a56c675263271ba1f",
+    "reader_attempts_sha256": "10d68f5e11fe2d3d763a670aeae531c9fd4c83beff183635a2407dfc02eb860f",
+    "provider_attempts_sha256": "1008ec3de392bf305e87ffd731bc1a647bd5d0b9daf4539079b1b40aa7998bda",
+    "paid_rows_sha256": "cb14f9cc49ac4aeceb9dc3fe2961bc535daa6569cff9b2daa013ff87ddaade73"
+  }
+}

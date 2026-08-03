@@ -55,7 +55,6 @@ SCORING_ONLY_FIELDS = (
 PROMPT_FIELDS = ("id", "user_id", "generator", "conversation", "options")
 MAX_EPISODE_BYTES = 120_000
 RECALL_QUERY_CHARS = 8_000
-MIN_CACHE_PREFIX_CHARS = 16_384
 ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
 PAID_ARMS = ("full_context", "fast", "selective_deep")
 CONFIRMATION_ARMS = ("full_context", "fast")
@@ -67,7 +66,7 @@ DEEP_MODEL = "openai/gpt-5.6-luna-20260709"
 DEEP_PROVIDER = "azure"
 DEEP_MAX_SPEND_USD = Decimal("3")
 COMBINED_MAX_SPEND_USD = Decimal("25")
-CONFIRMATION_MAX_SPEND_USD = Decimal("120")
+CONFIRMATION_MAX_SPEND_USD = Decimal("140")
 CONFIRMATION_MAX_OUTPUT_TOKENS = 1024
 READER_SYSTEM_PROMPT = (
     "Choose the response A-E that best matches the user's current preference using "
@@ -251,13 +250,6 @@ def confirmation_authorization_packet(
         "frozen_inputs": frozen_inputs,
         "arms": list(CONFIRMATION_ARMS),
         "cost_preflight": preflight,
-        "prompt_cache": {
-            "provider": "anthropic",
-            "type": "explicit_ephemeral",
-            "write_multiplier": "1.25",
-            "read_multiplier": "0.1",
-            "require_write_then_read_per_user": True,
-        },
         "models": {
             "reader": CONFIRMATION_READER_MODEL,
             "reader_provider": READER_PROVIDER,
@@ -723,8 +715,8 @@ def confirmation_result_contract(source_sha: str, analysis: dict) -> dict:
             "flags": [
                 "full_context",
                 "fast",
-                "reader=anthropic/claude-opus-4.5",
-                "anthropic_explicit_prompt_cache",
+                "reader=anthropic/claude-opus-4.6",
+                "uncached_full_context",
             ],
         },
         "corpus": {
@@ -1900,35 +1892,21 @@ def confirmation_reader_requests(rows: list[dict], fast_rows: list[dict]) -> lis
     for row in rows:
         by_user.setdefault(row["user_id"], []).append(row)
     if any(len(user_rows) != 2 for user_rows in by_user.values()):
-        raise ValueError("confirmation caching requires exactly two rows per user")
+        raise ValueError("confirmation requires exactly two rows per user")
 
-    paired = []
-    for user_id, user_rows in by_user.items():
-        prompts = sorted(
-            ((full_context_prompt(row), row) for row in user_rows),
-            key=lambda value: len(value[0]),
-        )
-        cache_prefix = os.path.commonprefix([prompt for prompt, _ in prompts])
-        if len(cache_prefix) < MIN_CACHE_PREFIX_CHARS:
-            raise ValueError(
-                f"confirmation cache prefix is too short for {user_id}: "
-                f"{len(cache_prefix)} chars"
-            )
-        paired.append((max(len(prompt) for prompt, _ in prompts), user_id, prompts, cache_prefix))
-
-    requests = []
-    for _, user_id, prompts, cache_prefix in sorted(paired, reverse=True):
-        for cache_role, (prompt, row) in zip(("write", "read"), prompts, strict=True):
-            requests.append(
-                {
-                    "id": row["id"],
-                    "user_id": user_id,
-                    "arm": "full_context",
-                    "prompt": prompt,
-                    "cache_prefix": cache_prefix,
-                    "cache_role": cache_role,
-                }
-            )
+    requests = sorted(
+        (
+            {
+                "id": row["id"],
+                "user_id": row["user_id"],
+                "arm": "full_context",
+                "prompt": full_context_prompt(row),
+            }
+            for row in rows
+        ),
+        key=lambda row: len(row["prompt"]),
+        reverse=True,
+    )
 
     fast_by_id = {row["id"]: row for row in fast_rows}
     if set(fast_by_id) != {row["id"] for row in rows}:
@@ -1943,8 +1921,6 @@ def confirmation_reader_requests(rows: list[dict], fast_rows: list[dict]) -> lis
                 "user_id": row["user_id"],
                 "arm": "fast",
                 "prompt": prompt,
-                "cache_prefix": None,
-                "cache_role": None,
             }
         )
     requests.extend(sorted(fast_requests, key=lambda row: len(row["prompt"]), reverse=True))
@@ -1960,16 +1936,10 @@ def confirmation_cost_preflight(
 ) -> dict:
     if pilot_prompt_chars <= 0 or pilot_prompt_tokens <= 0 or not requests:
         raise ValueError("confirmation cost preflight inputs must be positive")
-    shared_chars = sum(
-        len(request["cache_prefix"])
-        for request in requests
-        if request["cache_role"] == "write"
-    )
     prompt_chars = sum(len(request["prompt"]) for request in requests)
-    adjusted_chars = Decimal(prompt_chars) - Decimal("0.65") * shared_chars
     token_ratio = Decimal(pilot_prompt_tokens) / Decimal(pilot_prompt_chars)
     input_cost = (
-        adjusted_chars * token_ratio * Decimal("5") / Decimal(1_000_000)
+        Decimal(prompt_chars) * token_ratio * Decimal("5") / Decimal(1_000_000)
     )
     completion_cost = (
         Decimal(len(requests) * max_output_tokens)
@@ -1982,10 +1952,8 @@ def confirmation_cost_preflight(
         "status": (
             "passed" if buffered <= CONFIRMATION_MAX_SPEND_USD else "blocked"
         ),
-        "method": "pilot prompt-token ratio plus exact 1.25x write and 0.1x read cache multipliers, with 5% planning buffer",
+        "method": "pilot prompt-token ratio over exact uncached prompt characters, with 5% planning buffer",
         "prompt_chars": prompt_chars,
-        "shared_cache_prefix_chars": shared_chars,
-        "cache_adjusted_prompt_chars": f"{adjusted_chars:.2f}",
         "pilot_prompt_chars": pilot_prompt_chars,
         "pilot_prompt_tokens": pilot_prompt_tokens,
         "pilot_tokens_per_char": str(token_ratio),
@@ -1995,15 +1963,7 @@ def confirmation_cost_preflight(
         "estimated_total_usd": f"{buffered:.6f}",
         "authorized_ceiling_usd": str(CONFIRMATION_MAX_SPEND_USD),
         "calls": len(requests),
-        "cache_reference": "https://openrouter.ai/docs/guides/best-practices/prompt-caching",
     }
-
-
-def validate_confirmation_cache_usage(metadata: dict, cache_role: str) -> None:
-    details = (metadata.get("usage") or {}).get("prompt_tokens_details") or {}
-    field = "cache_write_tokens" if cache_role == "write" else "cached_tokens"
-    if not isinstance(details.get(field), (int, float)) or details[field] <= 0:
-        raise RuntimeError(f"required Anthropic cache {cache_role} was not observed")
 
 
 def _validate_reader_metadata(
@@ -2045,12 +2005,9 @@ def reader_terminal(
     arm: str,
     prompt: str,
     *,
-    cache_prefix: str | None = None,
     expected_model: str = READER_MODEL,
 ) -> dict:
-    reply = cli.call(
-        "reader", READER_SYSTEM_PROMPT, prompt, cache_prefix=cache_prefix
-    )
+    reply = cli.call("reader", READER_SYSTEM_PROMPT, prompt)
     metadata = cli.last_call_metadata
     _validate_reader_metadata(metadata, expected_model=expected_model)
     try:
@@ -2245,7 +2202,6 @@ def run_paid_confirmation(args) -> dict:
                         request["id"],
                         request["arm"],
                         request["prompt"],
-                        cache_prefix=request["cache_prefix"],
                         expected_model=CONFIRMATION_READER_MODEL,
                     )
                 except ProviderRefusal:
@@ -2254,10 +2210,6 @@ def run_paid_confirmation(args) -> dict:
                     )
                 if row["status"] != "completed":
                     raise RuntimeError(row.get("error") or "reader row did not complete")
-                if request["cache_role"] is not None:
-                    validate_confirmation_cache_usage(
-                        row.get("provider") or {}, request["cache_role"]
-                    )
             except (CallBudgetExceeded, RuntimeError) as error:
                 _append_terminal(
                     terminal_rows,
@@ -2269,12 +2221,10 @@ def run_paid_confirmation(args) -> dict:
                         "status": "error",
                         "answer": None,
                         "abstain": False,
-                        "cache_role": request["cache_role"],
                         "error": f"{type(error).__name__}: {error}",
                     },
                 )
                 raise
-            row["cache_role"] = request["cache_role"]
             _append_terminal(terminal_rows, raw_output, authorization_sha, row)
             by_key[key] = row
 
@@ -2287,13 +2237,6 @@ def run_paid_confirmation(args) -> dict:
         reader_cost = Decimal(str(snapshot["reported_cost_usd"]))
         if reader_cost > CONFIRMATION_MAX_SPEND_USD:
             raise RuntimeError("confirmation spend ceiling exceeded")
-        details = [
-            ((row.get("provider") or {}).get("usage") or {}).get(
-                "prompt_tokens_details"
-            )
-            or {}
-            for row in terminal_rows
-        ]
         closure = ledger.close_campaign(closure_path)
         census = {
             "schema_version": 1,
@@ -2311,12 +2254,6 @@ def run_paid_confirmation(args) -> dict:
                 "priced_provider_attempts": snapshot["priced_provider_attempts"],
                 "reported_cost_usd": str(reader_cost),
                 "attempts_sha256": snapshot["attempts_sha256"],
-                "cache_write_tokens": sum(
-                    int(detail.get("cache_write_tokens") or 0) for detail in details
-                ),
-                "cache_read_tokens": sum(
-                    int(detail.get("cached_tokens") or 0) for detail in details
-                ),
             },
             "raw_rows_sha256": gr.sha256_file(raw_output),
             "journal_closure": closure,
@@ -3109,8 +3046,6 @@ def build_confirmation_analysis(args) -> dict:
             "paid_census_sha256": gr.sha256_file(args.paid_census.resolve()),
             "reader_cost_usd": census["reader"]["reported_cost_usd"],
             "provider_attempts": census["reader"]["provider_attempts"],
-            "cache_write_tokens": census["reader"]["cache_write_tokens"],
-            "cache_read_tokens": census["reader"]["cache_read_tokens"],
             "unsettled_cost_usd": "0",
         },
         "claim_boundary": {
