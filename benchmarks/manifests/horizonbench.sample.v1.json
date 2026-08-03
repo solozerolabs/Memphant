@@ -1,0 +1,34 @@
+{
+  "config": "sample",
+  "dataset": "stellalisy/HorizonBench",
+  "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+  "expected_ids": [
+    "Marcus Trevino_event31_20260327_turn3_facilitation_style_preferences_160_counterfactuals.json",
+    "Marcus Chen_event55_20260328_turn1_technology_assistance_style_preferences_291_counterfactuals.json",
+    "Maya Chen_event67_20260328_turn3_communication_intimacy_58_counterfactuals.json",
+    "Maya Ortiz_event114_20260325_turn17_follow_up_strategy_preferences_339_counterfactuals.json",
+    "Ryan Morrison_event130_20260325_turn7_event_planning_detail_preferences_227_counterfactuals.json",
+    "Jason Taylor_event79_20260326_turn3_content_length_preferences_170_counterfactuals.json",
+    "Jairo Restrepo_event77_20260326_turn1_communication_medium_preferences_142_counterfactuals.json",
+    "Sasha Thorne_event84_20260326_turn21_creative_collaboration_206_counterfactuals.json",
+    "Julian Sterling_event145_20260326_turn13_motivation_strategy_preferences_316_counterfactuals.json",
+    "Aarav Shah_event154_20260328_turn1_intergenerational_engagement_preferences_262_counterfactuals.json"
+  ],
+  "expected_user_ids": [
+    "sonnet-4.5/user_73",
+    "sonnet-4.5/user_112",
+    "sonnet-4.5/user_68",
+    "o3/user_40",
+    "o3/user_58",
+    "o3/user_65",
+    "gemini-3-flash/user_33",
+    "gemini-3-flash/user_0",
+    "gemini-3-flash/user_14",
+    "gemini-3-flash/user_109"
+  ],
+  "jsonl_sha256": "0e3004b70e03d2fd02a01fbfe184709f8ad8aaeb0749c2682240c983de0b2815",
+  "row_count": 10,
+  "source_url": "https://datasets-server.huggingface.co/rows?dataset=stellalisy%2FHorizonBench&config=sample&split=test&offset=0&length=10",
+  "split": "test",
+  "user_count": 10
+}
