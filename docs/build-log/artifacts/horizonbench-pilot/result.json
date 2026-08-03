@@ -1,0 +1,316 @@
+{
+  "accounting": {
+    "authorization_scope_sha256": "543f8c1821232133d82971ddceda643dd35761f120654e3ccae073131f1da0c0",
+    "combined_cost_usd": "7.62753",
+    "deep_calls": 0,
+    "paid_census_sha256": "eebd365f20c52cb70e013f39518e2d69a147ca483de392dbecd88d4eb8e6b343",
+    "reader_provider_attempts": 20,
+    "unsettled_cost_usd": "0"
+  },
+  "analysis": {
+    "arms": {
+      "fast": {
+        "accuracy": 0.5,
+        "correct": 5,
+        "evolved": {
+          "accuracy": 0.6666666666666666,
+          "correct": 4,
+          "n": 6
+        },
+        "evolved_distractor_selections": 1,
+        "n": 10,
+        "static": {
+          "accuracy": 0.25,
+          "correct": 1,
+          "n": 4
+        }
+      },
+      "full_context": {
+        "accuracy": 0.5,
+        "correct": 5,
+        "evolved": {
+          "accuracy": 0.5,
+          "correct": 3,
+          "n": 6
+        },
+        "evolved_distractor_selections": 1,
+        "n": 10,
+        "static": {
+          "accuracy": 0.5,
+          "correct": 2,
+          "n": 4
+        }
+      },
+      "selective_deep": {
+        "accuracy": 0.5,
+        "correct": 5,
+        "evolved": {
+          "accuracy": 0.6666666666666666,
+          "correct": 4,
+          "n": 6
+        },
+        "evolved_distractor_selections": 1,
+        "n": 10,
+        "static": {
+          "accuracy": 0.25,
+          "correct": 1,
+          "n": 4
+        }
+      }
+    },
+    "paired_selective_vs_full": {
+      "accuracy_delta": 0.0,
+      "cluster_bootstrap_95_ci": {
+        "high": 0.3,
+        "low": -0.3,
+        "method": "user-cluster percentile bootstrap",
+        "samples": 20000,
+        "seed": 20260803
+      },
+      "discordant": 2,
+      "gains": 1,
+      "losses": 1,
+      "ties": 8
+    },
+    "per_item": [
+      {
+        "correct_letter": "C",
+        "distractor_letter": "D",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Marcus Trevino_event31_20260327_turn3_facilitation_style_preferences_160_counterfactuals.json",
+        "selective_deep_answer": "C",
+        "selective_deep_correct": true,
+        "selective_route": "fast",
+        "user_id": "sonnet-4.5/user_73"
+      },
+      {
+        "correct_letter": "E",
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Marcus Chen_event55_20260328_turn1_technology_assistance_style_preferences_291_counterfactuals.json",
+        "selective_deep_answer": "B",
+        "selective_deep_correct": false,
+        "selective_route": "fast",
+        "user_id": "sonnet-4.5/user_112"
+      },
+      {
+        "correct_letter": "A",
+        "distractor_letter": "D",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Maya Chen_event67_20260328_turn3_communication_intimacy_58_counterfactuals.json",
+        "selective_deep_answer": "A",
+        "selective_deep_correct": true,
+        "selective_route": "fast",
+        "user_id": "sonnet-4.5/user_68"
+      },
+      {
+        "correct_letter": "A",
+        "distractor_letter": "E",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Maya Ortiz_event114_20260325_turn17_follow_up_strategy_preferences_339_counterfactuals.json",
+        "selective_deep_answer": "B",
+        "selective_deep_correct": false,
+        "selective_route": "fast",
+        "user_id": "o3/user_40"
+      },
+      {
+        "correct_letter": "E",
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Ryan Morrison_event130_20260325_turn7_event_planning_detail_preferences_227_counterfactuals.json",
+        "selective_deep_answer": "E",
+        "selective_deep_correct": true,
+        "selective_route": "fast",
+        "user_id": "o3/user_58"
+      },
+      {
+        "correct_letter": "D",
+        "distractor_letter": "B",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Jason Taylor_event79_20260326_turn3_content_length_preferences_170_counterfactuals.json",
+        "selective_deep_answer": "D",
+        "selective_deep_correct": true,
+        "selective_route": "fast",
+        "user_id": "o3/user_65"
+      },
+      {
+        "correct_letter": "A",
+        "distractor_letter": "D",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Jairo Restrepo_event77_20260326_turn1_communication_medium_preferences_142_counterfactuals.json",
+        "selective_deep_answer": "D",
+        "selective_deep_correct": false,
+        "selective_route": "fast",
+        "user_id": "gemini-3-flash/user_33"
+      },
+      {
+        "correct_letter": "E",
+        "distractor_letter": "B",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Sasha Thorne_event84_20260326_turn21_creative_collaboration_206_counterfactuals.json",
+        "selective_deep_answer": "E",
+        "selective_deep_correct": true,
+        "selective_route": "fast",
+        "user_id": "gemini-3-flash/user_0"
+      },
+      {
+        "correct_letter": "D",
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Julian Sterling_event145_20260326_turn13_motivation_strategy_preferences_316_counterfactuals.json",
+        "selective_deep_answer": "E",
+        "selective_deep_correct": false,
+        "selective_route": "fast",
+        "user_id": "gemini-3-flash/user_14"
+      },
+      {
+        "correct_letter": "B",
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Aarav Shah_event154_20260328_turn1_intergenerational_engagement_preferences_262_counterfactuals.json",
+        "selective_deep_answer": "D",
+        "selective_deep_correct": false,
+        "selective_route": "fast",
+        "user_id": "gemini-3-flash/user_109"
+      }
+    ],
+    "selective_routing": {
+      "deep": 0,
+      "fast": 10,
+      "other": 0
+    },
+    "verdict": {
+      "gates": {
+        "all_arms_complete": true,
+        "at_least_one_paired_gain": true,
+        "no_more_evolved_distractors_than_full_context": true,
+        "noninferior_overall_accuracy": true
+      },
+      "outcome": "advance_to_powered_plan"
+    }
+  },
+  "claim": "The ten-row HorizonBench sample passed its process gate but is underpowered and does not establish SOTA.",
+  "claim_boundary": {
+    "code_sota": false,
+    "next_authorized": "write a separately preregistered powered HorizonBench plan; do not run it yet",
+    "overall_sota": false,
+    "preference_sota": false,
+    "storage_sota": false
+  },
+  "decisional": false,
+  "evidence_contract": {
+    "claim": "The ten-row HorizonBench pilot is a diagnostic paired behavior result, not a promotion or SOTA result.",
+    "corpus": {
+      "n_items": 10,
+      "sha256": "0e3004b70e03d2fd02a01fbfe184709f8ad8aaeb0749c2682240c983de0b2815",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:sample/test"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 16384,
+      "embed_model": "local sentence-unit embedder",
+      "flags": [
+        "full_context",
+        "fast",
+        "selective_deep",
+        "reader=anthropic/claude-opus-4.5"
+      ],
+      "k": 20,
+      "scorer": "exact released HorizonBench correct_letter"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "conversation": 10,
+        "correct_letter": 10,
+        "has_evolved": 10,
+        "options": 10
+      },
+      "license_evidence": "Pinned Hugging Face dataset metadata.",
+      "license_id": "CC-BY-4.0",
+      "license_source": "RECORD_METADATA",
+      "rows_counted": 10,
+      "shipped_rows_verified": true
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "MemPhant Fast evidence was used on every treatment row; Deep remained explicit and gold-blind.",
+    "notes": "n=10 and n_d below the exact McNemar floor; process gate only.",
+    "power": {
+      "b": 1,
+      "c": 1,
+      "n": 10,
+      "n_d": 2,
+      "source": "docs/build-log/artifacts/horizonbench-pilot/result.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "lineage": {
+    "paid_census_sha256": "eebd365f20c52cb70e013f39518e2d69a147ca483de392dbecd88d4eb8e6b343",
+    "paid_rows_sha256": "0432b2a0c9ae91bceb13b9a43e4f8f57c256c8baaa5e72bd99d0d6e6d9e8afa7",
+    "repository": {
+      "git_head": "2600332fd587639178850e9a78b77c73cab5b98f",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tracked_dirty": false,
+      "tracked_file_count": 1606,
+      "tracked_worktree_sha256": "da1d96bfd2eca92806860c948a73a13ff8c75843c8289e89b52acff48a1441f7"
+    },
+    "runner_sha256": "47612c04850aa1b1e1107bd4441e82c452a7d74e42050f8e273464eb119d74ed",
+    "test_sha256": "c0d94e28784b6e863612ac6a718c58a6e501b7378d8672451f3ee1e2db6ef221"
+  },
+  "published_reference": {
+    "comparison_status": "not_comparable_ten_row_post_release_reader_diagnostic",
+    "evolved_accuracy": 0.513,
+    "near_sota": false,
+    "overall_accuracy": 0.528
+  },
+  "schema_version": 1,
+  "source": {
+    "dataset": "stellalisy/HorizonBench",
+    "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+    "jsonl_sha256": "0e3004b70e03d2fd02a01fbfe184709f8ad8aaeb0749c2682240c983de0b2815",
+    "rows": 10,
+    "users": 10
+  },
+  "status": "complete"
+}
