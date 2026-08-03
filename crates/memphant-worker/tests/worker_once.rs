@@ -98,13 +98,23 @@ fn worker_drain_exits_zero_and_prints_exactly_one_summary_line() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let lines = stdout.lines().collect::<Vec<_>>();
     assert_eq!(lines.len(), 1, "stdout must contain one summary: {stdout}");
-    let total = lines[0]
+    let summary = lines[0]
         .strip_prefix("memphant-worker: drain completed=")
         .expect("exact drain summary prefix");
-    assert!(
-        total.parse::<usize>().is_ok(),
-        "total must be numeric: {total}"
-    );
+    let (completed, summary) = summary.split_once(" failed=").expect("failed count");
+    let (failed, summary) = summary.split_once(" retried=").expect("retried count");
+    let (retried, deferred) = summary.split_once(" deferred=").expect("deferred count");
+    for (name, value) in [
+        ("completed", completed),
+        ("failed", failed),
+        ("retried", retried),
+        ("deferred", deferred),
+    ] {
+        assert!(
+            value.parse::<usize>().is_ok(),
+            "{name} must be numeric: {value}"
+        );
+    }
 }
 
 #[test]

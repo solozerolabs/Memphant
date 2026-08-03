@@ -59,8 +59,40 @@ under `~/.cache/memphant-bench/` and `~/.cache/memphant/` were preserved.
 - Both machine results are registered in the evidence contract and their
   focused regression tests pass.
 
+## Verification
+
+- `python3 -m pytest tests/ -q`: 808 passed, 8 skipped.
+- Spec drift, power instrumentation, and evidence-contract checks: clean;
+  59 contracted artifacts and 45 named retrofit-pending artifacts.
+- `cargo fmt --check`: clean.
+- `cargo clippy --all-targets --all-features -- -D warnings`: clean.
+- `cargo test --workspace --all-targets --all-features`: exit 0.
+- `cargo test --doc`: exit 0.
+- Scratch-Postgres store and worker executable tests: 93 passed, 0 failed.
+- Provider lint: clean for `plain-postgres`, `supabase`, and `neon`.
+- Migration dry-run: nine migrations ordered through
+  `20260801_009_drop_dead_schema.sql`.
+- Real server, worker, CLI, MCP, and PostgreSQL E2E probe: all checks passed.
+- The private Syndai mirror was synchronized through its required worktree and
+  preflight path; remote `main` accepted `e824dff66` and CI passed.
+
+The scratch gate exposed one stale test assertion: the worker's current drain
+contract prints `completed`, `failed`, `retried`, and `deferred`, while the old
+process test still parsed everything after `completed=` as one integer. The
+producer and benchmark consumers already shared the stronger four-field
+contract, so only the stale test was corrected. The focused live regression and
+the complete 93-test scratch suite then passed.
+
+Rust 1.96.1 on this macOS host repeatedly left compiler and zero-case rustdoc
+children sleeping between Cargo jobs. A temporary out-of-repo wrapper cleared
+inherited jobserver variables and serialized builds; no repository or toolchain
+change was made. The official scratch command's substantive tests all passed,
+but its trailing zero-case rustdoc stalled. The same packages therefore ran
+with `--tests` to a clean exit, alongside the separate clean workspace doctest
+gate. This is an execution-environment caveat, not product or evidence proof.
+
 ## Remaining publication gate
 
-Run the complete `AGENTS.md` verification contract, push `main`, and verify the
-exact GitHub Actions run. Any unavailable live-Postgres or private-Syndai check
-must remain named as unavailable rather than reported green.
+Commit the verified worker-test correction and this log, push `main` by normal
+fast-forward, and verify the exact GitHub Actions run before beginning the next
+external evidence stage.

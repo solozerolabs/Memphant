@@ -851,5 +851,3 @@ Gitignored, at `~/.memphant-private/track-r-paraphrase/run-rerank/`: both arms'
 evidence JSONL and provenance reports (with `cross_rerank_liveness`,
 `gold_cross_rerank_rank` per question, and the full drain block), the server
 logs carrying the per-query `cross_rerank_ms` lines, and the binary hashes.
-
-

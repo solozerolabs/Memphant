@@ -3,7 +3,6 @@
 **Task S2 · branch `s2-instrument` · 2026-08-01 · $0, no paid call on any path.**
 
 ---
-
 ## 0. THE TRAP, first, because it is the finding most likely to be misread
 
 **A corpus whose gold is not recency-identified will make BOTH arms score worse.**
@@ -491,4 +490,3 @@ cluster bootstrap over the 257 instances, as `memorycode.lock.json` already
 prescribes, and report the realised DEFF beside the interval.
 
 ---
-
