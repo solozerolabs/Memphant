@@ -609,6 +609,22 @@ def test_cache_key_includes_response_schema_and_decoding_identity(tmp_path, monk
     assert cli._cache_path("reader", "sys", "prompt") != original
 
 
+def test_openrouter_cache_prefix_preserves_exact_prompt_text() -> None:
+    reader = _load_run_reader()
+
+    content = reader.openrouter_user_content(
+        "shared prefix and request tail", "shared prefix"
+    )
+
+    assert "".join(block["text"] for block in content) == (
+        "shared prefix and request tail"
+    )
+    assert content[0]["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in content[1]
+    with pytest.raises(ValueError, match="prefix"):
+        reader.openrouter_user_content("request", "not shared")
+
+
 def test_openrouter_uses_strict_provider_schemas_for_reader_and_judge(
     tmp_path, monkeypatch
 ) -> None:

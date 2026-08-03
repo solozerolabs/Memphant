@@ -545,7 +545,7 @@ def test_paid_authorization_is_hash_bound_and_capped_at_25_dollars() -> None:
         module.validate_pilot_authorization(packet, frozen)
 
 
-def test_confirmation_authorization_is_two_arm_hash_bound_and_capped_at_92() -> None:
+def test_confirmation_authorization_is_two_arm_hash_bound_and_capped_at_120() -> None:
     module = load_module()
     frozen = {
         "source_jsonl_sha256": "a" * 64,
@@ -555,22 +555,119 @@ def test_confirmation_authorization_is_two_arm_hash_bound_and_capped_at_92() -> 
         "runner_sha256": "e" * 64,
         "provider_attempts_sha256": "f" * 64,
     }
+    preflight = {
+        "status": "passed",
+        "estimated_total_usd": "86.11",
+        "authorized_ceiling_usd": "120",
+    }
     packet = module.confirmation_authorization_packet(
-        frozen, authorized_by="owner", authorized_at="2026-08-03T00:00:00Z"
+        frozen,
+        preflight=preflight,
+        authorized_by="owner",
+        authorized_at="2026-08-03T00:00:00Z",
     )
 
-    module.validate_confirmation_authorization(packet, frozen)
+    module.validate_confirmation_authorization(packet, frozen, preflight)
     assert packet["hard_limits"] == {
         "max_logical_calls": 240,
         "max_provider_attempts": 480,
-        "max_spend_usd": "92",
+        "max_spend_usd": "120",
     }
     assert packet["arms"] == ["full_context", "fast"]
     assert "deep" not in json.dumps(packet).lower()
+    assert packet["prompt_cache"] == {
+        "provider": "anthropic",
+        "type": "explicit_ephemeral",
+        "write_multiplier": "1.25",
+        "read_multiplier": "0.1",
+        "require_write_then_read_per_user": True,
+    }
 
-    packet["hard_limits"]["max_spend_usd"] = "93"
+    packet["hard_limits"]["max_spend_usd"] = "121"
     with pytest.raises(ValueError, match="authorization scope"):
-        module.validate_confirmation_authorization(packet, frozen)
+        module.validate_confirmation_authorization(packet, frozen, preflight)
+
+
+def test_confirmation_reader_requests_pair_exact_cache_prefixes_first() -> None:
+    module = load_module()
+    prefix = "stable memory\n" * 2_000
+    rows = []
+    fast_rows = []
+    for index, user_id in enumerate(("user-a", "user-b")):
+        for suffix in ("early", "later context"):
+            row = sample_row(index)
+            row.update(
+                id=f"{user_id}-{suffix}",
+                user_id=user_id,
+                conversation=prefix + suffix,
+            )
+            rows.append(row)
+            fast_rows.append(
+                {
+                    "id": row["id"],
+                    "evidence": [{"body": "current memory"}],
+                    "question": "choose A-E",
+                }
+            )
+
+    requests = module.confirmation_reader_requests(rows, fast_rows)
+
+    assert [request["arm"] for request in requests[:4]] == ["full_context"] * 4
+    for first, second in zip(requests[:4:2], requests[1:4:2], strict=True):
+        assert first["user_id"] == second["user_id"]
+        assert first["cache_role"] == "write"
+        assert second["cache_role"] == "read"
+        assert first["cache_prefix"] == second["cache_prefix"]
+        assert first["prompt"].startswith(first["cache_prefix"])
+        assert second["prompt"].startswith(second["cache_prefix"])
+    assert [request["arm"] for request in requests[4:]] == ["fast"] * 4
+
+
+def test_confirmation_cost_preflight_requires_cache_savings_and_usage_proof() -> None:
+    module = load_module()
+    requests = [
+        {
+            "arm": "full_context",
+            "prompt": "x" * 100,
+            "cache_prefix": "x" * 80,
+            "cache_role": "write",
+        },
+        {
+            "arm": "full_context",
+            "prompt": "x" * 140,
+            "cache_prefix": "x" * 80,
+            "cache_role": "read",
+        },
+        {
+            "arm": "fast",
+            "prompt": "x" * 10,
+            "cache_prefix": None,
+            "cache_role": None,
+        },
+    ]
+
+    preflight = module.confirmation_cost_preflight(
+        requests,
+        pilot_prompt_chars=1_000,
+        pilot_prompt_tokens=250,
+        max_output_tokens=10,
+    )
+
+    assert preflight["cache_adjusted_prompt_chars"] == "198.00"
+    assert preflight["status"] == "passed"
+    module.validate_confirmation_cache_usage(
+        {"usage": {"prompt_tokens_details": {"cache_write_tokens": 20}}},
+        "write",
+    )
+    module.validate_confirmation_cache_usage(
+        {"usage": {"prompt_tokens_details": {"cached_tokens": 20}}},
+        "read",
+    )
+    with pytest.raises(RuntimeError, match="cache read"):
+        module.validate_confirmation_cache_usage(
+            {"usage": {"prompt_tokens_details": {"cached_tokens": 0}}},
+            "read",
+        )
 
 
 def test_selective_routing_uses_fast_answer_or_requires_completed_deep() -> None:
@@ -735,4 +832,13 @@ def test_confirmation_analysis_applies_all_preregistered_gates_by_user() -> None
         "evolved_distractors_not_increased": True,
         "discordance_sufficient": True,
         "outcome": "pass",
+    }
+    contract = module.confirmation_result_contract("a" * 64, result)
+    assert contract["decisional"] is True
+    assert contract["power"] == {
+        "test": "bootstrap paired difference",
+        "n": 12,
+        "b": 0,
+        "c": 6,
+        "n_d": 6,
     }

@@ -55,6 +55,7 @@ SCORING_ONLY_FIELDS = (
 PROMPT_FIELDS = ("id", "user_id", "generator", "conversation", "options")
 MAX_EPISODE_BYTES = 120_000
 RECALL_QUERY_CHARS = 8_000
+MIN_CACHE_PREFIX_CHARS = 16_384
 ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
 PAID_ARMS = ("full_context", "fast", "selective_deep")
 CONFIRMATION_ARMS = ("full_context", "fast")
@@ -65,7 +66,7 @@ DEEP_MODEL = "openai/gpt-5.6-luna-20260709"
 DEEP_PROVIDER = "azure"
 DEEP_MAX_SPEND_USD = Decimal("3")
 COMBINED_MAX_SPEND_USD = Decimal("25")
-CONFIRMATION_MAX_SPEND_USD = Decimal("92")
+CONFIRMATION_MAX_SPEND_USD = Decimal("120")
 READER_SYSTEM_PROMPT = (
     "Choose the response A-E that best matches the user's current preference using "
     "only the supplied evidence. If the evidence is insufficient, set abstain=true "
@@ -227,13 +228,34 @@ def validate_pilot_authorization(packet: dict, expected_frozen: dict) -> None:
 
 
 def confirmation_authorization_packet(
-    frozen_inputs: dict, *, authorized_by: str, authorized_at: str
+    frozen_inputs: dict,
+    *,
+    preflight: dict,
+    authorized_by: str,
+    authorized_at: str,
 ) -> dict:
+    if (
+        preflight.get("status") != "passed"
+        or Decimal(preflight["estimated_total_usd"])
+        > Decimal(preflight["authorized_ceiling_usd"])
+        or Decimal(preflight["authorized_ceiling_usd"])
+        != CONFIRMATION_MAX_SPEND_USD
+    ):
+        raise ValueError("paid confirmation cost preflight did not pass")
     packet = {
         "schema_version": 1,
-        "status": "AUTHORIZED_HORIZONBENCH_CONFIRMATION",
+        "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+        "campaign_type": "horizonbench_confirmation",
         "frozen_inputs": frozen_inputs,
         "arms": list(CONFIRMATION_ARMS),
+        "cost_preflight": preflight,
+        "prompt_cache": {
+            "provider": "anthropic",
+            "type": "explicit_ephemeral",
+            "write_multiplier": "1.25",
+            "read_multiplier": "0.1",
+            "require_write_then_read_per_user": True,
+        },
         "models": {
             "reader": READER_MODEL,
             "reader_provider": READER_PROVIDER,
@@ -284,7 +306,9 @@ def confirmation_authorization_packet(
     return packet
 
 
-def validate_confirmation_authorization(packet: dict, expected_frozen: dict) -> None:
+def validate_confirmation_authorization(
+    packet: dict, expected_frozen: dict, expected_preflight: dict
+) -> None:
     authorization = packet.get("authorization") if isinstance(packet, dict) else None
     if (
         not isinstance(authorization, dict)
@@ -296,6 +320,7 @@ def validate_confirmation_authorization(packet: dict, expected_frozen: dict) -> 
         raise ValueError("paid confirmation authorization is missing owner approval")
     expected = confirmation_authorization_packet(
         expected_frozen,
+        preflight=expected_preflight,
         authorized_by=authorization["authorized_by"],
         authorized_at=authorization["authorized_at"],
     )
@@ -668,6 +693,57 @@ def pilot_evidence_contract(source_sha: str, analysis: dict) -> dict:
             "license_evidence": "Pinned Hugging Face dataset metadata.",
         },
         "notes": "n=10 and n_d below the exact McNemar floor; process gate only.",
+    }
+
+
+def confirmation_result_contract(source_sha: str, analysis: dict) -> dict:
+    paired = analysis["paired_fast_vs_full"]
+    n = analysis["arms"]["fast"]["n"]
+    return {
+        "schema_version": 1,
+        "decisional": paired["discordant"] >= 6,
+        "claim": "The frozen 60-user HorizonBench tranche is a held-out paired Fast-versus-full-context confirmation.",
+        "power": {
+            "test": "bootstrap paired difference",
+            "n": n,
+            "b": paired["losses"],
+            "c": paired["gains"],
+            "n_d": paired["discordant"],
+        },
+        "mechanism_enabled": True,
+        "probe_kind": "lever",
+        "mechanism_evidence": "Every Fast prediction used non-degraded evidence from the matching passed construction gate.",
+        "harness": {
+            "embed_model": "local sentence-unit embedder",
+            "scorer": "exact released HorizonBench correct_letter",
+            "k": 20,
+            "budget": 16384,
+            "flags": [
+                "full_context",
+                "fast",
+                "reader=anthropic/claude-opus-4.5",
+                "anthropic_explicit_prompt_cache",
+            ],
+        },
+        "corpus": {
+            "sha256": source_sha,
+            "snapshot_id": f"{DATASET_ID}@{DATASET_REVISION}:benchmark/test:confirmation-v1",
+            "n_items": n,
+        },
+        "instrument_verification": {
+            "shipped_rows_verified": True,
+            "rows_counted": n,
+            "fields_counted": {
+                "conversation": n,
+                "options": n,
+                "correct_letter": n,
+                "has_evolved": n,
+            },
+            "license_id": "CC-BY-4.0",
+            "license_source": "RECORD_METADATA",
+            "license_evidence": "Pinned Hugging Face dataset metadata.",
+        },
+        "notes": "User-clustered bootstrap is primary; no complete-split or cross-axis SOTA claim.",
     }
 
 
@@ -1817,6 +1893,117 @@ def full_context_prompt(row: dict) -> str:
     )
 
 
+def confirmation_reader_requests(rows: list[dict], fast_rows: list[dict]) -> list[dict]:
+    by_user: dict[str, list[dict]] = {}
+    for row in rows:
+        by_user.setdefault(row["user_id"], []).append(row)
+    if any(len(user_rows) != 2 for user_rows in by_user.values()):
+        raise ValueError("confirmation caching requires exactly two rows per user")
+
+    paired = []
+    for user_id, user_rows in by_user.items():
+        prompts = sorted(
+            ((full_context_prompt(row), row) for row in user_rows),
+            key=lambda value: len(value[0]),
+        )
+        cache_prefix = os.path.commonprefix([prompt for prompt, _ in prompts])
+        if len(cache_prefix) < MIN_CACHE_PREFIX_CHARS:
+            raise ValueError(
+                f"confirmation cache prefix is too short for {user_id}: "
+                f"{len(cache_prefix)} chars"
+            )
+        paired.append((max(len(prompt) for prompt, _ in prompts), user_id, prompts, cache_prefix))
+
+    requests = []
+    for _, user_id, prompts, cache_prefix in sorted(paired, reverse=True):
+        for cache_role, (prompt, row) in zip(("write", "read"), prompts, strict=True):
+            requests.append(
+                {
+                    "id": row["id"],
+                    "user_id": user_id,
+                    "arm": "full_context",
+                    "prompt": prompt,
+                    "cache_prefix": cache_prefix,
+                    "cache_role": cache_role,
+                }
+            )
+
+    fast_by_id = {row["id"]: row for row in fast_rows}
+    if set(fast_by_id) != {row["id"] for row in rows}:
+        raise ValueError("confirmation Fast evidence IDs do not match source IDs")
+    fast_requests = []
+    for row in rows:
+        fast = fast_by_id[row["id"]]
+        prompt = evidence_prompt(fast["evidence"], fast["question"])
+        fast_requests.append(
+            {
+                "id": row["id"],
+                "user_id": row["user_id"],
+                "arm": "fast",
+                "prompt": prompt,
+                "cache_prefix": None,
+                "cache_role": None,
+            }
+        )
+    requests.extend(sorted(fast_requests, key=lambda row: len(row["prompt"]), reverse=True))
+    return requests
+
+
+def confirmation_cost_preflight(
+    requests: list[dict],
+    *,
+    pilot_prompt_chars: int,
+    pilot_prompt_tokens: int,
+    max_output_tokens: int = 256,
+) -> dict:
+    if pilot_prompt_chars <= 0 or pilot_prompt_tokens <= 0 or not requests:
+        raise ValueError("confirmation cost preflight inputs must be positive")
+    shared_chars = sum(
+        len(request["cache_prefix"])
+        for request in requests
+        if request["cache_role"] == "write"
+    )
+    prompt_chars = sum(len(request["prompt"]) for request in requests)
+    adjusted_chars = Decimal(prompt_chars) - Decimal("0.65") * shared_chars
+    token_ratio = Decimal(pilot_prompt_tokens) / Decimal(pilot_prompt_chars)
+    input_cost = (
+        adjusted_chars * token_ratio * Decimal("5") / Decimal(1_000_000)
+    )
+    completion_cost = (
+        Decimal(len(requests) * max_output_tokens)
+        * Decimal("25")
+        / Decimal(1_000_000)
+    )
+    estimate = input_cost + completion_cost
+    buffered = estimate * Decimal("1.05")
+    return {
+        "status": (
+            "passed" if buffered <= CONFIRMATION_MAX_SPEND_USD else "blocked"
+        ),
+        "method": "pilot prompt-token ratio plus exact 1.25x write and 0.1x read cache multipliers, with 5% planning buffer",
+        "prompt_chars": prompt_chars,
+        "shared_cache_prefix_chars": shared_chars,
+        "cache_adjusted_prompt_chars": f"{adjusted_chars:.2f}",
+        "pilot_prompt_chars": pilot_prompt_chars,
+        "pilot_prompt_tokens": pilot_prompt_tokens,
+        "pilot_tokens_per_char": str(token_ratio),
+        "estimated_input_usd": f"{input_cost:.6f}",
+        "max_completion_usd": f"{completion_cost:.6f}",
+        "estimated_total_usd_before_buffer": f"{estimate:.6f}",
+        "estimated_total_usd": f"{buffered:.6f}",
+        "authorized_ceiling_usd": str(CONFIRMATION_MAX_SPEND_USD),
+        "calls": len(requests),
+        "cache_reference": "https://openrouter.ai/docs/guides/best-practices/prompt-caching",
+    }
+
+
+def validate_confirmation_cache_usage(metadata: dict, cache_role: str) -> None:
+    details = (metadata.get("usage") or {}).get("prompt_tokens_details") or {}
+    field = "cache_write_tokens" if cache_role == "write" else "cached_tokens"
+    if not isinstance(details.get(field), (int, float)) or details[field] <= 0:
+        raise RuntimeError(f"required Anthropic cache {cache_role} was not observed")
+
+
 def _validate_reader_metadata(metadata: dict | None) -> None:
     if (
         not isinstance(metadata, dict)
@@ -1830,8 +2017,17 @@ def _validate_reader_metadata(metadata: dict | None) -> None:
         raise RuntimeError("reader provider/model/price provenance mismatch")
 
 
-def reader_terminal(cli: ReaderCli, item_id: str, arm: str, prompt: str) -> dict:
-    reply = cli.call("reader", READER_SYSTEM_PROMPT, prompt)
+def reader_terminal(
+    cli: ReaderCli,
+    item_id: str,
+    arm: str,
+    prompt: str,
+    *,
+    cache_prefix: str | None = None,
+) -> dict:
+    reply = cli.call(
+        "reader", READER_SYSTEM_PROMPT, prompt, cache_prefix=cache_prefix
+    )
     metadata = cli.last_call_metadata
     _validate_reader_metadata(metadata)
     try:
@@ -1881,6 +2077,226 @@ def _expected_paid_frozen(args) -> dict:
             SCRIPTS_DIR / "provider_attempts.py"
         ),
     }
+
+
+def _expected_confirmation_frozen(args) -> dict:
+    return {
+        "source_jsonl_sha256": gr.sha256_file(args.source.resolve()),
+        "selection_sha256": gr.sha256_file(args.selection.resolve()),
+        "fast_evidence_sha256": gr.sha256_file(args.fast_evidence.resolve()),
+        "fast_gate_sha256": gr.sha256_file(args.fast_gate.resolve()),
+        "runner_sha256": gr.sha256_file(Path(__file__)),
+        "provider_attempts_sha256": gr.sha256_file(
+            SCRIPTS_DIR / "provider_attempts.py"
+        ),
+    }
+
+
+def authorize_confirmation(args) -> dict:
+    source_rows, selection = load_locked_confirmation(
+        args.source.resolve(), args.selection.resolve()
+    )
+    fast_rows = load_jsonl(args.fast_evidence.resolve())
+    validate_evidence_rows(fast_rows, selection["expected_ids"], "fast")
+    fast_gate = json.loads(args.fast_gate.read_text(encoding="utf-8"))
+    if fast_gate.get("status") != "passed" or fast_gate.get(
+        "evidence_jsonl_sha256"
+    ) != gr.sha256_file(args.fast_evidence.resolve()):
+        raise ValueError("confirmation authorization requires the matching Fast gate")
+
+    pilot_source = load_jsonl(args.pilot_source.resolve())
+    pilot_paid = load_jsonl(args.pilot_paid_rows.resolve())
+    pilot_by_id = {row["id"]: row for row in pilot_source}
+    pilot_full = [row for row in pilot_paid if row.get("arm") == "full_context"]
+    if len(pilot_full) != 10 or len(pilot_by_id) != 10:
+        raise ValueError("confirmation preflight requires ten pilot full-context rows")
+    pilot_prompt_chars = sum(
+        len(full_context_prompt(pilot_by_id[row["id"]])) for row in pilot_full
+    )
+    try:
+        pilot_prompt_tokens = sum(
+            int(row["provider"]["usage"]["prompt_tokens"]) for row in pilot_full
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("pilot prompt-token accounting is incomplete") from error
+    requests = confirmation_reader_requests(source_rows, fast_rows)
+    preflight = confirmation_cost_preflight(
+        requests,
+        pilot_prompt_chars=pilot_prompt_chars,
+        pilot_prompt_tokens=pilot_prompt_tokens,
+    )
+    preflight["pilot_source_sha256"] = gr.sha256_file(args.pilot_source.resolve())
+    preflight["pilot_paid_rows_sha256"] = gr.sha256_file(
+        args.pilot_paid_rows.resolve()
+    )
+    if preflight["status"] != "passed":
+        raise ValueError("confirmation cost preflight exceeds the authorized ceiling")
+    packet = confirmation_authorization_packet(
+        _expected_confirmation_frozen(args),
+        preflight=preflight,
+        authorized_by=args.authorized_by,
+        authorized_at=args.authorized_at,
+    )
+    atomic_write_json(args.out.resolve(), packet)
+    return packet
+
+
+def run_paid_confirmation(args) -> dict:
+    source_rows, selection = load_locked_confirmation(
+        args.source.resolve(), args.selection.resolve()
+    )
+    expected_ids = selection["expected_ids"]
+    fast_rows = load_jsonl(args.fast_evidence.resolve())
+    validate_evidence_rows(fast_rows, expected_ids, "fast")
+    fast_gate = json.loads(args.fast_gate.read_text(encoding="utf-8"))
+    if fast_gate.get("status") != "passed" or fast_gate.get(
+        "evidence_jsonl_sha256"
+    ) != gr.sha256_file(args.fast_evidence.resolve()):
+        raise ValueError("paid confirmation requires the matching passed Fast gate")
+
+    packet = json.loads(args.authorization.read_text(encoding="utf-8"))
+    frozen = _expected_confirmation_frozen(args)
+    validate_confirmation_authorization(packet, frozen, packet.get("cost_preflight", {}))
+    authorization_sha = packet["authorization"]["authorization_scope_sha256"]
+    execution = packet["execution"]
+    artifact_dir = args.authorization.resolve().parent
+    journal = artifact_dir / execution["journal_path"]
+    cache_dir = artifact_dir / execution["cache_dir"]
+    raw_output = artifact_dir / execution["raw_rows"]
+    closure_path = artifact_dir / execution["closure"]
+    census_path = artifact_dir / execution["census"]
+    if args.output.resolve() != raw_output.resolve():
+        raise ValueError("paid output differs from the authorized path")
+
+    ledger = open_campaign_ledger(
+        args.authorization,
+        screen_id="horizonbench-confirmation",
+        expected_journal_path=journal,
+    )
+    try:
+        snapshot = ledger.snapshot()
+        reported, unsettled = restore_spend_from_attempts(snapshot["attempts"])
+        cli = ReaderCli(
+            "openrouter",
+            READER_MODEL,
+            READER_MODEL,
+            cache_dir,
+            max_calls=240,
+            max_spend_usd=CONFIRMATION_MAX_SPEND_USD,
+            max_price_per_million={
+                "prompt": Decimal("5"),
+                "completion": Decimal("25"),
+            },
+            max_output_tokens=256,
+        )
+        cli.provider_only = [READER_PROVIDER]
+        cli.set_provider_attempt_ledger(ledger)
+        cli.provider_attempts = len(snapshot["attempts"])
+        cli.set_provider_attempt_limit(480)
+        cli.restore_spend_state(
+            reported_spend_usd=reported, unsettled_liability_usd=unsettled
+        )
+
+        terminal_rows = load_jsonl(raw_output)
+        keys = [(row.get("id"), row.get("arm")) for row in terminal_rows]
+        if len(keys) != len(set(keys)):
+            raise ValueError("confirmation resume contains duplicate terminal rows")
+        if any(
+            row.get("authorization_sha256") != authorization_sha
+            or row.get("id") not in expected_ids
+            or row.get("arm") not in CONFIRMATION_ARMS
+            for row in terminal_rows
+        ):
+            raise ValueError("confirmation resume row is outside authorized scope")
+        by_key = {(row["id"], row["arm"]): row for row in terminal_rows}
+        requests = confirmation_reader_requests(source_rows, fast_rows)
+        for request in requests:
+            key = (request["id"], request["arm"])
+            if key in by_key:
+                continue
+            try:
+                row = reader_terminal(
+                    cli,
+                    request["id"],
+                    request["arm"],
+                    request["prompt"],
+                    cache_prefix=request["cache_prefix"],
+                )
+                if request["cache_role"] is not None:
+                    validate_confirmation_cache_usage(
+                        row.get("provider") or {}, request["cache_role"]
+                    )
+            except (CallBudgetExceeded, ProviderRefusal, RuntimeError) as error:
+                _append_terminal(
+                    terminal_rows,
+                    raw_output,
+                    authorization_sha,
+                    {
+                        "id": request["id"],
+                        "arm": request["arm"],
+                        "status": "error",
+                        "answer": None,
+                        "abstain": False,
+                        "cache_role": request["cache_role"],
+                        "error": f"{type(error).__name__}: {error}",
+                    },
+                )
+                raise
+            row["cache_role"] = request["cache_role"]
+            _append_terminal(terminal_rows, raw_output, authorization_sha, row)
+            by_key[key] = row
+
+        validate_terminal_rows(
+            terminal_rows, expected_ids, arms=CONFIRMATION_ARMS
+        )
+        snapshot = ledger.snapshot()
+        if not provider_attempt_ledger_is_complete(snapshot):
+            raise RuntimeError("confirmation reader ledger is incomplete or unpriced")
+        reader_cost = Decimal(str(snapshot["reported_cost_usd"]))
+        if reader_cost > CONFIRMATION_MAX_SPEND_USD:
+            raise RuntimeError("confirmation spend ceiling exceeded")
+        details = [
+            ((row.get("provider") or {}).get("usage") or {}).get(
+                "prompt_tokens_details"
+            )
+            or {}
+            for row in terminal_rows
+        ]
+        closure = ledger.close_campaign(closure_path)
+        census = {
+            "schema_version": 1,
+            "status": "complete",
+            "authorization_scope_sha256": authorization_sha,
+            "terminal_rows": len(terminal_rows),
+            "completed_rows": sum(
+                row["status"] == "completed" for row in terminal_rows
+            ),
+            "error_rows": sum(row["status"] == "error" for row in terminal_rows),
+            "reader": {
+                "model": READER_MODEL,
+                "provider": READER_PROVIDER,
+                "provider_attempts": snapshot["provider_attempts"],
+                "priced_provider_attempts": snapshot["priced_provider_attempts"],
+                "reported_cost_usd": str(reader_cost),
+                "attempts_sha256": snapshot["attempts_sha256"],
+                "cache_write_tokens": sum(
+                    int(detail.get("cache_write_tokens") or 0) for detail in details
+                ),
+                "cache_read_tokens": sum(
+                    int(detail.get("cached_tokens") or 0) for detail in details
+                ),
+            },
+            "raw_rows_sha256": gr.sha256_file(raw_output),
+            "journal_closure": closure,
+            "lineage": {
+                "repository": gr.repository_identity(REPO_ROOT),
+                **frozen,
+            },
+        }
+        atomic_write_json(census_path, census)
+        return census
+    finally:
+        ledger.close()
 
 
 def _configure_deep_runtime() -> None:
@@ -2609,6 +3025,86 @@ def build_analysis(args) -> dict:
     return result
 
 
+def build_confirmation_analysis(args) -> dict:
+    source_rows, selection = load_locked_confirmation(
+        args.source.resolve(), args.selection.resolve()
+    )
+    terminal_rows = load_jsonl(args.paid_rows.resolve())
+    census = json.loads(args.paid_census.read_text(encoding="utf-8"))
+    if (
+        census.get("status") != "complete"
+        or census.get("raw_rows_sha256")
+        != gr.sha256_file(args.paid_rows.resolve())
+        or census.get("terminal_rows") != 240
+        or census.get("error_rows") != 0
+    ):
+        raise ValueError(
+            "confirmation analysis requires the complete hash-matched paid census"
+        )
+    analysis = analyze_confirmation_rows(
+        source_rows,
+        terminal_rows,
+        bootstrap_seed=args.bootstrap_seed,
+        bootstrap_samples=args.bootstrap_samples,
+    )
+    passed = analysis["verdict"]["outcome"] == "pass"
+    result = {
+        "schema_version": 1,
+        "status": "complete",
+        "decisional": analysis["paired_fast_vs_full"]["discordant"] >= 6,
+        "claim": (
+            "Fast passed the frozen held-out paired HorizonBench confirmation against full context."
+            if passed
+            else "Fast did not pass the frozen held-out paired HorizonBench confirmation against full context."
+        ),
+        "source": {
+            "dataset": DATASET_ID,
+            "dataset_revision": DATASET_REVISION,
+            "jsonl_sha256": selection["source_jsonl_sha256"],
+            "selection_sha256": gr.sha256_file(args.selection.resolve()),
+            "rows": len(source_rows),
+            "users": len({row["user_id"] for row in source_rows}),
+        },
+        "analysis": analysis,
+        "published_reference": {
+            "overall_accuracy": 0.528,
+            "evolved_accuracy": 0.513,
+            "comparison_status": "held_out_tranche_not_complete_official_split",
+            "near_sota": False,
+        },
+        "accounting": {
+            "authorization_scope_sha256": census["authorization_scope_sha256"],
+            "paid_census_sha256": gr.sha256_file(args.paid_census.resolve()),
+            "reader_cost_usd": census["reader"]["reported_cost_usd"],
+            "provider_attempts": census["reader"]["provider_attempts"],
+            "cache_write_tokens": census["reader"]["cache_write_tokens"],
+            "cache_read_tokens": census["reader"]["cache_read_tokens"],
+            "unsettled_cost_usd": "0",
+        },
+        "claim_boundary": {
+            "held_out_preference_confirmation": passed,
+            "official_full_split": False,
+            "overall_sota": False,
+            "cross_axis_near_sota": False,
+            "next_authorized": "none; stop after confirmation verdict",
+        },
+        "evidence_contract": confirmation_result_contract(
+            selection["source_jsonl_sha256"], analysis
+        ),
+        "lineage": {
+            "repository": gr.repository_identity(REPO_ROOT),
+            "runner_sha256": gr.sha256_file(Path(__file__)),
+            "test_sha256": gr.sha256_file(
+                REPO_ROOT / "tests" / "test_horizonbench_contract.py"
+            ),
+            "paid_rows_sha256": gr.sha256_file(args.paid_rows.resolve()),
+            "paid_census_sha256": gr.sha256_file(args.paid_census.resolve()),
+        },
+    }
+    atomic_write_json(args.output.resolve(), result)
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2684,6 +3180,35 @@ def main() -> int:
     confirmation_evidence.add_argument(
         "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
     )
+    confirmation_authorize = subparsers.add_parser("authorize-confirmation")
+    confirmation_authorize.add_argument("--source", required=True, type=Path)
+    confirmation_authorize.add_argument("--selection", required=True, type=Path)
+    confirmation_authorize.add_argument("--fast-evidence", required=True, type=Path)
+    confirmation_authorize.add_argument("--fast-gate", required=True, type=Path)
+    confirmation_authorize.add_argument(
+        "--pilot-source",
+        default=Path.home()
+        / ".cache/memphant-bench/horizonbench"
+        / DATASET_REVISION
+        / "sample.jsonl",
+        type=Path,
+    )
+    confirmation_authorize.add_argument(
+        "--pilot-paid-rows",
+        default=REPO_ROOT
+        / "docs/build-log/artifacts/horizonbench-pilot/paid-rows.jsonl",
+        type=Path,
+    )
+    confirmation_authorize.add_argument("--authorized-by", required=True)
+    confirmation_authorize.add_argument("--authorized-at", required=True)
+    confirmation_authorize.add_argument("--out", required=True, type=Path)
+    confirmation_paid = subparsers.add_parser("run-paid-confirmation")
+    confirmation_paid.add_argument("--source", required=True, type=Path)
+    confirmation_paid.add_argument("--selection", required=True, type=Path)
+    confirmation_paid.add_argument("--fast-evidence", required=True, type=Path)
+    confirmation_paid.add_argument("--fast-gate", required=True, type=Path)
+    confirmation_paid.add_argument("--authorization", required=True, type=Path)
+    confirmation_paid.add_argument("--output", required=True, type=Path)
     paid = subparsers.add_parser("run-paid-pilot")
     paid.add_argument("--source", required=True, type=Path)
     paid.add_argument(
@@ -2733,6 +3258,18 @@ def main() -> int:
     analysis.add_argument("--output", required=True, type=Path)
     analysis.add_argument("--bootstrap-seed", type=int, default=20260803)
     analysis.add_argument("--bootstrap-samples", type=int, default=20_000)
+    confirmation_analysis = subparsers.add_parser("analyze-confirmation")
+    confirmation_analysis.add_argument("--source", required=True, type=Path)
+    confirmation_analysis.add_argument("--selection", required=True, type=Path)
+    confirmation_analysis.add_argument("--paid-rows", required=True, type=Path)
+    confirmation_analysis.add_argument("--paid-census", required=True, type=Path)
+    confirmation_analysis.add_argument("--output", required=True, type=Path)
+    confirmation_analysis.add_argument(
+        "--bootstrap-seed", type=int, default=20260803
+    )
+    confirmation_analysis.add_argument(
+        "--bootstrap-samples", type=int, default=20_000
+    )
     args = parser.parse_args()
     if args.command == "fetch-sample":
         lock = fetch_sample(args.out)
@@ -2753,11 +3290,20 @@ def main() -> int:
     elif args.command == "build-confirmation-evidence":
         report = build_confirmation_evidence(args)
         print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "authorize-confirmation":
+        report = authorize_confirmation(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "run-paid-confirmation":
+        report = run_paid_confirmation(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "run-paid-pilot":
         report = run_paid_pilot(args)
         print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "analyze":
         report = build_analysis(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "analyze-confirmation":
+        report = build_confirmation_analysis(args)
         print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

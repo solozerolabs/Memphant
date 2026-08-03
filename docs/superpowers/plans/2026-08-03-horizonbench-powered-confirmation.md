@@ -1,6 +1,9 @@
 # HorizonBench powered confirmation plan
 
-**Status:** owner authorized gates 1-2 on 2026-08-03 with a hard $92 ceiling.
+**Status:** owner authorized gates 1-2 on 2026-08-03 and explicitly removed the
+original $92 constraint. The runner retains a $120 fail-safe ceiling and uses
+Anthropic explicit prompt caching; its pilot-calibrated estimate is $86.11
+before a 5% planning buffer ($90.41 buffered).
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision
@@ -23,10 +26,13 @@ engine. PostgreSQL remains the authority and the product path remains Fast.
    selected timeline incrementally once, not once per question.
 2. **Held-out paired confirmation.** Before reading answers, exclude all ten
    exposed sample users and select 20 users per generator, 60 users total, with
-   one evolved and one static question each. Ingest each user's identical
-   timeline once, then run the same Opus snapshot on full context and Fast.
+   one evolved and one static question each. Ingest each user's monotone
+   timeline prefixes incrementally, then run the same Opus snapshot on full
+   context and Fast.
    The authorization permits 240 logical reader calls, at most 480 provider
-   attempts, no Deep, and at most $92 combined spend. Require complete
+   attempts, no Deep, and at most $120 combined spend. Exact shared
+   full-context prefixes must produce an observed cache write then read for
+   every user pair; a missing cache event stops the run. Require complete
    priced rows, user-clustered intervals, non-negative overall delta, positive
    evolved delta, no increase in evolved distractor selections, and at least
    six discordant pairs.
