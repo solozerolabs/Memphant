@@ -837,53 +837,139 @@ def runtime_item(row: dict, *, context_ref: str | None = None) -> dict:
 
 
 def confirmation_runtime_items(rows: list[dict]) -> list[dict]:
-    items = []
+    by_user: dict[str, list[dict]] = {}
     for row in rows:
-        view = prompt_item(row)
-        sessions = parse_sessions(normalize_source_text(view["conversation"]))
-        session_times = _observed_times(sessions)
-        context_ref = f"horizon-user-{_safe_ref(view['user_id'])}"
-        context_token = _safe_ref(context_ref)
-        episodes = []
-        for session_index, session in enumerate(sessions):
-            base_time = datetime.fromisoformat(
-                session_times[session_index].replace("Z", "+00:00")
-            )
-            for turn_index, turn in enumerate(session["turns"]):
-                observed_at = (
-                    (base_time + timedelta(microseconds=turn_index))
-                    .isoformat()
-                    .replace("+00:00", "Z")
-                )
-                label = "User" if turn["role"] == "user" else "Assistant"
-                body = [f"Date: {session['date']}"]
-                if session["scenario"]:
-                    body.append(f"Scenario: {session['scenario']}")
-                body.append(f"{label}: {turn['content'].rstrip()}")
-                episodes.append(
-                    {
-                        "source_ref": (
-                            f"horizon:{context_token}:session:{session_index}:"
-                            f"turn:{turn_index}"
-                        ),
-                        "observed_at": observed_at,
-                        "body": "\n".join(body),
-                    }
-                )
-        question = build_question(view["options"])
-        items.append(
-            {
-                "id": view["id"],
-                "user_id": view["user_id"],
-                "generator": view["generator"],
-                "context_ref": context_ref,
-                "episodes": episodes,
-                "question": question,
-                "recall_query": question[:RECALL_QUERY_CHARS],
-                "options": view["options"],
-            }
+        by_user.setdefault(row["user_id"], []).append(row)
+    if any(len(user_rows) != 2 for user_rows in by_user.values()):
+        raise ValueError("HorizonBench confirmation requires two rows per user")
+    items = []
+    for user_id in sorted(by_user):
+        ordered = sorted(
+            by_user[user_id], key=lambda row: (len(row["conversation"]), row["id"])
         )
+        views = [prompt_item(row) for row in ordered]
+        early, late = [
+            parse_sessions(normalize_source_text(view["conversation"]))
+            for view in views
+        ]
+        if len(early) > len(late) or any(
+            early[index]["turns"] != late[index]["turns"]
+            for index in range(max(0, len(early) - 1))
+        ):
+            raise ValueError(f"HorizonBench timeline drift for user {user_id}")
+        early_last = len(early) - 1
+        early_turns = [
+            {**turn, "content": turn["content"].rstrip()}
+            for turn in early[early_last]["turns"]
+        ]
+        late_prefix = [
+            {**turn, "content": turn["content"].rstrip()}
+            for turn in late[early_last]["turns"][: len(early_turns)]
+        ]
+        if early_turns != late_prefix:
+            raise ValueError(f"HorizonBench timeline drift for user {user_id}")
+        context_ref = f"horizon-user-{_safe_ref(user_id)}"
+        context_token = _safe_ref(context_ref)
+        late_times = _observed_times(late)
+        early_episodes = [
+            {
+                "source_ref": f"horizon:{context_token}:session:{index}",
+                "observed_at": late_times[index],
+                "body": _confirmation_session_body(session),
+            }
+            for index, session in enumerate(early[:-1])
+        ]
+        base_time = datetime.fromisoformat(
+            late_times[early_last].replace("Z", "+00:00")
+        )
+        early_episodes.extend(
+            _confirmation_turn_episode(
+                context_token,
+                early[early_last],
+                session_index=early_last,
+                turn_index=index,
+                turn=turn,
+                base_time=base_time,
+            )
+            for index, turn in enumerate(early_turns)
+        )
+        late_episodes = list(early_episodes)
+        late_episodes.extend(
+            _confirmation_turn_episode(
+                context_token,
+                late[early_last],
+                session_index=early_last,
+                turn_index=index,
+                turn={**turn, "content": turn["content"].rstrip()},
+                base_time=base_time,
+            )
+            for index, turn in enumerate(
+                late[early_last]["turns"][len(early_turns) :],
+                start=len(early_turns),
+            )
+        )
+        late_episodes.extend(
+            {
+                "source_ref": f"horizon:{context_token}:session:{index}",
+                "observed_at": late_times[index],
+                "body": _confirmation_session_body(session),
+            }
+            for index, session in enumerate(late[len(early) :], start=len(early))
+        )
+        for view, episodes in zip(views, (early_episodes, late_episodes), strict=True):
+            question = build_question(view["options"])
+            items.append(
+                {
+                    "id": view["id"],
+                    "user_id": view["user_id"],
+                    "generator": view["generator"],
+                    "context_ref": context_ref,
+                    "episodes": episodes,
+                    "question": question,
+                    "recall_query": question[:RECALL_QUERY_CHARS],
+                    "options": view["options"],
+                }
+            )
     return items
+
+
+def _confirmation_session_body(session: dict) -> str:
+    return _session_body(
+        {
+            **session,
+            "turns": [
+                {**turn, "content": turn["content"].rstrip()}
+                for turn in session["turns"]
+            ],
+        }
+    )
+
+
+def _confirmation_turn_episode(
+    context_token: str,
+    session: dict,
+    *,
+    session_index: int,
+    turn_index: int,
+    turn: dict,
+    base_time: datetime,
+) -> dict:
+    label = "User" if turn["role"] == "user" else "Assistant"
+    body = [f"Date: {session['date']}"]
+    if session["scenario"]:
+        body.append(f"Scenario: {session['scenario']}")
+    body.append(f"{label}: {turn['content']}")
+    return {
+        "source_ref": (
+            f"horizon:{context_token}:session:{session_index}:turn:{turn_index}"
+        ),
+        "observed_at": (
+            (base_time + timedelta(microseconds=turn_index))
+            .isoformat()
+            .replace("+00:00", "Z")
+        ),
+        "body": "\n".join(body),
+    }
 
 
 def build_incremental_confirmation_evidence(

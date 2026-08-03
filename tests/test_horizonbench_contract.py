@@ -472,8 +472,8 @@ def test_confirmation_reuses_one_retained_timeline_per_user() -> None:
     assert items[0]["context_ref"] == items[1]["context_ref"]
     assert items[1]["episodes"][: len(items[0]["episodes"])] == items[0]["episodes"]
     assert len(client.binds) == 1
-    assert retained == compiled == 7
-    assert sum(path == "/v1/episodes" for path, _ in client.posts) == 7
+    assert retained == compiled == 5
+    assert sum(path == "/v1/episodes" for path, _ in client.posts) == 5
     assert sum(path == "/v1/recall" for path, _ in client.posts) == 2
     assert [row["id"] for row in evidence] == [rows[0]["id"], rows[1]["id"]]
 
