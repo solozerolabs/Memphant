@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "status": "failed_closed",
+  "claim": "The first powered-confirmation authorization produced no scored row because Claude Opus 4.5 rejected the largest frozen full-context prompt above its 200000-token context limit.",
+  "failure": {
+    "arm": "full_context",
+    "cache_role": "write",
+    "estimated_input_tokens": 268591,
+    "requested_output_tokens": 256,
+    "provider_context_limit_tokens": 200000,
+    "http_status": 400,
+    "scored_rows": 0
+  },
+  "accounting": {
+    "provider_attempts": 1,
+    "priced_provider_attempts": 0,
+    "reported_cost_usd": "0",
+    "unsettled_cost_usd": "0"
+  },
+  "replacement_boundary": "Do not truncate or compress the control. Reauthorize both arms on the same 1M-context Opus 4.6 model and preserve this failed attempt separately.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The original paid authorization is a context-limit preflight failure with zero scored rows and zero reported spend.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "local sentence-unit embedder",
+      "scorer": "not reached",
+      "k": 20,
+      "budget": 16384,
+      "flags": [
+        "full_context",
+        "reader=anthropic/claude-opus-4.5",
+        "anthropic_explicit_prompt_cache"
+      ]
+    },
+    "corpus": {
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1",
+      "n_items": 0
+    },
+    "notes": "Instrument failure only; no benchmark outcome or SOTA inference."
+  },
+  "lineage": {
+    "git_head": "e1e445cd26acdd04b8cc3aa1291fd0a0b46c1a99",
+    "authorization_sha256": "679d028595d08688bc3b2e1d96f239755323ff5f69b31736a6ce128399faeb59",
+    "authorization_scope_sha256": "9fc63384456e3d1211d938d7780ff28f2909b1616bc14521ac2e7c0e390496d6",
+    "reader_attempts_sha256": "138747b1642dede969a77e19ef7b294f13c9dca8073f5ad5ff78813112908075",
+    "paid_rows_sha256": "61efb6b17a9bff7a9c970ddaf22a02e03cf5356a990a1028770c3a43f5fea122"
+  }
+}

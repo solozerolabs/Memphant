@@ -4,6 +4,9 @@
 original $92 constraint. The runner retains a $120 fail-safe ceiling and uses
 Anthropic explicit prompt caching; its pilot-calibrated estimate is $86.11
 before a 5% planning buffer ($90.41 buffered).
+The first authorization failed closed at $0 before any score when Opus 4.5
+rejected a 268,591-token input against its 200k window. The replacement uses
+Opus 4.6's 1M window for both arms; truncation and compression remain forbidden.
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision
@@ -27,7 +30,7 @@ engine. PostgreSQL remains the authority and the product path remains Fast.
 2. **Held-out paired confirmation.** Before reading answers, exclude all ten
    exposed sample users and select 20 users per generator, 60 users total, with
    one evolved and one static question each. Ingest each user's monotone
-   timeline prefixes incrementally, then run the same Opus snapshot on full
+   timeline prefixes incrementally, then run the same Opus 4.6 snapshot on full
    context and Fast.
    The authorization permits 240 logical reader calls, at most 480 provider
    attempts, no Deep, and at most $120 combined spend. Exact shared

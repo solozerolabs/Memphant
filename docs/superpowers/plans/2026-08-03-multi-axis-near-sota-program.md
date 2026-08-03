@@ -108,7 +108,8 @@ claim and cannot compensate for a failed lane.
   recalls per user, and require complete non-degraded evidence before paid work.
 - [ ] Commit a hash-bound authorization for exactly two arms—full context and
   Fast—240 logical reader calls, at most 480 provider attempts, no Deep,
-  explicit prefix caching, and a $120 fail-safe ceiling.
+  explicit prefix caching, Opus 4.6's 1M context for both arms, and a $120
+  fail-safe ceiling. Preserve the zero-spend Opus 4.5 context-limit failure.
 - [ ] Run the paid command only through
   `doppler run --project syndai --config dev -- ...`; stop on model/provider/
   price drift, incomplete pricing, unsettled liability, or the spend cap.

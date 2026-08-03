@@ -60,6 +60,7 @@ ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
 PAID_ARMS = ("full_context", "fast", "selective_deep")
 CONFIRMATION_ARMS = ("full_context", "fast")
 READER_MODEL = "anthropic/claude-opus-4.5"
+CONFIRMATION_READER_MODEL = "anthropic/claude-opus-4.6"
 READER_PROVIDER = "anthropic"
 READER_MAX_SPEND_USD = Decimal("22")
 DEEP_MODEL = "openai/gpt-5.6-luna-20260709"
@@ -257,7 +258,7 @@ def confirmation_authorization_packet(
             "require_write_then_read_per_user": True,
         },
         "models": {
-            "reader": READER_MODEL,
+            "reader": CONFIRMATION_READER_MODEL,
             "reader_provider": READER_PROVIDER,
             "reader_prompt_sha256": hashlib.sha256(
                 READER_SYSTEM_PROMPT.encode()
@@ -671,7 +672,7 @@ def pilot_evidence_contract(source_sha: str, analysis: dict) -> dict:
                 "full_context",
                 "fast",
                 "selective_deep",
-                "reader=anthropic/claude-opus-4.5",
+                "reader=anthropic/claude-opus-4.6",
             ],
         },
         "corpus": {
@@ -2004,11 +2005,13 @@ def validate_confirmation_cache_usage(metadata: dict, cache_role: str) -> None:
         raise RuntimeError(f"required Anthropic cache {cache_role} was not observed")
 
 
-def _validate_reader_metadata(metadata: dict | None) -> None:
+def _validate_reader_metadata(
+    metadata: dict | None, *, expected_model: str = READER_MODEL
+) -> None:
     if (
         not isinstance(metadata, dict)
         or metadata.get("parse_status") != "provider_response_validated"
-        or metadata.get("requested_model") != READER_MODEL
+        or metadata.get("requested_model") != expected_model
         or str(metadata.get("provider", "")).lower() != READER_PROVIDER
         or not isinstance(metadata.get("usage"), dict)
         or not isinstance(metadata["usage"].get("cost"), (int, float))
@@ -2024,12 +2027,13 @@ def reader_terminal(
     prompt: str,
     *,
     cache_prefix: str | None = None,
+    expected_model: str = READER_MODEL,
 ) -> dict:
     reply = cli.call(
         "reader", READER_SYSTEM_PROMPT, prompt, cache_prefix=cache_prefix
     )
     metadata = cli.last_call_metadata
-    _validate_reader_metadata(metadata)
+    _validate_reader_metadata(metadata, expected_model=expected_model)
     try:
         parsed = parse_reader_output(reply)
         answer = parsed["answer"]
@@ -2178,8 +2182,8 @@ def run_paid_confirmation(args) -> dict:
         reported, unsettled = restore_spend_from_attempts(snapshot["attempts"])
         cli = ReaderCli(
             "openrouter",
-            READER_MODEL,
-            READER_MODEL,
+            CONFIRMATION_READER_MODEL,
+            CONFIRMATION_READER_MODEL,
             cache_dir,
             max_calls=240,
             max_spend_usd=CONFIRMATION_MAX_SPEND_USD,
@@ -2221,6 +2225,7 @@ def run_paid_confirmation(args) -> dict:
                     request["arm"],
                     request["prompt"],
                     cache_prefix=request["cache_prefix"],
+                    expected_model=CONFIRMATION_READER_MODEL,
                 )
                 if request["cache_role"] is not None:
                     validate_confirmation_cache_usage(
@@ -2273,7 +2278,7 @@ def run_paid_confirmation(args) -> dict:
             ),
             "error_rows": sum(row["status"] == "error" for row in terminal_rows),
             "reader": {
-                "model": READER_MODEL,
+                "model": CONFIRMATION_READER_MODEL,
                 "provider": READER_PROVIDER,
                 "provider_attempts": snapshot["provider_attempts"],
                 "priced_provider_attempts": snapshot["priced_provider_attempts"],

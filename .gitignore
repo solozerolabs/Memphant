@@ -226,7 +226,7 @@ docs/build-log/artifacts/horizonbench-pilot/*.jsonl
 docs/build-log/artifacts/horizonbench-pilot/*.jsonl.lock
 docs/build-log/artifacts/horizonbench-pilot/*.log
 docs/build-log/artifacts/horizonbench-pilot/reader-cache/
-docs/build-log/artifacts/horizonbench-confirmation/*.jsonl
-docs/build-log/artifacts/horizonbench-confirmation/*.jsonl.lock
-docs/build-log/artifacts/horizonbench-confirmation/*.log
-docs/build-log/artifacts/horizonbench-confirmation/reader-cache/
+docs/build-log/artifacts/horizonbench-confirmation*/*.jsonl
+docs/build-log/artifacts/horizonbench-confirmation*/*.jsonl.lock
+docs/build-log/artifacts/horizonbench-confirmation*/*.log
+docs/build-log/artifacts/horizonbench-confirmation*/reader-cache/
