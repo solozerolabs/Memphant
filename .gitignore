@@ -223,5 +223,6 @@ docs/build-log/artifacts/s10-conversion/s10-stub*.json
 # HorizonBench source/prompt bodies and paid response state stay local. Only
 # compact hashes, authorization, accounting, and final analysis are committed.
 docs/build-log/artifacts/horizonbench-pilot/*.jsonl
+docs/build-log/artifacts/horizonbench-pilot/*.jsonl.lock
 docs/build-log/artifacts/horizonbench-pilot/*.log
 docs/build-log/artifacts/horizonbench-pilot/reader-cache/
