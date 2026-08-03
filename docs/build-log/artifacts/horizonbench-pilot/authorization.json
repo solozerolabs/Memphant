@@ -1,0 +1,63 @@
+{
+  "authorization": {
+    "authorization_scope_sha256": "543f8c1821232133d82971ddceda643dd35761f120654e3ccae073131f1da0c0",
+    "authorized_at": "2026-08-03T17:40:14Z",
+    "authorized_by": "repository owner via conversation approval"
+  },
+  "campaign": {
+    "hard_ceiling_nanos": 200000000000,
+    "journal_path": "reader-attempts.jsonl",
+    "opening_liability_nanos": 0,
+    "opening_reservations": [],
+    "unallocated_reserve_nanos": 10000000000
+  },
+  "claim_boundary": "Ten-row diagnostic only; no SOTA or default promotion.",
+  "execution": {
+    "cache_dir": "reader-cache",
+    "census": "paid-census.json",
+    "closure": "reader-closure.json",
+    "deep_cache": "deep-evidence.jsonl",
+    "journal_path": "reader-attempts.jsonl",
+    "raw_rows": "paid-rows.jsonl"
+  },
+  "frozen_inputs": {
+    "fast_evidence_sha256": "19d07faa2a9b11b568a68c614305d14afa89b18a0a78fc65dfe0bfcbd55484e7",
+    "fast_gate_sha256": "6a8af07e63220b2044f9706b5b2af3ea7cf43b6ef3f3d38102634d65f068e1fe",
+    "lock_sha256": "5080511bf8ab4f07afaea39db3db2ffeb5b00e5938a85a0dcec8d43244428fb9",
+    "provider_attempts_sha256": "833d8782dd54a8f9937ddb7ca65544be470c8e5bb38c790424ae4b4eca52d04a",
+    "runner_sha256": "d3c76f130789dab5a331843a3113b04fde9ca23da5434c202dd00251724e9d1d",
+    "source_jsonl_sha256": "0e3004b70e03d2fd02a01fbfe184709f8ad8aaeb0749c2682240c983de0b2815"
+  },
+  "hard_limits": {
+    "combined_max_spend_usd": "25",
+    "deep": {
+      "max_calls": 10,
+      "max_spend_per_call_usd": "0.30",
+      "max_spend_usd": "3"
+    },
+    "reader": {
+      "max_logical_calls": 30,
+      "max_provider_attempts": 60,
+      "max_spend_usd": "22"
+    }
+  },
+  "models": {
+    "deep": "openai/gpt-5.6-luna-20260709",
+    "deep_price_usd_per_million": {
+      "completion": "6.6",
+      "prompt": "1.1"
+    },
+    "deep_provider": "azure",
+    "max_output_tokens": 256,
+    "reader": "anthropic/claude-opus-4.5",
+    "reader_price_usd_per_million": {
+      "completion": "25",
+      "prompt": "5"
+    },
+    "reader_prompt_sha256": "9bbc933029a0ee7f0fb6dafa7ffe3bca8bedcff00a25a01001cdee4e93983342",
+    "reader_provider": "anthropic",
+    "temperature": 0
+  },
+  "schema_version": 1,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
+}
