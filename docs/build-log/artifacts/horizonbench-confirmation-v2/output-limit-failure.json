@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "status": "failed_closed",
+  "claim": "The Opus 4.6 replacement reached the 1M context path but its first response exhausted the 256-token output cap before completing the strict JSON object.",
+  "failure": {
+    "arm": "full_context",
+    "cache_role": "write",
+    "prompt_tokens": 216230,
+    "cache_write_tokens": 215000,
+    "completion_tokens": 256,
+    "finish": "truncated_strict_json",
+    "scored_rows": 0
+  },
+  "accounting": {
+    "provider_attempts": 2,
+    "priced_provider_attempts": 1,
+    "reported_cost_usd": "1.3563",
+    "unsettled_cost_usd_upper_bound": "10.252875",
+    "total_liability_usd_upper_bound": "11.609175"
+  },
+  "replacement_boundary": "Increase only the output cap to 1024, keep Opus 4.6 and both prompt arms identical, and stop immediately on any future parse error.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The second authorization is an output-limit instrument failure with zero scored rows.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "local sentence-unit embedder",
+      "scorer": "not reached",
+      "k": 20,
+      "budget": 16384,
+      "flags": [
+        "full_context",
+        "reader=anthropic/claude-opus-4.6",
+        "max_output_tokens=256",
+        "anthropic_explicit_prompt_cache"
+      ]
+    },
+    "corpus": {
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1",
+      "n_items": 0
+    },
+    "notes": "Instrument failure only; no benchmark outcome or SOTA inference."
+  },
+  "lineage": {
+    "git_head": "6db860e984bef507cbf4d207d425c98265d9e716",
+    "authorization_sha256": "8a452d62a026b87ac47dd26f9f9e1764a094f545f84d72b7a5b2f49689c402fa",
+    "authorization_scope_sha256": "9aeca66bfd20850264b070f081e787c74cc5392914881ae7e9d7920625de7359",
+    "reader_attempts_sha256": "f74a2e8c6cac2723bcab3efacd506623b729ef9631fa9c2c44e195bdef9c5664",
+    "paid_rows_sha256": "1bf90488ef040b35a0ea2e349cf1dbcef960e67a85d878a7cca83a67bc68f9ea"
+  }
+}

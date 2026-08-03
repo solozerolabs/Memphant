@@ -7,6 +7,10 @@ before a 5% planning buffer ($90.41 buffered).
 The first authorization failed closed at $0 before any score when Opus 4.5
 rejected a 268,591-token input against its 200k window. The replacement uses
 Opus 4.6's 1M window for both arms; truncation and compression remain forbidden.
+Its first response then exposed a separate 256-token output-cap failure after
+one $1.3563 settled call; an interrupted second attempt retains a $10.252875
+unsettled upper bound. The final authorization raises only output headroom to
+1,024 and stops immediately on any parse failure.
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision

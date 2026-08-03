@@ -68,6 +68,7 @@ DEEP_PROVIDER = "azure"
 DEEP_MAX_SPEND_USD = Decimal("3")
 COMBINED_MAX_SPEND_USD = Decimal("25")
 CONFIRMATION_MAX_SPEND_USD = Decimal("120")
+CONFIRMATION_MAX_OUTPUT_TOKENS = 1024
 READER_SYSTEM_PROMPT = (
     "Choose the response A-E that best matches the user's current preference using "
     "only the supplied evidence. If the evidence is insufficient, set abstain=true "
@@ -264,7 +265,7 @@ def confirmation_authorization_packet(
                 READER_SYSTEM_PROMPT.encode()
             ).hexdigest(),
             "temperature": 0,
-            "max_output_tokens": 256,
+            "max_output_tokens": CONFIRMATION_MAX_OUTPUT_TOKENS,
             "reader_price_usd_per_million": {
                 "prompt": "5",
                 "completion": "25",
@@ -1955,7 +1956,7 @@ def confirmation_cost_preflight(
     *,
     pilot_prompt_chars: int,
     pilot_prompt_tokens: int,
-    max_output_tokens: int = 256,
+    max_output_tokens: int = CONFIRMATION_MAX_OUTPUT_TOKENS,
 ) -> dict:
     if pilot_prompt_chars <= 0 or pilot_prompt_tokens <= 0 or not requests:
         raise ValueError("confirmation cost preflight inputs must be positive")
@@ -2191,7 +2192,7 @@ def run_paid_confirmation(args) -> dict:
                 "prompt": Decimal("5"),
                 "completion": Decimal("25"),
             },
-            max_output_tokens=256,
+            max_output_tokens=CONFIRMATION_MAX_OUTPUT_TOKENS,
         )
         cli.provider_only = [READER_PROVIDER]
         cli.set_provider_attempt_ledger(ledger)
@@ -2227,6 +2228,8 @@ def run_paid_confirmation(args) -> dict:
                     cache_prefix=request["cache_prefix"],
                     expected_model=CONFIRMATION_READER_MODEL,
                 )
+                if row["status"] != "completed":
+                    raise RuntimeError(row.get("error") or "reader row did not complete")
                 if request["cache_role"] is not None:
                     validate_confirmation_cache_usage(
                         row.get("provider") or {}, request["cache_role"]
