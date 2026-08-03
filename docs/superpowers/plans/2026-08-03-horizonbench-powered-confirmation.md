@@ -1,34 +1,41 @@
 # HorizonBench powered confirmation plan
 
-**Status:** designed, not authorized for paid execution.
+**Status:** owner authorized gates 1-2 on 2026-08-03 with a hard $92 ceiling.
+The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision
 
-Target one claim only: MemPhant Fast is competitive on HorizonBench's
+Target one lane only: MemPhant Fast is competitive on HorizonBench's
 evolving-preference axis while materially improving reader latency and cost.
+This result feeds, but can never establish by itself, the five-axis claim in
+`2026-08-03-multi-axis-near-sota-program.md`.
 Do not pursue storage SOTA, restore LongMemEval-V2, or add another memory
 engine. PostgreSQL remains the authority and the product path remains Fast.
 
 ## Ordered gates
 
 1. **Free full-split census.** Pin the 4,245-row benchmark revision, enumerate
-   the 360 released users, verify exact IDs and scoring-field quarantine, and
+   the 346 benchmark-contributing users, reconcile them against the 360 released
+   graph users without acquiring graph gold, verify exact IDs and scoring-field quarantine, and
    prove that each user's repeated conversation bytes are identical. Ingest
    once per user, not once per question. Abort on any within-user timeline
    drift.
-2. **Held-out paired confirmation.** Before reading answers, select 60 users
-   and two questions per user, stratified to one evolved and one static item
-   where available. Run the same Opus snapshot on full context and Fast. This
-   is approximately $92 at the pilot's observed token prices. Require complete
+2. **Held-out paired confirmation.** Before reading answers, exclude all ten
+   exposed sample users and select 20 users per generator, 60 users total, with
+   one evolved and one static question each. Ingest each user's identical
+   timeline once, then run the same Opus snapshot on full context and Fast.
+   The authorization permits 240 logical reader calls, at most 480 provider
+   attempts, no Deep, and at most $92 combined spend. Require complete
    priced rows, user-clustered intervals, non-negative overall delta, positive
    evolved delta, no increase in evolved distractor selections, and at least
    six discordant pairs.
-3. **Router falsification.** Do not reuse the failed self-abstention router.
+3. **Router falsification — not authorized now.** Do not reuse the failed self-abstention router.
    On the same frozen predictions, evaluate only gold-blind candidates derived
    from retrieval telemetry (coverage, current-state evidence, conflict, and
    packing displacement). Any learned/calibrated rule is trained outside the
    confirmation users and frozen before their scores are joined.
-4. **Official treatment run.** Only after gate 2 passes, run Fast plus the fixed
+4. **Official treatment run — not authorized now.** Only after a separate owner
+   authorization following gate 2, run Fast plus the fixed
    reader on all 4,245 items. At the pilot rate this is about $298, versus about
    $2,940 for full context. Compare the complete official score with the
    paper's 52.8% overall and 51.3% evolved references; use user-clustered
