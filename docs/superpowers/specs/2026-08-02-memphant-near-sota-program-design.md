@@ -20,14 +20,19 @@ the user-visible job better than another fact-retrieval arm.
 
 ## Evidence basis
 
-- LongMemEval-V2 evaluates 451 questions across static state, dynamic state,
-  workflows, gotchas, and premise awareness. Its official metric rewards the
-  accuracy-latency frontier, not accuracy alone:
-  <https://arxiv.org/abs/2605.12493> and
-  <https://xiaowu0162.github.io/longmemeval-v2/>.
+- HorizonBench evaluates 4,245 long-horizon preference questions linked to 360
+  user-level mental-state graphs. It is the strongest public preference
+  candidate found, but its current dataset release and evaluator fail the
+  acquisition/completeness gate: <https://arxiv.org/abs/2604.17283>.
 - PERMA evaluates evolving preferences across time, domains, noise, and
   interactive task completion rather than static preference retrieval:
   <https://arxiv.org/abs/2603.23231>.
+- PerMemBench's selective session-level storage gate reinforces the product
+  seam, but its released study has only 20 users and cannot resolve this
+  program's 3--7 point target: <https://arxiv.org/abs/2605.25535>.
+- Proactive Memory Agent reports behavior gains from selectively applying
+  memory at the agent edge, supporting an intervention policy above the store
+  rather than another storage engine: <https://arxiv.org/abs/2607.08716>.
 - User as Code shows why executable aggregate state and proactive rules can beat
   retrieval-only memory, but MemPhant must express that value through its
   existing typed units, lineage, and projections rather than adding a Python
@@ -69,9 +74,9 @@ experience is:
 7. Fast remains the default; Deep is explicit, bounded, cancellable, and uses
    the same cited-evidence response contract.
 
-Cost and latency are optimization constraints after correctness. The official
-target is a positive LongMemEval-V2 LAFS contribution or accuracy within three
-percentage points of the reverified best comparable system at materially lower
+Cost and latency are optimization constraints after correctness. The target is
+positive official behavior-level lift or accuracy within three percentage
+points of the reverified best comparable system at materially lower
 latency/cost. Security is never removed, but pre-production work does not spend
 cycles on speculative hardening ahead of the behavior gate.
 
@@ -90,17 +95,26 @@ only a Stage-0 adapter round trip first. The adapter must map public events to t
 existing retain/correct/recall contracts and must score end behavior. It may not
 derive gold from the same statements offered to the retriever.
 
+PERMA and HorizonBench both failed before adapter work. PERMA lacks license
+artifacts, user/history lineage in its packaged rows, sufficient independent
+units, and a fail-closed scorer. HorizonBench has the right linked user/history
+shape and 360 independent clusters, but its dataset license is card-only and its
+runner drops failed rows and bootstraps rows rather than users. HorizonBench is
+the preferred reopen target because its scientific shape is stronger.
+
 The private Track U bank remains a coarse smoke only. Its 51 goldens cannot
 resolve a 7-point effect; it may support a preregistered roughly 15-point screen
 only if independent units can reach the required count without duplicating a
 source file.
 
-### C. Resume the official environment-memory path
+### C. Keep the retired environment-memory path closed
 
-After trunk is stable, recensus the paused LongMemEval-V2 v5 campaign at zero
-spend, fix the retry/adjudication root cause with live-shaped tests, resume only
-the exact unresolved set, then run paired Fast/Deep reader and official 451-row
-evaluation. Never score the survivor-only prefix.
+Do not resume LongMemEval-V2 v5. Commit `17700a381ba17a725182429250b7bf3f9ad09045`
+deleted its harness after the instrument register found zero official outputs;
+v1/v3/v4 are `ABANDONED_NEVER_RESUME`, and the retained maximum is explicitly
+not recoverable by resuming. The July 27 partial construction ledger remains
+provenance only. Reopening requires a newly acquired complete instrument and a
+fresh plan, not restoration of deleted apparatus.
 
 ## Gates
 
@@ -109,7 +123,7 @@ evaluation. Never score the survivor-only prefix.
 | Repository | Full verification passes and `origin/main` equals local main | Any in-scope failure or unresolved branch/stash lineage |
 | Instrument | License artifact pinned, gold external to statement set, Stage-0 round trip exact, power reachable | Card-only license, saturable gold, or unreachable sample size |
 | Preference smoke | End-behavior gain clears preregistered effect and no scope/negative-constraint regression | CI crosses zero or safety/correction behavior regresses |
-| LongMemEval-V2 | Complete 451 rows, settled cost, comparable frontier reverified | Partial matrix, unresolved accounting, or kill gate makes target unreachable |
+| Retired lane | A new licensed, complete instrument independently qualifies | Restoring LongMemEval-V2's deleted apparatus or scoring its partial survivor bank |
 | Near-SOTA | Positive LAFS contribution or within 3pp accuracy at materially better cost/latency | Comparator remains clearly superior on accuracy and operating cost |
 
 ## Status ownership

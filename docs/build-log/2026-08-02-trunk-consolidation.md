@@ -91,8 +91,10 @@ but its trailing zero-case rustdoc stalled. The same packages therefore ran
 with `--tests` to a clean exit, alongside the separate clean workspace doctest
 gate. This is an execution-environment caveat, not product or evidence proof.
 
-## Remaining publication gate
+## Publication result
 
-Commit the verified worker-test correction and this log, push `main` by normal
-fast-forward, and verify the exact GitHub Actions run before beginning the next
-external evidence stage.
+`main` was pushed by normal fast-forward through `9ce85041`. GitHub Actions run
+`30808877476` completed successfully at exact head
+`9ce85041116150250a6aca2781a48713230a2136`; both `public-gates` and
+`postgres-contracts` passed. Subsequent zero-spend external-instrument audits
+are recorded separately; their current releases did not pass acquisition.

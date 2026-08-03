@@ -33,11 +33,11 @@
 - Consumes: banked MemoryCode and S8 inputs with pinned hashes.
 - Produces: registered negative artifacts that validate with `check_evidence_contract.py`.
 
-- [ ] Verify the stash is contained by current `main` file-by-file and record the result in the consolidation build log.
-- [ ] Remove `L.txt`, `rw.csv`, and `rwl.txt`; they are dirty-path observations, not inputs.
-- [ ] Remove transient server/log files while retaining paired arm outputs, liveness, preregistration, and analysis.
-- [ ] Run focused S1b, MiniLM, evidence-contract, and power checks.
-- [ ] Commit S1b and MiniLM as separate bisectable evidence commits.
+- [x] Verify the stash is contained by current `main` file-by-file and record the result in the consolidation build log.
+- [x] Remove `L.txt`, `rw.csv`, and `rwl.txt`; they are dirty-path observations, not inputs.
+- [x] Remove transient server/log files while retaining paired arm outputs, liveness, preregistration, and analysis.
+- [x] Run focused S1b, MiniLM, evidence-contract, and power checks.
+- [x] Commit S1b and MiniLM as separate bisectable evidence commits.
 
 ### Task 2: Publish the authoritative trunk
 
@@ -49,11 +49,11 @@
 - Consumes: all unique local commits and completed evidence.
 - Produces: one pushed `main`, zero unresolved local branches/worktrees/stashes, and a current dashboard.
 
-- [ ] Add a compact dashboard to `STATUS.md` for surfaces, memory kinds, storage, pipeline layers, and near-SOTA gates.
-- [ ] Run the complete verification contract from `AGENTS.md`, using the scratch Postgres wrapper for ignored live tests.
-- [ ] Commit only named files; preserve unrelated data until its cleanup classification is proven.
-- [ ] Push `main` with a normal fast-forward push.
-- [ ] Poll GitHub Actions no more often than every two minutes until the exact `main` run completes.
+- [x] Add a compact dashboard to `STATUS.md` for surfaces, memory kinds, storage, pipeline layers, and near-SOTA gates.
+- [x] Run the complete verification contract from `AGENTS.md`, using the scratch Postgres wrapper for ignored live tests.
+- [x] Commit only named files; preserve unrelated data until its cleanup classification is proven.
+- [x] Push `main` with a normal fast-forward push.
+- [x] Poll GitHub Actions no more often than every two minutes until the exact `main` run completes.
 
 ### Task 3: Qualify the public preference instrument
 
@@ -68,47 +68,38 @@
 - Consumes: PERMA events and official evaluator at a pinned revision.
 - Produces: an exact no-model retain/correct/recall round trip or a rejection artifact.
 
-- [ ] Clone the official repository into a temporary directory and verify commit, LICENSE file, dataset revision, sample counts, gold construction, and evaluator inputs.
-- [ ] Reject the instrument if its license is card-only, its gold is derivable from supplied statements, or required independent sample size is unreachable.
-- [ ] Write one failing adapter-contract test covering evolving preference, scoped exception, and negative constraint.
-- [ ] Implement the minimum mapping through existing public MemPhant verbs.
-- [ ] Run a no-model Stage-0 round trip and archive exact lineage.
-- [ ] Commit the adapter and Stage-0 proof separately.
+- [x] Clone the official repository into a temporary directory and verify commit, LICENSE file, dataset revision, sample counts, gold construction, and evaluator inputs.
+- [x] Reject the instrument if its license is card-only, its gold is derivable from supplied statements, or required independent sample size is unreachable.
+- [x] Close adapter, contract-test, round-trip, and adapter-commit work as not applicable after the acquisition/evidence gate rejected the release; proof: `docs/build-log/2026-08-02-perma-stage0.md`.
 
 ### Task 4: Run the smallest decisive preference gate
 
-**Files:**
-- Create: one preregistration under `docs/build-log/artifacts/`.
-- Create: one compact result artifact registered in `evidence_contract_registry.json`.
-- Modify: `STATUS.md` only if the preregistered predicate passes.
+**Outcome:** Not runnable after Stage-0 qualification rejected both PERMA and
+HorizonBench. No model call, provider call, benchmark-specific product path, or
+spend was authorized. HorizonBench is the preferred reopen target because it
+has 360 linked user graphs and non-saturating behavior gold; proof:
+`docs/build-log/2026-08-02-horizonbench-stage0.md`.
 
 **Interfaces:**
 - Consumes: qualified public preference instrument and packaged Postgres runtime.
 - Produces: behavior-level paired delta with accuracy, scope violations, correction errors, cost, and latency.
 
-- [ ] Compute power from the actual discordance assumptions and freeze the smallest decisive sample before model calls.
-- [ ] Run a no-memory or raw-dialogue control and MemPhant on identical rows and reader/judge pins.
-- [ ] Stop immediately when the maximum remaining gain cannot clear the gate.
-- [ ] Validate the evidence contract, settle cost, and report every failed/error row.
-- [ ] Promote only if end behavior improves without scope, negative-constraint, or correction regressions.
+- [x] Stop at the acquisition gate. Power preregistration, control/candidate
+  execution, result registration, and promotion are not applicable until a
+  qualified release exists.
 
-### Task 5: Resume LongMemEval-V2 v5 economically
+### Task 5: Keep LongMemEval-V2 retired
 
-**Files:**
-- Modify: the existing retry/adjudication code only after tracing all callers.
-- Test: live-shaped retry and captured-response regression tests.
-- Update: `docs/handoff/2026-07-27-state-aware-memory-v5-handoff.md` or its superseding proof.
+**Outcome:** Superseded before this plan by Phase C commit
+`17700a381ba17a725182429250b7bf3f9ad09045`. The 9,405-line harness and run
+payloads were deliberately deleted after zero official outputs; v1/v3/v4 are
+`ABANDONED_NEVER_RESUME`, and the retained maximum is not recoverable by
+resuming. The July 27 v5 handoff remains historical accounting provenance.
 
-**Interfaces:**
-- Consumes: exact unresolved v5 set and existing local response cache.
-- Produces: complete candidate bank, paired evaluation, and official 451-row Fast/Deep matrix.
-
-- [ ] Recensus captured bodies, terminal ledger rows, provider liability, and exact unresolved IDs at zero spend.
-- [ ] Write a regression test reproducing the unreachable retry/adjudication path.
-- [ ] Fix the shared root cause, then resume only the unresolved set under the remaining ceiling.
-- [ ] Run the paired current/candidate reader and scorer before any official frontier claim.
-- [ ] Run the complete 451-row Fast/Deep matrix with latency and settled cost.
-- [ ] Reverify the official frontier and calculate LAFS or the closest reproducible proxy.
+- [x] Verify current instrument-register, power, abandonment, and Phase C proof.
+- [x] Close the stale recensus/resume plan; do not restore deleted apparatus.
+- [x] Require a fresh licensed, fail-closed public instrument before any new
+  behavior campaign.
 
 ### Task 6: Decide and document near-SOTA status
 
@@ -117,10 +108,12 @@
 - Create: final build log and compact machine result.
 
 **Interfaces:**
-- Consumes: complete preference and/or LongMemEval-V2 result.
+- Consumes: complete behavior evidence or a qualified external-data gate.
 - Produces: one narrow public claim or an explicit next blocker.
 
-- [ ] Mark near-SOTA only for positive LAFS or accuracy within 3pp of the reverified best comparable result with materially lower latency/cost.
-- [ ] Keep global, storage, and tri-domain SOTA false unless separately proven.
-- [ ] Record which surfaces and layers remain unmeasured and the exact reopen condition for every retired idea.
-- [ ] Run the full repository gate, commit, push, and verify CI on `main`.
+- [x] Keep near-SOTA false: no complete preference result or comparable official frontier exists.
+- [x] Keep global, storage, code, tri-domain, and LongMemEval-V2 SOTA false.
+- [x] Record unmeasured surfaces/layers and exact reopen conditions for PERMA,
+  HorizonBench, and the retired LongMemEval-V2 lane.
+- [x] Run the full repository gate on the consolidated code head and the
+  docs/evidence gates on this decision; commit, push, and verify CI on `main`.
