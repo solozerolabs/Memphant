@@ -1,0 +1,165 @@
+{
+  "config": "benchmark",
+  "dataset": "stellalisy/HorizonBench",
+  "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+  "eligible_user_counts": {
+    "gemini-3-flash": 118,
+    "o3": 103,
+    "sonnet-4.5": 90
+  },
+  "evidence_contract": {
+    "claim": "The pinned HorizonBench benchmark release completed a full schema, identity, and integrity census.",
+    "corpus": {
+      "n_items": 4245,
+      "sha256": "69a7f5cd9e9f0fca330dacd217339bf3c4f0555b7d14903af6b5032108a886da",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 0,
+      "embed_model": "none",
+      "flags": [
+        "gold-quarantined",
+        "graph-identity-columns-only"
+      ],
+      "k": "n/a",
+      "scorer": "full release census; no answer scoring"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "conversation": 4245,
+        "correct_letter": 4245,
+        "has_evolved": 4245,
+        "options": 4245
+      },
+      "license_evidence": "Pinned Hugging Face dataset metadata.",
+      "license_id": "CC-BY-4.0",
+      "license_source": "RECORD_METADATA",
+      "rows_counted": 4245,
+      "shipped_rows_verified": true
+    },
+    "notes": "Qualification only; two inconsistent user timelines are excluded from held-out selection.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "n": 4245,
+      "n_d": 0,
+      "test": "descriptive-only (no test)"
+    },
+    "schema_version": 1
+  },
+  "evolved_rows_without_distractor": 992,
+  "generator_counts": {
+    "gemini-3-flash": 2212,
+    "o3": 981,
+    "sonnet-4.5": 1052
+  },
+  "gold_quarantine": {
+    "index_fields": [
+      "id",
+      "user_id",
+      "generator",
+      "has_evolved",
+      "conversation_sha256"
+    ],
+    "mental_state_graphs_acquired": false
+  },
+  "graph_reconciliation": {
+    "benchmark_users": 346,
+    "benchmark_users_missing_from_graph": [],
+    "graph_only_users": [
+      "sonnet-4.5/user_17",
+      "sonnet-4.5/user_22",
+      "sonnet-4.5/user_27",
+      "sonnet-4.5/user_29",
+      "sonnet-4.5/user_37",
+      "sonnet-4.5/user_38",
+      "sonnet-4.5/user_39",
+      "sonnet-4.5/user_40",
+      "sonnet-4.5/user_43",
+      "sonnet-4.5/user_47",
+      "sonnet-4.5/user_48",
+      "sonnet-4.5/user_5",
+      "sonnet-4.5/user_7",
+      "sonnet-4.5/user_8"
+    ],
+    "graph_users": 360,
+    "identity_source": "remote Parquet projection of user_id and generator only",
+    "source_objects": [
+      {
+        "path": "mental_state_graphs/test-00000-of-00003.parquet",
+        "sha256": "c582dbb76fe3231636a32e940b4e63cb384a04e2bedf01128373e4c7ab887174",
+        "size": 202913277
+      },
+      {
+        "path": "mental_state_graphs/test-00001-of-00003.parquet",
+        "sha256": "f02f674ff46d209cb41eb77d566779e34830f35f3c4d8f9edbafc8506d20f525",
+        "size": 190023603
+      },
+      {
+        "path": "mental_state_graphs/test-00002-of-00003.parquet",
+        "sha256": "8a52a598b748b15c3c9c1ebc3392425a0a7c44d3ce65ed65573419ab6d2ec161",
+        "size": 169945684
+      }
+    ]
+  },
+  "index_path": "/Users/sidsharma/.cache/memphant-bench/horizonbench/50941f00f90c03a5a60219d76393869b757b835a/benchmark-index.jsonl",
+  "index_sha256": "7a1409a0bd63bf81a0c475e77ddc1dccf221e40843970e47c85a07d5b902ce51",
+  "option_cardinality_counts": {
+    "3": 1,
+    "4": 9,
+    "5": 4235
+  },
+  "row_count": 4245,
+  "schema_version": 1,
+  "source_bytes": 1601956117,
+  "source_files": [
+    {
+      "path": "benchmark/test-00000-of-00006.parquet",
+      "sha256": "644c54d3bae551be4a4dc1e9ff1d9d15cd345187704188ecfa8974dea5ff12a2",
+      "size": 375406101
+    },
+    {
+      "path": "benchmark/test-00001-of-00006.parquet",
+      "sha256": "dec20b351f452557341e44eb4a930c68c4d281e452ed9ed307b7980c87848639",
+      "size": 325890406
+    },
+    {
+      "path": "benchmark/test-00002-of-00006.parquet",
+      "sha256": "f5c79c3b0a91102085226ccbd33d154a0c47ec8c5cccc3a7e327e58cc265d314",
+      "size": 231533473
+    },
+    {
+      "path": "benchmark/test-00003-of-00006.parquet",
+      "sha256": "aa454abf71cb5eee0071cec4a66b45b23847303bbd8e4a7443e24ddd35fb0b91",
+      "size": 221745352
+    },
+    {
+      "path": "benchmark/test-00004-of-00006.parquet",
+      "sha256": "44cc2e4a02c7be37cfcdbeb97e8e73d7ca516bb7d2b5d3f741200660522d7c98",
+      "size": 223939127
+    },
+    {
+      "path": "benchmark/test-00005-of-00006.parquet",
+      "sha256": "d5c4b6a418ebcaa904956aba5adc2e200e953211ade258501c3a041309d1154e",
+      "size": 223441658
+    }
+  ],
+  "split": "test",
+  "status": "passed",
+  "stratum_counts": {
+    "evolved": 2484,
+    "static": 1761
+  },
+  "timeline_integrity": {
+    "drift_users": [
+      "gemini-3-flash/user_15",
+      "gemini-3-flash/user_49"
+    ],
+    "monotone_users": 344,
+    "selection_excludes_drift_users": true,
+    "status": "qualified_with_exclusions"
+  },
+  "timeline_variant_count": 4245,
+  "user_count": 346
+}

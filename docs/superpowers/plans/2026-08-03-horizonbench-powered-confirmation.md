@@ -16,10 +16,11 @@ engine. PostgreSQL remains the authority and the product path remains Fast.
 
 1. **Free full-split census.** Pin the 4,245-row benchmark revision, enumerate
    the 346 benchmark-contributing users, reconcile them against the 360 released
-   graph users without acquiring graph gold, verify exact IDs and scoring-field quarantine, and
-   prove that each user's repeated conversation bytes are identical. Ingest
-   once per user, not once per question. Abort on any within-user timeline
-   drift.
+   graph users without acquiring graph gold, and verify exact IDs and
+   scoring-field quarantine. The census found per-question monotone prefixes,
+   not identical conversation bytes; exclude the two identity-collision users
+   and require strict prefix consistency for every selected user. Ingest each
+   selected timeline incrementally once, not once per question.
 2. **Held-out paired confirmation.** Before reading answers, exclude all ten
    exposed sample users and select 20 users per generator, 60 users total, with
    one evolved and one static question each. Ingest each user's identical

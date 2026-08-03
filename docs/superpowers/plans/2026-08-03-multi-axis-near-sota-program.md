@@ -94,14 +94,16 @@ claim and cannot compensate for a failed lane.
 - Modify: `docs/build-log/artifacts/evidence-contract-retrofit.json`
 - Modify: `docs/superpowers/specs/memphant/STATUS.md`
 
-- [ ] Census the complete pinned 4,245-row release for free, validate its six
+- [x] Census the complete pinned 4,245-row release for free, validate its six
   source objects, row/user/generator counts, schema, options, gold shape, and
   one conversation-byte identity per user.
-- [ ] Reconcile the 346 benchmark-contributing users with the 360-user graph
+- [x] Reconcile the 346 benchmark-contributing users with the 360-user graph
   population using only `user_id` and `generator`; never acquire graph gold.
-- [ ] Exclude all ten exposed sample users. Deterministically select 20 users
+- [x] Exclude all ten exposed sample users and the two timeline-identity
+  collisions found by the census. Deterministically select 20 users
   per generator with one evolved and one static item each, for 60 users and
-  120 frozen items.
+  120 frozen items. Selected histories must form monotone per-question prefixes;
+  retain them incrementally so an earlier question cannot see future turns.
 - [ ] Ingest one timeline per user, issue two gold-blind Fast recalls per user,
   and require complete non-degraded evidence before paid work.
 - [ ] Commit a hash-bound authorization for exactly two arms—full context and

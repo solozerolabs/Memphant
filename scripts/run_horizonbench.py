@@ -14,6 +14,8 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -55,6 +57,7 @@ MAX_EPISODE_BYTES = 120_000
 RECALL_QUERY_CHARS = 8_000
 ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
 PAID_ARMS = ("full_context", "fast", "selective_deep")
+CONFIRMATION_ARMS = ("full_context", "fast")
 READER_MODEL = "anthropic/claude-opus-4.5"
 READER_PROVIDER = "anthropic"
 READER_MAX_SPEND_USD = Decimal("22")
@@ -62,12 +65,71 @@ DEEP_MODEL = "openai/gpt-5.6-luna-20260709"
 DEEP_PROVIDER = "azure"
 DEEP_MAX_SPEND_USD = Decimal("3")
 COMBINED_MAX_SPEND_USD = Decimal("25")
+CONFIRMATION_MAX_SPEND_USD = Decimal("92")
 READER_SYSTEM_PROMPT = (
     "Choose the response A-E that best matches the user's current preference using "
     "only the supplied evidence. If the evidence is insufficient, set abstain=true "
     "and answer=null. Otherwise set abstain=false and answer to exactly one uppercase "
     "letter A-E. Return the required JSON object; notes must be brief."
 )
+BENCHMARK_GENERATOR_COUNTS = {
+    "sonnet-4.5": 1052,
+    "o3": 981,
+    "gemini-3-flash": 2212,
+}
+BENCHMARK_SOURCE_FILES = (
+    (
+        "benchmark/test-00000-of-00006.parquet",
+        375_406_101,
+        "644c54d3bae551be4a4dc1e9ff1d9d15cd345187704188ecfa8974dea5ff12a2",
+    ),
+    (
+        "benchmark/test-00001-of-00006.parquet",
+        325_890_406,
+        "dec20b351f452557341e44eb4a930c68c4d281e452ed9ed307b7980c87848639",
+    ),
+    (
+        "benchmark/test-00002-of-00006.parquet",
+        231_533_473,
+        "f5c79c3b0a91102085226ccbd33d154a0c47ec8c5cccc3a7e327e58cc265d314",
+    ),
+    (
+        "benchmark/test-00003-of-00006.parquet",
+        221_745_352,
+        "aa454abf71cb5eee0071cec4a66b45b23847303bbd8e4a7443e24ddd35fb0b91",
+    ),
+    (
+        "benchmark/test-00004-of-00006.parquet",
+        223_939_127,
+        "44cc2e4a02c7be37cfcdbeb97e8e73d7ca516bb7d2b5d3f741200660522d7c98",
+    ),
+    (
+        "benchmark/test-00005-of-00006.parquet",
+        223_441_658,
+        "d5c4b6a418ebcaa904956aba5adc2e200e953211ade258501c3a041309d1154e",
+    ),
+)
+GRAPH_SOURCE_FILES = (
+    (
+        "mental_state_graphs/test-00000-of-00003.parquet",
+        202_913_277,
+        "c582dbb76fe3231636a32e940b4e63cb384a04e2bedf01128373e4c7ab887174",
+    ),
+    (
+        "mental_state_graphs/test-00001-of-00003.parquet",
+        190_023_603,
+        "f02f674ff46d209cb41eb77d566779e34830f35f3c4d8f9edbafc8506d20f525",
+    ),
+    (
+        "mental_state_graphs/test-00002-of-00003.parquet",
+        169_945_684,
+        "8a52a598b748b15c3c9c1ebc3392425a0a7c44d3ce65ed65573419ab6d2ec161",
+    ),
+)
+EXPECTED_TIMELINE_DRIFT_USERS = {
+    "gemini-3-flash/user_15",
+    "gemini-3-flash/user_49",
+}
 
 
 def sha256_json(value: object) -> str:
@@ -164,6 +226,83 @@ def validate_pilot_authorization(packet: dict, expected_frozen: dict) -> None:
         raise ValueError("paid authorization scope or frozen input drift")
 
 
+def confirmation_authorization_packet(
+    frozen_inputs: dict, *, authorized_by: str, authorized_at: str
+) -> dict:
+    packet = {
+        "schema_version": 1,
+        "status": "AUTHORIZED_HORIZONBENCH_CONFIRMATION",
+        "frozen_inputs": frozen_inputs,
+        "arms": list(CONFIRMATION_ARMS),
+        "models": {
+            "reader": READER_MODEL,
+            "reader_provider": READER_PROVIDER,
+            "reader_prompt_sha256": hashlib.sha256(
+                READER_SYSTEM_PROMPT.encode()
+            ).hexdigest(),
+            "temperature": 0,
+            "max_output_tokens": 256,
+            "reader_price_usd_per_million": {
+                "prompt": "5",
+                "completion": "25",
+            },
+        },
+        "hard_limits": {
+            "max_logical_calls": 240,
+            "max_provider_attempts": 480,
+            "max_spend_usd": str(CONFIRMATION_MAX_SPEND_USD),
+        },
+        "execution": {
+            "journal_path": "reader-attempts.jsonl",
+            "cache_dir": "reader-cache",
+            "raw_rows": "paid-rows.jsonl",
+            "closure": "reader-closure.json",
+            "census": "paid-census.json",
+        },
+        "campaign": {
+            "journal_path": "reader-attempts.jsonl",
+            "hard_ceiling_nanos": CAMPAIGN_HARD_CEILING_NANOS,
+            "unallocated_reserve_nanos": CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
+            "opening_liability_nanos": 0,
+            "opening_reservations": [],
+        },
+        "claim_boundary": (
+            "Sixty-user paired HorizonBench confirmation only; the complete "
+            "4,245-item treatment and every cross-axis SOTA claim remain unauthorized."
+        ),
+    }
+    scope = {
+        key: value
+        for key, value in packet.items()
+        if key not in {"schema_version", "status", "authorization"}
+    }
+    packet["authorization"] = {
+        "authorized_by": authorized_by,
+        "authorized_at": authorized_at,
+        "authorization_scope_sha256": sha256_json(scope),
+    }
+    return packet
+
+
+def validate_confirmation_authorization(packet: dict, expected_frozen: dict) -> None:
+    authorization = packet.get("authorization") if isinstance(packet, dict) else None
+    if (
+        not isinstance(authorization, dict)
+        or not isinstance(authorization.get("authorized_by"), str)
+        or not authorization["authorized_by"].strip()
+        or not isinstance(authorization.get("authorized_at"), str)
+        or not authorization["authorized_at"].strip()
+    ):
+        raise ValueError("paid confirmation authorization is missing owner approval")
+    expected = confirmation_authorization_packet(
+        expected_frozen,
+        authorized_by=authorization["authorized_by"],
+        authorized_at=authorization["authorized_at"],
+    )
+    if packet != expected:
+        raise ValueError("paid confirmation authorization scope or frozen input drift")
+
+
 def selective_route(fast_row: dict) -> str:
     if fast_row.get("status") != "completed":
         raise ValueError("selective routing requires a completed Fast reader row")
@@ -190,11 +329,16 @@ def validate_deep_completion(row: dict) -> None:
         raise ValueError("Deep result is not completed, settled, non-degraded evidence")
 
 
-def validate_terminal_rows(rows: list[dict], expected_ids: list[str]) -> None:
+def validate_terminal_rows(
+    rows: list[dict],
+    expected_ids: list[str],
+    *,
+    arms: tuple[str, ...] = PAID_ARMS,
+) -> None:
     keys = [(row.get("id"), row.get("arm")) for row in rows]
     if len(keys) != len(set(keys)):
         raise ValueError("paid terminal rows contain a duplicate id/arm")
-    expected = {(item_id, arm) for item_id in expected_ids for arm in PAID_ARMS}
+    expected = {(item_id, arm) for item_id in expected_ids for arm in arms}
     if set(keys) != expected or len(keys) != len(expected):
         raise ValueError("paid terminal rows do not match expected IDs and arms")
     if any(row.get("status") not in {"completed", "error"} for row in rows):
@@ -211,15 +355,19 @@ def _accuracy(rows: list[dict]) -> dict:
 
 
 def _cluster_bootstrap_delta(
-    per_item: list[dict], *, seed: int, samples: int
+    per_item: list[dict],
+    *,
+    seed: int,
+    samples: int,
+    candidate: str = "selective_deep",
+    control: str = "full_context",
 ) -> dict:
     if samples < 1:
         raise ValueError("bootstrap samples must be positive")
     clusters: dict[str, list[int]] = {}
     for row in per_item:
         clusters.setdefault(row["user_id"], []).append(
-            int(row["selective_deep_correct"])
-            - int(row["full_context_correct"])
+            int(row[f"{candidate}_correct"]) - int(row[f"{control}_correct"])
         )
     users = sorted(clusters)
     if not users:
@@ -261,7 +409,7 @@ def analyze_paid_rows(
             gold not in list("ABCDE")
             or not isinstance(distractor, str)
             or type(evolved) is not bool
-            or (evolved and distractor not in list("ABCDE"))
+            or (evolved and distractor not in [*list("ABCDE"), ""])
         ):
             raise ValueError("HorizonBench scoring gold is malformed")
         item = {
@@ -278,9 +426,9 @@ def analyze_paid_rows(
             item[f"{arm}_correct"] = (
                 prediction.get("status") == "completed" and answer == gold
             )
-        item["selective_route"] = predictions[
-            (source["id"], "selective_deep")
-        ].get("route")
+        item["selective_route"] = predictions[(source["id"], "selective_deep")].get(
+            "route"
+        )
         per_item.append(item)
 
     arms = {}
@@ -301,9 +449,7 @@ def analyze_paid_rows(
             "evolved": _accuracy(evolved_rows),
             "static": _accuracy(static_rows),
             "evolved_distractor_selections": sum(
-                row["evolved"]
-                and row["answer"] == row["distractor"]
-                for row in scored
+                row["evolved"] and row["answer"] == row["distractor"] for row in scored
             ),
         }
 
@@ -321,8 +467,7 @@ def analyze_paid_rows(
         "discordant": gains + losses,
         "ties": len(per_item) - gains - losses,
         "accuracy_delta": (
-            arms["selective_deep"]["accuracy"]
-            - arms["full_context"]["accuracy"]
+            arms["selective_deep"]["accuracy"] - arms["full_context"]["accuracy"]
         ),
         "cluster_bootstrap_95_ci": _cluster_bootstrap_delta(
             per_item, seed=bootstrap_seed, samples=bootstrap_samples
@@ -337,8 +482,7 @@ def analyze_paid_rows(
             <= arms["full_context"]["evolved_distractor_selections"]
         ),
         "noninferior_overall_accuracy": (
-            arms["selective_deep"]["accuracy"]
-            >= arms["full_context"]["accuracy"]
+            arms["selective_deep"]["accuracy"] >= arms["full_context"]["accuracy"]
         ),
         "at_least_one_paired_gain": gains >= 1,
     }
@@ -354,10 +498,123 @@ def analyze_paid_rows(
         },
         "verdict": {
             "gates": gates,
-            "outcome": (
-                "advance_to_powered_plan" if all(gates.values()) else "stop"
-            ),
+            "outcome": ("advance_to_powered_plan" if all(gates.values()) else "stop"),
         },
+        "per_item": per_item,
+    }
+
+
+def analyze_confirmation_rows(
+    source_rows: list[dict],
+    terminal_rows: list[dict],
+    *,
+    bootstrap_seed: int = 20260803,
+    bootstrap_samples: int = 20_000,
+) -> dict:
+    expected_ids = [row.get("id") for row in source_rows]
+    if any(not isinstance(item_id, str) or not item_id for item_id in expected_ids):
+        raise ValueError("confirmation source contains an invalid ID")
+    validate_terminal_rows(terminal_rows, expected_ids, arms=CONFIRMATION_ARMS)
+    predictions = {(row["id"], row["arm"]): row for row in terminal_rows}
+    per_item = []
+    for source in source_rows:
+        gold = source.get("correct_letter")
+        distractor = source.get("distractor_letter")
+        evolved = source.get("has_evolved")
+        if (
+            gold not in list("ABCDE")
+            or not isinstance(distractor, str)
+            or type(evolved) is not bool
+            or (evolved and distractor not in [*list("ABCDE"), ""])
+        ):
+            raise ValueError("HorizonBench confirmation gold is malformed")
+        item = {
+            "id": source["id"],
+            "user_id": source["user_id"],
+            "has_evolved": evolved,
+            "distractor_letter": distractor,
+        }
+        for arm in CONFIRMATION_ARMS:
+            prediction = predictions[(source["id"], arm)]
+            item[f"{arm}_answer"] = prediction.get("answer")
+            item[f"{arm}_correct"] = (
+                prediction.get("status") == "completed"
+                and prediction.get("answer") == gold
+            )
+        per_item.append(item)
+    arms = {}
+    for arm in CONFIRMATION_ARMS:
+        arm_rows = [
+            {
+                "correct": row[f"{arm}_correct"],
+                "evolved": row["has_evolved"],
+                "answer": row[f"{arm}_answer"],
+                "distractor": row["distractor_letter"],
+            }
+            for row in per_item
+        ]
+        evolved_rows = [row for row in arm_rows if row["evolved"]]
+        static_rows = [row for row in arm_rows if not row["evolved"]]
+        arms[arm] = {
+            **_accuracy(arm_rows),
+            "evolved": _accuracy(evolved_rows),
+            "static": _accuracy(static_rows),
+            "evolved_distractor_selections": sum(
+                row["evolved"] and row["answer"] == row["distractor"]
+                for row in arm_rows
+            ),
+        }
+    gains = sum(
+        row["fast_correct"] and not row["full_context_correct"] for row in per_item
+    )
+    losses = sum(
+        row["full_context_correct"] and not row["fast_correct"] for row in per_item
+    )
+    paired = {
+        "gains": gains,
+        "losses": losses,
+        "discordant": gains + losses,
+        "ties": len(per_item) - gains - losses,
+        "accuracy_delta": arms["fast"]["accuracy"] - arms["full_context"]["accuracy"],
+        "cluster_bootstrap_95_ci": _cluster_bootstrap_delta(
+            per_item,
+            seed=bootstrap_seed,
+            samples=bootstrap_samples,
+            candidate="fast",
+            control="full_context",
+        ),
+    }
+    deltas = {
+        "overall": arms["fast"]["accuracy"] - arms["full_context"]["accuracy"],
+        "evolved": (
+            arms["fast"]["evolved"]["accuracy"]
+            - arms["full_context"]["evolved"]["accuracy"]
+        ),
+        "static": (
+            arms["fast"]["static"]["accuracy"]
+            - arms["full_context"]["static"]["accuracy"]
+        ),
+    }
+    complete = all(row.get("status") == "completed" for row in terminal_rows)
+    verdict = {
+        "complete": complete,
+        "overall_noninferior": deltas["overall"] >= 0,
+        "evolved_positive": deltas["evolved"] > 0,
+        "evolved_distractors_not_increased": (
+            arms["fast"]["evolved_distractor_selections"]
+            <= arms["full_context"]["evolved_distractor_selections"]
+        ),
+        "discordance_sufficient": paired["discordant"] >= 6,
+    }
+    verdict["outcome"] = "pass" if all(verdict.values()) else "stop"
+    return {
+        "arms": arms,
+        "deltas": deltas,
+        "paired_fast_vs_full": paired,
+        "evolved_distractor_selections": {
+            arm: arms[arm]["evolved_distractor_selections"] for arm in CONFIRMATION_ARMS
+        },
+        "verdict": verdict,
         "per_item": per_item,
     }
 
@@ -430,8 +687,8 @@ def restore_source_text(value: str) -> str:
 
 def parse_options(value: str | list[dict]) -> list[dict]:
     options = json.loads(value) if isinstance(value, str) else value
-    if not isinstance(options, list) or len(options) != 5:
-        raise ValueError("HorizonBench options must contain exactly five rows")
+    if not isinstance(options, list) or not 3 <= len(options) <= 5:
+        raise ValueError("HorizonBench options must contain three to five rows")
     letters = []
     normalized = []
     for option in options:
@@ -450,8 +707,8 @@ def parse_options(value: str | list[dict]) -> list[dict]:
                 "option": option["option"],
             }
         )
-    if letters != list("ABCDE"):
-        raise ValueError("HorizonBench option letters must be ordered A-E")
+    if letters != list("ABCDE")[: len(letters)]:
+        raise ValueError("HorizonBench option letters must be an ordered A-E prefix")
     return normalized
 
 
@@ -494,7 +751,9 @@ def prompt_item(row: dict) -> dict:
 
 
 def build_question(options: list[dict]) -> str:
-    lines = ["Which of the following responses would align with the user's preferences the most?"]
+    lines = [
+        "Which of the following responses would align with the user's preferences the most?"
+    ]
     lines.extend(
         f"{option['letter']}: {normalize_source_text(option['option'])}"
         for option in options
@@ -520,7 +779,9 @@ def _observed_times(sessions: list[dict]) -> list[str]:
         try:
             parsed = datetime.fromisoformat(session["date"].replace("Z", "+00:00"))
         except (TypeError, ValueError) as error:
-            raise ValueError(f"invalid HorizonBench session date: {session['date']!r}") from error
+            raise ValueError(
+                f"invalid HorizonBench session date: {session['date']!r}"
+            ) from error
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         parsed = parsed.astimezone(timezone.utc)
@@ -540,20 +801,23 @@ def _session_body(session: dict) -> str:
         lines.append(f"{label}: {turn['content']}")
     body = "\n".join(lines)
     if not body.strip() or len(body.encode()) > MAX_EPISODE_BYTES:
-        raise ValueError("HorizonBench session body is empty or exceeds retain boundary")
+        raise ValueError(
+            "HorizonBench session body is empty or exceeds retain boundary"
+        )
     return body
 
 
-def runtime_item(row: dict) -> dict:
+def runtime_item(row: dict, *, context_ref: str | None = None) -> dict:
     view = prompt_item(row)
     sessions = parse_sessions(normalize_source_text(view["conversation"]))
     if not sessions:
         raise ValueError(f"HorizonBench row {view['id']} has no conversation sessions")
     ref = _safe_ref(view["id"])
+    episode_ref = _safe_ref(context_ref) if context_ref else ref
     times = _observed_times(sessions)
     episodes = [
         {
-            "source_ref": f"horizon:{ref}:session:{index}",
+            "source_ref": f"horizon:{episode_ref}:session:{index}",
             "observed_at": times[index],
             "body": _session_body(session),
         }
@@ -564,12 +828,124 @@ def runtime_item(row: dict) -> dict:
         "id": view["id"],
         "user_id": view["user_id"],
         "generator": view["generator"],
-        "context_ref": f"horizon-{ref}",
+        "context_ref": context_ref or f"horizon-{ref}",
         "episodes": episodes,
         "question": question,
         "recall_query": question[:RECALL_QUERY_CHARS],
         "options": view["options"],
     }
+
+
+def confirmation_runtime_items(rows: list[dict]) -> list[dict]:
+    items = []
+    for row in rows:
+        view = prompt_item(row)
+        sessions = parse_sessions(normalize_source_text(view["conversation"]))
+        session_times = _observed_times(sessions)
+        context_ref = f"horizon-user-{_safe_ref(view['user_id'])}"
+        context_token = _safe_ref(context_ref)
+        episodes = []
+        for session_index, session in enumerate(sessions):
+            base_time = datetime.fromisoformat(
+                session_times[session_index].replace("Z", "+00:00")
+            )
+            for turn_index, turn in enumerate(session["turns"]):
+                observed_at = (
+                    (base_time + timedelta(microseconds=turn_index))
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                )
+                label = "User" if turn["role"] == "user" else "Assistant"
+                body = [f"Date: {session['date']}"]
+                if session["scenario"]:
+                    body.append(f"Scenario: {session['scenario']}")
+                body.append(f"{label}: {turn['content']}")
+                episodes.append(
+                    {
+                        "source_ref": (
+                            f"horizon:{context_token}:session:{session_index}:"
+                            f"turn:{turn_index}"
+                        ),
+                        "observed_at": observed_at,
+                        "body": "\n".join(body),
+                    }
+                )
+        question = build_question(view["options"])
+        items.append(
+            {
+                "id": view["id"],
+                "user_id": view["user_id"],
+                "generator": view["generator"],
+                "context_ref": context_ref,
+                "episodes": episodes,
+                "question": question,
+                "recall_query": question[:RECALL_QUERY_CHARS],
+                "options": view["options"],
+            }
+        )
+    return items
+
+
+def build_incremental_confirmation_evidence(
+    client,
+    items: list[dict],
+    drain_worker,
+    *,
+    k: int,
+    budget_tokens: int,
+) -> tuple[list[dict], int, int]:
+    groups: dict[str, list[dict]] = {}
+    for item in items:
+        groups.setdefault(item["context_ref"], []).append(item)
+    if any(len(group) != 2 for group in groups.values()):
+        raise ValueError("HorizonBench confirmation requires two items per user")
+    ordered_groups = []
+    bound = {}
+    for context_ref in sorted(groups):
+        group = sorted(
+            groups[context_ref], key=lambda item: (len(item["episodes"]), item["id"])
+        )
+        if group[1]["episodes"][: len(group[0]["episodes"])] != group[0]["episodes"]:
+            raise ValueError(f"HorizonBench timeline drift for context {context_ref}")
+        context = client.bind_context(
+            context_ref,
+            subject_ref=context_ref,
+            actor_ref="horizonbench-runner",
+            scope_ref=context_ref,
+            agent_node_ref="horizonbench-runner",
+        )
+        for item in group:
+            bound[item["id"]] = context
+        ordered_groups.append(group)
+    retained_counts = {group[0]["context_ref"]: 0 for group in ordered_groups}
+    retained = 0
+    compiled = 0
+    evidence = []
+    for stage in range(2):
+        stage_items = []
+        for group in ordered_groups:
+            item = group[stage]
+            context_ref = item["context_ref"]
+            start = retained_counts[context_ref]
+            for episode in item["episodes"][start:]:
+                client.post(
+                    "/v1/episodes",
+                    gr.episode_retain_payload(
+                        bound[item["id"]],
+                        source_ref=episode["source_ref"],
+                        observed_at=episode["observed_at"],
+                        source_kind="user",
+                        body=episode["body"],
+                    ),
+                )
+                retained += 1
+            retained_counts[context_ref] = len(item["episodes"])
+            stage_items.append(item)
+        compiled += drain_worker()
+        evidence.extend(
+            recall_runtime_items(client, stage_items, bound, "fast", k, budget_tokens)
+        )
+    return evidence, retained, compiled
 
 
 def validate_evidence_rows(rows: list[dict], expected_ids: list[str], arm: str) -> None:
@@ -580,18 +956,33 @@ def validate_evidence_rows(rows: list[dict], expected_ids: list[str], arm: str) 
         raise ValueError(f"HorizonBench {arm} evidence does not match expected IDs")
     for row in rows:
         if row.get("arm") != arm:
-            raise ValueError(f"HorizonBench evidence row has wrong arm: {row.get('arm')!r}")
+            raise ValueError(
+                f"HorizonBench evidence row has wrong arm: {row.get('arm')!r}"
+            )
         if row.get("degraded") is not False:
-            raise ValueError(f"HorizonBench {arm} evidence is degraded for {row.get('id')}")
+            raise ValueError(
+                f"HorizonBench {arm} evidence is degraded for {row.get('id')}"
+            )
         evidence = row.get("evidence")
         if not isinstance(evidence, list) or not evidence:
-            raise ValueError(f"HorizonBench {arm} has empty evidence for {row.get('id')}")
+            raise ValueError(
+                f"HorizonBench {arm} has empty evidence for {row.get('id')}"
+            )
 
 
 def retain_runtime_items(client, items: list[dict]) -> tuple[dict[str, dict], int]:
     bound = {}
     retained = 0
+    contexts: dict[str, tuple[list[dict], dict]] = {}
     for item in items:
+        prior = contexts.get(item["context_ref"])
+        if prior is not None:
+            if item["episodes"] != prior[0]:
+                raise ValueError(
+                    f"HorizonBench timeline drift for context {item['context_ref']}"
+                )
+            bound[item["id"]] = prior[1]
+            continue
         context = client.bind_context(
             item["context_ref"],
             subject_ref=item["context_ref"],
@@ -599,6 +990,7 @@ def retain_runtime_items(client, items: list[dict]) -> tuple[dict[str, dict], in
             scope_ref=item["context_ref"],
             agent_node_ref="horizonbench-runner",
         )
+        contexts[item["context_ref"]] = (item["episodes"], context)
         bound[item["id"]] = context
         for episode in item["episodes"]:
             payload = gr.episode_retain_payload(
@@ -655,7 +1047,9 @@ def recall_runtime_items(
 
 def validate_sample_rows(rows: list[dict]) -> dict:
     if len(rows) != 10:
-        raise ValueError(f"HorizonBench sample must contain exactly 10 rows, got {len(rows)}")
+        raise ValueError(
+            f"HorizonBench sample must contain exactly 10 rows, got {len(rows)}"
+        )
     ids = [row.get("id") for row in rows]
     if any(not isinstance(item_id, str) or not item_id for item_id in ids):
         raise ValueError("HorizonBench sample has a missing id")
@@ -669,14 +1063,621 @@ def validate_sample_rows(rows: list[dict]) -> dict:
     for row in rows:
         view = prompt_item(row)
         sessions = parse_sessions(view["conversation"])
-        if not sessions or any(not session["date"] or not session["turns"] for session in sessions):
-            raise ValueError(f"HorizonBench row {row['id']} has invalid conversation sessions")
+        if not sessions or any(
+            not session["date"] or not session["turns"] for session in sessions
+        ):
+            raise ValueError(
+                f"HorizonBench row {row['id']} has invalid conversation sessions"
+            )
     return {
         "row_count": len(rows),
         "user_count": len(set(users)),
         "expected_ids": ids,
         "expected_user_ids": users,
     }
+
+
+def validate_benchmark_rows(
+    rows: list[dict],
+    *,
+    expected_rows: int,
+    expected_users: int,
+    expected_generator_counts: dict[str, int],
+) -> dict:
+    if len(rows) != expected_rows:
+        raise ValueError(
+            f"HorizonBench benchmark must contain {expected_rows} rows, got {len(rows)}"
+        )
+    ids = [row.get("id") for row in rows]
+    if any(not isinstance(item_id, str) or not item_id for item_id in ids):
+        raise ValueError("HorizonBench benchmark has a missing id")
+    if len(ids) != len(set(ids)):
+        raise ValueError("HorizonBench benchmark has a duplicate id")
+    users: dict[str, list[dict]] = {}
+    generator_counts: Counter[str] = Counter()
+    option_cardinality_counts: Counter[int] = Counter()
+    evolved_rows_without_distractor = 0
+    evolved_rows = 0
+    for row in rows:
+        user_id = row.get("user_id")
+        generator = row.get("generator")
+        conversation = row.get("conversation")
+        if not isinstance(user_id, str) or not user_id:
+            raise ValueError("HorizonBench benchmark has a missing user_id")
+        if not isinstance(generator, str) or not generator:
+            raise ValueError("HorizonBench benchmark has a missing generator")
+        if not isinstance(conversation, str) or not conversation:
+            raise ValueError("HorizonBench benchmark has an empty conversation")
+        options = parse_options(row.get("options"))
+        option_cardinality_counts[len(options)] += 1
+        letters = {option["letter"] for option in options}
+        if row.get("correct_letter") not in letters:
+            raise ValueError(f"HorizonBench row {row['id']} has invalid correct_letter")
+        if type(row.get("has_evolved")) is not bool:
+            raise ValueError(f"HorizonBench row {row['id']} has invalid has_evolved")
+        evolved_rows += int(row["has_evolved"])
+        distractor = row.get("distractor_letter")
+        if row["has_evolved"] and distractor in {"", None}:
+            evolved_rows_without_distractor += 1
+        if row["has_evolved"] and distractor not in letters | {"", None}:
+            raise ValueError(
+                f"HorizonBench row {row['id']} has invalid distractor_letter"
+            )
+        if not row["has_evolved"] and distractor not in {"", None}:
+            raise ValueError(f"HorizonBench row {row['id']} has static distractor")
+        users.setdefault(user_id, []).append(row)
+        generator_counts[generator] += 1
+    if len(users) != expected_users:
+        raise ValueError(
+            f"HorizonBench benchmark must contain {expected_users} users, got {len(users)}"
+        )
+    if dict(generator_counts) != expected_generator_counts:
+        raise ValueError(
+            "HorizonBench benchmark generator counts drift: "
+            f"{dict(generator_counts)} != {expected_generator_counts}"
+        )
+    inconsistent = inconsistent_timeline_users(rows)
+    if inconsistent:
+        raise ValueError(f"HorizonBench timeline drift for user {inconsistent[0]}")
+    eligible: Counter[str] = Counter()
+    for user_id, user_rows in users.items():
+        strata = {row["has_evolved"] for row in user_rows}
+        if strata == {False, True}:
+            eligible[user_rows[0]["generator"]] += 1
+    return {
+        "row_count": len(rows),
+        "user_count": len(users),
+        "generator_counts": dict(generator_counts),
+        "eligible_user_counts": dict(eligible),
+        "option_cardinality_counts": {
+            str(count): rows
+            for count, rows in sorted(option_cardinality_counts.items())
+        },
+        "evolved_rows_without_distractor": evolved_rows_without_distractor,
+        "stratum_counts": {
+            "evolved": evolved_rows,
+            "static": len(rows) - evolved_rows,
+        },
+    }
+
+
+def inconsistent_timeline_users(rows: list[dict]) -> list[str]:
+    conversations: dict[str, list[str]] = {}
+    for row in rows:
+        conversations.setdefault(row["user_id"], []).append(
+            row["conversation"].rstrip()
+        )
+    inconsistent = []
+    for user_id, values in conversations.items():
+        ordered = sorted(values, key=len)
+        if any(
+            not later.startswith(earlier)
+            for earlier, later in zip(ordered, ordered[1:], strict=False)
+        ):
+            inconsistent.append(user_id)
+    return sorted(inconsistent)
+
+
+def _seeded_key(seed: str, *parts: object) -> str:
+    return hashlib.sha256(
+        "\0".join([seed, *(str(part) for part in parts)]).encode()
+    ).hexdigest()
+
+
+def select_confirmation_rows(
+    rows: list[dict],
+    *,
+    excluded_user_ids: set[str],
+    seed: str,
+    users_per_generator: int,
+) -> list[dict]:
+    by_generator: dict[str, dict[str, list[dict]]] = {}
+    for row in rows:
+        by_generator.setdefault(row["generator"], {}).setdefault(
+            row["user_id"], []
+        ).append(row)
+    selected: list[dict] = []
+    for generator in sorted(by_generator):
+        eligible = [
+            user_id
+            for user_id, user_rows in by_generator[generator].items()
+            if user_id not in excluded_user_ids
+            and {row["has_evolved"] for row in user_rows} == {False, True}
+        ]
+        ranked_users = sorted(
+            eligible, key=lambda user_id: _seeded_key(seed, generator, user_id)
+        )
+        if len(ranked_users) < users_per_generator:
+            raise ValueError(
+                f"HorizonBench generator {generator} has only {len(ranked_users)} "
+                f"eligible users after exclusions; need {users_per_generator}"
+            )
+        for user_id in ranked_users[:users_per_generator]:
+            user_rows = by_generator[generator][user_id]
+            for evolved in (False, True):
+                candidates = [row for row in user_rows if row["has_evolved"] is evolved]
+                selected.append(
+                    min(
+                        candidates,
+                        key=lambda row: _seeded_key(
+                            seed, generator, user_id, evolved, row["id"]
+                        ),
+                    )
+                )
+    return selected
+
+
+def reconcile_graph_population(
+    benchmark_rows: list[dict],
+    graph_rows: list[dict],
+    *,
+    expected_graph_users: int,
+) -> dict:
+    if any(set(row) != {"user_id", "generator"} for row in graph_rows):
+        raise ValueError("graph reconciliation accepts identity columns only")
+    benchmark_users = {row["user_id"] for row in benchmark_rows}
+    graph_users = {row["user_id"] for row in graph_rows}
+    if len(graph_users) != expected_graph_users:
+        raise ValueError(
+            f"HorizonBench graph population must contain {expected_graph_users} users, "
+            f"got {len(graph_users)}"
+        )
+    return {
+        "benchmark_users": len(benchmark_users),
+        "graph_users": len(graph_users),
+        "benchmark_users_missing_from_graph": sorted(benchmark_users - graph_users),
+        "graph_only_users": sorted(graph_users - benchmark_users),
+    }
+
+
+def verify_locked_file(path: Path, *, expected_size: int, expected_sha256: str) -> dict:
+    actual_size = path.stat().st_size
+    if actual_size != expected_size:
+        raise ValueError(
+            f"HorizonBench source size drift for {path}: "
+            f"{actual_size} != {expected_size}"
+        )
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    actual_sha256 = digest.hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise ValueError(
+            f"HorizonBench source sha256 drift for {path}: "
+            f"{actual_sha256} != {expected_sha256}"
+        )
+    return {
+        "path": str(path),
+        "size": actual_size,
+        "sha256": actual_sha256,
+    }
+
+
+def _source_url(relative_path: str) -> str:
+    quoted = urllib.parse.quote(relative_path, safe="/")
+    return (
+        f"https://huggingface.co/datasets/{DATASET_ID}/resolve/"
+        f"{DATASET_REVISION}/{quoted}?download=true"
+    )
+
+
+def _download_locked_file(cache_dir: Path, source: tuple[str, int, str]) -> dict:
+    relative_path, expected_size, expected_sha256 = source
+    destination = cache_dir / relative_path
+    if destination.exists():
+        return verify_locked_file(
+            destination,
+            expected_size=expected_size,
+            expected_sha256=expected_sha256,
+        )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix(destination.suffix + ".partial")
+    offset = partial.stat().st_size if partial.exists() else 0
+    headers = {"User-Agent": "MemPhant-HorizonBench/1.0"}
+    if offset:
+        headers["Range"] = f"bytes={offset}-"
+    request = urllib.request.Request(_source_url(relative_path), headers=headers)
+    with urllib.request.urlopen(request, timeout=120) as response:
+        append = offset > 0 and response.status == 206
+        with partial.open("ab" if append else "wb") as output:
+            while chunk := response.read(8 * 1024 * 1024):
+                output.write(chunk)
+    os.replace(partial, destination)
+    return verify_locked_file(
+        destination,
+        expected_size=expected_size,
+        expected_sha256=expected_sha256,
+    )
+
+
+def _parquet_rows(paths: list[Path], *, columns: list[str] | None = None):
+    try:
+        import pyarrow.parquet as parquet
+    except ImportError as error:
+        raise RuntimeError(
+            "census-full requires pyarrow; run with `uv run --with pyarrow`"
+        ) from error
+    for path in paths:
+        parquet_file = parquet.ParquetFile(path)
+        for batch in parquet_file.iter_batches(batch_size=16, columns=columns):
+            yield from batch.to_pylist()
+
+
+def _remote_graph_identity_rows() -> list[dict]:
+    try:
+        import fsspec
+        import pyarrow.parquet as parquet
+    except ImportError as error:
+        raise RuntimeError(
+            "graph identity projection requires pyarrow and fsspec; run with "
+            "`uv run --with pyarrow --with fsspec --with aiohttp`"
+        ) from error
+    rows = []
+    for relative_path, _, _ in GRAPH_SOURCE_FILES:
+        with fsspec.open(
+            _source_url(relative_path), "rb", block_size=8 * 1024 * 1024
+        ) as handle:
+            parquet_file = parquet.ParquetFile(handle)
+            for batch in parquet_file.iter_batches(
+                batch_size=64, columns=["user_id", "generator"]
+            ):
+                rows.extend(batch.to_pylist())
+    return rows
+
+
+def census_full(args) -> dict:
+    revision = fetch_source_revision()
+    cache_dir = args.cache_root.expanduser().resolve() / revision
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        verified_files = list(
+            executor.map(
+                lambda source: _download_locked_file(cache_dir, source),
+                BENCHMARK_SOURCE_FILES,
+            )
+        )
+    ids: set[str] = set()
+    users: dict[str, dict] = {}
+    generator_counts: Counter[str] = Counter()
+    option_cardinality_counts: Counter[int] = Counter()
+    evolved_rows_without_distractor = 0
+    evolved_rows = 0
+    index_rows = []
+    benchmark_paths = [cache_dir / source[0] for source in BENCHMARK_SOURCE_FILES]
+    for row in _parquet_rows(benchmark_paths):
+        item_id = row.get("id")
+        user_id = row.get("user_id")
+        generator = row.get("generator")
+        conversation = row.get("conversation")
+        if not isinstance(item_id, str) or not item_id or item_id in ids:
+            raise ValueError("HorizonBench benchmark has an invalid or duplicate id")
+        if not isinstance(user_id, str) or not user_id:
+            raise ValueError(f"HorizonBench row {item_id} has an invalid user_id")
+        if (
+            not isinstance(generator, str)
+            or generator not in BENCHMARK_GENERATOR_COUNTS
+        ):
+            raise ValueError(f"HorizonBench row {item_id} has an invalid generator")
+        if not isinstance(conversation, str) or not conversation:
+            raise ValueError(f"HorizonBench row {item_id} has an empty conversation")
+        options = parse_options(row.get("options"))
+        option_cardinality_counts[len(options)] += 1
+        letters = {option["letter"] for option in options}
+        evolved = row.get("has_evolved")
+        evolved_rows += int(evolved is True)
+        if row.get("correct_letter") not in letters or type(evolved) is not bool:
+            raise ValueError(f"HorizonBench row {item_id} has malformed gold")
+        distractor = row.get("distractor_letter")
+        if evolved and distractor in {"", None}:
+            evolved_rows_without_distractor += 1
+        if (evolved and distractor not in letters | {"", None}) or (
+            not evolved and distractor not in {"", None}
+        ):
+            raise ValueError(f"HorizonBench row {item_id} has malformed distractor")
+        conversation_sha = hashlib.sha256(conversation.encode()).hexdigest()
+        user = users.setdefault(
+            user_id,
+            {
+                "generator": generator,
+                "latest_conversation": conversation.rstrip(),
+                "conversation_hashes": set(),
+                "strata": set(),
+                "timeline_consistent": True,
+            },
+        )
+        latest = user["latest_conversation"]
+        current = conversation.rstrip()
+        if user["generator"] != generator or not (
+            current.startswith(latest) or latest.startswith(current)
+        ):
+            user["timeline_consistent"] = False
+        if len(current) > len(latest):
+            user["latest_conversation"] = current
+        user["conversation_hashes"].add(conversation_sha)
+        user["strata"].add(evolved)
+        ids.add(item_id)
+        generator_counts[generator] += 1
+        index_rows.append(
+            {
+                "id": item_id,
+                "user_id": user_id,
+                "generator": generator,
+                "has_evolved": evolved,
+                "conversation_sha256": conversation_sha,
+            }
+        )
+    if len(ids) != 4_245 or len(users) != 346:
+        raise ValueError(
+            f"HorizonBench census drift: rows={len(ids)}, users={len(users)}"
+        )
+    if dict(generator_counts) != BENCHMARK_GENERATOR_COUNTS:
+        raise ValueError(
+            f"HorizonBench generator counts drift: {dict(generator_counts)}"
+        )
+    timeline_drift_users = {
+        user_id for user_id, value in users.items() if not value["timeline_consistent"]
+    }
+    if timeline_drift_users != EXPECTED_TIMELINE_DRIFT_USERS:
+        raise ValueError(
+            "HorizonBench timeline-drift population changed: "
+            f"{sorted(timeline_drift_users)}"
+        )
+    eligible_counts = Counter(
+        value["generator"]
+        for value in users.values()
+        if value["timeline_consistent"] and value["strata"] == {False, True}
+    )
+    index_path = cache_dir / "benchmark-index.jsonl"
+    write_jsonl(index_path, sorted(index_rows, key=lambda row: row["id"]))
+
+    graph_rows = _remote_graph_identity_rows()
+    graph_report = reconcile_graph_population(
+        index_rows, graph_rows, expected_graph_users=360
+    )
+    if graph_report["benchmark_users_missing_from_graph"]:
+        raise ValueError(
+            "HorizonBench benchmark users are missing from graph population"
+        )
+    report = {
+        "schema_version": 1,
+        "status": "passed",
+        "dataset": DATASET_ID,
+        "dataset_revision": revision,
+        "config": "benchmark",
+        "split": "test",
+        "source_files": [
+            {**verified, "path": source[0]}
+            for verified, source in zip(
+                verified_files, BENCHMARK_SOURCE_FILES, strict=True
+            )
+        ],
+        "source_bytes": sum(source[1] for source in BENCHMARK_SOURCE_FILES),
+        "row_count": len(ids),
+        "user_count": len(users),
+        "generator_counts": dict(generator_counts),
+        "option_cardinality_counts": {
+            str(count): rows
+            for count, rows in sorted(option_cardinality_counts.items())
+        },
+        "evolved_rows_without_distractor": evolved_rows_without_distractor,
+        "stratum_counts": {
+            "evolved": evolved_rows,
+            "static": len(ids) - evolved_rows,
+        },
+        "eligible_user_counts": dict(eligible_counts),
+        "timeline_variant_count": sum(
+            len(value["conversation_hashes"]) for value in users.values()
+        ),
+        "timeline_integrity": {
+            "status": "qualified_with_exclusions",
+            "monotone_users": len(users) - len(timeline_drift_users),
+            "drift_users": sorted(timeline_drift_users),
+            "selection_excludes_drift_users": True,
+        },
+        "index_path": str(index_path),
+        "index_sha256": gr.sha256_file(index_path),
+        "graph_reconciliation": {
+            **graph_report,
+            "identity_source": "remote Parquet projection of user_id and generator only",
+            "source_objects": [
+                {"path": path, "size": size, "sha256": sha256}
+                for path, size, sha256 in GRAPH_SOURCE_FILES
+            ],
+        },
+        "gold_quarantine": {
+            "index_fields": [
+                "id",
+                "user_id",
+                "generator",
+                "has_evolved",
+                "conversation_sha256",
+            ],
+            "mental_state_graphs_acquired": False,
+        },
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "The pinned HorizonBench benchmark release completed a full schema, identity, and integrity census.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 4_245,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+            },
+            "harness": {
+                "embed_model": "none",
+                "scorer": "full release census; no answer scoring",
+                "k": "n/a",
+                "budget": 0,
+                "flags": ["gold-quarantined", "graph-identity-columns-only"],
+            },
+            "corpus": {
+                "sha256": sha256_json([source[2] for source in BENCHMARK_SOURCE_FILES]),
+                "snapshot_id": f"{DATASET_ID}@{revision}:benchmark/test",
+                "n_items": 4_245,
+            },
+            "instrument_verification": {
+                "shipped_rows_verified": True,
+                "rows_counted": 4_245,
+                "fields_counted": {
+                    "conversation": 4_245,
+                    "options": 4_245,
+                    "correct_letter": 4_245,
+                    "has_evolved": 4_245,
+                },
+                "license_id": "CC-BY-4.0",
+                "license_source": "RECORD_METADATA",
+                "license_evidence": "Pinned Hugging Face dataset metadata.",
+            },
+            "notes": "Qualification only; two inconsistent user timelines are excluded from held-out selection.",
+        },
+    }
+    atomic_write_json(args.lock_out.resolve(), report)
+    atomic_write_json(args.report_out.resolve(), report)
+    return report
+
+
+def select_confirmation(args) -> dict:
+    full_lock = json.loads(args.full_lock.read_text(encoding="utf-8"))
+    validate_source_revision(full_lock.get("dataset_revision"))
+    index_path = Path(full_lock["index_path"])
+    if gr.sha256_file(index_path) != full_lock.get("index_sha256"):
+        raise ValueError("HorizonBench benchmark index hash drift")
+    index_rows = load_jsonl(index_path)
+    sample_lock = json.loads(args.sample_lock.read_text(encoding="utf-8"))
+    excluded_users = set(sample_lock.get("expected_user_ids", [])) | set(
+        full_lock.get("timeline_integrity", {}).get("drift_users", [])
+    )
+    selected_index = select_confirmation_rows(
+        index_rows,
+        excluded_user_ids=excluded_users,
+        seed=args.seed,
+        users_per_generator=20,
+    )
+    selected_ids = {row["id"] for row in selected_index}
+    cache_dir = args.cache_root.expanduser().resolve() / DATASET_REVISION
+    rows = [
+        row
+        for row in _parquet_rows(
+            [cache_dir / source[0] for source in BENCHMARK_SOURCE_FILES]
+        )
+        if row.get("id") in selected_ids
+    ]
+    if len(rows) != 120:
+        raise ValueError(f"HorizonBench confirmation extraction got {len(rows)} rows")
+    rows_by_id = {row["id"]: row for row in rows}
+    ordered = [rows_by_id[row["id"]] for row in selected_index]
+    validate_benchmark_rows(
+        ordered,
+        expected_rows=120,
+        expected_users=60,
+        expected_generator_counts={
+            generator: 40 for generator in BENCHMARK_GENERATOR_COUNTS
+        },
+    )
+    source_raw = canonical_jsonl_bytes(ordered)
+    atomic_write(args.out.expanduser().resolve(), source_raw)
+    selected_users = sorted({row["user_id"] for row in ordered})
+    report = {
+        "schema_version": 1,
+        "status": "frozen",
+        "dataset": DATASET_ID,
+        "dataset_revision": DATASET_REVISION,
+        "seed": args.seed,
+        "source_jsonl_sha256": hashlib.sha256(source_raw).hexdigest(),
+        "expected_ids": [row["id"] for row in ordered],
+        "expected_user_ids": selected_users,
+        "rows": 120,
+        "users": 60,
+        "users_per_generator": {
+            generator: 20 for generator in BENCHMARK_GENERATOR_COUNTS
+        },
+        "rows_per_generator": {
+            generator: 40 for generator in BENCHMARK_GENERATOR_COUNTS
+        },
+        "rows_per_stratum": {"evolved": 60, "static": 60},
+        "evolved_distractor_coverage": {
+            "present": sum(
+                bool(row.get("distractor_letter"))
+                for row in ordered
+                if row["has_evolved"]
+            ),
+            "missing": sum(
+                not bool(row.get("distractor_letter"))
+                for row in ordered
+                if row["has_evolved"]
+            ),
+        },
+        "excluded_sample_user_ids_sha256": sha256_json(sorted(excluded_users)),
+        "full_lock_sha256": gr.sha256_file(args.full_lock.resolve()),
+        "gold_quarantine": {
+            "selection_fields": ["id", "user_id", "generator", "has_evolved"],
+            "selection_uses_correct_letter": False,
+            "selection_uses_distractor_letter": False,
+            "mental_state_graphs_acquired": False,
+        },
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "A deterministic gold-blind 60-user, 120-item HorizonBench confirmation tranche was frozen.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 120,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+            },
+            "harness": {
+                "embed_model": "none",
+                "scorer": "selection only; no answer scoring",
+                "k": "n/a",
+                "budget": 0,
+                "flags": ["sample-users-excluded", "timeline-drift-users-excluded"],
+            },
+            "corpus": {
+                "sha256": hashlib.sha256(source_raw).hexdigest(),
+                "snapshot_id": f"{DATASET_ID}@{DATASET_REVISION}:benchmark/test:confirmation-v1",
+                "n_items": 120,
+            },
+            "instrument_verification": {
+                "shipped_rows_verified": True,
+                "rows_counted": 120,
+                "fields_counted": {
+                    "conversation": 120,
+                    "options": 120,
+                    "correct_letter": 120,
+                    "has_evolved": 120,
+                },
+                "license_id": "CC-BY-4.0",
+                "license_source": "RECORD_METADATA",
+                "license_evidence": "Pinned Hugging Face dataset metadata.",
+            },
+            "notes": "Selection used identity, generator, and has_evolved strata only; answer and distractor labels were not used.",
+        },
+    }
+    atomic_write_json(args.report_out.resolve(), report)
+    return report
 
 
 def canonical_jsonl_bytes(rows: list[dict]) -> bytes:
@@ -819,11 +1820,9 @@ def run_paid_pilot(args) -> dict:
     fast_rows = load_jsonl(args.fast_evidence.resolve())
     validate_evidence_rows(fast_rows, expected_ids, "fast")
     fast_gate = json.loads(args.fast_gate.read_text(encoding="utf-8"))
-    if (
-        fast_gate.get("status") != "passed"
-        or fast_gate.get("evidence_jsonl_sha256")
-        != gr.sha256_file(args.fast_evidence.resolve())
-    ):
+    if fast_gate.get("status") != "passed" or fast_gate.get(
+        "evidence_jsonl_sha256"
+    ) != gr.sha256_file(args.fast_evidence.resolve()):
         raise ValueError("paid pilot requires the matching passed Fast gate")
 
     packet = json.loads(args.authorization.read_text(encoding="utf-8"))
@@ -1045,7 +2044,9 @@ def run_paid_pilot(args) -> dict:
             "status": "complete",
             "authorization_scope_sha256": authorization_sha,
             "terminal_rows": len(terminal_rows),
-            "completed_rows": sum(row["status"] == "completed" for row in terminal_rows),
+            "completed_rows": sum(
+                row["status"] == "completed" for row in terminal_rows
+            ),
             "error_rows": sum(row["status"] == "error" for row in terminal_rows),
             "reader": {
                 "model": READER_MODEL,
@@ -1097,6 +2098,41 @@ def load_locked_sample(source: Path, lock_path: Path) -> tuple[list[dict], dict]
     if census["expected_user_ids"] != lock.get("expected_user_ids"):
         raise ValueError("HorizonBench sample users do not match the lock")
     return rows, lock
+
+
+def load_locked_confirmation(
+    source: Path,
+    selection_path: Path,
+    *,
+    expected_rows: int = 120,
+    expected_users: int = 60,
+) -> tuple[list[dict], dict]:
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    if selection.get("status") != "frozen":
+        raise ValueError("HorizonBench confirmation selection is not frozen")
+    validate_source_revision(selection.get("dataset_revision"))
+    raw = source.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != selection.get("source_jsonl_sha256"):
+        raise ValueError("HorizonBench confirmation source hash drift")
+    rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
+    if (
+        len(rows) != expected_rows
+        or len({row.get("user_id") for row in rows}) != expected_users
+    ):
+        raise ValueError("HorizonBench confirmation row or user count drift")
+    ids = [row.get("id") for row in rows]
+    users = sorted({row.get("user_id") for row in rows})
+    if ids != selection.get("expected_ids") or users != selection.get(
+        "expected_user_ids"
+    ):
+        raise ValueError("HorizonBench confirmation IDs or users drift")
+    validate_benchmark_rows(
+        rows,
+        expected_rows=expected_rows,
+        expected_users=expected_users,
+        expected_generator_counts=dict(Counter(row["generator"] for row in rows)),
+    )
+    return rows, selection
 
 
 def validate_source_revision(actual: str) -> None:
@@ -1276,6 +2312,151 @@ def build_fast_evidence(args) -> dict:
     return report
 
 
+def confirmation_fast_gate_contract(
+    source_sha: str, *, k: int, budget_tokens: int
+) -> dict:
+    return {
+        "schema_version": 1,
+        "decisional": False,
+        "claim": (
+            "The frozen 60-user HorizonBench confirmation completed its "
+            "incremental gold-blind Fast construction gate."
+        ),
+        "power": {
+            "test": "construction gate only (no answer scoring)",
+            "n": 120,
+            "b": 0,
+            "c": 0,
+            "n_d": 0,
+        },
+        "mechanism_enabled": True,
+        "probe_kind": "gate",
+        "mechanism_evidence": (
+            "Sixty user timelines were retained incrementally and each of 120 "
+            "questions produced non-degraded Fast evidence before gold access."
+        ),
+        "harness": {
+            "embed_model": "local sentence-unit embedder",
+            "scorer": "construction completeness only; benchmark gold quarantined",
+            "k": k,
+            "budget": budget_tokens,
+            "flags": ["fast", "fact_extraction=off", "deep=off"],
+        },
+        "corpus": {
+            "sha256": source_sha,
+            "snapshot_id": f"{DATASET_ID}@{DATASET_REVISION}:benchmark/test:confirmation-v1",
+            "n_items": 120,
+        },
+        "instrument_verification": {
+            "shipped_rows_verified": True,
+            "rows_counted": 120,
+            "fields_counted": {
+                "conversation": 120,
+                "options": 120,
+                "correct_letter": 120,
+                "has_evolved": 120,
+            },
+            "license_id": "CC-BY-4.0",
+            "license_source": "RECORD_METADATA",
+            "license_evidence": "Pinned Hugging Face dataset metadata.",
+        },
+        "notes": "Non-decisional construction proof; no answer scoring or SOTA claim.",
+    }
+
+
+def build_confirmation_evidence(args) -> dict:
+    source = args.source.expanduser().resolve()
+    rows, selection = load_locked_confirmation(source, args.selection.resolve())
+    items = confirmation_runtime_items(rows)
+    gr.reexec_through_scratch_db(args.database_url)
+    database_url = os.environ["DATABASE_URL"]
+    os.environ["MEMPHANT_FACT_EXTRACTION"] = "0"
+    os.environ["MEMPHANT_DEEP"] = "off"
+    tenant_id, api_key = gr.provision_tenant(
+        args.cli_bin, database_url, name_prefix="horizon-confirmation"
+    )
+    server = gr.Server(
+        args.server_bin,
+        database_url,
+        args.port,
+        log_path=args.out.parent / "server-confirmation-fast.log",
+    )
+    started = time.monotonic()
+    try:
+        server.start()
+        client = gr.ApiClient(args.port, api_key, tenant_id)
+        evidence, retained, compiled = build_incremental_confirmation_evidence(
+            client,
+            items,
+            lambda: gr.drain_worker(args.worker_bin, database_url),
+            k=args.k,
+            budget_tokens=args.budget_tokens,
+        )
+    finally:
+        server.stop()
+    if retained != compiled:
+        raise RuntimeError(
+            f"confirmation runtime lineage mismatch: retained={retained} compiled={compiled}"
+        )
+    validate_evidence_rows(evidence, selection["expected_ids"], "fast")
+    evidence_raw = canonical_jsonl_bytes(evidence)
+    atomic_write(args.out, evidence_raw)
+    report = {
+        "schema_version": 1,
+        "status": "passed",
+        "decisional": False,
+        "claim": (
+            "The frozen HorizonBench confirmation completed its incremental "
+            "gold-blind Fast construction gate."
+        ),
+        "source": {
+            "dataset": DATASET_ID,
+            "dataset_revision": DATASET_REVISION,
+            "jsonl_sha256": selection["source_jsonl_sha256"],
+            "selection_sha256": gr.sha256_file(args.selection.resolve()),
+            "rows": 120,
+            "users": 60,
+        },
+        "runtime": {
+            "arm": "fast",
+            "items": len(items),
+            "user_contexts": len({item["context_ref"] for item in items}),
+            "turn_episodes_retained": retained,
+            "jobs_compiled": compiled,
+            "nonempty_evidence_rows": sum(bool(row["evidence"]) for row in evidence),
+            "degraded_rows": sum(bool(row["degraded"]) for row in evidence),
+            "k": args.k,
+            "budget_tokens": args.budget_tokens,
+            "latency_ms": [row["latency_ms"] for row in evidence],
+        },
+        "gold_quarantine": {
+            "runtime_fields": list(PROMPT_FIELDS),
+            "scoring_only_fields": list(SCORING_ONLY_FIELDS),
+            "mental_state_graphs_acquired": False,
+        },
+        "evidence_jsonl_sha256": hashlib.sha256(evidence_raw).hexdigest(),
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "evidence_contract": confirmation_fast_gate_contract(
+            selection["source_jsonl_sha256"],
+            k=args.k,
+            budget_tokens=args.budget_tokens,
+        ),
+        "lineage": {
+            "repository": gr.repository_identity(REPO_ROOT),
+            "migrations": gr.migration_identity(REPO_ROOT),
+            "runner_sha256": gr.sha256_file(Path(__file__)),
+            "test_sha256": gr.sha256_file(
+                REPO_ROOT / "tests" / "test_horizonbench_contract.py"
+            ),
+            "server_sha256": gr.sha256_file(Path(args.server_bin)),
+            "worker_sha256": gr.sha256_file(Path(args.worker_bin)),
+            "cli_sha256": gr.sha256_file(Path(args.cli_bin)),
+        },
+    }
+    atomic_write_json(args.report_out, report)
+    return report
+
+
 def build_analysis(args) -> dict:
     source_rows, lock = load_locked_sample(args.source.resolve(), args.lock.resolve())
     terminal_rows = load_jsonl(args.paid_rows.resolve())
@@ -1313,9 +2494,7 @@ def build_analysis(args) -> dict:
             "near_sota": False,
         },
         "accounting": {
-            "authorization_scope_sha256": census[
-                "authorization_scope_sha256"
-            ],
+            "authorization_scope_sha256": census["authorization_scope_sha256"],
             "paid_census_sha256": gr.sha256_file(args.paid_census.resolve()),
             "combined_cost_usd": census["combined_cost_usd"],
             "reader_provider_attempts": census["reader"]["provider_attempts"],
@@ -1329,9 +2508,7 @@ def build_analysis(args) -> dict:
             "code_sota": False,
             "next_authorized": "write a separately preregistered powered HorizonBench plan; do not run it yet",
         },
-        "evidence_contract": pilot_evidence_contract(
-            lock["jsonl_sha256"], analysis
-        ),
+        "evidence_contract": pilot_evidence_contract(lock["jsonl_sha256"], analysis),
         "lineage": {
             "repository": gr.repository_identity(REPO_ROOT),
             "runner_sha256": gr.sha256_file(Path(__file__)),
@@ -1352,6 +2529,29 @@ def main() -> int:
     fetch = subparsers.add_parser("fetch-sample")
     fetch.add_argument("--out", required=True, type=Path)
     fetch.add_argument("--lock-out", type=Path)
+    census = subparsers.add_parser("census-full")
+    census.add_argument(
+        "--cache-root",
+        default=Path("~/.cache/memphant-bench/horizonbench"),
+        type=Path,
+    )
+    census.add_argument("--lock-out", required=True, type=Path)
+    census.add_argument("--report-out", required=True, type=Path)
+    selection = subparsers.add_parser("select-confirmation")
+    selection.add_argument("--full-lock", required=True, type=Path)
+    selection.add_argument(
+        "--sample-lock",
+        default=REPO_ROOT / "benchmarks/manifests/horizonbench.sample.v1.json",
+        type=Path,
+    )
+    selection.add_argument(
+        "--cache-root",
+        default=Path("~/.cache/memphant-bench/horizonbench"),
+        type=Path,
+    )
+    selection.add_argument("--seed", required=True)
+    selection.add_argument("--out", required=True, type=Path)
+    selection.add_argument("--report-out", required=True, type=Path)
     evidence = subparsers.add_parser("build-fast-evidence")
     evidence.add_argument("--source", required=True, type=Path)
     evidence.add_argument(
@@ -1375,6 +2575,27 @@ def main() -> int:
         "--worker-bin", default=str(REPO_ROOT / "target/release/memphant-worker")
     )
     evidence.add_argument(
+        "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
+    )
+    confirmation_evidence = subparsers.add_parser("build-confirmation-evidence")
+    confirmation_evidence.add_argument("--source", required=True, type=Path)
+    confirmation_evidence.add_argument("--selection", required=True, type=Path)
+    confirmation_evidence.add_argument("--out", required=True, type=Path)
+    confirmation_evidence.add_argument("--report-out", required=True, type=Path)
+    confirmation_evidence.add_argument("--k", type=int, default=20)
+    confirmation_evidence.add_argument("--budget-tokens", type=int, default=16384)
+    confirmation_evidence.add_argument("--port", type=int, default=39485)
+    confirmation_evidence.add_argument(
+        "--database-url",
+        default="postgres://memphant:memphant@localhost:5432/memphant",
+    )
+    confirmation_evidence.add_argument(
+        "--server-bin", default=str(REPO_ROOT / "target/release/memphant-server")
+    )
+    confirmation_evidence.add_argument(
+        "--worker-bin", default=str(REPO_ROOT / "target/release/memphant-worker")
+    )
+    confirmation_evidence.add_argument(
         "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
     )
     paid = subparsers.add_parser("run-paid-pilot")
@@ -1434,8 +2655,17 @@ def main() -> int:
             atomic_write(args.lock_out, encoded)
         else:
             print(encoded.decode(), end="")
+    elif args.command == "census-full":
+        report = census_full(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "select-confirmation":
+        report = select_confirmation(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "build-fast-evidence":
         report = build_fast_evidence(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "build-confirmation-evidence":
+        report = build_confirmation_evidence(args)
         print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "run-paid-pilot":
         report = run_paid_pilot(args)
