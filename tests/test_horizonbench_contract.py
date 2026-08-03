@@ -301,3 +301,49 @@ def test_terminal_rows_reject_duplicates_and_missing_arms() -> None:
         module.validate_terminal_rows([*rows, rows[0]], ["one", "two"])
     with pytest.raises(ValueError, match="terminal rows"):
         module.validate_terminal_rows(rows[:-1], ["one", "two"])
+
+
+def test_analysis_joins_gold_last_and_applies_preregistered_verdict() -> None:
+    module = load_module()
+    source = [sample_row(0), sample_row(1)]
+    source[0].update(correct_letter="A", distractor_letter="B", has_evolved=True)
+    source[1].update(correct_letter="C", distractor_letter="", has_evolved=False)
+    predictions = []
+    for item, full, fast in zip(source, ("B", "C"), ("A", "D"), strict=True):
+        predictions.extend(
+            [
+                {"id": item["id"], "arm": "full_context", "status": "completed", "answer": full, "abstain": False},
+                {"id": item["id"], "arm": "fast", "status": "completed", "answer": fast, "abstain": False},
+                {"id": item["id"], "arm": "selective_deep", "status": "completed", "answer": fast, "abstain": False, "route": "fast"},
+            ]
+        )
+
+    first = module.analyze_paid_rows(source, predictions, bootstrap_seed=7, bootstrap_samples=1000)
+    second = module.analyze_paid_rows(source, predictions, bootstrap_seed=7, bootstrap_samples=1000)
+
+    assert first == second
+    assert first["arms"]["full_context"]["correct"] == 1
+    assert first["arms"]["selective_deep"]["correct"] == 1
+    assert first["arms"]["full_context"]["evolved_distractor_selections"] == 1
+    assert first["arms"]["selective_deep"]["evolved_distractor_selections"] == 0
+    assert first["paired_selective_vs_full"] == {
+        **first["paired_selective_vs_full"],
+        "gains": 1,
+        "losses": 1,
+        "discordant": 2,
+    }
+    assert first["verdict"]["outcome"] == "advance_to_powered_plan"
+
+    with pytest.raises(ValueError, match="terminal rows"):
+        module.analyze_paid_rows(source, predictions[:-1])
+
+
+def test_pilot_contract_stays_nondecisional_below_mcnemar_floor() -> None:
+    module = load_module()
+    analysis = {"paired_selective_vs_full": {"gains": 1, "losses": 1, "discordant": 2}}
+
+    contract = module.pilot_evidence_contract("a" * 64, analysis)
+
+    assert contract["decisional"] is False
+    assert contract["power"]["n_d"] == 2
+    assert contract["power"]["test"] == "two-sided exact (conditional binomial) McNemar"

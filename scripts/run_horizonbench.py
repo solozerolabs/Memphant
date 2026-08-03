@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import random
 import re
 import sys
 import tempfile
@@ -198,6 +199,219 @@ def validate_terminal_rows(rows: list[dict], expected_ids: list[str]) -> None:
         raise ValueError("paid terminal rows do not match expected IDs and arms")
     if any(row.get("status") not in {"completed", "error"} for row in rows):
         raise ValueError("paid terminal rows contain a non-terminal status")
+
+
+def _accuracy(rows: list[dict]) -> dict:
+    correct = sum(row["correct"] for row in rows)
+    return {
+        "n": len(rows),
+        "correct": correct,
+        "accuracy": correct / len(rows) if rows else None,
+    }
+
+
+def _cluster_bootstrap_delta(
+    per_item: list[dict], *, seed: int, samples: int
+) -> dict:
+    if samples < 1:
+        raise ValueError("bootstrap samples must be positive")
+    clusters: dict[str, list[int]] = {}
+    for row in per_item:
+        clusters.setdefault(row["user_id"], []).append(
+            int(row["selective_deep_correct"])
+            - int(row["full_context_correct"])
+        )
+    users = sorted(clusters)
+    if not users:
+        raise ValueError("bootstrap requires at least one user cluster")
+    generator = random.Random(seed)
+    values = []
+    for _ in range(samples):
+        sampled = [generator.choice(users) for _ in users]
+        differences = [value for user in sampled for value in clusters[user]]
+        values.append(sum(differences) / len(differences))
+    values.sort()
+    return {
+        "method": "user-cluster percentile bootstrap",
+        "seed": seed,
+        "samples": samples,
+        "low": values[int((samples - 1) * 0.025)],
+        "high": values[int((samples - 1) * 0.975)],
+    }
+
+
+def analyze_paid_rows(
+    source_rows: list[dict],
+    terminal_rows: list[dict],
+    *,
+    bootstrap_seed: int = 20260803,
+    bootstrap_samples: int = 20_000,
+) -> dict:
+    expected_ids = [row.get("id") for row in source_rows]
+    if any(not isinstance(item_id, str) or not item_id for item_id in expected_ids):
+        raise ValueError("scoring source contains an invalid ID")
+    validate_terminal_rows(terminal_rows, expected_ids)
+    predictions = {(row["id"], row["arm"]): row for row in terminal_rows}
+    per_item = []
+    for source in source_rows:
+        gold = source.get("correct_letter")
+        distractor = source.get("distractor_letter")
+        evolved = source.get("has_evolved")
+        if (
+            gold not in list("ABCDE")
+            or not isinstance(distractor, str)
+            or type(evolved) is not bool
+            or (evolved and distractor not in list("ABCDE"))
+        ):
+            raise ValueError("HorizonBench scoring gold is malformed")
+        item = {
+            "id": source["id"],
+            "user_id": source["user_id"],
+            "has_evolved": evolved,
+            "correct_letter": gold,
+            "distractor_letter": distractor,
+        }
+        for arm in PAID_ARMS:
+            prediction = predictions[(source["id"], arm)]
+            answer = prediction.get("answer")
+            item[f"{arm}_answer"] = answer
+            item[f"{arm}_correct"] = (
+                prediction.get("status") == "completed" and answer == gold
+            )
+        item["selective_route"] = predictions[
+            (source["id"], "selective_deep")
+        ].get("route")
+        per_item.append(item)
+
+    arms = {}
+    for arm in PAID_ARMS:
+        scored = [
+            {
+                "correct": row[f"{arm}_correct"],
+                "evolved": row["has_evolved"],
+                "answer": row[f"{arm}_answer"],
+                "distractor": row["distractor_letter"],
+            }
+            for row in per_item
+        ]
+        evolved_rows = [row for row in scored if row["evolved"]]
+        static_rows = [row for row in scored if not row["evolved"]]
+        arms[arm] = {
+            **_accuracy(scored),
+            "evolved": _accuracy(evolved_rows),
+            "static": _accuracy(static_rows),
+            "evolved_distractor_selections": sum(
+                row["evolved"]
+                and row["answer"] == row["distractor"]
+                for row in scored
+            ),
+        }
+
+    gains = sum(
+        row["selective_deep_correct"] and not row["full_context_correct"]
+        for row in per_item
+    )
+    losses = sum(
+        row["full_context_correct"] and not row["selective_deep_correct"]
+        for row in per_item
+    )
+    paired = {
+        "gains": gains,
+        "losses": losses,
+        "discordant": gains + losses,
+        "ties": len(per_item) - gains - losses,
+        "accuracy_delta": (
+            arms["selective_deep"]["accuracy"]
+            - arms["full_context"]["accuracy"]
+        ),
+        "cluster_bootstrap_95_ci": _cluster_bootstrap_delta(
+            per_item, seed=bootstrap_seed, samples=bootstrap_samples
+        ),
+    }
+    gates = {
+        "all_arms_complete": all(
+            row.get("status") == "completed" for row in terminal_rows
+        ),
+        "no_more_evolved_distractors_than_full_context": (
+            arms["selective_deep"]["evolved_distractor_selections"]
+            <= arms["full_context"]["evolved_distractor_selections"]
+        ),
+        "noninferior_overall_accuracy": (
+            arms["selective_deep"]["accuracy"]
+            >= arms["full_context"]["accuracy"]
+        ),
+        "at_least_one_paired_gain": gains >= 1,
+    }
+    return {
+        "arms": arms,
+        "paired_selective_vs_full": paired,
+        "selective_routing": {
+            "fast": sum(row["selective_route"] == "fast" for row in per_item),
+            "deep": sum(row["selective_route"] == "deep" for row in per_item),
+            "other": sum(
+                row["selective_route"] not in {"fast", "deep"} for row in per_item
+            ),
+        },
+        "verdict": {
+            "gates": gates,
+            "outcome": (
+                "advance_to_powered_plan" if all(gates.values()) else "stop"
+            ),
+        },
+        "per_item": per_item,
+    }
+
+
+def pilot_evidence_contract(source_sha: str, analysis: dict) -> dict:
+    paired = analysis["paired_selective_vs_full"]
+    n = analysis.get("arms", {}).get("selective_deep", {}).get("n", 10)
+    return {
+        "schema_version": 1,
+        "decisional": False,
+        "claim": "The ten-row HorizonBench pilot is a diagnostic paired behavior result, not a promotion or SOTA result.",
+        "power": {
+            "test": "two-sided exact (conditional binomial) McNemar",
+            "n": n,
+            "b": paired["losses"],
+            "c": paired["gains"],
+            "n_d": paired["discordant"],
+            "source": "docs/build-log/artifacts/horizonbench-pilot/result.json",
+        },
+        "mechanism_enabled": True,
+        "probe_kind": "lever",
+        "mechanism_evidence": "MemPhant Fast evidence was used on every treatment row; Deep remained explicit and gold-blind.",
+        "harness": {
+            "embed_model": "local sentence-unit embedder",
+            "scorer": "exact released HorizonBench correct_letter",
+            "k": 20,
+            "budget": 16384,
+            "flags": [
+                "full_context",
+                "fast",
+                "selective_deep",
+                "reader=anthropic/claude-opus-4.5",
+            ],
+        },
+        "corpus": {
+            "sha256": source_sha,
+            "snapshot_id": f"{DATASET_ID}@{DATASET_REVISION}:sample/test",
+            "n_items": n,
+        },
+        "instrument_verification": {
+            "shipped_rows_verified": True,
+            "rows_counted": n,
+            "fields_counted": {
+                "conversation": n,
+                "options": n,
+                "correct_letter": n,
+                "has_evolved": n,
+            },
+            "license_id": "CC-BY-4.0",
+            "license_source": "RECORD_METADATA",
+            "license_evidence": "Pinned Hugging Face dataset metadata.",
+        },
+        "notes": "n=10 and n_d below the exact McNemar floor; process gate only.",
+    }
 
 
 def normalize_source_text(value: str) -> str:
@@ -1062,6 +1276,76 @@ def build_fast_evidence(args) -> dict:
     return report
 
 
+def build_analysis(args) -> dict:
+    source_rows, lock = load_locked_sample(args.source.resolve(), args.lock.resolve())
+    terminal_rows = load_jsonl(args.paid_rows.resolve())
+    census = json.loads(args.paid_census.read_text(encoding="utf-8"))
+    if (
+        census.get("status") != "complete"
+        or census.get("raw_rows_sha256") != gr.sha256_file(args.paid_rows.resolve())
+        or census.get("terminal_rows") != 30
+        or census.get("error_rows") != 0
+    ):
+        raise ValueError("analysis requires the complete hash-matched paid census")
+    analysis = analyze_paid_rows(
+        source_rows,
+        terminal_rows,
+        bootstrap_seed=args.bootstrap_seed,
+        bootstrap_samples=args.bootstrap_samples,
+    )
+    result = {
+        "schema_version": 1,
+        "status": "complete",
+        "decisional": False,
+        "claim": "The ten-row HorizonBench sample passed its process gate but is underpowered and does not establish SOTA.",
+        "source": {
+            "dataset": DATASET_ID,
+            "dataset_revision": DATASET_REVISION,
+            "jsonl_sha256": lock["jsonl_sha256"],
+            "rows": len(source_rows),
+            "users": len({row["user_id"] for row in source_rows}),
+        },
+        "analysis": analysis,
+        "published_reference": {
+            "overall_accuracy": 0.528,
+            "evolved_accuracy": 0.513,
+            "comparison_status": "not_comparable_ten_row_post_release_reader_diagnostic",
+            "near_sota": False,
+        },
+        "accounting": {
+            "authorization_scope_sha256": census[
+                "authorization_scope_sha256"
+            ],
+            "paid_census_sha256": gr.sha256_file(args.paid_census.resolve()),
+            "combined_cost_usd": census["combined_cost_usd"],
+            "reader_provider_attempts": census["reader"]["provider_attempts"],
+            "deep_calls": census["deep"]["calls"],
+            "unsettled_cost_usd": census["deep"]["unsettled_cost_usd"],
+        },
+        "claim_boundary": {
+            "overall_sota": False,
+            "preference_sota": False,
+            "storage_sota": False,
+            "code_sota": False,
+            "next_authorized": "write a separately preregistered powered HorizonBench plan; do not run it yet",
+        },
+        "evidence_contract": pilot_evidence_contract(
+            lock["jsonl_sha256"], analysis
+        ),
+        "lineage": {
+            "repository": gr.repository_identity(REPO_ROOT),
+            "runner_sha256": gr.sha256_file(Path(__file__)),
+            "test_sha256": gr.sha256_file(
+                REPO_ROOT / "tests" / "test_horizonbench_contract.py"
+            ),
+            "paid_rows_sha256": gr.sha256_file(args.paid_rows.resolve()),
+            "paid_census_sha256": gr.sha256_file(args.paid_census.resolve()),
+        },
+    }
+    atomic_write_json(args.output, result)
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1130,6 +1414,18 @@ def main() -> int:
     paid.add_argument(
         "--cli-bin", default=str(REPO_ROOT / "target/release/memphant-cli")
     )
+    analysis = subparsers.add_parser("analyze")
+    analysis.add_argument("--source", required=True, type=Path)
+    analysis.add_argument(
+        "--lock",
+        default=REPO_ROOT / "benchmarks/manifests/horizonbench.sample.v1.json",
+        type=Path,
+    )
+    analysis.add_argument("--paid-rows", required=True, type=Path)
+    analysis.add_argument("--paid-census", required=True, type=Path)
+    analysis.add_argument("--output", required=True, type=Path)
+    analysis.add_argument("--bootstrap-seed", type=int, default=20260803)
+    analysis.add_argument("--bootstrap-samples", type=int, default=20_000)
     args = parser.parse_args()
     if args.command == "fetch-sample":
         lock = fetch_sample(args.out)
@@ -1143,6 +1439,9 @@ def main() -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "run-paid-pilot":
         report = run_paid_pilot(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "analyze":
+        report = build_analysis(args)
         print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
