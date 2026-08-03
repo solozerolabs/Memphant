@@ -1,0 +1,80 @@
+{
+  "arms": [
+    "full_context",
+    "fast"
+  ],
+  "authorization": {
+    "authorization_scope_sha256": "edcf342b174b098902c277eae631812da001fe71240b132a56c675263271ba1f",
+    "authorized_at": "2026-08-03T00:00:00-07:00",
+    "authorized_by": "Sid Sharma (chat approval 2026-08-03; cap removed)"
+  },
+  "campaign": {
+    "hard_ceiling_nanos": 200000000000,
+    "journal_path": "reader-attempts.jsonl",
+    "opening_liability_nanos": 0,
+    "opening_reservations": [],
+    "unallocated_reserve_nanos": 10000000000
+  },
+  "campaign_type": "horizonbench_confirmation",
+  "claim_boundary": "Sixty-user paired HorizonBench confirmation only; the complete 4,245-item treatment and every cross-axis SOTA claim remain unauthorized.",
+  "cost_preflight": {
+    "authorized_ceiling_usd": "120",
+    "cache_adjusted_prompt_chars": "69588934.40",
+    "cache_reference": "https://openrouter.ai/docs/guides/best-practices/prompt-caching",
+    "calls": 240,
+    "estimated_input_usd": "84.572051",
+    "estimated_total_usd": "95.251854",
+    "estimated_total_usd_before_buffer": "90.716051",
+    "max_completion_usd": "6.144000",
+    "method": "pilot prompt-token ratio plus exact 1.25x write and 0.1x read cache multipliers, with 5% planning buffer",
+    "pilot_paid_rows_sha256": "0432b2a0c9ae91bceb13b9a43e4f8f57c256c8baaa5e72bd99d0d6e6d9e8afa7",
+    "pilot_prompt_chars": 5673862,
+    "pilot_prompt_tokens": 1379099,
+    "pilot_source_sha256": "0e3004b70e03d2fd02a01fbfe184709f8ad8aaeb0749c2682240c983de0b2815",
+    "pilot_tokens_per_char": "0.2430617804944850614977946238",
+    "prompt_chars": 91626524,
+    "shared_cache_prefix_chars": 33903984,
+    "status": "passed"
+  },
+  "execution": {
+    "cache_dir": "reader-cache",
+    "census": "paid-census.json",
+    "closure": "reader-closure.json",
+    "journal_path": "reader-attempts.jsonl",
+    "raw_rows": "paid-rows.jsonl"
+  },
+  "frozen_inputs": {
+    "fast_evidence_sha256": "494781d428beced4f8e6038714fdfbb9390222bb1f40e560848a5fe37c8d99b7",
+    "fast_gate_sha256": "fd6ff298d111180935ed02ee3873812d4aeb991ea1b0bafaea6f57fce070eca6",
+    "provider_attempts_sha256": "9dc434ad6767e5da9ba39490a17d30bfd5a7019ade32b508873eed94d558042a",
+    "run_reader_sha256": "2437bc81552ac677f557818e52ff399bb54198be57099ea1e32f91ed247c2f17",
+    "runner_sha256": "c4dc2a286885ad4356c04e79d0a66e68205cce2bce2ca47e59bab0099a5ecaca",
+    "selection_sha256": "56a8b2ddb1eaa3a31562e962a523ce56a8f48218c3eeb860a6d535552a19919f",
+    "source_jsonl_sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0"
+  },
+  "hard_limits": {
+    "max_logical_calls": 240,
+    "max_provider_attempts": 480,
+    "max_spend_usd": "120"
+  },
+  "models": {
+    "max_output_tokens": 1024,
+    "reader": "anthropic/claude-opus-4.6",
+    "reader_price_usd_per_million": {
+      "completion": "25",
+      "prompt": "5"
+    },
+    "reader_prompt_sha256": "9bbc933029a0ee7f0fb6dafa7ffe3bca8bedcff00a25a01001cdee4e93983342",
+    "reader_provider": "anthropic",
+    "temperature": 0
+  },
+  "prompt_cache": {
+    "provider": "anthropic",
+    "read_multiplier": "0.1",
+    "require_write_then_read_per_user": true,
+    "type": "explicit_ephemeral",
+    "write_multiplier": "1.25"
+  },
+  "schema_version": 1,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
+}
