@@ -2409,7 +2409,7 @@ def confirmation_fast_gate_contract(
             "incremental gold-blind Fast construction gate."
         ),
         "power": {
-            "test": "construction gate only (no answer scoring)",
+            "test": "descriptive-only (no test)",
             "n": 0,
             "b": 0,
             "c": 0,

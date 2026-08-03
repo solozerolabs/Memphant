@@ -507,6 +507,19 @@ def test_fast_gate_carries_nondecisional_evidence_contract() -> None:
     assert contract["corpus"]["sha256"] == "a" * 64
     assert contract["instrument_verification"]["rows_counted"] == 10
 
+    confirmation = module.confirmation_fast_gate_contract(
+        "b" * 64, k=20, budget_tokens=16384
+    )
+    assert confirmation["decisional"] is False
+    assert confirmation["power"] == {
+        "test": "descriptive-only (no test)",
+        "n": 0,
+        "b": 0,
+        "c": 0,
+        "n_d": 0,
+    }
+    assert confirmation["corpus"]["n_items"] == 120
+
 
 def test_paid_authorization_is_hash_bound_and_capped_at_25_dollars() -> None:
     module = load_module()

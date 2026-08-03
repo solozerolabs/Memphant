@@ -1,0 +1,266 @@
+{
+  "claim": "The frozen HorizonBench confirmation completed its incremental gold-blind Fast construction gate.",
+  "decisional": false,
+  "elapsed_seconds": 797.492,
+  "evidence_contract": {
+    "claim": "The frozen 60-user HorizonBench confirmation completed its incremental gold-blind Fast construction gate.",
+    "corpus": {
+      "n_items": 120,
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 16384,
+      "embed_model": "local sentence-unit embedder",
+      "flags": [
+        "fast",
+        "fact_extraction=off",
+        "deep=off"
+      ],
+      "k": 20,
+      "scorer": "construction completeness only; benchmark gold quarantined"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "conversation": 120,
+        "correct_letter": 120,
+        "has_evolved": 120,
+        "options": 120
+      },
+      "license_evidence": "Pinned Hugging Face dataset metadata.",
+      "license_id": "CC-BY-4.0",
+      "license_source": "RECORD_METADATA",
+      "rows_counted": 120,
+      "shipped_rows_verified": true
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Sixty user timelines were retained incrementally and each of 120 questions produced non-degraded Fast evidence before gold access.",
+    "notes": "Non-decisional construction proof; no answer scoring or SOTA claim.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "n": 0,
+      "n_d": 0,
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "gate",
+    "schema_version": 1
+  },
+  "evidence_jsonl_sha256": "494781d428beced4f8e6038714fdfbb9390222bb1f40e560848a5fe37c8d99b7",
+  "gold_quarantine": {
+    "mental_state_graphs_acquired": false,
+    "runtime_fields": [
+      "id",
+      "user_id",
+      "generator",
+      "conversation",
+      "options"
+    ],
+    "scoring_only_fields": [
+      "correct_letter",
+      "distractor_letter",
+      "has_evolved",
+      "preference_domain",
+      "preference_evolution"
+    ]
+  },
+  "lineage": {
+    "cli_sha256": "2efc2c1da1c6a66fad27bc9036942598b55bfeb34ffb99d565c4bf22c658c808",
+    "migrations": {
+      "aggregate_sha256": "f27ffbc3751c98891a2d624e367945bec1728aa75763a8ad182c70e4cc92b762",
+      "files": [
+        {
+          "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
+          "sha256": "5059ff8494cc35257d76a31ab1de5e50e5348b4bdbfd19e910c71bada9c5b156"
+        },
+        {
+          "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
+          "sha256": "5fa198008ce6775ca31ec8661b4ae70fd7d319de34bfaa47659a0702d4d79341"
+        },
+        {
+          "path": "memphant_migrations/versions/20260724_003_worker_claim_throughput.sql",
+          "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
+        },
+        {
+          "path": "memphant_migrations/versions/20260730_004_served_login_roles.sql",
+          "sha256": "45f43b742e866a07fcb3962c7ca77b51a7dd985fc4bca1c9be68a83e28129a4e"
+        },
+        {
+          "path": "memphant_migrations/versions/20260730_005_pending_worker_job_count.sql",
+          "sha256": "dbced018ba81e3bd41c9741500c3e7c00dd0a5722d602c6890013f42768efb8f"
+        },
+        {
+          "path": "memphant_migrations/versions/20260731_006_preference_memory_kind.sql",
+          "sha256": "5a1b567299b2d9c7be7ed064ddbc77364019c1df32008766e372673ba26aa010"
+        },
+        {
+          "path": "memphant_migrations/versions/20260731_007_semantic_only_subject_exclusion.sql",
+          "sha256": "5946d103832cc8019febd7a04bfdfe2644f0ef6301362ffb71969c92180c3bb6"
+        },
+        {
+          "path": "memphant_migrations/versions/20260801_008_drop_retention_tier.sql",
+          "sha256": "64f145e6886f5270a4803e94e7ccc2e1ced3179e335f359557c2628967a8868e"
+        },
+        {
+          "path": "memphant_migrations/versions/20260801_009_drop_dead_schema.sql",
+          "sha256": "2ecda0e12713902ac6726fb46a0cdbcc7fb07eb5665af0ed063dfaf1c2610d2d"
+        }
+      ]
+    },
+    "repository": {
+      "git_head": "8df85907e41d45f8d62f6829693db19a91340c72",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tracked_dirty": false,
+      "tracked_file_count": 1614,
+      "tracked_worktree_sha256": "2cbc92d8151fcc97114c249a8b04f46c42656a1dd8399cb83a090754122d4317"
+    },
+    "runner_sha256": "c829ac47b2b257221e20f67b1f3ace1a528b44fac726810fa45ffef46c192c2f",
+    "server_sha256": "d5e1a263360d79a74c15a3e14b34376cd517eeb2cb6586b9b145143dfa892a76",
+    "test_sha256": "dcf08f3e4d0a47fccae57eea0ebb5367753e4d8d5d68e374d3382ea355562b9c",
+    "worker_sha256": "fed1a4a8e1fafc080aa4c1d28598e2c9fd122c67f389fbfca6a5d788314463de"
+  },
+  "runtime": {
+    "arm": "fast",
+    "budget_tokens": 16384,
+    "degraded_rows": 0,
+    "items": 120,
+    "jobs_compiled": 8875,
+    "k": 20,
+    "latency_ms": [
+      548.635,
+      280.792,
+      245.06,
+      581.653,
+      577.88,
+      420.525,
+      365.156,
+      247.157,
+      178.444,
+      545.006,
+      190.589,
+      310.753,
+      479.095,
+      412.808,
+      587.362,
+      317.521,
+      410.809,
+      535.167,
+      386.34,
+      404.826,
+      509.721,
+      748.654,
+      1491.456,
+      671.917,
+      616.08,
+      454.809,
+      395.764,
+      339.009,
+      526.921,
+      564.609,
+      433.851,
+      367.707,
+      582.82,
+      301.909,
+      473.724,
+      457.454,
+      267.336,
+      303.577,
+      512.36,
+      201.019,
+      624.907,
+      739.654,
+      954.391,
+      538.31,
+      1722.953,
+      710.182,
+      625.682,
+      1136.125,
+      1295.232,
+      644.424,
+      1699.504,
+      1402.876,
+      553.724,
+      542.6,
+      1079.967,
+      561.704,
+      1080.368,
+      677.641,
+      917.341,
+      616.967,
+      513.541,
+      561.559,
+      540.671,
+      540.158,
+      554.193,
+      436.59,
+      430.295,
+      516.264,
+      457.713,
+      523.519,
+      324.621,
+      409.619,
+      617.889,
+      391.66,
+      492.645,
+      411.652,
+      607.732,
+      622.569,
+      458.086,
+      495.272,
+      622.088,
+      508.638,
+      525.449,
+      673.71,
+      471.03,
+      367.964,
+      292.379,
+      408.967,
+      516.509,
+      427.334,
+      672.708,
+      336.344,
+      1133.216,
+      536.057,
+      424.868,
+      958.257,
+      1294.469,
+      321.193,
+      506.805,
+      667.012,
+      1556.638,
+      1293.239,
+      1337.408,
+      755.597,
+      1389.642,
+      874.45,
+      752.874,
+      468.9,
+      1205.418,
+      455.252,
+      2108.003,
+      1986.668,
+      1326.197,
+      1068.798,
+      983.109,
+      1563.426,
+      2774.15,
+      1348.32,
+      431.965,
+      891.912
+    ],
+    "nonempty_evidence_rows": 120,
+    "turn_episodes_retained": 8875,
+    "user_contexts": 60
+  },
+  "schema_version": 1,
+  "source": {
+    "dataset": "stellalisy/HorizonBench",
+    "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+    "jsonl_sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+    "rows": 120,
+    "selection_sha256": "56a8b2ddb1eaa3a31562e962a523ce56a8f48218c3eeb860a6d535552a19919f",
+    "users": 60
+  },
+  "status": "passed"
+}
