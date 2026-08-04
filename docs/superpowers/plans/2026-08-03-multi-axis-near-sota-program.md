@@ -53,7 +53,7 @@ not an accuracy axis.
 
 | Axis | Primary public instrument | Current external reference | Current MemPhant status |
 |---|---|---|---|
-| Evolving preference and belief state | HorizonBench | 52.8% overall | n=10 Fast diagnostic only; powered confirmation is authorized below |
+| Evolving preference and belief state | HorizonBench | 52.8% overall | Powered held-out confirmation failed: Fast 36.7% vs full context 52.5%, delta -15.8pp, 95% user-cluster CI [-24.2, -7.5] |
 | Longitudinal remembering, reasoning, recommendation, and obsolete-state avoidance | Memora / FAMA | Task- and horizon-specific frontier; no valid universal aggregate winner | Mechanism signal exists, but the raw 43/71 versus 44/71 result is not frontier evidence |
 | Heterogeneous dialogue, documents, and email | RHELM | 38.1 overall with external sources; 33.6 best evaluated memory framework | No pinned adapter or official run; current private docs gate is negative |
 | Procedural/environment experience | LongMemEval-V2 | AgentRunbook-C 72.5 average; strongest reported RAG point 58.6/57.0 | Prior local campaign is retired and must never be resumed; any return begins with a new free qualification and clean adapter plan |
@@ -106,16 +106,17 @@ claim and cannot compensate for a failed lane.
   retain them incrementally so an earlier question cannot see future turns.
 - [x] Ingest monotone timeline prefixes per user, issue two gold-blind Fast
   recalls per user, and require complete non-degraded evidence before paid work.
-- [ ] Commit a hash-bound authorization for exactly two arms—full context and
+- [x] Commit a hash-bound authorization for exactly two arms—full context and
   Fast—240 logical reader calls, at most 480 provider attempts, no Deep,
   uncached independent prompts, Opus 4.6's 1M context for both arms, and a $140
   fail-safe ceiling. Preserve every earlier failed-closed authorization.
-- [ ] Run the paid command only through
+- [x] Run the paid command only through
   `doppler run --project syndai --config dev -- ...`; stop on model/provider/
   price drift, incomplete pricing, unsettled liability, or the spend cap.
-- [ ] Require complete paired rows, overall delta >= 0, evolved delta > 0, no
+- [x] Require complete paired rows, overall delta >= 0, evolved delta > 0, no
   increase in evolved distractor choices, and at least six discordant pairs.
-  Stop here regardless of result. The 4,245-item reader run is not authorized.
+  The complete bank failed three outcome predicates and stopped here. The
+  4,245-item reader run is not authorized.
 
 Focused check:
 
@@ -135,14 +136,14 @@ python3 scripts/instrument_power.py --check
 - Create after each passing gate:
   `benchmarks/manifests/<instrument>.lock.json`
 
-- [ ] Record the five-axis matrix and claim predicate in `STATUS.md`; keep the
+- [x] Record the five-axis matrix and claim predicate in `STATUS.md`; keep the
   existing dashboard as the single tracker.
-- [ ] Qualify instruments in this order: Memora/FAMA replay integrity, RHELM,
+- [x] Qualify instruments in this order: Memora/FAMA replay integrity, RHELM,
   fresh LongMemEval-V2, then RepoMem. Qualification is download/hash/schema/
   scorer/contamination/power/cost work only and spends $0.
-- [ ] Prefer reuse: existing Memora and evidence helpers first; no generic
+- [x] Prefer reuse: existing Memora and evidence helpers first; no generic
   benchmark framework, second store, or new product abstraction.
-- [ ] Reject or defer any instrument whose official split, scorer, immutable
+- [x] Reject or defer any instrument whose official split, scorer, immutable
   source, independent sample size, or cost ceiling cannot be verified.
 
 ### Task 3: Repair the largest product gaps on exposed development evidence

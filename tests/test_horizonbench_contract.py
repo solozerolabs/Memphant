@@ -840,4 +840,7 @@ def test_confirmation_analysis_applies_all_preregistered_gates_by_user() -> None
         "b": 0,
         "c": 6,
         "n_d": 6,
+        "psi_observed": 0.5,
+        "mde_at_80": None,
+        "computed_by": "scripts.instrument_power.min_detectable_effect",
     }

@@ -1,0 +1,40 @@
+{
+  "authorization_scope_sha256": "99d68cf7930a1b6a9b3f7f9e4cb8310f40cd3b654a467ef7a7f9dff85272b0d6",
+  "completed_rows": 240,
+  "error_rows": 0,
+  "journal_closure": {
+    "authorization_sha256": "99d68cf7930a1b6a9b3f7f9e4cb8310f40cd3b654a467ef7a7f9dff85272b0d6",
+    "journal_sha256": "b8d96ed949f24566d3c7e83a25ffd1f85edb4a611fac2998a0b6a5084aef1afb",
+    "settled_nanos": 109134600000,
+    "total_liability_nanos": 109134600000,
+    "unresolved_max_liability_nanos": 0
+  },
+  "lineage": {
+    "fast_evidence_sha256": "494781d428beced4f8e6038714fdfbb9390222bb1f40e560848a5fe37c8d99b7",
+    "fast_gate_sha256": "fd6ff298d111180935ed02ee3873812d4aeb991ea1b0bafaea6f57fce070eca6",
+    "provider_attempts_sha256": "b943ac3f8ebaffe0d475cd83a700b17c191f458655a80f62a4e535e13860ac4d",
+    "repository": {
+      "git_head": "b9c98c8f32c9035b5a74b8dbd2bc9c8c61c86f15",
+      "tracked_diff_sha256": "a7524cb608de08dda08c0be86d75b996374df5d103535044099e74264cd02f29",
+      "tracked_dirty": true,
+      "tracked_file_count": 1628,
+      "tracked_worktree_sha256": "c0db84e7a5a14096ea7a02fdb790f70be7b68c196ff78c779fd76ef9c382bedf"
+    },
+    "run_reader_sha256": "a9b718fac5be077596a9816d5f2f622091246d515085df5d4f2725d37b1ee00f",
+    "runner_sha256": "7377653577a33e948d2d8fb01c915c4d5fd2f6c84aa7fe6d3635b33125ba0d4d",
+    "selection_sha256": "56a8b2ddb1eaa3a31562e962a523ce56a8f48218c3eeb860a6d535552a19919f",
+    "source_jsonl_sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0"
+  },
+  "raw_rows_sha256": "9e036970bdb1299556d4ec3a5598d36c29504155a21bd590a81670cc415b6697",
+  "reader": {
+    "attempts_sha256": "2af14c8fd86841437f860b86fa156965d524be81233d6e9114a564823f52a2aa",
+    "model": "claude-opus-4-6",
+    "priced_provider_attempts": 240,
+    "provider": "anthropic",
+    "provider_attempts": 240,
+    "reported_cost_usd": "109.1346"
+  },
+  "schema_version": 1,
+  "status": "complete",
+  "terminal_rows": 240
+}

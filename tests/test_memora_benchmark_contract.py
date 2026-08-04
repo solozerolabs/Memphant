@@ -511,7 +511,7 @@ def test_provider_attempt_ledger_survives_cache_before_answer_checkpoint(
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
     payload = {
         "id": "reader-response-1",
-        "model": "openai/gpt-5.6-luna-pro",
+        "model": "openai/gpt-5.6-luna-pro-20260709",
         "openrouter_metadata": {
             "endpoints": {"available": [{"provider": "OpenAI", "selected": True}]}
         },

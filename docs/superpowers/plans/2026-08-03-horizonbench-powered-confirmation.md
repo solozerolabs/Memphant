@@ -1,7 +1,14 @@
 # HorizonBench powered confirmation plan
 
-**Status:** owner authorized gates 1-2 on 2026-08-03 and explicitly removed the
-original $92 constraint. The runner retains a $140 fail-safe ceiling.
+**Status:** gates 1-2 are complete and gate 2 failed its frozen outcome rule on
+2026-08-03. The complete 240-row first-party Anthropic run settled $109.1346
+with zero errors, retries, or unsettled liability. Fast scored 44/120 versus
+63/120 for full context (delta -15.8pp, 95% user-cluster CI [-24.2, -7.5]);
+evolved accuracy fell 45.0% to 35.0% and distractor choices rose 10 to 17.
+This lane is stopped and the official 4,245-item treatment remains unauthorized.
+
+The owner authorized gates 1-2 on 2026-08-03 and explicitly removed the
+original $92 constraint. The runner retained a $140 fail-safe ceiling.
 The first authorization failed closed at $0 before any score when Opus 4.5
 rejected a 268,591-token input against its 200k window. The replacement uses
 Opus 4.6's 1M window for both arms; truncation and compression remain forbidden.
@@ -33,6 +40,16 @@ path: its free Models API response confirms pinned `claude-opus-4-6`, 1M input,
 128k output, and structured-output support. Prompts, schema, $5/$25 accounting,
 output cap, reader family, and stop rules remain unchanged.
 The complete 4,245-item treatment run remains unauthorized.
+
+## Outcome
+
+The preregistered paired confirmation is a decisive negative. The complete
+bank has 120/120 rows per arm, 31 discordant pairs (6 Fast gains, 25 losses),
+and a closed liability ledger. Fast failed overall non-inferiority, positive
+evolved lift, and evolved-distractor non-regression. No router analysis,
+official treatment, default change, or HorizonBench/SOTA claim is authorized.
+The selected 60-user tranche is burned and may be analyzed but never tuned on
+or relabeled as held out.
 
 ## Decision
 

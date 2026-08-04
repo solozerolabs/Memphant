@@ -52,6 +52,7 @@
     "docs/build-log/artifacts/horizonbench-confirmation-v4/cache-expiry-failure.json",
     "docs/build-log/artifacts/horizonbench-confirmation-v5/generation-stats-failure.json",
     "docs/build-log/artifacts/horizonbench-confirmation-v6/credit-limit-failure.json",
+    "docs/build-log/artifacts/horizonbench-confirmation-v7/result.json",
     "docs/build-log/artifacts/horizonbench-pilot/fast-gate.json",
     "docs/build-log/artifacts/horizonbench-pilot/result.json",
     "docs/build-log/artifacts/null-review-ledger.json",

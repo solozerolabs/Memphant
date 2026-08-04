@@ -26,6 +26,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import gate_runtime as gr  # noqa: E402
+from instrument_power import min_detectable_effect  # noqa: E402
 from provider_attempts import (  # noqa: E402
     CAMPAIGN_HARD_CEILING_NANOS,
     CAMPAIGN_UNALLOCATED_RESERVE_NANOS,
@@ -694,6 +695,7 @@ def pilot_evidence_contract(source_sha: str, analysis: dict) -> dict:
 def confirmation_result_contract(source_sha: str, analysis: dict) -> dict:
     paired = analysis["paired_fast_vs_full"]
     n = analysis["arms"]["fast"]["n"]
+    psi = paired["discordant"] / n
     return {
         "schema_version": 1,
         "decisional": paired["discordant"] >= 6,
@@ -704,6 +706,9 @@ def confirmation_result_contract(source_sha: str, analysis: dict) -> dict:
             "b": paired["losses"],
             "c": paired["gains"],
             "n_d": paired["discordant"],
+            "psi_observed": psi,
+            "mde_at_80": min_detectable_effect(n, psi),
+            "computed_by": "scripts.instrument_power.min_detectable_effect",
         },
         "mechanism_enabled": True,
         "probe_kind": "lever",

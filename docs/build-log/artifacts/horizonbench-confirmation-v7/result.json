@@ -1,0 +1,1366 @@
+{
+  "accounting": {
+    "authorization_scope_sha256": "99d68cf7930a1b6a9b3f7f9e4cb8310f40cd3b654a467ef7a7f9dff85272b0d6",
+    "paid_census_sha256": "b5e4d4a5129895809554eb28ee88e9325143997b8806c9a3f271d0377418c928",
+    "provider_attempts": 240,
+    "reader_cost_usd": "109.1346",
+    "unsettled_cost_usd": "0"
+  },
+  "analysis": {
+    "arms": {
+      "fast": {
+        "accuracy": 0.36666666666666664,
+        "correct": 44,
+        "evolved": {
+          "accuracy": 0.35,
+          "correct": 21,
+          "n": 60
+        },
+        "evolved_distractor_selections": 17,
+        "n": 120,
+        "static": {
+          "accuracy": 0.38333333333333336,
+          "correct": 23,
+          "n": 60
+        }
+      },
+      "full_context": {
+        "accuracy": 0.525,
+        "correct": 63,
+        "evolved": {
+          "accuracy": 0.45,
+          "correct": 27,
+          "n": 60
+        },
+        "evolved_distractor_selections": 10,
+        "n": 120,
+        "static": {
+          "accuracy": 0.6,
+          "correct": 36,
+          "n": 60
+        }
+      }
+    },
+    "deltas": {
+      "evolved": -0.10000000000000003,
+      "overall": -0.15833333333333338,
+      "static": -0.21666666666666662
+    },
+    "evolved_distractor_selections": {
+      "fast": 17,
+      "full_context": 10
+    },
+    "paired_fast_vs_full": {
+      "accuracy_delta": -0.15833333333333338,
+      "cluster_bootstrap_95_ci": {
+        "high": -0.075,
+        "low": -0.24166666666666667,
+        "method": "user-cluster percentile bootstrap",
+        "samples": 20000,
+        "seed": 20260803
+      },
+      "discordant": 31,
+      "gains": 6,
+      "losses": 25,
+      "ties": 89
+    },
+    "per_item": [
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Tiago Ferreira_event146_20260328_turn1_analytical_approach_77_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_79"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Tiago Ferreira_event161_20260328_turn33_philosophical_engagement_14_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_79"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Robert Miller_event140_20260326_turn1_stakeholder_consultation_preferences_413_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_19"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Robert Miller_event157_20260326_turn1_intergenerational_engagement_preferences_424_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_19"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Leo O'Malley_event68_20260328_turn5_intergenerational_engagement_preferences_257_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_62"
+      },
+      {
+        "distractor_letter": "B",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Leo O'Malley_event65_20260328_turn17_philosophical_engagement_9_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_62"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Julian Vance_event73_20260328_turn1_ethical_review_preferences_147_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_97"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Julian Vance_event131_20260328_turn41_stakeholder_consultation_preferences_413_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_97"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Elias Thorne_event92_20260326_turn1_analytical_approach_77_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_47"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Elias Thorne_event42_20260326_turn1_tone_guideline_preferences_164_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_47"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Silas Vane_event114_20260328_turn5_stakeholder_consultation_preferences_413_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_114"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": null,
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Silas Vane_event32_20260327_turn1_productivity_style_223_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_114"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Althea Sterling_event172_20260326_turn5_ethical_review_preferences_68_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_53"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Althea Sterling_event166_20260326_turn1_philosophical_engagement_13_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_53"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Julian Sterling_event106_20260328_turn17_tone_guideline_preferences_168_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_73"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": null,
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Julian Sterling_event117_20260328_turn9_content_length_preferences_173_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_73"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Arthur Sterling_event112_20260328_turn21_tone_guideline_preferences_203_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_83"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Arthur Sterling_event47_20260328_turn9_philosophical_engagement_16_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_83"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Yu-Hsuan Liao_event81_20260328_turn5_empirical_evidence_integration_preferences_266_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_93"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Yu-Hsuan Liao_event127_20260328_turn23_public_speaking_coaching_preferences_412_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_93"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Arthur Sterling_event169_20260328_turn35_philosophical_engagement_78_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_86"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Arthur Sterling_event149_20260328_turn1_ethical_review_preferences_179_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_86"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Matteo Bianchi_event168_20260328_turn11_emotional_support_style_19_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_101"
+      },
+      {
+        "distractor_letter": "D",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Matteo Bianchi_event159_20260328_turn15_philosophical_engagement_74_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_101"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": null,
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Alistair Thorne_event142_20260326_turn15_ethical_review_preferences_147_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_26"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Alistair Thorne_event92_20260326_turn3_ethical_review_preferences_70_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_26"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Arthur Sterling_event112_20260328_turn17_public_speaking_coaching_preferences_412_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_84"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Arthur Sterling_event167_20260328_turn15_communication_intimacy_75_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_84"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Alistair Thorne_event133_20260328_turn17_analytical_approach_91_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_115"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Alistair Thorne_event123_20260328_turn11_analytical_approach_89_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_115"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Elena Vane_event123_20260328_turn1_emotional_support_style_201_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_68"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Elena Vane_event130_20260328_turn1_social_engagement_style_preferences_310_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_68"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Alistair Vance_event81_20260326_turn15_conflict_resolution_style_preferences_415_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_34"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Alistair Vance_event112_20260326_turn1_writing_style_preferences_86_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_34"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": null,
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Wei Chen_event144_20260326_turn17_advice_delivery_preferences_96_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_43"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Wei Chen_event99_20260326_turn21_creative_collaboration_187_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_43"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Marcus Thorne_event172_20260328_turn15_interfaith_engagement_preferences_303_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_102"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Marcus Thorne_event48_20260328_turn1_advice_delivery_preferences_101_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_102"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Nia Robinson_event79_20260326_turn1_stakeholder_consultation_preferences_402_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_54"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Nia Robinson_event68_20260326_turn13_philosophical_engagement_12_counterfactuals.json",
+        "user_id": "gemini-3-flash/user_54"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Lauren Ortiz_event102_20260326_turn13_ethical_review_preferences_179_counterfactuals.json",
+        "user_id": "o3/user_73"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Lauren Ortiz_event172_20260326_turn19_conflict_resolution_style_preferences_437_counterfactuals.json",
+        "user_id": "o3/user_73"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Lucas Alvarez_event85_20260325_turn3_motivation_strategy_preferences_315_counterfactuals.json",
+        "user_id": "o3/user_56"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Lucas Alvarez_event53_20260325_turn3_entertainment_preferences_33_counterfactuals.json",
+        "user_id": "o3/user_56"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Thomas VanderMeer_event142_20260328_turn15_facilitation_style_preferences_208_counterfactuals.json",
+        "user_id": "o3/user_119"
+      },
+      {
+        "distractor_letter": "D",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Thomas VanderMeer_event141_20260328_turn5_writing_style_preferences_221_counterfactuals.json",
+        "user_id": "o3/user_119"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Samuel Greene_event51_20260326_turn17_empirical_evidence_integration_preferences_392_counterfactuals.json",
+        "user_id": "o3/user_63"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Samuel Greene_event90_20260326_turn15_emotional_support_style_59_counterfactuals.json",
+        "user_id": "o3/user_63"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Ethan Walker_event134_20260325_turn9_philosophical_engagement_12_counterfactuals.json",
+        "user_id": "o3/user_23"
+      },
+      {
+        "distractor_letter": "D",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Ethan Walker_event88_20260325_turn1_empirical_evidence_integration_preferences_266_counterfactuals.json",
+        "user_id": "o3/user_23"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Elena Morales_event78_20260325_turn7_apology_style_preferences_447_counterfactuals.json",
+        "user_id": "o3/user_11"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Elena Morales_event66_20260325_turn7_emotional_support_style_61_counterfactuals.json",
+        "user_id": "o3/user_11"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Jordan Alvarez_event117_20260328_turn15_tone_guideline_preferences_165_counterfactuals.json",
+        "user_id": "o3/user_112"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Jordan Alvarez_event76_20260328_turn5_writing_style_preferences_80_counterfactuals.json",
+        "user_id": "o3/user_112"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Tamara Brooks_event127_20260325_turn17_emotional_support_style_23_counterfactuals.json",
+        "user_id": "o3/user_38"
+      },
+      {
+        "distractor_letter": "C",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Tamara Brooks_event95_20260325_turn11_advice_delivery_preferences_151_counterfactuals.json",
+        "user_id": "o3/user_38"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Wei Li_event107_20260326_turn35_support_technique_preferences_309_counterfactuals.json",
+        "user_id": "o3/user_99"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Wei Li_event66_20260326_turn5_apology_style_preferences_447_counterfactuals.json",
+        "user_id": "o3/user_99"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Elena Parker_event115_20260326_turn9_writing_style_preferences_80_counterfactuals.json",
+        "user_id": "o3/user_94"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Elena Parker_event114_20260326_turn15_self_esteem_rebuilding_preferences_363_counterfactuals.json",
+        "user_id": "o3/user_94"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Michael Adams_event129_20260326_turn5_facilitation_style_preferences_154_counterfactuals.json",
+        "user_id": "o3/user_86"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Michael Adams_event58_20260326_turn5_emotional_support_style_17_counterfactuals.json",
+        "user_id": "o3/user_86"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Derek Slater_event134_20260325_turn7_analytical_approach_91_counterfactuals.json",
+        "user_id": "o3/user_36"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Derek Slater_event35_20260325_turn9_self_esteem_rebuilding_preferences_434_counterfactuals.json",
+        "user_id": "o3/user_36"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Daniel Hayes_event30_20260326_turn1_creative_collaboration_52_counterfactuals.json",
+        "user_id": "o3/user_87"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Daniel Hayes_event118_20260326_turn7_writing_style_preferences_80_counterfactuals.json",
+        "user_id": "o3/user_87"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Marcus Ortiz_event135_20260325_turn11_entertainment_preferences_410_counterfactuals.json",
+        "user_id": "o3/user_29"
+      },
+      {
+        "distractor_letter": "B",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Marcus Ortiz_event134_20260325_turn7_entertainment_preferences_408_counterfactuals.json",
+        "user_id": "o3/user_29"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Katherine Morales_event160_20260325_turn3_facilitation_style_preferences_153_counterfactuals.json",
+        "user_id": "o3/user_59"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Katherine Morales_event113_20260325_turn5_entertainment_preferences_408_counterfactuals.json",
+        "user_id": "o3/user_59"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Denise Harper_event126_20260325_turn41_language_preferences_365_counterfactuals.json",
+        "user_id": "o3/user_54"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Denise Harper_event64_20260325_turn3_creative_collaboration_49_counterfactuals.json",
+        "user_id": "o3/user_54"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Eleanor Blackwood_event53_20260325_turn13_emotional_support_style_23_counterfactuals.json",
+        "user_id": "o3/user_6"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Eleanor Blackwood_event116_20260325_turn3_philosophical_engagement_9_counterfactuals.json",
+        "user_id": "o3/user_6"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Camila Flores_event109_20260326_turn15_self_esteem_rebuilding_preferences_362_counterfactuals.json",
+        "user_id": "o3/user_78"
+      },
+      {
+        "distractor_letter": "C",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Camila Flores_event149_20260326_turn19_emotional_support_style_23_counterfactuals.json",
+        "user_id": "o3/user_78"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Maya Hernandez_event89_20260326_turn1_philosophical_engagement_9_counterfactuals.json",
+        "user_id": "o3/user_88"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Maya Hernandez_event135_20260326_turn7_ethical_review_preferences_66_counterfactuals.json",
+        "user_id": "o3/user_88"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Lin Gao_event102_20260326_turn7_language_preferences_423_counterfactuals.json",
+        "user_id": "o3/user_74"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Lin Gao_event134_20260326_turn9_public_speaking_coaching_preferences_341_counterfactuals.json",
+        "user_id": "o3/user_74"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Michael Chen_event34_20260327_turn17_creative_collaboration_49_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_88"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Michael Chen_event99_20260328_turn15_motivation_strategy_preferences_316_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_88"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Patricia Morrison_event32_20260327_turn7_facilitation_style_preferences_157_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_105"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Patricia Morrison_event90_20260328_turn9_emotional_support_style_24_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_105"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Brandon Mitchell_event65_20260328_turn15_empirical_evidence_integration_preferences_266_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_98"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Brandon Mitchell_event21_20260327_turn25_philosophical_engagement_9_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_98"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Dimitar Petrov_event83_20260327_turn9_tone_guideline_preferences_167_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_118"
+      },
+      {
+        "distractor_letter": "C",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Dimitar Petrov_event165_20260329_turn43_writing_style_preferences_80_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_118"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Priya Mehta_event57_20260327_turn27_entertainment_preferences_408_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_109"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Priya Mehta_event77_20260328_turn19_self_esteem_rebuilding_preferences_362_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_109"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Brad Mitchell_event133_20260329_turn23_public_speaking_coaching_preferences_349_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_52"
+      },
+      {
+        "distractor_letter": "C",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Brad Mitchell_event130_20260329_turn1_advice_delivery_preferences_100_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_52"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Marcus Chen_event72_20260328_turn13_public_speaking_coaching_preferences_349_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_90"
+      },
+      {
+        "distractor_letter": "D",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Marcus Chen_event166_20260330_turn3_emotional_support_style_22_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_90"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Mohui Chen_event50_20260327_turn3_entertainment_preferences_33_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_74"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Mohui Chen_event171_20260328_turn11_entertainment_preferences_408_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_74"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Margaret Chen_event42_20260326_turn3_philosophical_engagement_10_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_46"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Margaret Chen_event39_20260326_turn13_advice_delivery_preferences_193_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_46"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Marco Bianchi_event136_20260330_turn1_analytical_approach_89_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_64"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Marco Bianchi_event47_20260328_turn13_emotional_support_style_19_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_64"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": false,
+        "id": "Carlos Andr\u00e9s Moreno_event34_20260326_turn19_empirical_evidence_integration_preferences_266_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_33"
+      },
+      {
+        "distractor_letter": "B",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Carlos Andr\u00e9s Moreno_event60_20260326_turn15_advice_delivery_preferences_96_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_33"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Marcus Chen_event141_20260329_turn7_apology_style_preferences_448_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_70"
+      },
+      {
+        "distractor_letter": "C",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Marcus Chen_event65_20260327_turn15_advice_delivery_preferences_95_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_70"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Robert Mitchell_event90_20260329_turn5_content_length_preferences_171_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_87"
+      },
+      {
+        "distractor_letter": "C",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Robert Mitchell_event29_20260328_turn3_empirical_evidence_integration_preferences_307_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_87"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "E",
+        "fast_correct": true,
+        "full_context_answer": "E",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Marcus Chen_event55_20260329_turn13_public_speaking_coaching_preferences_342_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_107"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Marcus Chen_event91_20260329_turn9_communication_intimacy_27_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_107"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Marcus Chen_event69_20260326_turn3_empirical_evidence_integration_preferences_340_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_42"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Marcus Chen_event83_20260326_turn21_analytical_approach_60_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_42"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": false,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Maya Patel_event130_20260329_turn11_advice_delivery_preferences_148_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_102"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Maya Patel_event107_20260329_turn9_stakeholder_consultation_preferences_393_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_102"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Michael Patterson_event154_20260330_turn1_language_preferences_432_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_86"
+      },
+      {
+        "distractor_letter": "A",
+        "fast_answer": "A",
+        "fast_correct": false,
+        "full_context_answer": "A",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Michael Patterson_event137_20260329_turn17_interfaith_engagement_preferences_445_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_86"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "B",
+        "fast_correct": true,
+        "full_context_answer": "B",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Rajesh Kumar_event137_20260329_turn11_content_length_preferences_209_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_57"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": false,
+        "full_context_answer": "D",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Rajesh Kumar_event83_20260328_turn13_creative_collaboration_49_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_57"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "C",
+        "fast_correct": true,
+        "full_context_answer": "C",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Henry Wong_event57_20260326_turn3_empirical_evidence_integration_preferences_340_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_31"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "D",
+        "fast_correct": true,
+        "full_context_answer": "D",
+        "full_context_correct": true,
+        "has_evolved": true,
+        "id": "Henry Wong_event50_20260326_turn1_therapy_discussion_preferences_199_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_31"
+      },
+      {
+        "distractor_letter": "",
+        "fast_answer": "A",
+        "fast_correct": true,
+        "full_context_answer": "A",
+        "full_context_correct": true,
+        "has_evolved": false,
+        "id": "Maya Chen_event40_20260328_turn5_conflict_resolution_style_preferences_442_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_51"
+      },
+      {
+        "distractor_letter": "E",
+        "fast_answer": "E",
+        "fast_correct": false,
+        "full_context_answer": "E",
+        "full_context_correct": false,
+        "has_evolved": true,
+        "id": "Maya Chen_event80_20260329_turn11_creative_collaboration_182_counterfactuals.json",
+        "user_id": "sonnet-4.5/user_51"
+      }
+    ],
+    "verdict": {
+      "complete": true,
+      "discordance_sufficient": true,
+      "evolved_distractors_not_increased": false,
+      "evolved_positive": false,
+      "outcome": "stop",
+      "overall_noninferior": false
+    }
+  },
+  "claim": "Fast did not pass the frozen held-out paired HorizonBench confirmation against full context.",
+  "claim_boundary": {
+    "cross_axis_near_sota": false,
+    "held_out_preference_confirmation": false,
+    "next_authorized": "none; stop after confirmation verdict",
+    "official_full_split": false,
+    "overall_sota": false
+  },
+  "decisional": true,
+  "evidence_contract": {
+    "claim": "The frozen 60-user HorizonBench tranche is a held-out paired Fast-versus-full-context confirmation.",
+    "corpus": {
+      "n_items": 120,
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1"
+    },
+    "decisional": true,
+    "harness": {
+      "budget": 16384,
+      "embed_model": "local sentence-unit embedder",
+      "flags": [
+        "full_context",
+        "fast",
+        "reader=claude-opus-4-6",
+        "provider=anthropic-first-party",
+        "uncached_full_context"
+      ],
+      "k": 20,
+      "scorer": "exact released HorizonBench correct_letter"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "conversation": 120,
+        "correct_letter": 120,
+        "has_evolved": 120,
+        "options": 120
+      },
+      "license_evidence": "Pinned Hugging Face dataset metadata.",
+      "license_id": "CC-BY-4.0",
+      "license_source": "RECORD_METADATA",
+      "rows_counted": 120,
+      "shipped_rows_verified": true
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Every Fast prediction used non-degraded evidence from the matching passed construction gate.",
+    "notes": "User-clustered bootstrap is primary; no complete-split or cross-axis SOTA claim.",
+    "power": {
+      "b": 25,
+      "c": 6,
+      "computed_by": "scripts.instrument_power.min_detectable_effect",
+      "mde_at_80": 0.13438502064540392,
+      "n": 120,
+      "n_d": 31,
+      "psi_observed": 0.25833333333333336,
+      "test": "bootstrap paired difference"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "lineage": {
+    "paid_census_sha256": "b5e4d4a5129895809554eb28ee88e9325143997b8806c9a3f271d0377418c928",
+    "paid_rows_sha256": "9e036970bdb1299556d4ec3a5598d36c29504155a21bd590a81670cc415b6697",
+    "repository": {
+      "git_head": "b9c98c8f32c9035b5a74b8dbd2bc9c8c61c86f15",
+      "tracked_diff_sha256": "9d68319fd5ad4958c48a8a4c6675ef8af83ed44ff7b95366413536960ebea93b",
+      "tracked_dirty": true,
+      "tracked_file_count": 1628,
+      "tracked_worktree_sha256": "47df44ac821dbc42953c001a1af84a6c6e3394bed9610ec265d5eaccfc940974"
+    },
+    "runner_sha256": "ddb51c0e696a21a790fa43c59a7965a9a24fddf59bcf35f70e54eafcb6b7268f",
+    "test_sha256": "6b8d32e63623edaeb02e09f43b8b89287a169eda0a879eb9b5ea9847207951e9"
+  },
+  "published_reference": {
+    "comparison_status": "held_out_tranche_not_complete_official_split",
+    "evolved_accuracy": 0.513,
+    "near_sota": false,
+    "overall_accuracy": 0.528
+  },
+  "schema_version": 1,
+  "source": {
+    "dataset": "stellalisy/HorizonBench",
+    "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+    "jsonl_sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+    "rows": 120,
+    "selection_sha256": "56a8b2ddb1eaa3a31562e962a523ce56a8f48218c3eeb860a6d535552a19919f",
+    "users": 60
+  },
+  "status": "complete"
+}
