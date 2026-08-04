@@ -64,6 +64,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from provider_attempts import (
     ProviderAttemptLedger,
+    complete_provider_response_evidence,
     open_campaign_ledger,
     openrouter_generation_lookup,
     provider_response_evidence,
@@ -1250,7 +1251,7 @@ class ReaderCli:
                     provider=provider,
                 )
                 stats = {}
-                if response_id:
+                if response_id and not complete_provider_response_evidence(metadata):
                     try:
                         stats = self._openrouter_generation_lookup(response_id)
                     except Exception as error:
@@ -1271,7 +1272,11 @@ class ReaderCli:
                 if isinstance(usage, dict):
                     usage = dict(usage)
                     cost = usage.get("cost")
-                    if not isinstance(cost, (int, float)) or cost <= 0:
+                    if (
+                        isinstance(cost, bool)
+                        or not isinstance(cost, (int, float))
+                        or cost < 0
+                    ):
                         usage["cost"] = stats.get("total_cost")
                 metadata["served_model"] = stats.get("model") or metadata["served_model"]
                 metadata["provider"] = stats.get("provider_name") or metadata["provider"]

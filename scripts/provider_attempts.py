@@ -383,6 +383,19 @@ def fresh_paid_usage(response: Any) -> bool:
     )
 
 
+def complete_provider_response_evidence(response: Any) -> bool:
+    return (
+        isinstance(response, dict)
+        and isinstance(response.get("response_id"), str)
+        and bool(response["response_id"])
+        and isinstance(response.get("served_model"), str)
+        and bool(response["served_model"])
+        and isinstance(response.get("provider"), str)
+        and bool(response["provider"])
+        and fresh_paid_usage(response)
+    )
+
+
 class ProviderAttemptLedger:
     """Campaign-wide append-before-call, fsynced JSONL state machine.
 
@@ -874,6 +887,7 @@ def _normalize_response(
         isinstance(response_id, str)
         and response_id
         and generation_lookup is not None
+        and not complete_provider_response_evidence(normalized)
     ):
         try:
             stats = generation_lookup(response_id) or {}

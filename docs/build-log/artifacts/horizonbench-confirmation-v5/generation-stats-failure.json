@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "status": "failed_closed",
+  "claim": "The fifth authorization stopped before scoring after 31 valid rows because a complete primary response was incorrectly made dependent on an unavailable secondary generation-statistics record.",
+  "failure": {
+    "completed_terminal_rows": 31,
+    "error_terminal_rows": 1,
+    "scored_rows": 0,
+    "failing_row": 32,
+    "arm": "full_context",
+    "error": "RuntimeError: OpenRouter generation statistics lookup failed",
+    "secondary_lookup_attempts": 6,
+    "secondary_http_status": 404
+  },
+  "accounting": {
+    "provider_attempts": 35,
+    "priced_provider_attempts": 31,
+    "unpriced_provider_attempts": 4,
+    "reported_cost_usd": "40.953895",
+    "unsettled_cost_usd_upper_bound": "31.498615",
+    "total_liability_usd_upper_bound": "72.45251"
+  },
+  "replacement_boundary": "Treat the complete non-streaming chat response as authoritative when it carries response ID, served model, provider, exact positive token counts, and non-negative cost. Use the asynchronous /generation endpoint only as a bounded fallback for incomplete inline evidence. Start a clean authorization and do not score or reuse these partial rows.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The fifth authorization is a secondary-provenance lookup failure and its partial rows are not benchmark evidence.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "local sentence-unit embedder",
+      "scorer": "not reached",
+      "k": 20,
+      "budget": 16384,
+      "flags": [
+        "full_context",
+        "reader=anthropic/claude-opus-4.6",
+        "max_output_tokens=1024",
+        "uncached_full_context"
+      ]
+    },
+    "corpus": {
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1",
+      "n_items": 0
+    },
+    "notes": "Instrument failure only; all 31 completed partial rows remain score-quarantined."
+  },
+  "lineage": {
+    "git_head": "91803c0083ffb9664d2b10e8332b239f6959c044",
+    "authorization_sha256": "adffc8f5b67d29ca64e9ea84dbfe4e5173874f9537e9a5409db66ce695034342",
+    "authorization_scope_sha256": "da1c9c8276babd3bad3c0806891858ed680d38f719c61e6a16707c3f7be82b9e",
+    "reader_attempts_sha256": "c63dd207a2daae858b0097c2fbaba9e036f37bdc18cafa3ab5e0769b443ae77f",
+    "provider_attempts_sha256": "2f52b4eb34f328474aca5f2ae4e62da9a5b49db560c5ec6a6045855ac6ddf84f",
+    "paid_rows_sha256": "397219c53f6314ddc175a2ed29d7472fced762a6133c4cfd217b3fdbfb1db427"
+  }
+}

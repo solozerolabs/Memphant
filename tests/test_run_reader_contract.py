@@ -1504,7 +1504,7 @@ def test_openrouter_call_captures_and_caches_served_model_provider_usage_and_cos
     assert cli.last_call_metadata == {
         "response_id": "gen-reader-1",
         "requested_model": "openai/gpt-5.6-luna-pro",
-        "served_model": "openai/gpt-5.6-luna-pro-20260709",
+            "served_model": "openai/gpt-5.6-luna-pro",
         "provider": "OpenAI",
         "usage": payload["usage"],
             "elapsed_seconds": cli.last_call_metadata["elapsed_seconds"],
@@ -1516,7 +1516,7 @@ def test_openrouter_call_captures_and_caches_served_model_provider_usage_and_cos
     assert cli.last_call_metadata["elapsed_seconds"] >= 0
     assert cli.provider_attempt_log == [{"response": cli.last_call_metadata}]
     assert cli.provider_attempts == 1
-    assert len(requests) == 2
+    assert len(requests) == 1
     assert requests[0].get_header("X-openrouter-metadata") == "enabled"
 
     cached = reader.ReaderCli(
@@ -1595,7 +1595,7 @@ def test_openrouter_refusal_is_a_priced_terminal_model_result(tmp_path, monkeypa
     }
 
 
-def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
+def test_openrouter_generation_lookup_failure_is_terminal_when_inline_provenance_incomplete(
     tmp_path, monkeypatch
 ) -> None:
     reader = _load_run_reader()
@@ -1604,7 +1604,6 @@ def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
     payload = {
         "id": "gen-paid-before-stats-failure",
         "model": "openai/gpt-5.6-luna-pro",
-        "provider": "OpenAI",
         "usage": {
             "prompt_tokens": 10,
             "completion_tokens": 5,
@@ -1653,7 +1652,7 @@ def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
     response = attempt["error"]["response"]
     assert response["response_id"] == payload["id"]
     assert response["served_model"] == payload["model"]
-    assert response["provider"] == payload["provider"]
+    assert response["provider"] is None
     assert response["usage"] == payload["usage"]
     assert response["retry_index"] == 0
     assert response["parse_status"] == "generation_stats_lookup_failed"
@@ -1663,6 +1662,52 @@ def test_openrouter_generation_lookup_failure_is_terminal_and_durable(
     assert requests[0] == reader.OPENROUTER_URL
     assert len(set(requests[1:])) == 1
     assert not cache_dir.exists() or not list(cache_dir.iterdir())
+
+
+def test_openrouter_complete_inline_evidence_skips_generation_lookup(
+    tmp_path, monkeypatch
+) -> None:
+    reader = _load_run_reader()
+    attempts = _load_provider_attempts()
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-not-real")
+    payload = {
+        "id": "gen-inline-complete",
+        "model": "anthropic/claude-4.6-opus-20260205",
+        "provider": "Anthropic",
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "cost": 0.0123,
+        },
+        "choices": [
+            {"message": {"content": '{"notes":"","answer":"A","abstain":false}'}}
+        ],
+    }
+    requests = []
+
+    def open_response(request, timeout=None):
+        requests.append(request.full_url)
+        if request.full_url == reader.OPENROUTER_URL:
+            return _FakeHttpResponse(payload)
+        raise AssertionError("complete inline evidence must not use /generation")
+
+    monkeypatch.setattr(reader.urllib.request, "urlopen", open_response)
+    ledger = _open_test_ledger(attempts, tmp_path / "attempts.jsonl")
+    cli = reader.ReaderCli(
+        "openrouter",
+        "anthropic/claude-opus-4.6",
+        "judge",
+        tmp_path / "cache",
+        1,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("5"), "completion": Decimal("25")},
+    )
+    cli.set_provider_attempt_ledger(ledger)
+
+    assert cli.call("reader", "sys", "prompt") == payload["choices"][0]["message"]["content"]
+    assert requests == [reader.OPENROUTER_URL]
+    assert ledger.snapshot()["priced_provider_attempts"] == 1
 
 
 def test_openrouter_generation_lookup_retries_eventual_404(monkeypatch) -> None:

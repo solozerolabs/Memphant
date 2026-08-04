@@ -20,6 +20,12 @@ also remain unscored. The final authorization uses ordinary independent,
 uncached prompts: with one reuse per prefix the one-hour cache tier costs more
 than two uncached reads, while the five-minute tier cannot survive long calls
 and retries.
+The first uncached authorization then produced 31 valid rows before a complete
+primary response was rejected because its asynchronous `/generation` record
+remained 404 after bounded retries. Those rows remain unscored. OpenRouter's
+current contract makes inline usage authoritative and describes the generation
+endpoint as an alternative audit path, so the final runner uses it only when
+inline response ID, model, provider, tokens, or cost is incomplete.
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision

@@ -444,6 +444,47 @@ def test_shared_meter_hard_caps_native_scorer_output(tmp_path: Path) -> None:
     assert captured[0]["max_tokens"] == 4096
 
 
+def test_shared_meter_complete_inline_evidence_skips_generation_lookup(
+    tmp_path: Path,
+) -> None:
+    attempts = load_attempts()
+
+    class Completions:
+        def create(self, **_kwargs):
+            payload = {
+                "id": "judge-inline-complete",
+                "model": "judge",
+                "provider": "OpenAI",
+                "usage": {
+                    "prompt_tokens": 2,
+                    "completion_tokens": 1,
+                    "total_tokens": 3,
+                    "cost": 0.01,
+                },
+            }
+            return types.SimpleNamespace(
+                **payload, model_dump=lambda **_kwargs: payload
+            )
+
+    class OpenAI:
+        def __init__(self, **_kwargs):
+            self.chat = types.SimpleNamespace(completions=Completions())
+
+    ledger = open_test_ledger(attempts, tmp_path / "judge.jsonl", "judge")
+    sdk = types.SimpleNamespace(OpenAI=OpenAI)
+    attempts.install_openai_meter(
+        sdk,
+        ledger,
+        max_liability_nanos=100_000_000,
+        generation_lookup=lambda _response_id: (_ for _ in ()).throw(
+            AssertionError("complete inline evidence must not use /generation")
+        ),
+    )
+
+    sdk.OpenAI().chat.completions.create(model="judge", messages=[])
+    assert ledger.snapshot()["priced_provider_attempts"] == 1
+
+
 def test_shared_meter_context_cannot_override_reserved_liability(tmp_path: Path) -> None:
     attempts = load_attempts()
 
