@@ -61,8 +61,9 @@ scored or reused.
   Postgres, Supabase, and Neon.
 - Scratch-Postgres ignored tests all passed, including 53 store contracts, 12
   mutation-ledger contracts, RLS/role/worker checks, and the hot-path SLO. The
-  enclosing Cargo command was interrupted only after it entered an unrelated
-  sleeping rustdoc process; the scratch database was dropped.
+  gate now uses Cargo `--all-targets` so this separately owned integration gate
+  excludes the unrelated doctest tail; the exact corrected command exited 0
+  and dropped its scratch database.
 - The real binary/Postgres end-to-end probe passed all checks.
 - Local `cargo test --doc` is unverified because `rustdoc` slept at 0% CPU on
-  `memphant-core`; no doc-test success is claimed locally.
+  `memphant-core`; no local doc-test success is claimed.

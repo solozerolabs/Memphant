@@ -92,7 +92,7 @@ cargo test --doc
 # and create the scratch DB; the tests never touch `memphant` itself.
 bash scripts/with_scratch_db.sh postgres://memphant:memphant@localhost:5432/memphant \
   MEMPHANT_TEST_DATABASE_URL \
-  cargo test -p memphant-store-postgres -p memphant-worker -- --ignored --test-threads=1
+  cargo test -p memphant-store-postgres -p memphant-worker --all-targets -- --ignored --test-threads=1
 cargo run -p memphant-cli -- db lint --provider plain-postgres
 cargo run -p memphant-cli -- db lint --provider supabase
 cargo run -p memphant-cli -- db lint --provider neon

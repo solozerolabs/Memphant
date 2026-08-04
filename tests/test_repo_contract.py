@@ -144,6 +144,18 @@ def test_repo_hygiene_files_keep_generated_and_private_state_out() -> None:
     assert ignored.returncode == 0
 
 
+def test_live_postgres_ci_gate_excludes_unrelated_doctests() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    command = (
+        "cargo test -p memphant-store-postgres -p memphant-worker --all-targets "
+        "-- --ignored --test-threads=1"
+    )
+    assert command in workflow
+    assert command in agents
+
+
 def test_handoff_docs_mirror_status_phase() -> None:
     status = (ROOT / "docs/superpowers/specs/memphant/STATUS.md").read_text(encoding="utf-8")
     status_phase = STATUS_PHASE_RE.search(status)
