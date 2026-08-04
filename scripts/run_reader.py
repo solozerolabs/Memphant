@@ -71,8 +71,10 @@ from provider_attempts import (
 )
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
-ENGINES = ("claude", "codex", "openrouter")
+ENGINES = ("claude", "codex", "openrouter", "anthropic")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
 # $0 dry-run target. Three external instruments in this program failed at first
 # contact on OUR side, two of them after money was already authorized, and the
 # instrument register's single highest-leverage governance recommendation is a
@@ -724,6 +726,16 @@ def response_contract(engine: str, kind: str, model: str | None = None) -> dict:
         schema = schemas[kind]
     except KeyError as error:
         raise ValueError(f"unknown response kind: {kind}") from error
+    if engine == "anthropic":
+        return {
+            "output_config": {
+                "format": {
+                    "type": "json_schema",
+                    "schema": schema,
+                }
+            },
+            "decoding": {"temperature": 0},
+        }
     if engine == "openrouter":
         return {
             "response_format": {
@@ -837,8 +849,8 @@ class ReaderCli:
                 "OpenRouter spend control requires both a total ceiling and "
                 "prompt/completion max prices"
             )
-        if max_spend_usd is not None and engine != "openrouter":
-            raise ValueError("spend control is openrouter-only")
+        if max_spend_usd is not None and engine not in {"openrouter", "anthropic"}:
+            raise ValueError("spend control requires a metered API engine")
         self.max_spend_usd = max_spend_usd
         self.max_price_per_million = max_price_per_million
         self.max_output_tokens = max_output_tokens or OPENROUTER_DECODING["max_tokens"]
@@ -913,17 +925,17 @@ class ReaderCli:
         system_prompt: str,
         prompt: str,
     ) -> str:
-        if self.engine == "openrouter":
+        if self.engine in {"openrouter", "anthropic"}:
             if self.provider_attempt_ledger is None:
                 raise RuntimeError(
-                    "openrouter call requires an authorized campaign ledger"
+                    f"{self.engine} call requires an authorized campaign ledger"
                 )
             self.provider_attempt_ledger.assert_open()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         cache_path = self._cache_path(kind, system_prompt, prompt)
         if cache_path.exists():
             cached = json.loads(cache_path.read_text())
-            if self.engine == "openrouter":
+            if self.engine in {"openrouter", "anthropic"}:
                 self._validate_cached_attempt(cache_path.name, cached)
             self.cached_calls += 1
             self.last_call_metadata = cached.get("metadata")
@@ -939,6 +951,8 @@ class ReaderCli:
                 reply = self._call_claude(kind, system_prompt, prompt)
             elif self.engine == "codex":
                 reply = self._call_codex(kind, system_prompt, prompt)
+            elif self.engine == "anthropic":
+                reply = self._call_anthropic(kind, system_prompt, prompt)
             else:
                 reply = self._call_openrouter(kind, system_prompt, prompt)
         finally:
@@ -949,7 +963,7 @@ class ReaderCli:
                 "reply": reply,
                 "metadata": self.last_call_metadata,
             }
-        if self.engine == "openrouter":
+        if self.engine in {"openrouter", "anthropic"}:
             cache_entry.update(self._cache_attempt_provenance(cache_path.name))
         atomic_write_json(cache_path, cache_entry)
         return reply
@@ -1042,7 +1056,7 @@ class ReaderCli:
         )
         if projected > self.max_spend_usd:
             raise CallBudgetExceeded(
-                "openrouter spend ceiling would be exceeded "
+                "provider spend ceiling would be exceeded "
                 f"({projected} > {self.max_spend_usd} USD)"
             )
         self.unsettled_liability_usd += liability
@@ -1052,10 +1066,10 @@ class ReaderCli:
         if self.max_spend_usd is None:
             return
         if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0:
-            raise RuntimeError("OpenRouter response is missing a valid usage.cost")
+            raise RuntimeError("provider response is missing a valid usage.cost")
         settled = Decimal(str(cost))
         if settled > liability:
-            raise RuntimeError("OpenRouter response cost exceeds reserved liability")
+            raise RuntimeError("provider response cost exceeds reserved liability")
         self.unsettled_liability_usd -= liability
         self.reported_spend_usd += settled
 
@@ -1063,7 +1077,7 @@ class ReaderCli:
         if self.provider_attempt_ledger is not None:
             self.provider_attempt_ledger.record(
                 event,
-                self._active_cache_key or "direct-openrouter-call",
+                self._active_cache_key or f"direct-{self.engine}-call",
                 payload,
             )
 
@@ -1136,6 +1150,160 @@ class ReaderCli:
         if not reply:
             raise RuntimeError("codex exec returned an empty final message")
         return reply
+
+    def _call_anthropic(
+        self,
+        kind: str,
+        system_prompt: str,
+        prompt: str,
+    ) -> str:
+        self.last_call_metadata = None
+        model = self.model_for(kind)
+        payload = {
+            "model": model,
+            "max_tokens": self.max_output_tokens,
+            "temperature": 0,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": prompt}],
+            "output_config": self.response_contract_for(kind)["output_config"],
+        }
+        body = json.dumps(payload).encode()
+        last_error: Exception | None = None
+        for attempt, delay in enumerate((0, *OPENROUTER_RETRY_DELAYS)):
+            if (
+                self.provider_attempt_limit is not None
+                and self.provider_attempts >= self.provider_attempt_limit
+            ):
+                raise CallBudgetExceeded("provider attempt ceiling exhausted")
+            if delay:
+                time.sleep(delay)
+            liability = self._reserve_attempt(body)
+            self._provider_attempt_event(
+                "start",
+                {
+                    "retry_index": attempt,
+                    "requested_model": model,
+                    "request_sha256": hashlib.sha256(body).hexdigest(),
+                    "max_liability_nanos": int(
+                        liability * Decimal(1_000_000_000)
+                    ),
+                },
+            )
+            self.provider_attempts += 1
+            attempt_started = time.monotonic()
+            try:
+                api_key = os.environ.get("ANTHROPIC_API_KEY")
+                if not api_key:
+                    raise RuntimeError(
+                        "anthropic engine requires ANTHROPIC_API_KEY; run via Doppler"
+                    )
+                request = urllib.request.Request(
+                    ANTHROPIC_URL,
+                    data=body,
+                    method="POST",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": ANTHROPIC_VERSION,
+                        "content-type": "application/json",
+                    },
+                )
+                with urllib.request.urlopen(
+                    request, timeout=OPENROUTER_TIMEOUT
+                ) as response:
+                    data = json.loads(response.read())
+                usage = data.get("usage") or {}
+                prompt_tokens = sum(
+                    int(usage.get(field) or 0)
+                    for field in (
+                        "input_tokens",
+                        "cache_creation_input_tokens",
+                        "cache_read_input_tokens",
+                    )
+                )
+                completion_tokens = usage.get("output_tokens")
+                if (
+                    prompt_tokens <= 0
+                    or type(completion_tokens) is not int
+                    or completion_tokens <= 0
+                ):
+                    raise ValueError("Anthropic response omitted complete token usage")
+                cost = (
+                    Decimal(prompt_tokens) * self.max_price_per_million["prompt"]
+                    + Decimal(completion_tokens)
+                    * self.max_price_per_million["completion"]
+                ) / Decimal(1_000_000)
+                evidence_response = {
+                    "id": data.get("id"),
+                    "model": data.get("model"),
+                    "provider": "Anthropic",
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                        "cost": float(cost),
+                    },
+                    "content": data.get("content"),
+                    "stop_reason": data.get("stop_reason"),
+                }
+                metadata = provider_response_evidence(
+                    evidence_response,
+                    model,
+                    time.monotonic() - attempt_started,
+                    hashlib.sha256(body).hexdigest(),
+                    retry_index=attempt,
+                    provider="Anthropic",
+                )
+                self._settle_attempt(liability, float(cost))
+                text_blocks = [
+                    block.get("text")
+                    for block in data.get("content") or []
+                    if isinstance(block, dict)
+                    and block.get("type") == "text"
+                    and isinstance(block.get("text"), str)
+                ]
+                content = "".join(text_blocks).strip()
+                if data.get("stop_reason") == "refusal":
+                    metadata["refusal"] = {
+                        "finish_reason": "content_filter",
+                        "native_finish_reason": "refusal",
+                    }
+                    self.provider_attempt_log.append({"response": metadata})
+                    self._provider_attempt_event("result", {"response": metadata})
+                    self.last_call_metadata = metadata
+                    raise ProviderRefusal("Anthropic refused to answer")
+                if not content:
+                    raise ValueError("Anthropic returned empty content")
+                self.provider_attempt_log.append({"response": metadata})
+                self._provider_attempt_event("result", {"response": metadata})
+                self.last_call_metadata = metadata
+                return content
+            except urllib.error.HTTPError as error:
+                body_text = error.read().decode(errors="replace")[:500]
+                last_error = RuntimeError(
+                    f"Anthropic request failed (HTTP {error.code}, attempt "
+                    f"{attempt + 1}/4): {body_text}"
+                )
+                self._provider_attempt_event(
+                    "error",
+                    {
+                        "error": f"http_{error.code}",
+                        "elapsed_seconds": time.monotonic() - attempt_started,
+                        "retry_index": attempt,
+                    },
+                )
+                if error.code != 429 and error.code < 500:
+                    raise last_error from error
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
+                last_error = error
+                self._provider_attempt_event(
+                    "error",
+                    {
+                        "error": type(error).__name__,
+                        "elapsed_seconds": time.monotonic() - attempt_started,
+                        "retry_index": attempt,
+                    },
+                )
+        raise RuntimeError("Anthropic request failed after 4 attempts") from last_error
 
     def _call_openrouter(
         self,

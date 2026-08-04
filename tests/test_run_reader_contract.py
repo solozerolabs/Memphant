@@ -1710,6 +1710,64 @@ def test_openrouter_complete_inline_evidence_skips_generation_lookup(
     assert ledger.snapshot()["priced_provider_attempts"] == 1
 
 
+def test_anthropic_reader_uses_strict_schema_and_durable_meter(
+    tmp_path, monkeypatch
+) -> None:
+    reader = _load_run_reader()
+    attempts = _load_provider_attempts()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-not-real")
+    requests = []
+
+    def open_response(request, timeout=None):
+        requests.append(request)
+        return _FakeHttpResponse(
+            {
+                "id": "msg_test",
+                "model": "claude-opus-4-6",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": '{"notes":"","answer":"A","abstain":false}',
+                    }
+                ],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            }
+        )
+
+    monkeypatch.setattr(reader.urllib.request, "urlopen", open_response)
+    ledger = _open_test_ledger(attempts, tmp_path / "attempts.jsonl")
+    cli = reader.ReaderCli(
+        "anthropic",
+        "claude-opus-4-6",
+        "claude-opus-4-6",
+        tmp_path / "cache",
+        1,
+        max_spend_usd=Decimal("1"),
+        max_price_per_million={"prompt": Decimal("5"), "completion": Decimal("25")},
+        max_output_tokens=1024,
+    )
+    cli.set_provider_attempt_ledger(ledger)
+
+    reply = cli.call("reader", "sys", "prompt")
+    body = json.loads(requests[0].data)
+    assert reader.parse_reader_output(reply)["answer"] == "A"
+    assert body["model"] == "claude-opus-4-6"
+    assert body["max_tokens"] == 1024
+    assert body["system"] == "sys"
+    assert body["output_config"]["format"]["type"] == "json_schema"
+    assert cli.last_call_metadata["provider"] == "Anthropic"
+    assert cli.last_call_metadata["usage"] == {
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cost": 0.000175,
+    }
+    snapshot = ledger.snapshot()
+    assert snapshot["priced_provider_attempts"] == 1
+    assert snapshot["unpriced_provider_attempts"] == 0
+
+
 def test_openrouter_generation_lookup_retries_eventual_404(monkeypatch) -> None:
     attempts = _load_provider_attempts()
     calls = []

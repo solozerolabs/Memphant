@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "status": "failed_closed",
+  "claim": "The sixth authorization stopped before scoring after nine valid rows because the configured OpenRouter account could not fund the next authorized prompt.",
+  "failure": {
+    "completed_terminal_rows": 9,
+    "error_terminal_rows": 1,
+    "scored_rows": 0,
+    "failing_row": 10,
+    "arm": "full_context",
+    "http_status": 402,
+    "error": "Prompt tokens limit exceeded: 354949 > 305469",
+    "limit_source": "openrouter_credits"
+  },
+  "accounting": {
+    "provider_attempts": 10,
+    "priced_provider_attempts": 9,
+    "unpriced_provider_attempts": 1,
+    "reported_cost_usd": "15.510315",
+    "unsettled_cost_usd_upper_bound": "7.129675",
+    "total_liability_usd_upper_bound": "22.63999"
+  },
+  "replacement_boundary": "Use the already configured first-party Anthropic credential with pinned claude-opus-4-6, native structured outputs, the same exact prompts, and the same $5/$25 token accounting. The Models API must confirm 1M input and structured-output support before authorization. Do not score or reuse these partial rows.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The sixth authorization is an external OpenRouter credit-limit failure and its partial rows are not benchmark evidence.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0
+    },
+    "harness": {
+      "embed_model": "local sentence-unit embedder",
+      "scorer": "not reached",
+      "k": 20,
+      "budget": 16384,
+      "flags": [
+        "full_context",
+        "reader=anthropic/claude-opus-4.6",
+        "max_output_tokens=1024",
+        "uncached_full_context"
+      ]
+    },
+    "corpus": {
+      "sha256": "caedffed588b90ae7e3ecb57da1737af43c97bbcd358134462305e4712c480b0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1",
+      "n_items": 0
+    },
+    "notes": "External credit failure only; all nine completed partial rows remain score-quarantined."
+  },
+  "lineage": {
+    "git_head": "85f3429f42dca0538672a07807a14522b66ce698",
+    "authorization_sha256": "e5c52045477b9c6747cd7bb3a7bd402b608030503678afdacb089d9dac3e509f",
+    "authorization_scope_sha256": "0b18ea914cbca3af424886d684a0ac201736c0070a765c2294da09bb708167d7",
+    "reader_attempts_sha256": "085acecd574250cb7e550f69a4d582c716487921e2d717418c628fa3e1d39760",
+    "provider_attempts_sha256": "804d47241b57288f6aed948e27d110fcfe56855a1121b64477e94de6b8277c37",
+    "paid_rows_sha256": "ca7ff01594d30002f20932ac1b157e15c32712b1a5bd8d694a59d7bc2f54ddb6"
+  }
+}

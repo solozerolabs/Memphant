@@ -59,7 +59,7 @@ ESCAPED_CODEPOINT = re.compile(r"\\u([0-9a-fA-F]{4})")
 PAID_ARMS = ("full_context", "fast", "selective_deep")
 CONFIRMATION_ARMS = ("full_context", "fast")
 READER_MODEL = "anthropic/claude-opus-4.5"
-CONFIRMATION_READER_MODEL = "anthropic/claude-opus-4.6"
+CONFIRMATION_READER_MODEL = "claude-opus-4-6"
 READER_PROVIDER = "anthropic"
 READER_MAX_SPEND_USD = Decimal("22")
 DEEP_MODEL = "openai/gpt-5.6-luna-20260709"
@@ -252,6 +252,7 @@ def confirmation_authorization_packet(
         "cost_preflight": preflight,
         "models": {
             "reader": CONFIRMATION_READER_MODEL,
+            "reader_engine": "anthropic",
             "reader_provider": READER_PROVIDER,
             "reader_prompt_sha256": hashlib.sha256(
                 READER_SYSTEM_PROMPT.encode()
@@ -715,7 +716,8 @@ def confirmation_result_contract(source_sha: str, analysis: dict) -> dict:
             "flags": [
                 "full_context",
                 "fast",
-                "reader=anthropic/claude-opus-4.6",
+                "reader=claude-opus-4-6",
+                "provider=anthropic-first-party",
                 "uncached_full_context",
             ],
         },
@@ -2158,7 +2160,7 @@ def run_paid_confirmation(args) -> dict:
         snapshot = ledger.snapshot()
         reported, unsettled = restore_spend_from_attempts(snapshot["attempts"])
         cli = ReaderCli(
-            "openrouter",
+            "anthropic",
             CONFIRMATION_READER_MODEL,
             CONFIRMATION_READER_MODEL,
             cache_dir,
@@ -2170,7 +2172,6 @@ def run_paid_confirmation(args) -> dict:
             },
             max_output_tokens=CONFIRMATION_MAX_OUTPUT_TOKENS,
         )
-        cli.provider_only = [READER_PROVIDER]
         cli.set_provider_attempt_ledger(ledger)
         cli.provider_attempts = len(snapshot["attempts"])
         cli.set_provider_attempt_limit(480)

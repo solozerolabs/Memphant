@@ -574,7 +574,8 @@ def test_confirmation_authorization_is_two_arm_hash_bound_and_capped_at_140() ->
         "max_spend_usd": "140",
     }
     assert packet["arms"] == ["full_context", "fast"]
-    assert packet["models"]["reader"] == "anthropic/claude-opus-4.6"
+    assert packet["models"]["reader"] == "claude-opus-4-6"
+    assert packet["models"]["reader_engine"] == "anthropic"
     assert packet["models"]["max_output_tokens"] == 1024
     assert "deep" not in json.dumps(packet).lower()
     assert "prompt_cache" not in packet

@@ -26,6 +26,12 @@ remained 404 after bounded retries. Those rows remain unscored. OpenRouter's
 current contract makes inline usage authoritative and describes the generation
 endpoint as an alternative audit path, so the final runner uses it only when
 inline response ID, model, provider, tokens, or cost is incomplete.
+That corrected OpenRouter authorization produced nine valid rows, then the
+account returned HTTP 402 because its remaining credits could not fund the next
+355k-token prompt. The configured first-party Anthropic credential is the final
+path: its free Models API response confirms pinned `claude-opus-4-6`, 1M input,
+128k output, and structured-output support. Prompts, schema, $5/$25 accounting,
+output cap, reader family, and stop rules remain unchanged.
 The complete 4,245-item treatment run remains unauthorized.
 
 ## Decision
