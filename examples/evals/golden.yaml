@@ -8,6 +8,7 @@ cases:
   - golden/inferred_belief_composition.yaml
   - golden/checkout_region.yaml
   - golden/contextual_chunk_breaker.yaml
+  - golden/contextual_chunk_multi_window.yaml
   - golden/deleted_secret_filter.yaml
   - golden/edge_expansion_runbook_lineage.yaml
   - golden/packing_abstention_buried_deploy.yaml

@@ -1,0 +1,82 @@
+id: contextual_chunk_multi_window
+second_author_confirmed: true
+query: "What is the rollback trigger for the payments migration?"
+k: 4
+budget_tokens: 512
+# Closes a measured blind spot, not a hypothetical one. Before this case the
+# deterministic lane contained ZERO units with more than one contextual chunk:
+# every golden seeds a short body, and `contextual_chunk_breaker` — the one case
+# built for chunk-aware recall — carries exactly ONE chunk. A single chunk can
+# never form a contiguous run, so `select_chunk_mask` sibling expansion,
+# `emit_selected_chunks` run grouping, and the W1 completion pass were entirely
+# uncovered here; the gap was found on 2026-08-05 by diffing archived traces of
+# the whole suite with spec-30 P-2 on vs off and observing that not one packed
+# item was chunk-rendered in either arm.
+#
+# Four CONTIGUOUS windows in the production episode header dialect
+# (`[episode …] [kind …] [turns a-b]`), which varies across a unit's chunks only
+# in the trailing span. That is what P-2's `split_header_span`/`run_header`
+# widening acts on, so this case exercises the real merge path rather than the
+# degenerate identical-header one.
+#
+# The query terms live in a chunk AND in the unit body on purpose. `bm25-code`
+# (the shipped default since 2026-08-01) scores unit BODIES only, so a
+# chunk-only match would make the unit unretrievable under the default scorer —
+# the trap `contextual_chunk_breaker` documents and works around with
+# `lexical_scorer: overlap`. Here the body carries the terms so the unit is
+# found by the shipped configuration, and the chunks carry them so
+# `select_chunk_mask` finds a matched anchor and chunk rendering actually fires.
+# Without both, this case would silently degrade to a whole-body render and
+# cover nothing.
+#
+# The ASSERTIONS hold in both the merge-on and merge-off arms by design: a
+# golden grades units, not rendered text (`packed_context_contains` takes unit
+# names), so it cannot assert "one header replaced three". What it does pin is
+# the invariant that must survive any chunk-render change — a multi-window unit
+# is still packed, still answer-bearing, and still cited. Byte-level merge
+# behaviour is covered by `chunk_render_tests` in memphant-core.
+seed:
+  units:
+    - name: mem_payments_migration
+      episode_body: "Payments migration runbook: staged cutover, rollback trigger, and verification steps."
+      kind: semantic
+      state: active
+      subject_key: "payments migration runbook"
+      body: "Payments migration runbook. The rollback trigger for the payments migration is a sustained authorization error rate above two percent."
+      trust_level: trusted_system
+      contextual_chunks:
+        - id: chunk-payments-1
+          header: "[episode payments-mig] [kind user] [turns 1-2]"
+          body: "Stage one moves read traffic to the new payments ledger behind a flag."
+          source_span: "0-70"
+        - id: chunk-payments-2
+          header: "[episode payments-mig] [kind user] [turns 3-4]"
+          body: "The rollback trigger for the payments migration is a sustained authorization error rate above two percent."
+          source_span: "70-176"
+        - id: chunk-payments-3
+          header: "[episode payments-mig] [kind user] [turns 5-6]"
+          body: "On trigger, flip the flag back and drain the write queue before re-pointing reads."
+          source_span: "176-259"
+        - id: chunk-payments-4
+          header: "[episode payments-mig] [kind user] [turns 7-8]"
+          body: "Verification: authorization error rate under one percent for thirty minutes post-rollback."
+          source_span: "259-351"
+    - name: mem_payments_decoy
+      episode_body: "Search migration notes."
+      kind: semantic
+      state: active
+      subject_key: "search migration runbook"
+      body: "Search migration runbook. Rollback is manual and has no automatic trigger."
+      trust_level: trusted_system
+expect:
+  answer_bearing_ids:
+    - mem_payments_migration
+  top_k_contains:
+    - mem_payments_migration
+  packed_context_contains:
+    - mem_payments_migration
+  citations_include:
+    - mem_payments_migration
+  trace_stages_include:
+    - assemble
+    - trace

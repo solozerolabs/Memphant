@@ -16634,3 +16634,79 @@ mod ranking_channels_fixed_tests {
         );
     }
 }
+
+/// Guards the `contextual_chunk_multi_window` golden against silent rot.
+///
+/// That fixture exists to give the deterministic lane its ONLY unit with more
+/// than one contextual chunk. But a golden grades units, not rendered text, so
+/// it passes whether or not chunk rendering actually fires — if its bodies or
+/// budget ever drift into a whole-body fallback, the suite stays green while
+/// covering nothing. That is exactly how the lane came to have zero multi-chunk
+/// coverage in the first place. This test asserts the fixture's real shape:
+/// its chunks are selected as ONE contiguous run at its declared budget, and
+/// merging them measurably shrinks the render.
+#[cfg(test)]
+mod multi_window_fixture_guard {
+    use super::*;
+
+    /// Byte-identical to the chunks seeded by
+    /// `examples/evals/golden/contextual_chunk_multi_window.yaml`.
+    fn fixture_chunks() -> Vec<ContextualChunk> {
+        [
+            ("1-2", "Stage one moves read traffic to the new payments ledger behind a flag."),
+            ("3-4", "The rollback trigger for the payments migration is a sustained authorization error rate above two percent."),
+            ("5-6", "On trigger, flip the flag back and drain the write queue before re-pointing reads."),
+            ("7-8", "Verification: authorization error rate under one percent for thirty minutes post-rollback."),
+        ]
+        .iter()
+        .map(|(turns, body)| ContextualChunk {
+            id: format!("chunk-payments-{turns}"),
+            header: format!("[episode payments-mig] [kind user] [turns {turns}]"),
+            body: (*body).to_string(),
+            source_span: Some("0-70".to_string()),
+        })
+        .collect()
+    }
+
+    #[test]
+    fn fixture_is_chunk_rendered_as_one_contiguous_run() {
+        let chunks = fixture_chunks();
+        let query = tokenize("What is the rollback trigger for the payments migration?");
+        // 512 is the fixture's declared `budget_tokens`.
+        let selected = select_chunk_mask(&chunks, &query, 512)
+            .expect("fixture must chunk-render, not fall back to the whole body");
+        assert!(
+            selected.iter().all(|picked| *picked),
+            "all four windows are selected at the fixture budget: {selected:?}"
+        );
+        assert_eq!(
+            selected_runs(&chunks, &selected, true),
+            vec![(0, 3)],
+            "the four windows form ONE contiguous mergeable run"
+        );
+
+        let unmerged = emit_selected_chunks(&chunks, &selected, false);
+        let merged = emit_selected_chunks(&chunks, &selected, true);
+        assert!(
+            merged.len() < unmerged.len(),
+            "merging shrinks the render: {} vs {}",
+            merged.len(),
+            unmerged.len()
+        );
+        assert_eq!(
+            merged.matches("[episode payments-mig]").count(),
+            1,
+            "one run-spanning header replaces the four per-window ones: {merged}"
+        );
+        assert!(
+            merged.contains("[turns 1-8]"),
+            "the run header spans the whole run: {merged}"
+        );
+        // The answer span survives the merge — the property the golden asserts
+        // at unit granularity and cannot check at chunk granularity.
+        assert!(
+            merged.contains("sustained authorization error rate above two percent"),
+            "the answer-bearing window is still emitted: {merged}"
+        );
+    }
+}

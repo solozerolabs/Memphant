@@ -6,6 +6,7 @@ golden:
   - inferred_belief_composition_control
   - checkout_region
   - contextual_chunk_breaker
+  - contextual_chunk_multi_window
   - deleted_secret_filter
   - edge_expansion_runbook_lineage
   - packing_abstention_buried_deploy
