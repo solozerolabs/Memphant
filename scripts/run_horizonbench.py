@@ -2665,6 +2665,12 @@ def fetch_sample(output: Path) -> dict:
     }
 
 
+def fact_extraction_flag() -> str:
+    """Report what actually ran, matching `fact_extraction_from_env` in the runtime."""
+    value = os.environ.get("MEMPHANT_FACT_EXTRACTION", "").strip().lower()
+    return "fact_extraction=off" if value in {"0", "false", "off"} else "fact_extraction=on"
+
+
 def fast_gate_evidence_contract(source_sha: str, k: int, budget_tokens: int) -> dict:
     return {
         "schema_version": 1,
@@ -2685,7 +2691,7 @@ def fast_gate_evidence_contract(source_sha: str, k: int, budget_tokens: int) -> 
             "scorer": "construction completeness only; benchmark gold remained quarantined",
             "k": k,
             "budget": budget_tokens,
-            "flags": ["fast", "fact_extraction=off", "deep=off"],
+            "flags": ["fast", fact_extraction_flag(), "deep=off"],
         },
         "corpus": {
             "sha256": source_sha,
@@ -2714,7 +2720,9 @@ def build_fast_evidence(args) -> dict:
     items = [runtime_item(row) for row in rows]
     gr.reexec_through_scratch_db(args.database_url)
     database_url = os.environ["DATABASE_URL"]
-    os.environ["MEMPHANT_FACT_EXTRACTION"] = "0"
+    # ponytail: setdefault, not assignment, so the free ten-row sample can run
+    # the extraction-on arm. The sealed confirmation path below stays hardcoded.
+    os.environ.setdefault("MEMPHANT_FACT_EXTRACTION", "0")
     os.environ["MEMPHANT_DEEP"] = "off"
     tenant_id, api_key = gr.provision_tenant(
         args.cli_bin, database_url, name_prefix="horizon-sample"
