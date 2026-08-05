@@ -108,31 +108,75 @@ subject family, and the candidate adopts the stored key rather than
 re-deriving one, so the keys are equal by construction. It reads the whole open
 scope, like the write compiler it feeds.
 
-Threshold sweep on the same ten users:
+### Two compile-abort defects the sweep surfaced (both fixed)
 
-| threshold | superseded | edges | distinct preference keys |
-|---|---:|---:|---:|
-| off | 34 | 102 | 212 |
-| 0.95 | 36 | 108 | 210 |
-| 0.90 | 37 | 111 | 210 |
-| 0.85 | **42** | 126 | **206** |
+The first sweep aborted the reflect drain at thresholds ≤ 0.80 with
+`memphant_memory_unit_subject_valid_excl` violations — two candidates opening
+one subject over overlapping validity. Two distinct mechanisms, both invisible
+against `InMemoryStore` (no exclusion constraint) and both now guarded by a
+one-subject-per-job rule in `resolve_subject_aliases`, pinned by
+`crates/memphant-store-postgres/tests/subject_resolution_pg.rs`:
 
-Monotone and small — no runaway merging at any threshold tried. The new merges
-at 0.85 are the intended shape:
+1. Two mined phrases in one episode both resolve to the same open unit.
+2. One phrase resolves onto a key another candidate in the same job will
+   *derive* (verbatim restatement) — deterministic, so every retry repeats it;
+   observed as 20 dead jobs plus a blocked scope lane. The guard is seeded with
+   the keys the job will derive, not only those it already carries.
 
-```
-and just throw ideas at me fast, i like the rapid-fire style => i love rapid-fire ideas
-ngl i usually hate confronting people but this is getting old => i really hate confrontations …
-```
+### Threshold sweep (ten users, all arms now drain clean)
 
-and at least one is arguable (`i love the cumbia comparison` → `u know how much
-i love cumbia` merges liking a comparison with liking the music). On a
-three-pair eyeball that is two clean and one questionable.
+| threshold | superseded | distinct pref keys | cross-wording merges | resolution-attributable | questionable |
+|---|---:|---:|---:|---:|---:|
+| off | 34 | 212 | 3 | 0 (extraction's own filler-normalization) | 0 |
+| 0.95 | 36 | 210 | 5 | 2 | 0 |
+| 0.90 | 37 | 210 | 5 | 2 | 0 |
+| 0.85 | 42 | 206 | 9 | 6 | 1 |
+| 0.80 | 50 | 202 | 13 | 10 | 3+ |
+| 0.75 | 70 | 186 | 29 | 26 | many |
 
-**This is a mechanism that now works, not a measured accuracy win.** Eight extra
-supersessions across ten users is not evidence for the axis, and the burned
-tranche cannot supply that evidence. It ships default-off with the threshold as
-a calibration knob; promotion needs a fresh Horizon tranche.
+"Resolution-attributable" subtracts the 3 cross-wording merges the off arm
+already makes — extraction lightly normalizes filler ("hmm i like the sound of
+that" → "i like the sound of that") on its own. The 2 merges resolution adds at
+0.90 are both clean restatements (an option-2 choice and a
+confrontation-avoidance preference). 0.85 adds four more — rapid-fire style,
+communication style, a confrontation chain (all correct) and one questionable
+(`i love the cumbia comparison` → `u know how much i love cumbia`, liking a
+comparison vs. liking the genre).
+
+**0.80 is where it turns.** It starts collapsing a chain of distinct emotional
+statements — "i hate feeling like i'm drifting" → "…losing my grip" → "…failing
+at this level" — into one generation. Those are three different feelings, not
+one preference restated. But note the mechanism: extraction mined emotional
+venting as `preference` units in the first place, and resolution merely merges
+whatever extraction produced. Resolution's false-merge risk is therefore
+bounded by extraction precision, and below 0.85 the sweep mostly merges
+extraction noise, not genuine restatements.
+
+**Operating point: 0.85.** It captures the clear restatements at a ~1-in-6
+questionable rate, and every merge is recoverable — under bitemporal lineage a
+wrong merge *closes* a generation (superseded, still as-of queryable), it does
+not destroy the belief. 0.90 is the conservative alternative (zero questionable,
+misses rapid-fire / communication-style / confrontation chains).
+
+### Chat-lane non-inferiority (frozen 178-item LME-S dev split)
+
+The concern with any shared write-path change is that it quietly regresses the
+already-working general-dialogue lane. It does not. Both arms ran the frozen
+dev split, seed 20260713, extraction on, the only difference being resolution:
+
+| arm | recall@5 | recall@10 |
+|---|---:|---:|
+| extraction on, resolution off | 0.7771 | 0.8012 |
+| + subject-resolution 0.85 | 0.7771 | 0.8072 |
+
+Per-question join on all 178 ids: **zero losses** at either cutoff, one gain at
+recall@10. Non-inferiority holds; the shared mechanism is safe to carry on the
+green lane.
+
+**This is a mechanism that now works, not a measured accuracy win on the axis.**
+Eight extra supersessions across ten users is not axis evidence, and the burned
+tranche cannot supply it. It ships default-off; promotion needs a fresh Horizon
+tranche.
 
 ## Consequence for the program
 

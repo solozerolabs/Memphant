@@ -41,10 +41,18 @@
 > compilation, not retrieval, packing, or the reader; stage-2/3 levers
 > (`pack_render_cap`, pool depth, thresholds) cannot address it. Semantic
 > subject identity now exists behind `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD`
-> (default OFF): at 0.85 it lifts supersessions 34→42 and cuts distinct
-> preference keys 212→206 on that sample — a working mechanism, **not** an
-> accuracy result, and not promotable from a burned tranche. The -15.8pp stands
-> as decisional evidence for that configuration and the tranche stays burned
+> (default OFF, `--subject-resolution` on the bench): a mined candidate whose
+> subject phrase is cosine-near an open unit's adopts that unit's fact_key.
+> Calibrated at 0.85 (lifts supersessions 34→42, cuts distinct preference keys
+> 212→206; 0.80 begins over-merging distinct emotional statements that
+> extraction mislabeled as preferences). Two same-job subject-collision aborts
+> the sweep surfaced at low thresholds are fixed and pinned by a Postgres
+> exclusion-constraint test (`InMemoryStore` cannot see them). Chat-lane
+> non-inferiority holds on the frozen 178-item LME-S dev split: recall@5 0.7771
+> unchanged, recall@10 0.8012→0.8072, per-question zero losses / one gain. Still
+> a working mechanism, **not** an axis accuracy result, and not promotable from
+> a burned tranche. The -15.8pp stands as decisional evidence for that
+> configuration and the tranche stays burned
 > (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`).
 >
 > **HorizonBench powered confirmation (2026-08-03):** The clean paired bank used 60 held-out users, one static and one evolved item per user, identical pinned Opus 4.6 readers, complete full context versus non-degraded Fast evidence, and user-clustered inference. Full context scored 63/120 (52.5%); Fast scored 44/120 (36.7%), delta -15.8pp with 95% CI [-24.2, -7.5]. On evolved items Fast scored 21/60 versus 27/60 (delta -10.0pp) and selected the released distractor 17 times versus 10. There were 31 discordant pairs: six Fast gains and 25 losses. All 240 provider attempts were terminal and priced; $109.1346 settled with zero unresolved liability. The frozen rule failed overall non-inferiority, positive evolved lift, and distractor non-regression. Horizon preference confirmation, official-full, overall SOTA, and cross-axis near-SOTA remain false (`docs/build-log/2026-08-03-horizonbench-powered-confirmation.md`; machine result `docs/build-log/artifacts/horizonbench-confirmation-v7/result.json`).

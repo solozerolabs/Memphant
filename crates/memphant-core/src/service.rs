@@ -36,7 +36,7 @@ use crate::{
     ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket, StructuredSourceKind,
     StructuredStateProvider, StructuredStateRequest, VectorQuery, apply_correction_transition,
     apply_unit_forget_transition, canonical_mutation_request_hash, correction_rectangles_with_ids,
-    cosine_similarity, derive_episode_dedup_key, embedding_profile_for,
+    cosine_similarity, derive_episode_dedup_key, derive_fact_key, embedding_profile_for,
     evidence_slices_for_episode, fold_structured_observations, non_blank, normalize_component,
     parse_content_date, prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
     project_structured_state, recall_scope_admitted,
@@ -5455,6 +5455,37 @@ impl<S: MemoryStore> MemoryService<S> {
         }
         let (candidate_vectors, existing_vectors) = vectors.split_at(eligible.len());
 
+        // ONE CANDIDATE PER SUBJECT PER JOB. Two phrases mined from the same
+        // episode can both be near the same open unit; letting both adopt its
+        // key opens one subject twice over overlapping validity, which the
+        // `memphant_memory_unit_subject_valid_excl` exclusion constraint rejects
+        // and the whole reflect job dies with it. The first candidate to claim a
+        // key keeps it; later ones fall through and mint their own, which is the
+        // pre-resolution behaviour for them.
+        //
+        // Seeded with every key this job will own WITHOUT resolution: the ones
+        // candidates already carry explicitly, AND the ones the compiler will
+        // derive for them further down. That second half is not belt-and-braces
+        // — derivation happens after this stage, so a phrase identical to some
+        // open unit's is invisible here while still being destined for that
+        // unit's key. Resolving another phrase onto it then puts two candidates
+        // on one subject, and because it is deterministic every retry repeats
+        // it: measured as 20 dead jobs and a blocked scope lane draining the
+        // Horizon sample at threshold 0.80.
+        let mut claimed: HashSet<String> = candidates
+            .iter()
+            .map(|candidate| {
+                candidate.fact_key.clone().unwrap_or_else(|| {
+                    derive_fact_key(
+                        context.scope_id.as_uuid(),
+                        candidate.subject.as_deref(),
+                        candidate.predicate.as_deref(),
+                        &candidate.body,
+                    )
+                })
+            })
+            .collect();
+
         for (slot, index) in eligible.into_iter().enumerate() {
             let family = candidates[index]
                 .subject
@@ -5465,8 +5496,10 @@ impl<S: MemoryStore> MemoryService<S> {
             let best = existing
                 .iter()
                 .zip(existing_vectors)
-                .filter(|((existing_family, existing_phrase, _), _)| {
-                    *existing_family == family && *existing_phrase != phrase
+                .filter(|((existing_family, existing_phrase, fact_key), _)| {
+                    *existing_family == family
+                        && *existing_phrase != phrase
+                        && !claimed.contains(fact_key)
                 })
                 .map(|((_, _, fact_key), vector)| {
                     (cosine_similarity(&candidate_vectors[slot], vector), fact_key)
@@ -5483,6 +5516,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     _ => Some(current),
                 });
             if let Some((_, fact_key)) = best {
+                claimed.insert(fact_key.clone());
                 candidates[index].fact_key = Some(fact_key.clone());
             }
         }

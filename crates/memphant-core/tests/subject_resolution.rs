@@ -189,6 +189,48 @@ async fn an_unrelated_preference_keeps_its_own_subject() {
     );
 }
 
+/// Two phrases mined from ONE episode can both sit near the same open unit.
+/// Both adopting its key opens one subject twice over overlapping validity,
+/// which Postgres rejects on `memphant_memory_unit_subject_valid_excl` and
+/// which takes the whole reflect job down with it (observed draining the
+/// Horizon sample at threshold 0.80). At most one candidate per subject per
+/// job; the loser mints its own key as it did before resolution existed.
+#[tokio::test]
+async fn two_phrases_in_one_episode_never_claim_the_same_subject() {
+    let store = InMemoryStore::default();
+    let svc = service(store.clone(), Some(0.9));
+    let tenant = TenantId::new();
+    let context = memphant_store_testkit::bind_context(&store, tenant).await;
+
+    retain_and_reflect(&svc, &context, FIRST).await;
+    // Both sentences are step-topical, so both resolve toward the FIRST unit.
+    retain_and_reflect(
+        &svc,
+        &context,
+        "[session s2]\n\
+user: I prefer having actual steps to follow.\n\
+assistant: Noted.\n\
+user: I also prefer sequential steps with numbers.\n",
+    )
+    .await;
+
+    let units = store.memory_units(tenant);
+    let mut open_subjects: Vec<&str> = units
+        .iter()
+        .filter(|unit| unit.state == UnitState::Active && unit.valid_to.is_none())
+        .filter_map(|unit| unit.fact_key.as_deref())
+        .filter(|key| key.contains(":preference:"))
+        .collect();
+    let before = open_subjects.len();
+    open_subjects.sort_unstable();
+    open_subjects.dedup();
+    assert_eq!(
+        open_subjects.len(),
+        before,
+        "one subject may hold only one open head, got {open_subjects:?}"
+    );
+}
+
 /// The flag-off path is exactly today's behaviour: two wordings, two keys.
 #[tokio::test]
 async fn resolution_off_leaves_the_two_wordings_separate() {
