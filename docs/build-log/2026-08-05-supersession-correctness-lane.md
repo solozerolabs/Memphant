@@ -347,6 +347,62 @@ recency saturation that killed MemoryCode, in new clothing. It costs nothing
 against the sampled trajectories and could kill the whole direction before any
 labeling spend. **Do that first.**
 
+## Census 3b — C3 recency death-from-below: **SURVIVES**, but the ceiling check warns
+
+Ran on the same 14 sampled trajectories, $0.
+`benchmarks/xs_crosssession/c3_recency_check.py`.
+
+**Scope discipline.** Whole-trajectory scoring is leaky — the agent's later
+messages contain the edit itself. The honest ask is the **prefix before the
+first real edit** (`str_replace_editor` with command `create`/`str_replace`/
+`insert`), median **52 messages**. All numbers below are prefix-scoped; the
+metric is *covers-gold* (does the prediction name every patched file), with
+paths suffix-matched so `client.py` matches `src/apiron/client.py`.
+
+| rule | covers gold | reading |
+|---|---:|---|
+| **recency** — last file named | **3/14 = 0.214** | **does NOT saturate** |
+| **frequency** — most-named file | 6/14 = 0.429 | the stronger trivial rule |
+| **union** — every file named | 7/14 = 0.500 | statement-based **ceiling** |
+
+**The question asked is answered: recency does not saturate this direction.**
+At 0.214 it is far from the 0.85 kill bar, so the MemoryCode failure mode does
+not repeat here. The direction survives.
+
+**Two findings that matter more than the one requested.**
+
+1. **Recency was the wrong rule to fear.** Frequency ("the file the agent keeps
+   returning to") doubles it at 0.429. Any future Part A must use **frequency**
+   as its death-from-below baseline; preregistering against recency alone would
+   have set the bar against the weaker rule.
+2. **The ceiling is low, and this is the SWE-ContextBench death shape.** Union
+   covers gold only 0.500 — even naming *every* file the agent mentions before
+   its first edit leaves half the patches uncovered, so no statement-based method
+   can exceed it. Addressable headroom above the best trivial rule is therefore
+   **0.500 − 0.429 ≈ 7.1pp**. SWE-ContextBench died at an oracle lift of 3.72pp
+   against an MDE of 3.38–8.32pp. **7.1pp sits inside that danger band.**
+
+   Checked and closed: the ceiling is not a test-file artifact. Excluding
+   test files from gold (median gold size 4 → 2) leaves all three rules
+   **identically at 3/6/7 of 14**.
+
+**n = 14. These are screening estimates with wide intervals** (95% CI on 6/14 is
+roughly 0.18–0.71) and are **not** a verdict. The next step is free: re-run this
+same script over ~300 trajectories to tighten both the frequency baseline and the
+union ceiling. **Only if the headroom survives at n≈300 is a labeled arc-rate
+sample worth any spend** — and if it does not, the belief-revision direction dies
+for the same reason SWE-ContextBench did, for $0.
+
+**Instrument defect, recorded.** The first version of this script reported
+`recency_any_hit 1/14` and an empty prefix scope — a clean-looking, meaningless
+result. Three causes, all found by inspecting rather than trusting it: paths were
+compared by exact equality (gold `src/apiron/client.py` vs named `client.py`, so
+nothing ever matched); the edit detector matched the substring `create` anywhere
+in the tool-call JSON, truncating the prefix to ~4 messages of 109; and files
+were read only from message content (3 per trajectory) while the real signal
+lives in `tool_calls` (38 per trajectory). This is the repo's own
+unprobed-instrument trap, and it fired here on the third try in one day.
+
 ## Census status: three corpora rejected, one conditional — the lane is BLOCKED
 
 | candidate | verdict | binding reason |
