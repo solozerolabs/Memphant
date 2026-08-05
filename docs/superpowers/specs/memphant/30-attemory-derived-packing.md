@@ -117,7 +117,31 @@ To make the golden lane capable of gating this at all, it needs a fixture whose 
 
 **Harness seam added.** `crates/memphant-eval/src/lib.rs` previously hardcoded `PackLevers::default()`, so no suite could run a lever arm. It now reads `MEMPHANT_PACK_MERGE_CHUNK_BLOCKS` — the same var the runtime reads — via `eval_pack_levers()`. Unset means off, so every existing suite is unchanged; an unrecognised value is a hard error rather than a silent default, because an eval that quietly measures the wrong arm yields evidence that looks paired and is not.
 
-Remaining before any promotion claim: a chunk-bearing rung-7 fixture, Track R paired vs lever-off, and reader-QA on the chat lane.
+**Track R proper — CANNOT RUN, data absent.** `benchmarks/data/track_r_repo_memory_golden.jsonl` (180 cases, 373,968 bytes, sha256-pinned) does not exist on disk; only `track_r_repo_memory_golden.lock.json` survives, same for the paraphrase bank. This is the C3 wipe. Regeneration is not a rerun: it needs the 64,055-event `nebius/SWE-rebench-openhands-trajectories` materialization plus `track_r_mine.py`, whose generation and adjudication run as an **agent-in-the-loop request/reply cache** (`--stage mine` exits 2 while calls are pending). A cold cache is a multi-round loop, not a command. Note also the lock records `bar_passed: false` (`with_distractors_ge_50pct` failed), so the instrument had not cleared its own preregistered bar.
+
+**Code lane paired (R0 coding-events bank, n=40) — RUN 2026-08-05. Retrieval null, cost win, Budget drops cut 61%.**
+
+Substituted for Track R because its bank is present and its runner (`code_lane_run_memphant.py`) *is* the Phase-1b Budget-drop replay harness. Both arms: same corpus/golden (lock verified, sha `b7bf9b34959c`), fresh scratch DB and tenant each, `k=10`, `mode=deep`, `budget_tokens=8192`, retrieval-trace only — no reader, no model call, $0.
+
+| | merge OFF | merge ON |
+|---|---|---|
+| R@5 / R@10 | 0.625 / 0.750 | 0.625 / 0.750 |
+| hit@5 / hit@10 counts | 25 / 30 | 25 / 30 |
+| per-question `hit_at_5`, `hit_at_10`, `gold_rank`, `bucket` | — | **zero differences** |
+| **Budget drops** | **38** | **15** (−61%) |
+| `output_limit` drops | 1538 | 1561 (+23) |
+| `trust` drops | 11 | 11 |
+| **packed context chars** | **768,200** | **678,890** (−11.6%) |
+| packed items | 400 | 400 |
+| `packed_item_chars_max` | 6537 | 6605 |
+
+Reading it: the merge does exactly what the mechanism says. Budget evictions fall by 61% and reader-facing context by 11.6%, at byte-identical retrieval. The freed budget converts into `output_limit` drops (+23) rather than into recall, because **this lane is slot-bound at `k=10`, not budget-bound** — `packed_items_mean` is exactly 10.0 and `budget_share_of_in_pool_unpacked` is 0.0 in *both* arms. Cheaper items cannot buy slots. That is the same null mechanism that made `pack_render_cap` a code-lane null (STATUS.md:124), and it was predictable from the baseline arm alone. The lone rise, `packed_item_chars_max` 6537→6605, is the completion pass buying fuller coverage for one item now that it is affordable — the intended behaviour, not a regression.
+
+So on the code lane P-2 is a **context-cost win at zero retrieval cost**, not a retrieval win. Unlike LME-S — where the lane is budget-bound and the saving refilled the budget with a 5th/6th/7th item — here the budget was never the binding constraint, so the saving stays visible as 11.6% less context sent. Same mechanism, opposite surface, because a different constraint binds.
+
+Caveats: n=40, single seed, one bank. The 11.6% is a deterministic mechanical measurement and trustworthy at this n; the retrieval null is not powered to exclude small effects. **This is not Track R** and must never be reported as such — Track R is the 180-case repo-memory instrument that produced the 58.89%-vs-grep-96.67% result, and it remains unrunnable.
+
+Remaining before any promotion claim: a chunk-bearing rung-7 fixture, reader-QA on the chat lane (does the freed budget's extra item help or distract?), and — if Track R is ever rebuilt — the paired run there.
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.

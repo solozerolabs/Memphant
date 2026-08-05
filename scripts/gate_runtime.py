@@ -257,6 +257,7 @@ class Server:
         pack_render_cap: int | None = None,
         pack_session_quota: int | None = None,
         pack_submodular_ordering: bool = False,
+        merge_chunk_blocks: bool = False,
         lexical_scorer: str | None = None,
     ) -> None:
         if pack_render_cap is not None and pack_render_cap <= 0:
@@ -274,6 +275,7 @@ class Server:
         self.pack_render_cap = pack_render_cap
         self.pack_session_quota = pack_session_quota
         self.pack_submodular_ordering = pack_submodular_ordering
+        self.merge_chunk_blocks = merge_chunk_blocks
         self.lexical_scorer = lexical_scorer
         self.proc: subprocess.Popen | None = None
         self._log_file = None
@@ -288,6 +290,7 @@ class Server:
         env.pop("MEMPHANT_PACK_RENDER_CAP", None)
         env.pop("MEMPHANT_PACK_SESSION_QUOTA", None)
         env.pop("MEMPHANT_PACK_SUBMODULAR_ORDERING", None)
+        env.pop("MEMPHANT_PACK_MERGE_CHUNK_BLOCKS", None)
         env.pop("MEMPHANT_LEXICAL_SCORER", None)
         env["MEMPHANT_APP_DATABASE_URL"] = self.database_url
         env["MEMPHANT_AUTHN_DATABASE_URL"] = self.database_url
@@ -306,6 +309,8 @@ class Server:
             env["MEMPHANT_PACK_SESSION_QUOTA"] = str(self.pack_session_quota)
         if self.pack_submodular_ordering:
             env["MEMPHANT_PACK_SUBMODULAR_ORDERING"] = "1"
+        if self.merge_chunk_blocks:
+            env["MEMPHANT_PACK_MERGE_CHUNK_BLOCKS"] = "1"
         if self.lexical_scorer:
             env["MEMPHANT_LEXICAL_SCORER"] = self.lexical_scorer
         return env

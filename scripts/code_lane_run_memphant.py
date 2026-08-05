@@ -771,6 +771,15 @@ def build_parser():
              "ambient MEMPHANT_PACK_RENDER_CAP can never leak into an arm",
     )
     parser.add_argument(
+        "--merge-chunk-blocks", action="store_true",
+        help="MEMPHANT_PACK_MERGE_CHUNK_BLOCKS for the server arm (spec 30 P-2: "
+             "one run-spanning provenance header per contiguous chunk run "
+             "instead of one header per chunk; omit for the merge-OFF arm). "
+             "Explicitly selected here and nowhere else, same discipline as "
+             "--pack-render-cap: gate_runtime.Server closes inherited packing "
+             "env vars, so an ambient value can never leak into an arm",
+    )
+    parser.add_argument(
         "--lexical-scorer", default=None,
         choices=("overlap", "bm25-control", "bm25-code"),
         help="MEMPHANT_LEXICAL_SCORER for the server arm (fusion's lexical "
@@ -887,6 +896,7 @@ def main() -> int:
     server = gr.Server(
         args.server_bin, args.database_url, args.port, args.embed_model,
         log_path=server_log_path, pack_render_cap=args.pack_render_cap,
+        merge_chunk_blocks=args.merge_chunk_blocks,
         lexical_scorer=args.lexical_scorer,
         cross_rerank=args.cross_rerank, reranker=args.reranker,
         rerank_candidate_limit=args.rerank_candidate_limit,
@@ -1036,6 +1046,7 @@ def main() -> int:
             "recall_mode": args.mode,
             "budget_tokens": args.budget_tokens,
             "pack_render_cap": args.pack_render_cap,
+            "merge_chunk_blocks": args.merge_chunk_blocks,
             # None means "inherit the server default", which is bm25-code
             # since 2026-08-01. Record what actually ran, not the flag. The
             # literal here MUST track the shipped default: this fallback said
@@ -1112,6 +1123,7 @@ def main() -> int:
         print(
             f"{label_prefix}done: R@5={r5:.3f} R@10={r10:.3f} n={n} "
             f"cap={args.pack_render_cap or 'off'} "
+            f"merge={'on' if args.merge_chunk_blocks else 'off'} "
             f"drops={json.dumps(report['pack_drop_summary'])} "
             f"evidence={args.out_evidence} provenance={args.out_provenance}",
             file=sys.stderr,
