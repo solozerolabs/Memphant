@@ -141,7 +141,31 @@ So on the code lane P-2 is a **context-cost win at zero retrieval cost**, not a 
 
 Caveats: n=40, single seed, one bank. The 11.6% is a deterministic mechanical measurement and trustworthy at this n; the retrieval null is not powered to exclude small effects. **This is not Track R** and must never be reported as such — Track R is the 180-case repo-memory instrument that produced the 58.89%-vs-grep-96.67% result, and it remains unrunnable.
 
-Remaining before any promotion claim: a chunk-bearing rung-7 fixture, reader-QA on the chat lane (does the freed budget's extra item help or distract?), and — if Track R is ever rebuilt — the paired run there.
+**Chunk-bearing fixture — ADDED 2026-08-05.** `examples/evals/golden/contextual_chunk_multi_window.yaml`: four contiguous windows in the production episode header dialect. Passes 11/11 in both arms, and by design cannot distinguish them — a golden grades units, not rendered text. `multi_window_fixture_guard` in memphant-core pins what the golden cannot: all four windows selected as one run at the declared budget, merge shrinks the render 542→398 chars (−26.6%), one `[turns 1-8]` header replaces four, answer-bearing window survives. The guard exists because a fixture that drifts into whole-body fallback stays green while covering nothing — exactly how the lane lost this coverage originally.
+
+## 5. Verdict on P-2 (2026-08-05)
+
+**Not negative. Not yet useful. It is a cost lever with zero measured quality effect on any lane.**
+
+Everything measured, in one place:
+
+| lane | binding constraint | retrieval | what the merge bought |
+|---|---|---|---|
+| LME-S n=5 | budget | 0.8/0.8, unchanged | +1 packed item on 4/5 questions |
+| Code lane n=40 | slots (`k=10`) | 0.625/0.750, byte-identical | −11.6% packed context, Budget drops 38→15 |
+| Golden lane | — | 11/11 both arms | nothing (unit-level assertions) |
+| Unit (fixture shape) | — | — | −26.6% render |
+
+**Why it is not negative.** Selection is provably unchanged (the gate still charges the un-merged per-chunk price), single-chunk runs are byte-identical, gaps and foreign headers still break runs, and retrieval was identical on every lane and every question measured. The merge only deletes provenance the preceding line already established.
+
+**Why it is not yet useful.** It has never improved an answer. The one real win — −11.6% payload at identical retrieval — is **conditional on the lane being slot-bound**. Where budget binds (the chat lane), the packer simply refills the freed budget, so there is no payload saving at all; instead the reader sees *more items*, and whether that helps or distracts is unmeasured. So P-2 converts header bytes into either a payload saving (k binds) or extra evidence (budget binds), and only the first is unambiguously good.
+
+**Recommendation — one of two, not a third.**
+
+1. **Fund one reader-QA run on the chat lane.** That is the only place the behaviour change can hurt, and it is the last open question. If non-inferior, flip `merge_chunk_blocks` to default ON and take the payload win; −11.6% of returned context at identical retrieval is precisely the axis MemPhant's cost story lives on, and it compounds across every consumer.
+2. **If that run is not going to be funded, delete P-2.** A lever nobody will measure further is dormant lever #16 on a profile that already reports 15, and the repo has a precedent for that ending: sibling-gather was deleted once measured-dead. Keeping an unmeasurable lever is worse than not having it.
+
+Do not leave it default-OFF-and-unmeasured indefinitely — that is the outcome both options exist to avoid.
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.
