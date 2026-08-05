@@ -197,6 +197,66 @@ passes, and the $100 currently authorized remains **unspent**.
 
 ---
 
+# CENSUS LOG (appended per candidate corpus; Part A above is unedited)
+
+## Census 1 — C1 Syndai prod episodic: **REJECTED**, $0
+
+**Corpus.** `~/.memphant-private/c1/c1_prod_episodic.jsonl`, 321 rows from
+`syndai.episodic_memories`, `snapshot_sha256`
+`ddc0bc77d273c2da0ba4a7f95da4487a577e61fef861c7700fdfbc41dccf85c2`, read-only
+extract. 292 `dialog_turn` + 29 `rollup`; 5 users, 5 agents, 6 projects;
+2026-05-31 → 2026-07-31 over 31 distinct days.
+
+| §A.2 property | verdict | evidence |
+|---|---|---|
+| 1. Append-only arrival | **PASS** | table has `created_at`, no `updated_at`; rows are appended, never edited |
+| 2. ≥60 supersede arcs | **FAIL** | ceiling ≤13, and 0 genuine on inspection |
+| 3. ≥60 coexist pairs | **FAIL** | same structural reason |
+| 4. Labels outside statements | **N/A** | no arcs to label |
+
+**The structural reason, which generalizes.** 292 of 321 rows begin `USER: ` and
+are **task requests — imperatives, not assertions**. "Fix the character-gathering
+step in the forge flow" has no subject-value pair, so there is nothing for a
+later statement to replace. **An imperative has no truth value to supersede.**
+The 29 `rollup` rows are LLM aggregations over request clusters ("The user
+repeatedly requested completing localized-description tasks…") — summaries, not
+restatements. Duplication is heavy: 207 distinct normalized content prefixes of
+321, 30 duplicate clusters.
+
+**The keyword probe fired and every hit was a false positive.** Searching for
+restatement language returned 26 change-of-mind, 46 preference, and 10
+correction hits — apparently promising. Inspection kills all sampled hits: the
+matches are inside *technical prose describing code*, not a user restating a
+convention — "use the localized synopsis **instead of** the hard-coded text",
+"**prefer** it over older fallbacks", "**Prefer** synopsis translation for the
+selected locale". This is exactly the unprobed-instrument trap: a keyword
+counter formatted a clean-looking result, and only reading the matches showed it
+was measuring vocabulary, not structure.
+
+**Generous upper bound.** Clustering the 292 dialog turns by content Jaccard
+≥0.5 gives 117 clusters, 37 multi-row, of which only **13 span more than one
+day**. Even counting every cross-day cluster as a supersede arc — which none of
+the inspected ones are, being repeated requests against the same feature — the
+ceiling is **13 against a requirement of 60**. Rejected on power *and* construct.
+
+**What this rules in.** The failure is specific to the *episodic dialog-turn*
+slice, not to Syndai prod data as a whole. Restatement of durable
+subject-value claims is what Syndai stores in its **`user_facts` / persona /
+behavioral** layers (the L0 layers `context_loader` budgets separately at 400 /
+300 / 700 tokens) — a different table, not in the C1 extract, and the only
+remaining prod candidate whose rows are assertions rather than imperatives.
+**Censusing it requires a fresh read-only extract under the C1 privacy
+preregistration** (`docs/build-log/2026-07-30-c1-replication-privacy-prereg.md`)
+and owner authorization; it is not covered by the existing C1 extract's scope.
+Recorded as the next candidate, **not** started.
+
+**Standing rule earned here:** *census the statement SHAPE before the arc count.*
+Both rejected corpora failed on shape — flat files because the curator resolves
+supersession by in-place edit, C1 because imperatives carry no value to
+supersede. Counting markers or clusters first would have missed both.
+
+---
+
 # PART B — RESULTS
 
-*(empty — blocked on §A.2 corpus prerequisite)*
+*(empty — blocked on §A.2; two candidate corpora censused and rejected)*
