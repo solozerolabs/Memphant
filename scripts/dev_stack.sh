@@ -32,3 +32,10 @@ curl -sf -o /dev/null "http://127.0.0.1:3020/v1/scopes/00000000-0000-0000-0000-0
   && echo "server: responding (auth path reachable)" \
   || echo "server: up (endpoint returned non-2xx as expected without binding)"
 tail -1 "$LOGDIR/server.log"
+
+# Seed the dev tenant row (dev-tenant auth binds requests to it but does not
+# create it). Unit writes FK to tenant, so without this every retain 503s.
+psql "$DB" -c "insert into memphant.tenant (id, slug, plan, region) \
+  values ('$MEMPHANT_DEV_TENANT','dev-dogfood','dev','local') \
+  on conflict (id) do nothing;" >/dev/null 2>&1 \
+  && echo "dev tenant seeded" || echo "WARN: tenant seed failed (writes will 503)"
