@@ -403,6 +403,33 @@ were read only from message content (3 per trajectory) while the real signal
 lives in `tool_calls` (38 per trajectory). This is the repo's own
 unprobed-instrument trap, and it fired here on the third try in one day.
 
+## Census 3c — n≈300 decision rule, **fixed before the cells were seen**
+
+Written and committed while the fetch was still running, per the program's
+preregistration discipline. Instrument: `c3_headroom.py`, same prefix-scoped
+covers-gold metric, paired bootstrap (10,000 resamples, seed 20260805) on
+**headroom = union − frequency**, sampled at 61 spread offsets across all
+67,074 trajectories.
+
+Headroom is the decision quantity because no method that serves files the agent
+named can exceed the union ceiling. It bounds what *any* memory system could win
+here, MemPhant included.
+
+| condition on the headroom 95% CI | verdict |
+|---|---|
+| upper bound ≤ **8.32pp** | **DIRECTION DIES.** The whole addressable gap sits inside the band that killed SWE-ContextBench (oracle lift 3.72pp vs MDE 3.38–8.32pp). No labeling spend, no Part A. |
+| lower bound ≥ **8.32pp** | **PROCEED** to a labeled arc-rate sample (~40 trajectories) and a Part A for the belief-revision lane. |
+| CI straddles 8.32pp | **NOT DECIDED at this n.** Report the interval and the n needed; do **not** spend on labeling to "find out" — widen the sample first, which is free. |
+
+Two secondary readings, fixed here so they cannot be chosen after the fact:
+
+- **If `frequency` ≥ 0.85**, the direction dies immediately on death-from-below
+  regardless of headroom — a trivial rule doing the job means no product.
+- **If `union` (the ceiling) is itself < 0.35**, the corpus does not support the
+  construct at all: the agent mostly never names the files it patches, so
+  statement-based localization is the wrong frame and the failure is construct,
+  not power.
+
 ## Census status: three corpora rejected, one conditional — the lane is BLOCKED
 
 | candidate | verdict | binding reason |
