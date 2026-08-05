@@ -138,6 +138,11 @@ pub struct BenchLmeOptions {
     /// reflect stage mines preference/attribute facts. Recall needs no flag —
     /// mined facts are ordinary units.
     pub fact_extraction: bool,
+    /// Semantic subject-identity threshold (`--subject-resolution`, default
+    /// off) threaded via `with_subject_resolution_threshold` to the INGEST
+    /// service so a restated preference adopts the subject key of the belief it
+    /// replaces. Recall needs no flag — resolved units are ordinary units.
+    pub subject_resolution: Option<f32>,
     /// Rung 4 runtime contextual-chunk write path opt-in flag
     /// (`--runtime-chunks`, default true = the product path). The EFFECTIVE
     /// state also depends on `--disable runtime_chunks`, which forces the
@@ -339,6 +344,11 @@ pub struct BenchLmeReport {
     /// existed was a fact-extraction-off run, so an absent field ⇒ off.
     #[serde(default)]
     pub fact_extraction: bool,
+    /// The semantic subject-identity threshold this run used, if any. Serde
+    /// default `None`: every report written before the flag existed was a
+    /// resolution-off run, so an absent field ⇒ off.
+    #[serde(default)]
+    pub subject_resolution: Option<f32>,
     /// Whether the rung 4 runtime contextual-chunk write path was enabled for
     /// this run — records the EFFECTIVE state (default-on since the 2026-07-10
     /// promotion; `--disable runtime_chunks` records false). The serde default
@@ -874,7 +884,8 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
     .with_temporal_grounding_enabled(options.temporal_grounding)
     // W6: fact extraction is INGEST-time only — the reflect stage mines the facts
     // as ordinary units, so only the ingest service carries the flag.
-    .with_fact_extraction_enabled(options.fact_extraction);
+    .with_fact_extraction_enabled(options.fact_extraction)
+    .with_subject_resolution_threshold(options.subject_resolution);
     let vector_disabled = options.disable.as_deref() == Some("vector");
     // Vector ablation: same store/units, but the recall-side service embeds
     // with Noop so `query_vec` is None and the vector channel is honestly off.
@@ -1432,6 +1443,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         pack_submodular_ordering: options.pack_submodular_ordering,
         temporal_grounding: options.temporal_grounding,
         fact_extraction: options.fact_extraction,
+        subject_resolution: options.subject_resolution,
         runtime_chunks: runtime_chunks_enabled,
         embed_model: options.embed_model.clone(),
         // The active embedder's dims — for the vector-disabled arm the recall

@@ -462,6 +462,10 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
             pack_render_cap_from_env()
                 .unwrap_or_else(|error| panic!("MEMPHANT_PACK_RENDER_CAP: {error}")),
         )
+        .with_subject_resolution_threshold(
+            subject_resolution_threshold_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD: {error}")),
+        )
         .with_session_quota(
             pack_session_quota_from_env()
                 .unwrap_or_else(|error| panic!("MEMPHANT_PACK_SESSION_QUOTA: {error}")),
@@ -540,6 +544,31 @@ fn optional_positive_usize_from_value(value: Option<&str>) -> Result<Option<usiz
 
 fn pack_render_cap_from_env() -> Result<Option<usize>, String> {
     optional_positive_usize_from_value(std::env::var("MEMPHANT_PACK_RENDER_CAP").ok().as_deref())
+}
+
+/// `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD` → cosine threshold, **default off**.
+///
+/// Sets the similarity at which a mined subject phrase adopts an open unit's
+/// fact key so a restated preference supersedes instead of accumulating beside
+/// the belief it replaces. Unset leaves the compile byte-identical to today.
+/// Bounded to (0, 1]: a threshold of zero would merge every preference in a
+/// scope into one subject, which deletes belief rather than updating it.
+fn subject_resolution_threshold_from_env() -> Result<Option<f32>, String> {
+    let Some(value) = std::env::var("MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD")
+        .ok()
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+    else {
+        return Ok(None);
+    };
+    value
+        .parse::<f32>()
+        .ok()
+        .filter(|parsed| *parsed > 0.0 && *parsed <= 1.0)
+        .map(Some)
+        .ok_or_else(|| format!("must be a number in (0, 1] when set, got {value:?}"))
 }
 
 fn pack_session_quota_from_env() -> Result<Option<usize>, String> {

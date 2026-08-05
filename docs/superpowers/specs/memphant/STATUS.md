@@ -30,16 +30,22 @@
 > **Horizon stage-1 supersession defect (2026-08-05, $0):** All 1,448 evidence
 > units in the 120 banked paid rows are episodic, `:auto:`-keyed, generation 0,
 > with zero closed `valid_to` — the confirmation ran `MEMPHANT_FACT_EXTRACTION=0`,
-> and auto keys never supersede. A free two-arm rerun on the ten already-exposed
-> pilot users shows enabling extraction is necessary but not sufficient: the
-> on-arm mints 56 semantic units with explicit subject keys and still supersedes
-> nothing, because the key is `{scope}:{family}:{subject_phrase}` — lexical
-> phrase identity, so a restated preference mints a new key and the obsolete
+> and auto keys never supersede. Confirmed at the storage layer on the ten
+> already-exposed pilot users: extraction off gives 943 units, 943 auto keys,
+> **0 superseded, 0 edges**. Enabling extraction is necessary but not
+> sufficient — it supersedes 34 times, but every one is an identical filler
+> phrase ("i like the sound of that") closing its own generation, because the
+> key is `{scope}:{family}:{subject_phrase}`, lexical phrase identity. A
+> preference restated in different words still mints a new key and the obsolete
 > belief survives beside it. The first causal bottleneck is current-state
 > compilation, not retrieval, packing, or the reader; stage-2/3 levers
-> (`pack_render_cap`, pool depth, thresholds) cannot address it. The -15.8pp
-> stands as decisional evidence for that configuration and the tranche stays
-> burned (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`).
+> (`pack_render_cap`, pool depth, thresholds) cannot address it. Semantic
+> subject identity now exists behind `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD`
+> (default OFF): at 0.85 it lifts supersessions 34→42 and cuts distinct
+> preference keys 212→206 on that sample — a working mechanism, **not** an
+> accuracy result, and not promotable from a burned tranche. The -15.8pp stands
+> as decisional evidence for that configuration and the tranche stays burned
+> (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`).
 >
 > **HorizonBench powered confirmation (2026-08-03):** The clean paired bank used 60 held-out users, one static and one evolved item per user, identical pinned Opus 4.6 readers, complete full context versus non-degraded Fast evidence, and user-clustered inference. Full context scored 63/120 (52.5%); Fast scored 44/120 (36.7%), delta -15.8pp with 95% CI [-24.2, -7.5]. On evolved items Fast scored 21/60 versus 27/60 (delta -10.0pp) and selected the released distractor 17 times versus 10. There were 31 discordant pairs: six Fast gains and 25 losses. All 240 provider attempts were terminal and priced; $109.1346 settled with zero unresolved liability. The frozen rule failed overall non-inferiority, positive evolved lift, and distractor non-regression. Horizon preference confirmation, official-full, overall SOTA, and cross-axis near-SOTA remain false (`docs/build-log/2026-08-03-horizonbench-powered-confirmation.md`; machine result `docs/build-log/artifacts/horizonbench-confirmation-v7/result.json`).
 >
