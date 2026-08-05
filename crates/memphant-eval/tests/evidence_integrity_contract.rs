@@ -52,7 +52,8 @@ fn evidence_integrity_suite_passes_all_metrics() {
         "suite size drifted from the metric-bearing set"
     );
     assert_eq!(
-        report.passed_cases, report.total_cases,
+        report.passed_cases,
+        report.total_cases,
         "evidence-integrity regressions: {:#?}",
         report
             .case_results
