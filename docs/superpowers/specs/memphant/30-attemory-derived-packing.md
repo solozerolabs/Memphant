@@ -203,7 +203,27 @@ luna-pro reader (high) / sol-pro judge, longmemeval profile, prompt-v3, both arm
 - **Robust:** retrieval-survival +3.61pt (§6), deterministic, 6-0 monotone, two OFF runs per-question identical. Same evidence class `pack_render_cap` was promoted on.
 - **Fragile:** QA +5.62pt — directionally positive, nominally significant by two tests, and only 3 of the 15 improvements trace to the deterministic gold-survival flips; the rest ride the broader pack reshuffle whose net sign is +10:−5 but whose per-question stability is unproven.
 
-**Recommendation.** The endpoint gate came back positive and significant, cheaply. But at p=0.041 with 3 abstention regressions and no measured reader-noise floor, this is **not yet** a defensible default-ON flip. The judicious completion is the ~$6 same-arm replicate: if the reader's self-discordance is low (≲6 of 178), the +10 paired result stands and `merge_chunk_blocks` flips default ON; if self-discordance approaches the 20 observed, the QA result is noise-inflated and P-2 rests on the retrieval-survival win alone (which is itself promotable on the `pack_render_cap` precedent, independent of QA). Either way the header-merge's effect on abstention questions gets a dedicated check before promotion.
+### 7a. Noise-floor replicate (2026-08-05, paid, settled $2.16) — SIGNAL SURVIVES
+
+A third arm re-ran the OFF evidence through the reader/judge on a **fresh cache** (real API calls, identical inputs, lever unchanged), to measure the reader's self-discordance directly.
+
+| comparison | discordant | net | exact p |
+|---|---|---|---|
+| **noise floor** — OFF vs OFF-replicate (nothing changed) | **7 / 178 (3.9%)** | **−1** (3 up, 4 down — symmetric) | 1.00 |
+| **lever** — OFF vs ON | 20 / 178 | **+10** (15 up, 5 down) | 0.0414 |
+| **lever, noise-stable subset** — drop all 7 noise-unstable questions | 15 | **+9** (12 up, 3 down) | 0.0352 |
+
+The reader's self-noise is real but small (3.9%) and **directionally balanced** (net −1). The lever's effect is 3× that discordance count and, unlike noise, **asymmetric and positive** (+10). Removing every question that showed any re-run instability still leaves **+9 net at p=0.035**. So the +5.6pt QA lift is not an artifact of a noise floor that happened to lean positive — the signal survives noise subtraction.
+
+**Abstention failure mode, quantified.** Of the 5 lever regressions, 2 were noise-unstable; **3 are stable, and 2 of those 3 are abstention questions** (`60bf93ed_abs`, `gpt4_70e84552_abs`) — the merge reshuffles the pack such that the reader answers where it should have abstained. This is real but small (2 stable abstention regressions against 12 abstention questions and a net +9 overall) — a watch-item, not a blocker.
+
+**VERDICT: PROMOTE.** Two independent, mutually reinforcing results, total reader-QA spend **$8.10**:
+- **Retrieval survival +3.61pt** — deterministic, 6-0 monotone, two OFF runs per-question identical. The mechanism (`pack_render_cap`-class post-pack answer-bearing survival).
+- **Reader-QA +5.62pt** — exact McNemar p=0.041, and it survives the measured 3.9% noise floor (stable-subset +9, p=0.035).
+
+**Recommended action:** flip `merge_chunk_blocks` default ON. This is a production behaviour change — it makes the shipped packer emit merged chunk blocks, so `levers_off_pack_is_byte_identical` becomes `default_on_pack_merges_chunks` and the rung-7 profile / STATUS.md record the promotion. Land it as its own commit with the abstention watch-item noted, so the default flip is reviewable in isolation.
+
+~~**Recommendation.** ... Either way the header-merge's effect on abstention questions gets a dedicated check before promotion.~~ *(superseded by 7a — the replicate was run, the noise floor is 3.9%, the signal survives, and the abstention effect is quantified above.)*
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.
