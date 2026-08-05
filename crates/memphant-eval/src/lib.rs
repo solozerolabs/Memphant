@@ -225,6 +225,9 @@ pub struct EvalCaseResult {
     pub missing_citations: Vec<String>,
     pub missing_trace_stages: Vec<String>,
     pub dropped_mismatches: Vec<String>,
+    /// spec 31 — grounding strings that were NOT found in any packed item body.
+    #[serde(default)]
+    pub missing_body_strings: Vec<String>,
     pub error: Option<String>,
     /// Deep-recall settlement receipt when this case ran a Deep provider
     /// (P0.3 §6 settlement accounting). `None` for Fast cases.
@@ -507,6 +510,13 @@ struct GoldenCase {
     /// `docs/build-log/2026-08-01-dense-default-on.md`.
     #[serde(default)]
     lexical_scorer: Option<LexicalScorer>,
+    /// As-of VALID-time override (RFC3339). Absent ⇒ recall runs at the current
+    /// clock (today's behaviour). Set to a past instant to assert as-of
+    /// correctness: recall returns the state whose `valid_from`/`valid_to`
+    /// interval covers this time, e.g. the superseded value before a correction.
+    /// Threaded into `RecallRequest.valid_at`; spec 31.
+    #[serde(default)]
+    valid_at: Option<String>,
     seed: GoldenSeed,
     expect: GoldenExpect,
 }
@@ -583,6 +593,15 @@ struct GoldenExpect {
     dropped: Vec<GoldenDropped>,
     #[serde(default)]
     packed_context_contains: Vec<String>,
+    /// spec 31 — grounding: every string here MUST be a substring of some
+    /// packed item's RENDERED body. Unlike `packed_context_contains` (unit-name
+    /// membership), this reads `RecallContextItem.body`, so it catches an
+    /// answer value that was dropped from the render (e.g. a chunk not selected
+    /// under default-ON merge) even though its unit is packed. Reader-free proxy
+    /// for `unsupported_answer_rate`: the value the answer needs is present in
+    /// the evidence the reader would see.
+    #[serde(default)]
+    packed_body_contains: Vec<String>,
     #[serde(default)]
     packed_position_max: BTreeMap<String, usize>,
     #[serde(default)]
@@ -2013,6 +2032,7 @@ async fn run_golden_case(
             missing_citations: Vec::new(),
             missing_trace_stages: Vec::new(),
             dropped_mismatches: Vec::new(),
+            missing_body_strings: Vec::new(),
             error: Some(error.to_string()),
             // A hard failure (e.g. invalid provider output) produces no trace, so
             // there is no settlement receipt to record here; a Deep recall that
@@ -2063,7 +2083,7 @@ async fn run_golden_case_inner(
             decay_enabled: controls.decay_enabled,
             engine_version: ENGINE_VERSION.to_string(),
             transaction_as_of: None,
-            valid_at: None,
+            valid_at: case.valid_at.clone(),
             aggregation_window: None,
         },
         None,
@@ -2241,11 +2261,27 @@ async fn run_golden_case_inner(
         ));
     }
 
+    // spec 31 grounding: each expected string must appear in some packed item's
+    // rendered body (not merely have its unit whitelisted).
+    let missing_body_strings = case
+        .expect
+        .packed_body_contains
+        .iter()
+        .filter(|needle| {
+            !response
+                .items
+                .iter()
+                .any(|item| item.body.contains(needle.as_str()))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
     let passed = missing_units.is_empty()
         && forbidden_present.is_empty()
         && missing_citations.is_empty()
         && missing_trace_stages.is_empty()
-        && dropped_mismatches.is_empty();
+        && dropped_mismatches.is_empty()
+        && missing_body_strings.is_empty();
 
     // Resolve the Deep provider's nominated UUIDs back to fixture unit names
     // where known, so a "Deep completed but nominated the wrong unit" failure is
@@ -2277,6 +2313,7 @@ async fn run_golden_case_inner(
         missing_citations,
         missing_trace_stages,
         dropped_mismatches,
+        missing_body_strings,
         error: None,
         deep,
     })
@@ -2316,6 +2353,7 @@ async fn run_fixture_security_lane(lane: &SecurityLane) -> EvalResult<String> {
         lexical_scorer: None,
         mode: None,
         include_beliefs: false,
+        valid_at: None,
         seed: lane.seed.clone(),
         expect: lane.expect.clone(),
     };
@@ -2457,6 +2495,7 @@ async fn run_deletion_lane(lane: &SecurityLane) -> EvalResult<String> {
         lexical_scorer: None,
         mode: None,
         include_beliefs: false,
+        valid_at: None,
         seed: GoldenSeed::default(),
         expect: lane.expect.clone(),
     };

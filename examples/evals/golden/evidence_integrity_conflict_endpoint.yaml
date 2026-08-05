@@ -1,0 +1,40 @@
+id: evidence_integrity_conflict_endpoint
+second_author_confirmed: true
+# Conflict regime, second family (spec 31): contradictory rate-limit values for
+# the same endpoint. Both must surface + abstain; distinct subject_keys avoid
+# subject-dedup; the contradicts edge drives the abstention.
+query: "What is the export endpoint rate limit?"
+seed:
+  units:
+    - name: mem_ratelimit_100
+      episode_body: "The export endpoint rate limit was set to 100 rpm in the config."
+      kind: semantic
+      state: active
+      subject_key: "export endpoint rate limit"
+      body: "Export endpoint rate limit is 100 rpm."
+      trust_level: trusted_system
+    - name: mem_ratelimit_250
+      episode_body: "The export endpoint rate limit was set to 250 rpm in the runbook."
+      kind: semantic
+      state: active
+      subject_key: "export endpoint rate limit value"
+      body: "Export endpoint rate limit is 250 rpm."
+      trust_level: trusted_system
+  edges:
+    - src: mem_ratelimit_100
+      dst: mem_ratelimit_250
+      kind: contradicts
+expect:
+  answer_bearing_ids:
+    - mem_ratelimit_100
+    - mem_ratelimit_250
+  packed_context_contains:
+    - mem_ratelimit_100
+    - mem_ratelimit_250
+  packed_body_contains:
+    - "100 rpm"
+    - "250 rpm"
+  abstention_signal: true
+  trace_stages_include:
+    - assemble
+    - trace

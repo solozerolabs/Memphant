@@ -1,0 +1,25 @@
+id: evidence_integrity_ground_value
+second_author_confirmed: true
+# Grounding probe (spec 31, unsupported_answer_rate): the answer's key value must
+# be present in the RENDERED body of the cited unit, not merely have its unit
+# whitelisted. Catches a value dropped from the render (e.g. a chunk unselected
+# under default-ON merge) while the unit is still packed.
+query: "What port does the metrics server bind?"
+seed:
+  units:
+    - name: mem_metrics_port
+      episode_body: "Operators asked which port the metrics server binds on the hosts."
+      kind: semantic
+      state: active
+      subject_key: "metrics server port"
+      body: "The metrics server binds port 9187."
+      trust_level: trusted_system
+expect:
+  answer_bearing_ids:
+    - mem_metrics_port
+  citations_include:
+    - mem_metrics_port
+  packed_body_contains:
+    - "9187"
+  trace_stages_include:
+    - trace

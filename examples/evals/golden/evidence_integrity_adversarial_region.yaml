@@ -1,0 +1,39 @@
+id: evidence_integrity_adversarial_region
+second_author_confirmed: true
+# Adversarial regime (spec 31, citation_justification): two competing claims
+# under the SAME subject_key, so recall's subject-dedup must arbitrate at packing
+# and drop one as Duplicate. The query's distinguishing term ("primary") is
+# carried only by the correct unit, so it out-ranks and survives; the distractor
+# is dropped. `dropped: [{distractor, duplicate}]` is self-proving non-vacuity —
+# it fails unless the distractor was a retrieved candidate that dedup dropped in
+# favor of the correct unit. (Verified: a query carrying the distractor's
+# distinguishing term instead flips the outcome and fails the case.)
+query: "What is the primary production database region?"
+seed:
+  units:
+    - name: mem_region_correct
+      episode_body: "The primary production database region is us-east-1 per infra."
+      kind: semantic
+      state: active
+      subject_key: "production database region"
+      body: "Primary production database region is us-east-1."
+      trust_level: trusted_system
+    - name: mem_region_distractor
+      episode_body: "The fallback production database region is eu-west-1 per infra."
+      kind: semantic
+      state: active
+      subject_key: "production database region"
+      body: "Fallback production database region is eu-west-1."
+      trust_level: trusted_system
+expect:
+  answer_bearing_ids:
+    - mem_region_correct
+  citations_include:
+    - mem_region_correct
+  packed_body_contains:
+    - "us-east-1"
+  dropped:
+    - unit: mem_region_distractor
+      reason: duplicate
+  trace_stages_include:
+    - trace

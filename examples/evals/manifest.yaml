@@ -12,3 +12,11 @@ golden:
   - packing_abstention_buried_deploy
   - packing_abstention_contradiction
   - temporal_validity_current_office
+  - evidence_integrity_stale_office
+  - evidence_integrity_asof_concurrency
+  - evidence_integrity_stale_flag_supersede
+  - evidence_integrity_conflict_owner
+  - evidence_integrity_conflict_endpoint
+  - evidence_integrity_adversarial_region
+  - evidence_integrity_adversarial_version
+  - evidence_integrity_ground_value

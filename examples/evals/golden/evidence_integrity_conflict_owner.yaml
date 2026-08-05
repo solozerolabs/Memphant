@@ -1,0 +1,45 @@
+id: evidence_integrity_conflict_owner
+second_author_confirmed: true
+# Conflict regime (spec 31): two live, unreconciled claims about the same fact,
+# joined by a contradicts edge, must BOTH surface and force abstention. Different
+# subject_keys so recall's subject-dedup does not collapse them (the
+# packing_abstention_contradiction idiom). The contradicts edge is load-bearing:
+# it is what raises unresolved_contradiction, which gates the abstention.
+query: "Who owns the payments service?"
+seed:
+  units:
+    - name: mem_owner_alice
+      episode_body: "The payments service is owned by Alice per the latest rota."
+      kind: semantic
+      state: active
+      subject_key: "payments service owner"
+      body: "Payments service owner is Alice."
+      trust_level: trusted_system
+    - name: mem_owner_bob
+      episode_body: "The payments service is owned by Bob per the on-call sheet."
+      kind: semantic
+      state: active
+      subject_key: "payments service ownership"
+      body: "Payments service owner is Bob."
+      trust_level: trusted_system
+  edges:
+    - src: mem_owner_alice
+      dst: mem_owner_bob
+      kind: contradicts
+expect:
+  answer_bearing_ids:
+    - mem_owner_alice
+    - mem_owner_bob
+  top_k_contains:
+    - mem_owner_alice
+    - mem_owner_bob
+  packed_context_contains:
+    - mem_owner_alice
+    - mem_owner_bob
+  packed_body_contains:
+    - "Alice"
+    - "Bob"
+  abstention_signal: true
+  trace_stages_include:
+    - assemble
+    - trace

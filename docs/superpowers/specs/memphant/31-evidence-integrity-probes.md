@@ -1,6 +1,12 @@
 # MemPhant - Evidence-Integrity Probes (Unsupported-Answer Rate & Conflict Evidence Recall)
 
-> Status: SPEC (2026-08-05). No code landed. Motivated by Zero-Mem (arXiv 2607.29377) discussion: the defensible property of a trace-preserving memory is auditability under mutation/conflict — and MemPhant already has the *architecture* for it but zero *measurement* of it.
+> Status: LANDED (2026-08-05). Suite `benchmarks/evidence-integrity-sampled.yaml` (8 cases), gate `crates/memphant-eval/tests/evidence_integrity_contract.rs`. Two harness-only extensions (`valid_at` on `GoldenCase`, `packed_body_contains` on `GoldenExpect`) — no engine features, as promised. Motivated by Zero-Mem (arXiv 2607.29377): the defensible property of a trace-preserving memory is auditability under mutation/conflict — MemPhant had the *architecture* but zero *measurement*; this adds the measurement.
+>
+> **As-built vs spec — deviations (all recorded in `docs/flows/spec31-evidence-integrity.md`):**
+> - **as_of via valid-time, not transaction-time.** The seed writer can't set closed transaction intervals; valid-time as-of (`valid_at` + `valid_from`/`valid_to`) exercises the temporal stage honestly. The `asof_concurrency` case is self-guarding: without `valid_at` threaded it returns the successor and fails. Transaction-time as-of deferred.
+> - **Gate is a Rust contract test, not the Python `test_evidence_integrity_gate.py` of §3.3.** The golden runner is Rust; each case's `expect` IS the metric gate.
+> - **Non-vacuity, verified by perturbation** (the load-bearing correctness property): stale/as-of rely on a same-subject sibling being retrieved + the temporal stage running; conflict cases stop abstaining when the `contradicts` edge is removed; adversarial cases stop citing the correct unit when the query is swapped to favor the distractor. Grounding uses `packed_body_contains` (rendered-text substring), which catches a value dropped from the render even when its unit is packed.
+> - **Not promoted to `REQUIRED_PROFILE_AXES`** (§3.4) — runs as a standalone sampled suite, out of pr-golden, until it catches ≥1 real defect.
 
 ## 0. Rule
 

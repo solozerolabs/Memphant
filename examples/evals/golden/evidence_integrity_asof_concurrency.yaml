@@ -1,0 +1,43 @@
+id: evidence_integrity_asof_concurrency
+second_author_confirmed: true
+# As-of regime (spec 31): a value corrected across a valid-time boundary. The
+# `valid_at` query time falls inside the OLD interval, so recall must return the
+# superseded value (4), not the current one (12). This case is self-guarding: with
+# `valid_at` unthreaded, recall runs at the current clock, the old unit is
+# stale-dropped, and `answer_bearing_ids: [old]` fails — so a pass PROVES the
+# as-of path works.
+query: "What is the deploy concurrency limit?"
+valid_at: "2026-03-01T00:00:00Z"
+seed:
+  units:
+    - name: mem_concurrency_4_old
+      episode_body: "The deploy concurrency limit was four during the early rollout."
+      kind: semantic
+      state: active
+      subject_key: "deploy concurrency limit"
+      body: "Deploy concurrency limit is 4."
+      trust_level: trusted_system
+      valid_from: "2026-01-01T00:00:00Z"
+      valid_to: "2026-05-01T00:00:00Z"
+    - name: mem_concurrency_12_current
+      episode_body: "The deploy concurrency limit was raised to twelve and remains current."
+      kind: semantic
+      state: active
+      subject_key: "deploy concurrency limit"
+      body: "Deploy concurrency limit is 12."
+      trust_level: trusted_system
+      valid_from: "2026-05-01T00:00:00Z"
+expect:
+  answer_bearing_ids:
+    - mem_concurrency_4_old
+  top_k_contains:
+    - mem_concurrency_4_old
+  citations_include:
+    - mem_concurrency_4_old
+  packed_body_contains:
+    - "Deploy concurrency limit is 4."
+  forbidden_units:
+    - mem_concurrency_12_current
+  trace_stages_include:
+    - temporal
+    - trace

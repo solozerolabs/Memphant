@@ -1,0 +1,36 @@
+id: evidence_integrity_adversarial_version
+second_author_confirmed: true
+# Adversarial regime, second family (spec 31): two version pins under the SAME
+# subject_key; dedup must keep the one the query's distinguishing term ("active")
+# names and drop the other as Duplicate. dropped: [{distractor, duplicate}] is
+# self-proving non-vacuity. (Verified: a query naming the distractor's term
+# instead flips the outcome and fails the case.)
+query: "Which version is the active worker pinned to?"
+seed:
+  units:
+    - name: mem_version_correct
+      episode_body: "The active worker is pinned to version 3.4 in the lockfile."
+      kind: semantic
+      state: active
+      subject_key: "worker pinned version"
+      body: "Active worker is pinned to version 3.4."
+      trust_level: trusted_system
+    - name: mem_version_distractor
+      episode_body: "The retired worker was pinned to version 2.9 in the old lockfile."
+      kind: semantic
+      state: active
+      subject_key: "worker pinned version"
+      body: "Retired worker is pinned to version 2.9."
+      trust_level: trusted_system
+expect:
+  answer_bearing_ids:
+    - mem_version_correct
+  citations_include:
+    - mem_version_correct
+  packed_body_contains:
+    - "version 3.4"
+  dropped:
+    - unit: mem_version_distractor
+      reason: duplicate
+  trace_stages_include:
+    - trace

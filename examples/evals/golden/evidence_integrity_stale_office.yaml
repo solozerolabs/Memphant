@@ -1,0 +1,43 @@
+id: evidence_integrity_stale_office
+second_author_confirmed: true
+# Stale regime (spec 31): after a valid-time move, the superseded value must not
+# leak. Valid-time filtering excludes the stale unit at RETRIEVAL (whitelist
+# absence), not via a packing drop. Non-vacuity: the current unit shares the
+# same subject_key and query terms and IS retrieved + answers, so retrieval of
+# this subject demonstrably works; `trace_stages: [temporal]` confirms the
+# temporal stage ran; therefore the old unit's absence (`forbidden_units`) is
+# the temporal filter, not mere non-retrieval.
+query: "Which office is current for the launch review?"
+seed:
+  units:
+    - name: mem_office_seattle_old
+      episode_body: "The launch review office was Seattle until the move completed."
+      kind: semantic
+      state: active
+      subject_key: "launch review office"
+      body: "Launch review office is Seattle."
+      trust_level: trusted_system
+      valid_from: "2026-01-01T00:00:00Z"
+      valid_to: "2026-06-01T00:00:00Z"
+    - name: mem_office_taipei_current
+      episode_body: "The launch review office moved to Taipei and remains current."
+      kind: semantic
+      state: active
+      subject_key: "launch review office"
+      body: "Launch review office is Taipei."
+      trust_level: trusted_system
+      valid_from: "2026-06-01T00:00:00Z"
+expect:
+  answer_bearing_ids:
+    - mem_office_taipei_current
+  top_k_contains:
+    - mem_office_taipei_current
+  citations_include:
+    - mem_office_taipei_current
+  packed_body_contains:
+    - "Taipei"
+  forbidden_units:
+    - mem_office_seattle_old
+  trace_stages_include:
+    - temporal
+    - trace

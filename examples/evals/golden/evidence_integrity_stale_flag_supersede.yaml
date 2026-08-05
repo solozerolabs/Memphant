@@ -1,0 +1,36 @@
+id: evidence_integrity_stale_flag_supersede
+second_author_confirmed: true
+# Stale regime via explicit state (spec 31): the renamed flag's prior value is
+# marked state: superseded and must not surface. Non-vacuity: the successor unit
+# shares the subject and query terms and IS retrieved + answers, so retrieval of
+# this subject works; the superseded unit's absence is the state filter.
+query: "Which flag gates checkout?"
+seed:
+  units:
+    - name: mem_flag_legacy_superseded
+      episode_body: "Checkout was gated by the legacy_pay flag before the rename."
+      kind: semantic
+      state: superseded
+      subject_key: "checkout gating flag"
+      body: "Checkout is gated by flag legacy_pay."
+      trust_level: trusted_system
+    - name: mem_flag_express_current
+      episode_body: "Checkout is now gated by the express_pay flag after the rename."
+      kind: semantic
+      state: active
+      subject_key: "checkout gating flag"
+      body: "Checkout is gated by flag express_pay."
+      trust_level: trusted_system
+expect:
+  answer_bearing_ids:
+    - mem_flag_express_current
+  top_k_contains:
+    - mem_flag_express_current
+  citations_include:
+    - mem_flag_express_current
+  packed_body_contains:
+    - "express_pay"
+  forbidden_units:
+    - mem_flag_legacy_superseded
+  trace_stages_include:
+    - trace
