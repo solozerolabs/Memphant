@@ -272,14 +272,23 @@ requires every other axis independently (program plan §Required Portfolio).
 - [x] **P3** free construction gate **PASSED** on the fresh 60-user interim, fix on: 120/120 non-degraded, 9513 retained == compiled, and on fresh users **398 supersessions / 796 supersede edges / 398 closed generations** (gate required ≥1 each). Evidence: `docs/build-log/artifacts/horizonbench-fresh-v1/p3-supersession-evidence.json`.
 - [x] **P4** power freeze recorded (`benchmarks/manifests/instrument_power.json`, `preference/horizon` lane, psi 0.2583 from v7): MDE 13.4pt at the interim n=120 vs the 10.8pt decision gap ⇒ interim is a **look, not a decision**; required_n = 183 items, so the n_max **102u / 204i** design is adequate. `instrument_power.py --check` passes.
 
-## Authorization signature block (owner fills before any paid call)
+## Authorization signature block — SIGNED 2026-08-05
 
-- [ ] Design elected (circle one): **single-stage** 102u/204i / **group-sequential** n₁ = 60u/120i (look) → n_max = 102u/204i, alpha-spending boundary = `__________`
-- [ ] Reader pinned: `claude-opus-4-6`, 1M-context route, uncached, structured JSON, 1,024-token cap
-- [ ] Authorized ceiling(s) (USD): single-stage `______` (rec. $260) — or group-sequential stage 1 `______` (rec. $140) + combined `______` (rec. $260)
-- [ ] Pilot kill gate armed (10u/20i)
-- [ ] Authorized by: `______________`  date: `__________`
-- [ ] `authorization_scope_sha256`: `__________` (committed)
+- [x] Design elected: **group-sequential** — n₁ = 60u/120i (interim **look**, not a decision) → n_max = 102u/204i. Alpha-spending: **O'Brien–Fleming, 2 looks**, information fractions {0.5882, 1.0}, two-sided α = 0.05. Interim nominal two-sided α₁ = **0.0106** (critical z₁ = 2.556); the interim can stop early only for *overwhelming* efficacy, otherwise the study proceeds to the final look with the remaining α (final nominal ≈ 0.048 by Lan-DeMets). Early-stop-for-harm is handled by the pilot kill gate below, not by α-spending.
+- [x] Reader pinned: `claude-opus-4-6`, first-party Anthropic, 1M-context route, uncached, structured JSON, 1,024-token cap. **Verified resolvable 2026-08-05** (model-list check, no spend) — model-drift fail-closed condition clears.
+- [x] Authorized ceilings (USD): group-sequential **stage 1 $140** + **combined $260**. Stage 2's ~$120 increment releases only after the interim OBF boundary and the pilot kill gate both permit continue. Either stage stops hard on its own ceiling.
+- [x] Pilot kill gate **armed** (10u/20i), kill conditions per §7.
+- [x] Authorized by: **Sid Sharma (chat approval 2026-08-05)**
+- [x] `authorization_scope_sha256`: `f211d491609a2ec16dbdbcc117bbf35c2ebefa16af605987b45a8f9d5d813dd3` (committed: `docs/build-log/artifacts/horizonbench-fresh-v1/authorization-scope.json`)
 
 Paid execution runs **only** through
 `doppler run --project syndai --config dev -- …`, stopping on any §9 condition.
+
+**Runtime gate before the first charge (not yet done — the honest edge of $0):**
+the fresh-tranche *paid* pilot runner does not yet exist — `run-paid-pilot` is
+hardwired to the retired 10-row v7 sample (`--fast-evidence …/horizonbench-pilot/…`),
+and "first 10 fresh users" needs a defined global ordering across the three
+per-generator ranks. Building and **dry-run-verifying** that scoped runner
+(no provider calls) is the last $0 step; only its verified output is fed to the
+first `doppler run` charge. Authorization is signed and the budget is live, but
+no provider call has been made.
