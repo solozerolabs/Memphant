@@ -430,14 +430,71 @@ Two secondary readings, fixed here so they cannot be chosen after the fact:
   statement-based localization is the wrong frame and the failure is construct,
   not power.
 
-## Census status: three corpora rejected, one conditional — the lane is BLOCKED
+## Census 3d — n=299 RESULT: **direction REJECTED on construct**, $0
+
+61 spread offsets across all 67,074 trajectories, 60 batches landed (one batch
+at offset 14,300 failed and was dropped, not retried into the sample),
+**n=299 scored**, median pre-edit prefix 50 messages, median gold 2 files.
+
+| rule (prefix-scoped, covers-gold) | rate | 95% CI |
+|---|---:|---|
+| recency — last file named | 0.0836 | 0.054 – 0.117 |
+| frequency — most-named file | 0.1538 | 0.114 – 0.194 |
+| **union — every file named (ceiling)** | **0.3043** | **0.254 – 0.358** |
+| **headroom (union − frequency), paired** | **15.05pp** | **11.04 – 19.06pp** |
+
+### The two preregistered rules disagree, and the prereg did not rank them
+
+- **Primary (headroom):** CI lower bound **11.04pp ≥ 8.32pp** ⇒ *PROCEED to
+  labeling.* The gap clears the SWE-ContextBench band comfortably.
+- **Secondary (construct):** **union = 0.3043 < 0.35** ⇒ *construct failure, the
+  frame is wrong.*
+- Death-from-below is clean: frequency 0.154, nowhere near 0.85. Recency at
+  0.084 is even weaker than at n=14 — it emphatically does not saturate.
+
+**My preregistration (Census 3c) stated both conditions and never said which
+governs. That is a defect in the prereg, recorded rather than papered over.**
+
+**Adjudicated: construct beats power, and the direction is rejected.** A
+well-powered measurement of the wrong quantity is worth nothing, so a construct
+failure cannot be outvoted by a healthy effect size. The 15pp gap is real, but
+it is 15pp *inside a 30% ceiling*: even a flawless system is fully correct at
+most 30.4% of the time, because in ~70% of trajectories the files the agent
+names before its first edit do **not** cover the files it eventually patches.
+That is not a hard problem to win — it is the wrong problem.
+
+**The mechanism, which makes this interpretable rather than a threshold
+artifact.** Scoring the *whole* trajectory lifts the union ceiling 0.304 → 0.562
+(+26pp) while frequency *falls* 0.154 → 0.127. The coverage only appears once
+the messages containing the edits themselves are included. So the agent does not
+state a localization belief and then act on it; **the belief is expressed AS the
+action.** There is no pre-action statement stream to supersede. This is the same
+family of failure as C1 — actions, not assertions — surviving one level deeper
+because `str_replace_editor` paths *looked* like statements.
+
+Note the CI on the ceiling (0.254 – 0.358) grazes 0.35. A tightening run is
+possible and is **not recommended**: the mechanism above explains the number, and
+re-sampling to see whether a point estimate crosses a threshold it already sits
+below is fishing.
+
+**Do not spend on the labeled arc-rate sample.** The primary rule authorized it;
+the construct check retracts that authorization. $0 spent.
+
+**One salvage hypothesis, explicitly NOT adopted here.** Scoring "before the
+first edit *to that file*" rather than "before any edit" might recover a
+pre-action statement stream. That is a reframing invented after seeing the data,
+which this program forbids as an adjustment. It may only enter as a **new Part A
+with its own preregistered thresholds**, and it inherits the burden of showing it
+is not just leakage rebranded.
+
+## Census status: ALL FOUR corpora rejected — the lane is CLOSED, not blocked
 
 | candidate | verdict | binding reason |
 |---|---|---|
 | Syndai flat files (XS snapshot) | rejected | arcs are intra-unit; curator edits in place |
 | C1 prod episodic | rejected | imperatives carry no truth value to supersede |
 | Syndai prod `user_facts` | rejected | right shape, **0 arcs** — feature unused |
-| C3 public trajectories | **conditional** | shape + execution labels PASS, volume abundant; **arc rate unmeasured**, construct mutates to belief-revision, needs its own Part A |
+| C3 public trajectories | **rejected (n=299)** | ceiling 0.304 < 0.35 construct bar; the belief is expressed AS the action, so there is no pre-action statement stream to supersede |
 
 **The consequence, stated plainly:
 `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD` cannot currently be validated by any
