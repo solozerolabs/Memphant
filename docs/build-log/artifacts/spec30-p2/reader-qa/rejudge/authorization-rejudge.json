@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+  "frozen_inputs": {
+    "reader_runner_sha256": "0e3e7989b2a78632fedb2dc53101ce32f40941c4d272a954e6663d7aec8a69f9",
+    "provider_attempts_sha256": "b943ac3f8ebaffe0d475cd83a700b17c191f458655a80f62a4e535e13860ac4d",
+    "rejudge_evidence_sha256": "086f24a3f629db1c8ec1fbd1ae183b4f04f573c141c455ee8cdaef520bbd7100",
+    "rejudge_retrieval_sha256": "46db42717d7d728cd9fa108fd877973c6335f3a4333352a37ab08aebf8331a20"
+  },
+  "models": {
+    "provider": "OpenRouter",
+    "reader": "openai/gpt-5.6-luna-pro",
+    "reader_reasoning_effort": "high",
+    "judge": "openai/gpt-5.6-sol-pro",
+    "judge_profile": "longmemeval",
+    "prompt_version": 3,
+    "max_output_tokens_per_request": 1024,
+    "provider_max_price_usd_per_million": {
+      "prompt": "10",
+      "completion": "40"
+    }
+  },
+  "hard_limits": {
+    "rejudge": {
+      "max_logical_calls": 356,
+      "max_provider_attempts": 1424,
+      "max_spend_usd": "118.63"
+    }
+  },
+  "execution": {
+    "rejudge": {
+      "run_id": "rejudge",
+      "attempt_ledger": "docs/build-log/artifacts/spec30-p2/reader-qa/rejudge/attempts-rejudge.jsonl",
+      "cache_dir": "docs/build-log/artifacts/spec30-p2/reader-qa/rejudge/cache",
+      "output": "docs/build-log/artifacts/spec30-p2/reader-qa/rejudge/unused-output.json"
+    }
+  },
+  "campaign": {
+    "journal_path": "attempts-rejudge.jsonl",
+    "hard_ceiling_nanos": 200000000000,
+    "unallocated_reserve_nanos": 10000000000,
+    "opening_liability_nanos": 0,
+    "opening_reservations": []
+  },
+  "authorization": {
+    "authorized_by": "sid@syndai.ai (abstention re-judge confirm 2026-08-05)",
+    "authorized_at": "2026-08-05T22:48:40Z",
+    "authorization_scope_sha256": "8626f502946cf06be85aef1977ba8e085b23c938d8d8dbcdc5884c9e1fe19ed7"
+  }
+}

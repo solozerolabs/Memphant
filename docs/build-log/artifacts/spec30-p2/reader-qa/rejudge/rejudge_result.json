@@ -1,0 +1,62 @@
+{
+ "exact": {
+  "B": 15,
+  "C": 5,
+  "p": 0.04138946533203125
+ },
+ "llm_rejudge": {
+  "B": 13,
+  "C": 2,
+  "p": 0.00738525390625
+ },
+ "abstention_regrade": {
+  "0862e8bf_abs": {
+   "off": true,
+   "on": true
+  },
+  "09ba9854_abs": {
+   "off": false,
+   "on": false
+  },
+  "2133c1b5_abs": {
+   "off": true,
+   "on": true
+  },
+  "60bf93ed_abs": {
+   "off": true,
+   "on": true
+  },
+  "6456829e_abs": {
+   "off": true,
+   "on": true
+  },
+  "80ec1f4f_abs": {
+   "off": true,
+   "on": true
+  },
+  "88432d0a_abs": {
+   "off": true,
+   "on": true
+  },
+  "982b5123_abs": {
+   "off": true,
+   "on": true
+  },
+  "edced276_abs": {
+   "off": true,
+   "on": true
+  },
+  "gpt4_70e84552_abs": {
+   "off": true,
+   "on": true
+  },
+  "gpt4_93159ced_abs": {
+   "off": true,
+   "on": true
+  },
+  "gpt4_c27434e8_abs": {
+   "off": true,
+   "on": true
+  }
+ }
+}

@@ -37,4 +37,13 @@ The exact scorer's abstention-form noise leaned net −1 against P-2 (3 form-reg
 
 Cost note: abstention questions that refuse in prose now spend one judge call (structured/null abstentions stay free), which the packet minter already budgets — `calls_per_question=2` was always the reader+judge estimate.
 
-Artifacts: `abstention-diagnosis/regrade.py` (the deterministic re-grade that first demonstrated the +11 semantic result; the landed fix reproduces it via the LLM judge instead of a regex).
+**End-to-end confirmation (paid, settled $0.19).** Re-judged the committed P-2 reader answers through the LANDED fix with the real sol-pro judge — judge-only, 13 calls (one per abstention row with a non-null answer, both arms), no reader re-run. The real judge reproduces the deterministic prediction exactly:
+
+| grading | B | C | net | p |
+|---|---|---|---|---|
+| exact scorer (committed) | 15 | 5 | +10 | 0.0414 |
+| **LLM re-judge (landed fix, real sol-pro)** | **13** | **2** | **+11** | **0.0074** |
+
+Every prose refusal ("cannot be determined", "does not mention", "name not provided") scored a correct abstention; the sole fabricated answer (`09ba9854_abs`, the invented "$40–50") scored wrong in both arms. The three exact-scorer "regressions" (`60bf93ed`, `edced276`, `gpt4_70e84552`) all flip to correct-in-both-arms under the real judge. Reproducible: `rejudge_confirm.py` + `reader-qa/rejudge/rejudge_result.json`.
+
+Artifacts: `abstention-diagnosis/regrade.py` (the deterministic re-grade that first demonstrated the +11 semantic result); `rejudge_confirm.py` (the paid confirmation via the landed LLM judge). Both agree: +11, p=0.0074.
