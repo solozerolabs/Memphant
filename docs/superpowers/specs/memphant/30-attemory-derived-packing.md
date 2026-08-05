@@ -179,7 +179,31 @@ Paired arms on the frozen 178-question development cohort (`longmemeval_s.develo
 
 **Reader QA (paid, funded 2026-08-05):** luna-pro reader / sol-pro judge, prompt-v3, longmemeval judge profile, both arms n=178, on the `final_user_requested_screen.development_reader` lattice. This is the endpoint gate — does the gold that newly survives packing convert to correct *answers*, and does the header-merge on the other ~172 questions regress anything? Expected discordance is small (~6 material flips), so the test is powered to confirm direction + non-regression, not to resolve a sub-3-point QA effect. Result recorded in §7 once the run settles.
 
-**Provisional recommendation, pending §7:** the retrieval-survival win alone is the same *class* of evidence `pack_render_cap` was promoted on (post-pack answer-bearing survival), it is deterministic, and it costs −11.6% context on the slot-bound lane as a bonus. If the reader QA shows no regression, flip `merge_chunk_blocks` default ON. If the QA shows a regression on the merged-header questions, that is the one way this still dies — which is exactly why the paid run is worth its ~$40.
+## 7. Reader-QA result (2026-08-05, paid, settled $5.94)
+
+luna-pro reader (high) / sol-pro judge, longmemeval profile, prompt-v3, both arms n=178, one shared ledger + cache. Settled spend $5.94 total (mergeoff $2.16, mergeon $3.78 — 48 cross-arm cache hits and real prices far under the $10/$40 ceiling). Pipeline was $0-stub-validated first; the packet minter's `splitlines()` bug (fixed in `0007ec1b`) had to be repaired before minting.
+
+**Headline: QA accuracy 0.3539 → 0.4101, +5.62pt, significant — but fragile.**
+
+| | value |
+|---|---|
+| answer accuracy OFF → ON | 0.3539 → 0.4101 (+5.62pt) |
+| paired McNemar cells (B improved / C regressed) | 15 / 5 |
+| net | +10 questions |
+| exact two-sided McNemar p | **0.0414** |
+| bootstrap Δ CI95 (in-report) | [+0.0112, +0.1067], excludes 0 |
+| discordant pairs | 20 of 178 |
+
+**Two caveats that keep this from being a clean promote on QA alone:**
+
+1. **Borderline p with an unmeasured reader-noise floor.** p = 0.041 is just under 0.05. I tried to show the discordance is lever-driven rather than reader nondeterminism (luna-pro at high effort is not guaranteed deterministic) by checking whether discordant pairs coincide with real evidence changes — but **99% of all 178 questions had packed-set changes** (the retrieval layer is deterministic, but the merge perturbs almost every pack), so "20/20 discordant changed" does not discriminate signal from noise. Only 2 questions had unchanged evidence (both concordant), far too few to bound the reader's self-flip rate. **A same-arm reader replicate on a fresh cache (~$6) is required to state whether p=0.041 survives the noise floor.** Not yet run.
+2. **Abstention regressions.** Of the 5 regressions, **3 are `_abs` questions** (`60bf93ed_abs`, `edced276_abs`, `gpt4_70e84552_abs`) — the merge pushed the reader off a correct abstention onto a wrong answer. Abstention correctness at the retrieval layer was unchanged (7/12), so this is a reader-behaviour effect of the reshuffled pack, and it is the specific failure mode to watch.
+
+**What is robust vs fragile:**
+- **Robust:** retrieval-survival +3.61pt (§6), deterministic, 6-0 monotone, two OFF runs per-question identical. Same evidence class `pack_render_cap` was promoted on.
+- **Fragile:** QA +5.62pt — directionally positive, nominally significant by two tests, and only 3 of the 15 improvements trace to the deterministic gold-survival flips; the rest ride the broader pack reshuffle whose net sign is +10:−5 but whose per-question stability is unproven.
+
+**Recommendation.** The endpoint gate came back positive and significant, cheaply. But at p=0.041 with 3 abstention regressions and no measured reader-noise floor, this is **not yet** a defensible default-ON flip. The judicious completion is the ~$6 same-arm replicate: if the reader's self-discordance is low (≲6 of 178), the +10 paired result stands and `merge_chunk_blocks` flips default ON; if self-discordance approaches the 20 observed, the QA result is noise-inflated and P-2 rests on the retrieval-survival win alone (which is itself promotable on the `pack_render_cap` precedent, independent of QA). Either way the header-merge's effect on abstention questions gets a dedicated check before promotion.
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.

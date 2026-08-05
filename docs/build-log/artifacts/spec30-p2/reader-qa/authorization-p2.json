@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN",
+  "frozen_inputs": {
+    "reader_runner_sha256": "a9b718fac5be077596a9816d5f2f622091246d515085df5d4f2725d37b1ee00f",
+    "provider_attempts_sha256": "b943ac3f8ebaffe0d475cd83a700b17c191f458655a80f62a4e535e13860ac4d",
+    "mergeoff_evidence_sha256": "086f24a3f629db1c8ec1fbd1ae183b4f04f573c141c455ee8cdaef520bbd7100",
+    "mergeoff_retrieval_sha256": "46db42717d7d728cd9fa108fd877973c6335f3a4333352a37ab08aebf8331a20",
+    "mergeon_evidence_sha256": "232af8128c2cb7599401d48083ae3b69f512b71dab55c8f70bc53095e2038b7f",
+    "mergeon_retrieval_sha256": "49213c14ae666c71585d270d4c111aa2021f326da5cd1e149354776c876d25d9"
+  },
+  "models": {
+    "provider": "OpenRouter",
+    "reader": "openai/gpt-5.6-luna-pro",
+    "reader_reasoning_effort": "high",
+    "judge": "openai/gpt-5.6-sol-pro",
+    "judge_profile": "longmemeval",
+    "prompt_version": 3,
+    "max_output_tokens_per_request": 1024,
+    "provider_max_price_usd_per_million": {
+      "prompt": "10",
+      "completion": "40"
+    }
+  },
+  "hard_limits": {
+    "mergeoff": {
+      "max_logical_calls": 356,
+      "max_provider_attempts": 1424,
+      "max_spend_usd": "118.63"
+    },
+    "mergeon": {
+      "max_logical_calls": 356,
+      "max_provider_attempts": 1424,
+      "max_spend_usd": "118.20"
+    }
+  },
+  "execution": {
+    "mergeoff": {
+      "run_id": "mergeoff",
+      "attempt_ledger": "docs/build-log/artifacts/spec30-p2/reader-qa/attempts-p2.jsonl",
+      "cache_dir": "docs/build-log/artifacts/spec30-p2/reader-qa/cache",
+      "output": "docs/build-log/artifacts/spec30-p2/reader-qa/reader-mergeoff.json"
+    },
+    "mergeon": {
+      "run_id": "mergeon",
+      "attempt_ledger": "docs/build-log/artifacts/spec30-p2/reader-qa/attempts-p2.jsonl",
+      "cache_dir": "docs/build-log/artifacts/spec30-p2/reader-qa/cache",
+      "output": "docs/build-log/artifacts/spec30-p2/reader-qa/reader-mergeon.json"
+    }
+  },
+  "campaign": {
+    "journal_path": "attempts-p2.jsonl",
+    "hard_ceiling_nanos": 200000000000,
+    "unallocated_reserve_nanos": 10000000000,
+    "opening_liability_nanos": 0,
+    "opening_reservations": []
+  },
+  "authorization": {
+    "authorized_by": "sid@syndai.ai (funded 2026-08-05)",
+    "authorized_at": "2026-08-05T18:07:13Z",
+    "authorization_scope_sha256": "c0fe9739cbfb38aed003942b589e2fba2b7b1eb45cb4a95205668bb4f0c5fa13"
+  }
+}
