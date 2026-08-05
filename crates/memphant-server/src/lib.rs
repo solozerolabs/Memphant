@@ -692,6 +692,10 @@ struct ScopeMemoryQuery {
     cursor: Option<Uuid>,
     #[serde(default)]
     limit: Option<usize>,
+    /// Optional memory-kind filter (e.g. "preference"); applied per page, so a
+    /// filtered page may return fewer than `limit` items while `has_more` is true.
+    #[serde(default)]
+    kind: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -736,14 +740,28 @@ async fn scope_memory_handler<S: MemoryStore + 'static>(
         .cursor
         .map(|cursor| memphant_types::UnitId::from_u128(cursor.as_u128()));
     let limit = query.limit.unwrap_or(100).clamp(1, 500);
+    let kind_filter = query
+        .kind
+        .as_deref()
+        .map(|k| {
+            serde_json::from_value::<memphant_types::MemoryKind>(serde_json::Value::String(
+                k.to_string(),
+            ))
+            .map_err(|_| ApiError::invalid("invalid kind"))
+        })
+        .transpose()?;
     let page = state
         .service
         .scope_memory_page(&context, cursor, limit)
         .await?;
+    let items = match kind_filter {
+        Some(kind) => page.items.into_iter().filter(|u| u.kind == kind).collect(),
+        None => page.items,
+    };
     Ok(Json(ScopeMemoryResponse {
         tenant_id: authed.tenant,
         scope_id,
-        items: page.items,
+        items,
         next_cursor: page.next_cursor.map(|cursor| cursor.as_uuid().to_string()),
         has_more: page.has_more,
     }))
@@ -854,6 +872,7 @@ fn openapi_paths() -> serde_json::Map<String, Value> {
                 required_query_param("subject_generation", "integer"),
                 optional_query_param("cursor", "uuid"),
                 optional_query_param("limit", "integer"),
+                optional_query_param("kind", "string"),
             ],
         ),
     );

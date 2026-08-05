@@ -1104,6 +1104,55 @@ async fn scope_memory_cursor_pagination_yields_two_disjoint_pages() {
         .collect();
     assert!(ids_one.is_disjoint(&ids_two), "pages must not overlap");
     assert_eq!(ids_one.len() + ids_two.len(), 5);
+
+    // kind filter: episodic-only returns everything here (all units episodic),
+    // a kind with no units returns an empty page, and junk is a 400 — never a
+    // silent unfiltered response.
+    let episodic: ScopeMemoryResponse = json_request(
+        &app,
+        "GET",
+        &format!(
+            "/v1/scopes/{}/memory?{context_query}&limit=100&kind=episodic",
+            binding.scope_id.as_uuid()
+        ),
+        None::<()>,
+    )
+    .await
+    .1;
+    assert_eq!(episodic.items.len(), 5);
+    assert!(
+        episodic
+            .items
+            .iter()
+            .all(|unit| unit.kind == memphant_types::MemoryKind::Episodic)
+    );
+
+    let none: ScopeMemoryResponse = json_request(
+        &app,
+        "GET",
+        &format!(
+            "/v1/scopes/{}/memory?{context_query}&limit=100&kind=preference",
+            binding.scope_id.as_uuid()
+        ),
+        None::<()>,
+    )
+    .await
+    .1;
+    assert!(none.items.is_empty());
+
+    let junk = format!(
+        "/v1/scopes/{}/memory?{context_query}&kind=not-a-kind",
+        binding.scope_id.as_uuid()
+    );
+    let request = add_idempotency_header(Request::builder().method("GET").uri(&junk), &junk)
+        .body(Body::empty())
+        .expect("request");
+    let response = app.clone().oneshot(request).await.expect("response");
+    assert_eq!(
+        response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "junk kind must be rejected, not ignored"
+    );
 }
 
 #[tokio::test]
@@ -1354,7 +1403,7 @@ fn openapi_paths_match_public_contract_and_gets_have_no_request_body() {
             .as_array()
             .expect("scope params")
             .len(),
-        7
+        8
     );
 }
 

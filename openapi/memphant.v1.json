@@ -3496,6 +3496,15 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "format": "string",
+              "type": "string"
+            }
           }
         ],
         "responses": {
