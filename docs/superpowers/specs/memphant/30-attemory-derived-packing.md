@@ -143,29 +143,43 @@ Caveats: n=40, single seed, one bank. The 11.6% is a deterministic mechanical me
 
 **Chunk-bearing fixture — ADDED 2026-08-05.** `examples/evals/golden/contextual_chunk_multi_window.yaml`: four contiguous windows in the production episode header dialect. Passes 11/11 in both arms, and by design cannot distinguish them — a golden grades units, not rendered text. `multi_window_fixture_guard` in memphant-core pins what the golden cannot: all four windows selected as one run at the declared budget, merge shrinks the render 542→398 chars (−26.6%), one `[turns 1-8]` header replaces four, answer-bearing window survives. The guard exists because a fixture that drifts into whole-body fallback stays green while covering nothing — exactly how the lane lost this coverage originally.
 
-## 5. Verdict on P-2 (2026-08-05)
+## 5. Verdict on P-2 — SUPERSEDED 2026-08-05 by the n=178 dev-cohort run (see §6)
 
-**Not negative. Not yet useful. It is a cost lever with zero measured quality effect on any lane.**
+The verdict below said "zero measured quality effect on any lane." That was **wrong**, and the error was one of statistical power, not mechanism. It was drawn from n=5 (too small to resolve a 3-point effect) and the n=40 code lane (slot-bound, so structurally null). At the full **n=178 dev cohort the merge produces a real, deterministic retrieval-survival win** — kept here struck through so the reasoning error is visible, not erased.
 
-Everything measured, in one place:
+> ~~**Not negative. Not yet useful. It is a cost lever with zero measured quality effect on any lane.**~~
+>
+> | lane | binding constraint | retrieval | what the merge bought |
+> |---|---|---|---|
+> | LME-S n=5 | budget | 0.8/0.8, unchanged | +1 packed item on 4/5 questions |
+> | Code lane n=40 | slots (`k=10`) | 0.625/0.750, byte-identical | −11.6% packed context, Budget drops 38→15 |
+> | Golden lane | — | 11/11 both arms | nothing (unit-level assertions) |
+> | Unit (fixture shape) | — | — | −26.6% render |
+>
+> ~~It has never improved an answer.~~ ~~retrieval was identical on every lane and every question measured~~ — **false at n=178; the n=5 arm simply could not see it.**
 
-| lane | binding constraint | retrieval | what the merge bought |
-|---|---|---|---|
-| LME-S n=5 | budget | 0.8/0.8, unchanged | +1 packed item on 4/5 questions |
-| Code lane n=40 | slots (`k=10`) | 0.625/0.750, byte-identical | −11.6% packed context, Budget drops 38→15 |
-| Golden lane | — | 11/11 both arms | nothing (unit-level assertions) |
-| Unit (fixture shape) | — | — | −26.6% render |
+**Lesson for the ladder:** a null at n=5 is not a null. The spec's own §3 called for the LME-S run at the dev-cohort size; the interim n=5 smoke was mistaken for the measurement. Do not read an underpowered smoke as evidence of no effect — [[memphant-memorycode-gold-is-recency]] is the same trap from the other side.
 
-**Why it is not negative.** Selection is provably unchanged (the gate still charges the un-merged per-chunk price), single-chunk runs are byte-identical, gaps and foreign headers still break runs, and retrieval was identical on every lane and every question measured. The merge only deletes provenance the preceding line already established.
+## 6. The n=178 dev-cohort result (2026-08-05)
 
-**Why it is not yet useful.** It has never improved an answer. The one real win — −11.6% payload at identical retrieval — is **conditional on the lane being slot-bound**. Where budget binds (the chat lane), the packer simply refills the freed budget, so there is no payload saving at all; instead the reader sees *more items*, and whether that helps or distracts is unmeasured. So P-2 converts header bytes into either a payload saving (k binds) or extra evidence (budget binds), and only the first is unambiguously good.
+**Retrieval survival: +3.61 points, deterministic, CI excludes zero.**
 
-**Recommendation — one of two, not a third.**
+Paired arms on the frozen 178-question development cohort (`longmemeval_s.development.json`, seed 20260713, k=10, budget 8192, session granularity, fast mode, bge-small), fresh scratch DB per arm, dataset/seed/n pairing verified in-process.
 
-1. **Fund one reader-QA run on the chat lane.** That is the only place the behaviour change can hurt, and it is the last open question. If non-inferior, flip `merge_chunk_blocks` to default ON and take the payload win; −11.6% of returned context at identical retrieval is precisely the axis MemPhant's cost story lives on, and it compounds across every consumer.
-2. **If that run is not going to be funded, delete P-2.** A lever nobody will measure further is dormant lever #16 on a profile that already reports 15, and the repo has a precedent for that ending: sibling-gather was deleted once measured-dead. Keeping an unmeasurable lever is worse than not having it.
+| | merge OFF | merge ON |
+|---|---|---|
+| recall@5 = recall@10 | 0.6506 | **0.6867** |
+| paired Δrecall (n=166 scored) | — | **+0.0361, CI95 [+0.0120, +0.0663], excludes 0** |
+| abstention correct | 7/12 | 7/12 (unchanged) |
+| gold miss→hit / hit→miss | — | **6 / 0** (monotone) |
 
-Do not leave it default-OFF-and-unmeasured indefinitely — that is the outcome both options exist to avoid.
+`recall_at_k` here is **post-pack survival** (`bench_lme.rs:627`, the rank of the first gold-bearing *packed* item), not pre-pack ranking. In all 6 flipped questions the base arm had the gold-bearing item **unpacked** (`first_answer_rank = None`); under the merge it surfaces at rank 1–3 — and on 3 of the 6 the arm actually packed *fewer* items total. So this is not "freed budget adds items"; the cheaper merged render changes the greedy fill's admission/eviction so the gold-bearing item wins a slot it previously lost. This is the budget-bound mechanism §5's own text predicted, now measured.
+
+**Determinism proven cold:** two independent OFF runs on separate scratch DBs are per-question identical (0/166 hit mismatches), and all 6 flips are stable misses in both. The +6 is a real effect of the lever, not scratch-DB ordering variance.
+
+**Reader QA (paid, funded 2026-08-05):** luna-pro reader / sol-pro judge, prompt-v3, longmemeval judge profile, both arms n=178, on the `final_user_requested_screen.development_reader` lattice. This is the endpoint gate — does the gold that newly survives packing convert to correct *answers*, and does the header-merge on the other ~172 questions regress anything? Expected discordance is small (~6 material flips), so the test is powered to confirm direction + non-regression, not to resolve a sub-3-point QA effect. Result recorded in §7 once the run settles.
+
+**Provisional recommendation, pending §7:** the retrieval-survival win alone is the same *class* of evidence `pack_render_cap` was promoted on (post-pack answer-bearing survival), it is deterministic, and it costs −11.6% context on the slot-bound lane as a bonus. If the reader QA shows no regression, flip `merge_chunk_blocks` default ON. If the QA shows a regression on the merged-header questions, that is the one way this still dies — which is exactly why the paid run is worth its ~$40.
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.
