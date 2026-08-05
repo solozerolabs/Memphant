@@ -308,6 +308,19 @@ Two directions, both requiring construction, neither authorized here:
   and it is the mechanism MemPhant actually owns. This is the cheaper and more
   honest of the two, and it is a **different lane**, requiring its own Part A.
 
+  **AMENDED 2026-08-05, same day — the corpus half of this recommendation is
+  WRONG.** See `2026-08-05-supersession-correctness-lane.md` §A.1. The arcs in
+  this corpus are **intra-unit**: the curator resolves supersession by editing
+  in place, so retrieving the unit returns the resolution for free and there is
+  no (retired, live) pair to adjudicate. Mining git history instead yields
+  **≤16 arcs over 84 commits** (64 of which only add new entries; most
+  modifications are accretion, not replacement) — underpowered by an order of
+  magnitude. **B.2's claim that flat files fail by serving "a stale entry
+  retrieved next to its correction" is refuted**: they do not fail that way.
+  Their real costs are the curation labor performing those edits and unbounded
+  growth (one entry accreted 2,520 → 14,517 chars across four revisions). The
+  endpoint idea survives; the corpus does not.
+
 **The MCP gate stands unchanged and unmet.** A.5 authorizes MCP work only under
 Verdict A or N. Neither was reached. **No coding-agent MCP surface is built.**
 

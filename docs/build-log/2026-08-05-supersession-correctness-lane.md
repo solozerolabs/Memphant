@@ -1,0 +1,202 @@
+# SC — supersession-correctness: does the system know when a later statement *replaces* an earlier one?
+
+**Date:** 2026-08-05 · **Branch:** `xsession-controls` · **Status: PART A
+PREREGISTRATION, BLOCKED ON A CORPUS.** No cell has been seen. The corpus this
+lane was expected to use has been **rejected on measured construct and power
+grounds** (§A.1); the lane cannot run until §A.2's corpus requirement is met.
+
+Successor to XS (`2026-08-05-cross-session-flatfile-controls.md`), which died at
+its own acquisition gate. XS's B.3 named this lane as the cheaper and more
+honest next instrument. **That recommendation was wrong about the corpus, and
+this document records why before it proposes anything.**
+
+---
+
+# PART A — PREREGISTRATION
+
+## A.0 The question, and why the obvious version of it is not worth asking
+
+*When a later statement arrives about a subject the store already has, does the
+system correctly decide whether it **supersedes** the prior statement or
+**coexists** with it — and serve accordingly?*
+
+The naive endpoint — *"return the latest statement about X"* — is *not this
+question* and must not be built. It is saturable by a five-line recency rule,
+which is precisely how MemoryCode died (gold computable as latest-declaration;
+re-cutting as-of changed which short rule won, not whether one did). Any lane
+whose gold is "the newer one" is dead before it is mined.
+
+**The discriminating question is the one where recency is sometimes WRONG.** A
+later statement about a related topic may:
+
+- **supersede** — same subject, new value, prior generation closes; serve
+  only the new one; or
+- **coexist** — narrower scope, different subject, an exception, or a
+  restatement that adds detail without invalidating; serve both.
+
+A recency-always rule gets *every* supersede case and *no* coexist case, so its
+score is **pinned by construction** at the supersede fraction of the bank. Balance
+the bank 50/50 and the strongest trivial temporal rule cannot exceed 0.50. That
+is the property that makes this instrument constructible at all, and it is the
+reason the endpoint is served-set correctness rather than `hits@k`.
+
+This is also the mechanism MemPhant actually owns and currently gets wrong:
+subject keys are lexical phrases, so restatements only supersede when they are
+near-identical, and the fix sits behind `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD`
+(default **off**) with **no instrument that can score it**. This lane is that
+instrument.
+
+## A.1 The Syndai flat-file corpus is REJECTED — two independent measured reasons
+
+XS proposed reusing its own corpus snapshot here, on the argument that it
+"genuinely carries these arcs (`SUPERSEDED 2026-07-25`, `CORRECTED
+claude-2026-07-29`)." Both halves of that argument were checked before drafting
+and both fail.
+
+**Reason 1 — the arcs are INTRA-unit, so there is nothing to adjudicate.**
+Marker census over the 410-unit snapshot: `SUPERSEDED` 9 units, `CORRECTED` 8,
+`RESOLVED` 18. Inspecting them shows the correction living **inside the same
+unit as the claim it corrects** — `learnings:github-actions-doppler-pin` carries
+its own `SUPERSEDED 2026-07-25` clause in the same bullet; `mem:project_make_
+check_does_not_run_tests_unit` opens with `**SUPERSEDED 2026-07-30**` above the
+text it retires. At least one marker hit (`mem:feedback_gh_polling`) is not a
+supersession at all — it is the word used as domain vocabulary about git pushes,
+so the true count is below the census.
+
+A human curator resolves supersession **by editing in place**. Retrieve the
+unit and you get the resolution for free. There is no (retired, live) pair for a
+memory system to order, and a lane scored on this corpus would score the
+curator's work, not the system's.
+
+**This refutes a claim XS's own Part B made.** XS B.2 asserted flat files fail
+by "a stale entry retrieved next to its correction, both rank-1." Measured:
+they do not fail that way. In-place editing is a *correct and cheap*
+supersession mechanism. Flat-file memory's real costs are elsewhere — the
+curation labor that performs those edits, and unbounded growth (one entry here
+accreted 2,520 → 14,517 chars across four revisions). Any future product framing
+must drop the "stale entry served beside its correction" story for this class of
+corpus; it is not what happens.
+
+**Reason 2 — mining git history for cross-unit arcs is UNDERPOWERED.** The
+in-place edits are themselves a legitimate arc source: pre-edit text is the
+retired statement, post-edit the live one, commit date the transaction time, and
+the label comes from version history — *evidence outside the statement set*,
+which satisfies the instrument-acquisition requirement. So it was measured.
+
+Walking all 84 commits touching `LEARNINGS.md`: **64 new-entry additions** (no
+arc — nothing is replaced), **29 modification events over only 16 distinct
+keys**, and inspection shows most of those are **accretion, not replacement**
+(`preview-webserver-owns-the-build…` 2,520 → 4,422 → 8,851 → 11,593 → 14,517;
+`integration-local-lane-db` four growth steps). Genuine claim-replacement is a
+small subset of 16. `AGENTS.md` adds 86 commits of the same character. The
+session-memory directory is **not a git repository** (0 commits), so its 340
+files contribute no history at all.
+
+Ceiling: **≤16 arcs, realistically ~10 after dropping accretions.** A paired
+test needs n_d ≥ 6 discordant pairs to report anything; at n≈10–16 the MDE
+exceeds 30pp. Even a perfect instrument at this n could only detect an effect
+larger than any plausible one. **Rejected on power, before construct.**
+
+## A.2 Corpus requirement — the blocking prerequisite
+
+This lane does not run until a corpus exists with **all four** properties:
+
+1. **Append-only arrival.** Statements enter as a time-ordered stream that
+   nobody edits in place. (This is what disqualifies curated flat files.)
+2. **Genuine same-subject restatement.** ≥ 60 supersede arcs where a later
+   statement replaces an earlier value for the same subject.
+3. **Genuine coexistence pairs.** ≥ 60 later-statement pairs that are
+   topically adjacent but must **not** supersede — narrower scope, an
+   exception, an added detail. Without these the bank is a recency bank.
+4. **Labels from outside the statements.** Supersede/coexist decided by
+   execution, version history, or an author who was there — never by a rule
+   over the statement text.
+
+Two candidate sources, neither yet adapted, each needing its own $0 census
+before mining (the census this lane just ran on the flat files is the template):
+
+- **Syndai prod episodic data** (C1 landed: real rows, read-only extract,
+  gitignored). Append-only by construction, real subjects, real restatement.
+  Requires a labeling pass; the arcs are real but unlabeled.
+- **C3 public trajectories** (`nebius/SWE-rebench` et al. via the schema
+  adapter). Large enough for power; needs a census proving properties 2 and 3
+  actually occur at rate, which is *not* established and would be the first
+  thing to measure.
+
+**Do not mine a bank before the census.** XS's lesson was not "the bar was too
+low" — it was that a corpus's decisive structural property was knowable for $0
+and was not checked first.
+
+## A.3 Arms (fixed now, so the corpus choice cannot be tuned to them)
+
+| | arm | mechanism |
+|---|---|---|
+| **R** | recency-always | serve the later statement, always. **Score is pinned at the supersede fraction by construction** — a live check that the bank is balanced, not a real competitor |
+| **J** | subject-Jaccard rule (~20 lines) | supersede iff token-Jaccard(subject spans) ≥ τ, τ tuned on dev. **This is the trivial rule that can kill the bank** — it approximates what MemPhant's own subject resolution does, and if it wins there is no product here |
+| **F** | flat-file agent | agent with grep/read over the same statements, asked to serve the live set |
+| **T1** | MemPhant, flag OFF | shipped default (`MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD` unset) |
+| **T2** | MemPhant, flag ON | the same store with semantic subject identity enabled |
+
+**T1 vs T2 is the co-primary pair and the reason to build this at all.** It is
+the first measurement the subject-resolution work could ever have had, and it is
+paired on identical inputs. Per the standing Horizon rule, supersessions are
+**counted in the DB, never inferred from served evidence**; a T2 run showing
+zero DB supersessions is inert and does not report.
+
+## A.4 Endpoint
+
+**Served-set correctness, exact match, per query:** the arm returns a set of
+statement ids; correct iff it equals the gold live set. Partial credit is not
+scored — "served the retired rule alongside the live one" is the failure this
+lane exists to catch, and set-F1 would hide it.
+
+Reported as a 2×2 breakdown, never as a single rate:
+
+| | gold: supersede | gold: coexist |
+|---|---|---|
+| arm says supersede | correct | **over-supersession** (data loss — the worse error) |
+| arm says coexist | **under-supersession** (stale served) | correct |
+
+Over-supersession is destructive and under-supersession is noisy; a lane that
+collapses them into one accuracy number cannot tell a system that forgets too
+much from one that forgets too little. Primary statistic: exact-match rate,
+paired exact McNemar, α=0.025 Bonferroni across the two co-primary pairs
+(T1 vs J, T2 vs T1).
+
+## A.5 Acquisition gate — $0, runs before any mining spend
+
+1. **Census first** (§A.2) — properties 1–4 proven on the candidate corpus
+   before a single golden is written.
+2. **Death-from-below:** arms R and J run on the dev split. **R > 0.55 means
+   the bank is unbalanced** (rebuild the balance, not the bar). **J ≥ 0.85 kills
+   the lane** — a 20-line lexical rule doing the product's job means there is no
+   product, and that verdict is accepted, not re-litigated.
+3. **Death-from-above:** oracle arm (handed gold subject identity) bounds the
+   ceiling; addressable headroom between J and oracle must exceed the MDE at the
+   planned n, computed and recorded before the eval split is touched.
+4. **Lexical-overlap flatness check** — the diagnostic that made XS's verdict
+   decisive. If J's score is flat across question↔statement overlap strata,
+   re-mining cannot rescue the bank and the lane stops immediately.
+
+## A.6 Decision rule
+
+- **Ship the flag:** T2 beats T1 significantly at α=0.025 **and** does not
+  increase over-supersession. A quality win bought with data loss is not a win.
+- **Delete the flag:** T2 does not beat T1, or wins only by over-superseding.
+  The mechanism is measured-dead and `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD`
+  plus its machinery comes out, per the evidence-reset convention.
+- **No product here:** J ≥ 0.85, or J beats both T arms.
+- **MCP gate:** unchanged and still unmet. This lane does **not** authorize an
+  MCP surface — it scores a write-path mechanism, not an integration.
+
+## A.7 Spend
+
+$0 until §A.2 is satisfied. Census and both trivial rules are $0. No paid arm is
+authorized by this document; a mining budget is requested only after a census
+passes, and the $100 currently authorized remains **unspent**.
+
+---
+
+# PART B — RESULTS
+
+*(empty — blocked on §A.2 corpus prerequisite)*
