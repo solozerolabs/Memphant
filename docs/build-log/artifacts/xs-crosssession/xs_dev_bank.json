@@ -1,0 +1,910 @@
+{
+ "lane": "xs-crosssession",
+ "split": "dev",
+ "miner": "claude-fable-5 session subagents, 2026-08-05",
+ "corpus_manifest_sha256": "14bee671b4ab868a8fe9b25a323637b572ea078f1fa625be6e426e23ff0a71cf",
+ "units_sha256": "1e6e665e0e93698911243b53285c00796f4937d3a3942c88de238f6d4ceaca16",
+ "endpoint_contract": "hits@10: any answer_bearing_id in arm top-10 unit ids",
+ "goldens": [
+  {
+   "question": "I just pushed and I'm about to start polling CI to see when the workflow finishes \u2014 is there a known-good way to check run status in this project, and how often should I check?",
+   "answer_bearing_ids": [
+    "mem:feedback_gh_polling"
+   ],
+   "forbidden_terms": [
+    "gh run list",
+    "gh run view",
+    "databaseId",
+    "2 minutes",
+    "caches aggressively",
+    "stale status"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_001"
+  },
+  {
+   "question": "I'm about to run the repo's main check gate and was planning to trim its output down to the last few lines before deciding whether to commit \u2014 any reason not to do it that way?",
+   "answer_bearing_ids": [
+    "mem:feedback_never_pipe_gate_exit_codes",
+    "mem:feedback_piping_a_gate_to_tail_commits_over_red"
+   ],
+   "forbidden_terms": [
+    "tail",
+    "pipefail",
+    "exit code",
+    "make check",
+    "precommit-scoped.sh",
+    "grep"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_002"
+  },
+  {
+   "question": "Several agents are editing files in this same checkout right now and I'm ready to commit my slice \u2014 how should I stage my changes safely?",
+   "answer_bearing_ids": [
+    "mem:feedback_git_add_all_sweeps_parallel_agent_wip",
+    "mem:feedback_shared_checkout_worktree_isolation"
+   ],
+   "forbidden_terms": [
+    "git add -A",
+    "run.sh",
+    "test-round-counter.sh",
+    "auto-commit",
+    "SKILL.md"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_003"
+  },
+  {
+   "question": "I deliberately mutated a source file to negative-control a check, and now I want to undo just that mutation and keep working \u2014 what's the safe way to restore the file?",
+   "answer_bearing_ids": [
+    "mem:feedback_git_checkout_as_probe_cleanup_destroys_wip"
+   ],
+   "forbidden_terms": [
+    "git checkout",
+    "newsletter_weekly_draft.py",
+    "--repo-root",
+    "cp",
+    ".bak"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_004"
+  },
+  {
+   "question": "My rebase stopped on a conflict and won't continue because one file still has unstaged edits from another session \u2014 what's the right way to park those edits?",
+   "answer_bearing_ids": [
+    "mem:feedback_stash_push_path_drops_a_commits_own_file",
+    "mem:feedback_stash_push_path_drops_staged_content_mid_rebase"
+   ],
+   "forbidden_terms": [
+    "git stash push",
+    "--keep-index",
+    "staged",
+    "policy-org-switch.spec.ts",
+    "rebase --continue"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_005"
+  },
+  {
+   "question": "I'm about to kick off the full ship pipeline script for this workstream \u2014 should I run it as a foreground command or is there a required execution mode?",
+   "answer_bearing_ids": [
+    "mem:feedback_preflight_foreground_timeout_pushes"
+   ],
+   "forbidden_terms": [
+    "run_in_background",
+    "10-minute",
+    "exit 143",
+    "SIGTERM",
+    "7-push",
+    "run.sh"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_006"
+  },
+  {
+   "question": "A sub-step of the coding pipeline needs an LLM call for a review pass \u2014 which model or provider am I supposed to route it through?",
+   "answer_bearing_ids": [
+    "mem:feedback_no_api_claude_openai_use_session_model"
+   ],
+   "forbidden_terms": [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "session harness",
+    "Claude Max",
+    "ChatGPT subscription",
+    "OpenRouter"
+   ],
+   "kind_expected": "preference",
+   "id": "xs_007"
+  },
+  {
+   "question": "I'm choosing between a quick compatibility shim and a deeper structural fix for this pre-production app \u2014 how does the owner want engineering trade-offs like this decided?",
+   "answer_bearing_ids": [
+    "mem:feedback_decision_priorities"
+   ],
+   "forbidden_terms": [
+    "Accuracy/UX",
+    "Cost",
+    "latency",
+    "security",
+    "priority order",
+    "feature flags"
+   ],
+   "kind_expected": "preference",
+   "id": "xs_008"
+  },
+  {
+   "question": "Before pushing, I ran only the test directory for the feature I touched and it's all green \u2014 is that considered sufficient verification in this backend, or will CI see more?",
+   "answer_bearing_ids": [
+    "mem:feedback_scope_the_pregate_to_the_gate_not_the_feature",
+    "mem:project_backend_test_roots_beyond_tests_unit"
+   ],
+   "forbidden_terms": [
+    "tests/unit",
+    "_STDLIB_EXTRA_ALLOWLIST",
+    "reusable-backend-checks.yml",
+    "shard",
+    "evals-lane2",
+    "tests/features"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_009"
+  },
+  {
+   "question": "Instead of waiting on the slow official check target, I was going to verify lint cleanliness with my own quick one-liner in the shell \u2014 is that a reliable shortcut here?",
+   "answer_bearing_ids": [
+    "mem:feedback_measure_through_the_gate_not_a_pipeline"
+   ],
+   "forbidden_terms": [
+    "ruff",
+    "zsh",
+    "word-split",
+    "--select",
+    "grep -c",
+    "waivers"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_010"
+  },
+  {
+   "question": "I'm planning a dead-code sweep by counting how many places each symbol name appears in the repo \u2014 any known ways that measurement goes wrong in this project?",
+   "answer_bearing_ids": [
+    "mem:feedback_coverage_artifacts_poison_dead_code_measurement",
+    "mem:feedback_textual_grep_overcounts_dead_code"
+   ],
+   "forbidden_terms": [
+    "htmlcov",
+    "coverage.xml",
+    "grep -rl",
+    "ast.Call",
+    "iter_redis_stream_events",
+    "embeds the source"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_011"
+  },
+  {
+   "question": "The owner just shared an industry blog post and asked whether there's anything in it worth building \u2014 what's the expected default stance before I propose work from it?",
+   "answer_bearing_ids": [
+    "mem:feedback_external_marketing_takeaways"
+   ],
+   "forbidden_terms": [
+    "vendor blog",
+    "VC thread",
+    "phase22_killed",
+    "memory_reset_killed",
+    "kb_reset_killed",
+    "default answer is no"
+   ],
+   "kind_expected": "preference",
+   "id": "xs_012"
+  },
+  {
+   "question": "I'm wiring an integration against a third-party HTTP API and all my transport-mocked tests pass \u2014 is that enough confidence to ship the call path?",
+   "answer_bearing_ids": [
+    "mem:feedback_live_probe_external_wire_contracts"
+   ],
+   "forbidden_terms": [
+    "Cloudflare",
+    "multipart/form-data",
+    "httpx",
+    "data=form",
+    "script_count",
+    "HTTP 400"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_013"
+  },
+  {
+   "question": "I'm adding a scanner-style check whose success condition is finding zero violations \u2014 how am I expected to prove the check actually works before trusting its green?",
+   "answer_bearing_ids": [
+    "mem:feedback_a_passing_gate_is_the_failure_mode",
+    "mem:feedback_negative_control_needs_a_named_mutant"
+   ],
+   "forbidden_terms": [
+    "axe",
+    "CSP",
+    "mutation",
+    "findings == []",
+    "getByText",
+    "loading skeleton"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_014"
+  },
+  {
+   "question": "Before I run git add and commit for this session's changes in the main product repo, are there any known traps about which directory I run the git commands from?",
+   "answer_bearing_ids": [
+    "mem:project_bash_absolute_shared_checkout_path_trap"
+   ],
+   "forbidden_terms": [
+    "shared checkout",
+    "worktree",
+    "/Users/sidsharma/Syndai",
+    "rev-parse --show-toplevel",
+    "another session's branch",
+    "reflog"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_015"
+  },
+  {
+   "question": "I'm about to put several file paths into one shell variable and pass it to a git command in this environment \u2014 anything I should know about how the shell expands it?",
+   "answer_bearing_ids": [
+    "mem:project_bash_tool_zsh_no_word_split"
+   ],
+   "forbidden_terms": [
+    "zsh",
+    "word-split",
+    "pathspec",
+    "empty diff",
+    "${=FILES}",
+    "git diff -- $FILES"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_016"
+  },
+  {
+   "question": "I'm bumping the lint/format tool's version in one of the frontend apps' package manifests \u2014 how should I specify the version range, and is there anything else that has to move with it?",
+   "answer_bearing_ids": [
+    "mem:project_biome_caret_drifts_from_version_locked_schema"
+   ],
+   "forbidden_terms": [
+    "biome",
+    "caret",
+    "2.4.13",
+    "2.4.16",
+    "$schema",
+    "--package-lock-only",
+    "rehype-sanitize"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_017"
+  },
+  {
+   "question": "I've been polling GitHub for workflow run results and my API calls are now getting rejected for over-use \u2014 is there a known way to keep watching CI status anyway?",
+   "answer_bearing_ids": [
+    "mem:project_ci_status_graphql_bucket"
+   ],
+   "forbidden_terms": [
+    "GraphQL",
+    "statusCheckRollup",
+    "checkSuites",
+    "separate quota",
+    "5000/hr",
+    "abuse 403"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_018"
+  },
+  {
+   "question": "My branch adds a new database migration and edits a sandbox skill file; the local gate is green \u2014 is there anything else I should verify before pushing?",
+   "answer_bearing_ids": [
+    "mem:project_ci_traps_make_check_misses",
+    "mem:project_migration_branch_env_db_ship_steps"
+   ],
+   "forbidden_terms": [
+    "make check",
+    "linear migration history",
+    "SKILL.md",
+    "content_sha256",
+    "ops/cron",
+    "down_revision",
+    "cron drift",
+    "Schema & Integration Checks"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_019"
+  },
+  {
+   "question": "The CI pipeline is stuck and I'm considering deploying the backend to production by hand from my machine \u2014 any gotchas with a manual deploy?",
+   "answer_bearing_ids": [
+    "mem:project_flyctl_deploy_needs_release_version_env"
+   ],
+   "forbidden_terms": [
+    "flyctl",
+    "RELEASE_VERSION",
+    "bluegreen",
+    "/healthz",
+    "syndai-prod",
+    "EVALRANK_BUILD_SHA"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_020"
+  },
+  {
+   "question": "A formatting gate is red in CI for a commit, but my local checks pass on the exact same tree \u2014 what's the known cause and where should I look first?",
+   "answer_bearing_ids": [
+    "mem:project_make_check_formats_ci_checks"
+   ],
+   "forbidden_terms": [
+    "ruff format",
+    "--check",
+    "make check",
+    "rewrites",
+    "--no-verify",
+    "0.15.7",
+    "Static Analysis"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_021"
+  },
+  {
+   "question": "In the backend I need to do database work on a separate detached session derived from an existing one \u2014 what's the correct way to obtain that new session?",
+   "answer_bearing_ids": [
+    "mem:project_managed_session_rejects_connection_bind"
+   ],
+   "forbidden_terms": [
+    "managed_session",
+    "fresh_session_from_bind",
+    "AsyncConnection",
+    ".bind",
+    "get_bind",
+    "TypeError"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_022"
+  },
+  {
+   "question": "I'm about to compute a hash over compressed artifact bytes and use it as a stable content identity \u2014 is that safe as written?",
+   "answer_bearing_ids": [
+    "mem:project_gzip_compress_embeds_mtime_breaks_content_hashes"
+   ],
+   "forbidden_terms": [
+    "gzip.compress",
+    "mtime=0",
+    "MTIME",
+    "serialize_bundle",
+    "bundle_sha256",
+    "bytes 4:8"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_023"
+  },
+  {
+   "question": "My disk is nearly full and I'm thinking of reclaiming space by wiping Docker's data file on this Mac \u2014 is anything important lost if I do, and is there a gentler option?",
+   "answer_bearing_ids": [
+    "mem:project_docker_raw_holds_local_lane_db"
+   ],
+   "forbidden_terms": [
+    "Docker.raw",
+    "syndai-coding-local-db",
+    "named volume",
+    "containerd snapshotter",
+    "coding-local-db-bootstrap",
+    "926G"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_024"
+  },
+  {
+   "question": "I'm writing ops SQL that switches database roles partway through the script \u2014 any environment-specific hazards when this runs against the production database?",
+   "answer_bearing_ids": [
+    "mem:project_evalrank_deploy_set_role_postgres_class"
+   ],
+   "forbidden_terms": [
+    "SET ROLE",
+    "RESET ROLE",
+    "transaction pooler",
+    "6543",
+    "pgmq",
+    "supavisor",
+    "permission denied"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_025"
+  },
+  {
+   "question": "I'm writing a test that aborts a streaming HTTP upload mid-body to prove resource cleanup happens \u2014 any known pitfalls with the HTTP client library's standard test transport?",
+   "answer_bearing_ids": [
+    "mem:project_httpx_content_generator_ownership"
+   ],
+   "forbidden_terms": [
+    "httpx",
+    "MockTransport",
+    "aclose",
+    "AsyncIteratorByteStream",
+    "put_stream",
+    "content="
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_026"
+  },
+  {
+   "question": "I'm about to run an end-to-end coding-lane verification using the platform's current default model \u2014 will that give me a reliable signal right now?",
+   "answer_bearing_ids": [
+    "mem:project_glm52_default_thrashes_local_lane"
+   ],
+   "forbidden_terms": [
+    "glm-5.2",
+    "thrash",
+    "pi_stream_idle_timeout",
+    "PLATFORM_DEFAULT_PI_MODEL",
+    "qwen3-coder-next",
+    "z-ai"
+   ],
+   "kind_expected": "episodic",
+   "id": "xs_027"
+  },
+  {
+   "question": "I want to fetch and diff my branch against upstream main in the main product repo \u2014 which remote ref should I use?",
+   "answer_bearing_ids": [
+    "mem:project_git_remote_named_syndai"
+   ],
+   "forbidden_terms": [
+    "Syndai/main",
+    "origin",
+    "git remote -v",
+    "unknown revision",
+    "siddmax"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_028"
+  },
+  {
+   "question": "I'm adding a database migration on a long-lived feature branch and main has kept moving underneath me \u2014 anything I should check or fix up before committing it?",
+   "answer_bearing_ids": [
+    "mem:project_migration_forked_head_reparent_and_renumber",
+    "mem:project_migration_hub",
+    "mem:project_schedule_migration_fork_and_oob_ddl",
+    "mem:project_sandbox_escalation_piece6_deferred_redesign"
+   ],
+   "forbidden_terms": [
+    "alembic heads",
+    "down_revision",
+    "re-parent",
+    "renumber",
+    "test_revision_integrity",
+    "ck_"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_029"
+  },
+  {
+   "question": "We're planning to move the coding workspaces onto a different sandbox vendor \u2014 where in the configuration should that provider switch live?",
+   "answer_bearing_ids": [
+    "mem:project_mission_sandbox_lane_separation"
+   ],
+   "forbidden_terms": [
+    "SANDBOX_BACKEND",
+    "workspace_profiles",
+    "CODING_LANE_BACKENDS",
+    "modal",
+    "daytona",
+    "e2b"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_030"
+  },
+  {
+   "question": "I'm writing a scheduled database job that drops work onto one of our queues for a worker to pick up \u2014 any known pitfalls with the message shape, or with how to verify it actually worked?",
+   "answer_bearing_ids": [
+    "mem:project_pgcron_pgmq_envelope_contract",
+    "mem:project_prewarm_envelope_noop_shipped"
+   ],
+   "forbidden_terms": [
+    "pgmq",
+    "pg_cron",
+    "job_type",
+    "jsonb_build_object",
+    "DLQ",
+    "dead-letter",
+    "envelope"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_031"
+  },
+  {
+   "question": "About to introduce a brand-new background job queue for a feature \u2014 besides the code that enqueues onto it, what else has to exist before it's safe?",
+   "answer_bearing_ids": [
+    "mem:project_pgmq_queue_consumer_contract"
+   ],
+   "forbidden_terms": [
+    "pgmq",
+    "ALL_QUEUES",
+    "check_cron_pgmq_health",
+    "eval_pipeline_worker",
+    "evalrank_source_refresh_jobs",
+    "ops/cron"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_032"
+  },
+  {
+   "question": "I'm about to run the portal browser test suite locally from my own worktree \u2014 anything about the local environment that can silently make the results untrustworthy?",
+   "answer_bearing_ids": [
+    "mem:project_portal_e2e_port_3200_shared_across_worktrees",
+    "mem:project_portal_e2e_wrangler_prod_serve"
+   ],
+   "forbidden_terms": [
+    "3200",
+    "PORTAL_E2E_PORT",
+    "lsof",
+    "webServer",
+    "reuseExistingServer",
+    "wrangler"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_033"
+  },
+  {
+   "question": "I need to bump a frontend package and refresh its lock \u2014 any constraints on the local tooling I use before committing the regenerated file?",
+   "answer_bearing_ids": [
+    "mem:project_portal_npm_version_lockfile_skew"
+   ],
+   "forbidden_terms": [
+    "npm 10",
+    "npm 11",
+    "10.9.8",
+    ".nvmrc",
+    "esbuild",
+    "package-lock.json",
+    "@swc/helpers"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_034"
+  },
+  {
+   "question": "Writing a portal end-to-end spec that stubs a successful delete endpoint returning an empty response \u2014 any harness quirks I should know before I start?",
+   "answer_bearing_ids": [
+    "mem:project_playwright_204_finished_never_resolves"
+   ],
+   "forbidden_terms": [
+    "204",
+    "finished()",
+    "settle",
+    "route.fulfill",
+    "revokeMember",
+    "portalFetch"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_035"
+  },
+  {
+   "question": "I just pushed directly to the default branch and the automated ship watcher reported success within a few minutes \u2014 is that enough evidence that CI actually passed?",
+   "answer_bearing_ids": [
+    "mem:project_preflight_phase8_waits_for_main_ignored_workflows"
+   ],
+   "forbidden_terms": [
+    "phase 8",
+    "8-ci-watch",
+    "branches-ignore",
+    "Deploy",
+    "gh run list",
+    "Detect Changed Areas"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_036"
+  },
+  {
+   "question": "Several integration tests just failed on my branch on this dev machine \u2014 what should I check before assuming my change broke them?",
+   "answer_bearing_ids": [
+    "mem:project_shared_machine_test_contention"
+   ],
+   "forbidden_terms": [
+    "DeadlockDetected",
+    "InsufficientPrivilege",
+    "xdist_group",
+    "load average",
+    "ERR_CONNECTION_REFUSED",
+    "3193"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_037"
+  },
+  {
+   "question": "I'm about to conclude that a piece of work was never done, based on reading files in the main repo directory on this machine \u2014 any caveats about trusting that view of the tree?",
+   "answer_bearing_ids": [
+    "mem:project_shared_checkout_main_410_commits_stale",
+    "mem:project_stale_nonworktree_dir_git_resolves_to_shared_main"
+   ],
+   "forbidden_terms": [
+    "410",
+    "Syndai/main",
+    "git cat-file",
+    "shared checkout",
+    "git worktree list"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_038"
+  },
+  {
+   "question": "Thinking of adding a middle preset between the quick and thorough options in the run composer \u2014 is there a reason the current set of tiers is what it is?",
+   "answer_bearing_ids": [
+    "mem:project_portal_effort_dial_shipped"
+   ],
+   "forbidden_terms": [
+    "effort dial",
+    "resolve_coding_effort",
+    "xhigh",
+    "Balanced",
+    "escalation",
+    "validation_iteration"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_039"
+  },
+  {
+   "question": "The delivery table behind our push notifications looks like it has no protection against re-sending after a crash \u2014 should I add a dedupe key to the wire payload?",
+   "answer_bearing_ids": [
+    "mem:project_push_cooldown_doubles_as_replay_suppression"
+   ],
+   "forbidden_terms": [
+    "cooldown",
+    "attempts",
+    "nx=True",
+    "120",
+    "source_event_key",
+    "coding_push_deliveries"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_040"
+  },
+  {
+   "question": "I'm drafting a proposal to remove our workflow orchestration engine entirely in favor of a database-native approach \u2014 has this trade-off been assessed before, and what was decided?",
+   "answer_bearing_ids": [
+    "mem:project_temporal_replacement_verdict"
+   ],
+   "forbidden_terms": [
+    "Temporal",
+    "DBOS",
+    "strangler",
+    "MissionDagWorkflow",
+    "continue-as-new",
+    "Nango"
+   ],
+   "kind_expected": "episodic",
+   "id": "xs_041"
+  },
+  {
+   "question": "I'm about to fix a race where two concurrent requests both try to retire the current config row and insert a new one, and the loser 500s. Are there established patterns in this codebase for fixing and testing this class of race?",
+   "answer_bearing_ids": [
+    "mem:project_toctou_concurrency_fix_patterns"
+   ],
+   "forbidden_terms": [
+    "pg_advisory_xact_lock",
+    "is_current",
+    "lock_policy_config_scope",
+    "IntegrityError",
+    "flush_or_rollback",
+    "populate_existing",
+    "409"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_042"
+  },
+  {
+   "question": "An agent keeps giving up on a transient tool failure, so I'm thinking of marking that error code as safe to retry. Is there anything I should know before changing how an error code is classified?",
+   "answer_bearing_ids": [
+    "mem:project_tool_error_retry_contract"
+   ],
+   "forbidden_terms": [
+    "ToolError",
+    "retryable",
+    "ERROR_CATEGORY_MAP",
+    "EXECUTION_ERROR",
+    "drip_count",
+    "suggested_fix",
+    "sandbox_callback_controller"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_043"
+  },
+  {
+   "question": "I'm drafting positioning copy that frames the product around delivering a personalized daily summary to users. Does that match how the founder defines the product?",
+   "answer_bearing_ids": [
+    "mem:user_product_identity"
+   ],
+   "forbidden_terms": [
+    "daily brief",
+    "agent builder",
+    "Phase 41",
+    "2026-04-03"
+   ],
+   "kind_expected": "preference",
+   "id": "xs_044"
+  },
+  {
+   "question": "Long coding runs get a repository overview injected on the first turn and never again, so it could describe files that later changed. Should I build a mechanism to recompute it mid-run?",
+   "answer_bearing_ids": [
+    "mem:project_turn1_repo_map_staleness_measured_immaterial"
+   ],
+   "forbidden_terms": [
+    "_repo_map",
+    "coding_claude_runner.py",
+    "resume_source",
+    "2.7%",
+    "coding_turn1_grounding",
+    "executor_prompt_for_attempt"
+   ],
+   "kind_expected": "episodic",
+   "id": "xs_045"
+  },
+  {
+   "question": "The schema-contract CI check just went red on the main branch after a push that touched no database files. Before I start reverting things, what's the right way to diagnose and fix this?",
+   "answer_bearing_ids": [
+    "mem:project_uncommitted_applied_migration_reds_main"
+   ],
+   "forbidden_terms": [
+    "alembic_version",
+    "check_schema_contract.py",
+    "db_ahead_of_code",
+    "--require-db",
+    "42b32e2f2",
+    "worktree grep"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_046"
+  },
+  {
+   "question": "I'm writing a throwaway script that lives outside the backend directory but imports the project's source package. Any known trap about which copy of the code it will actually import on this machine?",
+   "answer_bearing_ids": [
+    "mem:project_warmlinked_venv_pth_wrong_worktree"
+   ],
+   "forbidden_terms": [
+    ".pth",
+    "site-packages",
+    ".venv",
+    "uv sync",
+    "__file__",
+    "worktree.sh"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_047"
+  },
+  {
+   "question": "My frontend build in this worktree suddenly fails to resolve a dependency that was working an hour ago, and I haven't touched anything. What's the likely cause and fix?",
+   "answer_bearing_ids": [
+    "mem:project_warmlinked_node_modules_shared_empty",
+    "learnings:retiring-a-shared-resource-must-keep-its-recognition",
+    "learnings:shared-warm-link-tree-and-its-audit"
+   ],
+   "forbidden_terms": [
+    "node_modules",
+    "symlink",
+    "posthog-js",
+    "npm ci",
+    "warm-link",
+    "portal-install"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_048"
+  },
+  {
+   "question": "I just created a fresh sibling worktree and the backend deterministic check gate dies early because it can't resolve the secrets configuration. How am I supposed to run it from here?",
+   "answer_bearing_ids": [
+    "mem:project_worktree_make_check_doppler"
+   ],
+   "forbidden_terms": [
+    "doppler",
+    "DOPPLER_RUN",
+    "Could not find requested config",
+    "Litestar DI",
+    "fetch_evalrank_public_contracts"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_049"
+  },
+  {
+   "question": "A production incident happened several hours ago and I need the backend's log lines from around that time. Do we retain production logs anywhere I can query, or is live tailing all we have?",
+   "answer_bearing_ids": [
+    "mem:reference_axiom_log_sink_for_prod",
+    "learnings:axiom-fly-logs-are-escaped-json-in-message"
+   ],
+   "forbidden_terms": [
+    "Axiom",
+    "fly-logs",
+    "fly logs",
+    "AXIOM_QUERY_TOKEN",
+    "APL",
+    "log-shipper"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_050"
+  },
+  {
+   "question": "I want to trigger a real coding run against the production API to verify a fix end-to-end. How do I authenticate, and are there admission limits that could block the run?",
+   "answer_bearing_ids": [
+    "mem:reference_caas_prod_verification"
+   ],
+   "forbidden_terms": [
+    "api.syndai.ai",
+    "sk_syndai_live",
+    "customer_api_keys",
+    "caas_verify.env",
+    "RUN_CONCURRENCY_LIMIT",
+    "syndai_run.py"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_051"
+  },
+  {
+   "question": "I'm about to tune test parallelism and worker counts for our hosted CI jobs. What hardware do the runners for this repo actually have?",
+   "answer_bearing_ids": [
+    "mem:reference_ci_private_repo_runner_4cpu",
+    "learnings:ci-private-repo-runner-is-2cpu"
+   ],
+   "forbidden_terms": [
+    "ubuntu-latest",
+    "nproc",
+    "2 vCPU",
+    "7 GB",
+    "16 GB",
+    "xdist",
+    "workers: 2"
+   ],
+   "kind_expected": "semantic",
+   "id": "xs_052"
+  },
+  {
+   "question": "A Cloudflare API credential looks dead based on a validity probe I ran. Before I report the credential as broken, is there a known reason the probe result might be misleading?",
+   "answer_bearing_ids": [
+    "mem:reference_cloudflare_cfat_token_verify_lies"
+   ],
+   "forbidden_terms": [
+    "cfat_",
+    "/user/tokens/verify",
+    "Invalid API Token",
+    "code 1000",
+    "CLOUDFLARE_DNS_EDIT_TOKEN",
+    "DMARC"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_053"
+  },
+  {
+   "question": "I'm about to add a waiting loop that polls CI job status through the GitHub CLI while other agents run in parallel. Any known constraints on polling cadence or API budget on this machine?",
+   "answer_bearing_ids": [
+    "learnings:github-api-poll-interval"
+   ],
+   "forbidden_terms": [
+    "5000",
+    "120 seconds",
+    "gh run view",
+    "GraphQL",
+    "rate_limit",
+    "secondary",
+    "scraping"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_054"
+  },
+  {
+   "question": "I'm scripting an automated code-review call to an external CLI model and the prompt is large. Are there known pitfalls in how to pass the prompt to it in this repo?",
+   "answer_bearing_ids": [
+    "learnings:codex-exec-stdin-not-argv"
+   ],
+   "forbidden_terms": [
+    "codex exec",
+    "argv",
+    "stdin redirect",
+    "codex-review.sh",
+    "--sandbox read-only",
+    "--output-last-message"
+   ],
+   "kind_expected": "procedural",
+   "id": "xs_055"
+  }
+ ]
+}

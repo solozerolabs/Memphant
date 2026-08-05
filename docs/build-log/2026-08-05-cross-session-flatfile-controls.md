@@ -222,4 +222,113 @@ artifact without lineage did not happen.
 
 # PART B — RESULTS (appended after the runs; Part A is unedited)
 
-*(empty — bank construction has not started)*
+## B.0 The answer: the bank is DEAD ON ARRIVAL. No money was spent.
+
+**A.1 acquisition gate, death-from-below check, dev split n=55, $0 of the $100
+authorized.** Trivial-rule scores, endpoint `hits@10` over 410 units:
+
+| rule | hits@10 |
+|---|---:|
+| **BM25 (trivial, ~40 lines)** | **0.9091** |
+| naive-grep (3 rarest question words by match count) | 0.3091 |
+| recency (keyword match ranked by latest date in unit) | 0.0182 |
+
+The preregistered rule in A.1 is unconditional: *"If either scores ≥ 85% hits@10
+on the dev split, the bank is saturated by a short rule and is **dead on
+arrival**; stop, record, do not spend."* BM25 scores **90.91%**. Stopped. No
+paid arm ran. **XS reports no verdict on T1/T2 vs F1** — the instrument was
+never able to ask the question.
+
+BM25 takes **rank 1** on 35/55 goldens (63.6%) and rank ≤3 on 82%. Only five
+goldens miss the top 10 (`xs_002`, `xs_014`, `xs_015`, `xs_029`, `xs_033`).
+
+## B.1 The escape hatch is measured shut, not argued shut
+
+The obvious rescue is *"the miner wrote lexically-close questions; re-mine with
+lower question↔gold vocabulary overlap."* That is refuted by the data. Median
+question-gold content-token overlap is 0.50 (min 0.13, max 0.78), and BM25's
+hits@10 is **flat across the whole overlap range**:
+
+| question↔gold token overlap | n | BM25 hits@10 |
+|---|---:|---:|
+| [0.00, 0.35) | 11 | **0.9091** |
+| [0.35, 0.50) | 15 | 0.9333 |
+| [0.50, 1.01] | 29 | 0.8966 |
+
+Goldens whose wording shares almost nothing with the gold entry are retrieved
+**just as well**. Whatever BM25 is keying on is not phrasing similarity, so
+re-mining for harder phrasing cannot produce a live instrument. Rebalancing the
+dev split (which A.1 permits) is therefore not attempted: there is no direction
+to rebalance toward.
+
+## B.2 What this actually says — and the two claims it does NOT license
+
+**The finding.** At the corpus scale a real coding agent has — **410 units, 2.0
+MB, topically well-separated entries** — the retrieval problem is *already
+solved by lexical matching*. Each entry is about a distinct thing (CI polling,
+warm-link symlinks, codex stdin, biome pinning), so any topical signal in the
+query lands the right unit. There is no ranking problem for a memory system to
+be better at.
+
+This is the **same shape as S4** and it is now measured twice: S4 found an
+agentic loop brute-forcing a ~122-item haystack; XS finds a ~40-line lexical
+rule saturating a 410-unit one. The consistent lesson is about **haystack
+size**, not about `grep` or BM25 specifically: *below some corpus scale,
+retrieval sophistication has nothing to buy.* MemPhant's coding-agent story
+cannot live at this scale, and no write-side or ranking work changes that.
+
+**NOT licensed by this result:**
+
+1. **"MemPhant loses to BM25 on cross-session memory."** Unmeasured. T1 never
+   ran. A dead instrument produces no comparison, and quoting the 0.9091 beside
+   any MemPhant number would be exactly the stage-mismatch this program voided a
+   headline for.
+2. **"Flat files are sufficient, the product is dead."** Also unmeasured, and
+   the endpoint is the reason: `hits@10` scores **retrieval**, and retrieval is
+   not what flat files are bad at. Their weaknesses are supersession (a stale
+   entry retrieved next to its correction, both rank-1), curation labor (the
+   `MEMORY.md` index is hand-maintained), and unbounded growth. This bank scores
+   none of those.
+
+## B.3 What would make a live instrument — and what it costs
+
+Two directions, both requiring construction, neither authorized here:
+
+- **Scale up the haystack.** The saturating variable is corpus size. A live
+  instrument needs a corpus where lexical rules break — plausibly 10⁴–10⁵ units,
+  which is the C3 public-trajectory source (`nebius/SWE-rebench` et al.), not a
+  hand-curated memory dir. **But run the ceiling check first:** at 10⁵ units
+  BM25 falls, and so does everything else — the question is whether the
+  *addressable* gap exceeds the MDE, which is what killed SWE-ContextBench.
+- **Change the endpoint to what flat files actually fail at.** Score
+  supersession-correctness (does the arm return the live rule or the retired
+  one?) rather than `hits@10`. The Syndai corpus genuinely carries these arcs
+  (`SUPERSEDED 2026-07-25`, `CORRECTED claude-2026-07-29`), a BM25 rule cannot
+  order them (recency scored **0.0182** here, so date-in-text is not a shortcut),
+  and it is the mechanism MemPhant actually owns. This is the cheaper and more
+  honest of the two, and it is a **different lane**, requiring its own Part A.
+
+**The MCP gate stands unchanged and unmet.** A.5 authorizes MCP work only under
+Verdict A or N. Neither was reached. **No coding-agent MCP surface is built.**
+
+## B.4 Defects recorded
+
+- **One leak defect:** `xs_005` contains its own forbidden term `staged`. It did
+  not affect the verdict (BM25 hits it either way) and the bank is dead, so it
+  is recorded, not fixed.
+- The gate script initially assumed a bare-list bank and crashed on the frozen
+  dict; fixed before the reported run. The reported numbers come from the fixed
+  script against the frozen bank.
+
+## B.5 Lineage
+
+- Corpus snapshot `~/.memphant-private/xs-crosssession/corpus-snapshot-2026-08-05`,
+  342 files, `MANIFEST.sha256` = `14bee671b4ab868a8fe9b25a323637b572ea078f1fa625be6e426e23ff0a71cf`
+- Unit universe 410 units (340 session-memory files, 61 LEARNINGS entries,
+  9 AGENTS sections), `units_sha256` = `1e6e665e0e93698911243b53285c00796f4937d3a3942c88de238f6d4ceaca16`
+- Frozen dev bank n=55 (40 procedural / 8 semantic / 4 preference / 3 episodic),
+  `bank_sha256` = `f678d2a29ef9f96515461500e52eb9c741819444dcb0c38c8d498b590b089328`
+- Gate artifact `docs/build-log/artifacts/xs-crosssession/gate-dev-2026-08-05.json`
+- Commit `7256f823`, branch `xsession-controls`
+- **Spend: $0.00 of $100 authorized.** Mining ran on session subagents; no
+  OpenRouter call was made.
