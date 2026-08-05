@@ -361,6 +361,23 @@ add_lane(
     "total, so that n is unreachable on the available corpus. Sized for 15pt at best.",
 )
 
+# --- evolving preference / HorizonBench ------------------------------------
+# P4 of the fresh-tranche packet. psi and (b,c) are the REAL v7 paired result
+# (n=120, 6 gains + 25 losses), banked at result.json:analysis.paired_fast_vs_full.
+# The effect we care about is 0.108 -- the marginal swing that moves the v7 point
+# estimate (-0.158) up to the program's -0.05 non-inferiority margin. At the v7
+# / interim n=120 the lane is INADEQUATE (MDE 13.4pt), which is exactly why the
+# interim 60-user look cannot itself decide non-inferiority; required_n names the
+# size the fresh n_max design (102u / 204i) must clear.
+add_lane(
+    "preference/horizon", "HorizonBench Fast vs full (non-inferiority)", 120, 6, 25,
+    f"{A}/horizonbench-confirmation-v7/result.json:analysis.paired_fast_vs_full", 0.108,
+    "psi_observed 0.2583, delta_observed -0.158 (Fast worse). care=0.108 is the "
+    "v7-point-to--5pp-margin swing. required_n=183 items => the fresh single-stage 102u/204i "
+    "design is ADEQUATE; the 60u/120i interim is a group-sequential LOOK, not a decision "
+    "point. Fresh selection frozen at fresh-selection-{20,34}.json; interim nests in n_max.",
+)
+
 # --- procedural ------------------------------------------------------------
 add_lane(
     "procedural", "rung10 state-style procedure replay", None, None, None,

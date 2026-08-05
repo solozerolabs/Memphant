@@ -1843,6 +1843,152 @@ def select_confirmation(args) -> dict:
     return report
 
 
+def select_fresh_tranche(args) -> dict:
+    """P2 of the fresh-tranche packet: a gold-blind held-out selection provably
+    disjoint from every already-exposed user. The burn set is the union of the
+    60 confirmation users, the 10 exposed pilot users, and the 2 timeline-drift
+    users. Selection is prefix-stable (`select_confirmation_rows` ranks by a
+    seeded hash and takes the first N per generator), so a 20/generator interim
+    is an exact prefix of any larger N under the same seed — the property the
+    group-sequential design's reader-cache reuse depends on."""
+    full_lock = json.loads(args.full_lock.read_text(encoding="utf-8"))
+    validate_source_revision(full_lock.get("dataset_revision"))
+    index_path = Path(full_lock["index_path"])
+    if gr.sha256_file(index_path) != full_lock.get("index_sha256"):
+        raise ValueError("HorizonBench benchmark index hash drift")
+    index_rows = load_jsonl(index_path)
+
+    sample_lock = json.loads(args.sample_lock.read_text(encoding="utf-8"))
+    confirmation = json.loads(args.confirmation_selection.read_text(encoding="utf-8"))
+    pilot_users = set(sample_lock.get("expected_user_ids", []))
+    drift_users = set(full_lock.get("timeline_integrity", {}).get("drift_users", []))
+    confirmation_users = set(confirmation.get("expected_user_ids", []))
+    if len(confirmation_users) != 60 or len(pilot_users) != 10 or len(drift_users) != 2:
+        raise ValueError(
+            "fresh-tranche burn set is not the expected 60 confirmation + 10 "
+            f"pilot + 2 drift users: {len(confirmation_users)}/{len(pilot_users)}/"
+            f"{len(drift_users)}"
+        )
+    # Benchmark integrity exclusions (e.g. ungroundable session dates), each a
+    # committed artifact carrying `excluded_user_ids` + its own hash. Same class
+    # as census drift, but derived by a dedicated scan rather than the census.
+    extra_users: set[str] = set()
+    extra_provenance: list[dict] = []
+    for path in args.extra_exclusions or []:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        ids = payload.get("excluded_user_ids", [])
+        extra_users |= set(ids)
+        extra_provenance.append(
+            {
+                "path": str(path),
+                "sha256": gr.sha256_file(path.resolve()),
+                "count": len(ids),
+            }
+        )
+    excluded_users = confirmation_users | pilot_users | drift_users | extra_users
+    if args.seed == confirmation.get("seed"):
+        raise ValueError(
+            "fresh tranche must not reuse the confirmation seed "
+            f"{confirmation.get('seed')!r}"
+        )
+
+    per_generator = args.users_per_generator
+    n_users = per_generator * len(BENCHMARK_GENERATOR_COUNTS)
+    n_rows = n_users * 2
+    selected_index = select_confirmation_rows(
+        index_rows,
+        excluded_user_ids=excluded_users,
+        seed=args.seed,
+        users_per_generator=per_generator,
+    )
+    selected_ids = {row["id"] for row in selected_index}
+    cache_dir = args.cache_root.expanduser().resolve() / DATASET_REVISION
+    rows = [
+        row
+        for row in _parquet_rows(
+            [cache_dir / source[0] for source in BENCHMARK_SOURCE_FILES]
+        )
+        if row.get("id") in selected_ids
+    ]
+    if len(rows) != n_rows:
+        raise ValueError(f"HorizonBench fresh extraction got {len(rows)}, want {n_rows}")
+    rows_by_id = {row["id"]: row for row in rows}
+    ordered = [rows_by_id[row["id"]] for row in selected_index]
+    validate_benchmark_rows(
+        ordered,
+        expected_rows=n_rows,
+        expected_users=n_users,
+        expected_generator_counts={
+            generator: per_generator * 2 for generator in BENCHMARK_GENERATOR_COUNTS
+        },
+    )
+    fresh_users = sorted({row["user_id"] for row in ordered})
+
+    # THE DISJOINTNESS GATE. A single exposed id in the fresh set relabels burned
+    # data as held out, which the claim contract forbids. Fail closed.
+    intersection = sorted(set(fresh_users) & excluded_users)
+    if intersection:
+        raise ValueError(f"fresh tranche intersects the burn set: {intersection}")
+
+    source_raw = canonical_jsonl_bytes(ordered)
+    atomic_write(args.out.expanduser().resolve(), source_raw)
+    report = {
+        "schema_version": 1,
+        "status": "frozen",
+        "dataset": DATASET_ID,
+        "dataset_revision": DATASET_REVISION,
+        "seed": args.seed,
+        "source_jsonl_sha256": hashlib.sha256(source_raw).hexdigest(),
+        "expected_ids": [row["id"] for row in ordered],
+        "expected_user_ids": fresh_users,
+        "rows": n_rows,
+        "users": n_users,
+        "users_per_generator": {
+            generator: per_generator for generator in BENCHMARK_GENERATOR_COUNTS
+        },
+        "rows_per_generator": {
+            generator: per_generator * 2 for generator in BENCHMARK_GENERATOR_COUNTS
+        },
+        "rows_per_stratum": {"evolved": n_users, "static": n_users},
+        "evolved_distractor_coverage": {
+            "present": sum(
+                bool(row.get("distractor_letter")) for row in ordered if row["has_evolved"]
+            ),
+            "missing": sum(
+                not bool(row.get("distractor_letter")) for row in ordered if row["has_evolved"]
+            ),
+        },
+        "burn_set": {
+            "confirmation_users": len(confirmation_users),
+            "pilot_users": len(pilot_users),
+            "drift_users": len(drift_users),
+            "extra_integrity_users": len(extra_users),
+            "extra_integrity_sources": extra_provenance,
+            "excluded_union_sha256": sha256_json(sorted(excluded_users)),
+        },
+        "disjoint_from_burn_set": True,
+        "fresh_user_ids_sorted_sha256": sha256_json(fresh_users),
+        "full_lock_sha256": gr.sha256_file(args.full_lock.resolve()),
+        "confirmation_selection_sha256": gr.sha256_file(
+            args.confirmation_selection.resolve()
+        ),
+        "gold_quarantine": {
+            "selection_fields": ["id", "user_id", "generator", "has_evolved"],
+            "selection_uses_correct_letter": False,
+            "selection_uses_distractor_letter": False,
+            "mental_state_graphs_acquired": False,
+        },
+        "notes": (
+            "P2 of docs/superpowers/plans/2026-08-05-horizonbench-fresh-tranche-"
+            "authorization.md. Selection used identity, generator, and has_evolved "
+            "strata only; answer and distractor labels were not used. Prefix-stable "
+            "under the seed, so a 20/generator interim nests inside any larger N."
+        ),
+    }
+    atomic_write_json(args.report_out.resolve(), report)
+    return report
+
+
 def canonical_jsonl_bytes(rows: list[dict]) -> bytes:
     return b"".join(
         json.dumps(row, sort_keys=True, separators=(",", ":")).encode() + b"\n"
@@ -2671,6 +2817,19 @@ def fact_extraction_flag() -> str:
     return "fact_extraction=off" if value in {"0", "false", "off"} else "fact_extraction=on"
 
 
+def subject_resolution_flag() -> str:
+    """Report the resolution threshold that actually ran, matching
+    `subject_resolution_threshold_from_env` in the runtime (unset/invalid ⇒ off)."""
+    value = os.environ.get("MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD", "").strip()
+    try:
+        parsed = float(value)
+    except ValueError:
+        return "subject_resolution=off"
+    if 0.0 < parsed <= 1.0:
+        return f"subject_resolution={parsed:g}"
+    return "subject_resolution=off"
+
+
 def fast_gate_evidence_contract(source_sha: str, k: int, budget_tokens: int) -> dict:
     return {
         "schema_version": 1,
@@ -2691,7 +2850,12 @@ def fast_gate_evidence_contract(source_sha: str, k: int, budget_tokens: int) -> 
             "scorer": "construction completeness only; benchmark gold remained quarantined",
             "k": k,
             "budget": budget_tokens,
-            "flags": ["fast", fact_extraction_flag(), "deep=off"],
+            "flags": [
+                "fast",
+                fact_extraction_flag(),
+                subject_resolution_flag(),
+                "deep=off",
+            ],
         },
         "corpus": {
             "sha256": source_sha,
@@ -2825,7 +2989,12 @@ def confirmation_fast_gate_contract(
             "scorer": "construction completeness only; benchmark gold quarantined",
             "k": k,
             "budget": budget_tokens,
-            "flags": ["fast", "fact_extraction=off", "deep=off"],
+            "flags": [
+                "fast",
+                fact_extraction_flag(),
+                subject_resolution_flag(),
+                "deep=off",
+            ],
         },
         "corpus": {
             "sha256": source_sha,
@@ -2855,7 +3024,10 @@ def build_confirmation_evidence(args) -> dict:
     items = confirmation_runtime_items(rows)
     gr.reexec_through_scratch_db(args.database_url)
     database_url = os.environ["DATABASE_URL"]
-    os.environ["MEMPHANT_FACT_EXTRACTION"] = "0"
+    # ponytail: setdefault, not assignment, so the fresh-tranche packet (P1) can
+    # run the repaired arm (extraction on + subject resolution). Absent env, the
+    # sealed default is byte-identical to the v7 confirmation. Deep stays hard-off.
+    os.environ.setdefault("MEMPHANT_FACT_EXTRACTION", "0")
     os.environ["MEMPHANT_DEEP"] = "off"
     tenant_id, api_key = gr.provision_tenant(
         args.cli_bin, database_url, name_prefix="horizon-confirmation"
@@ -3115,6 +3287,35 @@ def main() -> int:
     selection.add_argument("--seed", required=True)
     selection.add_argument("--out", required=True, type=Path)
     selection.add_argument("--report-out", required=True, type=Path)
+    fresh = subparsers.add_parser("select-fresh-tranche")
+    fresh.add_argument("--full-lock", required=True, type=Path)
+    fresh.add_argument(
+        "--sample-lock",
+        default=REPO_ROOT / "benchmarks/manifests/horizonbench.sample.v1.json",
+        type=Path,
+    )
+    fresh.add_argument(
+        "--confirmation-selection",
+        default=REPO_ROOT
+        / "docs/build-log/artifacts/horizonbench-confirmation/selection.json",
+        type=Path,
+    )
+    fresh.add_argument(
+        "--cache-root",
+        default=Path("~/.cache/memphant-bench/horizonbench"),
+        type=Path,
+    )
+    fresh.add_argument("--seed", required=True)
+    fresh.add_argument("--users-per-generator", type=int, required=True)
+    fresh.add_argument(
+        "--extra-exclusions",
+        type=Path,
+        nargs="*",
+        default=[],
+        help="committed integrity-exclusion artifacts, each with excluded_user_ids",
+    )
+    fresh.add_argument("--out", required=True, type=Path)
+    fresh.add_argument("--report-out", required=True, type=Path)
     evidence = subparsers.add_parser("build-fast-evidence")
     evidence.add_argument("--source", required=True, type=Path)
     evidence.add_argument(
@@ -3264,6 +3465,9 @@ def main() -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "select-confirmation":
         report = select_confirmation(args)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    elif args.command == "select-fresh-tranche":
+        report = select_fresh_tranche(args)
         print(json.dumps(report, indent=2, sort_keys=True))
     elif args.command == "build-fast-evidence":
         report = build_fast_evidence(args)

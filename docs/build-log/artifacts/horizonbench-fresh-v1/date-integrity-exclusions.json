@@ -1,0 +1,36 @@
+{
+  "bad_date_samples": {
+    "o3/user_31": [
+      "1976\\u001505\\u001514"
+    ],
+    "o3/user_32": [
+      "[Today]"
+    ],
+    "o3/user_63": [
+      "[auto-fill]"
+    ],
+    "o3/user_95": [
+      "[six months from today]"
+    ],
+    "sonnet-4.5/user_11": [
+      "[counting backward]"
+    ],
+    "sonnet-4.5/user_56": [
+      "YYYY-MM-DD"
+    ]
+  },
+  "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+  "excluded_user_ids": [
+    "o3/user_31",
+    "o3/user_32",
+    "o3/user_63",
+    "o3/user_95",
+    "sonnet-4.5/user_11",
+    "sonnet-4.5/user_56"
+  ],
+  "excluded_user_ids_sha256": "852bfabc581bffc90b6542155c764a5cdc05a8955ea4b4171547657764405f85",
+  "full_lock_sha256": "af992d557bf4deece8aa4c764aa5072f2af41521fee9d6c7cf735450bacde71d",
+  "method": "parse every session date via datetime.fromisoformat over the eligible pool",
+  "purpose": "HorizonBench eligible users whose session dates cannot be grounded; excluded from fresh-tranche selection like census drift users.",
+  "schema_version": 1
+}
