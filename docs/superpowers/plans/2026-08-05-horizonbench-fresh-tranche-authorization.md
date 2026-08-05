@@ -92,6 +92,36 @@ tranche's design and pin the MDE at 80% power for the preregistered predicate in
 the planning prior. The signed n must clear that MDE. Record
 `benchmarks/manifests/instrument_power.json` delta.
 
+**Design decision, made once at P4 and frozen — single-stage or group-sequential.**
+The selection is prefix-stable by construction: `select_confirmation_rows` ranks
+all eligible users by `_seeded_key(seed, generator, user_id)` and takes the first
+N per generator, and each user's two items are chosen independently of N. So
+under one seed the 60-user set is an **exact prefix** of the 100-user set — same
+users, same items. This makes a group-sequential design cache-efficient, but it
+is legitimate *only if elected here, before any paid look.*
+
+- **Single-stage:** freeze one n (recommended 100), run once. Simplest;
+  no interim peek.
+- **Group-sequential (down-payment):** pre-register n₁ = 60 (interim) and
+  n_max = 100 (final) under the **same seed** `horizonbench-fresh-v1`, a frozen
+  reader, and a frozen Fast config (threshold 0.85). Pin an **alpha-spending
+  boundary** (e.g. O'Brien–Fleming, recorded in `instrument_power.json`) so the
+  interim look does not inflate type-I error, and a written continue/stop rule
+  keyed only to the boundary — never to an unblinded eyeball of the interim
+  delta. The stage-2 extension re-presents the same 60 users through the shared
+  reader cache dir (`cache_role: read`), so their 240 calls are cache hits and
+  stage 2 pays only the 40-user / 160-call increment. Cache reuse requires the
+  reader model, prompt version, and Fast config to be **byte-identical** across
+  stages; changing the threshold or embedder after the interim look invalidates
+  the Fast-arm cache (the full-context arm still hits) and forfeits the saving.
+
+**The burn rule is why this must be elected up front.** A standalone 60-user run
+that is scored and *then* used to decide whether to continue has burned those 60
+users; reusing them in a later "held-out 100" would relabel burned data as held
+out, which the claim contract forbids. In that case the powered run needs fresh
+users disjoint from the burned 60 and pays a full second time (see §8). Only the
+pre-registered group-sequential path preserves both the users and the cache.
+
 ## 4. Frozen inputs (pinned by P1–P4 before signing)
 
 | input | value |
@@ -176,9 +206,36 @@ prompt-token distribution — this planning figure is not the authorization.
 | **primary (100u/200i, incl. pilot)** | 200 | 400 | **~$182** |
 | v7-equivalent (60u/120i) | 120 | 240 | ~$109 |
 
-**Recommended authorized ceiling: $260** (primary + ~40% headroom for
-prompt-token variance and the 1M-context premium on the full-context arm).
-Hard fail-safe: stop on reaching the ceiling regardless of completion.
+**Recommended authorized ceiling (single-stage 100u): $260** (primary + ~40%
+headroom for prompt-token variance and the 1M-context premium on the
+full-context arm). Hard fail-safe: stop on reaching the ceiling regardless of
+completion.
+
+**Group-sequential reuse (only under the P4 down-payment election).** Stage 1
+scores 60 users (240 calls, ~$109) and writes the shared reader cache. Because
+the 60-user set is a seed-prefix of the 100-user set (§P4) and the reader +
+Fast config are frozen identically, stage 2's first 60 users are cache hits;
+stage 2 pays only the 40-user increment:
+
+| stage | new calls | cached calls | est. incremental |
+|---|---:|---:|---:|
+| stage 1 (interim, 60u) | 240 | 0 | ~$109 |
+| stage 2 (extend to 100u) | 160 | 240 | **~$73** |
+| **combined powered 100u** | 400 | — | **~$182 total** |
+
+So the sequential path reaches the same powered 100-user result for the same
+~$182 of actual spend as running 100 in one shot — the stage-1 money is a down
+payment, not an added cost. **This holds ONLY if the design is elected at P4
+before stage 1.** If stage 1 is instead run standalone and the decision to
+extend is made afterward, the 60 are burned: the powered run then needs 100
+fresh users disjoint from them and pays a full second ~$182 (≈ $290 total, and
+~160 of the ~240 fresh users consumed). Cache reuse also evaporates if the
+reader model, prompt version, or Fast threshold changes between stages.
+
+Two ceilings to authorize if electing group-sequential: **stage 1 $140**
+(interim), **combined $260** (releases stage 2's ~$120 increment only after the
+P4 alpha-spending boundary says continue). Either stage stops hard on its own
+ceiling.
 
 ## 9. Fail-closed conditions (any ⇒ stop, preserve partial evidence)
 
@@ -213,9 +270,10 @@ requires every other axis independently (program plan §Required Portfolio).
 - [ ] P1 runner un-seal committed; diff sha256: `__________`
 - [ ] P2 fresh selection frozen; fresh id-set sha256: `__________`; excluded-union sha256: `__________`; disjointness asserted
 - [ ] P3 free construction gate passed; fresh supersessions (closed valid_to / edges): `____ / ____`
-- [ ] P4 power freeze passed; signed n = `____` users / `____` items; MDE @80% = `____`
+- [ ] P4 design elected (circle one): **single-stage** n = `____` / **group-sequential** n₁ = 60, n_max = `____`, alpha-spending boundary = `__________`
+- [ ] P4 power freeze passed; MDE @80% = `____`
 - [ ] Reader pinned: `claude-opus-4-6`, 1M-context route, uncached, structured JSON, 1,024-token cap
-- [ ] Authorized ceiling (USD): `______`  (recommended $260)
+- [ ] Authorized ceiling(s) (USD): single-stage `______` (rec. $260) — or group-sequential stage 1 `______` (rec. $140) + combined `______` (rec. $260)
 - [ ] Pilot kill gate armed (10u/20i)
 - [ ] Authorized by: `______________`  date: `__________`
 - [ ] `authorization_scope_sha256`: `__________` (committed)
