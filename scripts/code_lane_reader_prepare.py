@@ -70,7 +70,13 @@ def count_tokens(body: str) -> int:
 
 
 def load_arm(path: Path) -> list[dict]:
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    # Split on '\n' only: evidence bodies can embed U+2028/U+2029, which
+    # splitlines() would treat as record breaks mid-JSON (see run_reader.py).
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").split("\n")
+        if line.strip()
+    ]
     if not rows:
         raise ValueError(f"{path} is empty")
     return rows

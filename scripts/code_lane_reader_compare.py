@@ -196,7 +196,9 @@ def gold_span_decomposition(
     """
     rows = {r["question_id"]: r for r in reader_report["per_question"]}
     evidence = {}
-    for line in equalized_evidence.read_text(encoding="utf-8").splitlines():
+    # Split on '\n' only: evidence bodies can embed U+2028/U+2029, which
+    # splitlines() would treat as record breaks mid-JSON (see run_reader.py).
+    for line in equalized_evidence.read_text(encoding="utf-8").split("\n"):
         if line.strip():
             row = json.loads(line)
             evidence[row["question_id"]] = row

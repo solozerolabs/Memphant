@@ -52,7 +52,11 @@ def widest_prompt_bytes(evidence_path: Path) -> int:
     which is the row that bounds the per-call prompt liability.
     """
     widest = 0
-    for line in evidence_path.read_text(encoding="utf-8").splitlines():
+    # Split on '\n' only: chat bodies can embed U+2028/U+2029, which
+    # str.splitlines() would treat as line breaks mid-JSON-record — the same
+    # convention run_reader.py's evidence loader already uses. splitlines()
+    # here silently shredded LME session rows and aborted packet minting.
+    for line in evidence_path.read_text(encoding="utf-8").split("\n"):
         if not line.strip():
             continue
         row = json.loads(line)
@@ -106,7 +110,10 @@ def main() -> int:
             "retrieval": retrieval,
             "output": Path(output_s).resolve(),
             "n_rows": sum(
-                1 for line in evidence.read_text(encoding="utf-8").splitlines() if line.strip()
+                # Split on '\n' only (see widest_prompt_bytes): splitlines()
+                # over-counts rows whose bodies embed U+2028/U+2029, inflating
+                # the logical-call count and the derived spend ceiling.
+                1 for line in evidence.read_text(encoding="utf-8").split("\n") if line.strip()
             ),
             "widest_prompt_bytes": widest_prompt_bytes(evidence),
         }
