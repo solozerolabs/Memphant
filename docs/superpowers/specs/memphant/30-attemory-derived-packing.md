@@ -84,7 +84,24 @@ This is prose in the client render template (Syndai adapter + spec-28 contract),
 
 ## 3. Measurement
 
-- P-2 (landed, unmeasured): LME-S n=5 smoke first (chat-lane cost guard — the reverted fix's failure mode), then rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
+**LME-S n=5 smoke — RUN 2026-08-05, paired, PASS (smoke only, not evidence).** Both arms `--sample 5 --seed 1 --k 10`, `--features fastembed`, ephemeral scratch DB per arm via `with_scratch_db.sh`, identical dataset sha. Result:
+
+| | lever OFF | lever ON |
+|---|---|---|
+| recall@5 / recall@10 | 0.8 / 0.8 | 0.8 / 0.8 |
+| `hit_at_5`, `hit_at_10`, `first_answer_rank`, `degraded` | — | **identical on every question** |
+| `returned_items` | 4, 5, 6, 5, 6 | 5, 6, 7, 5, 7 |
+
+Every scalar in both reports matches except the flag itself. The lever fires and does exactly what the mechanism predicts: **+1 packed item on 4 of 5 questions at the same 8192-token budget**, with no change to which items rank where. That is the correct sign — cheaper per-item cost admits more evidence, the opposite of the reverted fix's failure mode.
+
+Three limits on reading this:
+1. **n=5 cannot promote anything.** It clears the CI chain-smoke bar and shows no regression; it is not a measurement.
+2. **Total reader tokens did not fall.** Packing fills the budget either way; what changed is how many distinct items fit inside it. "Cheaper per item" is not "fewer tokens sent."
+3. **No reader ran** — this lane is `retrieval_only`, so the reader-QA question (does more, smaller evidence answer better?) is untouched. Recall at n=5 was insensitive: the single miss stayed a miss.
+
+Remaining before any promotion claim: rung-7 profile, then Track R paired vs lever-off, then reader-QA on the chat lane.
+
+- P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.
 - P-4: rides the C0 drift-test pattern; behavioral effect only measurable end-to-end in Syndai — defer quantitative claim, land as contract change.
 
