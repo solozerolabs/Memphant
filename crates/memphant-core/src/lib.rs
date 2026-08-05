@@ -597,6 +597,26 @@ pub struct PackLevers {
     /// (2026-07-21-rung7-packing-diagnosis.md). `None` keeps today's per-item
     /// budget of `whole_body.min(request_budget)` — byte-identical off-path.
     pub pack_render_cap: Option<usize>,
+    /// P-2 (spec 30, Attemory-derived): emit a CONTIGUOUS RUN of selected
+    /// chunks as ONE block under a single run-spanning provenance header
+    /// instead of repeating a header per chunk. Both chunkers hold every header
+    /// slot fixed across a unit's chunks except a trailing `first-last` span
+    /// (episodes) or vary nothing at all (resources), so the merge is lossless;
+    /// a positional gap or a foreign header still starts a new block.
+    ///
+    /// Strictly a cost REDUCTION — a single-chunk run is byte-identical to the
+    /// per-chunk render, and selection still charges the un-merged per-chunk
+    /// price, so the gate can only ever reserve more than the merge spends.
+    /// Its point is the render-loss defect: pre-merge, full chunk coverage cost
+    /// one header PER CHUNK on top of the bodies, so it always exceeded the
+    /// whole-body render budget and a chunked item was structurally unable to
+    /// emit all of itself.
+    ///
+    /// Default OFF. It changes what the reader sees and how much each item
+    /// costs, so it is a measured arm like every other lever here — the
+    /// unconditional version of this fix was reverted on 2026-07-30 for
+    /// raising per-item cost against the chat lane.
+    pub merge_chunk_blocks: bool,
     /// Budgeted submodular evidence ordering. When enabled, a deterministic
     /// cost-scaled greedy pass jointly rewards relevance, distinct query-term
     /// coverage, saturated lexical representativeness (so near-duplicates
@@ -8813,6 +8833,9 @@ struct PackCtx<'a> {
     /// Exact structured goal promoted beside an authoritative quantity rollup.
     /// Rung-7 per-item render cap threaded from `PackLevers`. `None` off-path.
     pack_render_cap: Option<usize>,
+    /// P-2 merged chunk-block rendering, threaded from `PackLevers`. Off-path
+    /// this is `false` and rendering is byte-identical to pre-P-2.
+    merge_chunk_blocks: bool,
 }
 
 /// Everything computed once per candidate before the admit/drop decision.
@@ -8964,7 +8987,13 @@ fn pack_recall_context(
         }
     });
     if request.context_packing_abstention_enabled && pack_levers.submodular_ordering_enabled {
-        fused = submodular_pack_order(fused, request, query_tokens, pack_levers.pack_render_cap);
+        fused = submodular_pack_order(
+            fused,
+            request,
+            query_tokens,
+            pack_levers.pack_render_cap,
+            pack_levers.merge_chunk_blocks,
+        );
     }
 
     let ctx = PackCtx {
@@ -8975,6 +9004,7 @@ fn pack_recall_context(
         temporal_grounding_enabled,
         live_candidate_ids,
         pack_render_cap: pack_levers.pack_render_cap,
+        merge_chunk_blocks: pack_levers.merge_chunk_blocks,
     };
 
     // Greedy fill. With the session-diversity quota on, a candidate whose episode
@@ -9012,7 +9042,11 @@ fn pack_recall_context(
     // W1 render loss: a partially chunk-rendered item completes itself — to full
     // chunk coverage, or to the bare whole body when the per-window provenance
     // headers do not fit — when the leftover budget covers the difference.
-    chunk_completion_pass(&mut acc, request.budget_tokens);
+    chunk_completion_pass(
+        &mut acc,
+        request.budget_tokens,
+        pack_levers.merge_chunk_blocks,
+    );
 
     // W5 dated packs: prefix each item body with `[date YYYY-MM-DD]` from the
     // unit's grounded `valid_from`. Applied AFTER the completion pass (which
@@ -9080,6 +9114,7 @@ fn admit_or_drop(
         ctx.query_tokens,
         request.budget_tokens,
         ctx.pack_render_cap,
+        ctx.merge_chunk_blocks,
     );
     let candidate_id = candidate.unit.id;
     // The projection and its exact goal are authoritative packet structure.
@@ -9279,18 +9314,25 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
 /// thing that can change is the text of an item that was already packed, and only
 /// when the budget genuinely has room. A budget-bound pack (leftover 0) is a
 /// no-op; a slot-bound pack recovers full coverage.
-fn chunk_completion_pass(acc: &mut PackAccumulator, budget_tokens: usize) {
+fn chunk_completion_pass(acc: &mut PackAccumulator, budget_tokens: usize, merge: bool) {
     for index in 0..acc.items.len() {
         let Some(state) = acc.completions[index].take() else {
             continue;
         };
         let charged = acc.token_counts[index];
         let leftover = budget_tokens.saturating_sub(acc.token_estimate);
-        let full_coverage: usize = state.chunks.iter().map(chunk_block_token_cost).sum();
+        // P-2: full coverage is priced through the SAME merged-run accounting
+        // emission uses, so the completion pass is never quoted a per-chunk
+        // header tax it will not actually pay. This is what makes full coverage
+        // reachable at all: pre-merge it cost one header PER CHUNK on top of the
+        // bodies, so it always exceeded the whole body and the item was
+        // structurally unable to emit all of itself.
+        let all_chunks = vec![true; state.chunks.len()];
+        let full_coverage = selected_chunk_cost(&state.chunks, &all_chunks, merge);
         let whole_cost = conservative_token_estimate(&state.whole_body);
         let (body, cost) = if full_coverage.saturating_sub(charged) <= leftover {
             (
-                emit_selected_chunks(&state.chunks, &vec![true; state.chunks.len()]),
+                emit_selected_chunks(&state.chunks, &all_chunks, merge),
                 full_coverage,
             )
         } else if whole_cost.saturating_sub(charged) <= leftover {
@@ -9380,6 +9422,7 @@ fn submodular_pack_order(
     request: &RecallRequest,
     query_tokens: &[String],
     render_cap: Option<usize>,
+    merge_chunk_blocks: bool,
 ) -> Vec<CandidateAccumulator> {
     const ALPHA: f64 = 0.3;
     let query_terms = content_terms(query_tokens.iter().map(String::as_str));
@@ -9399,6 +9442,7 @@ fn submodular_pack_order(
                 query_tokens,
                 request.budget_tokens,
                 render_cap,
+                merge_chunk_blocks,
             )
             .1
         })
@@ -9416,6 +9460,7 @@ fn submodular_pack_order(
                 query_tokens,
                 request.budget_tokens,
                 render_cap,
+                merge_chunk_blocks,
             );
             let text = rendered.as_deref().unwrap_or(&candidate.unit.body);
             SubmodularPackCandidate {
@@ -9692,7 +9737,7 @@ fn packed_body_and_cost(
     query_tokens: &[String],
 ) -> (Option<String>, usize) {
     let (rendered_body, charged_tokens, _mask) =
-        packed_render(unit, query_tokens, usize::MAX, None);
+        packed_render(unit, query_tokens, usize::MAX, None, false);
     (rendered_body, charged_tokens)
 }
 
@@ -9705,6 +9750,7 @@ fn packed_render(
     query_tokens: &[String],
     request_budget_tokens: usize,
     render_cap: Option<usize>,
+    merge_chunk_blocks: bool,
 ) -> (Option<String>, usize, Option<Vec<bool>>) {
     let whole_body_tokens = conservative_token_estimate(&unit.body);
     // Rung-7: the per-item render budget is the whole body (bounded by the
@@ -9716,8 +9762,10 @@ fn packed_render(
         .min(render_cap.unwrap_or(usize::MAX));
     match select_chunk_mask(&unit.contextual_chunks, query_tokens, render_budget) {
         Some(selected) => {
-            let rendered = emit_selected_chunks(&unit.contextual_chunks, &selected);
-            let charged_tokens = selected_chunk_cost(&unit.contextual_chunks, &selected);
+            let rendered =
+                emit_selected_chunks(&unit.contextual_chunks, &selected, merge_chunk_blocks);
+            let charged_tokens =
+                selected_chunk_cost(&unit.contextual_chunks, &selected, merge_chunk_blocks);
             (Some(rendered), charged_tokens, Some(selected))
         }
         None => (None, whole_body_tokens, None),
@@ -9791,7 +9839,7 @@ fn render_chunked_item_body(
     budget_tokens: usize,
 ) -> Option<String> {
     select_chunk_mask(chunks, query_tokens, budget_tokens)
-        .map(|selected| emit_selected_chunks(chunks, &selected))
+        .map(|selected| emit_selected_chunks(chunks, &selected, true))
 }
 
 /// The chunk-selection mask behind chunk-aware rendering: `Some(selected)` marks
@@ -9893,11 +9941,16 @@ fn expand_siblings(
 }
 
 /// Emits the selected chunks in document order (chunk vector index == window
-/// index), each prefixed by its provenance header, blocks joined by a blank line.
-fn emit_selected_chunks(chunks: &[ContextualChunk], selected: &[bool]) -> String {
-    (0..chunks.len())
-        .filter(|&index| selected[index])
-        .map(|index| chunk_block(&chunks[index]))
+/// index), blocks joined by a blank line. P-2 (spec 30): a CONTIGUOUS RUN of
+/// selected chunks shares ONE provenance header rather than repeating one per
+/// chunk. A positional gap or an unmergeable header still starts a new block,
+/// so the reader keeps seeing a distinct header wherever content is
+/// discontinuous — the merge only removes headers that would have restated
+/// provenance the previous line already established.
+fn emit_selected_chunks(chunks: &[ContextualChunk], selected: &[bool], merge: bool) -> String {
+    selected_runs(chunks, selected, merge)
+        .into_iter()
+        .map(|(start, end)| run_block(chunks, start, end))
         .collect::<Vec<_>>()
         .join("\n\n")
 }
@@ -9910,17 +9963,117 @@ fn chunk_block(chunk: &ContextualChunk) -> String {
 /// Conservative reader-token cost of a rendered chunk block. One extra token
 /// covers the blank-line separator between blocks. Charging it on the first
 /// block too keeps the cost additive and can only underfill, never overrun.
+///
+/// Still charged PER CHUNK by the selection gate ([`select_chunk_mask`] /
+/// [`expand_siblings`]) even though emission merges runs: selection stays
+/// byte-identical to pre-P-2, and the merge can only make the final charge
+/// smaller than the gate assumed — underfill, never overrun.
 fn chunk_block_token_cost(chunk: &ContextualChunk) -> usize {
     conservative_token_estimate(&chunk_block(chunk)).saturating_add(1)
 }
 
-fn selected_chunk_cost(chunks: &[ContextualChunk], selected: &[bool]) -> usize {
-    chunks
-        .iter()
-        .zip(selected)
-        .filter(|(_, picked)| **picked)
-        .map(|(chunk, _)| chunk_block_token_cost(chunk))
+/// The charged cost of the merged emission — never larger than the per-chunk
+/// sum the selection gate assumed, and strictly smaller whenever a run merged.
+fn selected_chunk_cost(chunks: &[ContextualChunk], selected: &[bool], merge: bool) -> usize {
+    selected_runs(chunks, selected, merge)
+        .into_iter()
+        .map(|(start, end)| run_block_token_cost(chunks, start, end))
         .sum()
+}
+
+/// Splits a chunk header into `(prefix, first, last)` when it ends in the
+/// `<prefix><first>-<last>]` span slot both chunkers mint (the episode
+/// chunker's `[turns a-b]` / `[segments a-b]`). `None` for any other shape, so
+/// an unrecognised header degrades to "not span-mergeable" rather than to a
+/// wrong span.
+fn split_header_span(header: &str) -> Option<(&str, u64, u64)> {
+    let inner = header.strip_suffix(']')?;
+    let (head, last) = inner.rsplit_once('-')?;
+    let last: u64 = last.parse().ok()?;
+    let digits = head.len()
+        - head
+            .trim_end_matches(|byte: char| byte.is_ascii_digit())
+            .len();
+    if digits == 0 {
+        return None;
+    }
+    let cut = head.len() - digits;
+    let first: u64 = head[cut..].parse().ok()?;
+    Some((&header[..cut], first, last))
+}
+
+/// Two adjacent chunks belong in one block when their headers are identical
+/// (the resource chunker repeats one section heading verbatim across a
+/// section's chunks) or differ ONLY in the trailing span slot (the episode
+/// chunker holds episode id, kind, and date fixed across a unit's chunks and
+/// varies only `first-last`). Any other pair is left unmerged.
+fn headers_mergeable(left: &str, right: &str) -> bool {
+    if left == right {
+        return true;
+    }
+    match (split_header_span(left), split_header_span(right)) {
+        (Some((left_prefix, ..)), Some((right_prefix, ..))) => left_prefix == right_prefix,
+        _ => false,
+    }
+}
+
+/// Inclusive index ranges of selected chunks that are both adjacent and
+/// header-mergeable. With `merge` off every selected chunk is its own
+/// single-index run, which renders and prices byte-identically to the
+/// pre-P-2 per-chunk path.
+fn selected_runs(
+    chunks: &[ContextualChunk],
+    selected: &[bool],
+    merge: bool,
+) -> Vec<(usize, usize)> {
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for index in (0..chunks.len()).filter(|&index| selected[index]) {
+        match runs.last_mut() {
+            Some(run)
+                if merge
+                    && index == run.1 + 1
+                    && headers_mergeable(&chunks[run.0].header, &chunks[index].header) =>
+            {
+                run.1 = index;
+            }
+            _ => runs.push((index, index)),
+        }
+    }
+    runs
+}
+
+/// The run's single header: the first chunk's, with its span slot widened to
+/// the run's last chunk so the header describes exactly the content beneath it.
+/// Falls back to the first header verbatim when the shape carries no span slot
+/// (identical resource headings), which is already correct for that dialect.
+fn run_header(chunks: &[ContextualChunk], start: usize, end: usize) -> String {
+    if start == end {
+        return chunks[start].header.clone();
+    }
+    match (
+        split_header_span(&chunks[start].header),
+        split_header_span(&chunks[end].header),
+    ) {
+        (Some((prefix, first, _)), Some((_, _, last))) if first <= last => {
+            format!("{prefix}{first}-{last}]")
+        }
+        _ => chunks[start].header.clone(),
+    }
+}
+
+/// One rendered block: the run's header, then every chunk body in document
+/// order. A single-chunk run is byte-identical to [`chunk_block`].
+fn run_block(chunks: &[ContextualChunk], start: usize, end: usize) -> String {
+    let mut block = run_header(chunks, start, end);
+    for chunk in &chunks[start..=end] {
+        block.push('\n');
+        block.push_str(&chunk.body);
+    }
+    block
+}
+
+fn run_block_token_cost(chunks: &[ContextualChunk], start: usize, end: usize) -> usize {
+    conservative_token_estimate(&run_block(chunks, start, end)).saturating_add(1)
 }
 
 /// Model-agnostic, UTF-8-safe estimate for a reader-facing context budget.
@@ -11300,6 +11453,9 @@ fn append_pack_feature_flags(flags: &mut Vec<String>, levers: PackLevers) {
     }
     if let Some(quota) = levers.session_quota {
         flags.push(format!("pack_session_quota:{quota}"));
+    }
+    if levers.merge_chunk_blocks {
+        flags.push("pack_merge_chunk_blocks".to_string());
     }
     if levers.submodular_ordering_enabled {
         flags.push("pack_submodular_ordering_enabled".to_string());
@@ -14196,13 +14352,14 @@ mod chunk_render_tests {
         let rendered = render_chunked_item_body(&chunks, &tokenize("mango"), 1000)
             .expect("matched chunk renders");
 
-        // Every header present, each body emitted exactly once (dedup).
-        for turns in ["1-2", "3-4", "5-6", "7-8"] {
-            assert!(
-                rendered.contains(&format!("[turns {turns}]")),
-                "header for {turns} present: {rendered}"
-            );
-        }
+        // P-2: all four chunks are selected and contiguous, so they collapse to
+        // ONE block under a single header spanning the whole run — the four
+        // per-chunk headers this used to emit were pure duplication.
+        assert_eq!(
+            rendered,
+            "[episode ep] [kind user] [turns 1-8]\nred apple pie\ngreen lime soda\nblue mango tart\ngold plum cake",
+            "contiguous run merges under one run-spanning header"
+        );
         for body in [
             "red apple pie",
             "green lime soda",
@@ -14211,19 +14368,110 @@ mod chunk_render_tests {
         ] {
             assert_eq!(count(&rendered, body), 1, "{body} emitted once");
         }
-        // Document order: header positions ascend with window index.
-        let positions: Vec<usize> = ["1-2", "3-4", "5-6", "7-8"]
-            .iter()
-            .map(|turns| rendered.find(&format!("[turns {turns}]")).unwrap())
-            .collect();
-        assert!(
-            positions.windows(2).all(|pair| pair[0] < pair[1]),
-            "chunks emitted in document order: {positions:?}"
+        assert_eq!(
+            count(&rendered, "[episode ep]"),
+            1,
+            "one header for the run"
         );
-        // Header prefixes its body (provenance immediately precedes content).
-        let matched = rendered.find("[turns 5-6]").unwrap();
-        let body = rendered.find("blue mango tart").unwrap();
-        assert!(matched < body, "header precedes its body");
+    }
+
+    /// P-2: a positional GAP breaks the run, so each side keeps its own header
+    /// and the reader still sees that content is discontinuous.
+    #[test]
+    fn positional_gap_starts_a_new_block() {
+        let chunks = [
+            chunk("1-2", "alpha mango start"),
+            chunk("3-4", "zzz unrelated filler"),
+            chunk("5-6", "omega mango finish"),
+        ];
+        // Budget for exactly the two matched chunks: the middle one cannot fit,
+        // leaving a gap between them.
+        let two_matched = chunk_block_token_cost(&chunks[0]) + chunk_block_token_cost(&chunks[2]);
+        let rendered = render_chunked_item_body(&chunks, &tokenize("mango"), two_matched)
+            .expect("matched chunks render");
+
+        assert!(
+            !rendered.contains("zzz unrelated filler"),
+            "gap chunk not selected: {rendered}"
+        );
+        assert!(
+            rendered.contains("[turns 1-2]") && rendered.contains("[turns 5-6]"),
+            "each side of the gap keeps its own header: {rendered}"
+        );
+        assert_eq!(
+            count(&rendered, "[episode ep]"),
+            2,
+            "gap yields two blocks: {rendered}"
+        );
+    }
+
+    /// P-2 is a pure cost REDUCTION: a merged run never charges more than the
+    /// per-chunk sum the selection gate assumed, and charges strictly less
+    /// whenever any run actually merged. This is the property that makes the
+    /// change safe against the chat-lane per-item cost regression that forced
+    /// the earlier header fix to be reverted.
+    #[test]
+    fn merged_cost_never_exceeds_per_chunk_cost() {
+        let chunks = [
+            chunk("1-2", "red apple pie"),
+            chunk("3-4", "green lime soda"),
+            chunk("5-6", "blue mango tart"),
+        ];
+        let per_chunk: usize = chunks.iter().map(chunk_block_token_cost).sum();
+        let all = vec![true; chunks.len()];
+        let merged = selected_chunk_cost(&chunks, &all, true);
+        assert!(
+            merged < per_chunk,
+            "merged run is strictly cheaper: {merged} vs {per_chunk}"
+        );
+
+        // A single-chunk selection is byte-identical to the pre-merge render,
+        // so isolated items are completely unaffected.
+        let lone = [true, false, false];
+        assert_eq!(
+            selected_chunk_cost(&chunks, &lone, true),
+            chunk_block_token_cost(&chunks[0]),
+            "single-chunk run costs exactly what it always did"
+        );
+        assert_eq!(
+            emit_selected_chunks(&chunks, &lone, true),
+            chunk_block(&chunks[0]),
+            "single-chunk run renders exactly what it always did"
+        );
+    }
+
+    /// P-2 header dialects: the resource chunker repeats ONE section heading
+    /// verbatim, so a run merges without any span surgery; unrelated headers
+    /// never merge even when adjacent.
+    #[test]
+    fn header_dialects_merge_only_when_provenance_agrees() {
+        let heading = |body: &str| ContextualChunk {
+            id: "chunk-res".to_string(),
+            header: "### Deployment".to_string(),
+            body: body.to_string(),
+            source_span: Some("0-0".to_string()),
+        };
+        let resource = [heading("first para"), heading("second para")];
+        assert_eq!(
+            emit_selected_chunks(&resource, &[true, true], true),
+            "### Deployment\nfirst para\nsecond para",
+            "identical resource headings merge under one heading"
+        );
+
+        let mixed = [
+            chunk("1-2", "from episode one"),
+            ContextualChunk {
+                id: "chunk-other".to_string(),
+                header: "[episode other] [kind user] [turns 1-2]".to_string(),
+                body: "from episode two".to_string(),
+                source_span: Some("0-0".to_string()),
+            },
+        ];
+        let rendered = emit_selected_chunks(&mixed, &[true, true], true);
+        assert!(
+            rendered.contains("[episode ep]") && rendered.contains("[episode other]"),
+            "different episodes keep separate headers: {rendered}"
+        );
     }
 
     /// Budget bounds expansion: the matched chunk plus its nearest sibling fit,
@@ -14248,7 +14496,12 @@ mod chunk_render_tests {
             rendered.contains("red apple pie crust"),
             "nearest neighbour kept"
         );
-        assert!(rendered.contains("[turns 1-4]") && rendered.contains("[turns 5-8]"));
+        // P-2: chunks 0 and 1 are adjacent and same-episode, so the two blocks
+        // collapse under one header spanning turns 1-8.
+        assert!(
+            rendered.contains("[turns 1-8]"),
+            "adjacent kept chunks merge: {rendered}"
+        );
         assert!(
             !rendered.contains("blue plum jam toast") && !rendered.contains("[turns 9-12]"),
             "over-budget far sibling dropped: {rendered}"
@@ -15257,7 +15510,7 @@ mod pack_cost_tests {
 
         // What admission renders on its own — the defect, in isolation.
         let (rendered, admission_cost, mask) =
-            packed_render(&unit(1, &whole, chunks()), &query_tokens, 4096, None);
+            packed_render(&unit(1, &whole, chunks()), &query_tokens, 4096, None, false);
         let rendered = rendered.expect("the matched chunk renders");
         assert!(
             mask.expect("chunk-rendered").iter().any(|picked| !picked),
@@ -15299,7 +15552,7 @@ mod pack_cost_tests {
         assert_eq!(roomy.items.len(), 2, "nothing is displaced");
         assert_eq!(
             roomy.items[0].body,
-            emit_selected_chunks(&chunks(), &vec![true; bodies.len()]),
+            emit_selected_chunks(&chunks(), &vec![true; bodies.len()], false),
             "full chunk coverage is emitted, headers and all"
         );
         assert!(
@@ -15340,6 +15593,7 @@ mod pack_cost_tests {
         let capped = pack(
             4096,
             PackLevers {
+                merge_chunk_blocks: false,
                 session_quota: None,
                 pack_render_cap: Some(admission_cost),
                 submodular_ordering_enabled: false,
@@ -15348,6 +15602,54 @@ mod pack_cost_tests {
         assert_eq!(
             capped.items[0].body, rendered,
             "pack_render_cap still bounds the item"
+        );
+
+        // P-2, paired at ONE budget: enough for full coverage under a single
+        // run-spanning header, but NOT under one header per window.
+        let merged_coverage_cost = selected_chunk_cost(&chunks(), &vec![true; bodies.len()], true);
+        assert!(
+            merged_coverage_cost < full_coverage_cost,
+            "merging is strictly cheaper than the per-chunk price: \
+             {merged_coverage_cost} < {full_coverage_cost}"
+        );
+        let paired_budget = merged_coverage_cost + plain_cost;
+
+        // Lever off: the per-window headers do not fit, so provenance is lost
+        // entirely — the reader gets the bare whole body.
+        let off = pack(paired_budget, PackLevers::default());
+        assert_eq!(
+            off.items[0].body, whole,
+            "per-chunk headers do not fit at this budget, so none survive"
+        );
+
+        // Lever on: the same budget buys every span WITH its provenance.
+        let merged = pack(
+            paired_budget,
+            PackLevers {
+                merge_chunk_blocks: true,
+                ..PackLevers::default()
+            },
+        );
+        assert!(
+            merged.items[0].body.contains("goldspan"),
+            "every span is emitted: {}",
+            merged.items[0].body
+        );
+        assert!(
+            merged.items[0].body.contains("[turns 1-8]"),
+            "…under ONE run-spanning header: {}",
+            merged.items[0].body
+        );
+        assert_eq!(
+            merged.items[0].body.matches("[episode ep]").count(),
+            1,
+            "exactly one header survives the merge: {}",
+            merged.items[0].body
+        );
+        assert!(
+            merged.token_estimate <= paired_budget,
+            "never exceeds budget: {} vs {paired_budget}",
+            merged.token_estimate
         );
     }
 
@@ -15404,6 +15706,7 @@ mod pack_cost_tests {
             Vec::new(),
             16,
             PackLevers {
+                merge_chunk_blocks: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15458,6 +15761,7 @@ mod pack_cost_tests {
             Vec::new(),
             5,
             PackLevers {
+                merge_chunk_blocks: false,
                 session_quota: Some(2),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15516,6 +15820,7 @@ mod pack_cost_tests {
             &req,
             candidate_count,
             PackLevers {
+                merge_chunk_blocks: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15547,6 +15852,7 @@ mod pack_cost_tests {
             &req,
             candidate_count,
             PackLevers {
+                merge_chunk_blocks: false,
                 session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
                 pack_render_cap: None,
                 submodular_ordering_enabled: false,
@@ -15614,6 +15920,7 @@ mod pack_cost_tests {
         );
 
         let on_levers = PackLevers {
+            merge_chunk_blocks: false,
             session_quota: Some(DEFAULT_SESSION_DIVERSITY_QUOTA),
             pack_render_cap: None,
             submodular_ordering_enabled: false,

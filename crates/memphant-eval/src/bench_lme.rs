@@ -128,6 +128,11 @@ pub struct BenchLmeOptions {
     /// Budgeted submodular evidence ordering (`--pack-submodular-ordering`,
     /// default off).
     pub pack_submodular_ordering: bool,
+    /// P-2 merged chunk-block rendering (`--merge-chunk-blocks`, default off)
+    /// threaded via `with_merge_chunk_blocks`: a contiguous run of selected
+    /// chunks renders under ONE run-spanning provenance header instead of one
+    /// header per chunk.
+    pub merge_chunk_blocks: bool,
     /// W5 temporal-grounding flag (`--temporal-grounding`, default off) threaded
     /// via `with_temporal_grounding_enabled` to BOTH the ingest service (so
     /// `valid_from` and chunk headers are date-grounded at reflect) and the
@@ -326,6 +331,10 @@ pub struct BenchLmeReport {
     /// default `Overlap` for pre-flag reports, which is what they ran.
     #[serde(default)]
     pub lexical_scorer: LexicalScorer,
+    /// Whether P-2 merged chunk-block rendering was enabled. Serde default
+    /// `false` for pre-flag reports, which is what they ran.
+    #[serde(default)]
+    pub merge_chunk_blocks: bool,
     /// Whether budgeted submodular evidence ordering was enabled.
     #[serde(default)]
     pub pack_submodular_ordering: bool,
@@ -898,6 +907,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
     .with_pack_render_cap(options.pack_render_cap)
     .with_lexical_scorer(options.lexical_scorer)
     .with_pack_submodular_ordering_enabled(options.pack_submodular_ordering)
+    .with_merge_chunk_blocks(options.merge_chunk_blocks)
     // W5 temporal grounding: query-date windowing + dated packs at recall. Set
     // explicitly here too so the vector-disabled fresh recall service (which is
     // not a clone of `ingest_service`) also carries the flag.
@@ -1430,6 +1440,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
         pack_render_cap: options.pack_render_cap,
         lexical_scorer: options.lexical_scorer,
         pack_submodular_ordering: options.pack_submodular_ordering,
+        merge_chunk_blocks: options.merge_chunk_blocks,
         temporal_grounding: options.temporal_grounding,
         fact_extraction: options.fact_extraction,
         runtime_chunks: runtime_chunks_enabled,

@@ -470,6 +470,10 @@ fn build_base_service(store: AnyStore) -> MemoryService<AnyStore> {
             pack_submodular_ordering_from_env()
                 .unwrap_or_else(|error| panic!("MEMPHANT_PACK_SUBMODULAR_ORDERING: {error}")),
         )
+        .with_merge_chunk_blocks(
+            merge_chunk_blocks_from_env()
+                .unwrap_or_else(|error| panic!("MEMPHANT_PACK_MERGE_CHUNK_BLOCKS: {error}")),
+        )
         .with_structured_state_prefetch_concurrency(
             structured_state_prefetch_concurrency_from_value(
                 std::env::var("MEMPHANT_STRUCTURED_STATE_CONCURRENCY")
@@ -554,6 +558,14 @@ fn strict_bool_from_value(value: Option<&str>) -> Result<bool, String> {
             "must be one of 1, true, on, 0, false, or off, got {value:?}"
         )),
     }
+}
+
+fn merge_chunk_blocks_from_env() -> Result<bool, String> {
+    strict_bool_from_value(
+        std::env::var("MEMPHANT_PACK_MERGE_CHUNK_BLOCKS")
+            .ok()
+            .as_deref(),
+    )
 }
 
 fn pack_submodular_ordering_from_env() -> Result<bool, String> {

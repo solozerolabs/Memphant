@@ -3609,6 +3609,15 @@ impl<S: MemoryStore> MemoryService<S> {
         self
     }
 
+    /// Enables P-2 merged chunk-block rendering (default OFF): a contiguous run
+    /// of selected chunks renders as one block under a single run-spanning
+    /// provenance header instead of one header per chunk. Construction-time
+    /// only; the bench lane's `--merge-chunk-blocks` threads its value here.
+    pub fn with_merge_chunk_blocks(mut self, enabled: bool) -> Self {
+        self.pack_levers.merge_chunk_blocks = enabled;
+        self
+    }
+
     /// Enables budgeted submodular evidence ordering (default OFF).
     pub fn with_pack_submodular_ordering_enabled(mut self, enabled: bool) -> Self {
         self.pack_levers.submodular_ordering_enabled = enabled;
