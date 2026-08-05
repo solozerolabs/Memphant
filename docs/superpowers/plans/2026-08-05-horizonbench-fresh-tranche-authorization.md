@@ -265,13 +265,16 @@ requires every other axis independently (program plan §Required Portfolio).
 
 ---
 
+## Preconditions status (P1–P4 complete, $0, committed `61fd0c57` + P3)
+
+- [x] **P1** runner un-seal committed; `scripts/run_horizonbench.py` sha256 `19aa98395ec760d30a0b9af6369adabcf728a8b27a66663ac407c028467bfc6f`. Confirmation path now honors `MEMPHANT_FACT_EXTRACTION` + `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD` and records the actual flags; sealed default byte-identical to v7.
+- [x] **P2** fresh selection frozen, seed `horizonbench-fresh-v1`, disjointness asserted (∩ burn set = 0, re-derived independently). excluded-union sha256 `6005b8778e1850a7146c36f730cf13acfe212dff6553dc0eb15152235067af87`. Interim 60u (30/gen×2) fresh id-set sha256 `e2ef8c41b9da1399c999922da9838f273d5792d83c0e215ba171745f1a7e3eff`; n_max 102u fresh id-set sha256 `a8533be85b10ed1ce20e53560daecac08e7a442a35f7cf9024139abbcfcaa936`; interim nests exactly in n_max at user and item level. Burn set = 60 confirmation + 10 pilot + 2 drift + 6 date-integrity (union 77 after 1 overlap); date-integrity artifact sha256 `852bfabc581bffc90b6542155c764a5cdc05a8955ea4b4171547657764405f85`.
+- [x] **P3** free construction gate **PASSED** on the fresh 60-user interim, fix on: 120/120 non-degraded, 9513 retained == compiled, and on fresh users **398 supersessions / 796 supersede edges / 398 closed generations** (gate required ≥1 each). Evidence: `docs/build-log/artifacts/horizonbench-fresh-v1/p3-supersession-evidence.json`.
+- [x] **P4** power freeze recorded (`benchmarks/manifests/instrument_power.json`, `preference/horizon` lane, psi 0.2583 from v7): MDE 13.4pt at the interim n=120 vs the 10.8pt decision gap ⇒ interim is a **look, not a decision**; required_n = 183 items, so the n_max **102u / 204i** design is adequate. `instrument_power.py --check` passes.
+
 ## Authorization signature block (owner fills before any paid call)
 
-- [ ] P1 runner un-seal committed; diff sha256: `__________`
-- [ ] P2 fresh selection frozen; fresh id-set sha256: `__________`; excluded-union sha256: `__________`; disjointness asserted
-- [ ] P3 free construction gate passed; fresh supersessions (closed valid_to / edges): `____ / ____`
-- [ ] P4 design elected (circle one): **single-stage** n = `____` / **group-sequential** n₁ = 60, n_max = `____`, alpha-spending boundary = `__________`
-- [ ] P4 power freeze passed; MDE @80% = `____`
+- [ ] Design elected (circle one): **single-stage** 102u/204i / **group-sequential** n₁ = 60u/120i (look) → n_max = 102u/204i, alpha-spending boundary = `__________`
 - [ ] Reader pinned: `claude-opus-4-6`, 1M-context route, uncached, structured JSON, 1,024-token cap
 - [ ] Authorized ceiling(s) (USD): single-stage `______` (rec. $260) — or group-sequential stage 1 `______` (rec. $140) + combined `______` (rec. $260)
 - [ ] Pilot kill gate armed (10u/20i)

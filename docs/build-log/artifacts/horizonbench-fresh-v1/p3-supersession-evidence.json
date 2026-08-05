@@ -1,0 +1,30 @@
+{
+  "config": {
+    "deep": false,
+    "fact_extraction": true,
+    "subject_resolution_threshold": 0.85
+  },
+  "gate": "P3 free construction gate (fresh 60-user interim)",
+  "gate_requirement": "non-zero supersession (>=1 closed valid_to AND >=1 supersede edge) on fresh users",
+  "lineage": {
+    "compiled": 9513,
+    "degraded_rows": 0,
+    "items": 120,
+    "nonempty_evidence_rows": 120,
+    "retained": 9513,
+    "user_contexts": 60
+  },
+  "note": "Measured in the database, never in served evidence (a superseded unit is closed and never served). Cross-wording restatements supersede on users the fix has never touched.",
+  "packet": "docs/superpowers/plans/2026-08-05-horizonbench-fresh-tranche-authorization.md",
+  "schema_version": 1,
+  "selection_sha256_ref": "docs/build-log/artifacts/horizonbench-fresh-v1/fresh-selection-20.json",
+  "supersession_on_fresh_users": {
+    "closed_valid_to": 398,
+    "distinct_preference_keys": 1375,
+    "preference_units": 1499,
+    "supersede_edges": 796,
+    "superseded": 398,
+    "units": 12715
+  },
+  "verdict": "PASS"
+}
