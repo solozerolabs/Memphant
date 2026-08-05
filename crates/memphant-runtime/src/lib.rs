@@ -560,8 +560,25 @@ fn strict_bool_from_value(value: Option<&str>) -> Result<bool, String> {
     }
 }
 
+/// Promoted default-ON 2026-08-05 (spec 30 §7). Unset resolves to `true` and
+/// MUST agree with `PackLevers::default().merge_chunk_blocks` — the served path
+/// picks up the type default through `MemoryService::new`, the env path through
+/// here, and a drift ships two different products (same rule the lexical-scorer
+/// default enforces). The only escape hatch is the deterministic control arm:
+/// `0`/`false`/`off`. Garbage still fails closed rather than silently
+/// defaulting.
+fn merge_chunk_blocks_from_value(value: Option<&str>) -> Result<bool, String> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        None | Some("1" | "true" | "on") => Ok(true),
+        Some("0" | "false" | "off") => Ok(false),
+        Some(other) => Err(format!(
+            "must be one of 1, true, on, 0, false, or off, got {other:?}"
+        )),
+    }
+}
+
 fn merge_chunk_blocks_from_env() -> Result<bool, String> {
-    strict_bool_from_value(
+    merge_chunk_blocks_from_value(
         std::env::var("MEMPHANT_PACK_MERGE_CHUNK_BLOCKS")
             .ok()
             .as_deref(),
@@ -1423,6 +1440,36 @@ mod tests {
         );
         assert!(lexical_scorer_from_value(Some("bm25")).is_err());
         assert!(lexical_scorer_from_value(Some("BM25-CODE")).is_err());
+    }
+
+    #[test]
+    fn merge_chunk_blocks_defaults_on_and_agrees() {
+        use super::merge_chunk_blocks_from_value;
+        use memphant_core::PackLevers;
+        // Promoted 2026-08-05. Unset MUST resolve to ON, and it MUST agree with
+        // `PackLevers::default()` — the served path picks up the type default
+        // through `MemoryService::new`, the env path through here, and a drift
+        // between the two silently ships two different products.
+        for value in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("1"),
+            Some("true"),
+            Some("on"),
+        ] {
+            assert_eq!(merge_chunk_blocks_from_value(value), Ok(true));
+        }
+        assert_eq!(
+            merge_chunk_blocks_from_value(None),
+            Ok(PackLevers::default().merge_chunk_blocks)
+        );
+        // The only escape hatch: the deterministic merge-off control arm.
+        for value in [Some("0"), Some("false"), Some("off")] {
+            assert_eq!(merge_chunk_blocks_from_value(value), Ok(false));
+        }
+        assert!(merge_chunk_blocks_from_value(Some("yes")).is_err());
+        assert!(merge_chunk_blocks_from_value(Some("enabled")).is_err());
     }
 
     #[test]

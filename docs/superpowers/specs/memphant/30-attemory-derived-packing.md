@@ -223,6 +223,20 @@ The reader's self-noise is real but small (3.9%) and **directionally balanced** 
 
 **Recommended action:** flip `merge_chunk_blocks` default ON. This is a production behaviour change — it makes the shipped packer emit merged chunk blocks, so `levers_off_pack_is_byte_identical` becomes `default_on_pack_merges_chunks` and the rung-7 profile / STATUS.md record the promotion. Land it as its own commit with the abstention watch-item noted, so the default flip is reviewable in isolation.
 
+### 7b. Default flipped ON — LANDED 2026-08-05
+
+`merge_chunk_blocks` is now the shipped default. The type default and every composition root agree (the discipline the `lexical_scorer` default enforces):
+
+- `PackLevers::default().merge_chunk_blocks == true` — hand-written `Default` impl (not `#[derive]`) so the one non-false default is explicit and greppable.
+- `merge_chunk_blocks_from_env()` (runtime) and `eval_pack_levers()` (golden lane) both resolve unset ⇒ `true`; agreement is asserted by `merge_chunk_blocks_defaults_on_and_agrees` in the runtime crate.
+- Control arm: `MEMPHANT_PACK_MERGE_CHUNK_BLOCKS=0` (or `false`/`off`); bench flag `--no-merge-chunk-blocks`; garbage still fails closed.
+- Trace flag inverted to `pack_merge_chunk_blocks_disabled` (a trace flags deviations from the default, and the default is now merged).
+- Renamed `levers_off_pack_is_byte_identical` → `control_arm_all_levers_off_matches_pre_lever_golden`; pack-cost tests that measure the per-chunk baseline pin merge off via an `all_levers_off()` helper; the shipped-recall integration test (`recall_chunk_renders_matched_window_plus_neighbour`) now asserts the merged invariant (one run-spanning header, provenance never lost).
+
+Full workspace green, clippy clean. `PackLevers::default()` is no longer a neutral zero — a true no-levers baseline is now `PackLevers { merge_chunk_blocks: false, ..PackLevers::default() }`.
+
+**Abstention watch-item (carried forward):** 2 stable abstention regressions of 12 abstention questions. Not a blocker at net +9, but if a future abstention-specific gate is built, this is the first thing to re-measure.
+
 ~~**Recommendation.** ... Either way the header-merge's effect on abstention questions gets a dedicated check before promotion.~~ *(superseded by 7a — the replicate was run, the noise floor is 3.9%, the signal survives, and the abstention effect is quantified above.)*
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.

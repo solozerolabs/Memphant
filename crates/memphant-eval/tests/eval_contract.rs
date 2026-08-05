@@ -12,7 +12,7 @@ fn oracle_suite_runs_and_verifies_load_bearing_labels() {
     let suite = root.join("examples/evals/golden.yaml");
 
     let report = run_eval_file(&suite, EvalRunOptions::default()).expect("golden run");
-    assert_eq!(report.total_cases, 10);
+    assert_eq!(report.total_cases, 11);
     assert_eq!(
         report.passed_cases, report.total_cases,
         "{:#?}",
@@ -21,7 +21,7 @@ fn oracle_suite_runs_and_verifies_load_bearing_labels() {
     assert!(report.case_results.iter().all(|case| case.passed));
 
     let verify = verify_golden_file(&suite).expect("verify golden");
-    assert_eq!(verify.verified_cases, 10);
+    assert_eq!(verify.verified_cases, 11);
     assert!(verify.case_results.iter().all(|case| case.load_bearing));
 }
 
@@ -30,7 +30,7 @@ fn verify_golden_accepts_whole_corpus_directory() {
     let verify =
         verify_golden_file(&repo_root().join("examples/evals")).expect("verify golden directory");
 
-    assert_eq!(verify.verified_cases, 10);
+    assert_eq!(verify.verified_cases, 11);
     assert!(verify.case_results.iter().all(|case| case.load_bearing));
 }
 

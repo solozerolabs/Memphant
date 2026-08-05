@@ -796,14 +796,18 @@ fn percentile_ms(values: &[u64], percentile: f64) -> Option<f64> {
 /// quietly measures the wrong arm produces evidence that looks paired and is
 /// not, which is worse than an eval that refuses to run.
 fn eval_pack_levers() -> PackLevers {
+    // Promoted default-ON 2026-08-05 (spec 30 §7): unset ⇒ merge ON, so the
+    // golden lane validates what ships. `0`/`false`/`off` selects the
+    // deterministic control arm. Agrees with `PackLevers::default()` and the
+    // runtime env default by construction (all three resolve unset ⇒ true).
     let raw = std::env::var("MEMPHANT_PACK_MERGE_CHUNK_BLOCKS").ok();
     let merge_chunk_blocks = match raw
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        None | Some("0" | "false" | "off") => false,
-        Some("1" | "true" | "on") => true,
+        None | Some("1" | "true" | "on") => true,
+        Some("0" | "false" | "off") => false,
         Some(value) => panic!(
             "MEMPHANT_PACK_MERGE_CHUNK_BLOCKS: must be one of 1, true, on, 0, false, or off, \
              got {value:?}"

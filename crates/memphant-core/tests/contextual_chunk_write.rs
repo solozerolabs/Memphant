@@ -347,31 +347,22 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
         .find(|item| item.citation_episode_id == Some(episode_id))
         .expect("episode-derived item recalled");
 
-    // Matched middle window (turns 5-8) is present with its provenance header.
+    // The matched window and its gathered neighbour are BOTH present. Since
+    // `merge_chunk_blocks` is default-ON (spec 30 §7), the two contiguous
+    // same-episode windows render under ONE run-spanning header (`[turns 1-8]`)
+    // rather than one header per window — the attribution is preserved as the
+    // run's span, which is the point, not the per-window granularity.
     assert!(
-        item.body.contains("[turns 5-8]"),
-        "matched window header present: {}",
+        item.body.contains("quantum harmonica") && item.body.contains("Berlin"),
+        "matched window and its neighbour are both rendered: {}",
         item.body
     );
+    // Provenance is never lost: the chunk-rendered body LEADS with its
+    // provenance header — no body text appears above the first `[episode …]`
+    // line. This is the invariant the merge must preserve, and did.
     assert!(
-        item.body.contains("quantum harmonica"),
-        "matched window body present: {}",
-        item.body
-    );
-    // A neighbour window (turns 1-4) is gathered in.
-    assert!(
-        item.body.contains("[turns 1-4]") && item.body.contains("Berlin"),
-        "neighbour window gathered: {}",
-        item.body
-    );
-    // EVERY window the packed text shows carries its own header — the
-    // segment-level attribution is the point. A pack with budget to spare
-    // completes the item to full coverage (the far window comes back with
-    // `[turns 9-12]` on it, never as bare text), so what must never happen is a
-    // window appearing WITHOUT its provenance line.
-    assert!(
-        item.body.contains("[turns 9-12]") == item.body.contains("pomegranate"),
-        "no window is shown without its header: {}",
+        item.body.starts_with("[episode "),
+        "rendered body leads with its provenance header: {}",
         item.body
     );
     assert_ne!(
@@ -380,10 +371,12 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
     );
 
     // Roomy budget: the completion pass supersedes the partial render and the
-    // item emits all of itself — far window included, and every window still
-    // carrying its own provenance header. Dropping content the budget can afford
-    // was the render loss f67f2b2a fixed; dropping the headers with it was the
-    // regression that fix introduced.
+    // item emits all of itself — far window included. Under default-ON
+    // `merge_chunk_blocks` the three contiguous windows collapse to ONE
+    // run-spanning block (`[turns 1-12]`): full content, single header.
+    // Dropping content the budget can afford was the render loss f67f2b2a
+    // fixed; dropping the header with it was the regression that fix introduced
+    // — the merge keeps exactly one header, never zero.
     let response = service
         .recall(
             memphant_store_testkit::resolved_context(tenant, scope, actor),
@@ -396,18 +389,27 @@ async fn recall_chunk_renders_matched_window_plus_neighbour() {
         .iter()
         .find(|item| item.citation_episode_id == Some(episode_id))
         .expect("episode-derived item recalled");
-    assert!(
-        item.body.contains("pomegranate"),
-        "leftover budget covers the completion, so the far window returns: {}",
-        item.body
-    );
-    for window in ["[turns 1-4]", "[turns 5-8]", "[turns 9-12]"] {
+    // Every window's body is present (full coverage) …
+    for body in ["Berlin", "quantum harmonica", "pomegranate"] {
         assert!(
-            item.body.contains(window),
-            "no window may appear without its header — {window} missing from: {}",
+            item.body.contains(body),
+            "leftover budget completes to full coverage — {body} missing from: {}",
             item.body
         );
     }
+    // … under exactly ONE merged provenance header spanning the whole run, and
+    // the body still leads with that header (content is never shown headerless).
+    assert_eq!(
+        item.body.matches("[episode ").count(),
+        1,
+        "the contiguous run carries exactly one run-spanning header: {}",
+        item.body
+    );
+    assert!(
+        item.body.starts_with("[episode "),
+        "the completion still leads with its provenance header: {}",
+        item.body
+    );
     assert_ne!(
         item.body, SESSION_BODY,
         "the completion is chunk-rendered, not the bare session body"

@@ -569,19 +569,24 @@ pub const RERANK_CHARS_PER_TOKEN: usize = 3;
 pub const RERANK_MAX_SUBCHUNKS_PER_CANDIDATE: usize = 16;
 
 /// Packing levers, threaded construction-time exactly like `recall_pool_depth`
-/// — no `RecallRequest`/wire/OpenAPI field (item 4). All default OFF
-/// ([`PackLevers::default`]); with all off the packer is byte-identical to
-/// today. The service builders (e.g.
+/// — no `RecallRequest`/wire/OpenAPI field (item 4). The service builders (e.g.
 /// [`crate::service::MemoryService::with_session_quota`]) set these, and the
 /// bench lane's flags thread them so the measurement campaign can toggle each
 /// independently.
+///
+/// [`PackLevers::default`] is the SHIPPED configuration, not a neutral zero:
+/// `merge_chunk_blocks` is promoted default-ON (see its field doc and the
+/// manual [`Default`] impl). Every other lever defaults OFF, so with only
+/// `merge_chunk_blocks` on the packer's ADMISSION is unchanged and only the
+/// rendered blocks are merged. A true no-levers baseline is
+/// `PackLevers { merge_chunk_blocks: false, ..PackLevers::default() }`.
 ///
 /// The W4 sibling-gather lever was DELETED on 2026-07-30 once
 /// [`chunk_completion_pass`] landed — it could not show the reader a byte the
 /// completion pass misses, and its only distinct behaviour was refilling past a
 /// deliberate `pack_render_cap`. See
 /// `docs/build-log/2026-07-30-sibling-gather-deletion.md`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PackLevers {
     /// Per-`source_episode_id` admission cap during the greedy fill. `Some(cap)`
     /// admits at most `cap` items per episode until every distinct-episode
@@ -612,10 +617,17 @@ pub struct PackLevers {
     /// whole-body render budget and a chunked item was structurally unable to
     /// emit all of itself.
     ///
-    /// Default OFF. It changes what the reader sees and how much each item
-    /// costs, so it is a measured arm like every other lever here — the
-    /// unconditional version of this fix was reverted on 2026-07-30 for
-    /// raising per-item cost against the chat lane.
+    /// Default ON — **promoted 2026-08-05** (spec 30 §7). An earlier
+    /// unconditional version was reverted on 2026-07-30 for raising per-item
+    /// cost against the chat lane; this conditional form is a strict cost
+    /// reduction (selection still charges the un-merged price), which the
+    /// evidence bore out: on the n=178 LME-S dev cohort the merge lifted
+    /// post-pack recall +3.61pt (deterministic, 6-0) and paired reader-QA
+    /// +5.62pt (exact McNemar p=0.041, surviving a measured 3.9% reader-noise
+    /// floor). Disable with `MEMPHANT_PACK_MERGE_CHUNK_BLOCKS=0` for the
+    /// deterministic control arm; that env default and this type default MUST
+    /// agree (same discipline as `LexicalScorer::default`), enforced by
+    /// `merge_chunk_blocks_defaults_on_and_agrees` in the runtime crate.
     pub merge_chunk_blocks: bool,
     /// Budgeted submodular evidence ordering. When enabled, a deterministic
     /// cost-scaled greedy pass jointly rewards relevance, distinct query-term
@@ -623,6 +635,20 @@ pub struct PackLevers {
     /// quickly stop paying), and source diversity. Rendered costs honor
     /// `pack_render_cap`. Off preserves the established order byte-for-byte.
     pub submodular_ordering_enabled: bool,
+}
+
+impl Default for PackLevers {
+    fn default() -> Self {
+        Self {
+            session_quota: None,
+            pack_render_cap: None,
+            // Promoted default-ON — see the `merge_chunk_blocks` field doc.
+            // Kept in a hand-written impl (not `#[derive(Default)]`) precisely
+            // so this one non-false default is explicit and greppable.
+            merge_chunk_blocks: true,
+            submodular_ordering_enabled: false,
+        }
+    }
 }
 
 /// Which lexical scorer the fusion's lexical family uses, threaded
@@ -11454,8 +11480,11 @@ fn append_pack_feature_flags(flags: &mut Vec<String>, levers: PackLevers) {
     if let Some(quota) = levers.session_quota {
         flags.push(format!("pack_session_quota:{quota}"));
     }
-    if levers.merge_chunk_blocks {
-        flags.push("pack_merge_chunk_blocks".to_string());
+    // Promoted default-ON 2026-08-05: the trace flags a DEVIATION from the
+    // shipped default, so the notable state is now the disabled control arm,
+    // not the (default) merged one.
+    if !levers.merge_chunk_blocks {
+        flags.push("pack_merge_chunk_blocks_disabled".to_string());
     }
     if levers.submodular_ordering_enabled {
         flags.push("pack_submodular_ordering_enabled".to_string());
@@ -14597,6 +14626,17 @@ mod chunk_render_tests {
 mod pack_cost_tests {
     use super::*;
 
+    /// The deterministic all-off control config. `merge_chunk_blocks` is
+    /// default-ON since 2026-08-05, so tests that assert the historical
+    /// per-chunk render (render-cap, budget-reclaim, completion-pass mechanics
+    /// measured against the un-merged baseline) pin it off explicitly here.
+    fn all_levers_off() -> PackLevers {
+        PackLevers {
+            merge_chunk_blocks: false,
+            ..PackLevers::default()
+        }
+    }
+
     /// A chunk with the same provenance-header shape used elsewhere.
     fn chunk(turns: &str, body: &str) -> ContextualChunk {
         ContextualChunk {
@@ -15069,6 +15109,7 @@ mod pack_cost_tests {
         let cap = anchor_cost; // per-item render cap = one matched block
 
         // Uncapped: A expands to its big siblings, exhausting the budget → B drops.
+        // Merge pinned off so `expanded_a` (a per-chunk sum) is the real cost.
         let uncapped = pack_recall_context(
             vec![big_item(), plain()],
             &request(budget),
@@ -15076,7 +15117,7 @@ mod pack_cost_tests {
             &query_tokens,
             Vec::new(),
             2,
-            PackLevers::default(),
+            all_levers_off(),
             false,
         );
         assert_eq!(
@@ -15095,6 +15136,7 @@ mod pack_cost_tests {
             2,
             PackLevers {
                 pack_render_cap: Some(cap),
+                merge_chunk_blocks: false,
                 ..PackLevers::default()
             },
             false,
@@ -15134,6 +15176,7 @@ mod pack_cost_tests {
         let budget = 15 + rendered_cost;
 
         // Whole-body charging (B has no chunks): B costs 40, does not fit → drop.
+        // Merge pinned off so `rendered_cost` (a per-chunk sum) is the real cost.
         let whole = pack_recall_context(
             vec![plain(), candidate(unit(2, &body_of(40), Vec::new()), 4.0)],
             &request(budget),
@@ -15141,7 +15184,7 @@ mod pack_cost_tests {
             &query_tokens,
             Vec::new(),
             2,
-            PackLevers::default(),
+            all_levers_off(),
             false,
         );
         assert_eq!(
@@ -15160,7 +15203,7 @@ mod pack_cost_tests {
             &query_tokens,
             Vec::new(),
             2,
-            PackLevers::default(),
+            all_levers_off(),
             false,
         );
         assert_eq!(
@@ -15438,7 +15481,7 @@ mod pack_cost_tests {
             &query_tokens,
             Vec::new(),
             2,
-            PackLevers::default(),
+            all_levers_off(),
             false,
         );
 
@@ -15548,7 +15591,7 @@ mod pack_cost_tests {
         // Slot-bound (budget to spare): the item emits all of itself AS CHUNK
         // BLOCKS, so every window keeps its provenance header — the whole body
         // carries none. The co-packed plain item is untouched.
-        let roomy = pack(4096, PackLevers::default());
+        let roomy = pack(4096, all_levers_off());
         assert_eq!(roomy.items.len(), 2, "nothing is displaced");
         assert_eq!(
             roomy.items[0].body,
@@ -15572,7 +15615,7 @@ mod pack_cost_tests {
         // Between the two: enough leftover for the whole body but not for the
         // per-window headers on top of it. Content still wins — the bare whole
         // body is the fallback, never a silent partial render.
-        let header_bound = pack(whole_cost + plain_cost, PackLevers::default());
+        let header_bound = pack(whole_cost + plain_cost, all_levers_off());
         assert_eq!(
             header_bound.items[0].body, whole,
             "the whole body is the fallback when the headers do not fit"
@@ -15581,7 +15624,7 @@ mod pack_cost_tests {
 
         // Budget-bound (leftover zero): byte-identical to the old behaviour.
         let tight_budget = admission_cost + plain_cost;
-        let tight = pack(tight_budget, PackLevers::default());
+        let tight = pack(tight_budget, all_levers_off());
         assert_eq!(tight.items.len(), 2, "no item is displaced");
         assert_eq!(
             tight.items[0].body, rendered,
@@ -15616,7 +15659,7 @@ mod pack_cost_tests {
 
         // Lever off: the per-window headers do not fit, so provenance is lost
         // entirely — the reader gets the bare whole body.
-        let off = pack(paired_budget, PackLevers::default());
+        let off = pack(paired_budget, all_levers_off());
         assert_eq!(
             off.items[0].body, whole,
             "per-chunk headers do not fit at this budget, so none survive"
@@ -15953,12 +15996,19 @@ mod pack_cost_tests {
         assert_eq!(on.items.len(), 8, "the pack is still filled to k");
     }
 
-    /// §5 off-flags byte-identical: with both levers OFF the packer matches a
-    /// reference default run bit-for-bit (composition, bodies, cost, drops) and
-    /// the hand-computed golden of today's packer.
+    /// Deterministic control arm: with EVERY lever off — including
+    /// `merge_chunk_blocks`, which is default-ON since 2026-08-05 — the packer
+    /// matches the pre-lever golden bit-for-bit (composition, bodies, cost,
+    /// drops). The all-off config is constructed explicitly because
+    /// `PackLevers::default()` now merges; this asserts the `…=0` control arm
+    /// still reproduces the historical per-chunk render.
     #[test]
-    fn levers_off_pack_is_byte_identical() {
+    fn control_arm_all_levers_off_matches_pre_lever_golden() {
         let query_tokens = tokenize("quantum");
+        let off_levers = PackLevers {
+            merge_chunk_blocks: false,
+            ..PackLevers::default()
+        };
         let chunk_render_cost: usize = [
             chunk("1-4", "quantum harmonica"),
             chunk("5-8", "berlin note"),
@@ -15992,7 +16042,7 @@ mod pack_cost_tests {
             &query_tokens,
             Vec::new(),
             3,
-            PackLevers::default(),
+            off_levers,
             false,
         );
         let again = pack_recall_context(
@@ -16002,7 +16052,7 @@ mod pack_cost_tests {
             &query_tokens,
             Vec::new(),
             3,
-            PackLevers::default(),
+            off_levers,
             false,
         );
         assert_eq!(
