@@ -150,10 +150,18 @@ def run(model: str) -> int:
                 "https://openrouter.ai/api/v1/chat/completions", data=body,
                 headers={"Authorization": f"Bearer {key}",
                          "Content-Type": "application/json"})
+            out = OUT / f"{p['event']}_{model.split('/')[-1]}_{i}.txt"
+            if out.exists() and out.stat().st_size > 0:
+                print(f"{p['event']} {model} #{i}: cached")
+                continue
             with urllib.request.urlopen(req, timeout=180) as r:
                 resp = json.load(r)
-            txt = resp["choices"][0]["message"]["content"]
-            out = OUT / f"{p['event']}_{model.split('/')[-1]}_{i}.txt"
+            choice = resp["choices"][0]
+            c = choice["message"].get("content")
+            if isinstance(c, list):
+                c = " ".join(b.get("text", "") for b in c if isinstance(b, dict))
+            txt = c or f"[EMPTY finish_reason={choice.get('finish_reason')} " \
+                       f"refusal={choice['message'].get('refusal')}]"
             out.write_text(txt)
             print(f"{p['event']} {model} #{i}: {len(txt)} chars")
     return 0
