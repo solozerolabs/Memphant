@@ -29,8 +29,12 @@ Re-grading every abstention question semantically (refusal — structured null o
 
 The exact scorer's abstention-form noise leaned net −1 against P-2 (3 form-regressions vs 2 form-improvements), so it *understated* the effect. Under semantic grading P-2's reader-QA win is **stronger and more significant** — the promotion is robust to the scoring defect.
 
-## Separable instrument finding (NOT a P-2 issue)
+## Separable instrument finding — FIXED (NOT a P-2 issue)
 
-`abstention_exact` (`run_reader.py:1666`) under-credits prose refusals: 5 of 12 abstention questions flipped form between two otherwise-comparable arms, injecting symmetric noise into any paired reader-QA abstention comparison. This affects every reader-QA lane, not just P-2. Filed as a follow-up (credit a reader response that refuses in prose, e.g. `abstain OR answer is a refusal`, ideally via the LLM judge rather than a regex). Fixing it would tighten the abstention endpoint for all future paid runs.
+`abstention_exact` (`run_reader.py`) under-credited prose refusals: 5 of 12 abstention questions flipped form between two otherwise-comparable arms, injecting symmetric noise into any paired reader-QA abstention comparison. This affected every reader-QA lane, not just P-2.
 
-Artifacts: `abstention-diagnosis/regrade.py` (reproducible from the committed reader reports).
+**Fix landed** in both judge paths (`judge_row` for the longmemeval profile, `judge_rag_row` for rag-supported): an abstention question with **no answer text** (structured null or empty) is a correct decline, scored free; **any answer text** is delegated to the LLM judge (`build_abstention_judge_prompt`, reusing the `judge` kind's model + strict yes/no verdict schema, method `abstention_llm_judge`), which separates a prose refusal ("cannot be determined" → correct) from a fabricated answer (→ wrong). The `abstain` flag is now advisory — the answer TEXT decides — because the reader sets the flag inconsistently for prose refusals. No contract change (reuses the existing judge schema), so no new stub round-trip. `gate_compare.py`'s negative-gate guard was widened to accept `abstention_llm_judge` alongside `abstention_exact` (both are valid abstention evaluations). Tests: 6 added + 1 pre-existing updated in `tests/test_run_reader_contract.py`; full Python suite green (837 passed).
+
+Cost note: abstention questions that refuse in prose now spend one judge call (structured/null abstentions stay free), which the packet minter already budgets — `calls_per_question=2` was always the reader+judge estimate.
+
+Artifacts: `abstention-diagnosis/regrade.py` (the deterministic re-grade that first demonstrated the +11 semantic result; the landed fix reproduces it via the LLM judge instead of a regex).

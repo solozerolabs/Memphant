@@ -279,9 +279,13 @@ def test_mismatched_final_number_and_exact_abstention_are_incorrect(tmp_path) ->
     assert reader.judge_row(
         cli, abstention, {"notes": "", "answer": None, "abstain": True}
     ) == (True, "abstention_exact")
+    # A non-null answer on an abstention question is no longer hard-scored wrong
+    # (spec 30 §7b): it is delegated to the judge, which separates a prose
+    # refusal from a fabrication. This stub judge returns "no", so the result is
+    # a judge-routed miss — but via `abstention_llm_judge`, not `abstention_exact`.
     assert reader.judge_row(
         cli, abstention, {"notes": "", "answer": "I don't know", "abstain": False}
-    ) == (False, "abstention_exact")
+    ) == (False, "abstention_llm_judge")
 
 
 def test_non_exact_judge_verdict_is_a_failure(tmp_path) -> None:
@@ -2014,3 +2018,87 @@ def test_reader_cache_write_is_atomic_on_replace_failure(tmp_path, monkeypatch) 
         assert "crash" in str(error)
     assert not cache_path.exists()
     assert list(tmp_path.iterdir()) == []
+
+
+# --- abstention scoring: credit prose refusals via the judge (spec 30 §7b) ---
+
+
+class _StubJudgeCli:
+    """Minimal ReaderCli stand-in: records judge calls and returns a canned
+    verdict. engine='claude' so parse_judge_output just normalises the reply."""
+
+    def __init__(self, verdict: str = "yes"):
+        self.engine = "claude"
+        self._verdict = verdict
+        self.calls: list[tuple[str, str, str]] = []
+
+    def call(self, kind: str, system_prompt: str, prompt: str) -> str:
+        self.calls.append((kind, system_prompt, prompt))
+        return self._verdict
+
+
+def _abs_row(answer_gold="The information provided is not enough. You did not mention X."):
+    return {
+        "is_abstention": True,
+        "question": "How many days did the case take to arrive?",
+        "question_type": "single-session-user",
+        "gold_answer": answer_gold,
+        "evidence": [],
+    }
+
+
+def test_structured_abstention_is_free_and_correct():
+    reader = _load_run_reader()
+    cli = _StubJudgeCli(verdict="no")  # would score wrong if the judge were called
+    correct, method = reader.judge_row(cli, _abs_row(), {"abstain": True, "answer": None})
+    assert (correct, method) == (True, "abstention_exact")
+    assert cli.calls == [], "structured abstention must not spend a judge call"
+
+
+def test_null_answer_without_flag_is_free_and_correct():
+    reader = _load_run_reader()
+    cli = _StubJudgeCli(verdict="no")
+    correct, method = reader.judge_row(cli, _abs_row(), {"abstain": False, "answer": None})
+    assert (correct, method) == (True, "abstention_exact")
+    assert cli.calls == []
+
+
+def test_prose_refusal_is_credited_via_judge():
+    reader = _load_run_reader()
+    cli = _StubJudgeCli(verdict="yes")
+    output = {"abstain": False, "answer": "It cannot be determined from the provided evidence."}
+    correct, method = reader.judge_row(cli, _abs_row(), output)
+    assert (correct, method) == (True, "abstention_llm_judge")
+    assert len(cli.calls) == 1
+    kind, _system, prompt = cli.calls[0]
+    assert kind == "judge", "abstention judge must use the judge model/schema"
+    assert "decline" in prompt.lower() and output["answer"] in prompt
+
+
+def test_fabricated_answer_on_abstention_is_wrong_via_judge():
+    reader = _load_run_reader()
+    cli = _StubJudgeCli(verdict="no")
+    output = {"abstain": False, "answer": "It took 3 days to arrive."}
+    correct, method = reader.judge_row(cli, _abs_row(), output)
+    assert (correct, method) == (False, "abstention_llm_judge")
+    assert len(cli.calls) == 1
+
+
+def test_non_abstention_reader_abstention_still_scored_wrong():
+    reader = _load_run_reader()
+    cli = _StubJudgeCli(verdict="yes")
+    row = {"is_abstention": False, "question": "q", "question_type": "single-session-user",
+           "gold_answer": "Paris", "evidence": []}
+    correct, method = reader.judge_row(cli, row, {"abstain": True, "answer": None})
+    assert (correct, method) == (False, "abstention_exact")
+    assert cli.calls == [], "a wrongful reader-abstention is scored wrong without a judge call"
+
+
+def test_rag_profile_credits_prose_refusal_too():
+    reader = _load_run_reader()
+    cli = _StubJudgeCli(verdict="yes")
+    output = {"abstain": False, "answer": "The information is not enough to answer."}
+    audit = reader.judge_rag_row(cli, _abs_row(), output)
+    assert audit["correct"] is True
+    assert audit["judge_method"] == "abstention_llm_judge"
+    assert len(cli.calls) == 1 and cli.calls[0][0] == "judge"

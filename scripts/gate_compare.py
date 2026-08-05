@@ -139,11 +139,15 @@ def _validate_negative_admission(
         if any(
             row.get("question_type") != mem_rows[case_id]["case_kind"]
             or row.get("is_abstention") is not True
-            or row.get("judge_method") != "abstention_exact"
+            # A structured null still scores `abstention_exact` (free); a prose
+            # refusal is now delegated to the judge as `abstention_llm_judge`
+            # (spec 30 §7b). Both are valid abstention evaluations of a negative
+            # case — accept either, reject anything else.
+            or row.get("judge_method") not in ("abstention_exact", "abstention_llm_judge")
             or row.get("gold_answer") != "ABSTAIN"
             for row in (mem_row, syn_row)
         ):
-            raise ValueError(f"negative case {case_id} is not an exact-abstention evaluation")
+            raise ValueError(f"negative case {case_id} is not an abstention evaluation")
         paired_reader_rows[case_id] = (mem_row, syn_row)
 
     def arm_summary(index: int, provenance_rows: dict[str, dict]) -> dict:

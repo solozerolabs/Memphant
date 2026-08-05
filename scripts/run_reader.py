@@ -1618,6 +1618,33 @@ def build_judge_prompt(question_type: str, question: str, gold: str, answer: str
     )
 
 
+def build_abstention_judge_prompt(question: str, gold: str, answer: str) -> str:
+    """Judge whether a reader response to an ABSTENTION question correctly
+    declines to answer. The correct behaviour is to recognise the provided
+    information is insufficient and refuse. A prose refusal ("It cannot be
+    determined from the provided evidence") is correct; a specific substantive
+    answer given as if the information were sufficient is not.
+
+    This exists because the reader phrases abstention inconsistently — sometimes
+    as the structured null, sometimes as prose with `abstain=False` — and the
+    structured-only scorer credited only the former, injecting symmetric noise
+    into every paired abstention comparison (spec 30 §7b,
+    `docs/build-log/2026-08-05-p2-abstention-watchitem-resolved.md`)."""
+    return (
+        "The correct behaviour for this question is to recognise that the "
+        "provided information is INSUFFICIENT and to decline to answer. "
+        "Answer yes if the model response declines to answer, says the "
+        "information is insufficient/not mentioned, or says the answer cannot "
+        "be determined. Answer no if the model response gives a specific "
+        "substantive answer to the question as if the information were "
+        "sufficient.\n\n"
+        f"Question: {question}\n\n"
+        f"Reference (the correct behaviour is to abstain): {gold}\n\n"
+        f"Model Response: {answer}\n\n"
+        "Did the model correctly decline to answer? Answer yes or no only."
+    )
+
+
 def _render_ranked_evidence(evidence: list[dict]) -> str:
     if not evidence:
         return "(no evidence was retrieved)"
@@ -1661,10 +1688,24 @@ def _rag_audit_defaults() -> dict:
 def judge_rag_row(cli: ReaderCli, row: dict, output: dict) -> dict:
     audit = _rag_audit_defaults()
     if row["is_abstention"]:
+        answer = output["answer"]
+        # Same rule as `judge_row`: a null answer is a correct decline (free);
+        # any answer text is judged to separate a prose refusal from a fabricated
+        # answer (spec 30 §7b). The `abstain` flag is advisory.
+        if answer is None:
+            audit.update({"correct": True, "judge_method": "abstention_exact"})
+            return audit
+        verdict = cli.call(
+            "judge",
+            JUDGE_SYSTEM_PROMPT,
+            build_abstention_judge_prompt(
+                row["question"], str(row["gold_answer"]), answer
+            ),
+        )
         audit.update(
             {
-                "correct": output["abstain"] and output["answer"] is None,
-                "judge_method": "abstention_exact",
+                "correct": parse_judge_output(verdict, cli.engine) == "yes",
+                "judge_method": "abstention_llm_judge",
             }
         )
         return audit
@@ -1811,7 +1852,21 @@ def judge_row(cli: ReaderCli, row: dict, output: dict) -> tuple[bool, str]:
     """Returns (correct, judge_method)."""
     gold = str(row["gold_answer"])
     if row["is_abstention"]:
-        return output["abstain"] and output["answer"] is None, "abstention_exact"
+        answer = output["answer"]
+        # No substantive answer text (the structured null, or an empty answer)
+        # is a correct decline, scored free. The `abstain` flag is advisory: the
+        # reader sets it inconsistently for prose refusals, so the ANSWER TEXT
+        # decides. Any non-null answer goes to the judge, which separates a
+        # prose refusal ("cannot be determined" — a correct abstention) from a
+        # fabricated substantive answer. See spec 30 §7b.
+        if answer is None:
+            return True, "abstention_exact"
+        verdict = cli.call(
+            "judge",
+            JUDGE_SYSTEM_PROMPT,
+            build_abstention_judge_prompt(row["question"], gold, answer),
+        )
+        return parse_judge_output(verdict, cli.engine) == "yes", "abstention_llm_judge"
     if output["abstain"]:
         return False, "abstention_exact"
     answer = output["answer"]
