@@ -786,6 +786,35 @@ fn percentile_ms(values: &[u64], percentile: f64) -> Option<f64> {
     Some(sorted[index] as f64 / 1000.0)
 }
 
+/// Pack levers for the golden lane. The suites are deterministic and run at
+/// `PackLevers::default()`; this reads the SAME env var the runtime reads so a
+/// suite can be executed as a PAIRED ARM (`MEMPHANT_PACK_MERGE_CHUNK_BLOCKS=1`)
+/// without a second harness. Unset means off, so every existing suite is
+/// byte-identical to before.
+///
+/// An unrecognised value is a hard error, never a silent default: an eval that
+/// quietly measures the wrong arm produces evidence that looks paired and is
+/// not, which is worse than an eval that refuses to run.
+fn eval_pack_levers() -> PackLevers {
+    let raw = std::env::var("MEMPHANT_PACK_MERGE_CHUNK_BLOCKS").ok();
+    let merge_chunk_blocks = match raw
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        None | Some("0" | "false" | "off") => false,
+        Some("1" | "true" | "on") => true,
+        Some(value) => panic!(
+            "MEMPHANT_PACK_MERGE_CHUNK_BLOCKS: must be one of 1, true, on, 0, false, or off, \
+             got {value:?}"
+        ),
+    };
+    PackLevers {
+        merge_chunk_blocks,
+        ..PackLevers::default()
+    }
+}
+
 pub fn run_eval_file(path: &Path, options: EvalRunOptions) -> EvalResult<EvalReport> {
     let suite: EvalSuite = read_yaml(path)?;
     let base = path.parent().unwrap_or_else(|| Path::new("."));
@@ -2036,7 +2065,7 @@ async fn run_golden_case_inner(
         None,
         &EVAL_CLOCK,
         DEFAULT_RECALL_POOL_DEPTH,
-        PackLevers::default(),
+        eval_pack_levers(),
         case.lexical_scorer.unwrap_or_default(),
         false,
         None,

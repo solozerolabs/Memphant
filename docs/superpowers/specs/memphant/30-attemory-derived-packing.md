@@ -99,7 +99,25 @@ Three limits on reading this:
 2. **Total reader tokens did not fall.** Packing fills the budget either way; what changed is how many distinct items fit inside it. "Cheaper per item" is not "fewer tokens sent."
 3. **No reader ran** — this lane is `retrieval_only`, so the reader-QA question (does more, smaller evidence answer better?) is untouched. Recall at n=5 was insensitive: the single miss stayed a miss.
 
-Remaining before any promotion claim: rung-7 profile, then Track R paired vs lever-off, then reader-QA on the chat lane.
+**Rung-7 profile — RUN 2026-08-05. Passes, but carries NO signal on P-2: the lever is inert across the whole golden lane.**
+
+| what ran | result |
+|---|---|
+| `profile rung7-packing-abstention-profile.yaml --compare-to rungs-0-6-baseline` | pass (0 activated, 15 dormant) |
+| `run rung7-state-style-sampled.yaml` OFF / ON | 2/2 / 2/2 |
+| `run rung7-baseline-sampled.yaml` OFF / ON | 2/2 / 2/2 |
+| `run golden.yaml` OFF / ON | 10/10 / 10/10 |
+| `verify-golden golden.yaml` OFF / ON | 10/10 / 10/10 |
+
+Archived traces for both arms are byte-identical apart from `latency_micros` and `trace_id` — run-to-run noise. **Zero chunk-rendered items occur anywhere in the lane.** The cause is structural, not incidental: golden fixtures seed short bodies, and `episode_contextual_chunks` emits nothing below its window threshold, so units arrive with 0 or 1 chunk. Even `contextual_chunk_breaker`, the one golden built to exercise chunk-aware recall, carries exactly **one** chunk — and a single chunk can never form a contiguous run. `selected_runs` returns one single-index run, which renders and prices byte-identically to the pre-P-2 path by construction.
+
+So the rung-7 result is a clean **non-regression** on the deterministic lane and nothing more. It cannot promote P-2, and quoting "rung-7 passes" as support for the lever would be a category error — the gate never touched the mechanism.
+
+To make the golden lane capable of gating this at all, it needs a fixture whose unit carries ≥3 contextual chunks with an adjacent selection, asserting (a) one run-spanning header replaces the per-chunk ones and (b) full coverage becomes reachable. That fixture does not exist yet; the merge's behavioural coverage currently lives only in `memphant-core` unit tests and the LME-S lane.
+
+**Harness seam added.** `crates/memphant-eval/src/lib.rs` previously hardcoded `PackLevers::default()`, so no suite could run a lever arm. It now reads `MEMPHANT_PACK_MERGE_CHUNK_BLOCKS` — the same var the runtime reads — via `eval_pack_levers()`. Unset means off, so every existing suite is unchanged; an unrecognised value is a hard error rather than a silent default, because an eval that quietly measures the wrong arm yields evidence that looks paired and is not.
+
+Remaining before any promotion claim: a chunk-bearing rung-7 fixture, Track R paired vs lever-off, and reader-QA on the chat lane.
 
 - P-2 (landed, smoke-passed, unmeasured): rung-7 profile, then Track R paired vs lever-off. **No promotion claim until that evidence exists** — the lever is landed and default OFF, which is not the same as measured. Note the mechanism only bites where a unit's selected chunks are *contiguous*; the code lane's in-pool-unpacked misses were per-item Budget drops, so the expected effect there is more items admitted per budget, and that is the number to read.
 - P-3: Track R, paired vs current `k=10` arm, same lattice, same locked bank. With P-1 rejected, render cost no longer collapses, so raising render-k is not free — measure `candidate_k` vs `k` separately.
