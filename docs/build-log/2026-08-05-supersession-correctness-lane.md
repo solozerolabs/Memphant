@@ -300,14 +300,61 @@ production system in reach that implements the *gated* alternative produced n=5.
 Two readings remain open (nobody used the feature; or restatement happens but
 never reaches this surface) and this probe cannot separate them.
 
-## Census status: all reachable corpora rejected — the lane is BLOCKED
+## Census 3 — C3 public trajectories: **SHAPE PASSES, arc rate UNMEASURED**, $0
+
+**Corpus.** `nebius/SWE-rebench-openhands-trajectories`, CC-BY-4.0, the source
+already adapted in `2026-07-24-c3-public-code-lane.md`. **67,074 trajectories**
+(the prior lane used 495). Sampled 14 across three offsets via the public
+datasets-server; 1,896 messages, median 137 per trajectory; roles 941 assistant
+/ 927 tool / 14 system / 14 user. No paid call.
+
+| §A.2 property | verdict | evidence |
+|---|---|---|
+| 1. Append-only arrival | **PASS** | trajectories are immutable event streams; nothing is edited in place |
+| 2. ≥60 supersede arcs | **PLAUSIBLE, UNMEASURED** | see the rate caveat below |
+| 3. ≥60 coexist pairs | **PLAUSIBLE** | 7 of 14 `model_patch` values touch >1 file, so multi-item gold sets exist |
+| 4. Labels outside statements | **PASS — and this is the strong result** | `model_patch` (files actually changed) and `resolved` (tests passed) are **execution-grounded**, exactly the "gold that depends on evidence outside the statement set" the instrument-acquisition gate demands |
+
+**Volume is not the constraint, for the first time in this lane.** 67,074
+trajectories at ~137 messages each is ~9.2M messages. Even a low arc rate yields
+arcs in the thousands.
+
+**But the lane MUTATES if it uses this corpus, and that must be explicit.** There
+are no user preferences here. The construct becomes **belief revision during bug
+localization**: the *subject* is "where is the defect", the *value* is the
+agent's current file set, a later claim either **supersedes** (revised
+localization) or **coexists** (an additional file that also needs changing), and
+the gold live set is the file set in `model_patch`, graded by `resolved`. That is
+a different instrument than Part A describes — arguably a better one, since it is
+SWE-bench-shaped and execution-graded — and it **requires its own Part A**, not
+an amendment to this one.
+
+**The rate caveat, stated as the blocker it is.** The keyword probe found 28
+"reconsider", 35 "revise-plan", and 6 "explicit-wrong" hits across 941 assistant
+messages — and inspection shows them **dominated by navigation**, not
+restatement: "Actually, let me fix the import issue", "Let me check if there are
+other places". This is the **same false-positive trap C1 died on**, and the hits
+are therefore **not counted as arcs**. The load-bearing number is different: only
+**45 of 941 assistant messages (4.8%) name a source file at all** — roughly 3
+localization statements per trajectory, of which genuine *revisions* are a
+subset. **The arc rate is unmeasured and this census does not claim it.**
+Establishing it needs a hand-labeled sample (~40 trajectories) separating genuine
+localization revision from navigation chatter.
+
+**Run this death-from-below check BEFORE the labeled sample.** Agents converge,
+so *"serve the most recently named file"* is likely a strong trivial rule — the
+recency saturation that killed MemoryCode, in new clothing. It costs nothing
+against the sampled trajectories and could kill the whole direction before any
+labeling spend. **Do that first.**
+
+## Census status: three corpora rejected, one conditional — the lane is BLOCKED
 
 | candidate | verdict | binding reason |
 |---|---|---|
 | Syndai flat files (XS snapshot) | rejected | arcs are intra-unit; curator edits in place |
 | C1 prod episodic | rejected | imperatives carry no truth value to supersede |
 | Syndai prod `user_facts` | rejected | right shape, **0 arcs** — feature unused |
-| C3 public trajectories | **uncensused** | the only remaining candidate |
+| C3 public trajectories | **conditional** | shape + execution labels PASS, volume abundant; **arc rate unmeasured**, construct mutates to belief-revision, needs its own Part A |
 
 **The consequence, stated plainly:
 `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD` cannot currently be validated by any
@@ -316,9 +363,13 @@ measured and lost, but because no instrument exists to measure it. Building more
 supersession machinery before an instrument exists would repeat the error this
 lane was created to avoid.
 
-Before censusing C3, note the prior: trajectory corpora are agent *actions*, so
-they may fail the same way C1 did (imperatives, not assertions). Run the
-**shape** check first — that is the standing rule both prior censuses earned.
+**That prior was half right.** C3's assistant/tool messages are indeed actions
+and observations, not preference assertions — so the lane as written in Part A
+cannot run on it. What the shape check surfaced instead is a *different* subject
+the corpus does carry (defect localization) with an execution-grounded label the
+other three corpora entirely lacked. The next step is therefore **not** this
+lane's Part B; it is the recency death-from-below check above, then a Part A for
+a belief-revision lane if that check survives.
 
 ---
 
