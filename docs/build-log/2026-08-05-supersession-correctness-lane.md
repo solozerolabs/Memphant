@@ -255,8 +255,73 @@ Both rejected corpora failed on shape — flat files because the curator resolve
 supersession by in-place edit, C1 because imperatives carry no value to
 supersede. Counting markers or clusters first would have missed both.
 
+## Census 2 — Syndai prod `user_facts`: **REJECTED**, $0, no PII read
+
+**Probe.** Aggregates only, read-only, under
+`2026-08-05-user-facts-census-privacy-prereg.md`; SQL committed at
+`scripts/user_facts_census_probe.sql`. No `label`, `value`, `user_id`, or row id
+was selected, printed, or written.
+
+This was the most promising candidate on **shape**, and it remains so. The table
+is exactly what the lane needs: `label` is the subject (uniquely indexed per user
+over active rows), `value` is the value, `valid_to` closes a generation, and
+`supersedes_fact_id` is an **explicit supersession edge** — a label from outside
+the statement set, satisfying §A.2 property 4 by construction rather than by
+annotation. Property 1 (append-only) holds: supersession inserts a new row and
+closes the old via `valid_to`, never editing in place.
+
+**It fails on data, and completely:**
+
+| quantity | value | §A.2 requirement |
+|---|---:|---|
+| rows total | **5** | — |
+| distinct users | 2 | — |
+| **supersede arcs** (`supersedes_fact_id` not null) | **0** | ≥60 |
+| closed generations (`valid_to` not null) | **0** | — |
+| subjects with >1 generation | **0** (all 5 subjects have exactly 1) | ≥60 |
+| review_status active / proposed | 2 / 3 | — |
+| category mix | context 3, preferences 2 | — |
+| span | 2026-05-06 → 2026-08-04 | — |
+
+Ceiling for supersede arcs is **0**, against a requirement of 60. Rejected.
+
+**The finding worth keeping, stated at its actual strength.** Syndai's user-fact
+supersession machinery — the proposal/confirm review lifecycle, the partial
+unique indexes that let a proposal share a label with its active target, the
+`supersedes_fact_id` edge — is **fully built and has never fired in production**
+across three months. Three of the five rows are still sitting in `proposed`,
+never resolved.
+
+This is **not** evidence that users do not restate their preferences. It is
+evidence that a **human-confirmation-gated** supersession surface captured
+essentially no restatement in this deployment. The distinction matters: MemPhant
+proposes to supersede *automatically* on semantic subject identity, and the one
+production system in reach that implements the *gated* alternative produced n=5.
+Two readings remain open (nobody used the feature; or restatement happens but
+never reaches this surface) and this probe cannot separate them.
+
+## Census status: all reachable corpora rejected — the lane is BLOCKED
+
+| candidate | verdict | binding reason |
+|---|---|---|
+| Syndai flat files (XS snapshot) | rejected | arcs are intra-unit; curator edits in place |
+| C1 prod episodic | rejected | imperatives carry no truth value to supersede |
+| Syndai prod `user_facts` | rejected | right shape, **0 arcs** — feature unused |
+| C3 public trajectories | **uncensused** | the only remaining candidate |
+
+**The consequence, stated plainly:
+`MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD` cannot currently be validated by any
+data we can reach.** It stays default-off and unshipped — not because it was
+measured and lost, but because no instrument exists to measure it. Building more
+supersession machinery before an instrument exists would repeat the error this
+lane was created to avoid.
+
+Before censusing C3, note the prior: trajectory corpora are agent *actions*, so
+they may fail the same way C1 did (imperatives, not assertions). Run the
+**shape** check first — that is the standing rule both prior censuses earned.
+
 ---
 
 # PART B — RESULTS
 
-*(empty — blocked on §A.2; two candidate corpora censused and rejected)*
+*(empty — blocked on §A.2; three candidate corpora censused and rejected)*
