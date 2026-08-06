@@ -696,6 +696,34 @@ impl LexicalScorer {
         }
     }
 
+    /// Tokens as `&str` slices of `lowered`, which the caller MUST have already
+    /// ASCII-lowercased. Same token bag as [`Self::tokens`] — identical
+    /// multiplicity, order may differ, which BM25 (a bag model) does not depend
+    /// on — but allocates no per-token `String`. The hot recall path tokenizes
+    /// ~500 candidate bodies per request, so that per-token allocation dominated.
+    fn tokens_borrowed(self, lowered: &str) -> Vec<&str> {
+        let mut out: Vec<&str> = lowered
+            .split(|ch: char| !is_bm25_token_char(ch))
+            .filter(|token| !token.is_empty())
+            .collect();
+        if self == Self::Bm25Code {
+            // Every multi-part token also contributes its alphanumeric parts,
+            // so `src/foo/bar.py` matches whole AND by directory/file/ext.
+            let mut parts: Vec<&str> = Vec::new();
+            for &token in &out {
+                let sub: Vec<&str> = token
+                    .split(|ch: char| !ch.is_ascii_alphanumeric())
+                    .filter(|part| !part.is_empty())
+                    .collect();
+                if sub.len() > 1 {
+                    parts.extend(sub);
+                }
+            }
+            out.extend(parts);
+        }
+        out
+    }
+
     fn flag(self) -> Option<&'static str> {
         match self {
             Self::Overlap => None,
@@ -11042,12 +11070,18 @@ pub(crate) fn token_set_overlap_text_score(text: &str, query_tokens: &[String]) 
 const BM25_K1: f32 = 1.2;
 const BM25_B: f32 = 0.75;
 
+/// The BM25 token character class: identifiers, dotted paths and hyphenated
+/// flags survive whole. Shared by every tokenizer so they can never drift.
+fn is_bm25_token_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '/' | '-')
+}
+
 /// Maximal runs of `[a-z0-9_./-]` over ASCII-lowercased text — identifiers,
 /// dotted paths and hyphenated flags survive whole. Deliberately the same class
 /// the deterministic BM25 control tokenizes with.
 pub(crate) fn bm25_control_tokens(text: &str) -> Vec<String> {
     text.to_ascii_lowercase()
-        .split(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '/' | '-')))
+        .split(|ch: char| !is_bm25_token_char(ch))
         .filter(|token| !token.is_empty())
         .map(ToString::to_string)
         .collect()
@@ -11089,15 +11123,21 @@ fn bm25_unit_scores(
     if units.is_empty() || query_terms.is_empty() {
         return scores;
     }
-    let documents: Vec<(UnitId, Vec<String>)> = units
+    // Lowercase each body ONCE; tokens borrow `&str` slices from it, so the
+    // per-document cost is one allocation, not one String per token.
+    let lowered: Vec<(UnitId, String)> = units
         .iter()
-        .map(|unit| (unit.id, scorer.tokens(&unit.body)))
+        .map(|unit| (unit.id, unit.body.to_ascii_lowercase()))
+        .collect();
+    let documents: Vec<(UnitId, Vec<&str>)> = lowered
+        .iter()
+        .map(|(id, body)| (*id, scorer.tokens_borrowed(body)))
         .collect();
     let total_length: usize = documents.iter().map(|(_, tokens)| tokens.len()).sum();
     let average_length = (total_length as f32 / documents.len() as f32).max(1.0);
     let mut document_frequency: HashMap<&str, usize> = HashMap::new();
     for (_, tokens) in &documents {
-        let distinct: HashSet<&str> = tokens.iter().map(String::as_str).collect();
+        let distinct: HashSet<&str> = tokens.iter().copied().collect();
         for term in &query_terms {
             if distinct.contains(term.as_str()) {
                 *document_frequency.entry(term.as_str()).or_insert(0) += 1;
@@ -11108,7 +11148,7 @@ fn bm25_unit_scores(
     for (id, tokens) in &documents {
         let mut frequencies: HashMap<&str, usize> = HashMap::new();
         for token in tokens {
-            *frequencies.entry(token.as_str()).or_insert(0) += 1;
+            *frequencies.entry(*token).or_insert(0) += 1;
         }
         let length = tokens.len() as f32;
         let mut score = 0.0f32;
@@ -14717,6 +14757,24 @@ mod pack_cost_tests {
             bm25_code_tokens("src/foo/bar.py plain"),
             ["src", "foo", "bar", "py", "src/foo/bar.py", "plain"]
         );
+    }
+
+    #[test]
+    fn tokens_borrowed_is_the_same_bag_as_owned_tokens() {
+        // The alloc-free path must produce the identical token multiset (order
+        // aside) as the owned tokenizer, for both scorers, or BM25 scores drift.
+        let text = "Fetch src/Foo/bar.py --dry-run snake_case_ID CONST42";
+        for scorer in [LexicalScorer::Bm25Control, LexicalScorer::Bm25Code] {
+            let mut owned = scorer.tokens(text);
+            let mut borrowed: Vec<String> = scorer
+                .tokens_borrowed(&text.to_ascii_lowercase())
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            owned.sort();
+            borrowed.sort();
+            assert_eq!(owned, borrowed, "{scorer:?} token bag diverged");
+        }
     }
 
     #[test]
