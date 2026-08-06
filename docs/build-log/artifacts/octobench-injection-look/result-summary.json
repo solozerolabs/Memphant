@@ -1,0 +1,59 @@
+{
+  "benchmark": "OctoBench (arXiv 2601.10343, MIT)",
+  "harness": "MiniMax-AI/mini-vela",
+  "sut": "claude-sonnet-4-5-20250929",
+  "judge": "gpt-4o",
+  "image": "minimaxai/feedfeed:md_course_builder",
+  "arms": [
+    "baseline",
+    "inject(SessionStart hook, <=4KB rule block)"
+  ],
+  "per_task": {
+    "md-course-builder-conventional-commits": {
+      "baseline": {
+        "pass": 27,
+        "n": 29
+      },
+      "inject": {
+        "pass": 28,
+        "n": 29
+      }
+    },
+    "md-course-builder-code-style": {
+      "baseline": {
+        "pass": 31,
+        "n": 34
+      },
+      "inject": {
+        "pass": 31,
+        "n": 34
+      }
+    },
+    "benchmark-language_chinese_001": {
+      "baseline": {
+        "pass": 26,
+        "n": 26
+      },
+      "inject": {
+        "pass": 26,
+        "n": 26
+      }
+    },
+    "benchmark-style_no_emoji_001": {
+      "baseline": {
+        "pass": 23,
+        "n": 23
+      },
+      "inject": {
+        "pass": 23,
+        "n": 23
+      }
+    }
+  },
+  "overall": {
+    "baseline_pass": 107,
+    "inject_pass": 108,
+    "checks": 112
+  },
+  "verdict": "FLAT: +0.9pp (1/112 checks flipped). Baseline 95.5% = saturation on frontier model + short-task regime. Do not scale to full run."
+}
