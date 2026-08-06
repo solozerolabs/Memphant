@@ -1,0 +1,40 @@
+{
+  "authorization_scope_sha256": "aa20f05b3aa47a1df0cb7612d12f4b830673f738785ef5e161414b44dc476763",
+  "completed_rows": 240,
+  "error_rows": 0,
+  "journal_closure": {
+    "authorization_sha256": "aa20f05b3aa47a1df0cb7612d12f4b830673f738785ef5e161414b44dc476763",
+    "journal_sha256": "1d8272cae7b656357c648038164f4db019eafaa488bb9a0e05c1591065d99608",
+    "settled_nanos": 107057990000,
+    "total_liability_nanos": 107057990000,
+    "unresolved_max_liability_nanos": 0
+  },
+  "lineage": {
+    "fast_evidence_sha256": "211a0aba1a28912bc33e5d89053d4e4bd36638f1c40ece720988c6cb960ff0fe",
+    "fast_gate_sha256": "57b7d59ee509d3e132496c6d120f08f456d55e3461fc14b180e19497b643a031",
+    "provider_attempts_sha256": "564f7984d43455656e13e20a7a038e21bef4a072bf6492ffdadf5b57a896d3bc",
+    "repository": {
+      "git_head": "ef910f7562ef51212599b8419a5873a8274aea43",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tracked_dirty": false,
+      "tracked_file_count": 2582,
+      "tracked_worktree_sha256": "368f55854c32791efefc5b30d4e105fdb7ba43dcda319e4a54cac24c52a88c18"
+    },
+    "run_reader_sha256": "0e3e7989b2a78632fedb2dc53101ce32f40941c4d272a954e6663d7aec8a69f9",
+    "runner_sha256": "86da8d96d5a90abcf3ed57aae4089ddea11475a76eb0d75a636bc6163328144c",
+    "selection_sha256": "15768f53afefb0b8bd5c2247cb2074aafe7a9ec09094aacb606b2640ab8432dc",
+    "source_jsonl_sha256": "4ac3065ca7bbb30408e8f61d4e2330cbdd670aa9b9d0799a77c9e339274a61bc"
+  },
+  "raw_rows_sha256": "91b6dd4fa05df7630467b08e528690b6e49d751bc75ad86b5fb2ffbe564d7680",
+  "reader": {
+    "attempts_sha256": "05057f578f593f558304c2801e8f6b54c5f4f43e9dce23a609cfdfc830fe578f",
+    "model": "claude-opus-4-6",
+    "priced_provider_attempts": 240,
+    "provider": "anthropic",
+    "provider_attempts": 241,
+    "reported_cost_usd": "107.05799"
+  },
+  "schema_version": 1,
+  "status": "complete",
+  "terminal_rows": 240
+}
