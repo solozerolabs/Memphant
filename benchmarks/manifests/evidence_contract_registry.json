@@ -73,7 +73,9 @@
     "docs/build-log/artifacts/track-r-paraphrase/z1-ladder-power.json",
     "docs/build-log/artifacts/track-r-minilm/result.json",
     "docs/build-log/artifacts/track-r-rerank/fusion-sweep.json",
-    "docs/build-log/artifacts/track-r-rerank/rerank-channel.json"
+    "docs/build-log/artifacts/track-r-rerank/rerank-channel.json",
+    "docs/build-log/artifacts/horizonbench-fresh-v1/fresh-fast-gate-interim.json",
+    "docs/build-log/artifacts/horizonbench-fresh-v1/pilot-fast-gate.json"
   ],
   "pending": [
     {
@@ -392,6 +394,13 @@
         "decision"
       ],
       "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "path": "docs/build-log/artifacts/horizonbench-fresh-v1/p3-supersession-evidence.json",
+      "decision_keys": [
+        "verdict"
+      ],
+      "reason": "Free mechanism verification, not a benchmark outcome: verdict=PASS records only that subject-resolution supersession fired on fresh users (DB-measured closed generations and supersedes edges). No gold, no reader, no paired cells, no power computation — carries no evidence_contract by design and makes no promotion or SOTA claim. Cannot be contracted because there is no paired scored run to contract."
     }
   ]
 }
