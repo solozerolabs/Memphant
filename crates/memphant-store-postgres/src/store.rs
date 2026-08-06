@@ -2669,12 +2669,31 @@ impl MemoryStore for PgStore {
                     and $7::timestamptz < coalesce(transaction_to, 'infinity'::timestamptz)
                     and coalesce(valid_from, '-infinity'::timestamptz) <= $8::timestamptz
                     and $8::timestamptz < coalesce(valid_to, 'infinity'::timestamptz)";
-        // The embedding_profile_id predicate ($10) is mandatory (spec 03):
-        // it keeps `<=>` from comparing vectors of different dimensions/models
-        // across profiles. Vector recall is an exact brute-force `<=>` scan —
-        // no HNSW index exists; ANN/recall-quality is deferred until volume
-        // exists (build-log 2026-07-21-c3). The query vector is $9; the
-        // distance rides back as `<=>` (cosine distance).
+        // The embedding_profile_id predicate ($10) is mandatory (spec 03): it
+        // keeps `<=>` from comparing vectors of different dimensions/models
+        // across profiles, and makes the scan exact-per-profile. Query vector is
+        // $9; distance rides back as `<=>` (cosine).
+        //
+        // ponytail: exact brute-force `<=>` scan, no ANN index. This is
+        // pgvector's default (perfect recall) and the correct design here — the
+        // scan runs only over ONE (tenant, subject, generation)'s units in the
+        // allowed scopes. The scope/agent/kind allowlist is a non-sargable
+        // EXISTS-over-unnest POST-filter, so the cost driver is a single
+        // subject's footprint, NOT total table rows; `limit` caps output after
+        // the sort, not the scan. Measured (384-dim, warm): p50 ~= 6ms +
+        // 226ns/row; the 34ms packaged-recall SLO breaks near 50k rows local,
+        // ~15-25k prod-derated. Trigger: watch max rows per (tenant, subject,
+        // generation, profile) partition; warn at 10k, ship ANN at 50k (lower
+        // for 1024-dim). Upgrade path is NOT a global HNSW but a per-profile
+        // PARTIAL EXPRESSION index
+        //   CREATE INDEX CONCURRENTLY ... USING hnsw
+        //     ((vec::halfvec(N)) halfvec_cosine_ops) WHERE embedding_profile_id = $10
+        // plus casting this ORDER BY to match. A global HNSW is wrong: the
+        // selective pre-filter over-filters it (pgvector #721; iterative_scan
+        // only softens it). `vec` is intentionally typmod-less so multi-dim profiles
+        // coexist, so the cast-expression form is the only indexable path — no
+        // ALTER TYPE rewrite. 1024-dim profiles TOAST (>2KB/row) and reach the
+        // cliff earlier than the 384-dim default (772B/row).
         let sql = format!(
             "select unit.*, (embedding.vec <=> $9::halfvec) as vector_distance
              from ({inner}) unit
