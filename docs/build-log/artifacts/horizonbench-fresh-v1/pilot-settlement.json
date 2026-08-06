@@ -1,0 +1,32 @@
+{
+  "attempts_sha256": "2bb65c7158bce404c3808d5d846215acec5929fffc1c7972aaeae769ee06267c",
+  "authorization_scope_sha256": "bcc2a620b58b1a36585a29b7d6c6bdc6e39ab897aafa1ece8d6fc386b007dabd",
+  "auto_close": "FAILED: provider_attempt_ledger_is_complete requires every attempt to be a priced result; 2 transient URLError attempts remain in the append-only journal. No logical row was lost (both errored requests retried to a priced result).",
+  "ceiling_usd": 140,
+  "kill_gate": {
+    "fast_acc": 0.4,
+    "full_acc": 0.45,
+    "note": "n=20, noise-level; gate only checks not-catastrophically-worse",
+    "triggered": false,
+    "v7_fast": 0.367
+  },
+  "logical_rows": {
+    "arms": {
+      "fast": 20,
+      "full_context": 20
+    },
+    "completed": 40,
+    "total": 40
+  },
+  "pct_ceiling": 13.5,
+  "provider_attempts": {
+    "error_type": "URLError (network), retried to success",
+    "priced_results": 40,
+    "total": 42,
+    "transient_errors": 2
+  },
+  "raw_rows_sha256": "c5c4dc36a0b8e8d56eb6c551ffe4668eb7d1a2b35435486b5fea43d332d1ef36",
+  "schema_version": 1,
+  "settled_cost_usd": 18.9468,
+  "status": "completed_rows_all_priced__auto_close_failed_on_transient_errors"
+}
