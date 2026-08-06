@@ -10,7 +10,7 @@ kill_signal = 'SIGTERM'
   dockerfile = 'Dockerfile'
 
 [env]
-  MEMPHANT_BIND = '0.0.0.0:3000'
+  MEMPHANT_BIND = '[::]:3000'  # 6PN is IPv6; 0.0.0.0 refuses cross-app connections
   RUST_LOG = 'info'
   # Phase A serves deterministic profile facts (retain + projection reads);
   # the dense channel is unused. This also removes the HuggingFace model
