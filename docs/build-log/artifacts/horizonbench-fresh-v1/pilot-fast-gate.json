@@ -1,0 +1,167 @@
+{
+  "claim": "The frozen HorizonBench confirmation completed its incremental gold-blind Fast construction gate.",
+  "decisional": false,
+  "elapsed_seconds": 238.598,
+  "evidence_contract": {
+    "claim": "The frozen 60-user HorizonBench confirmation completed its incremental gold-blind Fast construction gate.",
+    "corpus": {
+      "n_items": 120,
+      "sha256": "ba29a17cc1aed69831dc6c6090abdd7a68bce64a08b156a0d3eb3c3b1cb4a6a0",
+      "snapshot_id": "stellalisy/HorizonBench@50941f00f90c03a5a60219d76393869b757b835a:benchmark/test:confirmation-v1"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 16384,
+      "embed_model": "local sentence-unit embedder",
+      "flags": [
+        "fast",
+        "fact_extraction=on",
+        "subject_resolution=0.85",
+        "deep=off"
+      ],
+      "k": 20,
+      "scorer": "construction completeness only; benchmark gold quarantined"
+    },
+    "instrument_verification": {
+      "fields_counted": {
+        "conversation": 120,
+        "correct_letter": 120,
+        "has_evolved": 120,
+        "options": 120
+      },
+      "license_evidence": "Pinned Hugging Face dataset metadata.",
+      "license_id": "CC-BY-4.0",
+      "license_source": "RECORD_METADATA",
+      "rows_counted": 120,
+      "shipped_rows_verified": true
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Sixty user timelines were retained incrementally and each of 120 questions produced non-degraded Fast evidence before gold access.",
+    "notes": "Non-decisional construction proof; no answer scoring or SOTA claim.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "n": 0,
+      "n_d": 0,
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "gate",
+    "schema_version": 1
+  },
+  "evidence_jsonl_sha256": "b5c3a4b948b2d930bec0ef2b18c57db77e701f1078232a8d3a984cfb38419c29",
+  "gold_quarantine": {
+    "mental_state_graphs_acquired": false,
+    "runtime_fields": [
+      "id",
+      "user_id",
+      "generator",
+      "conversation",
+      "options"
+    ],
+    "scoring_only_fields": [
+      "correct_letter",
+      "distractor_letter",
+      "has_evolved",
+      "preference_domain",
+      "preference_evolution"
+    ]
+  },
+  "lineage": {
+    "cli_sha256": "858b67755049ff8b467715617fd81884ab1825b2db973ccb4322fcbcade93214",
+    "migrations": {
+      "aggregate_sha256": "f27ffbc3751c98891a2d624e367945bec1728aa75763a8ad182c70e4cc92b762",
+      "files": [
+        {
+          "path": "memphant_migrations/versions/20260703_001_wsa_bootstrap.sql",
+          "sha256": "5059ff8494cc35257d76a31ab1de5e50e5348b4bdbfd19e910c71bada9c5b156"
+        },
+        {
+          "path": "memphant_migrations/versions/20260723_002_file_sync_mutation_verb.sql",
+          "sha256": "5fa198008ce6775ca31ec8661b4ae70fd7d319de34bfaa47659a0702d4d79341"
+        },
+        {
+          "path": "memphant_migrations/versions/20260724_003_worker_claim_throughput.sql",
+          "sha256": "5950724e77eae5f9b2f9e57afff89d570c9f9b3f0508de05a82be4139e8aa9fc"
+        },
+        {
+          "path": "memphant_migrations/versions/20260730_004_served_login_roles.sql",
+          "sha256": "45f43b742e866a07fcb3962c7ca77b51a7dd985fc4bca1c9be68a83e28129a4e"
+        },
+        {
+          "path": "memphant_migrations/versions/20260730_005_pending_worker_job_count.sql",
+          "sha256": "dbced018ba81e3bd41c9741500c3e7c00dd0a5722d602c6890013f42768efb8f"
+        },
+        {
+          "path": "memphant_migrations/versions/20260731_006_preference_memory_kind.sql",
+          "sha256": "5a1b567299b2d9c7be7ed064ddbc77364019c1df32008766e372673ba26aa010"
+        },
+        {
+          "path": "memphant_migrations/versions/20260731_007_semantic_only_subject_exclusion.sql",
+          "sha256": "5946d103832cc8019febd7a04bfdfe2644f0ef6301362ffb71969c92180c3bb6"
+        },
+        {
+          "path": "memphant_migrations/versions/20260801_008_drop_retention_tier.sql",
+          "sha256": "64f145e6886f5270a4803e94e7ccc2e1ced3179e335f359557c2628967a8868e"
+        },
+        {
+          "path": "memphant_migrations/versions/20260801_009_drop_dead_schema.sql",
+          "sha256": "2ecda0e12713902ac6726fb46a0cdbcc7fb07eb5665af0ed063dfaf1c2610d2d"
+        }
+      ]
+    },
+    "repository": {
+      "git_head": "01291ade52c07f3c3a8edd6789ee14ffa202f548",
+      "tracked_diff_sha256": "fd618f269428fad8156bc4718d6e73935ebb5bd5a116df37f00463038b0515da",
+      "tracked_dirty": true,
+      "tracked_file_count": 1646,
+      "tracked_worktree_sha256": "02c9ce84283bc9f30469d5b430fd7b929075bb608dcf584193132f91fddecfff"
+    },
+    "runner_sha256": "7e77fb15d9353da16c82075df6b62d7df5c5a98c7025d93b706d3675cd796ced",
+    "server_sha256": "e08a545246a5606a2d9bdd5e3cd2c4479dbe71881b5f69875abc4ea441d457a4",
+    "test_sha256": "6b8d32e63623edaeb02e09f43b8b89287a169eda0a879eb9b5ea9847207951e9",
+    "worker_sha256": "53493a430872c746e78365c38ac8f9bb0778cc627cdc61edc2851456052f07df"
+  },
+  "runtime": {
+    "arm": "fast",
+    "budget_tokens": 16384,
+    "degraded_rows": 0,
+    "items": 20,
+    "jobs_compiled": 1739,
+    "k": 20,
+    "latency_ms": [
+      473.756,
+      613.602,
+      293.669,
+      619.92,
+      553.151,
+      611.325,
+      709.055,
+      739.734,
+      875.151,
+      729.863,
+      404.784,
+      342.476,
+      435.431,
+      546.009,
+      542.997,
+      543.489,
+      475.382,
+      740.208,
+      1155.454,
+      1131.993
+    ],
+    "nonempty_evidence_rows": 20,
+    "turn_episodes_retained": 1739,
+    "user_contexts": 10
+  },
+  "schema_version": 1,
+  "source": {
+    "dataset": "stellalisy/HorizonBench",
+    "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+    "jsonl_sha256": "ba29a17cc1aed69831dc6c6090abdd7a68bce64a08b156a0d3eb3c3b1cb4a6a0",
+    "rows": 120,
+    "selection_sha256": "932cc41b88dbeebae58e4f9891937056316560bc20d9f8ce9aa408f9bf795e30",
+    "users": 60
+  },
+  "status": "passed"
+}

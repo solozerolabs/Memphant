@@ -1,0 +1,29 @@
+{
+  "arms": {
+    "fast": 20,
+    "full_context": 20
+  },
+  "context_risk_resolution": "v7 completed 240/240 full_context+fast rows with 0 errors on the same first-party claude-opus-4-6 reader (paid-census.json); per-user full-context prompts of this scale are proven.",
+  "est_pilot_calls": 40,
+  "est_pilot_cost_usd_at_v7_per_call": 18.19,
+  "fast_est_tokens": {
+    "max": 13380,
+    "min": 1950,
+    "p50": 12392,
+    "sum": 227202
+  },
+  "full_context_est_tokens": {
+    "max": 357982,
+    "min": 51498,
+    "p50": 181901,
+    "sum": 3498908
+  },
+  "full_context_max_exceeds_200k": true,
+  "full_context_max_within_1M": true,
+  "kind": "zero-spend dry-run preflight of the pilot reader requests",
+  "note": "Prompts built via confirmation_reader_requests WITHOUT any provider call. Token estimates use v7 tokens/char=0.24306.",
+  "pilot_fast_gate_status": "passed",
+  "pilot_selection_sha256": "932cc41b88dbeebae58e4f9891937056316560bc20d9f8ce9aa408f9bf795e30",
+  "requests_total": 40,
+  "schema_version": 1
+}

@@ -2,3 +2,5 @@
 # Commit only selection reports, the integrity artifact, gate reports, and hashes.
 fresh-source-*.jsonl
 fresh-fast-evidence-*.jsonl
+pilot-source-*.jsonl
+pilot-fast-evidence.jsonl

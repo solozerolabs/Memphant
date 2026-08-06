@@ -1,0 +1,64 @@
+{
+  "dataset": "stellalisy/HorizonBench",
+  "dataset_revision": "50941f00f90c03a5a60219d76393869b757b835a",
+  "expected_ids": [
+    "Julian Thorne_event129_20260326_turn1_ethical_review_preferences_71_counterfactuals.json",
+    "Julian Thorne_event77_20260326_turn3_advice_delivery_preferences_101_counterfactuals.json",
+    "Julian Kestrel_event118_20260326_turn1_tone_guideline_preferences_164_counterfactuals.json",
+    "Julian Kestrel_event156_20260326_turn1_philosophical_engagement_11_counterfactuals.json",
+    "Alistair Thorne_event154_20260326_turn5_analytical_approach_48_counterfactuals.json",
+    "Alistair Thorne_event39_20260326_turn13_stakeholder_consultation_preferences_393_counterfactuals.json",
+    "Caleb Vance_event161_20260328_turn5_stakeholder_consultation_preferences_393_counterfactuals.json",
+    "Caleb Vance_event170_20260328_turn19_facilitation_style_preferences_197_counterfactuals.json",
+    "Emma Rodriguez_event102_20260325_turn13_writing_style_preferences_83_counterfactuals.json",
+    "Emma Rodriguez_event167_20260325_turn1_advice_delivery_preferences_100_counterfactuals.json",
+    "Caleb Foster_event126_20260326_turn1_ethical_review_preferences_65_counterfactuals.json",
+    "Caleb Foster_event164_20260326_turn13_entertainment_preferences_410_counterfactuals.json",
+    "Madison Greene_event157_20260326_turn7_conflict_resolution_style_preferences_351_counterfactuals.json",
+    "Madison Greene_event84_20260326_turn1_entertainment_preferences_398_counterfactuals.json",
+    "Ji-won Park_event146_20260329_turn29_emotional_support_style_59_counterfactuals.json",
+    "Ji-won Park_event66_20260328_turn5_self_esteem_rebuilding_preferences_433_counterfactuals.json",
+    "Maya Reyes_event158_20260329_turn1_creative_collaboration_50_counterfactuals.json",
+    "Maya Reyes_event88_20260328_turn7_philosophical_engagement_12_counterfactuals.json",
+    "Maria Santos_event30_20260327_turn23_entertainment_preferences_408_counterfactuals.json",
+    "Maria Santos_event91_20260328_turn17_public_speaking_coaching_preferences_343_counterfactuals.json"
+  ],
+  "expected_user_ids": [
+    "gemini-3-flash/user_12",
+    "gemini-3-flash/user_40",
+    "gemini-3-flash/user_7",
+    "gemini-3-flash/user_81",
+    "o3/user_44",
+    "o3/user_91",
+    "o3/user_98",
+    "sonnet-4.5/user_111",
+    "sonnet-4.5/user_117",
+    "sonnet-4.5/user_78"
+  ],
+  "gold_quarantine": {
+    "mental_state_graphs_acquired": false,
+    "selection_fields": [
+      "id",
+      "user_id",
+      "generator",
+      "has_evolved"
+    ],
+    "selection_uses_correct_letter": false,
+    "selection_uses_distractor_letter": false
+  },
+  "interim_selection_sha256": "15768f53afefb0b8bd5c2247cb2074aafe7a9ec09094aacb606b2640ab8432dc",
+  "nests_in_interim": true,
+  "notes": "First 4/3/3 users per generator by the interim seeded ranking; prefix of the interim.",
+  "role": "group-sequential pilot kill gate (packet \u00a77)",
+  "rows": 20,
+  "schema_version": 1,
+  "seed": "horizonbench-fresh-v1",
+  "source_jsonl_sha256": "ba29a17cc1aed69831dc6c6090abdd7a68bce64a08b156a0d3eb3c3b1cb4a6a0",
+  "status": "frozen",
+  "users": 10,
+  "users_per_generator": {
+    "gemini-3-flash": 4,
+    "o3": 3,
+    "sonnet-4.5": 3
+  }
+}

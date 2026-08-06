@@ -2727,13 +2727,22 @@ def load_locked_confirmation(
     source: Path,
     selection_path: Path,
     *,
-    expected_rows: int = 120,
-    expected_users: int = 60,
+    expected_rows: int | None = None,
+    expected_users: int | None = None,
 ) -> tuple[list[dict], dict]:
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
     if selection.get("status") != "frozen":
         raise ValueError("HorizonBench confirmation selection is not frozen")
     validate_source_revision(selection.get("dataset_revision"))
+    # Trust the frozen selection's own declared counts unless the caller pins
+    # them. The counts are hash-bound (source_jsonl_sha256 + expected_ids), so a
+    # tampered selection fails the hash and id checks below regardless. This is
+    # what lets one paid runner serve the 10u pilot, 60u interim, and 102u
+    # n_max — the size lives in the frozen artifact, not in this function.
+    if expected_rows is None:
+        expected_rows = selection.get("rows")
+    if expected_users is None:
+        expected_users = selection.get("users")
     raw = source.read_bytes()
     if hashlib.sha256(raw).hexdigest() != selection.get("source_jsonl_sha256"):
         raise ValueError("HorizonBench confirmation source hash drift")
