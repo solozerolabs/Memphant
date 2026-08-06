@@ -50,6 +50,16 @@ in Fly/doppler secrets — never in git.
   MemPhant load or a bad migration contends with Syndai prod. Revisit at the
   first sign of contention; the exit is the $10/mo dedicated project.
 
+## Bring-up failures (2026-08-05, all fixed — check here first on redeploy issues)
+
+1. `flyctl deploy | tail` masks the exit code — pipeline reports tail's 0.
+2. glibc: ONNX Runtime binaries need >= 2.38 (`__isoc23_strto*`) — images are trixie.
+3. Cold start crashed downloading the bge model from HuggingFace —
+   `MEMPHANT_EMBEDDINGS=off` on this cell; bake the model in before vectors.
+4. A lease-timeout deploy can leave a machine updated-but-stopped and call it
+   "good state" — `flyctl machine start <id>`.
+5. `MEMPHANT_BIND=0.0.0.0` refuses cross-app connections — 6PN is IPv6, bind `[::]:3000`.
+
 ## Operations
 
 ```bash
