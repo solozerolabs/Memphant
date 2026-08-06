@@ -77,3 +77,51 @@ Either way the read filter must match the write kind — today they agree on
 - Next: the (A)/(B) decision + a PG-twin test asserting a profile fact is minted
   in a SERVED state and round-trips through `load_repo_profile_block` (this
   synthetic check, promoted to a real test, is the regression guard).
+
+## Resolution (appended after the fixes)
+
+**(A) was refuted empirically, not chosen.** Retaining `kind=preference` from
+the `agent`-kind actor STILL minted `belief/candidate/agent_output` (DB-checked).
+The trust gate is applied *before* kind: `actor_kind_trust` maps `agent →
+AgentOutput`, and any AgentOutput assertion becomes a belief candidate whatever
+kind it requests. So kind alone can never rescue it — **(B) was necessary.**
+
+**Fix as landed** (Syndai `37e128f78`, `5e13e1e1b`, `9b03301d9`):
+
+1. **Bug 1 (retain 422):** `payload.unit.confidence` is server-required; added
+   `confidence: 1.0` (deterministic facts are asserted).
+2. **Bug 2 (retain 503):** dev tenant row unseeded (unit FK). Seed added to
+   `scripts/dev_stack.sh` (`2d6a150e`) — idempotent, so the cohort stack is
+   reproducible.
+3. **Bug 3 (write trust):** a dedicated `syndai:repo-profiler` **system** actor
+   → `TrustedSystem` → active `semantic` units. Narrow: distinct from the shared
+   `syndai:coding-engine` agent actor, so nothing else is elevated.
+4. **Bug 4 (read staleness), found only after 1-3 unblocked the block:** raw
+   `/scopes/{id}/memory` returns EVERY generation, so a superseded fact rendered
+   ALONGSIDE its replacement (both resource tiers). This is worse than empty —
+   contradictory facts in the prompt. Fixed by reading the canonical
+   `/projection` (active/validated only, deduped on fact_key).
+
+**Block renders: YES.** Reproduced on three fresh repos — run 1 captures, run 2's
+turn-1 block carries exactly the 3 current facts, `treated = YES`, active
+`semantic` at `trusted_system` (DB-confirmed). A time-separated restatement
+(`small`→`large` tier) supersedes in place: the closed generation drops out of
+the projection and only the current fact serves.
+
+**One honest caveat (test artifact, not a slice bug):** `observed_at` is stamped
+at *second* precision. Two synthetic "runs" firing in the same wall-clock second
+collide and do NOT order, so the restatement looked like a no-op until the writes
+were separated in time. Real runs are minutes/hours apart, so this cannot occur
+in production — but if finalize ever needs same-second supersession, bump
+`observed_at` to sub-second.
+
+**Cohort status:** the flag-on path now produces genuinely treated runs. The
+prereg kill-clock can start once this runs on real traffic. The gap between this
+synthetic proof and a real yurivan PR is now purely the deploy path (slice +
+reachable Memphant on the worker's host), not a code question.
+
+**Regression guard still owed:** promote this synthetic to a PG-twin test
+(fact minted in a SERVED state → round-trips through `load_repo_profile_block`,
+and a restatement serves only the current generation). The tests team flagged
+that any new write path needs a PG twin because InMemoryStore can't see the
+trust/exclusion behavior — which is exactly the class of both bugs 3 and 4.
