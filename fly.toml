@@ -12,6 +12,12 @@ kill_signal = 'SIGTERM'
 [env]
   MEMPHANT_BIND = '0.0.0.0:3000'
   RUST_LOG = 'info'
+  # Phase A serves deterministic profile facts (retain + projection reads);
+  # the dense channel is unused. This also removes the HuggingFace model
+  # download from the startup path — a third-party cold-start dependency that
+  # crashed the first boot. Bake the model into the image before any feature
+  # that needs vectors on this cell.
+  MEMPHANT_EMBEDDINGS = 'off'
 
 [processes]
   server = 'memphant-server'
