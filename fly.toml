@@ -1,0 +1,48 @@
+# MemPhant production cell — private-only (6PN), reached by syndai-prod at
+# http://memphant-prod.internal:3000. No public service on purpose:
+# a serviceless app must keep restart=always and never scale to zero
+# (see Syndai LEARNINGS fly-serviceless-worker-autostop-reaps-it).
+app = 'memphant-prod'
+primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  MEMPHANT_BIND = '0.0.0.0:3000'
+  RUST_LOG = 'info'
+
+[processes]
+  server = 'memphant-server'
+  worker = 'memphant-worker'
+
+# No [http_service]: private networking only. Secrets carry the three served
+# database URLs (never DATABASE_URL — the server refuses the migrator cred).
+
+[[restart]]
+  policy = 'always'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['server']
+  count = 1
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['worker']
+  count = 1
+
+[checks.server_health]
+  type = 'http'
+  port = 3000
+  method = 'get'
+  path = '/v1/health'
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '30s'
+  processes = ['server']

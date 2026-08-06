@@ -52,7 +52,9 @@ for capability in "${ROLES[@]}"; do
   # MEMPHANT_LOGIN_PASSWORD exists so the Compose bootstrap can converge on a
   # password the server container already knows. LOCAL DEVELOPMENT ONLY — a
   # production bootstrap leaves it unset and captures the generated secrets.
-  password="${MEMPHANT_LOGIN_PASSWORD:-$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40)}"
+  # Bounded read first: an unbounded `tr </dev/urandom | head` dies of SIGPIPE
+  # under pipefail on macOS when head closes the pipe (observed exit 141).
+  password="${MEMPHANT_LOGIN_PASSWORD:-$(head -c 400 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 40)}"
   psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -q \
     -c "alter role \"$login\" login noinherit password '$password'"
   # Fail closed rather than hand back a credential that silently bypasses RLS.
