@@ -4,3 +4,7 @@ fresh-source-*.jsonl
 fresh-fast-evidence-*.jsonl
 pilot-source-*.jsonl
 pilot-fast-evidence.jsonl
+# Paid-run outputs: caches echo prompts (dataset bodies) — keep out of git.
+reader-cache/
+reader-attempts.jsonl
+paid-rows.jsonl

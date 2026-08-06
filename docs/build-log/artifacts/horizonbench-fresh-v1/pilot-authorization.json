@@ -1,0 +1,71 @@
+{
+  "arms": [
+    "full_context",
+    "fast"
+  ],
+  "authorization": {
+    "authorization_scope_sha256": "bcc2a620b58b1a36585a29b7d6c6bdc6e39ab897aafa1ece8d6fc386b007dabd",
+    "authorized_at": "2026-08-05T00:00:00-07:00",
+    "authorized_by": "Sid Sharma (chat approval 2026-08-05)"
+  },
+  "campaign": {
+    "hard_ceiling_nanos": 200000000000,
+    "journal_path": "reader-attempts.jsonl",
+    "opening_liability_nanos": 0,
+    "opening_reservations": [],
+    "unallocated_reserve_nanos": 10000000000
+  },
+  "campaign_type": "horizonbench_confirmation",
+  "claim_boundary": "Sixty-user paired HorizonBench confirmation only; the complete 4,245-item treatment and every cross-axis SOTA claim remain unauthorized.",
+  "cost_preflight": {
+    "authorized_ceiling_usd": "140",
+    "calls": 40,
+    "estimated_input_usd": "18.630637",
+    "estimated_total_usd": "20.637369",
+    "estimated_total_usd_before_buffer": "19.654637",
+    "max_completion_usd": "1.024000",
+    "method": "pilot prompt-token ratio over exact uncached prompt characters, with 5% planning buffer",
+    "pilot_paid_rows_sha256": "bootstrap-explicit-ratio",
+    "pilot_prompt_chars": 5673862,
+    "pilot_prompt_tokens": 1379099,
+    "pilot_source_sha256": "bootstrap-explicit-ratio",
+    "pilot_tokens_per_char": "0.2430617804944850614977946238",
+    "prompt_chars": 15329960,
+    "status": "passed"
+  },
+  "execution": {
+    "cache_dir": "reader-cache",
+    "census": "paid-census.json",
+    "closure": "reader-closure.json",
+    "journal_path": "reader-attempts.jsonl",
+    "raw_rows": "paid-rows.jsonl"
+  },
+  "frozen_inputs": {
+    "fast_evidence_sha256": "b5c3a4b948b2d930bec0ef2b18c57db77e701f1078232a8d3a984cfb38419c29",
+    "fast_gate_sha256": "0fe5d58caedd83b591b1252ec61cf91c9df09efbebb829fb3720ef1c44ed8aad",
+    "provider_attempts_sha256": "b943ac3f8ebaffe0d475cd83a700b17c191f458655a80f62a4e535e13860ac4d",
+    "run_reader_sha256": "a9b718fac5be077596a9816d5f2f622091246d515085df5d4f2725d37b1ee00f",
+    "runner_sha256": "86da8d96d5a90abcf3ed57aae4089ddea11475a76eb0d75a636bc6163328144c",
+    "selection_sha256": "932cc41b88dbeebae58e4f9891937056316560bc20d9f8ce9aa408f9bf795e30",
+    "source_jsonl_sha256": "ba29a17cc1aed69831dc6c6090abdd7a68bce64a08b156a0d3eb3c3b1cb4a6a0"
+  },
+  "hard_limits": {
+    "max_logical_calls": 240,
+    "max_provider_attempts": 480,
+    "max_spend_usd": "140"
+  },
+  "models": {
+    "max_output_tokens": 1024,
+    "reader": "claude-opus-4-6",
+    "reader_engine": "anthropic",
+    "reader_price_usd_per_million": {
+      "completion": "25",
+      "prompt": "5"
+    },
+    "reader_prompt_sha256": "9bbc933029a0ee7f0fb6dafa7ffe3bca8bedcff00a25a01001cdee4e93983342",
+    "reader_provider": "anthropic",
+    "temperature": 0
+  },
+  "schema_version": 1,
+  "status": "AUTHORIZED_STATE_MEMORY_CAMPAIGN"
+}

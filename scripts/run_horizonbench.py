@@ -2238,31 +2238,47 @@ def authorize_confirmation(args) -> dict:
     ) != gr.sha256_file(args.fast_evidence.resolve()):
         raise ValueError("confirmation authorization requires the matching Fast gate")
 
-    pilot_source = load_jsonl(args.pilot_source.resolve())
-    pilot_paid = load_jsonl(args.pilot_paid_rows.resolve())
-    pilot_by_id = {row["id"]: row for row in pilot_source}
-    pilot_full = [row for row in pilot_paid if row.get("arm") == "full_context"]
-    if len(pilot_full) != 10 or len(pilot_by_id) != 10:
-        raise ValueError("confirmation preflight requires ten pilot full-context rows")
-    pilot_prompt_chars = sum(
-        len(full_context_prompt(pilot_by_id[row["id"]])) for row in pilot_full
-    )
-    try:
-        pilot_prompt_tokens = sum(
-            int(row["provider"]["usage"]["prompt_tokens"]) for row in pilot_full
+    # Bootstrap path (the FIRST paid pilot has no prior paid rows): the owner
+    # supplies an explicit prompt-char/token basis for the tokens-per-char ratio
+    # — in practice v7's measured pilot (chars 5673862, tokens 1379099). Only
+    # this ratio is borrowed; the projected cost is still computed over THIS
+    # run's exact request characters. Every non-bootstrap authorization keeps
+    # requiring real pilot paid rows, so stage-1+ accounting is unchanged.
+    if args.pilot_prompt_chars is not None or args.pilot_prompt_tokens is not None:
+        if args.pilot_prompt_chars is None or args.pilot_prompt_tokens is None:
+            raise ValueError(
+                "bootstrap preflight needs both --pilot-prompt-chars and --pilot-prompt-tokens"
+            )
+        pilot_prompt_chars = args.pilot_prompt_chars
+        pilot_prompt_tokens = args.pilot_prompt_tokens
+        pilot_source_sha = "bootstrap-explicit-ratio"
+        pilot_paid_sha = "bootstrap-explicit-ratio"
+    else:
+        pilot_source = load_jsonl(args.pilot_source.resolve())
+        pilot_paid = load_jsonl(args.pilot_paid_rows.resolve())
+        pilot_by_id = {row["id"]: row for row in pilot_source}
+        pilot_full = [row for row in pilot_paid if row.get("arm") == "full_context"]
+        if len(pilot_full) != 10 or len(pilot_by_id) != 10:
+            raise ValueError("confirmation preflight requires ten pilot full-context rows")
+        pilot_prompt_chars = sum(
+            len(full_context_prompt(pilot_by_id[row["id"]])) for row in pilot_full
         )
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError("pilot prompt-token accounting is incomplete") from error
+        try:
+            pilot_prompt_tokens = sum(
+                int(row["provider"]["usage"]["prompt_tokens"]) for row in pilot_full
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("pilot prompt-token accounting is incomplete") from error
+        pilot_source_sha = gr.sha256_file(args.pilot_source.resolve())
+        pilot_paid_sha = gr.sha256_file(args.pilot_paid_rows.resolve())
     requests = confirmation_reader_requests(source_rows, fast_rows)
     preflight = confirmation_cost_preflight(
         requests,
         pilot_prompt_chars=pilot_prompt_chars,
         pilot_prompt_tokens=pilot_prompt_tokens,
     )
-    preflight["pilot_source_sha256"] = gr.sha256_file(args.pilot_source.resolve())
-    preflight["pilot_paid_rows_sha256"] = gr.sha256_file(
-        args.pilot_paid_rows.resolve()
-    )
+    preflight["pilot_source_sha256"] = pilot_source_sha
+    preflight["pilot_paid_rows_sha256"] = pilot_paid_sha
     if preflight["status"] != "passed":
         raise ValueError("confirmation cost preflight exceeds the authorized ceiling")
     packet = confirmation_authorization_packet(
@@ -3390,6 +3406,8 @@ def main() -> int:
         / "docs/build-log/artifacts/horizonbench-pilot/paid-rows.jsonl",
         type=Path,
     )
+    confirmation_authorize.add_argument("--pilot-prompt-chars", type=int, default=None)
+    confirmation_authorize.add_argument("--pilot-prompt-tokens", type=int, default=None)
     confirmation_authorize.add_argument("--authorized-by", required=True)
     confirmation_authorize.add_argument("--authorized-at", required=True)
     confirmation_authorize.add_argument("--out", required=True, type=Path)
