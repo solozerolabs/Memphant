@@ -1,10 +1,13 @@
 # syntax=docker/dockerfile:1
 
-FROM rust:1.96.1-bookworm AS builder
+FROM rust:1.96.1-trixie AS builder
 WORKDIR /app
 
 COPY . .
-RUN cargo build --locked --release \
+# trixie (glibc >= 2.38): the vendored ONNX Runtime binaries reference
+# __isoc23_strto* symbols that bookworm's glibc 2.36 lacks (rust-lld:
+# undefined symbol at link). Runtime stage must match the builder's glibc.
+RUN cargo build --locked --release -j 2 \
   -p memphant-server \
   -p memphant-worker \
   -p memphant-cli
@@ -12,7 +15,7 @@ RUN cargo build --locked --release \
 # One-shot bootstrap image: applies the bundled migrations and gives the served
 # capability roles usable credentials. Kept as its own stage so the runtime
 # image never carries psql, python, or the migration corpus.
-FROM debian:bookworm-slim AS bootstrap
+FROM debian:trixie-slim AS bootstrap
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates postgresql-client python3 \
@@ -23,7 +26,7 @@ COPY memphant_migrations /app/memphant_migrations
 COPY scripts/apply_memphant_migrations.py /app/scripts/apply_memphant_migrations.py
 COPY scripts/provision_login_roles.sh /app/scripts/provision_login_roles.sh
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
