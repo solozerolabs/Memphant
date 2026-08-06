@@ -8,3 +8,8 @@ pilot-fast-evidence.jsonl
 reader-cache/
 reader-attempts.jsonl
 paid-rows.jsonl
+
+# archived pilot run bodies (prompt-echoing caches) stay out
+pilot-paid-rows.jsonl
+pilot-reader-attempts.jsonl
+pilot-reader-cache/
