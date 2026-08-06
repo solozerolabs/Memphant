@@ -4195,7 +4195,22 @@ impl MemoryStore for InMemoryStore {
     ) -> Result<Vec<(StoredMemoryUnit, f32)>, StoreError> {
         let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
         state.validate_context(context)?;
-        let embeddings = state.embeddings.get(&context.tenant_id);
+        // Group the tenant's profile-matching embeddings by unit up front so
+        // the per-unit lookup below is O(1) instead of a full-tenant rescan
+        // (which made this O(units x embeddings)).
+        let mut embeddings_by_unit: HashMap<_, Vec<&EmbeddingRow>> = HashMap::new();
+        for row in state
+            .embeddings
+            .get(&context.tenant_id)
+            .into_iter()
+            .flatten()
+            .filter(|row| row.embedding_profile_id == profile_id)
+        {
+            embeddings_by_unit
+                .entry(row.memory_unit_id)
+                .or_default()
+                .push(row);
+        }
         let mut scored: Vec<(StoredMemoryUnit, f32)> = state
             .memory_units
             .get(&context.tenant_id)
@@ -4212,13 +4227,10 @@ impl MemoryStore for InMemoryStore {
                         // Best (nearest) embedding for this unit UNDER the
                         // active profile; app-side cosine, returned as cosine
                         // DISTANCE (1 - similarity) to mirror pgvector `<=>`.
-                        embeddings
+                        embeddings_by_unit
+                            .get(&unit.id)
                             .into_iter()
                             .flatten()
-                            .filter(|row| {
-                                row.memory_unit_id == unit.id
-                                    && row.embedding_profile_id == profile_id
-                            })
                             .map(|row| 1.0 - cosine_similarity(query_vec, &row.vec))
                             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                             .map(|distance| (unit.clone(), distance))
