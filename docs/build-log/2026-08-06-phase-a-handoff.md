@@ -50,12 +50,33 @@ cohort's preregistered kill-clock starts at the first treated run on real traffi
 | Dev stack | `Memphant scripts/dev_stack.sh` (local: server 127.0.0.1:3020 + worker, dev tenant) |
 | Prod cell creds | `~/.memphant-private/prod-cell/login_roles.env` |
 
+## BLOCKER (2026-08-06) — Syndai/main is RED, deploy failed, NOT our slice
+
+The Phase A slice is correctly merged to main, but the Deploy **failed** and Phase A
+is **not on prod**. Cause is pre-existing and unrelated: **the postbag `tags`+segments
+feature left main red.** `backend/src/features/newsletter/service.py:547`
+(`tags=frozenset(row["tags"] or ())`) KeyErrors because the tick-routing test's row
+has no `tags` key. **Proven not-ours:** the test fails at commit `852332984` (postbag),
+which predates the slice; the last 4 consecutive main Deploys all failed on it
+(`652030d9`/`7831e0d9`=our push/`66c0ed51`/`0776ce59`).
+
+**Decision (owner, 2026-08-06): routed to the postbag owner — do NOT fix their
+feature.** The slice deploys automatically on the next green main. Fix is either
+`row.get("tags")` (reader tolerance) or the row-builder should supply `tags` — the
+postbag owner's invariant to decide. **Next session: check if main is green yet
+(`gh run list --repo solozerolabs/Syndai --branch main --workflow Deploy --limit 1`);
+if green, the slice deployed — jump to "confirm treated run #1" below. If still red,
+it is still the postbag blocker, still not ours.**
+
 ## OPEN — next session, in priority order
 
-1. **Watch the deploy land** (was in-flight at handoff). `gh run list --repo
-   solozerolabs/Syndai --branch main` (poll ≥120s — abuse limiter, see LEARNINGS
-   `github-api-poll-interval`). If it fails, read `flyctl logs -a syndai-prod`;
-   deploy uses bluegreen so a health-check timeout leaves old machines serving.
+1. **Watch the deploy land once main is green** (see BLOCKER above — currently red on
+   postbag, not us). `gh run list --repo solozerolabs/Syndai --branch main` (poll
+   ≥120s — abuse limiter, see LEARNINGS `github-api-poll-interval`). If a NEW failure
+   appears that IS in our files (repo_profile/coding engine_loop/memphant adapter),
+   that is ours; the postbag `tags` one is not. On deploy failure read
+   `flyctl logs -a syndai-prod`; bluegreen means a health-check timeout leaves old
+   machines serving.
 2. **Confirm treated run #1**: after deploy, the first two coding runs on one repo
    should produce a `repo_profile_sha` on run 2. Query prod:
    `select count(*) from syndai.coding_execution_attempts where executor_metadata ?
