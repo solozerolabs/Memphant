@@ -2669,10 +2669,12 @@ impl MemoryStore for PgStore {
                     and $7::timestamptz < coalesce(transaction_to, 'infinity'::timestamptz)
                     and coalesce(valid_from, '-infinity'::timestamptz) <= $8::timestamptz
                     and $8::timestamptz < coalesce(valid_to, 'infinity'::timestamptz)";
-        // The embedding-profile predicate is mandatory (spec 03): it
-        // hits the per-profile partial index and keeps `<=>` from comparing
-        // vectors of different dimensions/models across profiles. `$4` is the
-        // query vector; the distance rides back as `<=>` (cosine distance).
+        // The embedding_profile_id predicate ($10) is mandatory (spec 03):
+        // it keeps `<=>` from comparing vectors of different dimensions/models
+        // across profiles. Vector recall is an exact brute-force `<=>` scan —
+        // no HNSW index exists; ANN/recall-quality is deferred until volume
+        // exists (build-log 2026-07-21-c3). The query vector is $9; the
+        // distance rides back as `<=>` (cosine distance).
         let sql = format!(
             "select unit.*, (embedding.vec <=> $9::halfvec) as vector_distance
              from ({inner}) unit
