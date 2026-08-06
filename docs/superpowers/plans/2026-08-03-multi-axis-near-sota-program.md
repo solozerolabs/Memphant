@@ -53,7 +53,7 @@ not an accuracy axis.
 
 | Axis | Primary public instrument | Current external reference | Current MemPhant status |
 |---|---|---|---|
-| Evolving preference and belief state | HorizonBench | 52.8% overall | Powered held-out confirmation failed: Fast 36.7% vs full context 52.5%, delta -15.8pp, 95% user-cluster CI [-24.2, -7.5] |
+| Evolving preference and belief state | HorizonBench | 52.8% overall | **CLOSED negative.** Fix-on interim (2026-08-06, fresh 60u/120i, $107.06): Fast 25.8% vs full 35.0%, delta -9.17pp, CI [-18.33, 0]; non-inferiority, evolved-lift, and distractor non-regression all fail. The subject-resolution fix moved the point estimate (-15.8->-9.17) but did not rescue Fast; interim look accepted, n_max declined. Prior v7: -15.8pp, CI [-24.2, -7.5] (ran with the fix off). |
 | Longitudinal remembering, reasoning, recommendation, and obsolete-state avoidance | Memora / FAMA | Task- and horizon-specific frontier; no valid universal aggregate winner | Mechanism signal exists, but the raw 43/71 versus 44/71 result is not frontier evidence |
 | Heterogeneous dialogue, documents, and email | RHELM | 38.1 overall with external sources; 33.6 best evaluated memory framework | No pinned adapter or official run; current private docs gate is negative |
 | Procedural/environment experience | LongMemEval-V2 | AgentRunbook-C 72.5 average; strongest reported RAG point 58.6/57.0 | Prior local campaign is retired and must never be resumed; any return begins with a new free qualification and clean adapter plan |
@@ -148,13 +148,21 @@ python3 scripts/instrument_power.py --check
 
 ### Task 3: Repair the largest product gaps on exposed development evidence
 
-- [ ] Temporal: improve obsolete-state avoidance without another threshold
-  sweep on the exhausted S6/S1b banks. The measured first bottleneck is
-  current-state compilation: supersession keys on lexical phrase identity
-  (`{scope}:{family}:{subject_phrase}`), so a restated preference never
-  collides with the belief it replaces and both reach the reader
-  (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`). Fix
-  subject identity before spending on retrieval or packing levers.
+- [x] Temporal: the subject-identity fix is built, paid-measured, and the axis
+  is **closed negative** — no further spend targets it. The diagnosed first
+  bottleneck was current-state compilation: supersession keys on lexical phrase
+  identity (`{scope}:{family}:{subject_phrase}`), so a restated preference never
+  collided with the belief it replaced
+  (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`). Semantic
+  subject identity now ships behind `MEMPHANT_SUBJECT_RESOLUTION_THRESHOLD`
+  (default off, calibrated 0.85). Re-measured with the fix on across a fresh
+  60u/120i tranche (2026-08-06, $107.06 settled): supersession fires (398 on
+  fresh users) and the point estimate moved -15.8->-9.17pp, but Fast stays
+  clearly inferior (delta -9.17pp, CI [-18.33, 0]; non-inferiority, evolved
+  lift, and distractor non-regression all fail). The O'Brien-Fleming interim
+  gave no efficacy stop; the owner accepted the look and declined the powered
+  n_max. The mechanism ships default-off; do not reopen this lane without a new
+  mechanism (`docs/build-log/2026-08-06-horizonbench-interim-fix-on.md`).
 - [ ] Docs: use RHELM development data to diagnose retrieval versus answer
   composition. Do not revive the rejected full-pool reranker.
 - [ ] Procedural: build a clean minimal adapter only if the new LongMemEval-V2
