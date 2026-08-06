@@ -1,0 +1,10 @@
+# Dataset bodies and derived evidence bodies stay out of git (packet §10).
+# Commit only selection reports, the integrity artifact, gate reports, and hashes.
+fresh-source-*.jsonl
+fresh-fast-evidence-*.jsonl
+pilot-source-*.jsonl
+pilot-fast-evidence.jsonl
+# Paid-run outputs: caches echo prompts (dataset bodies) — keep out of git.
+reader-cache/
+reader-attempts.jsonl
+paid-rows.jsonl

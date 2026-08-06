@@ -311,6 +311,11 @@ def _journal_state(
         event["payload"]["reserved_nanos"] for event in reconciliations
     )
     settled = sum(event["payload"]["settled_nanos"] for event in reconciliations)
+    result_keys = {
+        attempt["request_key"]
+        for attempt in attempts
+        if attempt.get("status") == "result"
+    }
     unresolved = 0
     for attempt in attempts:
         response = (
@@ -319,10 +324,20 @@ def _journal_state(
             else None
         )
         cost_nanos = _cost_nanos(response)
-        if cost_nanos is None:
-            unresolved += attempt["start"]["max_liability_nanos"]
-        else:
+        if cost_nanos is not None:
             settled += cost_nanos
+        elif (
+            attempt.get("status") == "error"
+            and attempt["request_key"] in result_keys
+        ):
+            # A transient error superseded by a priced result on the SAME
+            # request_key is proven non-billable: the retry carries the one
+            # charge, so this reservation is released. A dangling 'started' or
+            # an un-superseded error keeps its reservation unresolved — the
+            # fail-closed guarantee for a call whose billing we cannot confirm.
+            continue
+        else:
+            unresolved += attempt["start"]["max_liability_nanos"]
     return {
         "authorization_sha256": header["authorization_sha256"],
         "hard_ceiling_nanos": header["hard_ceiling_nanos"],
@@ -740,23 +755,46 @@ def open_campaign_ledger_from_env(
 
 def provider_attempt_ledger_is_complete(snapshot: dict[str, Any]) -> bool:
     attempts = snapshot.get("attempts")
-    if not isinstance(attempts, list):
+    if not isinstance(attempts, list) or not attempts:
         return False
-    return (
-        all(
-            isinstance(row, dict)
-            and row.get("status") == "result"
-            and isinstance(row.get("result"), dict)
-            and fresh_paid_usage(row["result"].get("response"))
-            and row["result"]["response"].get("parse_status")
+    # Every logical request (request_key) must end in EXACTLY ONE priced,
+    # validated result. Non-result attempts are tolerated ONLY as transient
+    # errors the result superseded — never a dangling 'started' (a call
+    # interrupted mid-flight, whose billing is unknown). This keeps the
+    # spend/pricing guarantee (one charge per request) while surviving the
+    # network blips that are near-certain across a 240-400 call campaign.
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for row in attempts:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("request_key"), str)
+            or not row["request_key"]
+        ):
+            return False
+        by_key.setdefault(row["request_key"], []).append(row)
+    priced = 0
+    superseded_errors = 0
+    for key_rows in by_key.values():
+        results = [row for row in key_rows if row.get("status") == "result"]
+        others = [row for row in key_rows if row.get("status") != "result"]
+        if len(results) != 1 or any(row.get("status") != "error" for row in others):
+            return False
+        result = results[0]
+        if not (
+            isinstance(result.get("result"), dict)
+            and fresh_paid_usage(result["result"].get("response"))
+            and result["result"]["response"].get("parse_status")
             == "provider_response_validated"
-            and _valid_attempt_metadata(row)
-            for row in attempts
-        )
-        and snapshot.get("attempts_sha256") == _sha256_json(attempts)
+            and _valid_attempt_metadata(result)
+        ):
+            return False
+        priced += 1
+        superseded_errors += len(others)
+    return (
+        snapshot.get("attempts_sha256") == _sha256_json(attempts)
         and snapshot.get("provider_attempts") == len(attempts)
-        and snapshot.get("priced_provider_attempts") == len(attempts)
-        and snapshot.get("unpriced_provider_attempts") == 0
+        and snapshot.get("priced_provider_attempts") == priced
+        and snapshot.get("unpriced_provider_attempts") == superseded_errors
     )
 
 
@@ -791,7 +829,13 @@ def _valid_attempt_metadata(row: dict[str, Any]) -> bool:
 def validate_provider_attempt_ledger(snapshot: dict[str, Any]) -> None:
     if not provider_attempt_ledger_is_complete(snapshot):
         raise RuntimeError("provider-attempt ledger contains an interrupted or unpriced attempt")
-    response_ids = [row["result"]["response"].get("response_id") for row in snapshot["attempts"]]
+    # Only priced results carry a response id; superseded transient errors are
+    # tolerated by the completeness check above and have no response to check.
+    response_ids = [
+        row["result"]["response"].get("response_id")
+        for row in snapshot["attempts"]
+        if row.get("status") == "result"
+    ]
     if any(not isinstance(value, str) or not value for value in response_ids):
         raise RuntimeError("provider-attempt ledger has a missing response ID")
     if len(response_ids) != len(set(response_ids)):

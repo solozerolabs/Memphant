@@ -572,3 +572,91 @@ def test_shared_meter_namespaces_context_away_from_authoritative_evidence(
     assert row["result"]["response"]["served_model"] == "served-authoritative"
     assert row["result"]["response"]["provider"] == "OpenAI"
     assert ledger.snapshot()["settled_nanos"] == 10_000_000
+
+
+# --- transient-retry tolerance (2026-08-05) -------------------------------
+# A real HorizonBench paid pilot completed all logical rows and priced every
+# one, but a transient URLError attempt (retried to a priced result on the same
+# request_key) left an "error" row in the append-only journal. The completeness
+# gate rejected any non-"result" attempt, so the campaign could not close AFTER
+# the money was spent. These pin the fix: a transient error SUPERSEDED by a
+# successful retry of the SAME request_key is tolerated and releases its
+# reservation; an UN-superseded error stays incomplete and unresolved.
+
+def _retry_response(response_id: str, retry_index: int, *, cost: object) -> dict:
+    return {
+        "response_id": response_id,
+        "requested_model": "anthropic/claude-opus-4-6",
+        "served_model": "claude-opus-4-6",
+        "provider": "Anthropic",
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost": cost},
+        "elapsed_seconds": 0.2,
+        "retry_index": retry_index,
+        "parse_status": "provider_response_validated",
+        "request_sha256": "1" * 64,
+        "result_sha256": "2" * 64,
+    }
+
+
+def _start(retry_index: int, *, max_liability_nanos: int = 100_000) -> dict:
+    return {
+        "retry_index": retry_index,
+        "requested_model": "anthropic/claude-opus-4-6",
+        "request_sha256": "1" * 64,
+        "max_liability_nanos": max_liability_nanos,
+    }
+
+
+def test_transient_error_superseded_by_retry_closes_clean(tmp_path: Path) -> None:
+    attempts = load_attempts()
+    ledger = open_test_ledger(attempts, tmp_path / "retry.jsonl", "retry")
+    # request "a": first attempt errors (URLError), retry succeeds and is priced.
+    ledger.record("start", "a", _start(0))
+    ledger.record("error", "a", {"error": "URLError", "retry_index": 0, "elapsed_seconds": 0.1})
+    ledger.record("start", "a", _start(1))
+    ledger.record("result", "a", {"response": _retry_response("gen-a", 1, cost="0.5")})
+    # request "b": clean single-attempt success.
+    ledger.record("start", "b", _start(0))
+    ledger.record("result", "b", {"response": _retry_response("gen-b", 0, cost="0.25")})
+
+    snapshot = ledger.snapshot()
+    assert attempts.provider_attempt_ledger_is_complete(snapshot), snapshot
+    # The superseded error released its reservation: only the two real charges
+    # settle, and there is no lingering unresolved liability.
+    assert snapshot["unresolved_max_liability_nanos"] == 0
+    assert snapshot["unpriced_provider_attempts"] == 1  # the one superseded error
+    assert snapshot["priced_provider_attempts"] == 2
+    assert abs(snapshot["reported_cost_usd"] - 0.75) < 1e-9
+    # validate_provider_attempt_ledger must not choke on the error row.
+    attempts.validate_provider_attempt_ledger(snapshot)
+    # And the campaign closes.
+    closure = ledger.close_campaign(tmp_path / "closure.json")
+    assert closure["unresolved_max_liability_nanos"] == 0
+
+
+def test_unsuperseded_error_stays_incomplete_and_unresolved(tmp_path: Path) -> None:
+    attempts = load_attempts()
+    ledger = open_test_ledger(attempts, tmp_path / "dangling.jsonl", "dangling")
+    ledger.record("start", "a", _start(0))
+    ledger.record("result", "a", {"response": _retry_response("gen-a", 0, cost="0.25")})
+    # request "b" errors and is NEVER retried to success — a real failure.
+    ledger.record("start", "b", _start(0))
+    ledger.record("error", "b", {"error": "URLError", "retry_index": 0, "elapsed_seconds": 0.1})
+
+    snapshot = ledger.snapshot()
+    assert not attempts.provider_attempt_ledger_is_complete(snapshot)
+    # Fail-closed preserved: the un-superseded error's reservation is unresolved.
+    assert snapshot["unresolved_max_liability_nanos"] == 100_000
+
+
+def test_dangling_started_without_terminal_stays_incomplete(tmp_path: Path) -> None:
+    attempts = load_attempts()
+    ledger = open_test_ledger(attempts, tmp_path / "started.jsonl", "started")
+    ledger.record("start", "a", _start(0))
+    ledger.record("result", "a", {"response": _retry_response("gen-a", 0, cost="0.25")})
+    # request "b" started but the process died before any terminal event.
+    ledger.record("start", "b", _start(0))
+
+    snapshot = ledger.snapshot()
+    assert not attempts.provider_attempt_ledger_is_complete(snapshot)
+    assert snapshot["unresolved_max_liability_nanos"] == 100_000

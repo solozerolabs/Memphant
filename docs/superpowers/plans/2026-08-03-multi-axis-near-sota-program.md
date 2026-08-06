@@ -149,7 +149,12 @@ python3 scripts/instrument_power.py --check
 ### Task 3: Repair the largest product gaps on exposed development evidence
 
 - [ ] Temporal: improve obsolete-state avoidance without another threshold
-  sweep on the exhausted S6/S1b banks.
+  sweep on the exhausted S6/S1b banks. The measured first bottleneck is
+  current-state compilation: supersession keys on lexical phrase identity
+  (`{scope}:{family}:{subject_phrase}`), so a restated preference never
+  collides with the belief it replaces and both reach the reader
+  (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`). Fix
+  subject identity before spending on retrieval or packing levers.
 - [ ] Docs: use RHELM development data to diagnose retrieval versus answer
   composition. Do not revive the rejected full-pool reranker.
 - [ ] Procedural: build a clean minimal adapter only if the new LongMemEval-V2

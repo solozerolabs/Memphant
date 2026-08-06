@@ -338,6 +338,21 @@
       "verdict": "NO PAIRED RUN -- psi unmeasured, MDE uncomputable"
     },
     {
+      "lane": "preference/horizon",
+      "instrument": "HorizonBench Fast vs full (non-inferiority)",
+      "n": 120,
+      "b": 6,
+      "c": 25,
+      "psi_source": "docs/build-log/artifacts/horizonbench-confirmation-v7/result.json:analysis.paired_fast_vs_full",
+      "effect_we_care_about": 0.108,
+      "note": "psi_observed 0.2583, delta_observed -0.158 (Fast worse). care=0.108 is the v7-point-to--5pp-margin swing. required_n=183 items => the fresh single-stage 102u/204i design is ADEQUATE; the 60u/120i interim is a group-sequential LOOK, not a decision point. Fresh selection frozen at fresh-selection-{20,34}.json; interim nests in n_max.",
+      "psi_observed": 0.258333,
+      "delta_observed": -0.158333,
+      "mde_at_80": 0.134385,
+      "required_n": 183,
+      "verdict": "INADEQUATE: MDE 13.4pt vs target 10.8pt; need n>=183"
+    },
+    {
       "lane": "procedural",
       "instrument": "rung10 state-style procedure replay",
       "n": null,

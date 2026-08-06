@@ -22,7 +22,7 @@ use memphant_types::{
     ReflectAccepted, ReflectCandidate, ReflectInput, ReflectJob, ReflectJobKind, ReflectRequest,
     ResolvedMemoryContext, ResourceId, ResourceKind, RetainEpisodeHttpRequest,
     RetainEpisodeHttpResponse, RetrievalTrace, ReviewEvent, StoredEpisode, StoredMemoryUnit,
-    TraceId, TrustLevel, UnitId,
+    TraceId, TrustLevel, UnitId, UnitState,
 };
 use sha2::{Digest, Sha256};
 
@@ -36,9 +36,9 @@ use crate::{
     ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket, StructuredSourceKind,
     StructuredStateProvider, StructuredStateRequest, VectorQuery, apply_correction_transition,
     apply_unit_forget_transition, canonical_mutation_request_hash, correction_rectangles_with_ids,
-    derive_episode_dedup_key, embedding_profile_for, evidence_slices_for_episode,
-    fold_structured_observations, non_blank, normalize_component, parse_content_date,
-    prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
+    cosine_similarity, derive_episode_dedup_key, derive_fact_key, embedding_profile_for,
+    evidence_slices_for_episode, fold_structured_observations, non_blank, normalize_component,
+    parse_content_date, prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
     project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed_owned,
     run_embedding_task, structured_compiler_identity, structured_extraction_receipt_sha256,
@@ -3484,6 +3484,19 @@ pub struct MemoryService<S: MemoryStore> {
     /// carries a parseable content date. Measurement-only promotion, so it ships
     /// off and the bench threads it via `with_fact_extraction_enabled`.
     fact_extraction_enabled: bool,
+    /// Semantic subject identity for mined candidates (DEFAULT `None` = off).
+    /// W6 mines an honest subject key only when the sentence carries an explicit
+    /// topic slot ("my favorite tea is chamomile" → `preference:favorite tea`).
+    /// A restatement with no such slot takes its whole object phrase as the
+    /// subject, so "prefer this broken down step by step" and "prefer actual
+    /// steps to follow" mint different keys and never supersede — both beliefs
+    /// reach the reader and the obsolete one competes with the current one
+    /// (`docs/build-log/2026-08-05-horizon-stage1-supersession-defect.md`).
+    /// When set, a mined candidate whose subject phrase is at least this cosine
+    /// similar to an open unit's adopts that unit's fact key, and the existing
+    /// subject-key supersedence machinery closes the generation. `None` leaves
+    /// the compile byte-identical to today.
+    subject_resolution_threshold: Option<f32>,
     /// W8 cross-encoder rerank seam (DEFAULT `None`). When set, recall reorders
     /// the top `recall_pool_depth` fused candidates by a real `(query, body)`
     /// cross-encoder AFTER fusion and BEFORE packing — the widened-pool rerank
@@ -3512,6 +3525,7 @@ impl<S: MemoryStore> Clone for MemoryService<S> {
             lexical_scorer: self.lexical_scorer,
             temporal_grounding_enabled: self.temporal_grounding_enabled,
             fact_extraction_enabled: self.fact_extraction_enabled,
+            subject_resolution_threshold: self.subject_resolution_threshold,
             cross_reranker: self.cross_reranker.clone(),
             cross_rerank_candidate_selection: self.cross_rerank_candidate_selection,
             cross_rerank_granularity: self.cross_rerank_granularity,
@@ -3536,6 +3550,7 @@ impl<S: MemoryStore> MemoryService<S> {
             lexical_scorer: LexicalScorer::default(),
             temporal_grounding_enabled: false,
             fact_extraction_enabled: false,
+            subject_resolution_threshold: None,
             cross_reranker: None,
             cross_rerank_candidate_selection: CrossRerankCandidateSelection::FusedHead,
             cross_rerank_granularity: CrossRerankGranularity::UnitBody,
@@ -3641,6 +3656,21 @@ impl<S: MemoryStore> MemoryService<S> {
     /// threads its value here. Off ⇒ the compile is byte-identical to today.
     pub fn with_fact_extraction_enabled(mut self, enabled: bool) -> Self {
         self.fact_extraction_enabled = enabled;
+        self
+    }
+
+    /// Sets the semantic subject-identity threshold (default `None` = off): a
+    /// mined candidate whose subject phrase is at least this cosine similar to
+    /// an open unit's adopts that unit's fact key, so a restatement supersedes
+    /// instead of accumulating beside the belief it replaces. Construction-time
+    /// only, mirroring the W3/W4/W5/W6 knobs. `None` ⇒ byte-identical to today.
+    ///
+    /// The threshold is a calibration knob, not a constant to tune away: it
+    /// trades missed updates (too high) against merging two genuinely different
+    /// preferences (too low). Supersession is bitemporal, so a wrong merge
+    /// closes a generation rather than destroying it, but it is still wrong.
+    pub fn with_subject_resolution_threshold(mut self, threshold: Option<f32>) -> Self {
+        self.subject_resolution_threshold = threshold;
         self
     }
 
@@ -5349,6 +5379,159 @@ impl<S: MemoryStore> MemoryService<S> {
             })
     }
 
+    /// Gives a mined candidate the subject identity of the belief it restates.
+    ///
+    /// A candidate that already carries a caller-authored `fact_key`, or that
+    /// names `target_unit_ids`, owns its identity and is left alone — this only
+    /// speaks for phrases W6 derived from free text. Matching is confined to
+    /// units sharing the candidate's subject family, so a preference can never
+    /// adopt a procedure's key, and the adopted value is the stored unit's own
+    /// `fact_key` rather than a re-derivation, so the keys are equal by
+    /// construction and not by two normalizers agreeing.
+    ///
+    /// Reads the WHOLE open scope, like the write compiler below it: a bounded
+    /// recall pool would miss aged units and silently split a subject that
+    /// should have superseded.
+    async fn resolve_subject_aliases(
+        &self,
+        context: &ResolvedMemoryContext,
+        candidates: &mut [ReflectCandidate],
+    ) -> Result<(), ServiceError> {
+        let Some(threshold) = self.subject_resolution_threshold else {
+            return Ok(());
+        };
+        if self.embedder.dimensions() == 0 {
+            return Ok(());
+        }
+        let eligible: Vec<usize> = candidates
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| {
+                candidate.fact_key.is_none()
+                    && candidate.target_unit_ids.is_none()
+                    && candidate.subject.is_some()
+                    && candidate
+                        .predicate
+                        .as_deref()
+                        .is_some_and(|p| !p.is_empty())
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if eligible.is_empty() {
+            return Ok(());
+        }
+
+        // (family, phrase, fact_key) for every open unit that already owns an
+        // explicit subject. `fact_key` is `{scope}:{family}:{phrase}`, so the
+        // family is the segment after the scope uuid.
+        let scope_prefix = format!("{}:", context.scope_id.as_uuid());
+        let existing: Vec<(String, String, String)> = self
+            .store
+            .fetch_scope_open_units(context)
+            .await?
+            .into_iter()
+            .filter(|unit| unit.state == UnitState::Active)
+            .filter_map(|unit| {
+                let fact_key = unit.fact_key.clone()?;
+                let family = fact_key
+                    .strip_prefix(&scope_prefix)?
+                    .split_once(':')
+                    .map(|(family, _)| family.to_string())?;
+                if family == "auto" {
+                    return None;
+                }
+                let phrase = unit.predicate.clone().filter(|p| !p.is_empty())?;
+                Some((family, phrase, fact_key))
+            })
+            .collect();
+        if existing.is_empty() {
+            return Ok(());
+        }
+
+        // One batched embed for the whole job: the candidate phrases followed
+        // by the open subjects.
+        let mut texts: Vec<String> = eligible
+            .iter()
+            .map(|index| candidates[*index].predicate.clone().unwrap_or_default())
+            .collect();
+        texts.extend(existing.iter().map(|(_, phrase, _)| phrase.clone()));
+        let vectors = self
+            .embedder
+            .embed(&texts)
+            .map_err(|error| ServiceError::Invalid(format!("subject embedding failed: {error}")))?;
+        if vectors.len() != texts.len() {
+            return Ok(());
+        }
+        let (candidate_vectors, existing_vectors) = vectors.split_at(eligible.len());
+
+        // ONE CANDIDATE PER SUBJECT PER JOB. Two phrases mined from the same
+        // episode can both be near the same open unit; letting both adopt its
+        // key opens one subject twice over overlapping validity, which the
+        // `memphant_memory_unit_subject_valid_excl` exclusion constraint rejects
+        // and the whole reflect job dies with it. The first candidate to claim a
+        // key keeps it; later ones fall through and mint their own, which is the
+        // pre-resolution behaviour for them.
+        //
+        // Seeded with every key this job will own WITHOUT resolution: the ones
+        // candidates already carry explicitly, AND the ones the compiler will
+        // derive for them further down. That second half is not belt-and-braces
+        // — derivation happens after this stage, so a phrase identical to some
+        // open unit's is invisible here while still being destined for that
+        // unit's key. Resolving another phrase onto it then puts two candidates
+        // on one subject, and because it is deterministic every retry repeats
+        // it: measured as 20 dead jobs and a blocked scope lane draining the
+        // Horizon sample at threshold 0.80.
+        let mut claimed: HashSet<String> = candidates
+            .iter()
+            .map(|candidate| {
+                candidate.fact_key.clone().unwrap_or_else(|| {
+                    derive_fact_key(
+                        context.scope_id.as_uuid(),
+                        candidate.subject.as_deref(),
+                        candidate.predicate.as_deref(),
+                        &candidate.body,
+                    )
+                })
+            })
+            .collect();
+
+        for (slot, index) in eligible.into_iter().enumerate() {
+            let family = candidates[index]
+                .subject
+                .clone()
+                .map(|subject| normalize_component(&subject).replace(' ', "_"))
+                .unwrap_or_default();
+            let phrase = candidates[index].predicate.clone().unwrap_or_default();
+            let best = existing
+                .iter()
+                .zip(existing_vectors)
+                .filter(|((existing_family, existing_phrase, fact_key), _)| {
+                    *existing_family == family
+                        && *existing_phrase != phrase
+                        && !claimed.contains(fact_key)
+                })
+                .map(|((_, _, fact_key), vector)| {
+                    (cosine_similarity(&candidate_vectors[slot], vector), fact_key)
+                })
+                .filter(|(score, _)| *score >= threshold)
+                // Ties resolve on the key so the same scope compiles the same
+                // way twice; `f32` has no total order, hence the manual fold.
+                .fold(None::<(f32, &String)>, |best, current| match best {
+                    Some(best)
+                        if best.0 > current.0 || (best.0 == current.0 && best.1 <= current.1) =>
+                    {
+                        Some(best)
+                    }
+                    _ => Some(current),
+                });
+            if let Some((_, fact_key)) = best {
+                claimed.insert(fact_key.clone());
+                candidates[index].fact_key = Some(fact_key.clone());
+            }
+        }
+        Ok(())
+    }
+
     /// Compiles one claimed reflect job through `reflect_recorded` — the ONE
     /// compilation path shared by the public reflect verb and the worker.
     async fn compile_job(
@@ -5559,6 +5742,10 @@ impl<S: MemoryStore> MemoryService<S> {
                 Vec::new(),
             ),
         };
+
+        let mut candidates = candidates;
+        self.resolve_subject_aliases(context, &mut candidates)
+            .await?;
 
         // Every candidate in a job shares the episode/resource actor; the raw
         // candidate is always first, so its actor drives the ReflectInput.
