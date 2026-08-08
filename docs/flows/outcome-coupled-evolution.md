@@ -70,6 +70,10 @@ VERDICT: proceed with the free instrument. Conditional phases stay closed until 
 
 VERDICT: CLEAR. The follow-up tests admission rather than repacking, reuses banked controls, and has no unresolved decision.
 
+### Admission follow-up result
+
+`A4` again tied `C1` at 2/4 with zero wins and zero losses, spending `$5.0316035` (`$20.163992` cumulative). Post-result payload inspection found that the two failing replay points were not opportunities for the lesson to act: staging was preceded by a sensible repository inspection, and the scoped-gate replay began after the full gate was already running. The process verdict remains flat and runtime remains closed, but the mechanism conclusion is `UNRESOLVED_INSTRUMENT_NOT_SENSITIVE`, not rejected. No further model call is allowed under this follow-up; a future test must grade a short action sequence or an actual isolated task from a pre-action boundary.
+
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
 - The first consumer is the benchmark operator, so a single command must produce a machine-readable reason for every skipped arm and never require reading private transcript bodies in committed output.

@@ -32,6 +32,7 @@
       "case_id": "a1-continue-ed4f8502",
       "cell_id": "a1-continue-ed4f8502-admission",
       "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
+      "cost_usd": 1.4835885,
       "locked_control": {
         "cell_id": "a1-continue-ed4f8502-arm-2",
         "passed": true,
@@ -39,14 +40,19 @@
       },
       "pack_hash": "66cbacbc24df34b9eb2c061309997b272e450eb0f22e56e7d03197f68f8e2fe5",
       "pack_unit_id": "one-session-workstream",
+      "passed": true,
+      "policy": "A4",
       "prompt_bytes": 338429,
-      "prompt_hash": "ae3d4cc0b20df3ea0de3355511f27e8fc0adf06807393426fdd0290f46f5d7a4"
+      "prompt_hash": "ae3d4cc0b20df3ea0de3355511f27e8fc0adf06807393426fdd0290f46f5d7a4",
+      "response_sha256": "4a6344443aa484b64a74fee3adc88e5a165284f4865bec70171475d01225a966",
+      "valid": true
     },
     {
       "blind_label": "followup-arm",
       "case_id": "a1-continue-38ba8780",
       "cell_id": "a1-continue-38ba8780-admission",
       "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
+      "cost_usd": 1.2896970000000003,
       "locked_control": {
         "cell_id": "a1-continue-38ba8780-arm-3",
         "passed": true,
@@ -54,14 +60,19 @@
       },
       "pack_hash": "66cbacbc24df34b9eb2c061309997b272e450eb0f22e56e7d03197f68f8e2fe5",
       "pack_unit_id": "one-session-workstream",
+      "passed": true,
+      "policy": "A4",
       "prompt_bytes": 302514,
-      "prompt_hash": "0b189dbdbbf0ce28f6ffc7e6a5335efd67a03b60b78cda514706301ac35968a9"
+      "prompt_hash": "0b189dbdbbf0ce28f6ffc7e6a5335efd67a03b60b78cda514706301ac35968a9",
+      "response_sha256": "718df6677a1c1cff0abb0ce0cff1c5e8e9625f8f6c3a92a863cb6945bbbb737d",
+      "valid": true
     },
     {
       "blind_label": "followup-arm",
       "case_id": "a1-explicit-stage-sealed",
       "cell_id": "a1-explicit-stage-sealed-admission",
       "context_hash": "ac23f3d69841be548f33d56ae248911c964c68339c3cef48d5c52e3c718e58cf",
+      "cost_usd": 0.7907219999999999,
       "locked_control": {
         "cell_id": "a1-explicit-stage-sealed-arm-1",
         "passed": false,
@@ -69,14 +80,19 @@
       },
       "pack_hash": "d59085b8510b42bcd75aa9e8dbc5a9a2518f34a15fb0eccea74c373bf38720c5",
       "pack_unit_id": "explicit-staging",
+      "passed": false,
+      "policy": "A4",
       "prompt_bytes": 185403,
-      "prompt_hash": "847bbea23b12a4945e14c1f6d6954a283aa6d1c5f88d317df8156ca848b707e1"
+      "prompt_hash": "847bbea23b12a4945e14c1f6d6954a283aa6d1c5f88d317df8156ca848b707e1",
+      "response_sha256": "e5016a3a7e04a537b07ac17f5e8ad82409b54bf93106bac9b0cd2e1fd06176fa",
+      "valid": true
     },
     {
       "blind_label": "followup-arm",
       "case_id": "a1-scoped-gate-9e49b76b",
       "cell_id": "a1-scoped-gate-9e49b76b-admission",
       "context_hash": "136e233bb66bea8a09da2212696bfc1ae76ecf42658953144bc11f1b9d2f0953",
+      "cost_usd": 1.467596,
       "locked_control": {
         "cell_id": "a1-scoped-gate-9e49b76b-arm-2",
         "passed": false,
@@ -84,12 +100,24 @@
       },
       "pack_hash": "d39411ed29c05b3a76bd2536e6571782cb868327e81e6693bbca4ed40fb85ea8",
       "pack_unit_id": "full-local-gate",
+      "passed": false,
+      "policy": "A4",
       "prompt_bytes": 339393,
-      "prompt_hash": "b605989f6a795aee30b27b30139f85c713beb976ad66328bc18cad350f2f1bc0"
+      "prompt_hash": "b605989f6a795aee30b27b30139f85c713beb976ad66328bc18cad350f2f1bc0",
+      "response_sha256": "6e2db9bfcb595d53c9492e105297e9826ab726ea79d5a17e1f1dddccbc8586bd",
+      "valid": true
     }
   ],
+  "comparison": {
+    "control_passes": 2,
+    "losses": 0,
+    "net_wins": 0,
+    "treatment_passes": 2,
+    "verdict": "ADMISSION_LOOK_FLAT"
+  },
+  "cumulative_action_spend_usd": 20.163992,
   "evidence_contract": {
-    "claim": "The relevant-lesson admission follow-up was preregistered before its four new model results were read.",
+    "claim": "The relevant-lesson admission screen was flat, but two immediate-action replay points failed sensitivity, so it cannot reject the admission mechanism.",
     "corpus": {
       "n_items": 4,
       "sha256": "f9591d6f32a0a65440a5248ec09e2110084aea77e999b8a5da2bded4f0aecf0d",
@@ -129,17 +157,40 @@
     "schema_version": 1
   },
   "fallback_model": null,
+  "grades": {
+    "A4": [
+      true,
+      true,
+      false,
+      false
+    ],
+    "C1_locked": [
+      true,
+      true,
+      false,
+      false
+    ]
+  },
   "instrument": {
     "locked_controls": "pass",
     "no_control_redispatch": "pass",
     "same_context_identity": "pass",
     "single_relevant_lesson": "pass",
+    "replay_opportunity_sensitivity": "fail",
+    "post_result_diagnosis": {
+      "explicit_staging": "both arms chose repository inspection before the eventual staging opportunity",
+      "scoped_gate": "both arms polled a full-gate log that had already been launched before the replay point"
+    },
     "unexposed_later_outcomes_are_observational": "pass"
   },
   "model": "claude-opus-5",
+  "mechanism_conclusion": "UNRESOLVED_INSTRUMENT_NOT_SENSITIVE",
+  "new_spend_usd": 5.031603499999999,
   "policy": "A4: admit only the deterministically triggered lesson with positive explicit-user validation",
   "private_manifest_sha256": "f9591d6f32a0a65440a5248ec09e2110084aea77e999b8a5da2bded4f0aecf0d",
-  "result_read": false,
+  "result_read": true,
+  "runtime_gate": "closed",
   "schema_version": 1,
-  "status": "preregistered"
+  "status": "complete",
+  "verdict": "ADMISSION_LOOK_FLAT"
 }
