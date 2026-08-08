@@ -12,7 +12,11 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     grade_liveness,
     gate_verdict,
     pack_for_policy,
+    mine_correction_candidates,
     reconstruct_compactions,
+    score_explicit_staging,
+    score_unmasked_gate,
+    select_first_scored_action,
     should_dispatch,
 )
 
@@ -99,6 +103,33 @@ def test_compaction_dropped_tokens_are_cumulative_across_boundaries():
         )
 
     assert len(reconstruct_compactions(rows)) == 2
+
+
+def test_partial_transcript_can_start_after_an_ancestor_compaction():
+    rows = [
+        {
+            "uuid": "boundary",
+            "type": "system",
+            "subtype": "compact_boundary",
+            "compactMetadata": {
+                "preTokens": 90,
+                "postTokens": 30,
+                "cumulativeDroppedTokens": 120,
+                "preservedMessages": {"anchorUuid": "summary", "uuids": []},
+            },
+        },
+        {
+            "uuid": "summary",
+            "type": "user",
+            "isCompactSummary": True,
+            "message": {"role": "user", "content": "summary"},
+        },
+    ]
+
+    [cut] = reconstruct_compactions(rows)
+
+    assert cut["dropped_tokens"] == 60
+    assert cut["prior_cumulative_dropped_tokens"] == 60
 
 
 def test_scope_qualification_requires_four_distinct_chronological_objective_cases():
@@ -240,6 +271,77 @@ def test_gate_reasons_distinguish_broken_instrument_flat_policy_and_untestable_s
     assert gate_verdict(6, 6, untestable, {"A1": "dispatch"}) == "FREE_GATE_CLOSED_UNTESTABLE"
     assert gate_verdict(6, 6, eligible, {"A1": "no_policy_difference"}) == "FREE_GATE_CLOSED_NO_POLICY_DIFFERENCE"
     assert gate_verdict(6, 6, eligible, {"A1": "dispatch"}) == "FREE_GATE_OPEN"
+
+
+def test_candidate_mining_filters_synthetic_turns_and_deduplicates_forks(tmp_path: Path):
+    root = tmp_path / "project"
+    root.mkdir()
+    row = {
+        "uuid": "correction",
+        "timestamp": "2026-08-07T00:00:00Z",
+        "message": {"role": "user", "content": "I thought we never do that"},
+    }
+    (root / "one.jsonl").write_text(json.dumps(row) + "\n")
+    (root / "fork.jsonl").write_text(json.dumps(row) + "\n")
+    (root / "meta.jsonl").write_text(json.dumps({**row, "uuid": "meta", "isMeta": True}) + "\n")
+    subagents = root / "subagents"
+    subagents.mkdir()
+    (subagents / "agent.jsonl").write_text(json.dumps({**row, "uuid": "agent"}) + "\n")
+
+    result = mine_correction_candidates([root])
+
+    assert result["candidate_turns"] == 1
+    assert result["duplicate_turns"] == 1
+    assert result["candidates"][0]["uuid"] == "correction"
+    assert "text" in result["candidates"][0]  # private miner output only
+
+
+def test_deterministic_action_scorers_grade_payload_not_regex_nomination():
+    assert score_explicit_staging("git add src/a.py tests/test_a.py && git commit -m ok") == "helpful"
+    assert score_explicit_staging("git add -A && git commit -m nope") == "harmful"
+    assert score_explicit_staging("git status --short") is None
+
+    assert score_unmasked_gate("pytest tests/test_a.py -q") == "helpful"
+    assert score_unmasked_gate("pytest tests/ -q | tail -20") == "harmful"
+    assert score_unmasked_gate("set -o pipefail; pytest tests/ -q | tail -20") == "helpful"
+
+
+def test_sealed_action_selection_uses_earliest_distinct_task(tmp_path: Path):
+    transcript = tmp_path / "session.jsonl"
+    rows = [
+        {
+            "uuid": "task",
+            "timestamp": "2026-08-06T00:00:00Z",
+            "message": {"role": "user", "content": "Commit the finished change"},
+        },
+        {
+            "uuid": "action",
+            "timestamp": "2026-08-06T00:01:00Z",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"command": "git add src/a.py && git commit -m done"},
+                    }
+                ],
+            },
+        },
+    ]
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    selected = select_first_scored_action(
+        [transcript],
+        "2026-08-06T00:00:00Z",
+        "2026-08-08T20:50:00Z",
+        score_explicit_staging,
+    )
+
+    assert selected["outcome"] == "helpful"
+    assert selected["action_uuid"] == "action"
+    assert selected["task_hash"] == __import__("hashlib").sha256(b"Commit the finished change").hexdigest()
+    assert "command" not in selected
 
 
 def test_private_text_never_enters_public_result(tmp_path: Path):

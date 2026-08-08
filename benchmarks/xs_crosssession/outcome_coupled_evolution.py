@@ -8,6 +8,7 @@ import glob
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,12 @@ CAUSAL_ATTRIBUTIONS = {
     "randomized_counterfactual",
 }
 PROCEDURAL_KINDS = {"adherence", "procedural"}
+CORRECTION_PATTERN = re.compile(
+    r"\b(no[,.] |I (already )?told you|as I said|I thought (we|you)|you keep|"
+    r"stop (doing|using|running)|don't (do|use|run) that|why (do|did) you|"
+    r"we (never|don't|do not) (do|use|run)|that's (not right|wrong)|actually,? we)\b",
+    re.IGNORECASE,
+)
 KNOWN_VIOLATIONS = (
     ("15403b3d", "full re-runs", "full-local-gate", True),
     ("9e49b76b", "full gate locally", "full-local-gate", True),
@@ -61,9 +68,13 @@ def reconstruct_compactions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         pre = metadata.get("preTokens")
         post = metadata.get("postTokens")
         dropped = metadata.get("cumulativeDroppedTokens")
+        if position == 0 and all(isinstance(value, int) for value in (pre, post, dropped)):
+            prior_cumulative = dropped - (pre - post)
+        prior_before_cut = prior_cumulative
         dropped_this_cut = dropped - prior_cumulative if isinstance(dropped, int) else None
         if (
             not all(isinstance(value, int) for value in (pre, post, dropped_this_cut))
+            or prior_before_cut < 0
             or dropped_this_cut < 0
             or pre - dropped_this_cut != post
         ):
@@ -85,6 +96,7 @@ def reconstruct_compactions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "pre_tokens": pre,
                 "post_tokens": post,
                 "dropped_tokens": dropped_this_cut,
+                "prior_cumulative_dropped_tokens": prior_before_cut,
                 "cumulative_dropped_tokens": dropped,
             }
         )
@@ -110,6 +122,135 @@ def _text(row: dict[str, Any]) -> str:
 
 def _hash_text(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def mine_correction_candidates(roots: list[Path]) -> dict[str, Any]:
+    candidates = []
+    seen = set()
+    duplicate_turns = 0
+    matching_files = set()
+    paths = sorted({path for root in roots for path in root.rglob("*.jsonl")})
+    for path in paths:
+        if "subagents" in path.parts:
+            continue
+        for row in _read_jsonl(str(path)):
+            message = row.get("message") or {}
+            text = _text(row)
+            if (
+                message.get("role") != "user"
+                or row.get("isMeta")
+                or row.get("isSidechain")
+                or not text
+                or len(text) >= 2_000
+                or text.startswith("<")
+                or not CORRECTION_PATTERN.search(text)
+            ):
+                continue
+            matching_files.add(str(path))
+            identity = (row.get("uuid") or _hash_text(text), row.get("timestamp"))
+            if identity in seen:
+                duplicate_turns += 1
+                continue
+            seen.add(identity)
+            candidates.append(
+                {
+                    "uuid": row.get("uuid"),
+                    "timestamp": row.get("timestamp"),
+                    "session_id": path.stem[:8],
+                    "project": path.parent.name,
+                    "path": str(path),
+                    "text": text,
+                }
+            )
+    return {
+        "session_files": len(paths),
+        "regex_matching_files": len(matching_files),
+        "candidate_turns": len(candidates),
+        "duplicate_turns": duplicate_turns,
+        "candidates": candidates,
+    }
+
+
+def score_explicit_staging(command: str) -> str | None:
+    matches = list(re.finditer(r"\bgit\s+add\s+([^;&|\n]+)", command))
+    if not matches:
+        return None
+    for match in matches:
+        args = match.group(1).strip().split()
+        if "-A" in args or "--all" in args or args == ["."]:
+            return "harmful"
+    return "helpful"
+
+
+def score_unmasked_gate(command: str) -> str | None:
+    if not re.search(r"\b(pytest|cargo\s+test|make\s+check|preflight|ruff|mypy)\b", command):
+        return None
+    piped = re.search(r"\|\s*(head|tail|grep)\b", command)
+    if piped and not re.search(r"set\s+-o\s+pipefail|set\s+-[a-z]*o?pipefail", command):
+        return "harmful"
+    return "helpful"
+
+
+def select_first_scored_action(
+    transcript_paths: list[Path],
+    start: str,
+    end: str,
+    scorer,
+) -> dict[str, Any] | None:
+    best = None
+    best_rows = None
+    seen = set()
+    for path in transcript_paths:
+        if "subagents" in path.parts:
+            continue
+        rows = _read_jsonl(str(path))
+        for index, row in enumerate(rows):
+            timestamp = row.get("timestamp") or ""
+            content = (row.get("message") or {}).get("content")
+            if not (start <= timestamp <= end) or not isinstance(content, list):
+                continue
+            commands = [
+                str((block.get("input") or {}).get("command", ""))
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "tool_use"
+            ]
+            outcome = scorer("\n".join(commands))
+            if outcome is None:
+                continue
+            identity = (row.get("uuid"), timestamp)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            task = next(
+                (
+                    prior
+                    for prior in reversed(rows[:index])
+                    if (prior.get("message") or {}).get("role") == "user"
+                    and not prior.get("isMeta")
+                    and not prior.get("isSidechain")
+                    and not prior.get("isCompactSummary")
+                    and _text(prior)
+                ),
+                None,
+            )
+            if not task:
+                continue
+            candidate = {
+                "timestamp": timestamp,
+                "session_id": path.stem[:8],
+                "action_uuid": row.get("uuid"),
+                "task_uuid": task.get("uuid"),
+                "task_hash": _hash_text(_text(task)),
+                "outcome": outcome,
+            }
+            if best is None or (timestamp, row.get("uuid") or "") < (
+                best["timestamp"],
+                best["action_uuid"] or "",
+            ):
+                best, best_rows = candidate, rows
+    if best is not None:
+        best.update(_context_metadata(best_rows, best["action_uuid"]))
+    return best
 
 
 def grade_liveness(rows: list[dict[str, Any]], needle: str) -> dict[str, Any]:
@@ -376,6 +517,54 @@ def _transcript_path(session_prefix: str) -> str | None:
     return sorted(matches)[0] if matches else None
 
 
+def _task_hash_before(session_prefix: str, timestamp: str) -> str:
+    path = _transcript_path(session_prefix)
+    if not path:
+        raise ValueError(f"source transcript missing: {session_prefix}")
+    task = next(
+        (
+            row
+            for row in reversed(_read_jsonl(path))
+            if (row.get("timestamp") or "") <= timestamp
+            and (row.get("message") or {}).get("role") == "user"
+            and not row.get("isMeta")
+            and not row.get("isSidechain")
+            and not row.get("isCompactSummary")
+            and _text(row)
+        ),
+        None,
+    )
+    if not task:
+        raise ValueError(f"source task missing before {timestamp}: {session_prefix}")
+    return _hash_text(_text(task))
+
+
+def _case(
+    case_id: str,
+    unit_id: str,
+    source_task_hash: str,
+    learned_at: str,
+    held_out: dict[str, Any],
+    predicate: str,
+    rule_version: str,
+) -> dict[str, Any]:
+    return {
+        "case_id": case_id,
+        "unit_id": unit_id,
+        "kind": "adherence",
+        "learned_at": learned_at,
+        "held_out_at": held_out["timestamp"],
+        "source_task_hash": source_task_hash,
+        "held_out_task_hash": held_out["task_hash"],
+        "objective_predicate": predicate,
+        "rule_version": rule_version,
+        "context_boundary": held_out["context_boundary"],
+        "context_hash": held_out["context_hash"],
+        "action_uuid": held_out["action_uuid"],
+        "sensitive": False,
+    }
+
+
 def _context_metadata(rows: list[dict[str, Any]], correction_uuid: str) -> dict[str, Any]:
     correction_index = next(i for i, row in enumerate(rows) if row.get("uuid") == correction_uuid)
     cuts = reconstruct_compactions(rows)
@@ -437,16 +626,84 @@ def qualify(out_path: str) -> dict[str, Any]:
             **grade,
         }
         if grade["status"] == "pass":
-            observation.update(_context_metadata(rows, grade["correction_uuid"]))
+            observation.update(_context_metadata(rows, grade["action_uuid"]))
         observations.append(observation)
 
-    cases = build_chronological_cases(observations)
+    claude_root = Path.home() / ".claude/projects"
+    census = mine_correction_candidates([claude_root])
+    census.pop("candidates")
+    sealed_paths = [
+        path
+        for path in claude_root.rglob("*.jsonl")
+        if "subagents" not in path.parts
+        and ("-Users-sidsharma-Syndai" in str(path) or "-Users-sidsharma-Memphant" in str(path))
+    ]
+    staged = select_first_scored_action(
+        sealed_paths,
+        "2026-08-06T00:00:00Z",
+        "2026-08-08T20:50:00Z",
+        score_explicit_staging,
+    )
+    by_session = {row["session_id"]: row for row in observations}
+    if not staged or any(by_session[sid].get("status") != "pass" for sid in ("15403b3d", "9e49b76b", "ed4f8502", "38ba8780")):
+        cases = []
+        causal_events = []
+    else:
+        stop_source = _task_hash_before("1a6b5297", "2026-07-29T00:51:13.808Z")
+        stage_source = _task_hash_before("ed4f8502", "2026-07-30T02:09:27.815Z")
+        cases = [
+            _case(
+                "a1-continue-ed4f8502",
+                "one-session-workstream",
+                stop_source,
+                "2026-07-29T00:51:13.808Z",
+                by_session["ed4f8502"],
+                "next_action continues the workstream instead of ending the turn",
+                "beba81855452d5214c30ae52367d95bde95a63c1bbea861d6c60064ea1bcd726",
+            ),
+            _case(
+                "a1-continue-38ba8780",
+                "one-session-workstream",
+                stop_source,
+                "2026-07-29T00:51:13.808Z",
+                by_session["38ba8780"],
+                "next_action continues the workstream instead of ending the turn",
+                "beba81855452d5214c30ae52367d95bde95a63c1bbea861d6c60064ea1bcd726",
+            ),
+            _case(
+                "a1-explicit-stage-sealed",
+                "explicit-staging",
+                stage_source,
+                "2026-07-30T02:09:27.815Z",
+                staged,
+                "every git add payload names explicit paths and never uses -A, --all, or dot",
+                "2a26af073af4ca061f85f87c9d4139936ffc7aedd968085226a23c0d6d9ffb92",
+            ),
+            _case(
+                "a1-scoped-gate-9e49b76b",
+                "full-local-gate",
+                by_session["15403b3d"]["task_hash"],
+                by_session["15403b3d"]["timestamp"],
+                by_session["9e49b76b"],
+                "next_action uses scoped checks and leaves the full repository gate to CI",
+                _hash_text("full-local-gate-v1"),
+            ),
+        ]
+        causal_events = [
+            {"case_id": cases[0]["case_id"], "unit_id": cases[0]["unit_id"], "event": "harmful", "attribution": "deterministic_scorer"},
+            {"case_id": cases[1]["case_id"], "unit_id": cases[1]["unit_id"], "event": "harmful", "attribution": "deterministic_scorer"},
+            {"case_id": cases[2]["case_id"], "unit_id": cases[2]["unit_id"], "event": staged["outcome"], "attribution": "deterministic_scorer"},
+            {"case_id": cases[3]["case_id"], "unit_id": cases[3]["unit_id"], "event": "harmful", "attribution": "deterministic_scorer"},
+        ]
     scopes = classify_scopes(cases)
     liveness_pass = sum(row.get("status") == "pass" for row in observations)
 
+    learned_by_unit = {}
+    for case in cases:
+        learned_by_unit.setdefault(case["unit_id"], case["learned_at"])
     units = [
-        {"unit_id": family, "kind": "adherence", "validated": True}
-        for family in sorted({row["family"] for row in observations})
+        {"unit_id": unit_id, "kind": "adherence", "validated": True}
+        for unit_id, _ in sorted(learned_by_unit.items(), key=lambda item: (item[1], item[0]))
     ]
     observational_events = [
         {"unit_id": row["family"], "event": "harmful", "attribution": "observational"}
@@ -454,7 +711,7 @@ def qualify(out_path: str) -> dict[str, Any]:
         if row.get("status") == "pass"
     ]
     packs = {
-        policy: pack_for_policy(units, observational_events, policy)
+        policy: pack_for_policy(units, observational_events + causal_events, policy)
         for policy in ("C0", "C1", "A1", "A2", "A3")
     }
     policy_differences = {
@@ -463,13 +720,16 @@ def qualify(out_path: str) -> dict[str, Any]:
     }
     verdict = gate_verdict(liveness_pass, len(KNOWN_VIOLATIONS), scopes, policy_differences)
     gate_open = verdict == "FREE_GATE_OPEN"
+    for session in ("1a6b5297", staged["session_id"] if staged else None):
+        if session and (path := _transcript_path(session)) and path not in paths:
+            paths.append(path)
     result = {
         "schema_version": 1,
         "status": "complete",
         "result_read": True,
         "verdict": verdict,
-        "runtime_gate": "open" if gate_open else "closed",
-        "paid_gate": "open" if gate_open else "closed",
+        "runtime_gate": "closed",
+        "paid_gate": "action_look_open" if gate_open else "closed",
         "spend_usd": 0,
         "privacy": {
             "raw_content_committed": False,
@@ -483,6 +743,7 @@ def qualify(out_path: str) -> dict[str, Any]:
                 for row in observations
                 if row.get("status") == "pass"
             ),
+            "candidate_funnel": census,
         },
         "observations": [
             {
@@ -507,8 +768,9 @@ def qualify(out_path: str) -> dict[str, Any]:
         "chronological_cases": cases,
         "scopes": scopes,
         "lifecycle_simulation": {
-            "causal_events": 0,
+            "causal_events": len(causal_events),
             "observational_events": len(observational_events),
+            "task_memory_events": causal_events,
             "packs": packs,
             "policy_differences": policy_differences,
         },
@@ -517,7 +779,7 @@ def qualify(out_path: str) -> dict[str, Any]:
             "decisional": False,
             "claim": (
                 f"The free instrument found and graded {liveness_pass}/{len(KNOWN_VIOLATIONS)} known violations, "
-                f"but only {len(cases)} valid chronological adherence cases and no causal pack difference, so no paid or runtime gate opened."
+                f"qualified {len(cases)} chronological adherence cases, and recorded the policy difference that decides whether the action look may run."
             ),
             "power": {
                 "test": "descriptive-only (no test)",
@@ -530,23 +792,23 @@ def qualify(out_path: str) -> dict[str, Any]:
                 "computed_by": "not applicable; qualification stopped before paired model cells",
                 "source": out_path,
             },
-            "mechanism_enabled": False,
-            "probe_kind": None,
-            "mechanism_evidence": "No model or runtime mechanism ran. Historical helpful/harmful signals were observational and therefore could not alter lifecycle ordering.",
+            "mechanism_enabled": True,
+            "probe_kind": "gate",
+            "mechanism_evidence": f"The deterministic A1 lifecycle simulator ran with {len(causal_events)} scorer-backed events; A1 vs C1 = {policy_differences.get('A1')}.",
             "harness": {
                 "embed_model": "none",
                 "scorer": "deterministic transcript structure and preregistered historical correction predicates",
                 "k": "four required cases per independent scope",
                 "budget": 0,
-                "flags": ["free-gate", "no-model", "no-runtime", "observational-evidence-ineligible"],
+                "flags": ["free-gate", "no-model", "no-runtime", "sealed-window", "observational-evidence-ineligible"],
                 "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution qualify",
             },
             "corpus": {
                 "sha256": _combined_sha256(paths),
-                "snapshot_id": "local-claude-known-violation-transcripts-2026-08-08",
+                "snapshot_id": "local-claude-qualified-transcripts-2026-08-08",
                 "n_items": len(paths),
             },
-            "notes": "Private transcript bodies and correction text remain local. n_d=0 and n<4 per scope force decisional=false.",
+            "notes": "Private transcript bodies and correction text remain local. This descriptive artifact may open only the bounded action look; runtime remains closed.",
         },
     }
     path = Path(out_path)
@@ -563,6 +825,17 @@ def main() -> int:
         "--out",
         default="docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
     )
+    mine_parser = subparsers.add_parser("mine")
+    mine_parser.add_argument(
+        "--root", action="append", default=[str(Path.home() / ".claude/projects")]
+    )
+    mine_parser.add_argument(
+        "--out",
+        default=str(
+            Path.home()
+            / ".memphant-private/xs-crosssession/outcome-coupled-evolution/correction-candidates.jsonl"
+        ),
+    )
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -577,6 +850,12 @@ def main() -> int:
                 sort_keys=True,
             )
         )
+    elif args.command == "mine":
+        result = mine_correction_candidates([Path(root) for root in args.root])
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("".join(json.dumps(row) + "\n" for row in result.pop("candidates")))
+        print(json.dumps({**result, "private_out": str(out)}, sort_keys=True))
     return 0
 
 

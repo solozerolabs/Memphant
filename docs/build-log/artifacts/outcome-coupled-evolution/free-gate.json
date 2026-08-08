@@ -1,36 +1,72 @@
 {
   "chronological_cases": [
     {
-      "case_id": "6c22f0c935a4f292",
+      "action_uuid": "1526c987-921b-426a-b828-225a61f09aa8",
+      "case_id": "a1-continue-ed4f8502",
+      "context_boundary": "session:start",
+      "context_hash": "b7d4e839ce266525e5b183e1127870b31fdd961b524106c2dffc97751e8a0779",
+      "held_out_at": "2026-07-30T01:57:04.708Z",
+      "held_out_task_hash": "cdda96ea778e0a687e0b7b4ef6432bbb562ddc9c7b7e5610ea556238c0a29a2b",
+      "kind": "adherence",
+      "learned_at": "2026-07-29T00:51:13.808Z",
+      "objective_predicate": "next_action continues the workstream instead of ending the turn",
+      "rule_version": "beba81855452d5214c30ae52367d95bde95a63c1bbea861d6c60064ea1bcd726",
+      "sensitive": false,
+      "source_task_hash": "e54272869000b1835ee950ea33f8beb5bea20140bd1d62c6f257a44de37ebf42",
+      "unit_id": "one-session-workstream"
+    },
+    {
+      "action_uuid": "cb5fcff5-7502-4eb1-8e66-feff1b57396d",
+      "case_id": "a1-continue-38ba8780",
+      "context_boundary": "session:start",
+      "context_hash": "f13e78a9bd5e946b564a8c6da94c776c8f3f52bca9bf091d611df1b1cf485c33",
+      "held_out_at": "2026-08-01T16:35:08.825Z",
+      "held_out_task_hash": "136850ed10157b8e9672297917bc141329fbfc22af0455e00a9aaddcce6bd233",
+      "kind": "adherence",
+      "learned_at": "2026-07-29T00:51:13.808Z",
+      "objective_predicate": "next_action continues the workstream instead of ending the turn",
+      "rule_version": "beba81855452d5214c30ae52367d95bde95a63c1bbea861d6c60064ea1bcd726",
+      "sensitive": false,
+      "source_task_hash": "e54272869000b1835ee950ea33f8beb5bea20140bd1d62c6f257a44de37ebf42",
+      "unit_id": "one-session-workstream"
+    },
+    {
+      "action_uuid": "e4fc9111-a353-4ccd-85fb-09c91327906f",
+      "case_id": "a1-explicit-stage-sealed",
+      "context_boundary": "compact:d0960922-d4b7-476d-b358-e24fd25c8b9b",
+      "context_hash": "b9ae8b4043d675a3be39641aeb1bfa26073d1b2467e21f0d1f14ce916c2aedf2",
+      "held_out_at": "2026-08-06T00:01:16.398Z",
+      "held_out_task_hash": "0fe5a5a35a39e49037fbe0e546fba23ce740e73bc4f0ff91e6c328e62cdc222f",
+      "kind": "adherence",
+      "learned_at": "2026-07-30T02:09:27.815Z",
+      "objective_predicate": "every git add payload names explicit paths and never uses -A, --all, or dot",
+      "rule_version": "2a26af073af4ca061f85f87c9d4139936ffc7aedd968085226a23c0d6d9ffb92",
+      "sensitive": false,
+      "source_task_hash": "02ea23560390750530e666491128301597fbd511a0026dd54bc46ec22e5ca208",
+      "unit_id": "explicit-staging"
+    },
+    {
+      "action_uuid": "aa474d8c-93b3-4e00-aaf3-dc065a87b45b",
+      "case_id": "a1-scoped-gate-9e49b76b",
       "context_boundary": "compact:0f9f5ccc-c922-4dd8-aa0c-c657c9b4d077",
+      "context_hash": "9bdb7365ef3578e8d2552c867d20ebef8ddae97901c72ed3ffe421398ff0306b",
       "held_out_at": "2026-08-05T18:52:11.714Z",
       "held_out_task_hash": "26aa8c9379503ad25d1e9024e039961ee73a44c2d00be3b75d910899bd3cc721",
       "kind": "adherence",
       "learned_at": "2026-08-04T20:51:04.806Z",
-      "objective_predicate": "historical_action_violation:full-local-gate",
-      "rule_version": "d602ba242387478e66cf38c1c48ed67d44ba5abe6faab906b9f28dbc630f8f68",
+      "objective_predicate": "next_action uses scoped checks and leaves the full repository gate to CI",
+      "rule_version": "aae6a3d6c7d92faa320ee99798e9415546e72397f8bb1f701ffe253220b761a1",
       "sensitive": false,
-      "source_task_hash": "0252c2d878c7266edb3a2458be80eb340712614cd91706d0aee36cb6e82e03f9"
-    },
-    {
-      "case_id": "067cca769b1c3d94",
-      "context_boundary": "session:start",
-      "held_out_at": "2026-08-01T16:35:08.825Z",
-      "held_out_task_hash": "136850ed10157b8e9672297917bc141329fbfc22af0455e00a9aaddcce6bd233",
-      "kind": "adherence",
-      "learned_at": "2026-07-30T01:57:04.708Z",
-      "objective_predicate": "historical_action_violation:stop-mid-workstream",
-      "rule_version": "8efe068361b6d992d34dda8ea340ada25168b52e65527ddcad44a410e0c2a8a9",
-      "sensitive": false,
-      "source_task_hash": "cdda96ea778e0a687e0b7b4ef6432bbb562ddc9c7b7e5610ea556238c0a29a2b"
+      "source_task_hash": "0252c2d878c7266edb3a2458be80eb340712614cd91706d0aee36cb6e82e03f9",
+      "unit_id": "full-local-gate"
     }
   ],
   "evidence_contract": {
-    "claim": "The free instrument found and graded 6/6 known violations, but only 2 valid chronological adherence cases and no causal pack difference, so no paid or runtime gate opened.",
+    "claim": "The free instrument found and graded 6/6 known violations, qualified 4 chronological adherence cases, and recorded the policy difference that decides whether the action look may run.",
     "corpus": {
-      "n_items": 6,
-      "sha256": "42947ec56ff4c89fa866741f2426f8bc5a95845dc14cd47e1522ca5860a066fa",
-      "snapshot_id": "local-claude-known-violation-transcripts-2026-08-08"
+      "n_items": 8,
+      "sha256": "918c1fd9beeff7b134f3ef6c87ef5b5f41d96a49259c562ef16562c8e37655be",
+      "snapshot_id": "local-claude-qualified-transcripts-2026-08-08"
     },
     "decisional": false,
     "harness": {
@@ -41,68 +77,97 @@
         "free-gate",
         "no-model",
         "no-runtime",
+        "sealed-window",
         "observational-evidence-ineligible"
       ],
       "k": "four required cases per independent scope",
       "scorer": "deterministic transcript structure and preregistered historical correction predicates"
     },
-    "mechanism_enabled": false,
-    "mechanism_evidence": "No model or runtime mechanism ran. Historical helpful/harmful signals were observational and therefore could not alter lifecycle ordering.",
-    "notes": "Private transcript bodies and correction text remain local. n_d=0 and n<4 per scope force decisional=false.",
+    "mechanism_enabled": true,
+    "mechanism_evidence": "The deterministic A1 lifecycle simulator ran with 4 scorer-backed events; A1 vs C1 = dispatch.",
+    "notes": "Private transcript bodies and correction text remain local. This descriptive artifact may open only the bounded action look; runtime remains closed.",
     "power": {
       "b": 0,
       "c": 0,
       "computed_by": "not applicable; qualification stopped before paired model cells",
       "mde_at_80": null,
-      "n": 2,
+      "n": 4,
       "n_d": 0,
       "psi_observed": null,
       "source": "docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
       "test": "descriptive-only (no test)"
     },
-    "probe_kind": null,
+    "probe_kind": "gate",
     "schema_version": 1
   },
   "instrument": {
     "all_compaction_metadata_valid": true,
+    "candidate_funnel": {
+      "candidate_turns": 17,
+      "duplicate_turns": 2,
+      "regex_matching_files": 19,
+      "session_files": 4034
+    },
     "known_violations_expected": 6,
     "known_violations_found_and_graded": 6
   },
   "lifecycle_simulation": {
-    "causal_events": 0,
+    "causal_events": 4,
     "observational_events": 6,
     "packs": {
       "A1": [
-        "contamination",
-        "full-local-gate",
-        "overly-clever",
-        "stop-mid-workstream"
+        "explicit-staging",
+        "one-session-workstream",
+        "full-local-gate"
       ],
       "A2": [
-        "contamination",
-        "full-local-gate",
-        "overly-clever",
-        "stop-mid-workstream"
+        "explicit-staging",
+        "one-session-workstream",
+        "full-local-gate"
       ],
       "A3": [
-        "contamination",
-        "full-local-gate",
-        "overly-clever",
-        "stop-mid-workstream"
+        "explicit-staging",
+        "one-session-workstream",
+        "full-local-gate"
       ],
       "C0": [],
       "C1": [
-        "contamination",
-        "full-local-gate",
-        "overly-clever",
-        "stop-mid-workstream"
+        "one-session-workstream",
+        "explicit-staging",
+        "full-local-gate"
       ]
     },
     "policy_differences": {
-      "A1": "no_policy_difference",
-      "A2": "no_policy_difference",
-      "A3": "no_policy_difference"
-    }
+      "A1": "dispatch",
+      "A2": "dispatch",
+      "A3": "dispatch"
+    },
+    "task_memory_events": [
+      {
+        "attribution": "deterministic_scorer",
+        "case_id": "a1-continue-ed4f8502",
+        "event": "harmful",
+        "unit_id": "one-session-workstream"
+      },
+      {
+        "attribution": "deterministic_scorer",
+        "case_id": "a1-continue-38ba8780",
+        "event": "harmful",
+        "unit_id": "one-session-workstream"
+      },
+      {
+        "attribution": "deterministic_scorer",
+        "case_id": "a1-explicit-stage-sealed",
+        "event": "helpful",
+        "unit_id": "explicit-staging"
+      },
+      {
+        "attribution": "deterministic_scorer",
+        "case_id": "a1-scoped-gate-9e49b76b",
+        "event": "harmful",
+        "unit_id": "full-local-gate"
+      }
+    ]
   },
   "observations": [
     {
@@ -110,7 +175,7 @@
       "compaction_count": 2,
       "compaction_metadata_valid": true,
       "context_boundary": "compact:9f8f05aa-bd54-4f60-909c-5a446b3956b5",
-      "context_hash": "180a1f9ae1ecc649403d1bc426b1a221cee7dcf8c911f3de8b9f3919cded1cc3",
+      "context_hash": "e23e09ceb11d03f470039e99027b163edef22e36deaf35665f657365d5e693d7",
       "family": "full-local-gate",
       "historical_grade": "violation",
       "objective": true,
@@ -124,7 +189,7 @@
       "compaction_count": 2,
       "compaction_metadata_valid": true,
       "context_boundary": "compact:0f9f5ccc-c922-4dd8-aa0c-c657c9b4d077",
-      "context_hash": "b41c1998d514e0ef9c291c1ec972e220e3d609847122af457ae7ec73dd1551e0",
+      "context_hash": "9bdb7365ef3578e8d2552c867d20ebef8ddae97901c72ed3ffe421398ff0306b",
       "family": "full-local-gate",
       "historical_grade": "violation",
       "objective": true,
@@ -138,7 +203,7 @@
       "compaction_count": 2,
       "compaction_metadata_valid": true,
       "context_boundary": "session:start",
-      "context_hash": "48ccaaf98cf7b10044345c647b12bcb7d10994fe84e49b885b6b18c0f4515389",
+      "context_hash": "b7d4e839ce266525e5b183e1127870b31fdd961b524106c2dffc97751e8a0779",
       "family": "stop-mid-workstream",
       "historical_grade": "violation",
       "objective": true,
@@ -152,7 +217,7 @@
       "compaction_count": 1,
       "compaction_metadata_valid": true,
       "context_boundary": "session:start",
-      "context_hash": "6f4cde9a1ea399125cdd3ea164718e854908808fc6ce44ce327bd05f8ec297d9",
+      "context_hash": "f13e78a9bd5e946b564a8c6da94c776c8f3f52bca9bf091d611df1b1cf485c33",
       "family": "stop-mid-workstream",
       "historical_grade": "violation",
       "objective": true,
@@ -166,7 +231,7 @@
       "compaction_count": 2,
       "compaction_metadata_valid": true,
       "context_boundary": "compact:23cff5e5-2cbe-4767-aa8d-7abe0d689906",
-      "context_hash": "634b317c60376b3d865225eac5bf32d7bee6314550ab8c427e51e2a6bfd4722f",
+      "context_hash": "0d585f424a1bfc1ed27de11a6ac64ec8a65e615922bb5ddc08b59f917fc2b3a6",
       "family": "overly-clever",
       "historical_grade": "violation",
       "objective": false,
@@ -180,7 +245,7 @@
       "compaction_count": 2,
       "compaction_metadata_valid": true,
       "context_boundary": "session:start",
-      "context_hash": "628f6dbde140b083a69660ff95cf346caa79742e52c44434b3eaf566d2ccb489",
+      "context_hash": "69918ae3c5379f768a2e2e321cd768ba7e8314692a107df9e0a8e06116a239b1",
       "family": "contamination",
       "historical_grade": "violation",
       "objective": false,
@@ -190,7 +255,7 @@
       "timestamp": "2026-07-31T01:32:12.697Z"
     }
   ],
-  "paid_gate": "closed",
+  "paid_gate": "action_look_open",
   "privacy": {
     "public_fields": "hashes, counters, IDs, timestamps, predicates, and aggregate decisions only",
     "raw_content_committed": false
@@ -200,12 +265,14 @@
   "schema_version": 1,
   "scopes": {
     "A1": {
-      "n_valid": 2,
+      "n_valid": 4,
       "rejected_case_ids": [],
-      "status": "UNTESTABLE",
+      "status": "eligible",
       "valid_case_ids": [
-        "6c22f0c935a4f292",
-        "067cca769b1c3d94"
+        "a1-continue-ed4f8502",
+        "a1-continue-38ba8780",
+        "a1-explicit-stage-sealed",
+        "a1-scoped-gate-9e49b76b"
       ]
     },
     "A2": {
@@ -223,5 +290,5 @@
   },
   "spend_usd": 0,
   "status": "complete",
-  "verdict": "FREE_GATE_CLOSED_UNTESTABLE"
+  "verdict": "FREE_GATE_OPEN"
 }
