@@ -15,7 +15,6 @@ memphant-types.workspace = true
 jiff.workspace = true
 eventsource-stream.workspace = true
 futures.workspace = true
-fs2.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

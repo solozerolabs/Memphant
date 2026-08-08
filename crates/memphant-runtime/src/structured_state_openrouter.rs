@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 
-use fs2::FileExt;
 use memphant_core::{
     EvidenceSlice, StructuredObservation, StructuredObservationDisposition, StructuredSourceKind,
     StructuredStateProvider, StructuredStateProviderError, StructuredStateProviderIdentity,
@@ -913,7 +912,7 @@ impl CampaignCache {
             .truncate(false)
             .open(lock_root.join(format!("{extraction_key}.lock")))
             .map_err(cache_error)?;
-        file.lock_exclusive().map_err(cache_error)?;
+        file.lock().map_err(cache_error)?;
         Ok(file)
     }
 
@@ -2765,7 +2764,7 @@ fn append_json_line(
         .read(true)
         .append(true)
         .open(path)?;
-    file.lock_exclusive()?;
+    file.lock()?;
     let mut prior = String::new();
     file.read_to_string(&mut prior)?;
     let mut reserved = 0_u64;
