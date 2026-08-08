@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import re
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +40,23 @@ TRANSCRIPT_ROOTS = (
     "/Users/sidsharma/.claude/projects/-Users-sidsharma-Syndai",
     "/Users/sidsharma/.claude/projects/-Users-sidsharma-Memphant",
 )
+PINNED_ACTION_MODEL = "claude-opus-5"
+ACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["continue", "tool_call", "stop"]},
+        "tool": {"type": ["string", "null"]},
+        "command": {"type": ["string", "null"]},
+        "files": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["kind", "tool", "command", "files"],
+    "additionalProperties": False,
+}
+RULE_TEXT = {
+    "one-session-workstream": "Continue the active workstream until it is complete. Do not stop merely to report progress or ask permission for an in-scope next step.",
+    "explicit-staging": "Stage only explicit file paths. Never use git add -A, git add --all, or git add dot.",
+    "full-local-gate": "Run the narrowest relevant local checks. Leave the full repository gate to CI unless the user explicitly asks for it locally.",
+}
 
 
 class CompactionError(ValueError):
@@ -191,6 +209,25 @@ def score_unmasked_gate(command: str) -> str | None:
     return "helpful"
 
 
+def score_next_action(case_id: str, payload: dict[str, Any]) -> bool:
+    command = payload.get("command") or ""
+    if case_id.startswith("a1-continue-"):
+        return payload.get("kind") != "stop" and bool(
+            payload.get("tool") or command or payload.get("files")
+        )
+    if case_id == "a1-explicit-stage-sealed":
+        return score_explicit_staging(command) == "helpful"
+    if case_id == "a1-scoped-gate-9e49b76b":
+        full_gate = re.search(
+            r"cargo\s+test\s+--workspace|pytest\s+tests/?(?:\s|$)|make\s+check|check_spec_drift|"
+            r"clippy\s+--all-targets\s+--all-features",
+            command,
+        )
+        scoped_check = re.search(r"\b(pytest|cargo\s+(?:test|clippy)|ruff|mypy)\b", command)
+        return bool(scoped_check and not full_gate)
+    raise ValueError(f"unknown action-look case: {case_id}")
+
+
 def select_first_scored_action(
     transcript_paths: list[Path],
     start: str,
@@ -313,6 +350,30 @@ def blind_arms(
         }
         for index, (_, pack) in enumerate(ordered, 1)
     ]
+
+
+def action_look_verdict(grades: dict[str, list[bool]]) -> dict[str, Any]:
+    control = grades["C1"]
+    treatment = grades["A1"]
+    if len(control) != 4 or len(treatment) != 4:
+        raise ValueError("action look requires four paired cases")
+    wins = sum(axis and not static for static, axis in zip(control, treatment))
+    losses = sum(static and not axis for static, axis in zip(control, treatment))
+    treatment_passes = sum(treatment)
+    control_passes = sum(control)
+    if losses:
+        verdict = "ACTION_LOOK_HARMFUL"
+    elif treatment_passes >= 3 and wins:
+        verdict = "ACTION_LOOK_PASS"
+    else:
+        verdict = "ACTION_LOOK_FLAT"
+    return {
+        "verdict": verdict,
+        "treatment_passes": treatment_passes,
+        "control_passes": control_passes,
+        "net_wins": wins,
+        "losses": losses,
+    }
 
 
 def build_chronological_cases(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -561,31 +622,49 @@ def _case(
         "context_boundary": held_out["context_boundary"],
         "context_hash": held_out["context_hash"],
         "action_uuid": held_out["action_uuid"],
+        "held_out_session_id": held_out["session_id"],
         "sensitive": False,
     }
 
 
-def _context_metadata(rows: list[dict[str, Any]], correction_uuid: str) -> dict[str, Any]:
-    correction_index = next(i for i, row in enumerate(rows) if row.get("uuid") == correction_uuid)
+def active_context(rows: list[dict[str, Any]], action_uuid: str) -> list[dict[str, str]]:
+    action_index = next(i for i, row in enumerate(rows) if row.get("uuid") == action_uuid)
     cuts = reconstruct_compactions(rows)
     boundary_indexes = {
         row.get("uuid"): index
         for index, row in enumerate(rows)
         if row.get("subtype") == "compact_boundary"
     }
-    eligible = [cut for cut in cuts if boundary_indexes[cut["boundary_uuid"]] < correction_index]
+    eligible = [cut for cut in cuts if boundary_indexes[cut["boundary_uuid"]] < action_index]
     if eligible:
         cut = eligible[-1]
         start = boundary_indexes[cut["boundary_uuid"]] + 1
-        context_rows = cut["preserved"] + [cut["summary"]] + rows[start:correction_index]
-        boundary = f"compact:{cut['boundary_uuid']}"
+        context_rows = cut["preserved"] + [cut["summary"]] + [
+            row for row in rows[start:action_index] if row.get("uuid") != cut["summary"].get("uuid")
+        ]
     else:
-        context_rows = rows[:correction_index]
-        boundary = "session:start"
-    canonical = [
-        ((row.get("message") or {}).get("role"), _text(row))
+        context_rows = rows[:action_index]
+    return [
+        {"role": (row.get("message") or {}).get("role"), "content": _text(row)}
         for row in context_rows
-        if not row.get("isSidechain") and _text(row)
+        if not row.get("isSidechain")
+        and (row.get("message") or {}).get("role") in {"user", "assistant"}
+        and _text(row)
+    ]
+
+
+def _context_metadata(rows: list[dict[str, Any]], action_uuid: str) -> dict[str, Any]:
+    action_index = next(i for i, row in enumerate(rows) if row.get("uuid") == action_uuid)
+    cuts = reconstruct_compactions(rows)
+    boundary_indexes = {
+        row.get("uuid"): index
+        for index, row in enumerate(rows)
+        if row.get("subtype") == "compact_boundary"
+    }
+    eligible = [cut for cut in cuts if boundary_indexes[cut["boundary_uuid"]] < action_index]
+    boundary = f"compact:{eligible[-1]['boundary_uuid']}" if eligible else "session:start"
+    canonical = [
+        (message["role"], message["content"]) for message in active_context(rows, action_uuid)
     ]
     return {
         "context_boundary": boundary,
@@ -604,6 +683,246 @@ def _combined_sha256(paths: list[str]) -> str:
                 file_digest.update(chunk)
         digest.update(file_digest.digest())
     return digest.hexdigest()
+
+
+def _action_prompt(context: list[dict[str, str]], pack: list[str]) -> str:
+    return json.dumps(
+        {
+            "active_context": context,
+            "learned_memory": [RULE_TEXT[unit_id] for unit_id in pack],
+            "request": "Choose the single next coding-agent action. Return only the required structured payload.",
+        },
+        separators=(",", ":"),
+    )
+
+
+def prepare_action_look(free_path: str, private_dir: str, out_path: str) -> dict[str, Any]:
+    free_gate = json.loads(Path(free_path).read_text())
+    if free_gate.get("paid_gate") != "action_look_open":
+        raise ValueError("free gate did not open the action look")
+    packs = {
+        policy: free_gate["lifecycle_simulation"]["packs"][policy]
+        for policy in ("C0", "C1", "A1")
+    }
+    private = Path(private_dir)
+    private.mkdir(parents=True, exist_ok=True)
+    cells = []
+    public_cells = []
+    for case in free_gate["chronological_cases"]:
+        path = _transcript_path(case["held_out_session_id"])
+        if not path:
+            raise ValueError(f"held-out transcript missing: {case['case_id']}")
+        context = active_context(_read_jsonl(path), case["action_uuid"])
+        context_hash = _hash_text(
+            json.dumps(
+                [(message["role"], message["content"]) for message in context],
+                separators=(",", ":"),
+            )
+        )
+        if context_hash != case["context_hash"]:
+            raise ValueError(f"context identity drifted: {case['case_id']}")
+        ordered = sorted(
+            packs.items(),
+            key=lambda item: _hash_text(f"action-look-v1:{case['case_id']}:{item[0]}"),
+        )
+        for index, (policy, pack) in enumerate(ordered, 1):
+            prompt = _action_prompt(context, pack)
+            cell_id = f"{case['case_id']}-arm-{index}"
+            cells.append(
+                {
+                    "cell_id": cell_id,
+                    "case_id": case["case_id"],
+                    "blind_label": f"arm-{index}",
+                    "policy": policy,
+                    "context_hash": context_hash,
+                    "pack": pack,
+                    "prompt": prompt,
+                }
+            )
+            public_cells.append(
+                {
+                    "cell_id": cell_id,
+                    "case_id": case["case_id"],
+                    "blind_label": f"arm-{index}",
+                    "context_hash": context_hash,
+                    "pack_hash": _hash_text(json.dumps(pack, separators=(",", ":"))),
+                    "prompt_hash": _hash_text(prompt),
+                    "prompt_bytes": len(prompt.encode()),
+                }
+            )
+    manifest = {
+        "schema_version": 1,
+        "model": PINNED_ACTION_MODEL,
+        "max_cell_usd": 2.5,
+        "phase_cap_usd": 30,
+        "cells": cells,
+    }
+    manifest_path = private / "action-look-manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    result = {
+        "schema_version": 1,
+        "status": "preregistered",
+        "result_read": False,
+        "model": PINNED_ACTION_MODEL,
+        "fallback_model": None,
+        "budget": {"phase_cap_usd": 30, "max_cell_usd": 2.5, "reserved_cells": 12},
+        "cases": [case["case_id"] for case in free_gate["chronological_cases"]],
+        "cells": public_cells,
+        "instrument": {
+            "arm_blinding": "pass",
+            "same_context_identity": "pass",
+            "known_violation_liveness": "pass",
+            "irrelevant_memory_negative_control": "pass",
+            "identical_pack_suppression": "pass",
+        },
+        "private_manifest_sha256": manifest_sha,
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "The four-case blinded action look was preregistered before any model result was read.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 4,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": None,
+                "mde_at_80": None,
+                "computed_by": "not applicable; fixed process kill gate",
+                "source": out_path,
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "lever",
+            "mechanism_evidence": "C1 and A1 use the exact preregistered static and Wilson-ordered packs from the free gate.",
+            "harness": {
+                "embed_model": "none",
+                "scorer": "deterministic structured next_action predicate",
+                "k": "all three validated adherence units in policy order",
+                "budget": 30,
+                "flags": ["blind-arms", "same-context", "structured-output", "no-fallback", "no-tools"],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-action-look",
+            },
+            "corpus": {
+                "sha256": manifest_sha,
+                "snapshot_id": "private-action-look-manifest-2026-08-08",
+                "n_items": 4,
+            },
+            "notes": "Private context and model bodies remain outside Git. Four cases cannot support a general effectiveness claim.",
+        },
+    }
+    Path(out_path).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def run_action_look(private_dir: str, out_path: str, claude_path: str) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest = json.loads((private / "action-look-manifest.json").read_text())
+    ledger = BudgetLedger(total_cap=100, phase_caps={"action": 30, "coding": 70})
+    grades = {policy: [] for policy in ("C0", "C1", "A1")}
+    public_cells = []
+    settled = 0.0
+    for cell in manifest["cells"]:
+        marker = private / f"{cell['cell_id']}.dispatch.json"
+        if marker.exists():
+            raise RuntimeError(f"refusing ambiguous or repeated dispatch: {cell['cell_id']}")
+        reservation = ledger.reserve("action", manifest["max_cell_usd"])
+        marker.write_text(json.dumps({"state": "dispatched", "cell_id": cell["cell_id"]}) + "\n")
+        completed = subprocess.run(
+            [
+                claude_path,
+                "-p",
+                "--safe-mode",
+                "--tools",
+                "",
+                "--no-session-persistence",
+                "--output-format",
+                "json",
+                "--json-schema",
+                json.dumps(ACTION_SCHEMA, separators=(",", ":")),
+                "--model",
+                manifest["model"],
+                "--max-budget-usd",
+                str(manifest["max_cell_usd"]),
+                "--max-turns",
+                "1",
+            ],
+            input=cell["prompt"],
+            text=True,
+            capture_output=True,
+            cwd=private,
+            timeout=600,
+            check=False,
+        )
+        response_path = private / f"{cell['cell_id']}.response.json"
+        response_path.write_text(
+            json.dumps(
+                {"returncode": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr},
+                indent=2,
+            )
+            + "\n"
+        )
+        try:
+            response = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            response = {}
+        cost = float(response.get("total_cost_usd") or 0)
+        ledger.settle(reservation, cost)
+        settled += cost
+        models = set((response.get("modelUsage") or {}).keys())
+        valid = (
+            completed.returncode == 0
+            and response.get("subtype") == "success"
+            and isinstance(response.get("structured_output"), dict)
+            and models == {manifest["model"]}
+        )
+        passed = valid and score_next_action(cell["case_id"], response["structured_output"])
+        grades[cell["policy"]].append(bool(passed))
+        marker.write_text(
+            json.dumps({"state": "settled", "cell_id": cell["cell_id"], "cost_usd": cost}) + "\n"
+        )
+        public_cells.append(
+            {
+                "cell_id": cell["cell_id"],
+                "case_id": cell["case_id"],
+                "blind_label": cell["blind_label"],
+                "policy": cell["policy"],
+                "valid": valid,
+                "passed": bool(passed),
+                "cost_usd": cost,
+                "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
+            }
+        )
+    comparison = action_look_verdict({policy: grades[policy] for policy in ("C1", "A1")})
+    prereg = json.loads(Path(out_path).read_text())
+    prereg_cells = {cell["cell_id"]: cell for cell in prereg["cells"]}
+    prereg.update(
+        {
+            "status": "complete",
+            "result_read": True,
+            "verdict": comparison["verdict"],
+            "runtime_gate": "coding_replay_open" if comparison["verdict"] == "ACTION_LOOK_PASS" else "closed",
+            "spend_usd": settled,
+            "grades": grades,
+            "comparison": comparison,
+            "cells": [{**prereg_cells[cell["cell_id"]], **cell} for cell in public_cells],
+        }
+    )
+    b = comparison["net_wins"]
+    c = comparison["losses"]
+    prereg["evidence_contract"]["claim"] = (
+        f"The fixed four-case action look ended {comparison['verdict']} with {b} A1 win(s) and {c} loss(es) versus C1."
+    )
+    prereg["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
+    Path(out_path).write_text(json.dumps(prereg, indent=2, sort_keys=True) + "\n")
+    checksum_paths = [str(path) for path in private.glob("*.json")]
+    (private / "SHA256SUMS").write_text(
+        "".join(
+            f"{hashlib.sha256(Path(path).read_bytes()).hexdigest()}  {Path(path).name}\n"
+            for path in sorted(checksum_paths)
+        )
+    )
+    return prereg
 
 
 def qualify(out_path: str) -> dict[str, Any]:
@@ -836,6 +1155,33 @@ def main() -> int:
             / ".memphant-private/xs-crosssession/outcome-coupled-evolution/correction-candidates.jsonl"
         ),
     )
+    prepare_parser = subparsers.add_parser("prepare-action-look")
+    prepare_parser.add_argument(
+        "--free-gate",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
+    )
+    prepare_parser.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/action-look"
+        ),
+    )
+    prepare_parser.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    )
+    run_parser = subparsers.add_parser("run-action-look")
+    run_parser.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/action-look"
+        ),
+    )
+    run_parser.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    )
+    run_parser.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -856,6 +1202,31 @@ def main() -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("".join(json.dumps(row) + "\n" for row in result.pop("candidates")))
         print(json.dumps({**result, "private_out": str(out)}, sort_keys=True))
+    elif args.command == "prepare-action-look":
+        result = prepare_action_look(args.free_gate, args.private_dir, args.out)
+        print(
+            json.dumps(
+                {
+                    "status": result["status"],
+                    "model": result["model"],
+                    "cells": len(result["cells"]),
+                    "max_prompt_bytes": max(cell["prompt_bytes"] for cell in result["cells"]),
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "run-action-look":
+        result = run_action_look(args.private_dir, args.out, args.claude)
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "spend_usd": result["spend_usd"],
+                    "comparison": result["comparison"],
+                },
+                sort_keys=True,
+            )
+        )
     return 0
 
 

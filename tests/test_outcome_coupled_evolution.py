@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     BudgetLedger,
     CompactionError,
+    active_context,
     blind_arms,
     build_chronological_cases,
     classify_scopes,
@@ -14,7 +16,10 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     pack_for_policy,
     mine_correction_candidates,
     reconstruct_compactions,
+    run_action_look,
     score_explicit_staging,
+    score_next_action,
+    action_look_verdict,
     score_unmasked_gate,
     select_first_scored_action,
     should_dispatch,
@@ -55,6 +60,33 @@ def test_reconstructs_summary_preserved_messages_and_active_tail():
     assert [row["uuid"] for row in cut["preserved"]] == ["head", "tail"]
     assert [row["uuid"] for row in cut["active_tail"]] == ["next"]
     assert cut["token_metadata_valid"] is True
+
+
+def test_active_context_contains_compact_summary_once_and_stops_before_action():
+    rows = [
+        {"uuid": "old", "message": {"role": "user", "content": "old task"}},
+        {
+            "uuid": "boundary",
+            "subtype": "compact_boundary",
+            "compactMetadata": {
+                "preTokens": 100,
+                "postTokens": 40,
+                "cumulativeDroppedTokens": 60,
+                "preservedMessages": {"anchorUuid": "summary", "uuids": ["old"]},
+            },
+        },
+        {
+            "uuid": "summary",
+            "isCompactSummary": True,
+            "message": {"role": "user", "content": "summary text"},
+        },
+        {"uuid": "task", "message": {"role": "user", "content": "new task"}},
+        {"uuid": "action", "message": {"role": "assistant", "content": "bad action"}},
+    ]
+
+    context = active_context(rows, "action")
+
+    assert [message["content"] for message in context] == ["old task", "summary text", "new task"]
 
 
 def test_reconstruction_fails_closed_on_missing_anchor_or_bad_token_math():
@@ -304,6 +336,110 @@ def test_deterministic_action_scorers_grade_payload_not_regex_nomination():
     assert score_unmasked_gate("pytest tests/test_a.py -q") == "helpful"
     assert score_unmasked_gate("pytest tests/ -q | tail -20") == "harmful"
     assert score_unmasked_gate("set -o pipefail; pytest tests/ -q | tail -20") == "helpful"
+
+
+def test_next_action_grading_uses_structured_payload_only():
+    assert score_next_action(
+        "a1-continue-ed4f8502",
+        {"kind": "tool_call", "tool": "Read", "command": None, "files": ["src/lib.rs"]},
+    )
+    assert not score_next_action(
+        "a1-continue-ed4f8502",
+        {"kind": "stop", "tool": None, "command": None, "files": []},
+    )
+    assert score_next_action(
+        "a1-explicit-stage-sealed",
+        {"kind": "tool_call", "tool": "Bash", "command": "git add src/a.py tests/a.py", "files": []},
+    )
+    assert not score_next_action(
+        "a1-explicit-stage-sealed",
+        {"kind": "tool_call", "tool": "Bash", "command": "git add -A", "files": []},
+    )
+    assert score_next_action(
+        "a1-scoped-gate-9e49b76b",
+        {"kind": "tool_call", "tool": "Bash", "command": "pytest tests/test_a.py -q", "files": []},
+    )
+    assert not score_next_action(
+        "a1-scoped-gate-9e49b76b",
+        {"kind": "tool_call", "tool": "Bash", "command": "cargo test --workspace --all-features", "files": []},
+    )
+
+
+def test_action_look_advances_only_with_three_passes_net_win_and_no_loss():
+    grades = {
+        "C1": [False, True, True, True],
+        "A1": [True, True, True, True],
+    }
+    assert action_look_verdict(grades) == {
+        "verdict": "ACTION_LOOK_PASS",
+        "treatment_passes": 4,
+        "control_passes": 3,
+        "net_wins": 1,
+        "losses": 0,
+    }
+    assert action_look_verdict({"C1": [True] * 4, "A1": [True] * 4})["verdict"] == "ACTION_LOOK_FLAT"
+    assert action_look_verdict({"C1": [True, False, True, False], "A1": [False, True, True, True]})["verdict"] == "ACTION_LOOK_HARMFUL"
+
+
+def test_action_runner_caps_dispatches_and_refuses_repeat(tmp_path: Path, monkeypatch):
+    cases = [
+        "a1-continue-ed4f8502",
+        "a1-continue-38ba8780",
+        "a1-explicit-stage-sealed",
+        "a1-scoped-gate-9e49b76b",
+    ]
+    cells = [
+        {
+            "cell_id": f"{case}-{policy}",
+            "case_id": case,
+            "blind_label": f"arm-{index}",
+            "policy": policy,
+            "context_hash": "context",
+            "pack": [],
+            "prompt": "private",
+        }
+        for case in cases
+        for index, policy in enumerate(("C0", "C1", "A1"), 1)
+    ]
+    (tmp_path / "action-look-manifest.json").write_text(
+        json.dumps({"model": "claude-opus-5", "max_cell_usd": 2.5, "cells": cells})
+    )
+    out = tmp_path / "public.json"
+    out.write_text(
+        json.dumps(
+            {
+                "cells": [{"cell_id": cell["cell_id"]} for cell in cells],
+                "evidence_contract": {
+                    "claim": "preregistered action look",
+                    "power": {"b": 0, "c": 0, "n_d": 0},
+                },
+            }
+        )
+    )
+    response = json.dumps(
+        {
+            "subtype": "success",
+            "total_cost_usd": 1,
+            "modelUsage": {"claude-opus-5": {}},
+            "structured_output": {
+                "kind": "tool_call",
+                "tool": "Bash",
+                "command": "git add src/a.py && pytest tests/test_a.py -q",
+                "files": ["src/a.py"],
+            },
+        }
+    )
+    monkeypatch.setattr(
+        "benchmarks.xs_crosssession.outcome_coupled_evolution.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=response, stderr=""),
+    )
+
+    result = run_action_look(str(tmp_path), str(out), "claude")
+
+    assert result["verdict"] == "ACTION_LOOK_FLAT"
+    assert result["spend_usd"] == 12
+    with pytest.raises(RuntimeError, match="refusing ambiguous or repeated dispatch"):
+        run_action_look(str(tmp_path), str(out), "claude")
 
 
 def test_sealed_action_selection_uses_earliest_distinct_task(tmp_path: Path):

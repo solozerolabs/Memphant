@@ -1,0 +1,175 @@
+{
+  "budget": {
+    "max_cell_usd": 2.5,
+    "phase_cap_usd": 30,
+    "reserved_cells": 12
+  },
+  "cases": [
+    "a1-continue-ed4f8502",
+    "a1-continue-38ba8780",
+    "a1-explicit-stage-sealed",
+    "a1-scoped-gate-9e49b76b"
+  ],
+  "cells": [
+    {
+      "blind_label": "arm-1",
+      "case_id": "a1-continue-ed4f8502",
+      "cell_id": "a1-continue-ed4f8502-arm-1",
+      "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
+      "pack_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "prompt_bytes": 338292,
+      "prompt_hash": "1afcac0eee068adc4a9d1bf2f3f0f8139b9b31c1e45940ff6e234ac6a8af9d80"
+    },
+    {
+      "blind_label": "arm-2",
+      "case_id": "a1-continue-ed4f8502",
+      "cell_id": "a1-continue-ed4f8502-arm-2",
+      "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
+      "pack_hash": "e57c9194149adc48fc9c8e6a0d279565b3b494b79e52200d9c66937fc391ba2e",
+      "prompt_bytes": 338644,
+      "prompt_hash": "bd86ec63c53f87d15590534a647db8d72ea8b80427fb41c04cba47fe3aff97c4"
+    },
+    {
+      "blind_label": "arm-3",
+      "case_id": "a1-continue-ed4f8502",
+      "cell_id": "a1-continue-ed4f8502-arm-3",
+      "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
+      "pack_hash": "b5134c85c5382e9e5afe86ab518d150f70f21ec9df9cf83b5c858ec016b6e8ec",
+      "prompt_bytes": 338644,
+      "prompt_hash": "db2a978c1a48b4135ec1952da182121de0b66398ffa31da99f4b15084c49a01c"
+    },
+    {
+      "blind_label": "arm-1",
+      "case_id": "a1-continue-38ba8780",
+      "cell_id": "a1-continue-38ba8780-arm-1",
+      "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
+      "pack_hash": "b5134c85c5382e9e5afe86ab518d150f70f21ec9df9cf83b5c858ec016b6e8ec",
+      "prompt_bytes": 302729,
+      "prompt_hash": "08b7b976f0b05b99ebc71beebd8a861729be60683f9ad3211d32e828baaeec29"
+    },
+    {
+      "blind_label": "arm-2",
+      "case_id": "a1-continue-38ba8780",
+      "cell_id": "a1-continue-38ba8780-arm-2",
+      "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
+      "pack_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "prompt_bytes": 302377,
+      "prompt_hash": "24c2a48eb51df232a351b46976fd3e42e1833f934d096f666158ec70615365e5"
+    },
+    {
+      "blind_label": "arm-3",
+      "case_id": "a1-continue-38ba8780",
+      "cell_id": "a1-continue-38ba8780-arm-3",
+      "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
+      "pack_hash": "e57c9194149adc48fc9c8e6a0d279565b3b494b79e52200d9c66937fc391ba2e",
+      "prompt_bytes": 302729,
+      "prompt_hash": "8739cdfb2670aa3d63c6dbad9a3763ad8f1c9053e07e00802cc9615d6b562c4c"
+    },
+    {
+      "blind_label": "arm-1",
+      "case_id": "a1-explicit-stage-sealed",
+      "cell_id": "a1-explicit-stage-sealed-arm-1",
+      "context_hash": "ac23f3d69841be548f33d56ae248911c964c68339c3cef48d5c52e3c718e58cf",
+      "pack_hash": "e57c9194149adc48fc9c8e6a0d279565b3b494b79e52200d9c66937fc391ba2e",
+      "prompt_bytes": 185669,
+      "prompt_hash": "54d702f656c4a2940df1da77f160ae903639e73d049ec6b4099774ae9c3b2cc5"
+    },
+    {
+      "blind_label": "arm-2",
+      "case_id": "a1-explicit-stage-sealed",
+      "cell_id": "a1-explicit-stage-sealed-arm-2",
+      "context_hash": "ac23f3d69841be548f33d56ae248911c964c68339c3cef48d5c52e3c718e58cf",
+      "pack_hash": "b5134c85c5382e9e5afe86ab518d150f70f21ec9df9cf83b5c858ec016b6e8ec",
+      "prompt_bytes": 185669,
+      "prompt_hash": "d822e4d522c3d0d868dc4213f8b94cbef2a242fd716458b3610b248e103a537f"
+    },
+    {
+      "blind_label": "arm-3",
+      "case_id": "a1-explicit-stage-sealed",
+      "cell_id": "a1-explicit-stage-sealed-arm-3",
+      "context_hash": "ac23f3d69841be548f33d56ae248911c964c68339c3cef48d5c52e3c718e58cf",
+      "pack_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "prompt_bytes": 185317,
+      "prompt_hash": "795b1bbe1f6ae71319ae7d1a2e760b3da89abec4aec543d54a5d01a7a018f7c2"
+    },
+    {
+      "blind_label": "arm-1",
+      "case_id": "a1-scoped-gate-9e49b76b",
+      "cell_id": "a1-scoped-gate-9e49b76b-arm-1",
+      "context_hash": "136e233bb66bea8a09da2212696bfc1ae76ecf42658953144bc11f1b9d2f0953",
+      "pack_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "prompt_bytes": 339266,
+      "prompt_hash": "8dd1cfbeb45aa2b4e7d32fed1c6aedfd1432d4614d4eff0a63efd38ce07b54b7"
+    },
+    {
+      "blind_label": "arm-2",
+      "case_id": "a1-scoped-gate-9e49b76b",
+      "cell_id": "a1-scoped-gate-9e49b76b-arm-2",
+      "context_hash": "136e233bb66bea8a09da2212696bfc1ae76ecf42658953144bc11f1b9d2f0953",
+      "pack_hash": "e57c9194149adc48fc9c8e6a0d279565b3b494b79e52200d9c66937fc391ba2e",
+      "prompt_bytes": 339618,
+      "prompt_hash": "06183fefd4384dfd5b51b81ee10b911aa13441a6658df4573a4c9985119a58db"
+    },
+    {
+      "blind_label": "arm-3",
+      "case_id": "a1-scoped-gate-9e49b76b",
+      "cell_id": "a1-scoped-gate-9e49b76b-arm-3",
+      "context_hash": "136e233bb66bea8a09da2212696bfc1ae76ecf42658953144bc11f1b9d2f0953",
+      "pack_hash": "b5134c85c5382e9e5afe86ab518d150f70f21ec9df9cf83b5c858ec016b6e8ec",
+      "prompt_bytes": 339618,
+      "prompt_hash": "778cfd00c474749dcedc6616979a40f32470e4d56afd604427100c83fa87b345"
+    }
+  ],
+  "evidence_contract": {
+    "claim": "The four-case blinded action look was preregistered before any model result was read.",
+    "corpus": {
+      "n_items": 4,
+      "sha256": "2cffc359fdb3a6f3cd306e3a505e62952b7981af30806c6ffd5780b6b0b337d3",
+      "snapshot_id": "private-action-look-manifest-2026-08-08"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 30,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-action-look",
+      "embed_model": "none",
+      "flags": [
+        "blind-arms",
+        "same-context",
+        "structured-output",
+        "no-fallback",
+        "no-tools"
+      ],
+      "k": "all three validated adherence units in policy order",
+      "scorer": "deterministic structured next_action predicate"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "C1 and A1 use the exact preregistered static and Wilson-ordered packs from the free gate.",
+    "notes": "Private context and model bodies remain outside Git. Four cases cannot support a general effectiveness claim.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; fixed process kill gate",
+      "mde_at_80": null,
+      "n": 4,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "fallback_model": null,
+  "instrument": {
+    "arm_blinding": "pass",
+    "identical_pack_suppression": "pass",
+    "irrelevant_memory_negative_control": "pass",
+    "known_violation_liveness": "pass",
+    "same_context_identity": "pass"
+  },
+  "model": "claude-opus-5",
+  "private_manifest_sha256": "2cffc359fdb3a6f3cd306e3a505e62952b7981af30806c6ffd5780b6b0b337d3",
+  "result_read": false,
+  "schema_version": 1,
+  "status": "preregistered"
+}
