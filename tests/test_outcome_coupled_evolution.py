@@ -15,6 +15,7 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     gate_verdict,
     pack_for_policy,
     mine_correction_candidates,
+    pinned_model_used,
     reconstruct_compactions,
     run_action_look,
     score_explicit_staging,
@@ -381,6 +382,21 @@ def test_action_look_advances_only_with_three_passes_net_win_and_no_loss():
     assert action_look_verdict({"C1": [True, False, True, False], "A1": [False, True, True, True]})["verdict"] == "ACTION_LOOK_HARMFUL"
 
 
+def test_model_pin_allows_only_small_auxiliary_validation_not_fallback():
+    pinned = {
+        "claude-opus-5": {"canonicalModel": "claude-opus-5", "outputTokens": 100},
+        "claude-haiku-4-5-20251001": {"canonicalModel": "claude-haiku-4-5", "outputTokens": 28},
+    }
+    fallback = {
+        **pinned,
+        "claude-sonnet-5": {"canonicalModel": "claude-sonnet-5", "outputTokens": 100},
+    }
+
+    assert pinned_model_used(pinned, "claude-opus-5")
+    assert not pinned_model_used(fallback, "claude-opus-5")
+    assert not pinned_model_used({"claude-haiku-4-5": pinned["claude-haiku-4-5-20251001"]}, "claude-opus-5")
+
+
 def test_action_runner_caps_dispatches_and_refuses_repeat(tmp_path: Path, monkeypatch):
     cases = [
         "a1-continue-ed4f8502",
@@ -420,7 +436,9 @@ def test_action_runner_caps_dispatches_and_refuses_repeat(tmp_path: Path, monkey
         {
             "subtype": "success",
             "total_cost_usd": 1,
-            "modelUsage": {"claude-opus-5": {}},
+            "modelUsage": {
+                "claude-opus-5": {"canonicalModel": "claude-opus-5", "outputTokens": 100}
+            },
             "structured_output": {
                 "kind": "tool_call",
                 "tool": "Bash",

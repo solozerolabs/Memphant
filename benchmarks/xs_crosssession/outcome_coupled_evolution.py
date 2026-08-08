@@ -376,6 +376,16 @@ def action_look_verdict(grades: dict[str, list[bool]]) -> dict[str, Any]:
     }
 
 
+def pinned_model_used(model_usage: dict[str, Any], pinned: str) -> bool:
+    primary = model_usage.get(pinned) or {}
+    if primary.get("canonicalModel") != pinned or not primary.get("outputTokens"):
+        return False
+    return all(
+        name == pinned or usage.get("canonicalModel") == "claude-haiku-4-5"
+        for name, usage in model_usage.items()
+    )
+
+
 def build_chronological_cases(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     cases = []
     families = sorted({row["family"] for row in observations if row.get("objective")})
@@ -869,12 +879,11 @@ def run_action_look(private_dir: str, out_path: str, claude_path: str) -> dict[s
         cost = float(response.get("total_cost_usd") or 0)
         ledger.settle(reservation, cost)
         settled += cost
-        models = set((response.get("modelUsage") or {}).keys())
         valid = (
             completed.returncode == 0
             and response.get("subtype") == "success"
             and isinstance(response.get("structured_output"), dict)
-            and models == {manifest["model"]}
+            and pinned_model_used(response.get("modelUsage") or {}, manifest["model"])
         )
         passed = valid and score_next_action(cell["case_id"], response["structured_output"])
         grades[cell["policy"]].append(bool(passed))
@@ -923,6 +932,62 @@ def run_action_look(private_dir: str, out_path: str, claude_path: str) -> dict[s
         )
     )
     return prereg
+
+
+def regrade_action_look(private_dir: str, out_path: str) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest = json.loads((private / "action-look-manifest.json").read_text())
+    artifact = json.loads(Path(out_path).read_text())
+    grades = {policy: [] for policy in ("C0", "C1", "A1")}
+    settled = []
+    for cell in manifest["cells"]:
+        response_path = private / f"{cell['cell_id']}.response.json"
+        envelope = json.loads(response_path.read_text())
+        response = json.loads(envelope["stdout"])
+        valid = (
+            envelope["returncode"] == 0
+            and response.get("subtype") == "success"
+            and isinstance(response.get("structured_output"), dict)
+            and pinned_model_used(response.get("modelUsage") or {}, manifest["model"])
+        )
+        passed = valid and score_next_action(cell["case_id"], response["structured_output"])
+        grades[cell["policy"]].append(bool(passed))
+        settled.append(
+            {
+                "cell_id": cell["cell_id"],
+                "case_id": cell["case_id"],
+                "blind_label": cell["blind_label"],
+                "policy": cell["policy"],
+                "valid": valid,
+                "passed": bool(passed),
+                "cost_usd": float(response.get("total_cost_usd") or 0),
+                "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
+            }
+        )
+    comparison = action_look_verdict({policy: grades[policy] for policy in ("C1", "A1")})
+    prior_cells = {cell["cell_id"]: cell for cell in artifact["cells"]}
+    artifact.update(
+        {
+            "status": "complete",
+            "result_read": True,
+            "verdict": comparison["verdict"],
+            "runtime_gate": "coding_replay_open" if comparison["verdict"] == "ACTION_LOOK_PASS" else "closed",
+            "grades": grades,
+            "comparison": comparison,
+            "cells": [{**prior_cells[cell["cell_id"]], **cell} for cell in settled],
+        }
+    )
+    artifact["instrument"]["model_pin_amendment"] = (
+        "pregrade: require pinned Opus generation; permit only Claude Code's reported Haiku auxiliary validator; reject any fallback model"
+    )
+    b = comparison["net_wins"]
+    c = comparison["losses"]
+    artifact["evidence_contract"]["claim"] = (
+        f"The fixed four-case action look ended {comparison['verdict']} with {b} A1 win(s) and {c} loss(es) versus C1."
+    )
+    artifact["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
+    Path(out_path).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
 
 
 def qualify(out_path: str) -> dict[str, Any]:
@@ -1182,6 +1247,17 @@ def main() -> int:
         default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
     )
     run_parser.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
+    regrade_parser = subparsers.add_parser("regrade-action-look")
+    regrade_parser.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/action-look"
+        ),
+    )
+    regrade_parser.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    )
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -1224,6 +1300,14 @@ def main() -> int:
                     "spend_usd": result["spend_usd"],
                     "comparison": result["comparison"],
                 },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "regrade-action-look":
+        result = regrade_action_look(args.private_dir, args.out)
+        print(
+            json.dumps(
+                {"verdict": result["verdict"], "comparison": result["comparison"]},
                 sort_keys=True,
             )
         )
