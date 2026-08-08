@@ -1,0 +1,74 @@
+# Flow: outcome-coupled evolution for coding agents
+
+## Spec
+
+Prove that task outcomes can improve future memory packs before adding serving machinery. The primary outcome is `accepted_without_violation = validator_pass AND requested_end_state_pass AND zero_rule_violation`; retrieval quality and model explanations are not success metrics.
+
+The experiment reuses the privacy-frozen local Track-U and Claude transcript corpus. Private transcript text and model bodies stay outside Git. Committed artifacts contain only schemas, hashes, counts, aggregate results, and public-safe methodology. Regex can nominate candidates but cannot label them.
+
+Five policies share one evaluator: `C0` receives no learned memory, `C1` receives every static eligible memory, `A1` outcome-couples adherence units, `A2` all procedural units, and `A3` every objectively scoreable kind. Only `explicit_user`, `deterministic_scorer`, and `randomized_counterfactual` evidence changes ordering. Explicit silence excludes; the remaining order is positive causal evidence by Wilson helpful lower bound, unevidenced validated units, then statistically harmful units. Identical `C1` and treatment packs suppress model calls.
+
+The execution gate is strict:
+
+- Qualify up to four chronological correction-to-later-task cases per scope, with a learned-before-held-out rule, distinct later task, objective predicate, recoverable rule/context boundary, and no privacy exclusion.
+- Reconstruct the actual post-compaction active context from `compact_boundary` records and validate its recorded token metadata.
+- The six known long-session violations are liveness probes; a scope with fewer than four valid cases is `UNTESTABLE` and receives no spend.
+- Reserve and settle every model call against the cumulative `$100` ceiling. Action look is capped at `$30`; isolated coding replay is capped at `$70`; ambiguous provider completion is never retried.
+- Runtime tables, APIs, Claude spool, shadow dogfood, and prompt injection remain closed until a treatment has positive net wins, zero task/safety losses, and a live instrument.
+
+If that gate opens, add only the approved append-only, tenant-bound `memphant.task_outcome` and `memphant.task_memory_event` records and their two POST endpoints. Preserve `mark`, `review_event`, and FSRS. Helpful/harmful lifecycle evidence rejects non-causal attribution, planned/actual file scope is normalized server-side, and raw prompts, commands, or transcript bodies are never accepted.
+
+## Plan
+
+1. Add one Python experiment module and one focused test module. The module reconstructs compaction boundaries, validates liveness metadata, computes Wilson ordering, suppresses identical packs, and emits a public-safe qualification artifact. Use stdlib only.
+2. Preregister the free-gate result path in the evidence-contract registry before running the corpus. Store private case packets and any model bodies only under the existing private artifact root with checksums.
+3. Run the `$0` qualification and lifecycle simulation. Record each scope as eligible, `UNTESTABLE`, or `no_policy_difference`; do not dispatch a model for ineligible/identical arms.
+4. Only if an Axis arm passes the free gates, run the blinded same-context structured-action look with reserved cost and the exact pinned Claude model. Advance at most two policies under the stated 3/4, net-win, zero-loss rule.
+5. Only if action look passes, run two isolated scratch-worktree coding cases, then expand to at most six only on positive net wins and zero losses. Never use production databases.
+6. Only if isolated replay opens the runtime gate, implement the two records, two POST endpoints, crash-safe local JSONL spool, and silent-shadow policy computation with tenant/privacy/idempotency tests. Do not implement inversion, deletion, veto, semantic ingestion, or repo serving.
+7. Add evidence contracts to every decisional artifact before reading results. Update STATUS only with its named passing proof. Run the full repository gate from AGENTS.md before claiming the workstream complete.
+
+## Harness
+
+```sh
+python3 -m pytest tests/test_outcome_coupled_evolution.py -q
+python3 scripts/check_evidence_contract.py
+python3 scripts/instrument_power.py --check
+python3 scripts/check_spec_drift.py
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets --all-features
+cargo test --doc
+cargo run -p memphant-cli -- db lint --provider plain-postgres
+cargo run -p memphant-cli -- db lint --provider supabase
+cargo run -p memphant-cli -- db lint --provider neon
+python3 scripts/apply_memphant_migrations.py --database-url postgres://memphant.invalid/memphant --dry-run
+```
+
+## Eng review (applied lens, autonomous — gstack-plan-eng-review)
+
+- The user already selected the kill-gated scope. The minimum honest implementation is the reusable free instrument plus its decisional artifact; runtime code before causal evidence would violate the approved architecture.
+- One module avoids three production policy implementations. Policy scope is data, causal eligibility is one shared predicate, and packing is one deterministic sort.
+- The load-bearing failure mode is false qualification. Tests must prove chronological ordering, distinct tasks, objective grading, compaction metadata identity, liveness, negative controls, and spend suppression before any model output is inspected.
+- Existing evidence-contract and scratch-Postgres machinery remain authoritative. No new decay engine, queue, service, or dependency is justified.
+
+VERDICT: proceed with the free instrument. Conditional phases stay closed until their predicates pass. NO UNRESOLVED DECISIONS.
+
+## DX review (applied lens, autonomous — gstack-plan-devex-review)
+
+- The first consumer is the benchmark operator, so a single command must produce a machine-readable reason for every skipped arm and never require reading private transcript bodies in committed output.
+- `UNTESTABLE`, `no_policy_difference`, budget denial, and ambiguous provider completion are first-class outcomes rather than exceptions.
+- Runtime API and hook onboarding are deliberately deferred; documenting endpoints that the evidence gate has not opened would create a false product contract.
+
+VERDICT: the instrument is operable and failure-explicit; runtime DX remains gated. NO UNRESOLVED DECISIONS.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| Eng Review | `/plan-eng-review` | Architecture and tests | 1 | CLEAR | Conditional runtime boundary preserved |
+| DX Review | `/plan-devex-review` | Operator experience | 1 | CLEAR | Explicit no-spend outcomes required |
+
+**VERDICT:** ENG + DX CLEARED — implement the free gate first
+
+NO UNRESOLVED DECISIONS
