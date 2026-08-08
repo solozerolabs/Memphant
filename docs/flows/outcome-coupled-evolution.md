@@ -8,6 +8,8 @@ The experiment reuses the privacy-frozen local Track-U and Claude transcript cor
 
 Five policies share one evaluator: `C0` receives no learned memory, `C1` receives every static eligible memory, `A1` outcome-couples adherence units, `A2` all procedural units, and `A3` every objectively scoreable kind. Only `explicit_user`, `deterministic_scorer`, and `randomized_counterfactual` evidence changes ordering. Explicit silence excludes; the remaining order is positive causal evidence by Wilson helpful lower bound, unevidenced validated units, then statistically harmful units. Identical `C1` and treatment packs suppress model calls.
 
+The first action look falsified ordering-only `A1`: all three arms scored 2/4. The approved follow-up tests a different, user-visible mechanism. A correction in run N validates one terse lesson; on run N+1 a deterministic task trigger admits that one relevant lesson into the agent's hot guidance. Long incident prose remains in `LEARNINGS.md`, which Syndai explicitly does not auto-load. The treatment is therefore `A4 = positive explicit outcome evidence AND deterministic trigger match`; it is compared against the already-settled `C1` full static pack without replaying controls. This is an adaptive mechanism screen, not confirmation evidence.
+
 The execution gate is strict:
 
 - Qualify up to four chronological correction-to-later-task cases per scope, with a learned-before-held-out rule, distinct later task, objective predicate, recoverable rule/context boundary, and no privacy exclusion.
@@ -27,6 +29,7 @@ If that gate opens, add only the approved append-only, tenant-bound `memphant.ta
 5. Only if action look passes, run two isolated scratch-worktree coding cases, then expand to at most six only on positive net wins and zero losses. Never use production databases.
 6. Only if isolated replay opens the runtime gate, implement the two records, two POST endpoints, crash-safe local JSONL spool, and silent-shadow policy computation with tenant/privacy/idempotency tests. Do not implement inversion, deletion, veto, semantic ingestion, or repo serving.
 7. Add evidence contracts to every decisional artifact before reading results. Update STATUS only with its named passing proof. Run the full repository gate from AGENTS.md before claiming the workstream complete.
+8. After the ordering-only screen is flat, preregister one admission follow-up. Reuse the four settled `C1` cells by checksum, dispatch only four `A4` relevant-lesson cells, and reserve at most `$10` of the unspent action-look budget. Advance only at 3/4, at least one net win, and zero losses. Do not reinterpret an unexposed historical memory as harmful causal evidence.
 
 ## Harness
 
@@ -53,6 +56,19 @@ python3 scripts/apply_memphant_migrations.py --database-url postgres://memphant.
 - Existing evidence-contract and scratch-Postgres machinery remain authoritative. No new decay engine, queue, service, or dependency is justified.
 
 VERDICT: proceed with the free instrument. Conditional phases stay closed until their predicates pass. NO UNRESOLVED DECISIONS.
+
+## Admission follow-up eng review (2026-08-08)
+
+- What already exists: the four qualified contexts, structured-action scorer, blinded runner, budget ledger, and settled `C1` responses are reused. `LEARNINGS.md` remains the long-form source; the treatment models its evidence-gated projection into always-loaded guidance.
+- Architecture: one new policy function selects the case's triggered unit. No database, exporter, generic retrieval, semantic matcher, or second decay system is added.
+- Attribution correction: the source correction is `explicit_user` evidence that validates the lesson. A later violation cannot grade the lesson harmful unless exposure was recorded; the follow-up never makes that unsupported attribution.
+- Tests: pin relevant-only admission, irrelevant-unit exclusion, reuse-by-checksum, four-cell budget reserve, no control redispatch, and the unchanged promotion rule.
+- Failure modes: changed control body or context hash fails closed; missing trigger produces no dispatch; any loss closes the gate; provider ambiguity is not retried.
+- Performance: four new calls maximum; private contexts remain local; public artifacts contain only hashes, IDs, counts, costs, and grades.
+- Sequential implementation, no parallelization opportunity.
+- NOT in scope: production runtime/API/spool, writing into Syndai, semantic matching, automatic prose generation, veto, deletion, and coding replay before this screen passes.
+
+VERDICT: CLEAR. The follow-up tests admission rather than repacking, reuses banked controls, and has no unresolved decision.
 
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
