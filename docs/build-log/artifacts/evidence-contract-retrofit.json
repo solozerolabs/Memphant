@@ -2,10 +2,10 @@
   "schema_version": 1,
   "generated_by": "scripts/check_evidence_contract.py --report",
   "method": "Every tracked JSON under docs/build-log/artifacts/ carrying a decision key at depth <= 4 is a promotion-capable candidate. NOTHING here is backfilled: a field that cannot be verified from a banked artifact is left absent and reported as a violation rather than invented.",
-  "candidates": 119,
-  "contracted": 73,
-  "pending_retrofit": 46,
-  "failing": 46,
+  "candidates": 122,
+  "contracted": 74,
+  "pending_retrofit": 48,
+  "failing": 48,
   "unverified_fields_total": 33,
   "artifacts": [
     {
@@ -543,6 +543,16 @@
       "unverified_fields": []
     },
     {
+      "artifact": "docs/build-log/artifacts/horizonbench-fresh-v1/interim-result.json",
+      "state": "contracted",
+      "decision_keys": [
+        "power",
+        "verdict"
+      ],
+      "violations": [],
+      "unverified_fields": []
+    },
+    {
       "artifact": "docs/build-log/artifacts/horizonbench-fresh-v1/p3-supersession-evidence.json",
       "state": "pending",
       "decision_keys": [
@@ -647,6 +657,17 @@
         "evidence_contract.corpus.snapshot_id",
         "evidence_contract.corpus.n_items"
       ]
+    },
+    {
+      "artifact": "docs/build-log/artifacts/octobench-injection-look/result-summary.json",
+      "state": "pending",
+      "decision_keys": [
+        "verdict"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "Blind directional look, not a promotion run: injection axis was flat (+0.9pp) under saturation and a short-task regime. No paired power cells, no corpus snapshot identity, no leakage block \u2014 carries no evidence_contract by design and makes no SOTA claim. Not backfilled; axis is negative and not to be scaled."
     },
     {
       "artifact": "docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json",
@@ -1306,6 +1327,17 @@
         "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
       ],
       "reason": "2026-07-03-era rung profile. Its `rung_decisions` were taken on self-authored, saturated axes with no paired cells, no recorded harness, and no corpus snapshot; several are already invalidated as synthetic fixtures. Cannot be contracted without a re-run."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/xs-crosssession/c3-headroom-n299-2026-08-05.json",
+      "state": "pending",
+      "decision_keys": [
+        "verdict"
+      ],
+      "violations": [
+        "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
+      ],
+      "reason": "Headroom analysis from the SC supersession lane, closed as negative (n=299 ceiling 0.304, rejected on construct). No paired scored run, no power cells, no corpus snapshot identity \u2014 carries no evidence_contract by design and makes no promotion or SOTA claim. Not backfilled; lane is CLOSED."
     }
   ]
 }

@@ -75,6 +75,7 @@
     "docs/build-log/artifacts/track-r-rerank/fusion-sweep.json",
     "docs/build-log/artifacts/track-r-rerank/rerank-channel.json",
     "docs/build-log/artifacts/horizonbench-fresh-v1/fresh-fast-gate-interim.json",
+    "docs/build-log/artifacts/horizonbench-fresh-v1/interim-result.json",
     "docs/build-log/artifacts/horizonbench-fresh-v1/pilot-fast-gate.json"
   ],
   "pending": [
@@ -401,6 +402,20 @@
         "verdict"
       ],
       "reason": "Free mechanism verification, not a benchmark outcome: verdict=PASS records only that subject-resolution supersession fired on fresh users (DB-measured closed generations and supersedes edges). No gold, no reader, no paired cells, no power computation — carries no evidence_contract by design and makes no promotion or SOTA claim. Cannot be contracted because there is no paired scored run to contract."
+    },
+    {
+      "path": "docs/build-log/artifacts/octobench-injection-look/result-summary.json",
+      "decision_keys": [
+        "verdict"
+      ],
+      "reason": "Blind directional look, not a promotion run: injection axis was flat (+0.9pp) under saturation and a short-task regime. No paired power cells, no corpus snapshot identity, no leakage block — carries no evidence_contract by design and makes no SOTA claim. Not backfilled; axis is negative and not to be scaled."
+    },
+    {
+      "path": "docs/build-log/artifacts/xs-crosssession/c3-headroom-n299-2026-08-05.json",
+      "decision_keys": [
+        "verdict"
+      ],
+      "reason": "Headroom analysis from the SC supersession lane, closed as negative (n=299 ceiling 0.304, rejected on construct). No paired scored run, no power cells, no corpus snapshot identity — carries no evidence_contract by design and makes no promotion or SOTA claim. Not backfilled; lane is CLOSED."
     }
   ]
 }
