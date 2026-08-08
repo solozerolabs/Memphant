@@ -104,6 +104,15 @@ Code and Pi):
 for on-demand recall and nothing else. It is never the spine — a pull protocol
 cannot deliver any of the three needs that matter.
 
+**Surface shape: one strong recall tool listed by default, the other six verbs
+unlisted** (env-gated re-enable, e.g. `MEMPHANT_MCP_TOOLS`). Since MCP is
+recall-compat only, the agent's job at the surface is one thing — recall — and a
+menu of seven verbs invites mis-picks and burns tool-schema context every
+session. Steal from CodeGraph (evaluated 2026-08-08, `codegraph_explore`): they
+measured one strong tool steering agents better than a narrow-tool menu. The
+bind_context handshake and all seven verbs stay fully functional and reachable;
+this is a default-listing change to the MCP surface, not a capability cut.
+
 **`memphant init` is onboarding, not architecture**: mints the repo scope,
 installs the plugin/hooks, compiles the current block to files. The
 compile-to-flat-files layer (experimental structure B) lives *inside* this
