@@ -386,6 +386,26 @@ def pinned_model_used(model_usage: dict[str, Any], pinned: str) -> bool:
     )
 
 
+def locked_control_cells(artifact: dict[str, Any], response_dir: Path) -> dict[str, Any]:
+    controls = {}
+    for cell in artifact["cells"]:
+        if cell.get("policy") != "C1":
+            continue
+        if cell.get("valid") is not True:
+            raise ValueError(f"control cell is invalid: {cell['cell_id']}")
+        response = response_dir / f"{cell['cell_id']}.response.json"
+        if not response.exists() or hashlib.sha256(response.read_bytes()).hexdigest() != cell.get(
+            "response_sha256"
+        ):
+            raise ValueError(f"control response drifted: {cell['cell_id']}")
+        controls[cell["case_id"]] = {
+            "cell_id": cell["cell_id"],
+            "passed": cell["passed"],
+            "response_sha256": cell["response_sha256"],
+        }
+    return controls
+
+
 def build_chronological_cases(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     cases = []
     families = sorted({row["family"] for row in observations if row.get("objective")})
@@ -512,6 +532,17 @@ def pack_for_policy(
             indexed.append((1, 0.0, ordinal, unit["unit_id"]))
     indexed.sort()
     return [unit_id for _, _, _, unit_id in indexed]
+
+
+def admission_pack(case: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
+    unit_id = case["unit_id"]
+    admitted = any(
+        event.get("unit_id") == unit_id
+        and event.get("event") == "helpful"
+        and event.get("attribution") in CAUSAL_ATTRIBUTIONS
+        for event in events
+    )
+    return [unit_id] if admitted else []
 
 
 def should_dispatch(control_pack: list[str], treatment_pack: list[str]) -> str:
@@ -825,20 +856,14 @@ def prepare_action_look(free_path: str, private_dir: str, out_path: str) -> dict
     return result
 
 
-def run_action_look(private_dir: str, out_path: str, claude_path: str) -> dict[str, Any]:
-    private = Path(private_dir)
-    manifest = json.loads((private / "action-look-manifest.json").read_text())
-    ledger = BudgetLedger(total_cap=100, phase_caps={"action": 30, "coding": 70})
-    grades = {policy: [] for policy in ("C0", "C1", "A1")}
-    public_cells = []
-    settled = 0.0
-    for cell in manifest["cells"]:
-        marker = private / f"{cell['cell_id']}.dispatch.json"
-        if marker.exists():
-            raise RuntimeError(f"refusing ambiguous or repeated dispatch: {cell['cell_id']}")
-        reservation = ledger.reserve("action", manifest["max_cell_usd"])
-        marker.write_text(json.dumps({"state": "dispatched", "cell_id": cell["cell_id"]}) + "\n")
-        completed = subprocess.run(
+def _dispatch_cell(
+    cell: dict[str, Any], manifest: dict[str, Any], private: Path, claude_path: str
+) -> tuple[dict[str, Any], float]:
+    marker = private / f"{cell['cell_id']}.dispatch.json"
+    if marker.exists():
+        raise RuntimeError(f"refusing ambiguous or repeated dispatch: {cell['cell_id']}")
+    marker.write_text(json.dumps({"state": "dispatched", "cell_id": cell["cell_id"]}) + "\n")
+    completed = subprocess.run(
             [
                 claude_path,
                 "-p",
@@ -864,44 +889,58 @@ def run_action_look(private_dir: str, out_path: str, claude_path: str) -> dict[s
             timeout=600,
             check=False,
         )
-        response_path = private / f"{cell['cell_id']}.response.json"
-        response_path.write_text(
-            json.dumps(
-                {"returncode": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr},
-                indent=2,
-            )
-            + "\n"
+    response_path = private / f"{cell['cell_id']}.response.json"
+    response_path.write_text(
+        json.dumps(
+            {"returncode": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr},
+            indent=2,
         )
-        try:
-            response = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            response = {}
-        cost = float(response.get("total_cost_usd") or 0)
+        + "\n"
+    )
+    try:
+        response = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        response = {}
+    cost = float(response.get("total_cost_usd") or 0)
+    valid = (
+        completed.returncode == 0
+        and response.get("subtype") == "success"
+        and isinstance(response.get("structured_output"), dict)
+        and pinned_model_used(response.get("modelUsage") or {}, manifest["model"])
+    )
+    passed = valid and score_next_action(cell["case_id"], response["structured_output"])
+    marker.write_text(
+        json.dumps({"state": "settled", "cell_id": cell["cell_id"], "cost_usd": cost}) + "\n"
+    )
+    return (
+        {
+            "cell_id": cell["cell_id"],
+            "case_id": cell["case_id"],
+            "blind_label": cell["blind_label"],
+            "policy": cell["policy"],
+            "valid": valid,
+            "passed": bool(passed),
+            "cost_usd": cost,
+            "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
+        },
+        cost,
+    )
+
+
+def run_action_look(private_dir: str, out_path: str, claude_path: str) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest = json.loads((private / "action-look-manifest.json").read_text())
+    ledger = BudgetLedger(total_cap=100, phase_caps={"action": 30, "coding": 70})
+    grades = {policy: [] for policy in ("C0", "C1", "A1")}
+    public_cells = []
+    settled = 0.0
+    for cell in manifest["cells"]:
+        reservation = ledger.reserve("action", manifest["max_cell_usd"])
+        public_cell, cost = _dispatch_cell(cell, manifest, private, claude_path)
         ledger.settle(reservation, cost)
         settled += cost
-        valid = (
-            completed.returncode == 0
-            and response.get("subtype") == "success"
-            and isinstance(response.get("structured_output"), dict)
-            and pinned_model_used(response.get("modelUsage") or {}, manifest["model"])
-        )
-        passed = valid and score_next_action(cell["case_id"], response["structured_output"])
-        grades[cell["policy"]].append(bool(passed))
-        marker.write_text(
-            json.dumps({"state": "settled", "cell_id": cell["cell_id"], "cost_usd": cost}) + "\n"
-        )
-        public_cells.append(
-            {
-                "cell_id": cell["cell_id"],
-                "case_id": cell["case_id"],
-                "blind_label": cell["blind_label"],
-                "policy": cell["policy"],
-                "valid": valid,
-                "passed": bool(passed),
-                "cost_usd": cost,
-                "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
-            }
-        )
+        grades[cell["policy"]].append(public_cell["passed"])
+        public_cells.append(public_cell)
     comparison = action_look_verdict({policy: grades[policy] for policy in ("C1", "A1")})
     prereg = json.loads(Path(out_path).read_text())
     prereg_cells = {cell["cell_id"]: cell for cell in prereg["cells"]}
@@ -987,6 +1026,220 @@ def regrade_action_look(private_dir: str, out_path: str) -> dict[str, Any]:
     )
     artifact["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
     Path(out_path).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
+
+
+def prepare_admission_look(
+    free_path: str,
+    action_path: str,
+    action_private_dir: str,
+    private_dir: str,
+    out_path: str,
+) -> dict[str, Any]:
+    free_gate = json.loads(Path(free_path).read_text())
+    action = json.loads(Path(action_path).read_text())
+    if action.get("verdict") != "ACTION_LOOK_FLAT":
+        raise ValueError("admission follow-up requires the settled flat ordering screen")
+    controls = locked_control_cells(action, Path(action_private_dir))
+    cases = free_gate["chronological_cases"]
+    if len(cases) != 4 or set(controls) != {case["case_id"] for case in cases}:
+        raise ValueError("admission follow-up requires four matching locked controls")
+    validation_events = [
+        {
+            "unit_id": unit_id,
+            "event": "helpful",
+            "attribution": "explicit_user",
+            "meaning": "source correction validated the lesson; no later exposure is inferred",
+        }
+        for unit_id in sorted({case["unit_id"] for case in cases})
+    ]
+    private = Path(private_dir)
+    private.mkdir(parents=True, exist_ok=True)
+    cells = []
+    public_cells = []
+    for case in cases:
+        path = _transcript_path(case["held_out_session_id"])
+        if not path:
+            raise ValueError(f"held-out transcript missing: {case['case_id']}")
+        context = active_context(_read_jsonl(path), case["action_uuid"])
+        context_hash = _hash_text(
+            json.dumps(
+                [(message["role"], message["content"]) for message in context],
+                separators=(",", ":"),
+            )
+        )
+        if context_hash != case["context_hash"]:
+            raise ValueError(f"context identity drifted: {case['case_id']}")
+        pack = admission_pack(case, validation_events)
+        if pack != [case["unit_id"]]:
+            raise ValueError(f"triggered lesson was not admitted: {case['case_id']}")
+        prompt = _action_prompt(context, pack)
+        cell_id = f"{case['case_id']}-admission"
+        cells.append(
+            {
+                "cell_id": cell_id,
+                "case_id": case["case_id"],
+                "blind_label": "followup-arm",
+                "policy": "A4",
+                "context_hash": context_hash,
+                "pack": pack,
+                "prompt": prompt,
+            }
+        )
+        public_cells.append(
+            {
+                "cell_id": cell_id,
+                "case_id": case["case_id"],
+                "blind_label": "followup-arm",
+                "context_hash": context_hash,
+                "pack_unit_id": case["unit_id"],
+                "pack_hash": _hash_text(json.dumps(pack, separators=(",", ":"))),
+                "prompt_hash": _hash_text(prompt),
+                "prompt_bytes": len(prompt.encode()),
+                "locked_control": controls[case["case_id"]],
+            }
+        )
+    manifest = {
+        "schema_version": 1,
+        "model": PINNED_ACTION_MODEL,
+        "max_cell_usd": 2.5,
+        "phase_cap_usd": 30,
+        "prior_action_spend_usd": action["spend_usd"],
+        "cells": cells,
+    }
+    manifest_path = private / "admission-look-manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    result = {
+        "schema_version": 1,
+        "status": "preregistered",
+        "result_read": False,
+        "model": PINNED_ACTION_MODEL,
+        "fallback_model": None,
+        "budget": {
+            "prior_action_spend_usd": action["spend_usd"],
+            "new_reserve_usd": 10,
+            "phase_cap_usd": 30,
+            "max_cell_usd": 2.5,
+            "new_cells": 4,
+        },
+        "policy": "A4: admit only the deterministically triggered lesson with positive explicit-user validation",
+        "attribution": validation_events,
+        "cells": public_cells,
+        "instrument": {
+            "locked_controls": "pass",
+            "same_context_identity": "pass",
+            "single_relevant_lesson": "pass",
+            "unexposed_later_outcomes_are_observational": "pass",
+            "no_control_redispatch": "pass",
+        },
+        "private_manifest_sha256": manifest_sha,
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "The relevant-lesson admission follow-up was preregistered before its four new model results were read.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 4,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": None,
+                "mde_at_80": None,
+                "computed_by": "not applicable; adaptive four-case mechanism screen",
+                "source": out_path,
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "lever",
+            "mechanism_evidence": "Each A4 cell contains exactly its triggered, explicitly validated lesson; locked C1 controls contain the full static pack.",
+            "harness": {
+                "embed_model": "none",
+                "scorer": "unchanged deterministic structured next_action predicate",
+                "k": 1,
+                "budget": 10,
+                "flags": [
+                    "adaptive-followup",
+                    "locked-controls",
+                    "same-context",
+                    "structured-output",
+                    "no-fallback",
+                    "no-tools",
+                ],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-admission-look",
+            },
+            "corpus": {
+                "sha256": manifest_sha,
+                "snapshot_id": "private-admission-look-manifest-2026-08-08",
+                "n_items": 4,
+            },
+            "notes": "Adaptive after a flat ordering screen. Private contexts and model bodies remain outside Git. Passing can open isolated replay but cannot support a general effectiveness claim.",
+        },
+    }
+    Path(out_path).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def run_admission_look(
+    action_path: str, private_dir: str, out_path: str, claude_path: str
+) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest = json.loads((private / "admission-look-manifest.json").read_text())
+    action = json.loads(Path(action_path).read_text())
+    controls = {
+        cell["case_id"]: cell["passed"]
+        for cell in action["cells"]
+        if cell.get("policy") == "C1" and cell.get("valid") is True
+    }
+    ledger = BudgetLedger(
+        total_cap=100,
+        phase_caps={"action": 30, "coding": 70},
+        _settled={"action": manifest["prior_action_spend_usd"]},
+    )
+    public_cells = []
+    new_spend = 0.0
+    for cell in manifest["cells"]:
+        reservation = ledger.reserve("action", manifest["max_cell_usd"])
+        public_cell, cost = _dispatch_cell(cell, manifest, private, claude_path)
+        ledger.settle(reservation, cost)
+        new_spend += cost
+        public_cells.append(public_cell)
+    control_grades = [controls[cell["case_id"]] for cell in manifest["cells"]]
+    treatment_grades = [cell["passed"] for cell in public_cells]
+    comparison = action_look_verdict({"C1": control_grades, "A1": treatment_grades})
+    comparison["verdict"] = comparison["verdict"].replace("ACTION_LOOK", "ADMISSION_LOOK")
+    artifact = json.loads(Path(out_path).read_text())
+    prior_cells = {cell["cell_id"]: cell for cell in artifact["cells"]}
+    artifact.update(
+        {
+            "status": "complete",
+            "result_read": True,
+            "verdict": comparison["verdict"],
+            "runtime_gate": (
+                "isolated_coding_replay_open"
+                if comparison["verdict"] == "ADMISSION_LOOK_PASS"
+                else "closed"
+            ),
+            "new_spend_usd": new_spend,
+            "cumulative_action_spend_usd": manifest["prior_action_spend_usd"] + new_spend,
+            "grades": {"C1_locked": control_grades, "A4": treatment_grades},
+            "comparison": comparison,
+            "cells": [{**prior_cells[cell["cell_id"]], **cell} for cell in public_cells],
+        }
+    )
+    b = comparison["net_wins"]
+    c = comparison["losses"]
+    artifact["evidence_contract"]["claim"] = (
+        f"The four-case relevant-lesson admission screen ended {comparison['verdict']} with {b} A4 win(s) and {c} loss(es) versus locked C1."
+    )
+    artifact["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
+    Path(out_path).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    checksum_paths = [str(path) for path in private.glob("*.json")]
+    (private / "SHA256SUMS").write_text(
+        "".join(
+            f"{hashlib.sha256(Path(path).read_bytes()).hexdigest()}  {Path(path).name}\n"
+            for path in sorted(checksum_paths)
+        )
+    )
     return artifact
 
 
@@ -1258,6 +1511,47 @@ def main() -> int:
         "--out",
         default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
     )
+    admission_prepare = subparsers.add_parser("prepare-admission-look")
+    admission_prepare.add_argument(
+        "--free-gate",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
+    )
+    admission_prepare.add_argument(
+        "--action-look",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    )
+    admission_prepare.add_argument(
+        "--action-private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/action-look"
+        ),
+    )
+    admission_prepare.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/admission-look"
+        ),
+    )
+    admission_prepare.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/admission-look.json",
+    )
+    admission_run = subparsers.add_parser("run-admission-look")
+    admission_run.add_argument(
+        "--action-look",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    )
+    admission_run.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/admission-look"
+        ),
+    )
+    admission_run.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/admission-look.json",
+    )
+    admission_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -1308,6 +1602,38 @@ def main() -> int:
         print(
             json.dumps(
                 {"verdict": result["verdict"], "comparison": result["comparison"]},
+                sort_keys=True,
+            )
+        )
+    elif args.command == "prepare-admission-look":
+        result = prepare_admission_look(
+            args.free_gate,
+            args.action_look,
+            args.action_private_dir,
+            args.private_dir,
+            args.out,
+        )
+        print(
+            json.dumps(
+                {
+                    "status": result["status"],
+                    "cells": len(result["cells"]),
+                    "new_reserve_usd": result["budget"]["new_reserve_usd"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "run-admission-look":
+        result = run_admission_look(
+            args.action_look, args.private_dir, args.out, args.claude
+        )
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "new_spend_usd": result["new_spend_usd"],
+                    "comparison": result["comparison"],
+                },
                 sort_keys=True,
             )
         )

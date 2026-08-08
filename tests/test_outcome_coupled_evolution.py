@@ -21,6 +21,8 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     score_explicit_staging,
     score_next_action,
     action_look_verdict,
+    admission_pack,
+    locked_control_cells,
     score_unmasked_gate,
     select_first_scored_action,
     should_dispatch,
@@ -395,6 +397,57 @@ def test_model_pin_allows_only_small_auxiliary_validation_not_fallback():
     assert pinned_model_used(pinned, "claude-opus-5")
     assert not pinned_model_used(fallback, "claude-opus-5")
     assert not pinned_model_used({"claude-haiku-4-5": pinned["claude-haiku-4-5-20251001"]}, "claude-opus-5")
+
+
+def test_admission_requires_triggered_unit_and_positive_explicit_outcome():
+    case = {"unit_id": "explicit-staging"}
+    events = [
+        {"unit_id": "explicit-staging", "event": "helpful", "attribution": "explicit_user"},
+        {"unit_id": "explicit-staging", "event": "harmful", "attribution": "observational"},
+        {"unit_id": "irrelevant", "event": "helpful", "attribution": "explicit_user"},
+    ]
+
+    assert admission_pack(case, events) == ["explicit-staging"]
+    assert admission_pack(case, events[1:]) == []
+
+
+def test_admission_budget_accounts_for_settled_ordering_screen():
+    ledger = BudgetLedger(
+        total_cap=100,
+        phase_caps={"action": 30, "coding": 70},
+        _settled={"action": 15.1323885},
+    )
+
+    for _ in range(4):
+        ledger.reserve("action", 2.5)
+    with pytest.raises(ValueError, match="phase budget"):
+        ledger.reserve("action", 5)
+
+
+def test_admission_reuses_only_checksum_locked_valid_controls(tmp_path: Path):
+    response = tmp_path / "case-arm.response.json"
+    response.write_text("settled body")
+    digest = __import__("hashlib").sha256(response.read_bytes()).hexdigest()
+    artifact = {
+        "cells": [
+            {
+                "cell_id": "case-arm",
+                "case_id": "case",
+                "policy": "C1",
+                "valid": True,
+                "passed": False,
+                "response_sha256": digest,
+            },
+            {"cell_id": "other", "case_id": "case", "policy": "A1", "valid": True},
+        ]
+    }
+
+    assert locked_control_cells(artifact, tmp_path) == {
+        "case": {"cell_id": "case-arm", "passed": False, "response_sha256": digest}
+    }
+    response.write_text("changed")
+    with pytest.raises(ValueError, match="control response drifted"):
+        locked_control_cells(artifact, tmp_path)
 
 
 def test_action_runner_caps_dispatches_and_refuses_repeat(tmp_path: Path, monkeypatch):

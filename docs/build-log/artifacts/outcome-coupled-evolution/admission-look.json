@@ -1,0 +1,145 @@
+{
+  "attribution": [
+    {
+      "attribution": "explicit_user",
+      "event": "helpful",
+      "meaning": "source correction validated the lesson; no later exposure is inferred",
+      "unit_id": "explicit-staging"
+    },
+    {
+      "attribution": "explicit_user",
+      "event": "helpful",
+      "meaning": "source correction validated the lesson; no later exposure is inferred",
+      "unit_id": "full-local-gate"
+    },
+    {
+      "attribution": "explicit_user",
+      "event": "helpful",
+      "meaning": "source correction validated the lesson; no later exposure is inferred",
+      "unit_id": "one-session-workstream"
+    }
+  ],
+  "budget": {
+    "max_cell_usd": 2.5,
+    "new_cells": 4,
+    "new_reserve_usd": 10,
+    "phase_cap_usd": 30,
+    "prior_action_spend_usd": 15.1323885
+  },
+  "cells": [
+    {
+      "blind_label": "followup-arm",
+      "case_id": "a1-continue-ed4f8502",
+      "cell_id": "a1-continue-ed4f8502-admission",
+      "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
+      "locked_control": {
+        "cell_id": "a1-continue-ed4f8502-arm-2",
+        "passed": true,
+        "response_sha256": "eb7a874f4a55f3607dc4543372b2190c740afc12fab91747192f33de5c031625"
+      },
+      "pack_hash": "66cbacbc24df34b9eb2c061309997b272e450eb0f22e56e7d03197f68f8e2fe5",
+      "pack_unit_id": "one-session-workstream",
+      "prompt_bytes": 338429,
+      "prompt_hash": "ae3d4cc0b20df3ea0de3355511f27e8fc0adf06807393426fdd0290f46f5d7a4"
+    },
+    {
+      "blind_label": "followup-arm",
+      "case_id": "a1-continue-38ba8780",
+      "cell_id": "a1-continue-38ba8780-admission",
+      "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
+      "locked_control": {
+        "cell_id": "a1-continue-38ba8780-arm-3",
+        "passed": true,
+        "response_sha256": "e3f920fe958b790a224ae92bad8f20e59e3346fccfc743a288c0fe1cf68d47d2"
+      },
+      "pack_hash": "66cbacbc24df34b9eb2c061309997b272e450eb0f22e56e7d03197f68f8e2fe5",
+      "pack_unit_id": "one-session-workstream",
+      "prompt_bytes": 302514,
+      "prompt_hash": "0b189dbdbbf0ce28f6ffc7e6a5335efd67a03b60b78cda514706301ac35968a9"
+    },
+    {
+      "blind_label": "followup-arm",
+      "case_id": "a1-explicit-stage-sealed",
+      "cell_id": "a1-explicit-stage-sealed-admission",
+      "context_hash": "ac23f3d69841be548f33d56ae248911c964c68339c3cef48d5c52e3c718e58cf",
+      "locked_control": {
+        "cell_id": "a1-explicit-stage-sealed-arm-1",
+        "passed": false,
+        "response_sha256": "cd17390584b00b0fb6368317da294bcd6a44511b02b8e2a08cfa9364fd8cf190"
+      },
+      "pack_hash": "d59085b8510b42bcd75aa9e8dbc5a9a2518f34a15fb0eccea74c373bf38720c5",
+      "pack_unit_id": "explicit-staging",
+      "prompt_bytes": 185403,
+      "prompt_hash": "847bbea23b12a4945e14c1f6d6954a283aa6d1c5f88d317df8156ca848b707e1"
+    },
+    {
+      "blind_label": "followup-arm",
+      "case_id": "a1-scoped-gate-9e49b76b",
+      "cell_id": "a1-scoped-gate-9e49b76b-admission",
+      "context_hash": "136e233bb66bea8a09da2212696bfc1ae76ecf42658953144bc11f1b9d2f0953",
+      "locked_control": {
+        "cell_id": "a1-scoped-gate-9e49b76b-arm-2",
+        "passed": false,
+        "response_sha256": "3a0af2df2080a38ab58a6979d74a327704fad15bcd4dae1966540a7a769458b4"
+      },
+      "pack_hash": "d39411ed29c05b3a76bd2536e6571782cb868327e81e6693bbca4ed40fb85ea8",
+      "pack_unit_id": "full-local-gate",
+      "prompt_bytes": 339393,
+      "prompt_hash": "b605989f6a795aee30b27b30139f85c713beb976ad66328bc18cad350f2f1bc0"
+    }
+  ],
+  "evidence_contract": {
+    "claim": "The relevant-lesson admission follow-up was preregistered before its four new model results were read.",
+    "corpus": {
+      "n_items": 4,
+      "sha256": "f9591d6f32a0a65440a5248ec09e2110084aea77e999b8a5da2bded4f0aecf0d",
+      "snapshot_id": "private-admission-look-manifest-2026-08-08"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 10,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-admission-look",
+      "embed_model": "none",
+      "flags": [
+        "adaptive-followup",
+        "locked-controls",
+        "same-context",
+        "structured-output",
+        "no-fallback",
+        "no-tools"
+      ],
+      "k": 1,
+      "scorer": "unchanged deterministic structured next_action predicate"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "Each A4 cell contains exactly its triggered, explicitly validated lesson; locked C1 controls contain the full static pack.",
+    "notes": "Adaptive after a flat ordering screen. Private contexts and model bodies remain outside Git. Passing can open isolated replay but cannot support a general effectiveness claim.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; adaptive four-case mechanism screen",
+      "mde_at_80": null,
+      "n": 4,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/admission-look.json",
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "fallback_model": null,
+  "instrument": {
+    "locked_controls": "pass",
+    "no_control_redispatch": "pass",
+    "same_context_identity": "pass",
+    "single_relevant_lesson": "pass",
+    "unexposed_later_outcomes_are_observational": "pass"
+  },
+  "model": "claude-opus-5",
+  "policy": "A4: admit only the deterministically triggered lesson with positive explicit-user validation",
+  "private_manifest_sha256": "f9591d6f32a0a65440a5248ec09e2110084aea77e999b8a5da2bded4f0aecf0d",
+  "result_read": false,
+  "schema_version": 1,
+  "status": "preregistered"
+}
