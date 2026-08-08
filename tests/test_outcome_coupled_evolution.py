@@ -6,7 +6,11 @@ import pytest
 from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     BudgetLedger,
     CompactionError,
+    blind_arms,
+    build_chronological_cases,
     classify_scopes,
+    grade_liveness,
+    gate_verdict,
     pack_for_policy,
     reconstruct_compactions,
     should_dispatch,
@@ -27,7 +31,8 @@ def test_reconstructs_summary_preserved_messages_and_active_tail():
                 "cumulativeDroppedTokens": 60,
                 "preservedMessages": {
                     "anchorUuid": "summary",
-                    "allUuids": ["head", "tail"],
+                    "uuids": ["head", "tail"],
+                    "allUuids": ["head", "opaque-chain-node", "tail"],
                 },
             },
         },
@@ -62,6 +67,38 @@ def test_reconstruction_fails_closed_on_missing_anchor_or_bad_token_math():
     }
     with pytest.raises(CompactionError):
         reconstruct_compactions([boundary])
+
+
+def test_compaction_dropped_tokens_are_cumulative_across_boundaries():
+    rows = []
+    for index, (pre, post, cumulative) in enumerate(((100, 40, 60), (90, 30, 120)), 1):
+        rows.extend(
+            [
+                {
+                    "uuid": f"boundary-{index}",
+                    "type": "system",
+                    "subtype": "compact_boundary",
+                    "compactMetadata": {
+                        "preTokens": pre,
+                        "postTokens": post,
+                        "cumulativeDroppedTokens": cumulative,
+                        "preservedMessages": {
+                            "anchorUuid": f"summary-{index}",
+                            "uuids": [],
+                            "allUuids": ["opaque-chain-node"],
+                        },
+                    },
+                },
+                {
+                    "uuid": f"summary-{index}",
+                    "type": "user",
+                    "isCompactSummary": True,
+                    "message": {"role": "user", "content": "summary"},
+                },
+            ]
+        )
+
+    assert len(reconstruct_compactions(rows)) == 2
 
 
 def test_scope_qualification_requires_four_distinct_chronological_objective_cases():
@@ -122,6 +159,87 @@ def test_identical_pack_suppression_and_budget_cutoff():
         ledger.reserve("action", 1)
     with pytest.raises(ValueError, match="total budget"):
         ledger.reserve("coding", 71)
+
+
+def test_liveness_grades_the_action_before_the_correction():
+    rows = [
+        {"uuid": "task", "timestamp": "2026-08-01T00:00:00Z", "message": {"role": "user", "content": "do it"}},
+        {
+            "uuid": "action",
+            "timestamp": "2026-08-01T00:01:00Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "name": "Bash", "input": {"command": "make check"}}],
+            },
+        },
+        {
+            "uuid": "correction",
+            "timestamp": "2026-08-01T00:02:00Z",
+            "message": {"role": "user", "content": "Do not run the full gate locally"},
+        },
+    ]
+
+    probe = grade_liveness(rows, "full gate locally")
+
+    assert probe["status"] == "pass"
+    assert probe["historical_grade"] == "violation"
+    assert probe["action_uuid"] == "action"
+    assert probe["task_hash"] != probe["correction_hash"]
+
+
+def test_blinding_is_stable_and_preserves_context_identity():
+    first = blind_arms("case-1", "context-sha", {"C1": ["u1"], "A1": ["u2"]}, seed="v1")
+    second = blind_arms("case-1", "context-sha", {"C1": ["u1"], "A1": ["u2"]}, seed="v1")
+
+    assert first == second
+    assert {cell["context_hash"] for cell in first} == {"context-sha"}
+    assert {cell["blind_label"] for cell in first} == {"arm-1", "arm-2"}
+    assert all("policy" not in cell for cell in first)
+
+
+def test_only_objective_chronological_cross_task_pairs_become_cases():
+    observations = [
+        {
+            "session_id": "source",
+            "family": "rule",
+            "objective": True,
+            "timestamp": "2026-08-01T00:00:00Z",
+            "task_hash": "task-a",
+            "context_boundary": "session:start",
+        },
+        {
+            "session_id": "held-out",
+            "family": "rule",
+            "objective": True,
+            "timestamp": "2026-08-02T00:00:00Z",
+            "task_hash": "task-b",
+            "context_boundary": "compact:1",
+        },
+        {
+            "session_id": "fuzzy",
+            "family": "fuzzy-rule",
+            "objective": False,
+            "timestamp": "2026-08-03T00:00:00Z",
+            "task_hash": "task-c",
+            "context_boundary": "session:start",
+        },
+    ]
+
+    [case] = build_chronological_cases(observations)
+
+    assert case["source_task_hash"] == "task-a"
+    assert case["held_out_task_hash"] == "task-b"
+    assert case["kind"] == "adherence"
+
+
+def test_gate_reasons_distinguish_broken_instrument_flat_policy_and_untestable_scope():
+    untestable = {"A1": {"status": "UNTESTABLE"}}
+    eligible = {"A1": {"status": "eligible"}}
+
+    assert gate_verdict(5, 6, eligible, {"A1": "dispatch"}) == "FREE_GATE_CLOSED_INSTRUMENT_FAILED"
+    assert gate_verdict(6, 6, untestable, {"A1": "dispatch"}) == "FREE_GATE_CLOSED_UNTESTABLE"
+    assert gate_verdict(6, 6, eligible, {"A1": "no_policy_difference"}) == "FREE_GATE_CLOSED_NO_POLICY_DIFFERENCE"
+    assert gate_verdict(6, 6, eligible, {"A1": "dispatch"}) == "FREE_GATE_OPEN"
 
 
 def test_private_text_never_enters_public_result(tmp_path: Path):

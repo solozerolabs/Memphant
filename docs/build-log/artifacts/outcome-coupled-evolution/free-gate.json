@@ -1,40 +1,227 @@
 {
-  "schema_version": 1,
-  "status": "preregistered",
-  "result_read": false,
-  "spend_usd": 0,
-  "gate": "No model or runtime dispatch unless one scope has four valid chronological correction-to-later-task cases and all six known-violation liveness probes pass.",
+  "chronological_cases": [
+    {
+      "case_id": "6c22f0c935a4f292",
+      "context_boundary": "compact:0f9f5ccc-c922-4dd8-aa0c-c657c9b4d077",
+      "held_out_at": "2026-08-05T18:52:11.714Z",
+      "held_out_task_hash": "26aa8c9379503ad25d1e9024e039961ee73a44c2d00be3b75d910899bd3cc721",
+      "kind": "adherence",
+      "learned_at": "2026-08-04T20:51:04.806Z",
+      "objective_predicate": "historical_action_violation:full-local-gate",
+      "rule_version": "d602ba242387478e66cf38c1c48ed67d44ba5abe6faab906b9f28dbc630f8f68",
+      "sensitive": false,
+      "source_task_hash": "0252c2d878c7266edb3a2458be80eb340712614cd91706d0aee36cb6e82e03f9"
+    },
+    {
+      "case_id": "067cca769b1c3d94",
+      "context_boundary": "session:start",
+      "held_out_at": "2026-08-01T16:35:08.825Z",
+      "held_out_task_hash": "136850ed10157b8e9672297917bc141329fbfc22af0455e00a9aaddcce6bd233",
+      "kind": "adherence",
+      "learned_at": "2026-07-30T01:57:04.708Z",
+      "objective_predicate": "historical_action_violation:stop-mid-workstream",
+      "rule_version": "8efe068361b6d992d34dda8ea340ada25168b52e65527ddcad44a410e0c2a8a9",
+      "sensitive": false,
+      "source_task_hash": "cdda96ea778e0a687e0b7b4ef6432bbb562ddc9c7b7e5610ea556238c0a29a2b"
+    }
+  ],
   "evidence_contract": {
-    "schema_version": 1,
+    "claim": "The free instrument found and graded 6/6 known violations, but only 2 valid chronological adherence cases and no causal pack difference, so no paid or runtime gate opened.",
+    "corpus": {
+      "n_items": 6,
+      "sha256": "42947ec56ff4c89fa866741f2426f8bc5a95845dc14cd47e1522ca5860a066fa",
+      "snapshot_id": "local-claude-known-violation-transcripts-2026-08-08"
+    },
     "decisional": false,
-    "claim": "This preregistration records the zero-dollar qualification gate before any outcome-coupled result cells are read.",
-    "power": {
-      "test": "descriptive-only (no test)",
-      "n": 0,
-      "b": 0,
-      "c": 0,
-      "n_d": 0,
-      "psi_observed": null,
-      "mde_at_80": null,
-      "computed_by": "not applicable before qualification",
-      "source": "docs/flows/outcome-coupled-evolution.md"
+    "harness": {
+      "budget": 0,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution qualify",
+      "embed_model": "none",
+      "flags": [
+        "free-gate",
+        "no-model",
+        "no-runtime",
+        "observational-evidence-ineligible"
+      ],
+      "k": "four required cases per independent scope",
+      "scorer": "deterministic transcript structure and preregistered historical correction predicates"
     },
     "mechanism_enabled": false,
+    "mechanism_evidence": "No model or runtime mechanism ran. Historical helpful/harmful signals were observational and therefore could not alter lifecycle ordering.",
+    "notes": "Private transcript bodies and correction text remain local. n_d=0 and n<4 per scope force decisional=false.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; qualification stopped before paired model cells",
+      "mde_at_80": null,
+      "n": 2,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
+      "test": "descriptive-only (no test)"
+    },
     "probe_kind": null,
-    "mechanism_evidence": "No outcome-coupled policy, model, database, or runtime mechanism has run; this is the preregistration boundary.",
-    "harness": {
-      "embed_model": "none",
-      "scorer": "deterministic transcript structure and preregistered action predicates",
-      "k": "up to four cases per scope",
-      "budget": 0,
-      "flags": ["free-gate", "no-model", "no-runtime"],
-      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution qualify"
+    "schema_version": 1
+  },
+  "instrument": {
+    "all_compaction_metadata_valid": true,
+    "known_violations_expected": 6,
+    "known_violations_found_and_graded": 6
+  },
+  "lifecycle_simulation": {
+    "causal_events": 0,
+    "observational_events": 6,
+    "packs": {
+      "A1": [
+        "contamination",
+        "full-local-gate",
+        "overly-clever",
+        "stop-mid-workstream"
+      ],
+      "A2": [
+        "contamination",
+        "full-local-gate",
+        "overly-clever",
+        "stop-mid-workstream"
+      ],
+      "A3": [
+        "contamination",
+        "full-local-gate",
+        "overly-clever",
+        "stop-mid-workstream"
+      ],
+      "C0": [],
+      "C1": [
+        "contamination",
+        "full-local-gate",
+        "overly-clever",
+        "stop-mid-workstream"
+      ]
     },
-    "corpus": {
-      "sha256": "e29821b24aff753a3bd5f58653f65044851485d1a7690d1081dedcb1a5200b87",
-      "snapshot_id": "track-u-privacy-frozen-2026-07-30",
-      "n_items": 51
+    "policy_differences": {
+      "A1": "no_policy_difference",
+      "A2": "no_policy_difference",
+      "A3": "no_policy_difference"
+    }
+  },
+  "observations": [
+    {
+      "action_uuid": "b75b5cc9-cc51-4411-b9d3-c188ee93ae8b",
+      "compaction_count": 2,
+      "compaction_metadata_valid": true,
+      "context_boundary": "compact:9f8f05aa-bd54-4f60-909c-5a446b3956b5",
+      "context_hash": "180a1f9ae1ecc649403d1bc426b1a221cee7dcf8c911f3de8b9f3919cded1cc3",
+      "family": "full-local-gate",
+      "historical_grade": "violation",
+      "objective": true,
+      "session_id": "15403b3d",
+      "status": "pass",
+      "task_hash": "0252c2d878c7266edb3a2458be80eb340712614cd91706d0aee36cb6e82e03f9",
+      "timestamp": "2026-08-04T20:51:04.806Z"
     },
-    "notes": "Private transcript bodies remain outside Git. A scope with fewer than four valid cases is UNTESTABLE and receives no spend."
-  }
+    {
+      "action_uuid": "aa474d8c-93b3-4e00-aaf3-dc065a87b45b",
+      "compaction_count": 2,
+      "compaction_metadata_valid": true,
+      "context_boundary": "compact:0f9f5ccc-c922-4dd8-aa0c-c657c9b4d077",
+      "context_hash": "b41c1998d514e0ef9c291c1ec972e220e3d609847122af457ae7ec73dd1551e0",
+      "family": "full-local-gate",
+      "historical_grade": "violation",
+      "objective": true,
+      "session_id": "9e49b76b",
+      "status": "pass",
+      "task_hash": "26aa8c9379503ad25d1e9024e039961ee73a44c2d00be3b75d910899bd3cc721",
+      "timestamp": "2026-08-05T18:52:11.714Z"
+    },
+    {
+      "action_uuid": "1526c987-921b-426a-b828-225a61f09aa8",
+      "compaction_count": 2,
+      "compaction_metadata_valid": true,
+      "context_boundary": "session:start",
+      "context_hash": "48ccaaf98cf7b10044345c647b12bcb7d10994fe84e49b885b6b18c0f4515389",
+      "family": "stop-mid-workstream",
+      "historical_grade": "violation",
+      "objective": true,
+      "session_id": "ed4f8502",
+      "status": "pass",
+      "task_hash": "cdda96ea778e0a687e0b7b4ef6432bbb562ddc9c7b7e5610ea556238c0a29a2b",
+      "timestamp": "2026-07-30T01:57:04.708Z"
+    },
+    {
+      "action_uuid": "cb5fcff5-7502-4eb1-8e66-feff1b57396d",
+      "compaction_count": 1,
+      "compaction_metadata_valid": true,
+      "context_boundary": "session:start",
+      "context_hash": "6f4cde9a1ea399125cdd3ea164718e854908808fc6ce44ce327bd05f8ec297d9",
+      "family": "stop-mid-workstream",
+      "historical_grade": "violation",
+      "objective": true,
+      "session_id": "38ba8780",
+      "status": "pass",
+      "task_hash": "136850ed10157b8e9672297917bc141329fbfc22af0455e00a9aaddcce6bd233",
+      "timestamp": "2026-08-01T16:35:08.825Z"
+    },
+    {
+      "action_uuid": "c9d4d8ae-cb7e-4296-b1a9-c95d4fead905",
+      "compaction_count": 2,
+      "compaction_metadata_valid": true,
+      "context_boundary": "compact:23cff5e5-2cbe-4767-aa8d-7abe0d689906",
+      "context_hash": "634b317c60376b3d865225eac5bf32d7bee6314550ab8c427e51e2a6bfd4722f",
+      "family": "overly-clever",
+      "historical_grade": "violation",
+      "objective": false,
+      "session_id": "c29d3978",
+      "status": "pass",
+      "task_hash": "2e6e90475de1ac9473ecfc3216caa5299f8bad062be410514eb82a6c7693f8f4",
+      "timestamp": "2026-07-31T10:28:25.692Z"
+    },
+    {
+      "action_uuid": "0f318201-24df-4757-964f-ed3bf4eaeeeb",
+      "compaction_count": 2,
+      "compaction_metadata_valid": true,
+      "context_boundary": "session:start",
+      "context_hash": "628f6dbde140b083a69660ff95cf346caa79742e52c44434b3eaf566d2ccb489",
+      "family": "contamination",
+      "historical_grade": "violation",
+      "objective": false,
+      "session_id": "8cc9baa3",
+      "status": "pass",
+      "task_hash": "ca9e9b349091af8e8f4d37ee4daac40a52694866cd413369ce083a837cb9e0f1",
+      "timestamp": "2026-07-31T01:32:12.697Z"
+    }
+  ],
+  "paid_gate": "closed",
+  "privacy": {
+    "public_fields": "hashes, counters, IDs, timestamps, predicates, and aggregate decisions only",
+    "raw_content_committed": false
+  },
+  "result_read": true,
+  "runtime_gate": "closed",
+  "schema_version": 1,
+  "scopes": {
+    "A1": {
+      "n_valid": 2,
+      "rejected_case_ids": [],
+      "status": "UNTESTABLE",
+      "valid_case_ids": [
+        "6c22f0c935a4f292",
+        "067cca769b1c3d94"
+      ]
+    },
+    "A2": {
+      "n_valid": 0,
+      "rejected_case_ids": [],
+      "status": "UNTESTABLE",
+      "valid_case_ids": []
+    },
+    "A3": {
+      "n_valid": 0,
+      "rejected_case_ids": [],
+      "status": "UNTESTABLE",
+      "valid_case_ids": []
+    }
+  },
+  "spend_usd": 0,
+  "status": "complete",
+  "verdict": "FREE_GATE_CLOSED_UNTESTABLE"
 }
