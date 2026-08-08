@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "preregistered",
+  "result_read": false,
+  "spend_usd": 0,
+  "gate": "No model or runtime dispatch unless one scope has four valid chronological correction-to-later-task cases and all six known-violation liveness probes pass.",
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "This preregistration records the zero-dollar qualification gate before any outcome-coupled result cells are read.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 0,
+      "b": 0,
+      "c": 0,
+      "n_d": 0,
+      "psi_observed": null,
+      "mde_at_80": null,
+      "computed_by": "not applicable before qualification",
+      "source": "docs/flows/outcome-coupled-evolution.md"
+    },
+    "mechanism_enabled": false,
+    "probe_kind": null,
+    "mechanism_evidence": "No outcome-coupled policy, model, database, or runtime mechanism has run; this is the preregistration boundary.",
+    "harness": {
+      "embed_model": "none",
+      "scorer": "deterministic transcript structure and preregistered action predicates",
+      "k": "up to four cases per scope",
+      "budget": 0,
+      "flags": ["free-gate", "no-model", "no-runtime"],
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution qualify"
+    },
+    "corpus": {
+      "sha256": "e29821d12bb6dde4c38ae0b9170ff055cb4a23ea8130d40a296ab7823aa04462",
+      "snapshot_id": "track-u-privacy-frozen-2026-07-30",
+      "n_items": 51
+    },
+    "notes": "Private transcript bodies remain outside Git. A scope with fewer than four valid cases is UNTESTABLE and receives no spend."
+  }
+}
