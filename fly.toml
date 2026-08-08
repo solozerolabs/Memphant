@@ -1,0 +1,54 @@
+# MemPhant production cell — private-only (6PN), reached by syndai-prod at
+# http://memphant-prod.internal:3000. No public service on purpose:
+# a serviceless app must keep restart=always and never scale to zero
+# (see Syndai LEARNINGS fly-serviceless-worker-autostop-reaps-it).
+app = 'memphant-prod'
+primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  MEMPHANT_BIND = '[::]:3000'  # 6PN is IPv6; 0.0.0.0 refuses cross-app connections
+  RUST_LOG = 'info'
+  # Phase A serves deterministic profile facts (retain + projection reads);
+  # the dense channel is unused. This also removes the HuggingFace model
+  # download from the startup path — a third-party cold-start dependency that
+  # crashed the first boot. Bake the model into the image before any feature
+  # that needs vectors on this cell.
+  MEMPHANT_EMBEDDINGS = 'off'
+
+[processes]
+  server = 'memphant-server'
+  worker = 'memphant-worker'
+
+# No [http_service]: private networking only. Secrets carry the three served
+# database URLs (never DATABASE_URL — the server refuses the migrator cred).
+
+[[restart]]
+  policy = 'always'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['server']
+  count = 1
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['worker']
+  count = 1
+
+[checks.server_health]
+  type = 'http'
+  port = 3000
+  method = 'get'
+  path = '/v1/health'
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '30s'
+  processes = ['server']

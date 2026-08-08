@@ -1,0 +1,40 @@
+{
+ "n_trajectories_scored": 299,
+ "median_prefix_msgs": 50,
+ "median_gold_files": 2,
+ "rules": {
+  "recency": {
+   "covers_gold": 0.0836,
+   "ci95": [
+    0.0535,
+    0.1171
+   ]
+  },
+  "frequency": {
+   "covers_gold": 0.1538,
+   "ci95": [
+    0.1137,
+    0.194
+   ]
+  },
+  "union": {
+   "covers_gold": 0.3043,
+   "ci95": [
+    0.2542,
+    0.3579
+   ]
+  }
+ },
+ "headroom_union_minus_frequency": {
+  "point_pp": 15.05,
+  "ci95_pp": [
+   11.04,
+   19.06
+  ],
+  "swe_contextbench_danger_band_pp": [
+   3.38,
+   8.32
+  ],
+  "verdict": "SURVIVES screening \u2014 CI upper bound clears the danger band"
+ }
+}
