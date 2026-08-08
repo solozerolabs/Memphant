@@ -2,8 +2,8 @@
   "schema_version": 1,
   "generated_by": "scripts/check_evidence_contract.py --report",
   "method": "Every tracked JSON under docs/build-log/artifacts/ carrying a decision key at depth <= 4 is a promotion-capable candidate. NOTHING here is backfilled: a field that cannot be verified from a banked artifact is left absent and reported as a violation rather than invented.",
-  "candidates": 123,
-  "contracted": 75,
+  "candidates": 124,
+  "contracted": 76,
   "pending_retrofit": 48,
   "failing": 48,
   "unverified_fields_total": 33,
@@ -668,6 +668,16 @@
         "no `evidence_contract` block: power/leakage/harness/mechanism_enabled/corpus/instrument_verification are all absent and cannot be inferred"
       ],
       "reason": "Blind directional look, not a promotion run: injection axis was flat (+0.9pp) under saturation and a short-task regime. No paired power cells, no corpus snapshot identity, no leakage block \u2014 carries no evidence_contract by design and makes no SOTA claim. Not backfilled; axis is negative and not to be scaled."
+    },
+    {
+      "artifact": "docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+      "state": "contracted",
+      "decision_keys": [
+        "power",
+        "verdict"
+      ],
+      "violations": [],
+      "unverified_fields": []
     },
     {
       "artifact": "docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
