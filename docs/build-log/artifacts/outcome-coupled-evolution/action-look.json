@@ -18,12 +18,12 @@
       "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
       "cost_usd": 1.5138099999999999,
       "pack_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "passed": false,
+      "passed": true,
       "policy": "C0",
       "prompt_bytes": 338292,
       "prompt_hash": "1afcac0eee068adc4a9d1bf2f3f0f8139b9b31c1e45940ff6e234ac6a8af9d80",
       "response_sha256": "7a9fe45b2b575fdca79147860354fada5a88d8c18ce30f252007e4825c8730de",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-2",
@@ -32,12 +32,12 @@
       "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
       "cost_usd": 1.4676045000000002,
       "pack_hash": "e57c9194149adc48fc9c8e6a0d279565b3b494b79e52200d9c66937fc391ba2e",
-      "passed": false,
+      "passed": true,
       "policy": "C1",
       "prompt_bytes": 338644,
       "prompt_hash": "bd86ec63c53f87d15590534a647db8d72ea8b80427fb41c04cba47fe3aff97c4",
       "response_sha256": "eb7a874f4a55f3607dc4543372b2190c740afc12fab91747192f33de5c031625",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-3",
@@ -46,12 +46,12 @@
       "context_hash": "b25f3b4714a0e07068c49d3b93d2ba14b6869683d8c2df398ec9f1fee9c26c26",
       "cost_usd": 1.4687145000000004,
       "pack_hash": "b5134c85c5382e9e5afe86ab518d150f70f21ec9df9cf83b5c858ec016b6e8ec",
-      "passed": false,
+      "passed": true,
       "policy": "A1",
       "prompt_bytes": 338644,
       "prompt_hash": "db2a978c1a48b4135ec1952da182121de0b66398ffa31da99f4b15084c49a01c",
       "response_sha256": "c95730b2a51423d03ddde927830751b2ab02389872301f6ad33d5f5d8533f349",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-1",
@@ -60,12 +60,12 @@
       "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
       "cost_usd": 1.2988855000000001,
       "pack_hash": "b5134c85c5382e9e5afe86ab518d150f70f21ec9df9cf83b5c858ec016b6e8ec",
-      "passed": false,
+      "passed": true,
       "policy": "A1",
       "prompt_bytes": 302729,
       "prompt_hash": "08b7b976f0b05b99ebc71beebd8a861729be60683f9ad3211d32e828baaeec29",
       "response_sha256": "5e4c2a51a7ebdbe965205f6b038993594c83c06b38f42010da5185cf97b97b34",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-2",
@@ -74,12 +74,12 @@
       "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
       "cost_usd": 1.3011025,
       "pack_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "passed": false,
+      "passed": true,
       "policy": "C0",
       "prompt_bytes": 302377,
       "prompt_hash": "24c2a48eb51df232a351b46976fd3e42e1833f934d096f666158ec70615365e5",
       "response_sha256": "458f48dda018b99a1d3ebc2fb03b98c1d83fd61b21c109b62ba4ba4460c3f441",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-3",
@@ -88,12 +88,12 @@
       "context_hash": "9d8c3c4020cac30dcfff6ab7b189b4dd2b5f405af1117862c7abb5139754a3d8",
       "cost_usd": 1.3166605,
       "pack_hash": "e57c9194149adc48fc9c8e6a0d279565b3b494b79e52200d9c66937fc391ba2e",
-      "passed": false,
+      "passed": true,
       "policy": "C1",
       "prompt_bytes": 302729,
       "prompt_hash": "8739cdfb2670aa3d63c6dbad9a3763ad8f1c9053e07e00802cc9615d6b562c4c",
       "response_sha256": "e3f920fe958b790a224ae92bad8f20e59e3346fccfc743a288c0fe1cf68d47d2",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-1",
@@ -107,7 +107,7 @@
       "prompt_bytes": 185669,
       "prompt_hash": "54d702f656c4a2940df1da77f160ae903639e73d049ec6b4099774ae9c3b2cc5",
       "response_sha256": "cd17390584b00b0fb6368317da294bcd6a44511b02b8e2a08cfa9364fd8cf190",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-2",
@@ -121,7 +121,7 @@
       "prompt_bytes": 185669,
       "prompt_hash": "d822e4d522c3d0d868dc4213f8b94cbef2a242fd716458b3610b248e103a537f",
       "response_sha256": "74ae36a583d533a0ad4391d4b79c069a341ec2b76ab9ffc080c31ba4dbdfd458",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-3",
@@ -135,7 +135,7 @@
       "prompt_bytes": 185317,
       "prompt_hash": "795b1bbe1f6ae71319ae7d1a2e760b3da89abec4aec543d54a5d01a7a018f7c2",
       "response_sha256": "d3dccef7a7a0629c4411e99f3720d65157fa4e45086f586b2324016b0bec8955",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-1",
@@ -149,7 +149,7 @@
       "prompt_bytes": 339266,
       "prompt_hash": "8dd1cfbeb45aa2b4e7d32fed1c6aedfd1432d4614d4eff0a63efd38ce07b54b7",
       "response_sha256": "8e2abbf5586dce296fb708fdbed602994acc250f3dfce7072d74221c48bb30a8",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-2",
@@ -163,7 +163,7 @@
       "prompt_bytes": 339618,
       "prompt_hash": "06183fefd4384dfd5b51b81ee10b911aa13441a6658df4573a4c9985119a58db",
       "response_sha256": "3a0af2df2080a38ab58a6979d74a327704fad15bcd4dae1966540a7a769458b4",
-      "valid": false
+      "valid": true
     },
     {
       "blind_label": "arm-3",
@@ -177,18 +177,18 @@
       "prompt_bytes": 339618,
       "prompt_hash": "778cfd00c474749dcedc6616979a40f32470e4d56afd604427100c83fa87b345",
       "response_sha256": "7492d5c0b1a36ddcbdac57b8b0c4595572908754eda45697d93211afbbd965b4",
-      "valid": false
+      "valid": true
     }
   ],
   "comparison": {
-    "control_passes": 0,
+    "control_passes": 2,
     "losses": 0,
     "net_wins": 0,
-    "treatment_passes": 0,
-    "verdict": "ACTION_LOOK_INSTRUMENT_INVALID"
+    "treatment_passes": 2,
+    "verdict": "ACTION_LOOK_FLAT"
   },
   "evidence_contract": {
-    "claim": "The settled action-look cells await pregrade correction of an over-strict exact-model metadata guard.",
+    "claim": "The fixed four-case action look ended ACTION_LOOK_FLAT with 0 A1 win(s) and 0 loss(es) versus C1.",
     "corpus": {
       "n_items": 4,
       "sha256": "2cffc359fdb3a6f3cd306e3a505e62952b7981af30806c6ffd5780b6b0b337d3",
@@ -229,20 +229,20 @@
   "fallback_model": null,
   "grades": {
     "A1": [
-      false,
-      false,
+      true,
+      true,
       false,
       false
     ],
     "C0": [
-      false,
-      false,
+      true,
+      true,
       false,
       false
     ],
     "C1": [
-      false,
-      false,
+      true,
+      true,
       false,
       false
     ]
@@ -252,8 +252,8 @@
     "identical_pack_suppression": "pass",
     "irrelevant_memory_negative_control": "pass",
     "known_violation_liveness": "pass",
-    "same_context_identity": "pass",
-    "model_pin_amendment": "pending pregrade: Claude Code reported pinned Opus generation plus its Haiku auxiliary validator; no payload grade has been read"
+    "model_pin_amendment": "pregrade: require pinned Opus generation; permit only Claude Code's reported Haiku auxiliary validator; reject any fallback model",
+    "same_context_identity": "pass"
   },
   "model": "claude-opus-5",
   "private_manifest_sha256": "2cffc359fdb3a6f3cd306e3a505e62952b7981af30806c6ffd5780b6b0b337d3",
@@ -261,6 +261,6 @@
   "runtime_gate": "closed",
   "schema_version": 1,
   "spend_usd": 15.1323885,
-  "status": "instrument_invalid_pending_regrade",
-  "verdict": "ACTION_LOOK_INSTRUMENT_INVALID"
+  "status": "complete",
+  "verdict": "ACTION_LOOK_FLAT"
 }
