@@ -48,9 +48,10 @@ transcript file ──▶ SessionSource ──▶ normalized Turn ──▶ secr
                                                                                         │
                             ┌───────────────────────────────────────────────────────────┘
                             ▼
-        outcome-gated promotion (reflect-join): captured ──▶ candidate ──▶ active
-        iff a distinct later same-scope task recorded accepted_without_violation
-        with this unit in context (task_memory_event, attribution=deterministic_scorer)
+        outcome-gated promotion (STAGE 2, on the outcome-write path):
+        captured ──▶ candidate ──▶ active iff a distinct later same-scope task
+        SERVED this unit (randomized_counterfactual lane) and recorded causal
+        helpful credit — in Stage 1 captured units are inert and never promote live
 ```
 
 ### 4.1 Components (each independently testable)
