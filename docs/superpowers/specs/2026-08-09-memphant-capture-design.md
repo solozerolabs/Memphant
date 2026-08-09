@@ -64,7 +64,34 @@ transcript file ──▶ SessionSource ──▶ normalized Turn ──▶ secr
 - **Writer.** Posts through **existing verbs**: learnings/corrections as episodes or direct units via `retain` (`RetainPayload::Unit`), corrections as `kind:preference` scoped to the repo, harness runs to `/v1/task-outcomes`. Binds `repo_slug → scope.external_ref = repo:{slug}` via `PUT /v1/context-bindings/capture:{slug}` (idempotent under advisory lock), caching the five resolved IDs.
 - **Outcome-gated promoter (Stage 2 — see eng-review Finding 1).** A `state='captured'` unit becomes `candidate`→`active` only when the ledger records a distinct later same-scope task with the unit **exposed and** causally credited. **This requires serving the candidate**, because credit needs prior exposure: `helpful`/`harmful` events demand causal attribution (`explicit_user`/`deterministic_scorer`/`randomized_counterfactual`) and a `shown_unit_ids` exposure — an inert unit can never be shown, so it can never promote. Therefore live promotion rides the **`randomized_counterfactual` serving lane** and moves to **Stage 2**, behind Phase A. The join fires on the **outcome-write path** (`record_task_outcome`/`record_task_memory_events` scanning for captured units in that scope), not the capture-time reflect (eng-review Finding 2). **In Stage 1 captured units stay genuinely inert** — not projected, not injected, not served — and the gate is proven only offline (§10).
 
-### 4.2 Idempotency (three existing layers, all used)
+### 4.2 Ingestion correctness — substrates, backfill, and identity (owner re-review 2026-08-09)
+
+This section resolves an ambiguity in earlier drafts: capture posts **the full masked session as episodes**, not just nominated candidates. The nominators are an *additional* precision path on top, not a filter in front. Substrate updates then flow through the machinery that already exists — capture adds transport, never a second compiler (DRY).
+
+**Substrate-by-substrate (what updates, and by what machinery):**
+
+| Substrate | Updated by | Capture's job |
+|---|---|---|
+| **Episodic** | Existing reflect compile: raw episode → episodic unit + contextual chunks + local embeddings (`service.rs:5901-5913`; C1 slice proven on real prod data) | POST each masked session turn-window as an episode via `retain` with correct `observed_at` |
+| **Semantic / facts** | The two core nominators (cross-repo/toolchain learnings → `semantic`, `state='captured'`) — the server fact miner stays flag-off; repo-recoverable facts deliberately NOT minted (grep's turf) | Nominate, never decide |
+| **Preference** | Corrections nominator → `kind='preference'`, `state='captured'`, repo scope | Nominate, never decide |
+| **Bitemporal** | Existing valid-time/transaction-time machinery — stores never consult wall time (`lib.rs:1141`); supersession via the existing `correct` flow with `valid_from`/`valid_to` | Pass true event time (below); never fabricate validity |
+| **Procedural / belief** | Existing reflect/write-router arms only, when the compiled unit warrants it | Nothing new — capture invents no extractor for these |
+| **Resources** | Out of capture's scope (file_plane/`retain` resource path already covers docs) | Nothing |
+
+**First run on an existing repo (backfill).** Default = **backfill from file start**, because retroactive capture is the differentiation (hooks can't do it). Rules:
+- **Event time is the transcript's time, never ingest time**: `observed_at` = the JSONL line's `timestamp` (required field on `RetainEpisodeHttpRequest`). A two-month-old session must rank as two months old in the recency channel and sit correctly on the valid-time axis; stamping backfill as "now" would corrupt every temporal signal at once. Transaction time = ingest time, automatically — that's the bitemporal split doing its job.
+- **Deterministic order**: files sorted (path, first-timestamp), lines in file order — re-running a backfill is byte-identical (the R0 re-ingest ordering lesson).
+- **Bounded + resumable**: per-pass byte budget, cursors persist per file; a 4,105-transcript machine backfills across runs, not in one gulp. `MEMPHANT_CAPTURE_BACKFILL=0` opts a source into start-at-EOF (khive's toggle) for users who only want go-forward capture.
+
+**Repo/user/harness identity (per-repo, per-user binding):**
+- `subject` = the human user; `scope` = the repo (`external_ref = repo:{slug}`); `agent_node` = the harness (`claude-code`, `codex`, `pi`, `opencode`) — the spine's three axes map exactly, no new concepts.
+- **Worktree normalization**: slug derived from the transcript's `cwd`/project dir must collapse `<repo>--claude-worktrees-<name>` (and `.claude/worktrees/*` paths) to the canonical repo slug. This machine has **129** worktree/scratchpad transcript dirs today; without normalization each would mint a bogus scope and per-repo preferences would fragment.
+- **Exclusions (fail-closed)**: transcripts under scratchpad/tmp paths (`/private/tmp/claude-*`, bench arms) are never ingested — eval-harness transcripts entering memory is contamination (dataset-integrity discipline). An unresolvable `cwd` skips the file with a counted warning, never a guessed scope.
+
+**Ongoing use (live conversations).** Incremental tail per session file from the cursor; only complete lines. Claude Code's `parentUuid` forms a **DAG** — sidechain/subagent turns are parsed but marked (`is_sidechain`), and nominators run only on mainline user turns (a subagent's internal dialogue is not a user correction). The Stop-hook lag rule applies: trigger on `SessionEnd` or delayed, since the JSONL is written asynchronously. Every layer is idempotent (§4.3), so hook + cron + manual runs can overlap safely.
+
+### 4.3 Idempotency (three existing layers, all used)
 
 1. **Primary — deterministic `Idempotency-Key` = `{source}:{file}:{offset}:{sha256}`** → mutation-ledger replay (never a duplicate write on re-run/`--watch` rescan). Mirrors `file_plane`'s `file-sync:{plan_sha256}:{uuid}`.
 2. **Backstop — episode `dedup_key`** (content SHA, `ON CONFLICT … DO UPDATE` bumping `observation_count`): identical transcript content collapses to one unit regardless of cursor drift.
@@ -72,7 +99,7 @@ transcript file ──▶ SessionSource ──▶ normalized Turn ──▶ secr
 
 A lost or double-advanced cursor therefore **cannot** create duplicates — so the cursor is a local file, not a DB table.
 
-### 4.3 Trust / tenancy
+### 4.4 Trust / tenancy
 
 The served path runs as superuser → **RLS is bypassed**, so tenant/scope binding is enforced **in app code** via the existing `context_binding` handshake (never trust a client `tenant_id`). Capture inherits this pattern unchanged. Committed artifacts carry **hashes/counts/offsets only — never transcript bodies** (flow-doc rule). Subject-erasure cascades already cover the target tables.
 
@@ -95,6 +122,7 @@ The served path runs as superuser → **RLS is bypassed**, so tenant/scope bindi
 - **Per-adapter** (mirror `fact_tests` table style): `parses_canonical_transcript_into_normalized_turns` (committed fixture under `tests/fixtures/capture/`), `rejects_unknown_shape_fails_closed`, `role_attribution_excludes_assistant_turns`, `byte_offsets_relocate_verbatim`.
 - **Cursor idempotency** as a `memphant-store-testkit` scenario run on **both** stores (`pg_contract_test!`) — the store-divergence trap: the "have I seen this?" check must be an **unbounded key lookup**, never a bounded recall read. Plus the append test (grow by K bytes → ingest only the K-byte tail) and the rogrep `parse(full)==parse(prefix)+resume(tail)` property.
 - **Secret-mask** parity test vs `github_lane_secrets.py`; `masked_output_never_contains_the_raw_secret`; the `postgres:postgres@localhost` CI-placeholder exclusion.
+- **Ingestion correctness (§4.2):** `backfilled_episode_carries_transcript_time_not_ingest_time` (observed_at = line timestamp; recency channel ranks it old); `backfill_is_deterministic_across_reruns` (sorted files, byte-identical); `worktree_slug_normalizes_to_canonical_repo_scope`; `scratchpad_and_tmp_transcripts_are_never_ingested` (fail-closed, counted skip); `sidechain_turns_are_marked_and_excluded_from_nomination`.
 - **Corrections-precision gate** = an `evidence_contract`-carrying, **registered** artifact: labeled turn corpus (`.jsonl` + `.lock.json` sha, `gate_mine_goldens.py` discipline), precision floor with a Wilson lower bound, McNemar power via `instrument_power.py`. Non-vacuity by **perturbation** (remove the outcome edge → the promotion must flip), per the golden-nonvacuity rule.
 - **Full gate** before "done": `check_spec_drift` (spec mirrored to Syndai), `instrument_power --check`, `check_evidence_contract`, `cargo fmt/clippy/test --workspace/--doc`, the scratch-DB `--ignored` tier.
 
