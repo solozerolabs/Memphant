@@ -30,6 +30,7 @@ If that gate opens, add only the approved append-only, tenant-bound `memphant.ta
 6. Only if isolated replay opens the runtime gate, implement the two records, two POST endpoints, crash-safe local JSONL spool, and silent-shadow policy computation with tenant/privacy/idempotency tests. Do not implement inversion, deletion, veto, semantic ingestion, or repo serving.
 7. Add evidence contracts to every decisional artifact before reading results. Update STATUS only with its named passing proof. Run the full repository gate from AGENTS.md before claiming the workstream complete.
 8. After the ordering-only screen is flat, preregister one admission follow-up. Reuse the four settled `C1` cells by checksum, dispatch only four `A4` relevant-lesson cells, and reserve at most `$10` of the unspent action-look budget. Advance only at 3/4, at least one net win, and zero losses. Do not reinterpret an unexposed historical memory as harmful causal evidence.
+9. Because the admission screen began before its rules could act, run one final mechanism-sensitive isolated replay from a pre-action boundary. Prove repo-file and MemPhant-projection delivery parity without a model call, then compare `C0` against the projected single-lesson pack on two whole scratch-repo tasks. Grade filesystem state, deterministic validators, and the complete tool sequence. Reserve at most `$20`; expand no further unless the treatment has a net win and zero losses. This is an experiment adapter over the existing canonical projection, not production hook or outcome-schema work.
 
 ## Harness
 
@@ -73,6 +74,16 @@ VERDICT: CLEAR. The follow-up tests admission rather than repacking, reuses bank
 ### Admission follow-up result
 
 `A4` again tied `C1` at 2/4 with zero wins and zero losses, spending `$5.0316035` (`$20.163992` cumulative). Post-result payload inspection found that the two failing replay points were not opportunities for the lesson to act: staging was preceded by a sensible repository inspection, and the scoped-gate replay began after the full gate was already running. The process verdict remains flat and runtime remains closed, but the mechanism conclusion is `UNRESOLVED_INSTRUMENT_NOT_SENSITIVE`, not rejected. No further model call is allowed under this follow-up; a future test must grade a short action sequence or an actual isolated task from a pre-action boundary.
+
+## Isolated replay addendum review (2026-08-08)
+
+- Reuse boundary: canonical projection units, causal attribution rules, budget ledger, pinned-model validation, and private response checksums remain authoritative. No runtime table, hook installer, retrieval service, or second store is added.
+- Delivery test: the repo-file and projected lesson bodies must hash identically before dispatch. Since identical context cannot identify a storage effect, only `C0` and projected treatment receive model calls.
+- Task test: two fresh scratch Git repositories begin from recorded clean commits. One grades explicit staging while preserving a preexisting dirty decoy; one grades scoped verification from before any test command. Both require the requested end state and deterministic validator success.
+- Instrument: stream the full Claude tool sequence, capture before/after tree and index hashes, and reject fallback models, repeated dispatches, missing exposures, raw-content leakage, or a task boundary that starts after the relevant action.
+- Stop rule: reserve at most four cells and `$20`. Flat or harmful results close the runtime gate; positive net wins with zero losses may open only the production-hook design gate.
+
+VERDICT: CLEAR. This is the minimum test capable of observing the lesson at an actionable boundary; identical delivery is checked for free and paid work remains two paired tasks.
 
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
