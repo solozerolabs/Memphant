@@ -50,6 +50,12 @@ benchmarks/data/coding_events_corpus.jsonl
 benchmarks/data/coding_events_corpus.stats.json
 benchmarks/data/coding_events_golden.jsonl
 !benchmarks/data/coding_events_golden.lock.json
+# Capture-gate Stage 1a census (Task B1): the raw JSONL carries real Syndai
+# dev-DB transcript text (turn bodies) and must never be committed. Only the
+# derived stats sidecar (counts only, zero text) is.
+benchmarks/data/capture_census.jsonl
+benchmarks/data/capture_census_labels.jsonl
+!benchmarks/data/capture_census.stats.json
 # Track U (user-learning bank) derives from the owner's PERSONAL agent memory.
 # Bodies and the authored probe layer (which paraphrases them) are never
 # committed — only the lock. Binding rules:

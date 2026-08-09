@@ -1,0 +1,11 @@
+{
+  "attempts": 317,
+  "corpus_bytes": 182135,
+  "corpus_sha256": "6d23fa628dd070eab9c7286f81a4b55913bf4692b73c5784670b1a9a625d4ce1",
+  "outcome_not_passed": 208,
+  "outcome_passed": 109,
+  "source": "syndai.coding_execution_attempt_events join syndai.coding_runs (read-only SELECT)",
+  "user_turns": 4,
+  "with_outcome": 317,
+  "with_scope": 317
+}
