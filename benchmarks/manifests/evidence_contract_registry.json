@@ -58,6 +58,7 @@
     "docs/build-log/artifacts/null-review-ledger.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/admission-look.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/free-gate.json",
     "docs/build-log/artifacts/p1-c2-killgate/killgate-b/verdict-b.json",
     "docs/build-log/artifacts/r6-docs-decision/packet.json",

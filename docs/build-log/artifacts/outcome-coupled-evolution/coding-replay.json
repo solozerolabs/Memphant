@@ -1,0 +1,110 @@
+{
+  "budget": {
+    "max_cell_usd": 5,
+    "new_reserve_usd": 20,
+    "phase_cap_usd": 70,
+    "prior_spend_usd": 20.163992,
+    "reserved_cells": 4
+  },
+  "cells": [
+    {
+      "base_commit": "21e692c369ae0fe0ac787bcfa205a2ca684f6916",
+      "before_index": "7d43cd430c70a4f0f734ce6261cb0d8941ce36fa",
+      "case_id": "explicit-staging",
+      "cell_id": "explicit-staging-arm-1",
+      "context_sha256": "9fae7da10010d0e8dabe6b774c26c7613c6d6cb30c339e6f0d3b017c7dcf1081",
+      "policy": "M1",
+      "prompt_sha256": "c65b15d0da4e60605d639a1cc32a29dddc8dd6fef895cfd4273f3d0d4bb7cfe6",
+      "unit_body_sha256": "2e607c927251727f1abfc2e1de2e65b627b4321d5420e3a890eeac92b365da80",
+      "unit_id": "explicit-staging"
+    },
+    {
+      "base_commit": "21e692c369ae0fe0ac787bcfa205a2ca684f6916",
+      "before_index": "7d43cd430c70a4f0f734ce6261cb0d8941ce36fa",
+      "case_id": "explicit-staging",
+      "cell_id": "explicit-staging-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "policy": "C0",
+      "prompt_sha256": "c65b15d0da4e60605d639a1cc32a29dddc8dd6fef895cfd4273f3d0d4bb7cfe6",
+      "unit_body_sha256": null,
+      "unit_id": null
+    },
+    {
+      "base_commit": "41667b7896c5db793045c54b19e0d1ca394ee985",
+      "before_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
+      "case_id": "scoped-gate",
+      "cell_id": "scoped-gate-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "policy": "M1",
+      "prompt_sha256": "e0cb0ec4b37c6f7ba3974367ec78efcb563415c669b8c00c718283b6d3865a20",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b",
+      "unit_id": "full-local-gate"
+    },
+    {
+      "base_commit": "41667b7896c5db793045c54b19e0d1ca394ee985",
+      "before_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
+      "case_id": "scoped-gate",
+      "cell_id": "scoped-gate-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "policy": "C0",
+      "prompt_sha256": "e0cb0ec4b37c6f7ba3974367ec78efcb563415c669b8c00c718283b6d3865a20",
+      "unit_body_sha256": null,
+      "unit_id": null
+    }
+  ],
+  "evidence_contract": {
+    "claim": "The two-case isolated coding replay was preregistered before any model result was read.",
+    "corpus": {
+      "n_items": 2,
+      "sha256": "c68b7397e685ed98922a9b2e6959d285fa5b1bc23a7e80e5f1a34d16573e39de",
+      "snapshot_id": "private-outcome-coding-replay-2026-08-08"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 20,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-coding-replay",
+      "embed_model": "none",
+      "flags": [
+        "paired",
+        "whole-task",
+        "pre-action-boundary",
+        "safe-mode",
+        "no-fallback",
+        "private-stream-json"
+      ],
+      "k": 1,
+      "scorer": "deterministic scratch-repository validator and rule predicate"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "M1 receives one deterministic-triggered canonical projection body with explicit-user validation; C0 receives none.",
+    "notes": "Mechanism screen only. Private task and model bodies remain outside Git.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; two-case mechanism screen",
+      "mde_at_80": null,
+      "n": 2,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "fallback_model": null,
+  "instrument": {
+    "dirty_file_baseline": "pass",
+    "one_shot_dispatch": "pass",
+    "pre_action_boundaries": "pass",
+    "raw_content_public": "absent",
+    "repo_projection_delivery_parity": "pass"
+  },
+  "model": "claude-opus-5",
+  "private_manifest_sha256": "c68b7397e685ed98922a9b2e6959d285fa5b1bc23a7e80e5f1a34d16573e39de",
+  "result_read": false,
+  "runtime_gate": "closed",
+  "schema_version": 1,
+  "status": "preregistered",
+  "verdict": "PENDING"
+}
