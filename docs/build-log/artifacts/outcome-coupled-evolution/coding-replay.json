@@ -8,52 +8,100 @@
   },
   "cells": [
     {
+      "after_index": "d7e63803a11a78e9e09a62f9ccd323e9324d9771",
       "base_commit": "21e692c369ae0fe0ac787bcfa205a2ca684f6916",
       "before_index": "7d43cd430c70a4f0f734ce6261cb0d8941ce36fa",
       "case_id": "explicit-staging",
       "cell_id": "explicit-staging-arm-1",
       "context_sha256": "9fae7da10010d0e8dabe6b774c26c7613c6d6cb30c339e6f0d3b017c7dcf1081",
+      "cost_usd": 0.08579400000000001,
+      "new_dirty_count": 1,
+      "passed": true,
       "policy": "M1",
       "prompt_sha256": "c65b15d0da4e60605d639a1cc32a29dddc8dd6fef895cfd4273f3d0d4bb7cfe6",
+      "requested_end_state_pass": true,
+      "response_sha256": "9e0afd9b0b5a93e974464cde5fed84a0620d6cfe666ccbef465525354bed5612",
+      "rule_violation": false,
+      "tool_count": 3,
       "unit_body_sha256": "2e607c927251727f1abfc2e1de2e65b627b4321d5420e3a890eeac92b365da80",
-      "unit_id": "explicit-staging"
+      "unit_id": "explicit-staging",
+      "valid": true,
+      "validator_pass": true
     },
     {
+      "after_index": "d7e63803a11a78e9e09a62f9ccd323e9324d9771",
       "base_commit": "21e692c369ae0fe0ac787bcfa205a2ca684f6916",
       "before_index": "7d43cd430c70a4f0f734ce6261cb0d8941ce36fa",
       "case_id": "explicit-staging",
       "cell_id": "explicit-staging-arm-2",
       "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cost_usd": 0.07765200000000001,
+      "new_dirty_count": 1,
+      "passed": true,
       "policy": "C0",
       "prompt_sha256": "c65b15d0da4e60605d639a1cc32a29dddc8dd6fef895cfd4273f3d0d4bb7cfe6",
+      "requested_end_state_pass": true,
+      "response_sha256": "8924489066a0b9005ebf926b859b7f0549f68f89b0038a15bd4fcc30becab394",
+      "rule_violation": false,
+      "tool_count": 2,
       "unit_body_sha256": null,
-      "unit_id": null
+      "unit_id": null,
+      "valid": true,
+      "validator_pass": true
     },
     {
+      "after_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
       "base_commit": "41667b7896c5db793045c54b19e0d1ca394ee985",
       "before_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
       "case_id": "scoped-gate",
       "cell_id": "scoped-gate-arm-1",
       "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "cost_usd": 0.07258,
+      "new_dirty_count": 1,
+      "passed": true,
       "policy": "M1",
       "prompt_sha256": "e0cb0ec4b37c6f7ba3974367ec78efcb563415c669b8c00c718283b6d3865a20",
+      "requested_end_state_pass": true,
+      "response_sha256": "e5e28d03d198a3a88833d58181ca0638d1b63256a2392a8e9d030dbbc255fbfd",
+      "rule_violation": false,
+      "tool_count": 6,
       "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b",
-      "unit_id": "full-local-gate"
+      "unit_id": "full-local-gate",
+      "valid": true,
+      "validator_pass": true
     },
     {
+      "after_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
       "base_commit": "41667b7896c5db793045c54b19e0d1ca394ee985",
       "before_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
       "case_id": "scoped-gate",
       "cell_id": "scoped-gate-arm-2",
       "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cost_usd": 0.0708365,
+      "new_dirty_count": 1,
+      "passed": false,
       "policy": "C0",
       "prompt_sha256": "e0cb0ec4b37c6f7ba3974367ec78efcb563415c669b8c00c718283b6d3865a20",
+      "requested_end_state_pass": true,
+      "response_sha256": "0ca6f9dcba253640b51563997dab2b95b1893be5ab57c57215adfa9b6a57c3c2",
+      "rule_violation": true,
+      "tool_count": 4,
       "unit_body_sha256": null,
-      "unit_id": null
+      "unit_id": null,
+      "valid": true,
+      "validator_pass": true
     }
   ],
+  "comparison": {
+    "control_passes": 1,
+    "losses": 0,
+    "net_wins": 1,
+    "treatment_passes": 2,
+    "verdict": "CODING_REPLAY_EXPAND"
+  },
+  "cumulative_spend_usd": 20.4708545,
   "evidence_contract": {
-    "claim": "The two-case isolated coding replay was preregistered before any model result was read.",
+    "claim": "The initial two-case whole-task replay ended CODING_REPLAY_EXPAND with 1 M1 win(s) and 0 loss(es) versus C0.",
     "corpus": {
       "n_items": 2,
       "sha256": "c68b7397e685ed98922a9b2e6959d285fa5b1bc23a7e80e5f1a34d16573e39de",
@@ -79,12 +127,12 @@
     "mechanism_evidence": "M1 receives one deterministic-triggered canonical projection body with explicit-user validation; C0 receives none.",
     "notes": "Mechanism screen only. Private task and model bodies remain outside Git.",
     "power": {
-      "b": 0,
+      "b": 1,
       "c": 0,
       "computed_by": "not applicable; two-case mechanism screen",
       "mde_at_80": null,
       "n": 2,
-      "n_d": 0,
+      "n_d": 1,
       "psi_observed": null,
       "source": "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
       "test": "descriptive-only (no test)"
@@ -93,6 +141,16 @@
     "schema_version": 1
   },
   "fallback_model": null,
+  "grades": {
+    "C0": [
+      true,
+      false
+    ],
+    "M1": [
+      true,
+      true
+    ]
+  },
   "instrument": {
     "dirty_file_baseline": "pass",
     "one_shot_dispatch": "pass",
@@ -101,10 +159,11 @@
     "repo_projection_delivery_parity": "pass"
   },
   "model": "claude-opus-5",
+  "new_spend_usd": 0.30686250000000004,
   "private_manifest_sha256": "c68b7397e685ed98922a9b2e6959d285fa5b1bc23a7e80e5f1a34d16573e39de",
-  "result_read": false,
-  "runtime_gate": "closed",
+  "result_read": true,
+  "runtime_gate": "expansion_open",
   "schema_version": 1,
-  "status": "preregistered",
-  "verdict": "PENDING"
+  "status": "complete",
+  "verdict": "CODING_REPLAY_EXPAND"
 }

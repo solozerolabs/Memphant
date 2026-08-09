@@ -85,6 +85,10 @@ VERDICT: CLEAR. The follow-up tests admission rather than repacking, reuses bank
 
 VERDICT: CLEAR. This is the minimum test capable of observing the lesson at an actionable boundary; identical delivery is checked for free and paid work remains two paired tasks.
 
+### Initial isolated replay result
+
+The projected lesson arm passed 2/2 whole tasks versus 1/2 for no learned lesson, with one net win, zero losses, and `$0.3068625` new spend (`$20.4708545` cumulative). Both arms completed and validated both requested edits. The difference was the scoped-gate predicate: the no-memory arm ran both the focused test and the full repository gate, while the MemPhant arm ran only the focused test. Explicit staging was already correct in both arms. The preregistered verdict is `CODING_REPLAY_EXPAND`; the production runtime gate remains closed pending two fresh task variants.
+
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
 - The first consumer is the benchmark operator, so a single command must produce a machine-readable reason for every skipped arm and never require reading private transcript bodies in committed output.
