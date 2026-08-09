@@ -39,29 +39,32 @@ Three findings from the research reshaped the naive "tail four transcripts, extr
 
 `memphant capture` is a new CLI module (`crates/memphant-cli/src/capture.rs`), dispatched from the existing hand-rolled `main.rs` arm (`main.rs:35`), sitting beside `http_verbs`/`file_plane` as a *transcript-parse + HTTP-client* layer. **No server route, no migration.**
 
+**Mask at the edge, nominate at the center** (review-2 Finding 1). The client is thin — tail/hook + mask + post masked episodes. Nomination and promotion are **server-side** (the worker compile already hosts `extract_fact_candidates`, `service.rs:5923`), so all three transports share one nominator impl and Syndai (Python) never reimplements it. Only masking is per-transport, because secrets must die before they reach MemPhant.
+
 ```
-transcript file ──▶ SessionSource ──▶ normalized Turn ──▶ secret-mask ──▶ nominator ──┐
- (CC JSONL)          (adapter)         (role,body,span)    (over-mask)     (precision)  │
-                                                                                        ▼
-                                        cursor state file  ◀── 3-layer idempotency  POST existing verbs
-                                    (MEMPHANT_CAPTURE_STATE_DIR)                    /v1/episodes (retain)
-                                                                                   /v1/… kind:preference
-                                                                                   /v1/task-outcomes
-                                                                                        │
-                            ┌───────────────────────────────────────────────────────────┘
-                            ▼
-        outcome-gated promotion (STAGE 2, on the outcome-write path):
-        candidate (inert) ──▶ active iff a distinct later same-scope task
-        SERVED this unit (randomized_counterfactual lane) and recorded causal
-        helpful credit — in Stage 1 candidates are inert and never promote live
+ EDGE (per-transport, masks locally)                    CENTER (server, one impl)
+ ───────────────────────────────────                   ─────────────────────────
+ local CLI:    tail  → mask(rust) → POST /v1/episodes ┐
+ Syndai chat:  hook  → mask(py)   → POST /v1/episodes ┼──▶ reflect compile:
+ Syndai run:   seam  → mask(py)   → POST /v1/episodes ┘      episodic unit (always)
+                        ▲                                  + NOMINATE → candidate
+              rust↔py parity test                            preference/semantic (inert)
+              is the DRY guard                                        │
+                                                                      ▼
+                                    outcome-gated promotion (STAGE 2, outcome-write path):
+                                    candidate (inert) ──▶ active iff a distinct later
+                                    same-scope task SERVED this unit (randomized_counterfactual
+                                    lane) + recorded causal helpful credit. Stage 1: inert only.
 ```
+
+3-layer idempotency (§4.3) still applies at every POST; cursor state stays a local file per transport.
 
 ### 4.1 Components (each independently testable)
 
 - **`SessionSource` trait** → yields normalized `Turn { session_id, role, body, byte_span, ts }` plus a per-session **`SessionBinding`** (`subject_ref, actor_ref+kind, scope_ref+kind+parent_ref, agent_node_ref, access_policies`). `cwd`/`git_branch` live on the binding, **not** on `Turn` — that struct *is* the entire domain seam: coding → `scope_kind="repo"`, chat → `scope_kind="project"`, docs → the owning scope; nothing else in the pipeline branches on domain (§14.1). Stage-1 impl: `ClaudeCodeSource` (JSONL, `~/.claude/projects/<enc>/<uuid>.jsonl`). The normalized schema is **MemPhant's own**; OTel `gen_ai.*`/`session.*` names are a *one-way export mapping only* (OTel GenAI is Development-status, mid-rename, forked with OpenInference — do not adopt on disk).
 - **Cursor + resume.** Byte-offset per `(file_id, path)` persisted to a git-ignored `MEMPHANT_CAPTURE_STATE_DIR` file (default `~/.memphant/capture/`). Rotation-safe via the `file-id` crate `(file_id, offset)` pair (atomic-replace/rotation detection). Read only complete lines; a partial trailing line is buffered, cursor advances to the byte after the last `\n`. **Contract (property-tested, borrowed from rogrep):** `parse(full) == parse(prefix) + resume(tail)`.
 - **Secret mask** — lives in **`memphant-cli`** (correction to eng-review Finding 4: `regex` is *not* an existing dep anywhere in core/cli — it reaches the tree only via `tokenizers` in `memphant-runtime`, and core's fact miner explicitly refuses regex, `service.rs:6691`). So: **one new `regex` dep in the CLI only**, core stays regex-free, and the vendored **gitleaks MIT TOML ruleset** is the pattern source (still not `kingfisher`/Hyperscan — x86 SIMD fights "run anywhere"). Rust, no network, **over-mask bias** (a missed secret is an incident; an over-mask is free — the accuracy call for secrets: recall over precision). Entropy as a high-threshold gated secondary. **Parity test against `scripts/github_lane_secrets.py`** so the Rust and Python packs cannot drift. Masking is irreversible (typed placeholders), applied to **tool-output turns too**, not just user turns.
-- **Nominators (two, precision-first, deterministic).** **Live in `memphant-core` as pure functions; the CLI calls them** (eng-review Finding 3 — one extractor, not a CLI copy that drifts from the core `extract_fact_candidates`; testable offline beside `fact_tests`). Reuse core helpers `split_sentences`, `derive_fact_key`, `clean_object`, and **`contains_composition_risk` verbatim** (rejects "ignore policy"/"force push"/"rm -rf"). Do *not* bend the existing personal-preference `PREF_VERBS` miner — wrong grammar.
+- **Nominators (two, precision-first, deterministic).** **Live in `memphant-core`, run server-side in the worker compile beside `extract_fact_candidates`** (review-2 Finding 1 — NOT in the CLI: three transports feed episodes and a Python reimplementation in Syndai would drift; server-side = one impl for all sources, and Syndai chats get nomination for free since they already POST `/v1/episodes`). Testable offline beside `fact_tests`. Reuse core helpers `split_sentences`, `derive_fact_key`, `clean_object`, and **`contains_composition_risk` verbatim** (rejects "ignore policy"/"force push"/"rm -rf"). Do *not* bend the existing personal-preference `PREF_VERBS` miner — wrong grammar. Gated by a capture-nomination flag on the reflect path (the `fact_extraction_enabled` seam), enabled for capture-sourced episodes.
   - *Corrections nominator*: prohibition/imperative patterns ("don't", "never", "stop", "use X not Y", "revert") **plus the highest-yield structural signal — an instruction re-issued after the agent did something else** (n-gram recurrence across turns). Emits `kind:preference` candidates.
   - *Learnings nominator*: durable cross-repo/toolchain facts only (grep can't reach a sibling repo). Emits `semantic` candidates. Repo-recoverable facts are deliberately **not** minted.
 - **Writer.** Posts through **existing verbs**: learnings/corrections as episodes or direct units via `retain` (`RetainPayload::Unit`), corrections as `kind:preference` scoped to the repo, harness runs to `/v1/task-outcomes`. Episode bodies are the turn-aware join `"\n".join("{role}: {text}")` — the compiler's chunker windows on exactly that shape (`segment_episode_body`, `service.rs:6340`); role→`source_kind` uses the measured `EVENT_SOURCE_KINDS` map verbatim (`user→user`, `assistant→agent`, `toolResult→tool` — `scripts/code_lane_run_memphant.py:629`). Binding rules are **load-bearing** (§14.4): repo scope is created **with `parent_external_ref` = the user-root scope from day one** (parents are immutable after creation — `store.rs:5296`); agent_node refs are **scope-namespaced** (`claude-code@repo:{slug}` — `external_ref` is unique per subject and scope-pinned, so a bare `claude-code` hard-conflicts on the second repo, `store.rs:5353`); harness agent_nodes are **L0** (no parent — L1+ agents cannot own semantic/belief/preference, `types:301-307`, so a mis-leveled agent writes invisible units); **per-role actors** carry trust (trust is never caller-supplied — the server clamps from `actor.kind`: user→TrustedUser, tool→UnverifiedTool, `types:309-317`); and the binding carries `access_policies` (`Inherit{user-root, semantic}` for cross-repo toolchain facts; `Grant` for preference — Inherit cannot carry preference, `store.rs:1322-1333`). The CLI needs **new client code** for `PUT /v1/context-bindings` and `/v1/task-outcomes` (today's dispatch has neither), and binding requires a **tenant service key** — acceptable for dogfood; OSS installs get a documented choice (pre-provisioned binding vs scoped key) before Stage 2.
@@ -102,9 +105,13 @@ This section resolves an ambiguity in earlier drafts: capture posts **the full m
 
 A lost or double-advanced cursor therefore **cannot** create duplicates — so the cursor is a local file, not a DB table.
 
-### 4.4 Trust / tenancy
+### 4.4 Trust / tenancy / binding auth
 
 The served path runs as superuser → **RLS is bypassed**, so tenant/scope binding is enforced **in app code** via the existing `context_binding` handshake (never trust a client `tenant_id`). Capture inherits this pattern unchanged. Committed artifacts carry **hashes/counts/offsets only — never transcript bodies** (flow-doc rule). Subject-erasure cascades already cover the target tables.
+
+**Binding auth (review-2 Finding 4, owner decision 2026-08-09 — pre-provisioned):** context-binding requires a tenant service key (`require_tenant_service_key`). That key **never ships to a capture install.** Instead: the user creates the binding once via an authenticated server-side flow (login/CLI-auth), and the capture CLI receives a **narrow, non-binding scoped key** that can only `retain` to its already-resolved context. No laptop holds a tenant-wide key. Dogfood (single trusted operator) may use the service key directly; the scoped-key flow is required before any public/OSS release.
+
+**Binding self-verification (review-2 Finding 2 — fail loud, never silent):** the six binding rules in §14.4 all fail *silently* (invisible writes, foreclosed inheritance). After the handshake, capture MUST `verify_binding()` — assert the resolved agent is **L0**, assert the scope carries the expected **parent**, assert the **Inherit/Grant policy rows** applied — and **refuse to write** on any mismatch. A silent invisible-write on a memory product is worse than a crash. One guard, one test that a mis-leveled bind is rejected.
 
 ## 5. Triggers (over the one-shot engine)
 
@@ -131,17 +138,19 @@ The served path runs as superuser → **RLS is bypassed**, so tenant/scope bindi
 
 ## 8. Staged delivery
 
+**Stage 0-pre — apply migration 010 to the target DB (review-2 Finding 3).** `task_outcome`/`task_memory_event` exist only in the repo; Finn's `schema_migrations` tops out at `009`. Nothing in Stage 0/2 works until 010 is applied — and applying to the shared co-tenant Finn is its own careful step (scope to `memphant.*`, off-peak, verified). This is the true first task.
+
 **Stage 0 — harness → ledger wire (days).** `memphant capture outcome`: Syndai/Pi/OpenCode harnesses POST run outcome + exposure to the existing `/v1/task-outcomes`. No parser, no daemon, no masking. The one indisputably-live consumer; ~90% present on this branch already.
 
-**Stage 1a — corpus-census entry gate ($0, before any Rust; eng-review Finding 5).** Census the frozen Track-U / Claude corpus for `correction → distinct-later-same-scope-task` chains. If ~0 exist, outcome-gating is `UNTESTABLE` and Stage 1 does not proceed — the cheapest possible kill, *before* the build, not after.
+**Stage 1a — corpus census + offline validation, one harness two modes (eng-review Finding 5 + review-2 Finding 6, $0, before any Rust).** Mode 1 (census): does the frozen Track-U / Claude corpus contain `correction → distinct-later-same-scope-task` chains at all? ~0 → outcome-gating is `UNTESTABLE`, stop here (cheapest kill). Mode 2 (validation): if chains exist, does outcome-gated minting beat blind minting on precision (§10)? Same script, two flags — not two builds.
 
 **Stage 1b — Claude Code capture as an inert nominator (~1–2 wks, only if 1a passes).** The engine (§4): CC adapter, cursor+resume, gitleaks-rules secret-mask (in the CLI), two deterministic nominators **in core**, writes as `UnitState::Candidate` (**genuinely inert — not served**). Ships the **$0 offline validation** of the gate (§10) on the served-lesson corpus arms. Optional Stop-hook + `--watch`. **No live promotion here** (Finding 1 — that needs serving).
 
-**Stage 1c — docs ingest-once (census-gated, after the resource write-path fix).** Context7/library docs → `RetainPayload::Resource` per repo, version-pinned (`uri` + `revision` both carry the version), recall-before-fetch in the consumer. **Blocked on** the resource-lane dedup/supersession fix (§14.3) and a usage census showing refetch volume worth saving — the C2 docs lane failed its kill-gate once already; this one earns its way in with numbers.
+**Stage 1c — docs ingest-once (census-gated, and note this is a CORE change not CLI — review-2 Finding 5).** Context7/library docs → `RetainPayload::Resource` per repo, version-pinned (`uri` + `revision` both carry the version), recall-before-fetch in the consumer. **Blocked on** the resource-lane dedup/valid-time/supersession fix (§14.3), which is a **core reflect/store change** (the `ReflectResource` arm and `supersedes_own_kind`), heavier than the rest of capture — plus a usage census showing refetch volume worth saving. The C2 docs lane failed its kill-gate once already; this one earns its way in with numbers.
 
 **Syndai chat + server-run lanes (Syndai-side work, parallel — §14.2).** Hook-push retains at the `runner_post_turn` boundary (chats) and at the `read_captured_stream` seam (server-run coding transcripts, whose sandboxes are deleted). Respects the Syndai coding-lane serving KILL (no memory injection before rung 10) — capture and outcome telemetry only.
 
-**Stage 2 — GATED on Phase A ≥ 0.40 on ≥1 non-Sid cohort (plan-of-record G2).** The `randomized_counterfactual` serving lane (so captured candidates can earn causal credit → **live** outcome-gated promotion on the outcome-write path); Codex/Pi/OpenCode adapters; corrections → **active** per-repo rules projected into the session-start injection; the review/approve dashboard. Build only if the depth signal proves positive. If Phase A is flat, the plan-of-record's own conclusion fires — adherence is "a Syndai plumbing fix, not a product" — and Stage 2 is deleted, not shrunk.
+**Stage 2 — GATED on Phase A ≥ 0.40 on ≥1 non-Sid cohort (plan-of-record G2). This is a major build, not an increment (review-2 Finding 5).** It requires *building the randomized-counterfactual serving lane* (a serving/injection experiment harness that does not exist today) so candidates can earn causal credit → **live** outcome-gated promotion on the outcome-write path; plus Codex/Pi/OpenCode adapters; corrections → **active** per-repo rules projected into session-start injection; the review/approve surface (already `GET /v1/scopes/{id}/projection`, not a new dashboard). Size it as a quarter, not a sprint. Build only if the depth signal proves positive. If Phase A is flat, the plan-of-record's own conclusion fires — adherence is "a Syndai plumbing fix, not a product" — and Stage 2 is deleted, not shrunk.
 
 ## 9. What we deliberately do NOT build (and when it unlocks)
 
@@ -254,5 +263,20 @@ Fix is write-path code (same `uri` + new `content_hash` → mark predecessor sta
 | 10 | Load-bearing | Mis-leveled agents write invisible preference/semantic units | L0 rule + policy rows at binding (§14.4) |
 | 11 | Architecture | Tri-domain decoupling | `SessionBinding` + `Lane` seam (§14.1); chats hook-push (§14.2); docs Stage 1c census-gated (§14.3) |
 | 12 | Honesty | "Zero schema/route" overclaimed | Scoped to episodes/chat/outcomes; resource-lane gaps named (§14.3, §3) |
+
+### 14.6 Review report addendum (review 2, 2026-08-09 — tri-domain + reliability)
+
+| # | Severity | Finding | Resolution |
+|---|---|---|---|
+| 1 | **Architecture/DRY (load-bearing)** | Client-side nomination forces Syndai (Python) to reimplement the Rust nominators across 3 transports | **Nomination moved server-side** (worker compile, `service.rs:5923`); mask stays per-transport at the edge (privacy), rust↔py parity test is the DRY guard. §4 diagram, §4.1 |
+| 2 | **Must-fix (reliability)** | The six §14.4 binding rules fail SILENTLY (invisible writes, foreclosed inheritance) | `verify_binding()` after handshake — assert L0 + parent + policies, refuse to write on mismatch, fail loud. §4.4 |
+| 3 | **Must-fix (sequencing)** | Stage 0 depends on migration 010, not applied to Finn (live tops at 009) | **Stage 0-pre**: apply 010 to the target DB first (careful on shared Finn). §8 |
+| 4 | Security (owner fork → resolved) | Tenant service key on OSS installs = tenant-wide blast radius on every laptop | **Pre-provisioned binding + scoped non-binding key** (owner, 2026-08-09); service key never ships to an install. §4.4 |
+| 5 | Blast-radius/honesty | Stage 2 (serving lane) and Stage 1c (resource write-path) read as increments but are major/core builds | Sized honestly: Stage 2 = a quarter (build the counterfactual serving harness); Stage 1c = a core reflect/store change. §8 |
+| 6 | Minor DRY | Stage 1a census and §10 validation are two builds | One harness, two modes (census / validation). §8 |
+
+**VERDICT (review 2):** foundation and tri-domain expansion sound. Finding 1 (server-side nomination) is the right structural call and makes every transport thinner. Findings 2-3 are must-fix and folded in; 4 resolved by owner; 5-6 folded. No new schema for episodes/chat/outcomes; the resource lane is honestly flagged as the exception.
+
+**Decisions resolved (review 2):** nomination server-side (mask at edge); OSS binding = pre-provisioned + scoped key (owner, 2026-08-09).
 
 NO UNRESOLVED DECISIONS
