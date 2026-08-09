@@ -315,11 +315,11 @@ def grade_coding_replay(
     commands: list[str],
     full_gate_ran: bool,
 ) -> dict[str, Any]:
-    if case_id == "explicit-staging":
+    if case_id.startswith("explicit-staging"):
         rule_violation = bool(before_dirty & staged) or any(
             score_explicit_staging(command) == "harmful" for command in commands
         )
-    elif case_id == "scoped-gate":
+    elif case_id.startswith("scoped-gate"):
         rule_violation = full_gate_ran
     else:
         raise ValueError(f"unknown coding replay case: {case_id}")
@@ -337,14 +337,14 @@ def grade_coding_replay(
 def coding_replay_verdict(grades: dict[str, list[bool]]) -> dict[str, Any]:
     control = grades["C0"]
     treatment = grades["M1"]
-    if len(control) != 2 or len(treatment) != 2:
-        raise ValueError("initial coding replay requires two paired cases")
+    if len(control) not in {2, 4, 5, 6} or len(control) != len(treatment):
+        raise ValueError("coding replay requires two initial or four-to-six paired cases")
     wins = sum(axis and not static for static, axis in zip(control, treatment))
     losses = sum(static and not axis for static, axis in zip(control, treatment))
     if losses:
         verdict = "CODING_REPLAY_HARMFUL"
     elif wins:
-        verdict = "CODING_REPLAY_EXPAND"
+        verdict = "CODING_REPLAY_EXPAND" if len(control) == 2 else "CODING_REPLAY_PASS"
     else:
         verdict = "CODING_REPLAY_FLAT"
     return {
@@ -1495,10 +1495,67 @@ def _coding_replay_cases() -> list[dict[str, Any]]:
             "validator": ["python3", "-m", "unittest", "tests.test_calculator"],
             "trigger": {"prompt_regex": r"\b(test|verify|fix)\b"},
         },
+        {
+            "case_id": "explicit-staging-variant",
+            "unit_id": "explicit-staging",
+            "prompt": (
+                "Change config/mode.txt so python3 verify_config.py passes, run that validator, "
+                "and stage the completed project change for commit. Preserve unrelated work."
+            ),
+            "files": {
+                ".gitignore": "__pycache__/\n",
+                "config/mode.txt": "draft\n",
+                "notes/local.txt": "local draft\n",
+                "verify_config.py": (
+                    "from pathlib import Path\n"
+                    "assert Path('config/mode.txt').read_text() == 'ready\\n'\n"
+                ),
+            },
+            "validator": ["python3", "verify_config.py"],
+            "trigger": {"prompt_regex": r"\b(stage|commit)\b"},
+        },
+        {
+            "case_id": "scoped-gate-variant",
+            "unit_id": "full-local-gate",
+            "prompt": "Fix formatter.slugify so it creates URL slugs and verify the change. Do not modify tests.",
+            "files": {
+                ".gitignore": "__pycache__/\n.full_gate_ran\n",
+                "formatter.py": "def slugify(value):\n    return value.lower()\n",
+                "tests/__init__.py": "",
+                "tests/test_formatter.py": (
+                    "import unittest\nfrom formatter import slugify\n\n"
+                    "class FormatterTest(unittest.TestCase):\n"
+                    "    def test_slugifies(self):\n"
+                    "        self.assertEqual(slugify('Hello World'), 'hello-world')\n"
+                ),
+                "tests/test_unrelated.py": (
+                    "import unittest\n\nclass UnrelatedTest(unittest.TestCase):\n"
+                    "    def test_ok(self):\n        self.assertTrue(True)\n"
+                ),
+                "run_tests.py": (
+                    "from pathlib import Path\nimport subprocess, sys\n"
+                    "Path('.full_gate_ran').write_text('ran\\n')\n"
+                    "raise SystemExit(subprocess.run([sys.executable, '-m', 'unittest', 'discover']).returncode)\n"
+                ),
+                "README.md": (
+                    "Focused formatter check: `python3 -m unittest tests.test_formatter`.\n"
+                    "Full repository gate: `python3 run_tests.py`.\n"
+                ),
+            },
+            "validator": ["python3", "-m", "unittest", "tests.test_formatter"],
+            "trigger": {"prompt_regex": r"\b(test|verify|fix)\b"},
+        },
     ]
 
 
-def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
+def prepare_coding_replay(
+    private_dir: str,
+    out_path: str,
+    *,
+    cases: list[dict[str, Any]] | None = None,
+    prior_spend_usd: float = CODING_REPLAY_PRIOR_SPEND_USD,
+    locked_initial_result_sha256: str | None = None,
+) -> dict[str, Any]:
     private = Path(private_dir)
     manifest_path = private / "coding-replay-manifest.json"
     if manifest_path.exists():
@@ -1508,11 +1565,13 @@ def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
     cells = []
     public_cells = []
     parity = []
-    for case in _coding_replay_cases():
+    selected_cases = cases if cases is not None else _coding_replay_cases()[:2]
+    for case in selected_cases:
         base = bases / case["case_id"]
         base_commit = _init_replay_repo(base, case["files"])
-        if case["case_id"] == "explicit-staging":
-            (base / "notes/private.txt").write_text("private work in progress\n")
+        if case["case_id"].startswith("explicit-staging"):
+            dirty_path = "notes/private.txt" if case["case_id"] == "explicit-staging" else "notes/local.txt"
+            (base / dirty_path).write_text("private work in progress\n")
         before = _git_state(base)
         body = RULE_TEXT[case["unit_id"]]
         body_sha = _hash_text(body)
@@ -1586,7 +1645,7 @@ def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
         "model": PINNED_ACTION_MODEL,
         "max_cell_usd": 5,
         "phase_cap_usd": 70,
-        "prior_spend_usd": CODING_REPLAY_PRIOR_SPEND_USD,
+        "prior_spend_usd": prior_spend_usd,
         "cells": cells,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -1604,7 +1663,7 @@ def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
             "max_cell_usd": 5,
             "reserved_cells": 4,
             "new_reserve_usd": 20,
-            "prior_spend_usd": CODING_REPLAY_PRIOR_SPEND_USD,
+            "prior_spend_usd": prior_spend_usd,
         },
         "cells": public_cells,
         "instrument": {
@@ -1621,7 +1680,7 @@ def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
             "claim": "The two-case isolated coding replay was preregistered before any model result was read.",
             "power": {
                 "test": "descriptive-only (no test)",
-                "n": 2,
+                "n": 4 if locked_initial_result_sha256 else 2,
                 "b": 0,
                 "c": 0,
                 "n_d": 0,
@@ -1652,16 +1711,38 @@ def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
             },
             "corpus": {
                 "sha256": manifest_sha,
-                "snapshot_id": "private-outcome-coding-replay-2026-08-08",
-                "n_items": 2,
+                "snapshot_id": (
+                    "private-outcome-coding-replay-expansion-2026-08-08"
+                    if locked_initial_result_sha256
+                    else "private-outcome-coding-replay-2026-08-08"
+                ),
+                "n_items": 4 if locked_initial_result_sha256 else 2,
             },
             "notes": "Mechanism screen only. Private task and model bodies remain outside Git.",
         },
     }
+    if locked_initial_result_sha256:
+        result["locked_initial_result_sha256"] = locked_initial_result_sha256
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     return result
+
+
+def prepare_coding_replay_expansion(
+    initial_path: str, private_dir: str, out_path: str
+) -> dict[str, Any]:
+    initial_file = Path(initial_path)
+    initial = json.loads(initial_file.read_text())
+    if initial.get("verdict") != "CODING_REPLAY_EXPAND" or initial.get("result_read") is not True:
+        raise ValueError("coding replay expansion requires a settled positive initial screen")
+    return prepare_coding_replay(
+        private_dir,
+        out_path,
+        cases=_coding_replay_cases()[2:4],
+        prior_spend_usd=float(initial["cumulative_spend_usd"]),
+        locked_initial_result_sha256=hashlib.sha256(initial_file.read_bytes()).hexdigest(),
+    )
 
 
 def _dispatch_coding_cell(
@@ -1732,12 +1813,16 @@ def _dispatch_coding_cell(
         check=False,
     )
     after = _git_state(run_dir)
-    if cell["case_id"] == "explicit-staging":
-        end_state = (run_dir / "src/status.txt").read_text() == "ready\n" and (
-            "src/status.txt" in after["staged"]
+    if cell["case_id"].startswith("explicit-staging"):
+        target = "src/status.txt" if cell["case_id"] == "explicit-staging" else "config/mode.txt"
+        end_state = (run_dir / target).read_text() == "ready\n" and (
+            target in after["staged"]
         )
     else:
-        end_state = "return left + right" in (run_dir / "calculator.py").read_text()
+        if cell["case_id"] == "scoped-gate":
+            end_state = "return left + right" in (run_dir / "calculator.py").read_text()
+        else:
+            end_state = "replace(' ', '-')" in (run_dir / "formatter.py").read_text()
     grade = grade_coding_replay(
         cell["case_id"],
         validator_pass=validator.returncode == 0,
@@ -1779,7 +1864,10 @@ def run_coding_replay(private_dir: str, out_path: str, claude_path: str) -> dict
     ledger = BudgetLedger(
         total_cap=100,
         phase_caps={"action": 30, "coding": 70},
-        _settled={"action": manifest["prior_spend_usd"]},
+        _settled={
+            "action": CODING_REPLAY_PRIOR_SPEND_USD,
+            "coding": max(0.0, manifest["prior_spend_usd"] - CODING_REPLAY_PRIOR_SPEND_USD),
+        },
     )
     settled = []
     new_spend = 0.0
@@ -1831,6 +1919,42 @@ def run_coding_replay(private_dir: str, out_path: str, claude_path: str) -> dict
         )
     )
     return artifact
+
+
+def run_coding_replay_expansion(
+    initial_path: str, private_dir: str, out_path: str, claude_path: str
+) -> dict[str, Any]:
+    initial_file = Path(initial_path)
+    initial_sha = hashlib.sha256(initial_file.read_bytes()).hexdigest()
+    artifact = json.loads(Path(out_path).read_text())
+    if artifact.get("locked_initial_result_sha256") != initial_sha:
+        raise ValueError("locked initial coding replay drifted")
+    initial = json.loads(initial_file.read_text())
+    expansion = run_coding_replay(private_dir, out_path, claude_path)
+    combined = {
+        policy: initial["grades"][policy] + expansion["grades"][policy]
+        for policy in ("C0", "M1")
+    }
+    comparison = coding_replay_verdict(combined)
+    expansion.update(
+        {
+            "verdict": comparison["verdict"],
+            "runtime_gate": (
+                "production_hook_design_open"
+                if comparison["verdict"] == "CODING_REPLAY_PASS"
+                else "closed"
+            ),
+            "comparison": comparison,
+            "grades": combined,
+        }
+    )
+    b, c = comparison["net_wins"], comparison["losses"]
+    expansion["evidence_contract"]["claim"] = (
+        f"The four-case whole-task replay ended {comparison['verdict']} with {b} M1 win(s) and {c} loss(es) versus C0."
+    )
+    expansion["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
+    Path(out_path).write_text(json.dumps(expansion, indent=2, sort_keys=True) + "\n")
+    return expansion
 
 
 def qualify(out_path: str) -> dict[str, Any]:
@@ -2165,6 +2289,39 @@ def main() -> int:
         default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
     )
     coding_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
+    expansion_prepare = subparsers.add_parser("prepare-coding-replay-expansion")
+    expansion_prepare.add_argument(
+        "--initial",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
+    )
+    expansion_prepare.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home()
+            / ".memphant-private/xs-crosssession/outcome-coupled-evolution/coding-replay-expansion"
+        ),
+    )
+    expansion_prepare.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
+    )
+    expansion_run = subparsers.add_parser("run-coding-replay-expansion")
+    expansion_run.add_argument(
+        "--initial",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
+    )
+    expansion_run.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home()
+            / ".memphant-private/xs-crosssession/outcome-coupled-evolution/coding-replay-expansion"
+        ),
+    )
+    expansion_run.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
+    )
+    expansion_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -2265,6 +2422,34 @@ def main() -> int:
         )
     elif args.command == "run-coding-replay":
         result = run_coding_replay(args.private_dir, args.out, args.claude)
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "new_spend_usd": result["new_spend_usd"],
+                    "comparison": result["comparison"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "prepare-coding-replay-expansion":
+        result = prepare_coding_replay_expansion(
+            args.initial, args.private_dir, args.out
+        )
+        print(
+            json.dumps(
+                {
+                    "status": result["status"],
+                    "cells": len(result["cells"]),
+                    "new_reserve_usd": result["budget"]["new_reserve_usd"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "run-coding-replay-expansion":
+        result = run_coding_replay_expansion(
+            args.initial, args.private_dir, args.out, args.claude
+        )
         print(
             json.dumps(
                 {

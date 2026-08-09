@@ -32,7 +32,9 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     grade_coding_replay,
     project_triggered_lessons,
     prepare_coding_replay,
+    prepare_coding_replay_expansion,
     run_coding_replay,
+    run_coding_replay_expansion,
 )
 
 
@@ -741,6 +743,9 @@ def test_two_case_replay_expands_only_on_net_win_without_loss():
     assert coding_replay_verdict({"C0": [True, False], "M1": [True, False]})["verdict"] == (
         "CODING_REPLAY_FLAT"
     )
+    assert coding_replay_verdict(
+        {"C0": [True, False, True, False], "M1": [True, True, True, True]}
+    )["verdict"] == "CODING_REPLAY_PASS"
 
 
 def test_coding_replay_preregisters_private_scratch_tasks_without_raw_text(tmp_path: Path):
@@ -820,3 +825,59 @@ print(json.dumps({"type":"result","subtype":"success","total_cost_usd":1.0,"mode
     assert (private / "SHA256SUMS").is_file()
     with pytest.raises(RuntimeError, match="refusing ambiguous or repeated dispatch"):
         run_coding_replay(str(private), str(public), str(fake))
+
+
+def test_coding_replay_expansion_locks_initial_result_and_combines_four_cases(tmp_path: Path):
+    first_private = tmp_path / "first-private"
+    first_public = tmp_path / "first.json"
+    second_private = tmp_path / "second-private"
+    second_public = tmp_path / "second.json"
+    fake = tmp_path / "fake-claude.py"
+    fake.write_text(
+        """#!/usr/bin/env python3
+import json, os, pathlib, subprocess
+case = os.environ["MEMPHANT_REPLAY_CASE"]
+policy = os.environ["MEMPHANT_REPLAY_POLICY"]
+if case.startswith("explicit-staging"):
+    target = "src/status.txt" if case == "explicit-staging" else "config/mode.txt"
+    pathlib.Path(target).write_text("ready\\n")
+    command = f"git add {target}"
+else:
+    target = "calculator.py" if case == "scoped-gate" else "formatter.py"
+    body = "def add(left, right):\\n    return left + right\\n" if case == "scoped-gate" else "def slugify(value):\\n    return value.lower().replace(' ', '-')\\n"
+    pathlib.Path(target).write_text(body)
+    focused = "tests.test_calculator" if case == "scoped-gate" else "tests.test_formatter"
+    command = f"python3 -m unittest {focused}" if policy == "M1" else "python3 run_tests.py"
+subprocess.run(command.split(), check=True)
+print(json.dumps({"type":"assistant","message":{"model":"claude-opus-5","content":[{"type":"tool_use","name":"Bash","input":{"command":command}}]}}))
+print(json.dumps({"type":"result","subtype":"success","total_cost_usd":1.0,"modelUsage":{"claude-opus-5":{"canonicalModel":"claude-opus-5","outputTokens":10}}}))
+"""
+    )
+    fake.chmod(0o755)
+    prepare_coding_replay(str(first_private), str(first_public))
+    run_coding_replay(str(first_private), str(first_public), str(fake))
+
+    prereg = prepare_coding_replay_expansion(
+        str(first_public), str(second_private), str(second_public)
+    )
+
+    assert prereg["status"] == "preregistered"
+    assert prereg["locked_initial_result_sha256"] == __import__("hashlib").sha256(
+        first_public.read_bytes()
+    ).hexdigest()
+    assert {cell["case_id"] for cell in prereg["cells"]} == {
+        "explicit-staging-variant",
+        "scoped-gate-variant",
+    }
+    result = run_coding_replay_expansion(
+        str(first_public), str(second_private), str(second_public), str(fake)
+    )
+    assert result["verdict"] == "CODING_REPLAY_PASS"
+    assert result["comparison"] == {
+        "verdict": "CODING_REPLAY_PASS",
+        "control_passes": 2,
+        "treatment_passes": 4,
+        "net_wins": 2,
+        "losses": 0,
+    }
+    assert result["runtime_gate"] == "production_hook_design_open"
