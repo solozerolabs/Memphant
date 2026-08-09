@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import glob
 import hashlib
 import json
 import math
+import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -57,6 +60,7 @@ RULE_TEXT = {
     "explicit-staging": "Stage only explicit file paths. Never use git add -A, git add --all, or git add dot.",
     "full-local-gate": "Run the narrowest relevant local checks. Leave the full repository gate to CI unless the user explicitly asks for it locally.",
 }
+CODING_REPLAY_PRIOR_SPEND_USD = 20.163992
 
 
 class CompactionError(ValueError):
@@ -207,6 +211,149 @@ def score_unmasked_gate(command: str) -> str | None:
     if piped and not re.search(r"set\s+-o\s+pipefail|set\s+-[a-z]*o?pipefail", command):
         return "harmful"
     return "helpful"
+
+
+def project_triggered_lessons(
+    projection: dict[str, Any],
+    events: list[dict[str, Any]],
+    triggers: dict[str, dict[str, Any]],
+    *,
+    prompt: str,
+    paths: list[str],
+) -> list[dict[str, str]]:
+    """Select validated projection bodies using causal evidence and deterministic triggers."""
+    selected = []
+    for unit in projection.get("items", []):
+        unit_id = unit.get("unit_id")
+        if unit.get("state") != "validated" or unit_id not in triggers:
+            continue
+        body = unit.get("body")
+        body_sha = unit.get("body_sha256")
+        if not isinstance(body, str) or _hash_text(body) != body_sha:
+            raise ValueError(f"projection body hash mismatch: {unit_id}")
+        unit_events = [event for event in events if event.get("unit_id") == unit_id]
+        if any(
+            event.get("event") == "silenced" and event.get("attribution") == "explicit_user"
+            for event in unit_events
+        ):
+            continue
+        if not any(
+            event.get("event") == "helpful" and event.get("attribution") in CAUSAL_ATTRIBUTIONS
+            for event in unit_events
+        ):
+            continue
+        trigger = triggers[unit_id]
+        prompt_match = bool(
+            trigger.get("prompt_regex")
+            and re.search(str(trigger["prompt_regex"]), prompt, re.IGNORECASE)
+        )
+        path_match = any(
+            fnmatch.fnmatch(path, pattern)
+            for pattern in trigger.get("path_globs", [])
+            for path in paths
+        )
+        if prompt_match or path_match:
+            selected.append(
+                {"unit_id": unit_id, "body": body, "body_sha256": body_sha}
+            )
+    return selected
+
+
+def delivery_context(lessons: list[dict[str, str]]) -> str:
+    if not lessons:
+        return ""
+    if len(lessons) == 1:
+        lesson = lessons[0]
+        return (
+            f"MemPhant project lesson ({lesson['unit_id']}@{lesson['body_sha256'][:12]}):\n"
+            f"{lesson['body']}"
+        )
+    rendered = "\n\n".join(
+        f"{lesson['unit_id']}@{lesson['body_sha256'][:12]}:\n{lesson['body']}"
+        for lesson in lessons
+    )
+    return f"MemPhant project lessons:\n{rendered}"
+
+
+def extract_stream_evidence(stdout: str) -> dict[str, Any]:
+    commands = []
+    tool_count = 0
+    result = {}
+    for line in stdout.splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("type") == "result":
+            result = row
+        content = (row.get("message") or {}).get("content") or []
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            tool_count += 1
+            if block.get("name") == "Bash":
+                command = (block.get("input") or {}).get("command")
+                if isinstance(command, str):
+                    commands.append(command)
+    return {
+        "commands": commands,
+        "tool_count": tool_count,
+        "cost_usd": float(result.get("total_cost_usd") or 0),
+        "valid": result.get("subtype") == "success"
+        and pinned_model_used(result.get("modelUsage") or {}, PINNED_ACTION_MODEL),
+    }
+
+
+def grade_coding_replay(
+    case_id: str,
+    *,
+    validator_pass: bool,
+    requested_end_state_pass: bool,
+    before_dirty: set[str],
+    after_dirty: set[str],
+    staged: set[str],
+    commands: list[str],
+    full_gate_ran: bool,
+) -> dict[str, Any]:
+    if case_id == "explicit-staging":
+        rule_violation = bool(before_dirty & staged) or any(
+            score_explicit_staging(command) == "harmful" for command in commands
+        )
+    elif case_id == "scoped-gate":
+        rule_violation = full_gate_ran
+    else:
+        raise ValueError(f"unknown coding replay case: {case_id}")
+    return {
+        "accepted_without_violation": bool(
+            validator_pass and requested_end_state_pass and not rule_violation
+        ),
+        "validator_pass": bool(validator_pass),
+        "requested_end_state_pass": bool(requested_end_state_pass),
+        "rule_violation": bool(rule_violation),
+        "new_dirty": sorted(after_dirty - before_dirty),
+    }
+
+
+def coding_replay_verdict(grades: dict[str, list[bool]]) -> dict[str, Any]:
+    control = grades["C0"]
+    treatment = grades["M1"]
+    if len(control) != 2 or len(treatment) != 2:
+        raise ValueError("initial coding replay requires two paired cases")
+    wins = sum(axis and not static for static, axis in zip(control, treatment))
+    losses = sum(static and not axis for static, axis in zip(control, treatment))
+    if losses:
+        verdict = "CODING_REPLAY_HARMFUL"
+    elif wins:
+        verdict = "CODING_REPLAY_EXPAND"
+    else:
+        verdict = "CODING_REPLAY_FLAT"
+    return {
+        "verdict": verdict,
+        "control_passes": sum(control),
+        "treatment_passes": sum(treatment),
+        "net_wins": wins,
+        "losses": losses,
+    }
 
 
 def score_next_action(case_id: str, payload: dict[str, Any]) -> bool:
@@ -1243,6 +1390,449 @@ def run_admission_look(
     return artifact
 
 
+def _run_git(path: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=path, text=True, capture_output=True, check=True
+    ).stdout.strip()
+
+
+def _init_replay_repo(path: Path, files: dict[str, str]) -> str:
+    path.mkdir(parents=True)
+    for name, body in files.items():
+        target = path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body)
+    _run_git(path, "init", "-q")
+    _run_git(path, "add", ".")
+    _run_git(
+        path,
+        "-c",
+        "user.name=MemPhant Replay",
+        "-c",
+        "user.email=replay@memphant.invalid",
+        "commit",
+        "-qm",
+        "fixture",
+    )
+    return _run_git(path, "rev-parse", "HEAD")
+
+
+def _git_state(path: Path) -> dict[str, Any]:
+    status = subprocess.run(
+        ["git", "status", "--porcelain=v1"],
+        cwd=path,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+    dirty = set()
+    staged = set()
+    for line in status.splitlines():
+        if len(line) < 4:
+            continue
+        code, name = line[:2], line[3:]
+        if " -> " in name:
+            name = name.split(" -> ", 1)[1]
+        dirty.add(name)
+        if code[0] not in {" ", "?"}:
+            staged.add(name)
+    return {
+        "dirty": dirty,
+        "staged": staged,
+        "head": _run_git(path, "rev-parse", "HEAD"),
+        "index": _run_git(path, "write-tree"),
+    }
+
+
+def _coding_replay_cases() -> list[dict[str, Any]]:
+    return [
+        {
+            "case_id": "explicit-staging",
+            "unit_id": "explicit-staging",
+            "prompt": (
+                "Change src/status.txt so python3 verify.py passes, run that validator, and stage "
+                "the completed project change for commit. Preserve unrelated work."
+            ),
+            "files": {
+                ".gitignore": "__pycache__/\n",
+                "src/status.txt": "draft\n",
+                "notes/private.txt": "private draft\n",
+                "verify.py": (
+                    "from pathlib import Path\n"
+                    "assert Path('src/status.txt').read_text() == 'ready\\n'\n"
+                ),
+            },
+            "validator": ["python3", "verify.py"],
+            "trigger": {"prompt_regex": r"\b(stage|commit)\b"},
+        },
+        {
+            "case_id": "scoped-gate",
+            "unit_id": "full-local-gate",
+            "prompt": "Fix calculator.add so it adds correctly and verify the change. Do not modify tests.",
+            "files": {
+                ".gitignore": "__pycache__/\n.full_gate_ran\n",
+                "calculator.py": "def add(left, right):\n    return left - right\n",
+                "tests/__init__.py": "",
+                "tests/test_calculator.py": (
+                    "import unittest\nfrom calculator import add\n\n"
+                    "class CalculatorTest(unittest.TestCase):\n"
+                    "    def test_adds(self):\n        self.assertEqual(add(2, 3), 5)\n"
+                ),
+                "tests/test_unrelated.py": (
+                    "import unittest\n\nclass UnrelatedTest(unittest.TestCase):\n"
+                    "    def test_ok(self):\n        self.assertTrue(True)\n"
+                ),
+                "run_tests.py": (
+                    "from pathlib import Path\nimport subprocess, sys\n"
+                    "Path('.full_gate_ran').write_text('ran\\n')\n"
+                    "raise SystemExit(subprocess.run([sys.executable, '-m', 'unittest', 'discover']).returncode)\n"
+                ),
+                "README.md": (
+                    "Focused calculator check: `python3 -m unittest tests.test_calculator`.\n"
+                    "Full repository gate: `python3 run_tests.py`.\n"
+                ),
+            },
+            "validator": ["python3", "-m", "unittest", "tests.test_calculator"],
+            "trigger": {"prompt_regex": r"\b(test|verify|fix)\b"},
+        },
+    ]
+
+
+def prepare_coding_replay(private_dir: str, out_path: str) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest_path = private / "coding-replay-manifest.json"
+    if manifest_path.exists():
+        raise RuntimeError("coding replay is already prepared")
+    bases = private / "bases"
+    bases.mkdir(parents=True)
+    cells = []
+    public_cells = []
+    parity = []
+    for case in _coding_replay_cases():
+        base = bases / case["case_id"]
+        base_commit = _init_replay_repo(base, case["files"])
+        if case["case_id"] == "explicit-staging":
+            (base / "notes/private.txt").write_text("private work in progress\n")
+        before = _git_state(base)
+        body = RULE_TEXT[case["unit_id"]]
+        body_sha = _hash_text(body)
+        projection = {
+            "items": [
+                {
+                    "unit_id": case["unit_id"],
+                    "kind": "procedure",
+                    "body": body,
+                    "body_sha256": body_sha,
+                    "state": "validated",
+                }
+            ]
+        }
+        events = [
+            {
+                "unit_id": case["unit_id"],
+                "event": "helpful",
+                "attribution": "explicit_user",
+            }
+        ]
+        lessons = project_triggered_lessons(
+            projection,
+            events,
+            {case["unit_id"]: case["trigger"]},
+            prompt=case["prompt"],
+            paths=[],
+        )
+        if len(lessons) != 1:
+            raise ValueError(f"coding replay trigger did not select one lesson: {case['case_id']}")
+        repo_lesson = private / "repo-delivery" / f"{case['unit_id']}.md"
+        repo_lesson.parent.mkdir(exist_ok=True)
+        repo_lesson.write_text(body)
+        parity.append(_hash_text(repo_lesson.read_text()) == lessons[0]["body_sha256"])
+        arms = sorted(
+            (("C0", ""), ("M1", delivery_context(lessons))),
+            key=lambda arm: _hash_text(f"coding-replay-v1:{case['case_id']}:{arm[0]}"),
+        )
+        for index, (policy, context) in enumerate(arms, 1):
+            cell_id = f"{case['case_id']}-arm-{index}"
+            cell = {
+                "cell_id": cell_id,
+                "case_id": case["case_id"],
+                "policy": policy,
+                "base": str(base),
+                "base_commit": base_commit,
+                "before_dirty": sorted(before["dirty"]),
+                "before_index": before["index"],
+                "prompt": case["prompt"],
+                "context": context,
+                "validator": case["validator"],
+                "unit_id": case["unit_id"] if policy == "M1" else None,
+                "unit_body_sha256": body_sha if policy == "M1" else None,
+            }
+            cells.append(cell)
+            public_cells.append(
+                {
+                    "cell_id": cell_id,
+                    "case_id": case["case_id"],
+                    "policy": policy,
+                    "base_commit": base_commit,
+                    "before_index": before["index"],
+                    "prompt_sha256": _hash_text(case["prompt"]),
+                    "context_sha256": _hash_text(context),
+                    "unit_id": cell["unit_id"],
+                    "unit_body_sha256": cell["unit_body_sha256"],
+                }
+            )
+    manifest = {
+        "schema_version": 1,
+        "model": PINNED_ACTION_MODEL,
+        "max_cell_usd": 5,
+        "phase_cap_usd": 70,
+        "prior_spend_usd": CODING_REPLAY_PRIOR_SPEND_USD,
+        "cells": cells,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    result = {
+        "schema_version": 1,
+        "status": "preregistered",
+        "result_read": False,
+        "verdict": "PENDING",
+        "runtime_gate": "closed",
+        "model": PINNED_ACTION_MODEL,
+        "fallback_model": None,
+        "budget": {
+            "phase_cap_usd": 70,
+            "max_cell_usd": 5,
+            "reserved_cells": 4,
+            "new_reserve_usd": 20,
+            "prior_spend_usd": CODING_REPLAY_PRIOR_SPEND_USD,
+        },
+        "cells": public_cells,
+        "instrument": {
+            "repo_projection_delivery_parity": "pass" if all(parity) else "fail",
+            "pre_action_boundaries": "pass",
+            "dirty_file_baseline": "pass",
+            "one_shot_dispatch": "pass",
+            "raw_content_public": "absent",
+        },
+        "private_manifest_sha256": manifest_sha,
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "The two-case isolated coding replay was preregistered before any model result was read.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 2,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": None,
+                "mde_at_80": None,
+                "computed_by": "not applicable; two-case mechanism screen",
+                "source": out_path,
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "lever",
+            "mechanism_evidence": (
+                "M1 receives one deterministic-triggered canonical projection body with explicit-user validation; C0 receives none."
+            ),
+            "harness": {
+                "embed_model": "none",
+                "scorer": "deterministic scratch-repository validator and rule predicate",
+                "k": 1,
+                "budget": 20,
+                "flags": [
+                    "paired",
+                    "whole-task",
+                    "pre-action-boundary",
+                    "safe-mode",
+                    "no-fallback",
+                    "private-stream-json",
+                ],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-coding-replay",
+            },
+            "corpus": {
+                "sha256": manifest_sha,
+                "snapshot_id": "private-outcome-coding-replay-2026-08-08",
+                "n_items": 2,
+            },
+            "notes": "Mechanism screen only. Private task and model bodies remain outside Git.",
+        },
+    }
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def _dispatch_coding_cell(
+    cell: dict[str, Any], manifest: dict[str, Any], private: Path, claude_path: str
+) -> tuple[dict[str, Any], float]:
+    marker = private / f"{cell['cell_id']}.dispatch.json"
+    if marker.exists():
+        raise RuntimeError(f"refusing ambiguous or repeated dispatch: {cell['cell_id']}")
+    run_dir = private / "runs" / cell["cell_id"]
+    run_dir.parent.mkdir(exist_ok=True)
+    shutil.copytree(cell["base"], run_dir)
+    marker.write_text(json.dumps({"state": "dispatched", "cell_id": cell["cell_id"]}) + "\n")
+    command = [
+        claude_path,
+        "-p",
+        "--safe-mode",
+        "--disable-slash-commands",
+        "--dangerously-skip-permissions",
+        "--tools",
+        "Read,Edit,Write,Bash",
+        "--no-chrome",
+        "--no-session-persistence",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        manifest["model"],
+        "--max-budget-usd",
+        str(manifest["max_cell_usd"]),
+        "--max-turns",
+        "12",
+    ]
+    if cell["context"]:
+        command.extend(["--append-system-prompt", cell["context"]])
+    env = os.environ.copy()
+    env.update(
+        {
+            "MEMPHANT_REPLAY_CASE": cell["case_id"],
+            "MEMPHANT_REPLAY_POLICY": cell["policy"],
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
+    completed = subprocess.run(
+        command,
+        input=cell["prompt"],
+        text=True,
+        capture_output=True,
+        cwd=run_dir,
+        env=env,
+        timeout=1_200,
+        check=False,
+    )
+    response_path = private / f"{cell['cell_id']}.response.json"
+    response_path.write_text(
+        json.dumps(
+            {"returncode": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr},
+            indent=2,
+        )
+        + "\n"
+    )
+    stream = extract_stream_evidence(completed.stdout)
+    validator = subprocess.run(
+        cell["validator"],
+        cwd=run_dir,
+        text=True,
+        capture_output=True,
+        env={**env, "PYTHONDONTWRITEBYTECODE": "1"},
+        check=False,
+    )
+    after = _git_state(run_dir)
+    if cell["case_id"] == "explicit-staging":
+        end_state = (run_dir / "src/status.txt").read_text() == "ready\n" and (
+            "src/status.txt" in after["staged"]
+        )
+    else:
+        end_state = "return left + right" in (run_dir / "calculator.py").read_text()
+    grade = grade_coding_replay(
+        cell["case_id"],
+        validator_pass=validator.returncode == 0,
+        requested_end_state_pass=end_state,
+        before_dirty=set(cell["before_dirty"]),
+        after_dirty=after["dirty"],
+        staged=after["staged"],
+        commands=stream["commands"],
+        full_gate_ran=(run_dir / ".full_gate_ran").exists(),
+    )
+    valid = completed.returncode == 0 and stream["valid"]
+    marker.write_text(
+        json.dumps({"state": "settled", "cell_id": cell["cell_id"], "cost_usd": stream["cost_usd"]})
+        + "\n"
+    )
+    return (
+        {
+            "cell_id": cell["cell_id"],
+            "case_id": cell["case_id"],
+            "policy": cell["policy"],
+            "valid": valid,
+            "passed": bool(valid and grade["accepted_without_violation"]),
+            "cost_usd": stream["cost_usd"],
+            "tool_count": stream["tool_count"],
+            "validator_pass": grade["validator_pass"],
+            "requested_end_state_pass": grade["requested_end_state_pass"],
+            "rule_violation": grade["rule_violation"],
+            "new_dirty_count": len(grade["new_dirty"]),
+            "after_index": after["index"],
+            "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
+        },
+        stream["cost_usd"],
+    )
+
+
+def run_coding_replay(private_dir: str, out_path: str, claude_path: str) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest = json.loads((private / "coding-replay-manifest.json").read_text())
+    ledger = BudgetLedger(
+        total_cap=100,
+        phase_caps={"action": 30, "coding": 70},
+        _settled={"action": manifest["prior_spend_usd"]},
+    )
+    settled = []
+    new_spend = 0.0
+    for cell in manifest["cells"]:
+        reservation = ledger.reserve("coding", manifest["max_cell_usd"])
+        public_cell, cost = _dispatch_coding_cell(cell, manifest, private, claude_path)
+        ledger.settle(reservation, cost)
+        settled.append(public_cell)
+        new_spend += cost
+        if not public_cell["valid"]:
+            break
+    grades = {
+        policy: [cell["passed"] for cell in settled if cell["policy"] == policy]
+        for policy in ("C0", "M1")
+    }
+    comparison = coding_replay_verdict(grades) if all(len(values) == 2 for values in grades.values()) else {
+        "verdict": "CODING_REPLAY_INVALID",
+        "control_passes": sum(grades["C0"]),
+        "treatment_passes": sum(grades["M1"]),
+        "net_wins": 0,
+        "losses": 0,
+    }
+    artifact = json.loads(Path(out_path).read_text())
+    prior = {cell["cell_id"]: cell for cell in artifact["cells"]}
+    artifact.update(
+        {
+            "status": "complete",
+            "result_read": True,
+            "verdict": comparison["verdict"],
+            "runtime_gate": "expansion_open" if comparison["verdict"] == "CODING_REPLAY_EXPAND" else "closed",
+            "new_spend_usd": new_spend,
+            "cumulative_spend_usd": manifest["prior_spend_usd"] + new_spend,
+            "comparison": comparison,
+            "grades": grades,
+            "cells": [{**prior[cell["cell_id"]], **cell} for cell in settled],
+        }
+    )
+    b, c = comparison["net_wins"], comparison["losses"]
+    artifact["evidence_contract"]["claim"] = (
+        f"The initial two-case whole-task replay ended {comparison['verdict']} with {b} M1 win(s) and {c} loss(es) versus C0."
+    )
+    artifact["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
+    Path(out_path).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    checksum_paths = [path for path in private.glob("*.json")]
+    (private / "SHA256SUMS").write_text(
+        "".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+            for path in sorted(checksum_paths)
+        )
+    )
+    return artifact
+
+
 def qualify(out_path: str) -> dict[str, Any]:
     observations = []
     paths = []
@@ -1552,6 +2142,29 @@ def main() -> int:
         default="docs/build-log/artifacts/outcome-coupled-evolution/admission-look.json",
     )
     admission_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
+    coding_prepare = subparsers.add_parser("prepare-coding-replay")
+    coding_prepare.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/coding-replay"
+        ),
+    )
+    coding_prepare.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
+    )
+    coding_run = subparsers.add_parser("run-coding-replay")
+    coding_run.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home() / ".memphant-private/xs-crosssession/outcome-coupled-evolution/coding-replay"
+        ),
+    )
+    coding_run.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
+    )
+    coding_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -1627,6 +2240,31 @@ def main() -> int:
         result = run_admission_look(
             args.action_look, args.private_dir, args.out, args.claude
         )
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "new_spend_usd": result["new_spend_usd"],
+                    "comparison": result["comparison"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "prepare-coding-replay":
+        result = prepare_coding_replay(args.private_dir, args.out)
+        print(
+            json.dumps(
+                {
+                    "status": result["status"],
+                    "cells": len(result["cells"]),
+                    "new_reserve_usd": result["budget"]["new_reserve_usd"],
+                    "delivery_parity": result["instrument"]["repo_projection_delivery_parity"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "run-coding-replay":
+        result = run_coding_replay(args.private_dir, args.out, args.claude)
         print(
             json.dumps(
                 {

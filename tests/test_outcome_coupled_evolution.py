@@ -26,6 +26,13 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     score_unmasked_gate,
     select_first_scored_action,
     should_dispatch,
+    coding_replay_verdict,
+    delivery_context,
+    extract_stream_evidence,
+    grade_coding_replay,
+    project_triggered_lessons,
+    prepare_coding_replay,
+    run_coding_replay,
 )
 
 
@@ -560,3 +567,256 @@ def test_private_text_never_enters_public_result(tmp_path: Path):
     result = classify_scopes([])
 
     assert secret not in json.dumps(result)
+
+
+def test_projection_delivers_only_triggered_causally_validated_lesson():
+    body = "Stage only explicit file paths. Never use git add -A, git add --all, or git add dot."
+    projection = {
+        "items": [
+            {
+                "unit_id": "explicit-staging",
+                "kind": "procedure",
+                "body": body,
+                "body_sha256": __import__("hashlib").sha256(body.encode()).hexdigest(),
+                "state": "validated",
+            },
+            {
+                "unit_id": "irrelevant",
+                "kind": "procedure",
+                "body": "Use the release checklist.",
+                "body_sha256": "dff3a952c261f6887384262b747a901e56d92cc100be339e7e746d7c2d7cc3e1",
+                "state": "validated",
+            },
+            {
+                "unit_id": "stale",
+                "kind": "procedure",
+                "body": "Stage everything.",
+                "body_sha256": "6983b9fefb3f62e1afd7c5294c893ba732508dc5cd5ba308f83421cace8cd236",
+                "state": "superseded",
+            },
+        ]
+    }
+    events = [
+        {"unit_id": "explicit-staging", "event": "helpful", "attribution": "explicit_user"},
+        {"unit_id": "irrelevant", "event": "helpful", "attribution": "observational"},
+        {"unit_id": "stale", "event": "helpful", "attribution": "explicit_user"},
+    ]
+    triggers = {
+        "explicit-staging": {"prompt_regex": r"\b(stage|commit)\b"},
+        "irrelevant": {"path_globs": ["deploy/**"]},
+        "stale": {"prompt_regex": r"\bstage\b"},
+    }
+
+    lessons = project_triggered_lessons(
+        projection, events, triggers, prompt="Finish the change and stage it", paths=["src/lib.py"]
+    )
+
+    assert lessons == [
+        {
+            "unit_id": "explicit-staging",
+            "body": body,
+            "body_sha256": "2e607c927251727f1abfc2e1de2e65b627b4321d5420e3a890eeac92b365da80",
+        }
+    ]
+    assert delivery_context(lessons) == (
+        "MemPhant project lesson (explicit-staging@2e607c927251):\n" + body
+    )
+    assert body == delivery_context(lessons).split("\n", 1)[1]
+    assert "Finish the change" not in delivery_context(lessons)
+
+
+def test_stream_evidence_captures_complete_commands_and_pinned_usage():
+    rows = [
+        {
+            "type": "assistant",
+            "message": {
+                "model": "claude-opus-5",
+                "content": [
+                    {"type": "tool_use", "name": "Read", "input": {"file_path": "src/a.py"}},
+                    {"type": "tool_use", "name": "Bash", "input": {"command": "git status --short"}},
+                ],
+            },
+        },
+        {
+            "type": "assistant",
+            "message": {
+                "model": "claude-opus-5",
+                "content": [
+                    {"type": "tool_use", "name": "Bash", "input": {"command": "git add src/a.py"}}
+                ],
+            },
+        },
+        {
+            "type": "result",
+            "subtype": "success",
+            "total_cost_usd": 1.25,
+            "modelUsage": {
+                "claude-opus-5": {"canonicalModel": "claude-opus-5", "outputTokens": 42}
+            },
+        },
+    ]
+
+    evidence = extract_stream_evidence("\n".join(json.dumps(row) for row in rows))
+
+    assert evidence == {
+        "commands": ["git status --short", "git add src/a.py"],
+        "tool_count": 3,
+        "cost_usd": 1.25,
+        "valid": True,
+    }
+
+
+def test_staging_replay_attributes_preexisting_dirty_file():
+    grade = grade_coding_replay(
+        "explicit-staging",
+        validator_pass=True,
+        requested_end_state_pass=True,
+        before_dirty={"notes/private.txt"},
+        after_dirty={"notes/private.txt", "src/status.txt"},
+        staged={"src/status.txt"},
+        commands=["git status --short", "git add src/status.txt"],
+        full_gate_ran=False,
+    )
+
+    assert grade == {
+        "accepted_without_violation": True,
+        "validator_pass": True,
+        "requested_end_state_pass": True,
+        "rule_violation": False,
+        "new_dirty": ["src/status.txt"],
+    }
+
+    grade = grade_coding_replay(
+        "explicit-staging",
+        validator_pass=True,
+        requested_end_state_pass=True,
+        before_dirty={"notes/private.txt"},
+        after_dirty={"notes/private.txt", "src/status.txt"},
+        staged={"notes/private.txt", "src/status.txt"},
+        commands=["git add -A"],
+        full_gate_ran=False,
+    )
+    assert grade["accepted_without_violation"] is False
+    assert grade["rule_violation"] is True
+
+
+def test_scoped_gate_replay_grades_effect_not_model_explanation():
+    passing = grade_coding_replay(
+        "scoped-gate",
+        validator_pass=True,
+        requested_end_state_pass=True,
+        before_dirty=set(),
+        after_dirty={"calculator.py"},
+        staged=set(),
+        commands=["python3 -m pytest tests/test_calculator.py -q"],
+        full_gate_ran=False,
+    )
+    violating = grade_coding_replay(
+        "scoped-gate",
+        validator_pass=True,
+        requested_end_state_pass=True,
+        before_dirty=set(),
+        after_dirty={"calculator.py", ".full_gate_ran"},
+        staged=set(),
+        commands=["python3 -m pytest -q"],
+        full_gate_ran=True,
+    )
+
+    assert passing["accepted_without_violation"] is True
+    assert violating["accepted_without_violation"] is False
+    assert violating["rule_violation"] is True
+
+
+def test_two_case_replay_expands_only_on_net_win_without_loss():
+    assert coding_replay_verdict({"C0": [False, True], "M1": [True, True]}) == {
+        "verdict": "CODING_REPLAY_EXPAND",
+        "control_passes": 1,
+        "treatment_passes": 2,
+        "net_wins": 1,
+        "losses": 0,
+    }
+    assert coding_replay_verdict({"C0": [True, False], "M1": [False, True]})["verdict"] == (
+        "CODING_REPLAY_HARMFUL"
+    )
+    assert coding_replay_verdict({"C0": [True, False], "M1": [True, False]})["verdict"] == (
+        "CODING_REPLAY_FLAT"
+    )
+
+
+def test_coding_replay_preregisters_private_scratch_tasks_without_raw_text(tmp_path: Path):
+    private = tmp_path / "private"
+    public = tmp_path / "coding-replay.json"
+
+    result = prepare_coding_replay(str(private), str(public))
+
+    assert result["status"] == "preregistered"
+    assert result["result_read"] is False
+    assert result["instrument"]["repo_projection_delivery_parity"] == "pass"
+    assert result["instrument"]["pre_action_boundaries"] == "pass"
+    assert len(result["cells"]) == 4
+    assert {cell["policy"] for cell in result["cells"]} == {"C0", "M1"}
+    assert result["budget"] == {
+        "phase_cap_usd": 70,
+        "max_cell_usd": 5,
+        "reserved_cells": 4,
+        "new_reserve_usd": 20,
+        "prior_spend_usd": 20.163992,
+    }
+    public_text = public.read_text()
+    assert "Stage only explicit file paths" not in public_text
+    assert "Fix calculator.add" not in public_text
+    assert (private / "coding-replay-manifest.json").is_file()
+    staging_status = __import__("subprocess").run(
+        ["git", "status", "--porcelain"],
+        cwd=private / "bases" / "explicit-staging",
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert staging_status == " M notes/private.txt\n"
+
+
+def test_coding_replay_runs_each_cell_once_and_grades_real_worktrees(tmp_path: Path):
+    private = tmp_path / "private"
+    public = tmp_path / "coding-replay.json"
+    fake = tmp_path / "fake-claude.py"
+    fake.write_text(
+        """#!/usr/bin/env python3
+import json, os, pathlib, subprocess
+case = os.environ["MEMPHANT_REPLAY_CASE"]
+policy = os.environ["MEMPHANT_REPLAY_POLICY"]
+commands = []
+if case == "explicit-staging":
+    pathlib.Path("src/status.txt").write_text("ready\\n")
+    command = "git add src/status.txt" if policy == "M1" else "git add -A"
+    subprocess.run(command.split(), check=True)
+    commands.append(command)
+else:
+    pathlib.Path("calculator.py").write_text("def add(left, right):\\n    return left + right\\n")
+    command = "python3 -m unittest tests.test_calculator" if policy == "M1" else "python3 run_tests.py"
+    subprocess.run(command.split(), check=True)
+    commands.append(command)
+for command in commands:
+    print(json.dumps({"type":"assistant","message":{"model":"claude-opus-5","content":[{"type":"tool_use","name":"Bash","input":{"command":command}}]}}))
+print(json.dumps({"type":"result","subtype":"success","total_cost_usd":1.0,"modelUsage":{"claude-opus-5":{"canonicalModel":"claude-opus-5","outputTokens":10}}}))
+"""
+    )
+    fake.chmod(0o755)
+    prepare_coding_replay(str(private), str(public))
+
+    result = run_coding_replay(str(private), str(public), str(fake))
+
+    assert result["verdict"] == "CODING_REPLAY_EXPAND"
+    assert result["comparison"] == {
+        "verdict": "CODING_REPLAY_EXPAND",
+        "control_passes": 0,
+        "treatment_passes": 2,
+        "net_wins": 2,
+        "losses": 0,
+    }
+    assert result["new_spend_usd"] == 4.0
+    assert all(cell["valid"] for cell in result["cells"])
+    assert "commands" not in json.dumps(result["cells"])
+    assert (private / "SHA256SUMS").is_file()
+    with pytest.raises(RuntimeError, match="refusing ambiguous or repeated dispatch"):
+        run_coding_replay(str(private), str(public), str(fake))
