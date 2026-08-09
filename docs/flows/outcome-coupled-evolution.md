@@ -89,6 +89,12 @@ VERDICT: CLEAR. This is the minimum test capable of observing the lesson at an a
 
 The projected lesson arm passed 2/2 whole tasks versus 1/2 for no learned lesson, with one net win, zero losses, and `$0.3068625` new spend (`$20.4708545` cumulative). Both arms completed and validated both requested edits. The difference was the scoped-gate predicate: the no-memory arm ran both the focused test and the full repository gate, while the MemPhant arm ran only the focused test. Explicit staging was already correct in both arms. The preregistered verdict is `CODING_REPLAY_EXPAND`; the production runtime gate remains closed pending two fresh task variants.
 
+### Expanded isolated replay result
+
+The final four-case mechanism screen passed: MemPhant delivery scored 4/4 versus 2/4 without learned lessons, with two net wins, zero losses, and `$0.290904` expansion spend (`$0.5977665` coding-replay spend; `$20.7617585` cumulative campaign spend). Explicit staging was neutral in both variants. The scoped-check lesson prevented an unnecessary full repository gate in both independent tasks while preserving validator and requested-end-state success.
+
+The first expansion grade incorrectly treated one literal implementation string as the requested end state even though both deterministic validators passed. A test-first amendment replaced it with an implementation-independent functional predicate, symmetrically regraded the banked worktrees, and made no model call. Private response/model hashes stayed unchanged. This opens only the production hook/shadow design gate; four synthetic scratch tasks do not satisfy the STATUS rung-10 STATE-Bench/pass^k requirement or support a general smarter-agent claim.
+
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
 - The first consumer is the benchmark operator, so a single command must produce a machine-readable reason for every skipped arm and never require reading private transcript bodies in committed output.

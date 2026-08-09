@@ -35,6 +35,8 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     prepare_coding_replay_expansion,
     run_coding_replay,
     run_coding_replay_expansion,
+    requested_end_state,
+    regrade_coding_replay_expansion,
 )
 
 
@@ -729,6 +731,14 @@ def test_scoped_gate_replay_grades_effect_not_model_explanation():
     assert violating["rule_violation"] is True
 
 
+def test_requested_end_state_accepts_equivalent_formatter_implementation(tmp_path: Path):
+    (tmp_path / "formatter.py").write_text(
+        "import re\n\ndef slugify(value):\n    return re.sub(r' +', '-', value.lower())\n"
+    )
+
+    assert requested_end_state("scoped-gate-variant", tmp_path, set()) is True
+
+
 def test_two_case_replay_expands_only_on_net_win_without_loss():
     assert coding_replay_verdict({"C0": [False, True], "M1": [True, True]}) == {
         "verdict": "CODING_REPLAY_EXPAND",
@@ -881,3 +891,8 @@ print(json.dumps({"type":"result","subtype":"success","total_cost_usd":1.0,"mode
         "losses": 0,
     }
     assert result["runtime_gate"] == "production_hook_design_open"
+    regraded = regrade_coding_replay_expansion(
+        str(first_public), str(second_private), str(second_public)
+    )
+    assert regraded["comparison"] == result["comparison"]
+    assert regraded["instrument"]["end_state_scorer_amendment"] == "pass"

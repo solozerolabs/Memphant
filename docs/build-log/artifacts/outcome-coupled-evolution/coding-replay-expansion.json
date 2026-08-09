@@ -8,52 +8,100 @@
   },
   "cells": [
     {
+      "after_index": "1d417279f9ba05dbde35bd76ba8cffe324a72f7d",
       "base_commit": "a1948053cd31cf65c7214b1118847f649d97e7e9",
       "before_index": "c8ef3b2e3a534469086e3bc933e72f0d94e6ec2f",
       "case_id": "explicit-staging-variant",
       "cell_id": "explicit-staging-variant-arm-1",
       "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cost_usd": 0.06615549999999999,
+      "new_dirty_count": 1,
+      "passed": true,
       "policy": "C0",
       "prompt_sha256": "f7e8e98b8cfc350ffe0f3a6d492b6f21663513498fb386df0602197ebb3a9de1",
+      "requested_end_state_pass": true,
+      "response_sha256": "c7d8bcd814eadf29436d57bde3fd97b7a8c6e16008e1aaa4484c5895778cb290",
+      "rule_violation": false,
+      "tool_count": 3,
       "unit_body_sha256": null,
-      "unit_id": null
+      "unit_id": null,
+      "valid": true,
+      "validator_pass": true
     },
     {
+      "after_index": "1d417279f9ba05dbde35bd76ba8cffe324a72f7d",
       "base_commit": "a1948053cd31cf65c7214b1118847f649d97e7e9",
       "before_index": "c8ef3b2e3a534469086e3bc933e72f0d94e6ec2f",
       "case_id": "explicit-staging-variant",
       "cell_id": "explicit-staging-variant-arm-2",
       "context_sha256": "9fae7da10010d0e8dabe6b774c26c7613c6d6cb30c339e6f0d3b017c7dcf1081",
+      "cost_usd": 0.061675499999999994,
+      "new_dirty_count": 1,
+      "passed": true,
       "policy": "M1",
       "prompt_sha256": "f7e8e98b8cfc350ffe0f3a6d492b6f21663513498fb386df0602197ebb3a9de1",
+      "requested_end_state_pass": true,
+      "response_sha256": "cb7f1b3a20b1bdff17132363c5c559eb2ab751b51e9b9b3769bd81e3bc28e789",
+      "rule_violation": false,
+      "tool_count": 3,
       "unit_body_sha256": "2e607c927251727f1abfc2e1de2e65b627b4321d5420e3a890eeac92b365da80",
-      "unit_id": "explicit-staging"
+      "unit_id": "explicit-staging",
+      "valid": true,
+      "validator_pass": true
     },
     {
+      "after_index": "a9baf578c347757d29933219a91270407cd424c7",
       "base_commit": "19a299a16a41568d3cbc85bea1ba132c5a06c8cf",
       "before_index": "a9baf578c347757d29933219a91270407cd424c7",
       "case_id": "scoped-gate-variant",
       "cell_id": "scoped-gate-variant-arm-1",
       "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cost_usd": 0.09455499999999999,
+      "new_dirty_count": 1,
+      "passed": false,
       "policy": "C0",
       "prompt_sha256": "170c475ec5635ce224e771c8bcae007d134065c38699dfa1dbb9225889bbc94b",
+      "requested_end_state_pass": true,
+      "response_sha256": "c17b537505daf6c07bc14a030113520a9d7000132b52cd1573af3d5e4d7ff500",
+      "rule_violation": true,
+      "tool_count": 6,
       "unit_body_sha256": null,
-      "unit_id": null
+      "unit_id": null,
+      "valid": true,
+      "validator_pass": true
     },
     {
+      "after_index": "a9baf578c347757d29933219a91270407cd424c7",
       "base_commit": "19a299a16a41568d3cbc85bea1ba132c5a06c8cf",
       "before_index": "a9baf578c347757d29933219a91270407cd424c7",
       "case_id": "scoped-gate-variant",
       "cell_id": "scoped-gate-variant-arm-2",
       "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "cost_usd": 0.068518,
+      "new_dirty_count": 1,
+      "passed": true,
       "policy": "M1",
       "prompt_sha256": "170c475ec5635ce224e771c8bcae007d134065c38699dfa1dbb9225889bbc94b",
+      "requested_end_state_pass": true,
+      "response_sha256": "5e33bce6e9f442f2c3f783f7699b31935d8bd4aa3dde54351ce0015d39d93fc4",
+      "rule_violation": false,
+      "tool_count": 4,
       "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b",
-      "unit_id": "full-local-gate"
+      "unit_id": "full-local-gate",
+      "valid": true,
+      "validator_pass": true
     }
   ],
+  "comparison": {
+    "control_passes": 2,
+    "losses": 0,
+    "net_wins": 2,
+    "treatment_passes": 4,
+    "verdict": "CODING_REPLAY_PASS"
+  },
+  "cumulative_spend_usd": 20.761758500000003,
   "evidence_contract": {
-    "claim": "The two-case isolated coding replay was preregistered before any model result was read.",
+    "claim": "The four-case whole-task replay ended CODING_REPLAY_PASS with 2 M1 win(s) and 0 loss(es) versus C0 after implementation-independent end-state regrading.",
     "corpus": {
       "n_items": 4,
       "sha256": "7b4713f9c5bcddb3d361dab3a4061cc6ce3a726281bdc4ce0eda27b90d025c28",
@@ -77,14 +125,14 @@
     },
     "mechanism_enabled": true,
     "mechanism_evidence": "M1 receives one deterministic-triggered canonical projection body with explicit-user validation; C0 receives none.",
-    "notes": "Mechanism screen only. Private task and model bodies remain outside Git.",
+    "notes": "Mechanism screen only. Private task and model bodies remain outside Git. Post-result regrade replaced an implementation-string check with the preregistered functional end-state predicate and applied it symmetrically to both arms without model reruns.",
     "power": {
-      "b": 0,
+      "b": 2,
       "c": 0,
       "computed_by": "not applicable; two-case mechanism screen",
       "mde_at_80": null,
       "n": 4,
-      "n_d": 0,
+      "n_d": 2,
       "psi_observed": null,
       "source": "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
       "test": "descriptive-only (no test)"
@@ -93,8 +141,23 @@
     "schema_version": 1
   },
   "fallback_model": null,
+  "grades": {
+    "C0": [
+      true,
+      false,
+      true,
+      false
+    ],
+    "M1": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
   "instrument": {
     "dirty_file_baseline": "pass",
+    "end_state_scorer_amendment": "pass",
     "one_shot_dispatch": "pass",
     "pre_action_boundaries": "pass",
     "raw_content_public": "absent",
@@ -102,10 +165,11 @@
   },
   "locked_initial_result_sha256": "1590bc1f876254e86c5f89f4bcb6965b2e8755552d7d3e7327c6ceb1b77f34a1",
   "model": "claude-opus-5",
+  "new_spend_usd": 0.29090399999999994,
   "private_manifest_sha256": "7b4713f9c5bcddb3d361dab3a4061cc6ce3a726281bdc4ce0eda27b90d025c28",
-  "result_read": false,
-  "runtime_gate": "closed",
+  "result_read": true,
+  "runtime_gate": "production_hook_design_open",
   "schema_version": 1,
-  "status": "preregistered",
-  "verdict": "PENDING"
+  "status": "complete",
+  "verdict": "CODING_REPLAY_PASS"
 }

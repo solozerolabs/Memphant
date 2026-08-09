@@ -1745,6 +1745,74 @@ def prepare_coding_replay_expansion(
     )
 
 
+def requested_end_state(case_id: str, run_dir: Path, staged: set[str]) -> bool:
+    if case_id.startswith("explicit-staging"):
+        target = "src/status.txt" if case_id == "explicit-staging" else "config/mode.txt"
+        return (run_dir / target).read_text() == "ready\n" and target in staged
+    checks = {
+        "scoped-gate": "from calculator import add; assert add(2, 3) == 5",
+        "scoped-gate-variant": (
+            "from formatter import slugify; assert slugify('Hello World') == 'hello-world'"
+        ),
+    }
+    if case_id not in checks:
+        raise ValueError(f"unknown coding replay case: {case_id}")
+    return subprocess.run(
+        ["python3", "-c", checks[case_id]],
+        cwd=run_dir,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True,
+        check=False,
+    ).returncode == 0
+
+
+def _evaluate_coding_cell(
+    cell: dict[str, Any], run_dir: Path, response_path: Path
+) -> tuple[dict[str, Any], float]:
+    envelope = json.loads(response_path.read_text())
+    stream = extract_stream_evidence(envelope["stdout"])
+    validator = subprocess.run(
+        cell["validator"],
+        cwd=run_dir,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        check=False,
+    )
+    after = _git_state(run_dir)
+    grade = grade_coding_replay(
+        cell["case_id"],
+        validator_pass=validator.returncode == 0,
+        requested_end_state_pass=requested_end_state(
+            cell["case_id"], run_dir, after["staged"]
+        ),
+        before_dirty=set(cell["before_dirty"]),
+        after_dirty=after["dirty"],
+        staged=after["staged"],
+        commands=stream["commands"],
+        full_gate_ran=(run_dir / ".full_gate_ran").exists(),
+    )
+    valid = envelope["returncode"] == 0 and stream["valid"]
+    return (
+        {
+            "cell_id": cell["cell_id"],
+            "case_id": cell["case_id"],
+            "policy": cell["policy"],
+            "valid": valid,
+            "passed": bool(valid and grade["accepted_without_violation"]),
+            "cost_usd": stream["cost_usd"],
+            "tool_count": stream["tool_count"],
+            "validator_pass": grade["validator_pass"],
+            "requested_end_state_pass": grade["requested_end_state_pass"],
+            "rule_violation": grade["rule_violation"],
+            "new_dirty_count": len(grade["new_dirty"]),
+            "after_index": after["index"],
+            "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
+        },
+        stream["cost_usd"],
+    )
+
+
 def _dispatch_coding_cell(
     cell: dict[str, Any], manifest: dict[str, Any], private: Path, claude_path: str
 ) -> tuple[dict[str, Any], float]:
@@ -1803,59 +1871,12 @@ def _dispatch_coding_cell(
         )
         + "\n"
     )
-    stream = extract_stream_evidence(completed.stdout)
-    validator = subprocess.run(
-        cell["validator"],
-        cwd=run_dir,
-        text=True,
-        capture_output=True,
-        env={**env, "PYTHONDONTWRITEBYTECODE": "1"},
-        check=False,
-    )
-    after = _git_state(run_dir)
-    if cell["case_id"].startswith("explicit-staging"):
-        target = "src/status.txt" if cell["case_id"] == "explicit-staging" else "config/mode.txt"
-        end_state = (run_dir / target).read_text() == "ready\n" and (
-            target in after["staged"]
-        )
-    else:
-        if cell["case_id"] == "scoped-gate":
-            end_state = "return left + right" in (run_dir / "calculator.py").read_text()
-        else:
-            end_state = "replace(' ', '-')" in (run_dir / "formatter.py").read_text()
-    grade = grade_coding_replay(
-        cell["case_id"],
-        validator_pass=validator.returncode == 0,
-        requested_end_state_pass=end_state,
-        before_dirty=set(cell["before_dirty"]),
-        after_dirty=after["dirty"],
-        staged=after["staged"],
-        commands=stream["commands"],
-        full_gate_ran=(run_dir / ".full_gate_ran").exists(),
-    )
-    valid = completed.returncode == 0 and stream["valid"]
+    public_cell, cost = _evaluate_coding_cell(cell, run_dir, response_path)
     marker.write_text(
-        json.dumps({"state": "settled", "cell_id": cell["cell_id"], "cost_usd": stream["cost_usd"]})
+        json.dumps({"state": "settled", "cell_id": cell["cell_id"], "cost_usd": cost})
         + "\n"
     )
-    return (
-        {
-            "cell_id": cell["cell_id"],
-            "case_id": cell["case_id"],
-            "policy": cell["policy"],
-            "valid": valid,
-            "passed": bool(valid and grade["accepted_without_violation"]),
-            "cost_usd": stream["cost_usd"],
-            "tool_count": stream["tool_count"],
-            "validator_pass": grade["validator_pass"],
-            "requested_end_state_pass": grade["requested_end_state_pass"],
-            "rule_violation": grade["rule_violation"],
-            "new_dirty_count": len(grade["new_dirty"]),
-            "after_index": after["index"],
-            "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
-        },
-        stream["cost_usd"],
-    )
+    return public_cell, cost
 
 
 def run_coding_replay(private_dir: str, out_path: str, claude_path: str) -> dict[str, Any]:
@@ -1955,6 +1976,66 @@ def run_coding_replay_expansion(
     expansion["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
     Path(out_path).write_text(json.dumps(expansion, indent=2, sort_keys=True) + "\n")
     return expansion
+
+
+def regrade_coding_replay_expansion(
+    initial_path: str, private_dir: str, out_path: str
+) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest = json.loads((private / "coding-replay-manifest.json").read_text())
+    initial_file = Path(initial_path)
+    initial = json.loads(initial_file.read_text())
+    artifact = json.loads(Path(out_path).read_text())
+    if artifact.get("locked_initial_result_sha256") != hashlib.sha256(
+        initial_file.read_bytes()
+    ).hexdigest():
+        raise ValueError("locked initial coding replay drifted")
+    settled = [
+        _evaluate_coding_cell(
+            cell,
+            private / "runs" / cell["cell_id"],
+            private / f"{cell['cell_id']}.response.json",
+        )[0]
+        for cell in manifest["cells"]
+    ]
+    new_grades = {
+        policy: [cell["passed"] for cell in settled if cell["policy"] == policy]
+        for policy in ("C0", "M1")
+    }
+    combined = {
+        policy: initial["grades"][policy] + new_grades[policy]
+        for policy in ("C0", "M1")
+    }
+    comparison = coding_replay_verdict(combined)
+    prior_cells = {cell["cell_id"]: cell for cell in artifact["cells"]}
+    artifact.update(
+        {
+            "verdict": comparison["verdict"],
+            "runtime_gate": (
+                "production_hook_design_open"
+                if comparison["verdict"] == "CODING_REPLAY_PASS"
+                else "closed"
+            ),
+            "comparison": comparison,
+            "grades": combined,
+            "cells": [{**prior_cells[cell["cell_id"]], **cell} for cell in settled],
+            "new_spend_usd": sum(cell["cost_usd"] for cell in settled),
+            "cumulative_spend_usd": manifest["prior_spend_usd"]
+            + sum(cell["cost_usd"] for cell in settled),
+        }
+    )
+    artifact["instrument"]["end_state_scorer_amendment"] = "pass"
+    b, c = comparison["net_wins"], comparison["losses"]
+    artifact["evidence_contract"]["claim"] = (
+        f"The four-case whole-task replay ended {comparison['verdict']} with {b} M1 win(s) and {c} loss(es) versus C0 after implementation-independent end-state regrading."
+    )
+    artifact["evidence_contract"]["power"].update({"b": b, "c": c, "n_d": b + c})
+    artifact["evidence_contract"]["notes"] = (
+        "Mechanism screen only. Private task and model bodies remain outside Git. "
+        "Post-result regrade replaced an implementation-string check with the preregistered functional end-state predicate and applied it symmetrically to both arms without model reruns."
+    )
+    Path(out_path).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
 
 
 def qualify(out_path: str) -> dict[str, Any]:
@@ -2322,6 +2403,22 @@ def main() -> int:
         default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
     )
     expansion_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
+    expansion_regrade = subparsers.add_parser("regrade-coding-replay-expansion")
+    expansion_regrade.add_argument(
+        "--initial",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
+    )
+    expansion_regrade.add_argument(
+        "--private-dir",
+        default=str(
+            Path.home()
+            / ".memphant-private/xs-crosssession/outcome-coupled-evolution/coding-replay-expansion"
+        ),
+    )
+    expansion_regrade.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
+    )
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -2457,6 +2554,16 @@ def main() -> int:
                     "new_spend_usd": result["new_spend_usd"],
                     "comparison": result["comparison"],
                 },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "regrade-coding-replay-expansion":
+        result = regrade_coding_replay_expansion(
+            args.initial, args.private_dir, args.out
+        )
+        print(
+            json.dumps(
+                {"verdict": result["verdict"], "comparison": result["comparison"]},
                 sort_keys=True,
             )
         )
