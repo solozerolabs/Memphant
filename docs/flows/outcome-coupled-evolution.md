@@ -95,6 +95,12 @@ The final four-case mechanism screen passed: MemPhant delivery scored 4/4 versus
 
 The first expansion grade incorrectly treated one literal implementation string as the requested end state even though both deterministic validators passed. A test-first amendment replaced it with an implementation-independent functional predicate, symmetrically regraded the banked worktrees, and made no model call. Private response/model hashes stayed unchanged. This opens only the production hook/shadow design gate; four synthetic scratch tasks do not satisfy the STATUS rung-10 STATE-Bench/pass^k requirement or support a general smarter-agent claim.
 
+### Gated runtime slice
+
+The opened gate now has one authoritative serving design: MemPhant stores append-only task outcomes and task-to-memory events; repo files remain an optional generated view, not a second store. `POST /v1/task-outcomes` atomically records normalized scope metrics and initial shown/activated units. `POST /v1/task-memory-events` accepts delayed evidence only after recorded exposure, rejects observational helpful/harmful credit, and requires explicit attribution for silence. Both paths are tenant/context bound and idempotent, accept hashes and counters rather than prompt/transcript bodies, and cascade on subject erasure.
+
+Automatic lifecycle changes, prompt injection, veto, inversion, and a Claude hook installer remain closed. The next live step is the preregistered ten-task silent shadow, using a crash-safe local spool; it must prove complete linkage and zero raw-content leakage before any prompt changes.
+
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
 - The first consumer is the benchmark operator, so a single command must produce a machine-readable reason for every skipped arm and never require reading private transcript bodies in committed output.

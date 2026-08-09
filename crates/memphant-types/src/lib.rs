@@ -39,6 +39,7 @@ id_type!(JobId);
 id_type!(ResourceId);
 id_type!(ScopeId);
 id_type!(SubjectId);
+id_type!(TaskId);
 id_type!(TenantId);
 id_type!(TraceId);
 id_type!(UnitId);
@@ -1728,7 +1729,7 @@ pub const TRACE_SCHEMA_VERSION: &str = "trace-0.1.0-ws0";
 /// `MIGRATION_HEAD` and this value, so a correctly-migrated database reported
 /// as incompatible and the server never became ready. Pinned by
 /// `migrations_manifest.rs::schema_compat_revision_matches_the_newest_migration`.
-pub const SCHEMA_COMPAT_REVISION: &str = "20260801_009_drop_dead_schema";
+pub const SCHEMA_COMPAT_REVISION: &str = "20260808_010_task_outcome_ledger";
 pub const METHODOLOGY_VERSION: &str = "memphant-methodology-2026-07-03";
 pub const EXPORT_SCHEMA_VERSION: &str = "export-0.1.0-ws0";
 
@@ -2148,6 +2149,104 @@ pub struct ReviewEvent {
     pub used_ids: Vec<UnitId>,
     pub outcome: MarkOutcome,
     pub recorded_at: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskCompletionStatus {
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskValidatorStatus {
+    Passed,
+    Failed,
+    NotRun,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskMemoryEventKind {
+    Shown,
+    Activated,
+    Helpful,
+    Harmful,
+    Silenced,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskMemoryAttribution {
+    ExplicitUser,
+    DeterministicScorer,
+    RandomizedCounterfactual,
+    Observational,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskMemoryEventInput {
+    pub unit_id: UnitId,
+    pub event: TaskMemoryEventKind,
+    pub attribution: TaskMemoryAttribution,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskOutcomeRequest {
+    pub subject_id: SubjectId,
+    pub scope_id: ScopeId,
+    pub actor_id: ActorId,
+    pub agent_node_id: AgentNodeId,
+    pub subject_generation: u64,
+    pub task_id: TaskId,
+    pub harness_id: String,
+    pub model_id: String,
+    pub started_at: String,
+    pub ended_at: String,
+    pub completion_status: TaskCompletionStatus,
+    pub validator_status: TaskValidatorStatus,
+    pub tool_count: u32,
+    pub failure_count: u32,
+    pub retry_count: u32,
+    pub planned_files: Option<Vec<String>>,
+    pub actual_files: Vec<String>,
+    pub transcript_sha256: String,
+    #[serde(default)]
+    pub shown_unit_ids: Vec<UnitId>,
+    #[serde(default)]
+    pub activated_unit_ids: Vec<UnitId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TaskOutcomeResult {
+    pub accepted: bool,
+    pub task_id: TaskId,
+    pub scope_recall: Option<f64>,
+    pub scope_precision: Option<f64>,
+    pub scope_jaccard: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskMemoryEventsRequest {
+    pub subject_id: SubjectId,
+    pub scope_id: ScopeId,
+    pub actor_id: ActorId,
+    pub agent_node_id: AgentNodeId,
+    pub subject_generation: u64,
+    pub task_id: TaskId,
+    pub events: Vec<TaskMemoryEventInput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct TaskMemoryEventsResult {
+    pub accepted: bool,
+    pub task_id: TaskId,
+    pub recorded: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

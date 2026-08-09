@@ -1376,6 +1376,35 @@ impl MutationLedgerStore for AnyStore {
             _ => txn_mismatch(),
         }
     }
+
+    async fn stage_task_outcome(
+        &self,
+        tx: &mut Self::Txn,
+        outcome: memphant_core::TaskOutcomeRow,
+        events: Vec<memphant_core::TaskMemoryEventRow>,
+    ) -> Result<(), StoreError> {
+        match (self, tx) {
+            (Self::Mem(store), AnyTxn::Mem(tx)) => {
+                store.stage_task_outcome(tx, outcome, events).await
+            }
+            (Self::Pg(store), AnyTxn::Pg(tx)) => {
+                store.stage_task_outcome(tx, outcome, events).await
+            }
+            _ => txn_mismatch(),
+        }
+    }
+
+    async fn stage_task_memory_events(
+        &self,
+        tx: &mut Self::Txn,
+        events: Vec<memphant_core::TaskMemoryEventRow>,
+    ) -> Result<(), StoreError> {
+        match (self, tx) {
+            (Self::Mem(store), AnyTxn::Mem(tx)) => store.stage_task_memory_events(tx, events).await,
+            (Self::Pg(store), AnyTxn::Pg(tx)) => store.stage_task_memory_events(tx, events).await,
+            _ => txn_mismatch(),
+        }
+    }
 }
 
 #[cfg(test)]

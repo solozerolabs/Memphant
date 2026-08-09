@@ -11,8 +11,8 @@ use memphant_core::{
     EmbeddingProfileRow, EmbeddingRow, FileSyncTransitionSnapshot, ForgetOutcome, ForgetWrite,
     JOB_DEAD_LETTER_ATTEMPTS, JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome,
     MutationLedgerStore, MutationResponse, ReflectJobRow, ResolvedMemoryContext, ReviewEventRow,
-    ScopePage, StoreError, SubjectErasureReceipt, correction_rectangles_with_ids,
-    deep_unit_is_snapshot_eligible,
+    ScopePage, StoreError, SubjectErasureReceipt, TaskMemoryEventRow, TaskOutcomeRow,
+    correction_rectangles_with_ids, deep_unit_is_snapshot_eligible,
 };
 use memphant_types::{
     ActorId, AgentNodeId, CitationSpan, ContextBindingAccessPolicy, ContextBindingPolicyMode,
@@ -21,8 +21,9 @@ use memphant_types::{
     NewEpisode, NewMemoryEdge, NewMemoryUnit, NewResource, QueuedReflectJob, RecallTime,
     RecordMaterial, ReflectJob, ReflectJobKind, ReflectTrace, ResolvedMemorySource, ResourceAcl,
     ResourceId, RetainOutcome, RetrievalTrace, SCHEMA_COMPAT_REVISION, ScopeId, StoredCitation,
-    StoredEpisode, StoredMemoryEdge, StoredMemoryUnit, StoredResource, SubjectId, TenantId,
-    TraceId, TrustLevel, UnitId, agent_level_allows_memory_kind,
+    StoredEpisode, StoredMemoryEdge, StoredMemoryUnit, StoredResource, SubjectId,
+    TaskMemoryAttribution, TaskMemoryEventKind, TenantId, TraceId, TrustLevel, UnitId,
+    agent_level_allows_memory_kind,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -36,6 +37,25 @@ use crate::MIGRATION_HEAD;
 /// RFC 3339 UTC projection used for every timestamptz read; writes bind RFC
 /// 3339 strings and cast `::timestamptz`.
 const TS_FMT: &str = r#"'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'"#;
+
+fn task_event_name(value: TaskMemoryEventKind) -> &'static str {
+    match value {
+        TaskMemoryEventKind::Shown => "shown",
+        TaskMemoryEventKind::Activated => "activated",
+        TaskMemoryEventKind::Helpful => "helpful",
+        TaskMemoryEventKind::Harmful => "harmful",
+        TaskMemoryEventKind::Silenced => "silenced",
+    }
+}
+
+fn task_attribution_name(value: TaskMemoryAttribution) -> &'static str {
+    match value {
+        TaskMemoryAttribution::ExplicitUser => "explicit_user",
+        TaskMemoryAttribution::DeterministicScorer => "deterministic_scorer",
+        TaskMemoryAttribution::RandomizedCounterfactual => "randomized_counterfactual",
+        TaskMemoryAttribution::Observational => "observational",
+    }
+}
 const TRANSACTION_POOLER_ERROR: &str = "persistent Postgres connections cannot use transaction pooler port 6543; use direct or session port 5432";
 pub const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 8;
 pub const MAX_WORKER_DATABASE_MAX_CONNECTIONS: u32 = 64;
@@ -1873,6 +1893,158 @@ impl MutationLedgerStore for PgStore {
             *response_staged = true;
         }
         Ok(receipt)
+    }
+
+    async fn stage_task_outcome(
+        &self,
+        tx: &mut Self::Txn,
+        outcome: TaskOutcomeRow,
+        events: Vec<TaskMemoryEventRow>,
+    ) -> Result<(), StoreError> {
+        tx.validate_identity(
+            outcome.tenant_id,
+            outcome.data_subject_id,
+            outcome.subject_generation,
+            outcome.scope_id,
+            outcome.agent_node_id,
+            Some(outcome.actor_id),
+        )?;
+        let completion = match outcome.completion_status {
+            memphant_types::TaskCompletionStatus::Completed => "completed",
+            memphant_types::TaskCompletionStatus::Failed => "failed",
+            memphant_types::TaskCompletionStatus::Cancelled => "cancelled",
+        };
+        let validator = match outcome.validator_status {
+            memphant_types::TaskValidatorStatus::Passed => "passed",
+            memphant_types::TaskValidatorStatus::Failed => "failed",
+            memphant_types::TaskValidatorStatus::NotRun => "not_run",
+        };
+        sqlx::query(
+            "insert into memphant.task_outcome
+            (tenant_id, data_subject_id, subject_generation, scope_id, agent_node_id, actor_id,
+             task_id, harness_id, model_id, started_at, ended_at, completion_status,
+             validator_status, tool_count, failure_count, retry_count, planned_files, actual_files,
+             scope_recall, scope_precision, scope_jaccard, transcript_sha256, recorded_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamptz,$11::timestamptz,$12,$13,
+                    $14,$15,$16,$17,$18,$19,$20,$21,$22,$23::timestamptz)",
+        )
+        .bind(outcome.tenant_id.as_uuid())
+        .bind(outcome.data_subject_id.as_uuid())
+        .bind(
+            i64::try_from(outcome.subject_generation)
+                .map_err(|_| StoreError::StaleSubjectGeneration)?,
+        )
+        .bind(outcome.scope_id.as_uuid())
+        .bind(outcome.agent_node_id.as_uuid())
+        .bind(outcome.actor_id.as_uuid())
+        .bind(outcome.task_id.as_uuid())
+        .bind(outcome.harness_id)
+        .bind(outcome.model_id)
+        .bind(outcome.started_at)
+        .bind(outcome.ended_at)
+        .bind(completion)
+        .bind(validator)
+        .bind(i64::from(outcome.tool_count))
+        .bind(i64::from(outcome.failure_count))
+        .bind(i64::from(outcome.retry_count))
+        .bind(outcome.planned_files)
+        .bind(outcome.actual_files)
+        .bind(outcome.scope_recall)
+        .bind(outcome.scope_precision)
+        .bind(outcome.scope_jaccard)
+        .bind(outcome.transcript_sha256)
+        .bind(outcome.recorded_at)
+        .execute(&mut *tx.tx)
+        .await
+        .map_err(backend)?;
+        for event in events {
+            sqlx::query(
+                "insert into memphant.task_memory_event
+                (tenant_id, data_subject_id, subject_generation, scope_id, agent_node_id, actor_id,
+                 task_id, memory_unit_id, event, attribution, recorded_at)
+                values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz)",
+            )
+            .bind(event.tenant_id.as_uuid())
+            .bind(event.data_subject_id.as_uuid())
+            .bind(
+                i64::try_from(event.subject_generation)
+                    .map_err(|_| StoreError::StaleSubjectGeneration)?,
+            )
+            .bind(event.scope_id.as_uuid())
+            .bind(event.agent_node_id.as_uuid())
+            .bind(event.actor_id.as_uuid())
+            .bind(event.task_id.as_uuid())
+            .bind(event.unit_id.as_uuid())
+            .bind(task_event_name(event.event))
+            .bind(task_attribution_name(event.attribution))
+            .bind(event.recorded_at)
+            .execute(&mut *tx.tx)
+            .await
+            .map_err(backend)?;
+        }
+        Ok(())
+    }
+
+    async fn stage_task_memory_events(
+        &self,
+        tx: &mut Self::Txn,
+        events: Vec<TaskMemoryEventRow>,
+    ) -> Result<(), StoreError> {
+        for event in events {
+            tx.validate_identity(
+                event.tenant_id,
+                event.data_subject_id,
+                event.subject_generation,
+                event.scope_id,
+                event.agent_node_id,
+                Some(event.actor_id),
+            )?;
+            if matches!(
+                event.event,
+                TaskMemoryEventKind::Helpful | TaskMemoryEventKind::Harmful
+            ) {
+                let exposed: bool = sqlx::query_scalar(
+                    "select exists(
+                    select 1 from memphant.task_memory_event where tenant_id=$1 and task_id=$2
+                      and memory_unit_id=$3 and event in ('shown','activated'))",
+                )
+                .bind(event.tenant_id.as_uuid())
+                .bind(event.task_id.as_uuid())
+                .bind(event.unit_id.as_uuid())
+                .fetch_one(&mut *tx.tx)
+                .await
+                .map_err(backend)?;
+                if !exposed {
+                    return Err(StoreError::Conflict(
+                        "task evidence requires prior exposure".to_string(),
+                    ));
+                }
+            }
+            sqlx::query(
+                "insert into memphant.task_memory_event
+                (tenant_id, data_subject_id, subject_generation, scope_id, agent_node_id, actor_id,
+                 task_id, memory_unit_id, event, attribution, recorded_at)
+                values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz)",
+            )
+            .bind(event.tenant_id.as_uuid())
+            .bind(event.data_subject_id.as_uuid())
+            .bind(
+                i64::try_from(event.subject_generation)
+                    .map_err(|_| StoreError::StaleSubjectGeneration)?,
+            )
+            .bind(event.scope_id.as_uuid())
+            .bind(event.agent_node_id.as_uuid())
+            .bind(event.actor_id.as_uuid())
+            .bind(event.task_id.as_uuid())
+            .bind(event.unit_id.as_uuid())
+            .bind(task_event_name(event.event))
+            .bind(task_attribution_name(event.attribution))
+            .bind(event.recorded_at)
+            .execute(&mut *tx.tx)
+            .await
+            .map_err(backend)?;
+        }
+        Ok(())
     }
 }
 

@@ -43,6 +43,7 @@ use memphant_types::{
     ResolvedMemorySource, RetainOutcome, RetainRequest, RetainResourceOutcome,
     RetainResourceRequest, RetrievalTrace, ReviewEvent, SCHEMA_COMPAT_REVISION, ScopeId,
     StoredCitation, StoredEpisode, StoredMemoryEdge, StoredMemoryUnit, StoredResource, SubjectId,
+    TaskCompletionStatus, TaskId, TaskMemoryAttribution, TaskMemoryEventKind, TaskValidatorStatus,
     TenantId, TraceId, TrustLevel, UnitId, UnitState, agent_level_allows_memory_kind,
 };
 use memphant_types::{
@@ -811,6 +812,8 @@ pub enum MutationVerb {
     Correct,
     Forget,
     Mark,
+    TaskOutcome,
+    TaskMemoryEvent,
     FileSync,
     EraseSubject,
 }
@@ -823,6 +826,8 @@ impl MutationVerb {
             Self::Correct => "correct",
             Self::Forget => "forget",
             Self::Mark => "mark",
+            Self::TaskOutcome => "task_outcome",
+            Self::TaskMemoryEvent => "task_memory_event",
             Self::FileSync => "file_sync",
             Self::EraseSubject => "erase_subject",
         }
@@ -939,6 +944,48 @@ fn canonicalize_access_policies(policies: &mut [ContextBindingAccessPolicy]) {
 /// Review-event row shape shared by the store seam; identical to the public
 /// `ReviewEvent` DTO.
 pub type ReviewEventRow = ReviewEvent;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskOutcomeRow {
+    pub tenant_id: TenantId,
+    pub data_subject_id: SubjectId,
+    pub subject_generation: u64,
+    pub scope_id: ScopeId,
+    pub agent_node_id: AgentNodeId,
+    pub actor_id: ActorId,
+    pub task_id: TaskId,
+    pub harness_id: String,
+    pub model_id: String,
+    pub started_at: String,
+    pub ended_at: String,
+    pub completion_status: TaskCompletionStatus,
+    pub validator_status: TaskValidatorStatus,
+    pub tool_count: u32,
+    pub failure_count: u32,
+    pub retry_count: u32,
+    pub planned_files: Option<Vec<String>>,
+    pub actual_files: Vec<String>,
+    pub scope_recall: Option<f64>,
+    pub scope_precision: Option<f64>,
+    pub scope_jaccard: Option<f64>,
+    pub transcript_sha256: String,
+    pub recorded_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskMemoryEventRow {
+    pub tenant_id: TenantId,
+    pub data_subject_id: SubjectId,
+    pub subject_generation: u64,
+    pub scope_id: ScopeId,
+    pub agent_node_id: AgentNodeId,
+    pub actor_id: ActorId,
+    pub task_id: TaskId,
+    pub unit_id: UnitId,
+    pub event: TaskMemoryEventKind,
+    pub attribution: TaskMemoryAttribution,
+    pub recorded_at: String,
+}
 
 /// Filter for claiming reflect jobs. The public reflect endpoint claims with a
 /// tenant+scope filter; the background worker claims unfiltered.
@@ -2068,6 +2115,17 @@ pub trait MutationLedgerStore: MemoryStore {
         &self,
         tx: &mut Self::Txn,
     ) -> impl Future<Output = Result<SubjectErasureReceipt, StoreError>> + Send;
+    fn stage_task_outcome(
+        &self,
+        tx: &mut Self::Txn,
+        outcome: TaskOutcomeRow,
+        events: Vec<TaskMemoryEventRow>,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+    fn stage_task_memory_events(
+        &self,
+        tx: &mut Self::Txn,
+        events: Vec<TaskMemoryEventRow>,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
 }
 
 #[derive(Clone, Default)]
@@ -2136,6 +2194,8 @@ struct InMemoryState {
     reflect_trace_owners: HashMap<ReflectOwnerKey, ReflectOwnerValue>,
     retrieval_traces: HashMap<TenantId, Vec<RetrievalTrace>>,
     review_events: HashMap<TenantId, Vec<ReviewEvent>>,
+    task_outcomes: HashMap<TenantId, Vec<TaskOutcomeRow>>,
+    task_memory_events: HashMap<TenantId, Vec<TaskMemoryEventRow>>,
     forgotten_sources: HashSet<(
         TenantId,
         SubjectId,
@@ -2716,6 +2776,14 @@ impl InMemoryState {
             .entry(tenant)
             .or_default()
             .retain(|event| !erased_trace_ids.contains(&event.trace_id));
+        self.task_outcomes
+            .entry(tenant)
+            .or_default()
+            .retain(|outcome| outcome.data_subject_id != subject);
+        self.task_memory_events
+            .entry(tenant)
+            .or_default()
+            .retain(|event| event.data_subject_id != subject);
         self.forgotten_sources
             .retain(|entry| entry.0 != tenant || entry.1 != subject);
         self.prepared_structured_state
@@ -2857,6 +2925,8 @@ pub struct InMemoryTxn {
     memory_units: Vec<StoredMemoryUnit>,
     memory_edges: Vec<StoredMemoryEdge>,
     reflect_jobs: Vec<QueuedReflectJob>,
+    task_outcomes: Vec<TaskOutcomeRow>,
+    task_memory_events: Vec<TaskMemoryEventRow>,
     state_snapshot: Option<(InMemoryContextState, Box<InMemoryState>)>,
     mutation: Option<StagedMutation>,
     subject_erasure: Option<SubjectErasureReceipt>,
@@ -2976,6 +3046,8 @@ impl InMemoryStore {
             memory_units: Vec::new(),
             memory_edges: Vec::new(),
             reflect_jobs: Vec::new(),
+            task_outcomes: Vec::new(),
+            task_memory_events: Vec::new(),
             state_snapshot: None,
             mutation: None,
             subject_erasure: None,
@@ -2998,6 +3070,32 @@ impl InMemoryStore {
             .map(|state| {
                 state
                     .memory_units
+                    .get(&tenant_id)
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn task_outcomes(&self, tenant_id: TenantId) -> Vec<TaskOutcomeRow> {
+        self.inner
+            .lock()
+            .map(|state| {
+                state
+                    .task_outcomes
+                    .get(&tenant_id)
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn task_memory_events(&self, tenant_id: TenantId) -> Vec<TaskMemoryEventRow> {
+        self.inner
+            .lock()
+            .map(|state| {
+                state
+                    .task_memory_events
                     .get(&tenant_id)
                     .cloned()
                     .unwrap_or_default()
@@ -3343,6 +3441,8 @@ impl MutationLedgerStore for InMemoryStore {
             || !tx.memory_units.is_empty()
             || !tx.memory_edges.is_empty()
             || !tx.reflect_jobs.is_empty()
+            || !tx.task_outcomes.is_empty()
+            || !tx.task_memory_events.is_empty()
             || tx.state_snapshot.is_some()
         {
             return Err(StoreError::Conflict(
@@ -3379,6 +3479,106 @@ impl MutationLedgerStore for InMemoryStore {
         )?);
         tx.subject_erasure = Some(receipt.clone());
         Ok(receipt)
+    }
+
+    async fn stage_task_outcome(
+        &self,
+        tx: &mut Self::Txn,
+        outcome: TaskOutcomeRow,
+        events: Vec<TaskMemoryEventRow>,
+    ) -> Result<(), StoreError> {
+        validate_context_identity(
+            &tx.context,
+            outcome.tenant_id,
+            outcome.data_subject_id,
+            outcome.subject_generation,
+            outcome.scope_id,
+            outcome.agent_node_id,
+            Some(outcome.actor_id),
+        )?;
+        let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        let units = state.memory_units.get(&outcome.tenant_id);
+        if events.iter().any(|event| {
+            units.is_none_or(|units| {
+                !units
+                    .iter()
+                    .any(|unit| unit.id == event.unit_id && unit_matches_context(unit, &tx.context))
+            })
+        }) {
+            return Err(StoreError::NotFound("memory unit"));
+        }
+        drop(state);
+        if tx
+            .task_outcomes
+            .iter()
+            .any(|row| row.task_id == outcome.task_id)
+        {
+            return Err(StoreError::Conflict("task already exists".to_string()));
+        }
+        tx.task_outcomes.push(outcome);
+        tx.task_memory_events.extend(events);
+        Ok(())
+    }
+
+    async fn stage_task_memory_events(
+        &self,
+        tx: &mut Self::Txn,
+        events: Vec<TaskMemoryEventRow>,
+    ) -> Result<(), StoreError> {
+        let state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        for event in &events {
+            validate_context_identity(
+                &tx.context,
+                event.tenant_id,
+                event.data_subject_id,
+                event.subject_generation,
+                event.scope_id,
+                event.agent_node_id,
+                Some(event.actor_id),
+            )?;
+            if !state
+                .task_outcomes
+                .get(&event.tenant_id)
+                .is_some_and(|rows| rows.iter().any(|row| row.task_id == event.task_id))
+            {
+                return Err(StoreError::NotFound("task outcome"));
+            }
+            if !state
+                .memory_units
+                .get(&event.tenant_id)
+                .is_some_and(|units| {
+                    units.iter().any(|unit| {
+                        unit.id == event.unit_id && unit_matches_context(unit, &tx.context)
+                    })
+                })
+            {
+                return Err(StoreError::NotFound("memory unit"));
+            }
+            if matches!(
+                event.event,
+                TaskMemoryEventKind::Helpful | TaskMemoryEventKind::Harmful
+            ) && !state
+                .task_memory_events
+                .get(&event.tenant_id)
+                .is_some_and(|rows| {
+                    rows.iter().any(|row| {
+                        row.task_id == event.task_id
+                            && row.unit_id == event.unit_id
+                            && matches!(
+                                row.event,
+                                TaskMemoryEventKind::Shown | TaskMemoryEventKind::Activated
+                            )
+                    })
+                })
+            {
+                return Err(StoreError::Conflict(
+                    "task evidence requires prior exposure".to_string(),
+                ));
+            }
+        }
+        drop(state);
+        tx.task_memory_events.extend(events);
+        Ok(())
     }
 }
 
@@ -3629,6 +3829,18 @@ impl MemoryStore for InMemoryStore {
                 .entry(job.tenant_id)
                 .or_default()
                 .push(job);
+        }
+        for outcome in tx.task_outcomes {
+            next.task_outcomes
+                .entry(outcome.tenant_id)
+                .or_default()
+                .push(outcome);
+        }
+        for event in tx.task_memory_events {
+            next.task_memory_events
+                .entry(event.tenant_id)
+                .or_default()
+                .push(event);
         }
         if let Some((claim, response)) = mutation {
             next.mutation_ledger.insert(

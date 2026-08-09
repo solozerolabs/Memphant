@@ -29,10 +29,12 @@ const DROP_RETENTION_TIER_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260801_008_drop_retention_tier.sql");
 const DROP_DEAD_SCHEMA_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260801_009_drop_dead_schema.sql");
+const TASK_OUTCOME_LEDGER_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260808_010_task_outcome_ledger.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260801_009_drop_dead_schema";
+pub const MIGRATION_HEAD: &str = "20260808_010_task_outcome_ledger";
 
 /// Bundled migrations in apply order.
 ///
@@ -69,7 +71,8 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         SEMANTIC_ONLY_SUBJECT_EXCLUSION_SQL,
     ),
     ("20260801_008_drop_retention_tier", DROP_RETENTION_TIER_SQL),
-    (MIGRATION_HEAD, DROP_DEAD_SCHEMA_SQL),
+    ("20260801_009_drop_dead_schema", DROP_DEAD_SCHEMA_SQL),
+    (MIGRATION_HEAD, TASK_OUTCOME_LEDGER_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[
@@ -96,6 +99,8 @@ const REQUIRED_TABLES: &[&str] = &[
     "belief_observation",
     "review_event",
     "mutation_ledger",
+    "task_outcome",
+    "task_memory_event",
     "schema_migrations",
 ];
 

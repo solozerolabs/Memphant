@@ -14,7 +14,9 @@ use memphant_types::{
     MarkOutcome, MarkRequest, MemoryKind, NewMemoryUnit, RecallHttpRequest, RecallResponse,
     ReflectRequest, RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetainEpisodePayload,
     RetainPayload, RetainResourcePayload, RetainUnitPayload, SCHEMA_COMPAT_REVISION, ScopeId,
-    ScopeMemoryResponse, TenantId, TrustLevel, UnitState,
+    ScopeMemoryResponse, TaskCompletionStatus, TaskId, TaskMemoryAttribution, TaskMemoryEventInput,
+    TaskMemoryEventKind, TaskMemoryEventsRequest, TaskMemoryEventsResult, TaskOutcomeRequest,
+    TaskOutcomeResult, TaskValidatorStatus, TenantId, TrustLevel, UnitState,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -37,6 +39,8 @@ fn add_idempotency_header(
             | "/v1/correct"
             | "/v1/forget"
             | "/v1/mark"
+            | "/v1/task-outcomes"
+            | "/v1/task-memory-events"
             | "/v1/file-sync"
     ) {
         builder = builder.header(
@@ -572,6 +576,124 @@ async fn canonical_projection_route_orders_multiple_units_by_unit_id() {
             .collect::<Vec<_>>(),
         vec![first_id, second_id]
     );
+}
+
+#[tokio::test]
+async fn task_outcome_links_exposure_and_accepts_only_causal_delayed_evidence() {
+    let tenant_id = tenant(96_175);
+    let (app, state) = dev_app_with_state(tenant_id);
+    let binding = bind_context(&app, "task-outcome").await;
+    let context = state
+        .store()
+        .resolve_memory_context(
+            tenant_id,
+            binding.subject_id,
+            binding.actor_id,
+            binding.scope_id,
+            binding.agent_node_id,
+        )
+        .await
+        .expect("resolve context");
+    let mut tx = state.store().begin(&context).await.expect("begin");
+    let unit_id = state
+        .store()
+        .stage_memory_unit(
+            &mut tx,
+            active_projection_unit(
+                tenant_id,
+                &binding,
+                "rest:task-outcome:unit",
+                "procedure:scoped-tests",
+                "Run the narrow validator before the full repository gate.",
+            ),
+        )
+        .await
+        .expect("stage unit");
+    state.store().commit(tx).await.expect("commit unit");
+
+    let task_id = TaskId::new();
+    let outcome: TaskOutcomeResult = json_request(
+        &app,
+        "POST",
+        "/v1/task-outcomes",
+        Some(TaskOutcomeRequest {
+            subject_id: binding.subject_id,
+            scope_id: binding.scope_id,
+            actor_id: binding.actor_id,
+            agent_node_id: binding.agent_node_id,
+            subject_generation: binding.subject_generation,
+            task_id,
+            harness_id: "claude-code".to_string(),
+            model_id: "claude-opus-5".to_string(),
+            started_at: "2026-08-08T10:00:00Z".to_string(),
+            ended_at: "2026-08-08T10:05:00Z".to_string(),
+            completion_status: TaskCompletionStatus::Completed,
+            validator_status: TaskValidatorStatus::Passed,
+            tool_count: 3,
+            failure_count: 0,
+            retry_count: 0,
+            planned_files: Some(vec![
+                "./src//lib.rs".to_string(),
+                "tests/test.rs".to_string(),
+            ]),
+            actual_files: vec!["src/lib.rs".to_string()],
+            transcript_sha256: "a".repeat(64),
+            shown_unit_ids: vec![unit_id],
+            activated_unit_ids: vec![unit_id],
+        }),
+    )
+    .await
+    .1;
+    assert_eq!(outcome.scope_recall, Some(0.5));
+    assert_eq!(outcome.scope_precision, Some(1.0));
+    assert_eq!(outcome.scope_jaccard, Some(0.5));
+
+    let delayed: TaskMemoryEventsResult = json_request(
+        &app,
+        "POST",
+        "/v1/task-memory-events",
+        Some(TaskMemoryEventsRequest {
+            subject_id: binding.subject_id,
+            scope_id: binding.scope_id,
+            actor_id: binding.actor_id,
+            agent_node_id: binding.agent_node_id,
+            subject_generation: binding.subject_generation,
+            task_id,
+            events: vec![TaskMemoryEventInput {
+                unit_id,
+                event: TaskMemoryEventKind::Helpful,
+                attribution: TaskMemoryAttribution::DeterministicScorer,
+            }],
+        }),
+    )
+    .await
+    .1;
+    assert_eq!(delayed.recorded, 1);
+    assert_eq!(state.store().task_outcomes(tenant_id).len(), 1);
+    assert_eq!(state.store().task_memory_events(tenant_id).len(), 3);
+
+    let body = TaskMemoryEventsRequest {
+        subject_id: binding.subject_id,
+        scope_id: binding.scope_id,
+        actor_id: binding.actor_id,
+        agent_node_id: binding.agent_node_id,
+        subject_generation: binding.subject_generation,
+        task_id,
+        events: vec![TaskMemoryEventInput {
+            unit_id,
+            event: TaskMemoryEventKind::Harmful,
+            attribution: TaskMemoryAttribution::Observational,
+        }],
+    };
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/task-memory-events")
+        .header("idempotency-key", "reject-observational")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

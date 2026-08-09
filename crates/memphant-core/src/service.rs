@@ -22,7 +22,9 @@ use memphant_types::{
     ReflectAccepted, ReflectCandidate, ReflectInput, ReflectJob, ReflectJobKind, ReflectRequest,
     ResolvedMemoryContext, ResourceId, ResourceKind, RetainEpisodeHttpRequest,
     RetainEpisodeHttpResponse, RetrievalTrace, ReviewEvent, StoredEpisode, StoredMemoryUnit,
-    TraceId, TrustLevel, UnitId, UnitState,
+    TaskMemoryAttribution, TaskMemoryEventInput, TaskMemoryEventKind, TaskMemoryEventsRequest,
+    TaskMemoryEventsResult, TaskOutcomeRequest, TaskOutcomeResult, TraceId, TrustLevel, UnitId,
+    UnitState,
 };
 use sha2::{Digest, Sha256};
 
@@ -34,11 +36,12 @@ use crate::{
     ForgetWrite, JobFilter, LexicalScorer, MemoryStore, MutationClaim, MutationClaimOutcome,
     MutationLedgerStore, MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite,
     ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket, StructuredSourceKind,
-    StructuredStateProvider, StructuredStateRequest, VectorQuery, apply_correction_transition,
-    apply_unit_forget_transition, canonical_mutation_request_hash, correction_rectangles_with_ids,
-    cosine_similarity, derive_episode_dedup_key, derive_fact_key, embedding_profile_for,
-    evidence_slices_for_episode, fold_structured_observations, non_blank, normalize_component,
-    parse_content_date, prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
+    StructuredStateProvider, StructuredStateRequest, TaskMemoryEventRow, TaskOutcomeRow,
+    VectorQuery, apply_correction_transition, apply_unit_forget_transition,
+    canonical_mutation_request_hash, correction_rectangles_with_ids, cosine_similarity,
+    derive_episode_dedup_key, derive_fact_key, embedding_profile_for, evidence_slices_for_episode,
+    fold_structured_observations, non_blank, normalize_component, parse_content_date,
+    prepare_compiled_write_from_snapshot_owned, prepare_compiled_write_owned,
     project_structured_state, recall_scope_admitted,
     recall_with_pool_and_selection_and_deep_started, reflect_recorded_claimed_owned,
     run_embedding_task, structured_compiler_identity, structured_extraction_receipt_sha256,
@@ -53,6 +56,70 @@ pub const MAX_WORKER_COMPILE_CONCURRENCY: usize = 128;
 pub const MAX_CANONICAL_PROJECTION_ENCODED_BYTES: usize = 1_048_576;
 /// Maximum-length future timestamp emitted by the canonical Jiff formatter.
 const MAX_CANONICAL_PROJECTION_TIMESTAMP: &str = "9999-12-30T22:00:00.999999999Z";
+
+fn normalized_paths(paths: Vec<String>) -> Result<Vec<String>, ServiceError> {
+    let mut normalized = Vec::with_capacity(paths.len());
+    for path in paths {
+        if path.is_empty()
+            || path.starts_with('/')
+            || path.contains('\\')
+            || path.chars().any(char::is_control)
+        {
+            return Err(
+                CoreError::Invalid("paths must be repo-relative POSIX paths".to_string()).into(),
+            );
+        }
+        let mut parts = Vec::new();
+        for part in path.split('/') {
+            match part {
+                "" | "." => {}
+                ".." => {
+                    return Err(CoreError::Invalid(
+                        "paths may not escape the repository".to_string(),
+                    )
+                    .into());
+                }
+                value => parts.push(value),
+            }
+        }
+        if parts.is_empty() {
+            return Err(CoreError::Invalid("path cannot normalize to empty".to_string()).into());
+        }
+        normalized.push(parts.join("/"));
+    }
+    normalized.sort();
+    normalized.dedup();
+    Ok(normalized)
+}
+
+fn scope_metrics(
+    planned: Option<&[String]>,
+    actual: &[String],
+) -> (Option<f64>, Option<f64>, Option<f64>) {
+    let Some(planned) = planned else {
+        return (None, None, None);
+    };
+    let p: HashSet<_> = planned.iter().collect();
+    let a: HashSet<_> = actual.iter().collect();
+    let intersection = p.intersection(&a).count() as f64;
+    let union = p.union(&a).count() as f64;
+    let recall = if p.is_empty() {
+        1.0
+    } else {
+        intersection / p.len() as f64
+    };
+    let precision = if a.is_empty() {
+        1.0
+    } else {
+        intersection / a.len() as f64
+    };
+    let jaccard = if union == 0.0 {
+        1.0
+    } else {
+        intersection / union
+    };
+    (Some(recall), Some(precision), Some(jaccard))
+}
 
 #[cfg(test)]
 mod canonical_projection_store_tests {
@@ -5044,6 +5111,238 @@ impl<S: MemoryStore> MemoryService<S> {
             return Err(sync_operation_error(error));
         }
         self.store.commit(tx).await.map_err(sync_commit_error)?;
+        Ok(response)
+    }
+
+    pub async fn record_task_outcome(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        mut request: TaskOutcomeRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        if request.harness_id.trim().is_empty() || request.model_id.trim().is_empty() {
+            return Err(
+                CoreError::Invalid("harness_id and model_id cannot be empty".to_string()).into(),
+            );
+        }
+        if request.transcript_sha256.len() != 64
+            || !request
+                .transcript_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err(CoreError::Invalid(
+                "transcript_sha256 must be 64 lowercase hex characters".to_string(),
+            )
+            .into());
+        }
+        let started = request
+            .started_at
+            .parse::<jiff::Timestamp>()
+            .map_err(|_| CoreError::Invalid("started_at must be RFC3339".to_string()))?;
+        let ended = request
+            .ended_at
+            .parse::<jiff::Timestamp>()
+            .map_err(|_| CoreError::Invalid("ended_at must be RFC3339".to_string()))?;
+        if ended < started {
+            return Err(
+                CoreError::Invalid("ended_at cannot precede started_at".to_string()).into(),
+            );
+        }
+        request.planned_files = request.planned_files.map(normalized_paths).transpose()?;
+        request.actual_files = normalized_paths(request.actual_files)?;
+        request
+            .shown_unit_ids
+            .sort_unstable_by_key(|id| id.as_uuid());
+        request.shown_unit_ids.dedup();
+        request
+            .activated_unit_ids
+            .sort_unstable_by_key(|id| id.as_uuid());
+        request.activated_unit_ids.dedup();
+        let claim = MutationClaim::new(
+            context,
+            MutationVerb::TaskOutcome,
+            idempotency_key,
+            canonical_mutation_request_hash(MutationVerb::TaskOutcome, &request)?,
+        )?;
+        let mut tx = self.store.begin(context).await?;
+        if let MutationClaimOutcome::Replay(response) =
+            self.store.stage_mutation_claim(&mut tx, claim).await?
+        {
+            self.store.commit(tx).await?;
+            return Ok(response);
+        }
+        let (scope_recall, scope_precision, scope_jaccard) =
+            scope_metrics(request.planned_files.as_deref(), &request.actual_files);
+        let recorded_at = self.clock.now_rfc3339();
+        let event = |unit_id, event| TaskMemoryEventRow {
+            tenant_id: context.tenant_id,
+            data_subject_id: context.data_subject_id,
+            subject_generation: context.subject_generation,
+            scope_id: context.scope_id,
+            agent_node_id: context.agent_node_id,
+            actor_id: context.actor_id,
+            task_id: request.task_id,
+            unit_id,
+            event,
+            attribution: TaskMemoryAttribution::Observational,
+            recorded_at: recorded_at.clone(),
+        };
+        let events = request
+            .shown_unit_ids
+            .iter()
+            .copied()
+            .map(|id| event(id, TaskMemoryEventKind::Shown))
+            .chain(
+                request
+                    .activated_unit_ids
+                    .iter()
+                    .copied()
+                    .map(|id| event(id, TaskMemoryEventKind::Activated)),
+            )
+            .collect();
+        self.store
+            .stage_task_outcome(
+                &mut tx,
+                TaskOutcomeRow {
+                    tenant_id: context.tenant_id,
+                    data_subject_id: context.data_subject_id,
+                    subject_generation: context.subject_generation,
+                    scope_id: context.scope_id,
+                    agent_node_id: context.agent_node_id,
+                    actor_id: context.actor_id,
+                    task_id: request.task_id,
+                    harness_id: request.harness_id,
+                    model_id: request.model_id,
+                    started_at: request.started_at,
+                    ended_at: request.ended_at,
+                    completion_status: request.completion_status,
+                    validator_status: request.validator_status,
+                    tool_count: request.tool_count,
+                    failure_count: request.failure_count,
+                    retry_count: request.retry_count,
+                    planned_files: request.planned_files,
+                    actual_files: request.actual_files,
+                    scope_recall,
+                    scope_precision,
+                    scope_jaccard,
+                    transcript_sha256: request.transcript_sha256,
+                    recorded_at,
+                },
+                events,
+            )
+            .await?;
+        let result = TaskOutcomeResult {
+            accepted: true,
+            task_id: request.task_id,
+            scope_recall,
+            scope_precision,
+            scope_jaccard,
+        };
+        let response = serialized_mutation_response(200, &result)?;
+        self.store
+            .stage_mutation_response(&mut tx, response.clone())
+            .await?;
+        self.store.commit(tx).await?;
+        Ok(response)
+    }
+
+    pub async fn record_task_memory_events(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        mut request: TaskMemoryEventsRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        if request.events.is_empty() {
+            return Err(CoreError::Invalid("events cannot be empty".to_string()).into());
+        }
+        if request.events.iter().any(|event| {
+            matches!(
+                event.event,
+                TaskMemoryEventKind::Helpful | TaskMemoryEventKind::Harmful
+            ) && !matches!(
+                event.attribution,
+                TaskMemoryAttribution::ExplicitUser
+                    | TaskMemoryAttribution::DeterministicScorer
+                    | TaskMemoryAttribution::RandomizedCounterfactual
+            )
+        }) {
+            return Err(CoreError::Invalid(
+                "helpful or harmful evidence requires causal attribution".to_string(),
+            )
+            .into());
+        }
+        if request.events.iter().any(|event| {
+            event.event == TaskMemoryEventKind::Silenced
+                && event.attribution != TaskMemoryAttribution::ExplicitUser
+        }) {
+            return Err(CoreError::Invalid(
+                "silenced evidence requires explicit_user attribution".to_string(),
+            )
+            .into());
+        }
+        request.events.sort_unstable_by_key(|event| {
+            (
+                event.unit_id.as_uuid(),
+                event.event as u8,
+                event.attribution as u8,
+            )
+        });
+        request.events.dedup();
+        let claim = MutationClaim::new(
+            context,
+            MutationVerb::TaskMemoryEvent,
+            idempotency_key,
+            canonical_mutation_request_hash(MutationVerb::TaskMemoryEvent, &request)?,
+        )?;
+        let mut tx = self.store.begin(context).await?;
+        if let MutationClaimOutcome::Replay(response) =
+            self.store.stage_mutation_claim(&mut tx, claim).await?
+        {
+            self.store.commit(tx).await?;
+            return Ok(response);
+        }
+        let recorded_at = self.clock.now_rfc3339();
+        let rows = request
+            .events
+            .iter()
+            .map(
+                |TaskMemoryEventInput {
+                     unit_id,
+                     event,
+                     attribution,
+                 }| TaskMemoryEventRow {
+                    tenant_id: context.tenant_id,
+                    data_subject_id: context.data_subject_id,
+                    subject_generation: context.subject_generation,
+                    scope_id: context.scope_id,
+                    agent_node_id: context.agent_node_id,
+                    actor_id: context.actor_id,
+                    task_id: request.task_id,
+                    unit_id: *unit_id,
+                    event: *event,
+                    attribution: *attribution,
+                    recorded_at: recorded_at.clone(),
+                },
+            )
+            .collect();
+        self.store.stage_task_memory_events(&mut tx, rows).await?;
+        let result = TaskMemoryEventsResult {
+            accepted: true,
+            task_id: request.task_id,
+            recorded: request.events.len(),
+        };
+        let response = serialized_mutation_response(200, &result)?;
+        self.store
+            .stage_mutation_response(&mut tx, response.clone())
+            .await?;
+        self.store.commit(tx).await?;
         Ok(response)
     }
 

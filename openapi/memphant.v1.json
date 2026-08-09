@@ -3008,6 +3008,273 @@
         "format": "uuid",
         "type": "string"
       },
+      "TaskCompletionStatus": {
+        "enum": [
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "type": "string"
+      },
+      "TaskId": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "TaskMemoryAttribution": {
+        "enum": [
+          "explicit_user",
+          "deterministic_scorer",
+          "randomized_counterfactual",
+          "observational"
+        ],
+        "type": "string"
+      },
+      "TaskMemoryEventInput": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "$ref": "#/components/schemas/TaskMemoryAttribution"
+          },
+          "event": {
+            "$ref": "#/components/schemas/TaskMemoryEventKind"
+          },
+          "unit_id": {
+            "$ref": "#/components/schemas/UnitId"
+          }
+        },
+        "required": [
+          "unit_id",
+          "event",
+          "attribution"
+        ],
+        "type": "object"
+      },
+      "TaskMemoryEventKind": {
+        "enum": [
+          "shown",
+          "activated",
+          "helpful",
+          "harmful",
+          "silenced"
+        ],
+        "type": "string"
+      },
+      "TaskMemoryEventsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_id": {
+            "$ref": "#/components/schemas/ActorId"
+          },
+          "agent_node_id": {
+            "$ref": "#/components/schemas/AgentNodeId"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/TaskMemoryEventInput"
+            },
+            "type": "array"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ScopeId"
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subject_id": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "task_id": {
+            "$ref": "#/components/schemas/TaskId"
+          }
+        },
+        "required": [
+          "subject_id",
+          "scope_id",
+          "actor_id",
+          "agent_node_id",
+          "subject_generation",
+          "task_id",
+          "events"
+        ],
+        "type": "object"
+      },
+      "TaskMemoryEventsResult": {
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "recorded": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "task_id": {
+            "$ref": "#/components/schemas/TaskId"
+          }
+        },
+        "required": [
+          "accepted",
+          "task_id",
+          "recorded"
+        ],
+        "type": "object"
+      },
+      "TaskOutcomeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "activated_unit_ids": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnitId"
+            },
+            "type": "array"
+          },
+          "actor_id": {
+            "$ref": "#/components/schemas/ActorId"
+          },
+          "actual_files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "agent_node_id": {
+            "$ref": "#/components/schemas/AgentNodeId"
+          },
+          "completion_status": {
+            "$ref": "#/components/schemas/TaskCompletionStatus"
+          },
+          "ended_at": {
+            "type": "string"
+          },
+          "failure_count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "harness_id": {
+            "type": "string"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "planned_files": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "retry_count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ScopeId"
+          },
+          "shown_unit_ids": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UnitId"
+            },
+            "type": "array"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subject_id": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "task_id": {
+            "$ref": "#/components/schemas/TaskId"
+          },
+          "tool_count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transcript_sha256": {
+            "type": "string"
+          },
+          "validator_status": {
+            "$ref": "#/components/schemas/TaskValidatorStatus"
+          }
+        },
+        "required": [
+          "subject_id",
+          "scope_id",
+          "actor_id",
+          "agent_node_id",
+          "subject_generation",
+          "task_id",
+          "harness_id",
+          "model_id",
+          "started_at",
+          "ended_at",
+          "completion_status",
+          "validator_status",
+          "tool_count",
+          "failure_count",
+          "retry_count",
+          "actual_files",
+          "transcript_sha256"
+        ],
+        "type": "object"
+      },
+      "TaskOutcomeResult": {
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "scope_jaccard": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "scope_precision": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "scope_recall": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "task_id": {
+            "$ref": "#/components/schemas/TaskId"
+          }
+        },
+        "required": [
+          "accepted",
+          "task_id"
+        ],
+        "type": "object"
+      },
+      "TaskValidatorStatus": {
+        "enum": [
+          "passed",
+          "failed",
+          "not_run"
+        ],
+        "type": "string"
+      },
       "TenantId": {
         "format": "uuid",
         "type": "string"
@@ -3584,6 +3851,96 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CanonicalProjectionResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/task-memory-events": {
+      "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskMemoryEventsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskMemoryEventsResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/task-outcomes": {
+      "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskOutcomeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOutcomeResult"
                 }
               }
             }
