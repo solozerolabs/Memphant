@@ -73,32 +73,45 @@ git commit -m "chore: verify migration 010 applies clean; pending on Finn"
 
 ## Part B — The census/validation kill gate (Stage 1a)
 
-One Python harness, two modes: **census** (do correction→later-same-scope chains exist at all?) and **validation** (does outcome-gated minting beat blind minting on precision?). $0, offline. Follows `scripts/gate_*.py` conventions.
+One Python harness, two modes: **census** (do correction→later-same-scope chains exist at all?) and **validation** (does outcome-gated minting beat blind minting on precision?). Read-only against the Syndai **dev** DB. Follows `scripts/gate_*.py` conventions.
 
-### Task B1: Assemble the census dataset from `coding_execution_attempt_events`
+**Data source (verified read-only, 2026-08-09):** Syndai dev DB (Supabase), `syndai` schema, reached via `doppler run --config dev`. Confirmed counts: **317 distinct attempts across 183 runs / 6 repos**, 1,434 `user` event rows, outcomes `completed`=103 / `failed`=161 / `cancelled`=22. This is enough for a census.
+
+**Real schema (do NOT assume the earlier draft's shape):**
+- `syndai.coding_execution_attempt_events`: `{id, coding_run_id, attempt_id, sequence, event_type, subtype, payload (JSONB — turn content), occurred_at}`. **Turn text lives in `payload`**, and a *user turn* is `event_type='user'` (the correction-candidate rows). `assistant` and structured `message_*/turn_*/tool_execution_*` events also exist — the nominator only reads `event_type='user'`.
+- `syndai.coding_runs`: `{coding_repository_id (=repo scope), current_phase, pr_status, terminal_summary (JSONB), validation_iteration}`. **Outcome = `current_phase`**: map `completed → passed`, `failed`/`cancelled → not_passed`. There is NO `validator_status` column.
+- Join: events → run via `coding_run_id` → `coding_repository_id` (scope) + `current_phase` (outcome).
+
+**Secrets/connection seam:** the script is doppler-agnostic — it reads `CENSUS_DATABASE_URL` (falling back to `DATABASE_URL`) from the env; the operator runs it wrapped in `doppler run --config dev -- …`. No secret ever enters the script or a committed file.
+
+### Task B1: Assemble the census dataset from `syndai.coding_execution_attempt_events`
 
 **Files:**
 - Create: `scripts/capture_census_dataset.py`
-- Create: `benchmarks/data/capture_census.jsonl` (output; committed as hashes+aggregates only — see B4)
-- Reference: `scripts/gate_common.py` (DB connect + row helpers), `benchmarks/data/coding_events_corpus.stats.json` (source table = `coding_execution_attempt_events`, 359 attempts / 144 eligible)
+- Create: `benchmarks/data/capture_census.jsonl` (gitignored — carries turn text)
+- Create: `benchmarks/data/capture_census.stats.json` (committed — counts only)
+- Reference: `scripts/gate_common.py` (row/env helpers)
 
 **Interfaces:**
-- Produces: a per-attempt record `{attempt_id, run_id, repo_scope, started_at, ended_at, validator_status, events:[{seq, role, text}]}` where `repo_scope` = the run's repository id and `validator_status ∈ {passed, failed, not_run}`.
+- Produces: a per-attempt record `{attempt_id, run_id, repo_scope, started_at, ended_at, outcome, user_turns:[{sequence, text}]}` where `repo_scope` = `coding_repository_id`, `outcome ∈ {passed, not_passed}` (from `current_phase`), and `user_turns` are the `event_type='user'` events' extracted `payload` text, in `sequence` order.
 
-- [ ] **Step 1: Write the failing test for the record shape**
+- [ ] **Step 1: Write the failing test for `normalize_attempt` (pure, no DB)**
 
 `scripts/tests/test_capture_census_dataset.py`:
 ```python
-from capture_census_dataset import normalize_attempt
-def test_normalize_attempt_carries_scope_and_outcome():
-    raw = {"attempt_id":"a1","run_id":"r1","repository_id":"repo1",
-           "started_at":"2026-07-06T15:44:21+00:00","ended_at":"2026-07-06T15:50:00+00:00",
-           "validator_status":"passed",
-           "events":[{"sequence":4,"role":"user","text":"use pnpm not npm"}]}
+from capture_census_dataset import normalize_attempt, phase_to_outcome
+def test_phase_maps_to_binary_outcome():
+    assert phase_to_outcome("completed") == "passed"
+    assert phase_to_outcome("failed") == "not_passed"
+    assert phase_to_outcome("cancelled") == "not_passed"
+def test_normalize_attempt_extracts_user_turns_and_scope():
+    raw = {"attempt_id":"a1","coding_run_id":"r1","repo_scope":"repo1",
+           "current_phase":"completed","started_at":"2026-07-06T15:44:21+00:00","ended_at":"2026-07-06T15:50:00+00:00",
+           "events":[{"sequence":4,"event_type":"user","payload":{"text":"use pnpm not npm"}},
+                     {"sequence":5,"event_type":"assistant","payload":{"text":"ok"}}]}
     rec = normalize_attempt(raw)
-    assert rec["repo_scope"] == "repo1"
-    assert rec["validator_status"] == "passed"
-    assert rec["events"][0]["role"] == "user"
+    assert rec["repo_scope"]=="repo1" and rec["outcome"]=="passed"
+    assert rec["user_turns"]==[{"sequence":4,"text":"use pnpm not npm"}]
 ```
 
 - [ ] **Step 2: Run it, verify it fails**
@@ -106,26 +119,26 @@ def test_normalize_attempt_carries_scope_and_outcome():
 Run: `python3 -m pytest scripts/tests/test_capture_census_dataset.py -q`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `normalize_attempt` + a `main()` that queries the source table**
+- [ ] **Step 3: Implement `phase_to_outcome`, `normalize_attempt`, and a read-only `main()`**
 
-`normalize_attempt(raw)` maps `repository_id→repo_scope`, passes `validator_status` through (defaulting `not_run` when absent), and keeps `events` as `[{sequence, role, text}]`. `main()` connects via `gate_common` to the `syndai_local` (or configured) DB, selects the 305 ok attempts, writes JSONL to `benchmarks/data/capture_census.jsonl`. Query is READ-ONLY.
+`phase_to_outcome(p)` = `"passed" if p=="completed" else "not_passed"`. `normalize_attempt(raw)` keeps only `event_type=='user'` events, extracts `payload["text"]` (payload may be a JSON string or dict — handle both; skip events with no text), returns the record shape above. `main()` reads `CENSUS_DATABASE_URL` or `DATABASE_URL` from env, runs ONE read-only SQL that joins `syndai.coding_execution_attempt_events` → `syndai.coding_runs`, groups events by `attempt_id`, and writes `benchmarks/data/capture_census.jsonl`. **Never** writes to the DB.
 
 - [ ] **Step 4: Run the test, verify it passes**
 
 Run: `python3 -m pytest scripts/tests/test_capture_census_dataset.py -q`
-Expected: PASS.
+Expected: PASS (both).
 
-- [ ] **Step 5: Generate the dataset and record its stats**
+- [ ] **Step 5: Generate the dataset from dev and record stats**
 
-Run: `python3 scripts/capture_census_dataset.py --out benchmarks/data/capture_census.jsonl`
-Expected: prints `attempts=<N> with_scope=<N> with_outcome=<N>`. If `with_scope` or `with_outcome` is ~0, STOP — the source lacks the join and the census is `UNTESTABLE` (record and surface; this is a legitimate early NO-GO).
+Run: `cd /Users/sidsharma/Syndai-capture-census && doppler run --config dev -- python3 /Users/sidsharma/Memphant/scripts/capture_census_dataset.py --out /Users/sidsharma/Memphant/benchmarks/data/capture_census.jsonl`
+Expected: prints `attempts=N with_scope=N with_outcome=N user_turns=N`. With the verified data, `attempts≈300+`, `with_scope` and `with_outcome` both near-total. If either is ~0, STOP — legitimate `UNTESTABLE` NO-GO.
 
-- [ ] **Step 6: Commit the script + stats (NOT raw bodies)**
+- [ ] **Step 6: Gitignore raw, commit script + stats only**
 
-Commit `capture_census_dataset.py`, the test, and a `.stats.json` (counts only). The raw `.jsonl` is gitignored (carries transcript text).
+Add `benchmarks/data/capture_census.jsonl` and `capture_census_labels.jsonl` to `.gitignore`. `.stats.json` carries counts only (no text).
 ```bash
 git add scripts/capture_census_dataset.py scripts/tests/test_capture_census_dataset.py benchmarks/data/capture_census.stats.json .gitignore
-git commit -m "feat: assemble capture census dataset from execution-attempt events"
+git commit -m "feat: assemble capture census dataset from syndai execution-attempt events (read-only dev mine)"
 ```
 
 ### Task B2: Detect `correction → distinct-later-same-scope-task` chains (census mode)
@@ -135,38 +148,41 @@ git commit -m "feat: assemble capture census dataset from execution-attempt even
 - Reference: the corrections-nominator grammar from the spec (§4.1); `scripts/gate_mine_goldens.py` (verbatim-span, drop-not-fabricate discipline)
 
 **Interfaces:**
-- Consumes: `benchmarks/data/capture_census.jsonl` (from B1).
-- Produces: `census_result = {attempts, corrections_nominated, chains_found, chain_rate}` where a *chain* = a correction nominated in attempt X whose same-`repo_scope` has a distinct later attempt Y (`started_at_Y > ended_at_X`) with `validator_status == "passed"`.
+- Consumes: `benchmarks/data/capture_census.jsonl` (from B1) — records with `{attempt_id, repo_scope, started_at, ended_at, outcome, user_turns}`.
+- Produces: `census_result = {attempts, corrections_nominated, chains_found, chain_rate}` where a *chain* = a correction nominated in attempt X whose same-`repo_scope` has a distinct later attempt Y (`started_at_Y > ended_at_X`) with `outcome == "passed"`.
 
 - [ ] **Step 1: Write the failing test for chain detection**
 
 `scripts/tests/test_capture_census.py`:
 ```python
-from capture_census import find_chains
+from capture_census import find_chains, nominate_corrections
 def test_correction_then_clean_later_same_scope_is_a_chain():
     ds = [
       {"attempt_id":"x","repo_scope":"r","started_at":"2026-07-01T00:00:00+00:00","ended_at":"2026-07-01T01:00:00+00:00",
-       "validator_status":"failed","events":[{"sequence":3,"role":"user","text":"no, use pnpm not npm"}]},
+       "outcome":"not_passed","user_turns":[{"sequence":3,"text":"no, use pnpm not npm"}]},
       {"attempt_id":"y","repo_scope":"r","started_at":"2026-07-02T00:00:00+00:00","ended_at":"2026-07-02T01:00:00+00:00",
-       "validator_status":"passed","events":[{"sequence":1,"role":"user","text":"add a route"}]},
+       "outcome":"passed","user_turns":[{"sequence":1,"text":"add a route"}]},
     ]
     chains = find_chains(ds)
     assert len(chains) == 1 and chains[0]["correction_attempt"] == "x" and chains[0]["clean_attempt"] == "y"
 
 def test_no_later_task_same_scope_is_not_a_chain():
     ds = [{"attempt_id":"x","repo_scope":"r","started_at":"2026-07-01T00:00:00+00:00","ended_at":"2026-07-01T01:00:00+00:00",
-           "validator_status":"failed","events":[{"sequence":3,"role":"user","text":"no, use pnpm not npm"}]}]
+           "outcome":"not_passed","user_turns":[{"sequence":3,"text":"no, use pnpm not npm"}]}]
     assert find_chains(ds) == []
+
+def test_conversational_non_correction_user_turn_is_not_nominated():
+    assert nominate_corrections([{"sequence":1,"text":"thanks, that looks great"}]) == []
 ```
 
-- [ ] **Step 2: Run, verify both fail**
+- [ ] **Step 2: Run, verify all fail**
 
 Run: `python3 -m pytest scripts/tests/test_capture_census.py -q`
 Expected: FAIL (module not found).
 
 - [ ] **Step 3: Implement `nominate_corrections` (deterministic) + `find_chains`**
 
-`nominate_corrections(events)` fires on prohibition/imperative user turns ("no", "don't", "never", "stop", "use X not Y", "revert") — precision-first, reuse the spec grammar. `find_chains(ds)` groups by `repo_scope`, sorts by time, and for each attempt with a nominated correction, finds a distinct later same-scope attempt with `validator_status == "passed"`.
+`nominate_corrections(user_turns)` fires on prohibition/imperative turns ("no", "don't", "never", "stop", "use X not Y", "revert", "actually") — precision-first, reject conversational praise/ack. `find_chains(ds)` groups by `repo_scope`, sorts by `started_at`, and for each attempt with a nominated correction finds a distinct later same-scope attempt with `outcome == "passed"` (`started_at_Y > ended_at_X`).
 
 - [ ] **Step 4: Run, verify pass**
 
