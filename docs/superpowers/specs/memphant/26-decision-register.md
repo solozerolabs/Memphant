@@ -290,3 +290,143 @@ reimplementation when available — it is cheaper and carries attribution rather
 than risk. And an independently implemented technique still earns its default
 through the same paired, preregistered evidence; the published gain is never our
 number.
+
+## 9. Outcome-Coupled Evolution — `marcusquinn/aidevops` Mechanism Evaluation (D-2026-08-09)
+
+Source: `marcusquinn/aidevops` `.agents/reference/memory.md`,
+`.agents/scripts/memory-graduate-helper.sh`,
+`.agents/workflows/{graduate-memories,memory-audit}.md`. **License caveat:** MIT
+with an `ATTRIBUTION.md` attaching notice requirements to copied code *and*
+"distinctive operating patterns." These decisions reimplement concepts under the
+tiered-independent-implementation protocol (D-2026-07-30b); **no aidevops text or
+code is copied**. Competitive/prior-art context: `13` §1.4a.
+
+All three are held to the standing evidence rules: promotion evidence only from
+the packaged Postgres runtime on pinned corpora; $0 qualification before any paid
+measurement; no tuning on burned tranches; a ranking change ships only with
+demonstrated lift (the Track-R reranker arm was rejected on exactly that bar).
+
+### D-2026-08-09a — Retrieval-outcome "Q-values" folded into ranking: **DORMANT (activation-gated)**
+
+**Mechanism.** aidevops blends a per-memory usefulness score (cited +1.0,
+led_to_new +0.6, edited +0.5, reused +0.4, dead_end −0.15/floor −1.0, debunked
+−2.0/floor −5.0) into ranking as `bm25 − usefulness*0.3`, or as a third RRF
+signal.
+
+**Decision.** Do **not** ship any usefulness→ranking blend now. The capability is
+**already specced** as the rung-11 fold/decay engine fed by the `mark
+{trace_id, used_ids[], outcome}` verb and day-one `review_event` rows (§1 row
+"Outcome feedback verb"); this is not a new mechanism, and aidevops is external
+confirmation of the shape, not evidence for a default. A ranking change is
+exactly the class the Track-R reranker rejection governs: **no fold coefficient
+ships without demonstrated lift from the packaged runtime on a pinned corpus.**
+
+**Why dormant, not adopt or reject.** It cannot be qualified on static banks —
+a usefulness signal needs longitudinal usage, which no frozen corpus contains.
+So it stays dormant until a live signal exists, then must clear the same paired
+gate as any other ranking lever.
+
+**Emitters (map onto existing lineage, zero new tables).** `cited` /
+`citation_justification` is already carried by receipts' citation identity
+(`CorrectionHandle` / `citation_episode_id`); `dead_end` = recalled-but-uncited
+in the same receipt. The only live consumer that can report either today is the
+Syndai active-read dogfood (`07`/WS-F). `led_to_new`, `edited`, `reused` map to
+existing `review_event` / consolidation lineage. The `debunked`/`false` signal is
+**not** a ranking input — it routes to supersession/contradiction suppression
+(D-2026-08-09b), never to a score.
+
+**Activation gate (must all hold before any paid measurement).**
+1. **Volume floor:** a preregistered minimum of dogfood receipts carrying
+   resolvable `used_ids[]` + outcome per (scope, kind) cell, set before reading
+   any telemetry, sufficient for a Wilson lower-bound helpful/harmful split (the
+   §8-plan ordering predicate). Below floor → `UNTESTABLE`, no spend.
+2. **Gold-blind, frozen telemetry design (the HorizonBench router lesson):** the
+   usefulness signal is computed from a telemetry stream that is **frozen and
+   hash-bound before it can touch any ranking or gold label**, exactly as the LME
+   dev/live cohorts are frozen (`memphant-lme-exposure-guard-gap`). The signal
+   may never be fit, tuned, or thresholded on a tranche that also scores the
+   promotion. Router lesson: a feedback loop that trains on its own evaluation
+   corpus manufactures lift that does not generalise.
+3. **Coefficient earns its default like any ranking lever:** paired, same-lattice,
+   preregistered; the aidevops constants (0.3 blend, the reward weights) are a
+   starting hypothesis, never our number.
+
+**Reopen/promote test.** Activation-gate floor met on frozen gold-blind telemetry
+AND a paired run shows lift → fold coefficient promoted through `27`. Until then
+the field exists (`outcome_label`, `mark`) and the coefficient is inert.
+
+### D-2026-08-09b — Suppressed-unit read must not refresh any ranking-relevant counter: **ADOPT (pin as invariant)**
+
+**Mechanism.** aidevops filters debunked/retracted/superseded rows out of recall
+**before** access/recency tracking updates, so retrieving a falsehood never
+refreshes it.
+
+**Decision.** Adopt the *invariant*, and pin it now with a deterministic golden.
+MemPhant already suppresses via `unresolved_contradiction` and supersession
+(`31` §0), but the ordering guarantee — "a suppressed/superseded unit's retrieval
+alters **no** ranking-relevant counter (access count, recency, and any future
+`mark`/usefulness signal per D-2026-08-09a)" — is **not** currently asserted by
+any test. An unpinned ordering invariant is a latent regression, and if
+D-2026-08-09a ever activates, a refresh-through-suppression bug would let an
+attacker keep a debunked unit fresh by re-querying it (the MINJA-class
+clean-provenance farming `26` §1 already treats as in-scope).
+
+**Cost/placement.** $0, reader-free, deterministic — this is precisely what the
+`31` evidence-integrity suite exists to hold (`31` §2). Spec delta lands in `31`
+(see delta below), verified by perturbation: remove the suppression edge and the
+counter must move; keep it and the counter must not.
+
+**Scope guard.** The probe asserts the *ordering*, not new engine behaviour. If it
+fails, that is a bug report against existing suppression machinery, not a feature
+request (`31` §0). It does **not** presuppose D-2026-08-09a: the counter set is
+"access + recency today, plus usefulness iff activated."
+
+### D-2026-08-09c — Verified-outcome gating + reversible per-entry promotion for the injection block: **CONDITIONAL (gated on adherence Phase A)**
+
+**Mechanism.** aidevops graduates a memory into always-loaded guidance only with
+an independently verified outcome (`test_passed | pr_merged |
+operational_verified | verified_reuse`) carrying a verifier identity and a
+non-self evidence source — self-assertion never qualifies; access frequency ranks
+candidates but never qualifies one. Every graduated block is wrapped in per-entry
+`begin/end` markers with a promotions record (destination, status, promoted_at);
+revocation is a surgical block delete, correction leaves an audit relation.
+
+**Decision.** Do **not** build the adherence injection lane on this basis.
+OctoBench injection is FLAT (+0.9pp) and the veto is DEAD
+(`memphant-adherence-9team-synthesis`); this mechanism is a *design constraint on
+a lane that has no measured justification to exist yet*, not a reason to open it.
+**Recorded as a conditional spec delta gated on the Phase A live-cohort depth
+signal** (the one open predicate in that synthesis): **if and only if** Phase A
+justifies a compiled ≤4KB session-start injection block, then admission is
+**outcome-verified, not confidence/frequency-ranked**, and block membership is
+**per-entry reversible**. If Phase A does not open, this decision is moot and no
+lane ships.
+
+**Data shapes borrowed regardless (map onto existing lineage, not new tables).**
+These are independently sound and align with the append-only bitemporal discipline
+(`04` §7.3a) whether or not the injection lane opens:
+- **One-row-per-source evidence dedup** — replay cannot manufacture independent
+  evidence. Maps onto the existing citation/`CorrectionHandle` provenance; the
+  invariant is "N replays of one source = 1 evidence row," not a new
+  `observation_sources` table.
+- **Verifier identity separate from the claim** — an `outcome`/`verification`
+  distinction where the verifier and evidence source are attributable and
+  non-self. Maps onto the `mark`/`review_event` outcome lineage extended with a
+  verifier attribution, **not** a parallel `observation_outcomes` +
+  `outcome_verifications` schema; self-assertion is inadmissible by construction.
+- **Promotion keyed by destination** — a promotion record (destination, status,
+  promoted_at) enabling surgical revoke + `corrects` audit relation. Maps onto
+  the pinned-block versioning already required for the one-editable-pinned-block-
+  per-scope decision (§1 row "Pinned scope block"): promotion = a versioned,
+  audited, per-entry-revocable write to that block, cleared by scope-`forget`.
+
+**Why verified-outcome and not frequency (if the lane opens).** Access frequency
+is farmable — it "structurally rewards an attacker for repeating themselves" (§1
+row "Stored composite importance score"). Gating always-loaded guidance on an
+independently verified, non-self outcome is the same trust-as-hard-ceiling
+posture already adopted for high-risk args, applied to promotion.
+
+**Reopen/promote test.** Phase A depth signal justifies the injection lane →
+build with outcome-verified, per-entry-reversible admission per this decision.
+Phase A stays flat → the lane stays closed and only the three borrowed data-shape
+invariants (above) apply to any promotion path that does open.

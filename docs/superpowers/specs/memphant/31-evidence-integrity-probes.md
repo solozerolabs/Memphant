@@ -20,8 +20,9 @@ We already ship: no-LLM write path with verbatim extraction bodies (service.rs:6
 | conflict_evidence_recall | for probes with a live contradiction: both conflicting states present in packed output AND `unresolved_contradiction` label set AND abstention=true | reproducible |
 | as_of_correctness | for superseded facts: current-time recall returns successor only; as-of-transaction-time recall returns the superseded unit (the `Superseded if transaction_to.is_some() → None` path, lib.rs:8388) | reproducible |
 | citation_justification | the probe's expected answer maps to the specific unit whose `CorrectionHandle` is cited — not merely *a* relevant unit | reproducible |
+| suppressed_read_no_refresh | retrieving a superseded or `unresolved_contradiction`-suppressed unit alters **no** ranking-relevant counter — access count, recency, and any future `mark`/usefulness signal (D-2026-08-09a). The suppression filter must run **before** any access/recency/outcome tracking. | reproducible |
 
-All four are deterministic golden assertions — $0, no reader lattice, no exposure-guard interaction.
+All five are deterministic golden assertions — $0, no reader lattice, no exposure-guard interaction.
 
 ## 2. Probe design constraints
 
@@ -29,6 +30,7 @@ All four are deterministic golden assertions — $0, no reader lattice, no expos
 2. **Mutations are in-store, not in-repo.** Repo-recoverable facts are grep's turf; probes mutate entity attributes across episodes (office moved, flag renamed, owner changed, value corrected then re-corrected) so the ground truth exists only in the memory store's history.
 3. **Three trace regimes per entity family:** stale (clean supersession — old unit must NOT leak), conflicting (two Active units, no supersession match — both must surface + abstain), adversarial (near-duplicate distractor with wrong value and high lexical overlap — citation_justification is the gate that catches packing the distractor).
 4. Reuse existing golden idioms: `temporal_validity_current_office.yaml` is the stale-regime template; extend rather than invent a new YAML dialect.
+5. **Suppressed-read-no-refresh probe (adopted D-2026-08-09b, from `marcusquinn/aidevops`'s filter-before-track ordering; concept reimplemented, no code copied).** One stale/superseded unit and one `unresolved_contradiction`-suppressed unit each get a probe that (a) records the unit's ranking-relevant counters, (b) issues a recall that would surface the unit were it not suppressed, (c) re-reads the counters and asserts **no change**. Verified by perturbation: remove the supersession/`contradicts` edge and the counter *must* move (proving the probe isn't vacuously passing on a unit that was never a candidate — the `memphant-golden-nonvacuity` rule). The counter set is "access + recency today, plus the `mark`/usefulness signal iff D-2026-08-09a activates"; the probe asserts the ordering guarantee, not new engine behaviour — any failure is a bug against existing suppression machinery (§0).
 
 ## 3. Wiring (follows the established add-a-probe-set path)
 
