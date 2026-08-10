@@ -1,0 +1,169 @@
+{
+  "budget": {
+    "max_cell_usd": 5,
+    "new_reserve_usd": 20,
+    "phase_cap_usd": 70,
+    "prior_spend_usd": 20.163992,
+    "reserved_cells": 4
+  },
+  "cells": [
+    {
+      "after_index": "d7e63803a11a78e9e09a62f9ccd323e9324d9771",
+      "base_commit": "d291ab290d7805794aa7cba8b5d7f3a36704699e",
+      "before_index": "7d43cd430c70a4f0f734ce6261cb0d8941ce36fa",
+      "case_id": "explicit-staging",
+      "cell_id": "explicit-staging-arm-1",
+      "context_sha256": "9fae7da10010d0e8dabe6b774c26c7613c6d6cb30c339e6f0d3b017c7dcf1081",
+      "cost_usd": 0.08584350000000002,
+      "new_dirty_count": 1,
+      "passed": true,
+      "policy": "M1",
+      "prompt_sha256": "c65b15d0da4e60605d639a1cc32a29dddc8dd6fef895cfd4273f3d0d4bb7cfe6",
+      "requested_end_state_pass": true,
+      "response_sha256": "7bfe143624a42fb341d685d5a88a4b90eb751fd0362deb5315224cd6b77fa870",
+      "rule_violation": false,
+      "tool_count": 3,
+      "unit_body_sha256": "2e607c927251727f1abfc2e1de2e65b627b4321d5420e3a890eeac92b365da80",
+      "unit_id": "explicit-staging",
+      "valid": true,
+      "validator_pass": true
+    },
+    {
+      "after_index": "d7e63803a11a78e9e09a62f9ccd323e9324d9771",
+      "base_commit": "d291ab290d7805794aa7cba8b5d7f3a36704699e",
+      "before_index": "7d43cd430c70a4f0f734ce6261cb0d8941ce36fa",
+      "case_id": "explicit-staging",
+      "cell_id": "explicit-staging-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cost_usd": 0.06557600000000001,
+      "new_dirty_count": 1,
+      "passed": true,
+      "policy": "C0",
+      "prompt_sha256": "c65b15d0da4e60605d639a1cc32a29dddc8dd6fef895cfd4273f3d0d4bb7cfe6",
+      "requested_end_state_pass": true,
+      "response_sha256": "b67d90d782a305ce995da0af58c29d148803e31937deba15cd2d006d7f2634d0",
+      "rule_violation": false,
+      "tool_count": 3,
+      "unit_body_sha256": null,
+      "unit_id": null,
+      "valid": true,
+      "validator_pass": true
+    },
+    {
+      "after_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
+      "base_commit": "e7ff4e3daf7ba9ea7510a4c1520209a83def4f13",
+      "before_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
+      "case_id": "scoped-gate",
+      "cell_id": "scoped-gate-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "cost_usd": 0.0783575,
+      "new_dirty_count": 1,
+      "passed": true,
+      "policy": "M1",
+      "prompt_sha256": "e0cb0ec4b37c6f7ba3974367ec78efcb563415c669b8c00c718283b6d3865a20",
+      "requested_end_state_pass": true,
+      "response_sha256": "55c085f775b5dcead944d5966aab70954662692363967ec230f2ff63160b47df",
+      "rule_violation": false,
+      "tool_count": 6,
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b",
+      "unit_id": "full-local-gate",
+      "valid": true,
+      "validator_pass": true
+    },
+    {
+      "after_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
+      "base_commit": "e7ff4e3daf7ba9ea7510a4c1520209a83def4f13",
+      "before_index": "37bb4df681ad99b365e4715666c56fd8b2d12513",
+      "case_id": "scoped-gate",
+      "cell_id": "scoped-gate-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cost_usd": 0.0744325,
+      "new_dirty_count": 1,
+      "passed": false,
+      "policy": "C0",
+      "prompt_sha256": "e0cb0ec4b37c6f7ba3974367ec78efcb563415c669b8c00c718283b6d3865a20",
+      "requested_end_state_pass": true,
+      "response_sha256": "7838d09ee02ac2a336ad445699326959433b5faef10814742715b7edc30cf26a",
+      "rule_violation": true,
+      "tool_count": 6,
+      "unit_body_sha256": null,
+      "unit_id": null,
+      "valid": true,
+      "validator_pass": true
+    }
+  ],
+  "comparison": {
+    "control_passes": 1,
+    "losses": 0,
+    "net_wins": 1,
+    "treatment_passes": 2,
+    "verdict": "CODING_REPLAY_EXPAND"
+  },
+  "cumulative_spend_usd": 20.4682015,
+  "evidence_contract": {
+    "claim": "The initial two-case whole-task replay ended CODING_REPLAY_EXPAND with 1 M1 win(s) and 0 loss(es) versus C0.",
+    "corpus": {
+      "n_items": 2,
+      "sha256": "38b8650e80290968a9fb57ef65c258178b0eafaaf82124d9cdbb8ab50b876506",
+      "snapshot_id": "private-outcome-coding-replay-2026-08-08"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 20,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-coding-replay",
+      "embed_model": "none",
+      "flags": [
+        "paired",
+        "whole-task",
+        "pre-action-boundary",
+        "safe-mode",
+        "no-fallback",
+        "private-stream-json"
+      ],
+      "k": 1,
+      "scorer": "deterministic scratch-repository validator and rule predicate"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "M1 receives one deterministic-triggered canonical projection body with explicit-user validation; C0 receives none.",
+    "notes": "Mechanism screen only. Private task and model bodies remain outside Git.",
+    "power": {
+      "b": 1,
+      "c": 0,
+      "computed_by": "not applicable; two-case mechanism screen",
+      "mde_at_80": null,
+      "n": 2,
+      "n_d": 1,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-repro.json",
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "fallback_model": null,
+  "grades": {
+    "C0": [
+      true,
+      false
+    ],
+    "M1": [
+      true,
+      true
+    ]
+  },
+  "instrument": {
+    "dirty_file_baseline": "pass",
+    "one_shot_dispatch": "pass",
+    "pre_action_boundaries": "pass",
+    "raw_content_public": "absent",
+    "repo_projection_delivery_parity": "pass"
+  },
+  "model": "claude-opus-5",
+  "new_spend_usd": 0.3042095,
+  "private_manifest_sha256": "38b8650e80290968a9fb57ef65c258178b0eafaaf82124d9cdbb8ab50b876506",
+  "result_read": true,
+  "runtime_gate": "expansion_open",
+  "schema_version": 1,
+  "status": "complete",
+  "verdict": "CODING_REPLAY_EXPAND"
+}
