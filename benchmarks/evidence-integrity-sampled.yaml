@@ -1,8 +1,8 @@
 # spec 31 evidence-integrity probes: a standalone sampled suite (NOT part of the
 # pr-golden profile, per spec 31 §3.4 — runs in CI's ephemeral-DB lane until it
 # earns a REQUIRED_PROFILE_AXES slot by catching a real defect). Reader-free,
-# in-memory, $0. Four metrics across stale / as-of / conflict / adversarial /
-# grounding regimes.
+# in-memory, $0. Five metrics across stale / as-of / conflict / adversarial /
+# grounding / suppressed-read regimes.
 id: evidence-integrity-sampled
 cases:
   - ../examples/evals/golden/evidence_integrity_stale_office.yaml
@@ -13,3 +13,5 @@ cases:
   - ../examples/evals/golden/evidence_integrity_adversarial_region.yaml
   - ../examples/evals/golden/evidence_integrity_adversarial_version.yaml
   - ../examples/evals/golden/evidence_integrity_ground_value.yaml
+  - ../examples/evals/golden/evidence_integrity_suppressed_read_no_refresh_superseded.yaml
+  - ../examples/evals/golden/evidence_integrity_suppressed_read_no_refresh_contradiction.yaml

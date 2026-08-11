@@ -20,3 +20,5 @@ golden:
   - evidence_integrity_adversarial_region
   - evidence_integrity_adversarial_version
   - evidence_integrity_ground_value
+  - evidence_integrity_suppressed_read_no_refresh_superseded
+  - evidence_integrity_suppressed_read_no_refresh_contradiction

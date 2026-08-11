@@ -27,7 +27,7 @@ fn suite() -> PathBuf {
 /// Every metric-bearing regime must be present AND pass. The explicit id list
 /// guards against the suite being silently emptied or a regime being dropped —
 /// a green "0/0" run must never masquerade as a passing integrity gate.
-const REQUIRED_CASE_IDS: [&str; 8] = [
+const REQUIRED_CASE_IDS: [&str; 10] = [
     // stale (valid-time) + as-of (valid_at) — as_of_correctness
     "evidence_integrity_stale_office",
     "evidence_integrity_asof_concurrency",
@@ -40,6 +40,9 @@ const REQUIRED_CASE_IDS: [&str; 8] = [
     "evidence_integrity_adversarial_version",
     // grounding — unsupported_answer_rate
     "evidence_integrity_ground_value",
+    // suppression precedes access/recency accounting — suppressed_read_no_refresh
+    "evidence_integrity_suppressed_read_no_refresh_superseded",
+    "evidence_integrity_suppressed_read_no_refresh_contradiction",
 ];
 
 #[test]

@@ -131,8 +131,8 @@ use memphant_types::{
     EVIDENCE_DISPOSITION_CONTRACT_REVISION, EvidenceDisposition, EvidenceStatus, ForgetRequest,
     ForgetSelector, MarkOutcome, MarkRequest, MemoryEdgeKind, MemoryKind, NewEpisode,
     NewMemoryEdge, NewMemoryUnit, RecallContextItem, RecallDropReason, RecallMode, RecallRequest,
-    RecallTime, ResolvedMemoryContext, RetrievalTrace, ScopeId, SubjectId, TRACE_SCHEMA_VERSION,
-    TenantId, TraceId, TrustLevel, UnitId, UnitState,
+    RecallResponse, RecallTime, ResolvedMemoryContext, RetrievalTrace, ScopeId, SubjectId,
+    TRACE_SCHEMA_VERSION, TenantId, TraceId, TrustLevel, UnitId, UnitState,
 };
 use schemars::schema_for;
 use serde::{Deserialize, Serialize};
@@ -616,6 +616,12 @@ struct GoldenExpect {
     high_risk_suppressed: Vec<String>,
     #[serde(default)]
     invalidated_units: Vec<String>,
+    /// spec 31 — the named units must not accrue a successful trace read, move
+    /// read recency, or mutate any ranking/outcome signal while suppressed.
+    /// The runner removes each unit's suppression in a fresh store and requires
+    /// the same query to move access + recency, preventing a vacuous pass.
+    #[serde(default)]
+    suppressed_read_no_refresh: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -2043,23 +2049,14 @@ async fn run_golden_case(
     }
 }
 
-async fn run_golden_case_inner(
+async fn recall_golden_case(
+    context: &SeedContext,
     case: &GoldenCase,
-    masked_units: &BTreeSet<String>,
     controls: GoldenRunControls,
-) -> EvalResult<EvalCaseResult> {
-    let context = seed_store(
-        &case.seed,
-        masked_units,
-        controls.contextual_chunks_enabled,
-        controls.temporal_validity_enabled,
-        !controls.filesystem_control_enabled,
-    )
-    .await?;
+) -> EvalResult<RecallResponse> {
     let recall_edge_expansion_enabled =
         controls.edge_expansion_enabled && !controls.filesystem_control_enabled;
     let mode = case.mode.unwrap_or(RecallMode::Fast);
-    let recall_started_at = Instant::now();
     let runtime_deep_provider = if controls.l4_exhaustive_enabled && controls.l4_runtime_provider {
         memphant_runtime::deep_recall_openrouter::build_deep_recall_provider()
             .map_err(EvalError::Failed)?
@@ -2068,7 +2065,7 @@ async fn run_golden_case_inner(
     };
     let local_deep_provider = (controls.l4_exhaustive_enabled && !controls.l4_runtime_provider)
         .then(EvalDeepProvider::default);
-    let response = recall_with_pool_and_selection_and_deep(
+    recall_with_pool_and_selection_and_deep(
         &context.store,
         RecallRequest {
             context: context.resolved(),
@@ -2104,7 +2101,171 @@ async fn run_golden_case_inner(
             }),
     )
     .await
-    .map_err(|error| EvalError::Core(error.to_string()))?;
+    .map_err(|error| EvalError::Core(error.to_string()))
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ReadSignals {
+    access_count: usize,
+    last_recalled_at: Option<String>,
+    reinforcement_count: u32,
+    last_reinforced_at: Option<String>,
+    review_event_count: usize,
+    task_memory_event_count: usize,
+}
+
+fn read_signals(context: &SeedContext, unit_id: UnitId) -> EvalResult<ReadSignals> {
+    let successful_reads = context
+        .store
+        .retrieval_traces(context.tenant_id)
+        .into_iter()
+        .filter(|trace| {
+            !trace.abstention_signal
+                && trace
+                    .context_items
+                    .iter()
+                    .any(|item| item.unit_id == unit_id)
+        })
+        .collect::<Vec<_>>();
+    let unit = context
+        .store
+        .memory_units(context.tenant_id)
+        .into_iter()
+        .find(|unit| unit.id == unit_id)
+        .ok_or_else(|| EvalError::Failed(format!("missing probe unit {unit_id:?}")))?;
+    Ok(ReadSignals {
+        access_count: successful_reads.len(),
+        last_recalled_at: successful_reads
+            .iter()
+            .map(|trace| trace.recall_time.evaluated_at.clone())
+            .max(),
+        reinforcement_count: unit.reinforcement_count,
+        last_reinforced_at: unit.last_reinforced_at,
+        review_event_count: context
+            .store
+            .review_events(context.tenant_id)
+            .iter()
+            .filter(|event| event.used_ids.contains(&unit_id))
+            .count(),
+        task_memory_event_count: context
+            .store
+            .task_memory_events(context.tenant_id)
+            .iter()
+            .filter(|event| event.unit_id == unit_id)
+            .count(),
+    })
+}
+
+async fn verify_suppressed_read_no_refresh(
+    case: &GoldenCase,
+    controls: GoldenRunControls,
+    context: &SeedContext,
+    before: ReadSignals,
+    unit_name: &str,
+) -> EvalResult<()> {
+    let unit_id = *context
+        .named_units
+        .get(unit_name)
+        .ok_or_else(|| EvalError::Failed(format!("unknown suppressed probe unit {unit_name}")))?;
+    let after = read_signals(context, unit_id)?;
+    if after != before {
+        return Err(EvalError::Failed(format!(
+            "suppressed read refreshed {unit_name}: before={before:?} after={after:?}"
+        )));
+    }
+
+    let mut control = case.clone();
+    let unit = control
+        .seed
+        .units
+        .iter_mut()
+        .find(|unit| unit.name == unit_name)
+        .ok_or_else(|| {
+            EvalError::Failed(format!("unknown suppression control unit {unit_name}"))
+        })?;
+    let mut suppression_removed = false;
+    if unit.state == UnitState::Superseded {
+        unit.state = UnitState::Active;
+        suppression_removed = true;
+    }
+    let edge_count = control.seed.edges.len();
+    control.seed.edges.retain(|edge| {
+        edge.kind != MemoryEdgeKind::Contradicts || (edge.src != unit_name && edge.dst != unit_name)
+    });
+    suppression_removed |= control.seed.edges.len() != edge_count;
+    if !suppression_removed {
+        return Err(EvalError::Failed(format!(
+            "{unit_name} has no superseded state or contradiction edge to perturb"
+        )));
+    }
+
+    let control_context = seed_store(
+        &control.seed,
+        &BTreeSet::new(),
+        controls.contextual_chunks_enabled,
+        controls.temporal_validity_enabled,
+        !controls.filesystem_control_enabled,
+    )
+    .await?;
+    let control_id = *control_context
+        .named_units
+        .get(unit_name)
+        .ok_or_else(|| EvalError::Failed(format!("missing perturbation unit {unit_name}")))?;
+    let control_before = read_signals(&control_context, control_id)?;
+    let response = recall_golden_case(&control_context, &control, controls).await?;
+    let control_after = read_signals(&control_context, control_id)?;
+    if response.abstention
+        || !response.candidate_whitelist.contains(&control_id)
+        || control_after.access_count != control_before.access_count + 1
+        || control_after.last_recalled_at.as_deref() != Some(EVAL_CLOCK.0)
+    {
+        return Err(EvalError::Failed(format!(
+            "suppression perturbation did not move recall/access/recency for {unit_name}: before={control_before:?} after={control_after:?} abstention={} recalled={}",
+            response.abstention,
+            response.candidate_whitelist.contains(&control_id)
+        )));
+    }
+    if control_after.reinforcement_count != control_before.reinforcement_count
+        || control_after.last_reinforced_at != control_before.last_reinforced_at
+        || control_after.review_event_count != control_before.review_event_count
+        || control_after.task_memory_event_count != control_before.task_memory_event_count
+    {
+        return Err(EvalError::Failed(format!(
+            "plain recall mutated explicit outcome signals for {unit_name}: before={control_before:?} after={control_after:?}"
+        )));
+    }
+    Ok(())
+}
+
+async fn run_golden_case_inner(
+    case: &GoldenCase,
+    masked_units: &BTreeSet<String>,
+    controls: GoldenRunControls,
+) -> EvalResult<EvalCaseResult> {
+    let context = seed_store(
+        &case.seed,
+        masked_units,
+        controls.contextual_chunks_enabled,
+        controls.temporal_validity_enabled,
+        !controls.filesystem_control_enabled,
+    )
+    .await?;
+    let suppressed_before = case
+        .expect
+        .suppressed_read_no_refresh
+        .iter()
+        .map(|unit_name| {
+            context
+                .named_units
+                .get(unit_name)
+                .copied()
+                .ok_or_else(|| EvalError::Failed(format!("unknown probe unit {unit_name}")))
+                .and_then(|unit_id| read_signals(&context, unit_id))
+                .map(|signals| (unit_name.clone(), signals))
+        })
+        .collect::<EvalResult<Vec<_>>>()?;
+    let recall_started_at = Instant::now();
+    let response = recall_golden_case(&context, case, controls).await?;
     let latency_micros = u64::try_from(recall_started_at.elapsed().as_micros()).unwrap_or(u64::MAX);
 
     let trace = context
@@ -2259,6 +2420,13 @@ async fn run_golden_case_inner(
             "abstention_signal:expected={expected}:trace={}:response={}",
             trace.abstention_signal, response.abstention
         ));
+    }
+    for (unit_name, before) in suppressed_before {
+        if let Err(error) =
+            verify_suppressed_read_no_refresh(case, controls, &context, before, &unit_name).await
+        {
+            dropped_mismatches.push(error.to_string());
+        }
     }
 
     // spec 31 grounding: each expected string must appear in some packed item's

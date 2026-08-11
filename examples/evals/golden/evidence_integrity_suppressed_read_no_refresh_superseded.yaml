@@ -1,0 +1,36 @@
+id: evidence_integrity_suppressed_read_no_refresh_superseded
+second_author_confirmed: true
+# spec 31 / D-2026-08-09b: a query that lexically matches the retired flag must
+# not turn its suppressed candidate into a successful access or refresh read
+# recency. The runner's perturbation changes only this unit back to active and
+# requires the same query to recall it and advance both trace-derived signals.
+query: "Which checkout flag is active?"
+seed:
+  units:
+    - name: mem_checkout_flag_retired
+      episode_body: "The retired checkout flag was legacy_pay."
+      kind: semantic
+      state: superseded
+      subject_key: "retired checkout flag"
+      body: "The checkout flag is legacy_pay."
+      trust_level: trusted_system
+    - name: mem_checkout_flag_current
+      episode_body: "The active checkout flag is express_pay."
+      kind: semantic
+      state: active
+      subject_key: "active checkout flag"
+      body: "The checkout flag is express_pay."
+      trust_level: trusted_system
+expect:
+  answer_bearing_ids:
+    - mem_checkout_flag_current
+  top_k_contains:
+    - mem_checkout_flag_current
+  forbidden_units:
+    - mem_checkout_flag_retired
+  packed_body_contains:
+    - "express_pay"
+  suppressed_read_no_refresh:
+    - mem_checkout_flag_retired
+  trace_stages_include:
+    - trace

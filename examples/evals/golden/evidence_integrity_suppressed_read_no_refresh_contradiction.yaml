@@ -1,0 +1,44 @@
+id: evidence_integrity_suppressed_read_no_refresh_contradiction
+second_author_confirmed: true
+# spec 31 / D-2026-08-09b: unresolved evidence remains visible for audit but the
+# forced-abstention read must not refresh either claim. The runner removes the
+# contradicts edge in a fresh store and requires this unit's successful access
+# count and recency to advance under the same query.
+query: "Who owns checkout operations?"
+seed:
+  units:
+    - name: mem_checkout_owner_alice
+      episode_body: "The checkout operations owner is Alice per the rota."
+      kind: semantic
+      state: active
+      subject_key: "checkout operations owner rota"
+      body: "Checkout operations owner is Alice."
+      trust_level: trusted_system
+    - name: mem_checkout_owner_bob
+      episode_body: "The checkout operations owner is Bob per the runbook."
+      kind: semantic
+      state: active
+      subject_key: "checkout operations owner runbook"
+      body: "Checkout operations owner is Bob."
+      trust_level: trusted_system
+  edges:
+    - src: mem_checkout_owner_alice
+      dst: mem_checkout_owner_bob
+      kind: contradicts
+expect:
+  answer_bearing_ids:
+    - mem_checkout_owner_alice
+    - mem_checkout_owner_bob
+  top_k_contains:
+    - mem_checkout_owner_alice
+    - mem_checkout_owner_bob
+  packed_body_contains:
+    - "Alice"
+    - "Bob"
+  abstention_signal: true
+  suppressed_read_no_refresh:
+    - mem_checkout_owner_alice
+    - mem_checkout_owner_bob
+  trace_stages_include:
+    - assemble
+    - trace
