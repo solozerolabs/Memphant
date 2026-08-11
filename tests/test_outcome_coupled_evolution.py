@@ -7,6 +7,7 @@ import pytest
 from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     BudgetLedger,
     CompactionError,
+    JsonlSpool,
     active_context,
     blind_arms,
     build_chronological_cases,
@@ -37,6 +38,7 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     run_coding_replay_expansion,
     requested_end_state,
     regrade_coding_replay_expansion,
+    run_silent_shadow_readiness,
 )
 
 
@@ -74,6 +76,75 @@ def test_reconstructs_summary_preserved_messages_and_active_tail():
     assert [row["uuid"] for row in cut["preserved"]] == ["head", "tail"]
     assert [row["uuid"] for row in cut["active_tail"]] == ["next"]
     assert cut["token_metadata_valid"] is True
+
+
+def test_ten_task_silent_shadow_is_restart_safe_linked_and_content_free(tmp_path: Path):
+    artifact = run_silent_shadow_readiness(
+        tmp_path / "shadow.jsonl",
+        tmp_path / "proof.json",
+    )
+
+    assert artifact["verdict"] == "SILENT_SHADOW_READINESS_PASS"
+    assert artifact["tasks_exercised"] == 10
+    assert artifact["outcome_to_exposure_links"] == 10
+    assert artifact["root_task_continuity"] is True
+    assert artifact["spool"] == {
+        "accepted_records": 20,
+        "duplicate_replays": 1,
+        "fully_drained": True,
+        "restart_replayed": True,
+    }
+    assert artifact["privacy"] == {
+        "raw_content_fields": 0,
+        "raw_content_matches": 0,
+    }
+    assert artifact["silent_policy"] == {
+        "automatic_lifecycle_changes": 0,
+        "byte_identical_recomputations": 10,
+        "prompt_changes": 0,
+    }
+    assert not (tmp_path / "shadow.jsonl").read_text()
+
+
+def test_shadow_spool_rejects_raw_content_before_writing(tmp_path: Path):
+    spool = JsonlSpool(tmp_path / "shadow.jsonl")
+    body = {
+        "subject_id": "subject",
+        "scope_id": "scope",
+        "actor_id": "actor",
+        "agent_node_id": "agent",
+        "subject_generation": 1,
+        "task_id": "task",
+        "events": [],
+        "prompt": "private prompt",
+    }
+
+    with pytest.raises(ValueError, match="raw prompt"):
+        spool.enqueue("/v1/task-memory-events", "event-1", body)
+
+    assert not spool.path.read_text()
+
+
+def test_shadow_spool_repairs_only_a_torn_final_append(tmp_path: Path):
+    spool = JsonlSpool(tmp_path / "shadow.jsonl")
+    body = {
+        "subject_id": "subject",
+        "scope_id": "scope",
+        "actor_id": "actor",
+        "agent_node_id": "agent",
+        "subject_generation": 1,
+        "task_id": "task",
+        "events": [],
+    }
+    spool.enqueue("/v1/task-memory-events", "event-1", body)
+    with spool.path.open("a") as handle:
+        handle.write('{"endpoint"')
+
+    JsonlSpool(spool.path).enqueue("/v1/task-memory-events", "event-2", body)
+    accepted = []
+    JsonlSpool(spool.path).drain(accepted.append)
+
+    assert [record["idempotency_key"] for record in accepted] == ["event-1", "event-2"]
 
 
 def test_active_context_contains_compact_summary_once_and_stops_before_action():

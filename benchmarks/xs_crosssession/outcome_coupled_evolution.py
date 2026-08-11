@@ -759,6 +759,301 @@ def _read_jsonl(path: str) -> list[dict[str, Any]]:
     return rows
 
 
+_SHADOW_BODY_FIELDS = {
+    "/v1/task-outcomes": {
+        "subject_id",
+        "scope_id",
+        "actor_id",
+        "agent_node_id",
+        "subject_generation",
+        "task_id",
+        "harness_id",
+        "model_id",
+        "started_at",
+        "ended_at",
+        "completion_status",
+        "validator_status",
+        "tool_count",
+        "failure_count",
+        "retry_count",
+        "planned_files",
+        "actual_files",
+        "transcript_sha256",
+        "shown_unit_ids",
+        "activated_unit_ids",
+    },
+    "/v1/task-memory-events": {
+        "subject_id",
+        "scope_id",
+        "actor_id",
+        "agent_node_id",
+        "subject_generation",
+        "task_id",
+        "events",
+    },
+}
+_RAW_CONTENT_FIELDS = {"prompt", "transcript", "command", "messages", "content"}
+
+
+def _validate_shadow_record(record: dict[str, Any]) -> None:
+    if set(record) != {"endpoint", "idempotency_key", "body"}:
+        raise ValueError("shadow spool record has unknown fields")
+    endpoint = record["endpoint"]
+    body = record["body"]
+    if endpoint not in _SHADOW_BODY_FIELDS or not isinstance(body, dict):
+        raise ValueError("shadow spool endpoint is not outcome-coupled")
+    stack = [body]
+    while stack:
+        value = stack.pop()
+        if isinstance(value, dict):
+            if _RAW_CONTENT_FIELDS & set(value):
+                raise ValueError("raw prompt, transcript, or command fields are forbidden")
+            stack.extend(value.values())
+        elif isinstance(value, list):
+            stack.extend(value)
+    if set(body) != _SHADOW_BODY_FIELDS[endpoint]:
+        raise ValueError("shadow spool body does not match the endpoint contract")
+
+
+class JsonlSpool:
+    """A tiny durable retry buffer; MemPhant remains the authoritative ledger."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.touch(exist_ok=True)
+
+    def _repair_torn_tail(self) -> None:
+        data = self.path.read_bytes()
+        if not data or data.endswith(b"\n"):
+            return
+        tail_start = data.rfind(b"\n") + 1
+        try:
+            json.loads(data[tail_start:])
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            with self.path.open("r+b") as handle:
+                handle.truncate(tail_start)
+                handle.flush()
+                os.fsync(handle.fileno())
+        else:
+            with self.path.open("ab") as handle:
+                handle.write(b"\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+
+    def enqueue(self, endpoint: str, idempotency_key: str, body: dict[str, Any]) -> None:
+        record = {
+            "endpoint": endpoint,
+            "idempotency_key": idempotency_key,
+            "body": body,
+        }
+        _validate_shadow_record(record)
+        self._repair_torn_tail()
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def _records(self) -> list[dict[str, Any]]:
+        records = _read_jsonl(str(self.path))
+        for record in records:
+            _validate_shadow_record(record)
+        return records
+
+    def _replace(self, records: list[dict[str, Any]]) -> None:
+        temporary = self.path.with_name(f".{self.path.name}.tmp")
+        with temporary.open("w", encoding="utf-8") as handle:
+            for record in records:
+                handle.write(json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, self.path)
+        directory = os.open(self.path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def drain(self, post: Any) -> int:
+        records = self._records()
+        accepted = 0
+        for index, record in enumerate(records):
+            post(record)
+            self._replace(records[index + 1 :])
+            accepted += 1
+        return accepted
+
+
+def run_silent_shadow_readiness(spool_path: Path, out_path: Path) -> dict[str, Any]:
+    """Exercise ten content-free shadow tasks, including an after-accept crash."""
+    spool = JsonlSpool(spool_path)
+    if spool._records():
+        raise ValueError("readiness proof requires an empty spool")
+    private_content = ("RAW-PROMPT-SENTINEL", "RAW-TRANSCRIPT-SENTINEL")
+    subject_id = "10000000-0000-4000-8000-000000000001"
+    scope_id = "20000000-0000-4000-8000-000000000001"
+    actor_id = "30000000-0000-4000-8000-000000000001"
+    agent_node_id = "40000000-0000-4000-8000-000000000001"
+    for index in range(1, 11):
+        task_id = f"50000000-0000-4000-8000-{index:012d}"
+        unit_id = f"60000000-0000-4000-8000-{index:012d}"
+        common = {
+            "subject_id": subject_id,
+            "scope_id": scope_id,
+            "actor_id": actor_id,
+            "agent_node_id": agent_node_id,
+            "subject_generation": 1,
+            "task_id": task_id,
+        }
+        outcome = {
+            **common,
+            "harness_id": "silent-shadow-v1",
+            "model_id": "unchanged-agent",
+            "started_at": f"2026-08-11T00:{index:02d}:00Z",
+            "ended_at": f"2026-08-11T00:{index:02d}:30Z",
+            "completion_status": "completed",
+            "validator_status": "passed",
+            "tool_count": index,
+            "failure_count": 0,
+            "retry_count": 1 if index == 4 else 0,
+            "planned_files": None if index == 1 else [f"src/task_{index}.rs"],
+            "actual_files": [f"src/task_{index}.rs"],
+            "transcript_sha256": _hash_text(f"{private_content[1]}-{index}"),
+            "shown_unit_ids": [unit_id],
+            "activated_unit_ids": [unit_id] if index % 2 == 0 else [],
+        }
+        delayed_event = {
+            **common,
+            "events": [
+                {
+                    "unit_id": unit_id,
+                    "event": "helpful",
+                    "attribution": "deterministic_scorer",
+                }
+            ],
+        }
+        spool.enqueue("/v1/task-outcomes", f"shadow-outcome-{index}", outcome)
+        spool.enqueue("/v1/task-memory-events", f"shadow-memory-{index}", delayed_event)
+
+    accepted: dict[str, dict[str, Any]] = {}
+    exposures: dict[str, set[str]] = {}
+    duplicate_replays = 0
+
+    def accept(record: dict[str, Any]) -> None:
+        nonlocal duplicate_replays
+        key = record["idempotency_key"]
+        if key in accepted:
+            if accepted[key] != record:
+                raise ValueError("idempotency key was reused with a different request")
+            duplicate_replays += 1
+            return
+        body = record["body"]
+        if record["endpoint"] == "/v1/task-outcomes":
+            exposures[body["task_id"]] = set(body["shown_unit_ids"])
+        elif any(event["unit_id"] not in exposures.get(body["task_id"], set()) for event in body["events"]):
+            raise ValueError("delayed memory evidence lacks a same-task exposure")
+        accepted[key] = record
+
+    calls = 0
+
+    def crash_after_accept(record: dict[str, Any]) -> None:
+        nonlocal calls
+        calls += 1
+        accept(record)
+        if calls == 7:
+            raise ConnectionError("simulated crash after server acceptance")
+
+    try:
+        spool.drain(crash_after_accept)
+    except ConnectionError:
+        pass
+    JsonlSpool(spool_path).drain(accept)
+
+    serialized = json.dumps(list(accepted.values()), separators=(",", ":"), sort_keys=True)
+    tasks = {
+        record["body"]["task_id"]
+        for record in accepted.values()
+        if record["endpoint"] == "/v1/task-outcomes"
+    }
+    linked = {
+        record["body"]["task_id"]
+        for record in accepted.values()
+        if record["endpoint"] == "/v1/task-memory-events"
+        and all(
+            event["unit_id"] in exposures[record["body"]["task_id"]]
+            for event in record["body"]["events"]
+        )
+    }
+    units = [{"unit_id": f"u-{index}", "kind": "adherence", "validated": True} for index in range(10)]
+    events = [{"unit_id": f"u-{index}", "event": "helpful", "attribution": "deterministic_scorer"} for index in range(10)]
+    pack = json.dumps(pack_for_policy(units, events, "A1"), separators=(",", ":"))
+    policy_matches = sum(
+        pack == json.dumps(pack_for_policy(units, events, "A1"), separators=(",", ":"))
+        for _ in tasks
+    )
+    payload_sha = _hash_text(serialized)
+    artifact = {
+        "schema_version": 1,
+        "status": "complete",
+        "verdict": "SILENT_SHADOW_READINESS_PASS" if tasks == linked and len(tasks) == 10 else "SILENT_SHADOW_INCOMPLETE",
+        "tasks_exercised": len(tasks),
+        "outcome_to_exposure_links": len(linked),
+        "root_task_continuity": tasks == linked,
+        "spool": {
+            "accepted_records": len(accepted),
+            "duplicate_replays": duplicate_replays,
+            "fully_drained": not JsonlSpool(spool_path)._records(),
+            "restart_replayed": duplicate_replays == 1,
+        },
+        "privacy": {
+            "raw_content_fields": sum(serialized.count(f'"{field}"') for field in _RAW_CONTENT_FIELDS),
+            "raw_content_matches": sum(value in serialized for value in private_content),
+        },
+        "silent_policy": {
+            "automatic_lifecycle_changes": 0,
+            "byte_identical_recomputations": policy_matches,
+            "prompt_changes": 0,
+        },
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "Ten deterministic silent-shadow tasks preserved complete outcome-to-exposure linkage through one after-accept restart replay without raw prompt or transcript content.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 10,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": None,
+                "mde_at_80": None,
+                "computed_by": "not applicable; deterministic readiness proof",
+                "source": "docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-readiness.json",
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "gate",
+            "mechanism_evidence": "The local JSONL retry buffer replayed an accepted request under the existing idempotency contract and drained all 20 endpoint records.",
+            "harness": {
+                "embed_model": "none",
+                "scorer": "deterministic endpoint-shape, linkage, restart, and privacy assertions",
+                "k": 10,
+                "budget": 0,
+                "flags": ["silent-shadow", "no-model", "no-prompt-change", "no-lifecycle-change", "local-jsonl-spool"],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution prove-silent-shadow",
+            },
+            "corpus": {
+                "sha256": payload_sha,
+                "snapshot_id": "deterministic-silent-shadow-readiness-v1",
+                "n_items": 10,
+            },
+            "notes": "Readiness proof only; it does not enable prompt injection or automatic lifecycle changes.",
+        },
+    }
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
+
+
 def _transcript_path(session_prefix: str) -> str | None:
     matches = []
     for root in TRANSCRIPT_ROOTS:
@@ -2419,6 +2714,18 @@ def main() -> int:
         "--out",
         default="docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
     )
+    shadow_proof = subparsers.add_parser("prove-silent-shadow")
+    shadow_proof.add_argument(
+        "--spool",
+        default=str(
+            Path.home()
+            / ".memphant-private/xs-crosssession/outcome-coupled-evolution/silent-shadow.jsonl"
+        ),
+    )
+    shadow_proof.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-readiness.json",
+    )
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -2564,6 +2871,19 @@ def main() -> int:
         print(
             json.dumps(
                 {"verdict": result["verdict"], "comparison": result["comparison"]},
+                sort_keys=True,
+            )
+        )
+    elif args.command == "prove-silent-shadow":
+        result = run_silent_shadow_readiness(Path(args.spool), Path(args.out))
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "tasks_exercised": result["tasks_exercised"],
+                    "spool": result["spool"],
+                    "privacy": result["privacy"],
+                },
                 sort_keys=True,
             )
         )

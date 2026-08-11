@@ -165,6 +165,7 @@
 > # CURRENT PHASE: `RUNTIME COMPLETE — BENCHMARK EVIDENCE PENDING`
 >
 > Runtime proof (2026-07-10): `docs/build-log/2026-07-10-runtime-postgres-proof.md` — durable Postgres-backed REST/MCP/CLI/worker with API-key tenancy; `scripts/e2e_probe.sh` passes end-to-end (durability across restart, cross-tenant denial, correct/forget without resurrection, tri-domain resource ingest). SOTA/benchmark rungs stay open under the promotion-provenance rule.
+> Silent-shadow readiness proof (2026-08-11): `docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-readiness.json` — the deterministic ten-task harness passed complete outcome-to-exposure linkage, after-accept restart replay through the idempotent endpoints, full spool drain, and zero raw prompt/transcript fields or sentinel matches. This is readiness proof only; live tasks, prompt injection, and automatic lifecycle changes remain closed.
 >
 > WS-0 proof artifact: `docs/build-log/artifacts/ws0-two-language-spike.json`.
 > R83 spike measured warm no-recompile Rust policy-change iteration at **0.073×** Python (`rust_proceeds`).

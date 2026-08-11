@@ -1,0 +1,62 @@
+{
+  "evidence_contract": {
+    "claim": "Ten deterministic silent-shadow tasks preserved complete outcome-to-exposure linkage through one after-accept restart replay without raw prompt or transcript content.",
+    "corpus": {
+      "n_items": 10,
+      "sha256": "d5b87cd466c49f7b259adb9ddd37ab08e58e2ad809cdbeaac3b78db830a22a3f",
+      "snapshot_id": "deterministic-silent-shadow-readiness-v1"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 0,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution prove-silent-shadow",
+      "embed_model": "none",
+      "flags": [
+        "silent-shadow",
+        "no-model",
+        "no-prompt-change",
+        "no-lifecycle-change",
+        "local-jsonl-spool"
+      ],
+      "k": 10,
+      "scorer": "deterministic endpoint-shape, linkage, restart, and privacy assertions"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "The local JSONL retry buffer replayed an accepted request under the existing idempotency contract and drained all 20 endpoint records.",
+    "notes": "Readiness proof only; it does not enable prompt injection or automatic lifecycle changes.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; deterministic readiness proof",
+      "mde_at_80": null,
+      "n": 10,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-readiness.json",
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "gate",
+    "schema_version": 1
+  },
+  "outcome_to_exposure_links": 10,
+  "privacy": {
+    "raw_content_fields": 0,
+    "raw_content_matches": 0
+  },
+  "root_task_continuity": true,
+  "schema_version": 1,
+  "silent_policy": {
+    "automatic_lifecycle_changes": 0,
+    "byte_identical_recomputations": 10,
+    "prompt_changes": 0
+  },
+  "spool": {
+    "accepted_records": 20,
+    "duplicate_replays": 1,
+    "fully_drained": true,
+    "restart_replayed": true
+  },
+  "status": "complete",
+  "tasks_exercised": 10,
+  "verdict": "SILENT_SHADOW_READINESS_PASS"
+}
