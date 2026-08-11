@@ -14,7 +14,8 @@ def read(path: str) -> str:
 def test_dockerfile_builds_all_rust_entrypoints_and_runs_non_root() -> None:
     dockerfile = read("Dockerfile")
 
-    assert "rust:1.96.1-bookworm" in dockerfile
+    assert "rust:1.96.1-trixie" in dockerfile
+    assert dockerfile.count("FROM debian:trixie-slim") == 2
     assert "-p memphant-server" in dockerfile
     assert "-p memphant-worker" in dockerfile
     assert "-p memphant-cli" in dockerfile
@@ -82,4 +83,3 @@ def test_restore_runbook_blocks_unexpected_missing_blobs() -> None:
     assert "restore_blob_missing{hash}" in runbook
     assert "block release" in runbook
     assert "at least the Postgres PITR window plus margin" in runbook
-
