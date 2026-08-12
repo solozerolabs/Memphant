@@ -1,0 +1,281 @@
+{
+  "budget": {
+    "max_cell_usd": 2,
+    "reserve_usd": 40,
+    "reserved_cells": 20
+  },
+  "cells": [
+    {
+      "base_commit": "cde37193d57984006265ee6bc7b8c6b34b39fbe8",
+      "case_id": "scoped-gate-dogfood-01",
+      "cell_id": "dogfood-pair-01-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-01",
+      "policy": "M1",
+      "prompt_sha256": "f7f1eb0ad4ec5d7db3c69b9de3ca03034d7546355a55ab9c53fe119cb55230ed",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "cde37193d57984006265ee6bc7b8c6b34b39fbe8",
+      "case_id": "scoped-gate-dogfood-01",
+      "cell_id": "dogfood-pair-01-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-01",
+      "policy": "C0",
+      "prompt_sha256": "f7f1eb0ad4ec5d7db3c69b9de3ca03034d7546355a55ab9c53fe119cb55230ed",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "9be0205a8790ebf485454e0e0798bafde1668195",
+      "case_id": "scoped-gate-dogfood-02",
+      "cell_id": "dogfood-pair-02-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-02",
+      "policy": "M1",
+      "prompt_sha256": "d937c9cd53baed881714ecd4bb4c0462f1e1493da8144a1d287feb236610c593",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "9be0205a8790ebf485454e0e0798bafde1668195",
+      "case_id": "scoped-gate-dogfood-02",
+      "cell_id": "dogfood-pair-02-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-02",
+      "policy": "C0",
+      "prompt_sha256": "d937c9cd53baed881714ecd4bb4c0462f1e1493da8144a1d287feb236610c593",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "84540cde6db374f2b27e8353b613ef76a509936b",
+      "case_id": "scoped-gate-dogfood-03",
+      "cell_id": "dogfood-pair-03-arm-1",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-03",
+      "policy": "C0",
+      "prompt_sha256": "99f90b7c2000b5380512241b210ce40cd7b754030cec043626efb3067048e72d",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "84540cde6db374f2b27e8353b613ef76a509936b",
+      "case_id": "scoped-gate-dogfood-03",
+      "cell_id": "dogfood-pair-03-arm-2",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-03",
+      "policy": "M1",
+      "prompt_sha256": "99f90b7c2000b5380512241b210ce40cd7b754030cec043626efb3067048e72d",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "0baed5829f920f4b05174a42ae40cd235c40c1e3",
+      "case_id": "scoped-gate-dogfood-04",
+      "cell_id": "dogfood-pair-04-arm-1",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-04",
+      "policy": "C0",
+      "prompt_sha256": "e5479bd913cbfee98bf1a640e4577e1e394e18e8acb6e0f1afe3fe37cfad430e",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "0baed5829f920f4b05174a42ae40cd235c40c1e3",
+      "case_id": "scoped-gate-dogfood-04",
+      "cell_id": "dogfood-pair-04-arm-2",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-04",
+      "policy": "M1",
+      "prompt_sha256": "e5479bd913cbfee98bf1a640e4577e1e394e18e8acb6e0f1afe3fe37cfad430e",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "99cdb7732b15feafe7c46f0735c915dff3e9f931",
+      "case_id": "scoped-gate-dogfood-05",
+      "cell_id": "dogfood-pair-05-arm-1",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-05",
+      "policy": "C0",
+      "prompt_sha256": "82a6a402581f1f6f9a8f8c70a4e79668734384499f61010e5fb2158ec26328ee",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "99cdb7732b15feafe7c46f0735c915dff3e9f931",
+      "case_id": "scoped-gate-dogfood-05",
+      "cell_id": "dogfood-pair-05-arm-2",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-05",
+      "policy": "M1",
+      "prompt_sha256": "82a6a402581f1f6f9a8f8c70a4e79668734384499f61010e5fb2158ec26328ee",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "8af8b3dffc4c036d31c4ee38769aaad7e26f3fd9",
+      "case_id": "scoped-gate-dogfood-06",
+      "cell_id": "dogfood-pair-06-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-06",
+      "policy": "M1",
+      "prompt_sha256": "716ee8eeb0f99edf2ccbed7007a2095e30e4a74e5f036389da84abc7d883c04e",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "8af8b3dffc4c036d31c4ee38769aaad7e26f3fd9",
+      "case_id": "scoped-gate-dogfood-06",
+      "cell_id": "dogfood-pair-06-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-06",
+      "policy": "C0",
+      "prompt_sha256": "716ee8eeb0f99edf2ccbed7007a2095e30e4a74e5f036389da84abc7d883c04e",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "89a4c23d715673ef87d2e3442b6822e78929b351",
+      "case_id": "scoped-gate-dogfood-07",
+      "cell_id": "dogfood-pair-07-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-07",
+      "policy": "M1",
+      "prompt_sha256": "e23247f6abe5b4a3200acd3cc9e6171bd5cd2b77ba30afce11fa1f32a970dead",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "89a4c23d715673ef87d2e3442b6822e78929b351",
+      "case_id": "scoped-gate-dogfood-07",
+      "cell_id": "dogfood-pair-07-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-07",
+      "policy": "C0",
+      "prompt_sha256": "e23247f6abe5b4a3200acd3cc9e6171bd5cd2b77ba30afce11fa1f32a970dead",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "69351df1b8aa4967f131993fde9a4d2e423545e7",
+      "case_id": "scoped-gate-dogfood-08",
+      "cell_id": "dogfood-pair-08-arm-1",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-08",
+      "policy": "C0",
+      "prompt_sha256": "4f3e59b01c57e6e508266048136cb3e205d6249b414c10f3154b5d10810b3938",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "69351df1b8aa4967f131993fde9a4d2e423545e7",
+      "case_id": "scoped-gate-dogfood-08",
+      "cell_id": "dogfood-pair-08-arm-2",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-08",
+      "policy": "M1",
+      "prompt_sha256": "4f3e59b01c57e6e508266048136cb3e205d6249b414c10f3154b5d10810b3938",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "8916b6e2c4292a6ff00db4304a78d0e3e7983b27",
+      "case_id": "scoped-gate-dogfood-09",
+      "cell_id": "dogfood-pair-09-arm-1",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-09",
+      "policy": "M1",
+      "prompt_sha256": "da2a22f7c0b8b7d097db417ca7e7fb613219525b645be3bf9f3e9722ee412474",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    },
+    {
+      "base_commit": "8916b6e2c4292a6ff00db4304a78d0e3e7983b27",
+      "case_id": "scoped-gate-dogfood-09",
+      "cell_id": "dogfood-pair-09-arm-2",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-09",
+      "policy": "C0",
+      "prompt_sha256": "da2a22f7c0b8b7d097db417ca7e7fb613219525b645be3bf9f3e9722ee412474",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "c45d4ca462d24cc680276c043606e9021496974a",
+      "case_id": "scoped-gate-dogfood-10",
+      "cell_id": "dogfood-pair-10-arm-1",
+      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dispatch_order": 1,
+      "pair_id": "dogfood-pair-10",
+      "policy": "C0",
+      "prompt_sha256": "45e749a6a79fe4ea20cfdaf82ed1b9f1b3a9267f98b23b21d8f11b56fdf8936a",
+      "unit_body_sha256": null
+    },
+    {
+      "base_commit": "c45d4ca462d24cc680276c043606e9021496974a",
+      "case_id": "scoped-gate-dogfood-10",
+      "cell_id": "dogfood-pair-10-arm-2",
+      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
+      "dispatch_order": 2,
+      "pair_id": "dogfood-pair-10",
+      "policy": "M1",
+      "prompt_sha256": "45e749a6a79fe4ea20cfdaf82ed1b9f1b3a9267f98b23b21d8f11b56fdf8936a",
+      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+    }
+  ],
+  "decision_rule": {
+    "computed_mde_required": true,
+    "maximum_losses": 0,
+    "maximum_p_two_sided": 0.05,
+    "minimum_wins": 7,
+    "treatment_objective_success_required": 10
+  },
+  "evidence_contract": {
+    "claim": "Ten paired randomized dogfood tasks were hash-locked before model dispatch.",
+    "corpus": {
+      "n_items": 10,
+      "sha256": "1a83755aec38557054d22beac422a9222d20c91709ab88445353d4d931634fca",
+      "snapshot_id": "private-randomized-dogfood-2026-08-12"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 40,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-randomized-dogfood",
+      "embed_model": "none",
+      "flags": [
+        "randomized-paired",
+        "whole-task",
+        "safe-mode",
+        "no-fallback",
+        "private-stream-json"
+      ],
+      "k": 1,
+      "scorer": "paired deterministic validator, requested end state, and rule-violation predicate"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "M1 receives the hash-locked canonical full-local-gate projection; C0 receives no learned memory.",
+    "notes": "Preregistration only; task prompts, lesson text, and model streams remain private.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable before results",
+      "mde_at_80": null,
+      "n": 10,
+      "n_d": 0,
+      "psi_observed": 0,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/randomized-dogfood.json",
+      "test": "two-sided exact (conditional binomial) McNemar"
+    },
+    "probe_kind": "lever",
+    "schema_version": 1
+  },
+  "model": "claude-opus-5",
+  "pairs_preregistered": 10,
+  "private_manifest_sha256": "1a83755aec38557054d22beac422a9222d20c91709ab88445353d4d931634fca",
+  "schema_version": 1,
+  "status": "preregistered",
+  "verdict": "PENDING"
+}

@@ -1182,3 +1182,97 @@ print(json.dumps({"type":"result","subtype":"success","total_cost_usd":1.0,"mode
     )
     assert regraded["comparison"] == result["comparison"]
     assert regraded["instrument"]["end_state_scorer_amendment"] == "pass"
+
+
+def test_randomized_dogfood_verdict_requires_powered_wins_and_zero_losses():
+    seven_wins = outcome_module.randomized_dogfood_verdict(
+        {"C0": [False] * 7 + [True] * 3, "M1": [True] * 10},
+        treatment_objective=[True] * 10,
+        instrument_valid=True,
+    )
+
+    assert seven_wins["verdict"] == "RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS"
+    assert seven_wins["wins"] == 7
+    assert seven_wins["losses"] == 0
+    assert seven_wins["mcnemar_exact_p_two_sided"] == 0.015625
+    assert seven_wins["mde_at_80"] is not None
+    assert outcome_module.randomized_dogfood_verdict(
+        {"C0": [False] * 6 + [True] * 4, "M1": [True] * 10},
+        treatment_objective=[True] * 10,
+        instrument_valid=True,
+    )["verdict"] == "RANDOMIZED_DOGFOOD_INCONCLUSIVE"
+    assert outcome_module.randomized_dogfood_verdict(
+        {"C0": [True] * 10, "M1": [False] + [True] * 9},
+        treatment_objective=[True] * 10,
+        instrument_valid=True,
+    )["verdict"] == "RANDOMIZED_DOGFOOD_HARMFUL"
+
+
+def test_randomized_dogfood_preregisters_pairs_without_public_task_text(tmp_path: Path):
+    private = tmp_path / "private"
+    public = tmp_path / "dogfood.json"
+    readiness = tmp_path / "readiness.json"
+    readiness.write_text(json.dumps({"verdict": "SILENT_SHADOW_REAL_TASK_READINESS_PASS"}))
+
+    result = outcome_module.prepare_randomized_dogfood(private, public, readiness)
+
+    assert result["status"] == "preregistered"
+    assert result["pairs_preregistered"] == 10
+    assert len(result["cells"]) == 20
+    assert all(
+        {cell["policy"] for cell in result["cells"] if cell["pair_id"] == pair_id}
+        == {"C0", "M1"}
+        for pair_id in {cell["pair_id"] for cell in result["cells"]}
+    )
+    assert result["budget"]["reserve_usd"] == 40
+    assert result["decision_rule"]["minimum_wins"] == 7
+    public_text = public.read_text()
+    assert "Fix logic.transform" not in public_text
+    assert "Run the narrowest relevant local checks" not in public_text
+    manifest = json.loads((private / "randomized-dogfood-manifest.json").read_text())
+    assert len(manifest["cells"]) == 20
+    assert all(
+        left["prompt"] == right["prompt"] and left["base_commit"] == right["base_commit"]
+        for left, right in (
+            (
+                next(cell for cell in manifest["cells"] if cell["pair_id"] == pair and cell["policy"] == "C0"),
+                next(cell for cell in manifest["cells"] if cell["pair_id"] == pair and cell["policy"] == "M1"),
+            )
+            for pair in {cell["pair_id"] for cell in manifest["cells"]}
+        )
+    )
+
+
+def test_randomized_dogfood_runs_once_and_publishes_aggregate_improvement(tmp_path: Path):
+    private = tmp_path / "private"
+    public = tmp_path / "dogfood.json"
+    readiness = tmp_path / "readiness.json"
+    fake = tmp_path / "fake-claude.py"
+    readiness.write_text(json.dumps({"verdict": "SILENT_SHADOW_REAL_TASK_READINESS_PASS"}))
+    fake.write_text(
+        """#!/usr/bin/env python3
+import json, os, pathlib, re, subprocess
+test = pathlib.Path("tests/test_logic.py").read_text()
+expected = int(re.search(r"assertEqual\\(transform\\(3\\), (\\d+)\\)", test).group(1))
+pathlib.Path("logic.py").write_text(f"def transform(value):\\n    return value + {expected - 3}\\n")
+command = "python3 run_tests.py" if os.environ["MEMPHANT_REPLAY_POLICY"] == "C0" else "python3 -m unittest tests.test_logic"
+subprocess.run(command.split(), check=True)
+print(json.dumps({"type":"assistant","message":{"model":"claude-opus-5","content":[{"type":"tool_use","name":"Bash","input":{"command":command}}]}}))
+print(json.dumps({"type":"result","subtype":"success","total_cost_usd":0.1,"modelUsage":{"claude-opus-5":{"canonicalModel":"claude-opus-5","outputTokens":10}}}))
+"""
+    )
+    fake.chmod(0o755)
+    outcome_module.prepare_randomized_dogfood(private, public, readiness)
+
+    result = outcome_module.run_randomized_dogfood(private, public, str(fake))
+
+    assert result["verdict"] == "RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS"
+    assert result["comparison"]["wins"] == 10
+    assert result["comparison"]["losses"] == 0
+    assert result["objective_success"] == {"C0": 10, "M1": 10}
+    assert result["cost_usd"] == {"C0": 1.0, "M1": 1.0, "total": 2.0}
+    assert result["evidence_contract"]["decisional"] is True
+    assert "commands" not in public.read_text()
+    assert (private / "SHA256SUMS").is_file()
+    with pytest.raises(RuntimeError, match="already settled"):
+        outcome_module.run_randomized_dogfood(private, public, str(fake))

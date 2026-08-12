@@ -3,7 +3,7 @@
   "generated_by": "scripts/check_evidence_contract.py --report",
   "method": "Every tracked JSON under docs/build-log/artifacts/ carrying a decision key at depth <= 4 is a promotion-capable candidate. NOTHING here is backfilled: a field that cannot be verified from a banked artifact is left absent and reported as a violation rather than invented.",
   "candidates": 131,
-  "contracted": 83,
+  "contracted": 84,
   "pending_retrofit": 48,
   "failing": 48,
   "unverified_fields_total": 33,

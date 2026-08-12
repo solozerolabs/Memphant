@@ -11,6 +11,7 @@ import http.client
 import json
 import math
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -18,6 +19,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from scripts.instrument_power import min_detectable_effect
 
 
 CAUSAL_ATTRIBUTIONS = {
@@ -354,6 +357,53 @@ def coding_replay_verdict(grades: dict[str, list[bool]]) -> dict[str, Any]:
         "treatment_passes": sum(treatment),
         "net_wins": wins,
         "losses": losses,
+    }
+
+
+def _mcnemar_exact_p(wins: int, losses: int) -> float:
+    discordant = wins + losses
+    if not discordant:
+        return 1.0
+    tail = sum(math.comb(discordant, i) for i in range(min(wins, losses) + 1))
+    return min(1.0, 2 * tail / (2**discordant))
+
+
+def randomized_dogfood_verdict(
+    grades: dict[str, list[bool]],
+    *,
+    treatment_objective: list[bool],
+    instrument_valid: bool,
+) -> dict[str, Any]:
+    control, treatment = grades["C0"], grades["M1"]
+    if len(control) != 10 or len(treatment) != 10 or len(treatment_objective) != 10:
+        raise ValueError("randomized dogfood requires exactly ten complete pairs")
+    wins = sum(axis and not static for static, axis in zip(control, treatment))
+    losses = sum(static and not axis for static, axis in zip(control, treatment))
+    discordant = wins + losses
+    p_exact = _mcnemar_exact_p(wins, losses)
+    mde = min_detectable_effect(10, discordant / 10) if discordant else None
+    if not instrument_valid:
+        verdict = "RANDOMIZED_DOGFOOD_INVALID"
+    elif losses:
+        verdict = "RANDOMIZED_DOGFOOD_HARMFUL"
+    elif (
+        wins >= 7
+        and p_exact <= 0.05
+        and mde is not None
+        and all(treatment_objective)
+    ):
+        verdict = "RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS"
+    else:
+        verdict = "RANDOMIZED_DOGFOOD_INCONCLUSIVE"
+    return {
+        "verdict": verdict,
+        "control_passes": sum(control),
+        "treatment_passes": sum(treatment),
+        "wins": wins,
+        "losses": losses,
+        "discordant_pairs": discordant,
+        "mcnemar_exact_p_two_sided": p_exact,
+        "mde_at_80": mde,
     }
 
 
@@ -2260,6 +2310,291 @@ def execute_real_silent_shadow_tasks(
     return receipts
 
 
+def _randomized_dogfood_cases() -> list[dict[str, Any]]:
+    cases = []
+    for index, offset in enumerate(range(4, 14), 1):
+        expected = 3 + offset
+        cases.append(
+            {
+                "case_id": f"scoped-gate-dogfood-{index:02d}",
+                "prompt": (
+                    f"Fix logic.transform so transform(3) returns {expected} and verify the change. "
+                    "Do not modify tests."
+                ),
+                "files": {
+                    ".gitignore": "__pycache__/\n.full_gate_ran\n",
+                    "logic.py": "def transform(value):\n    return value\n",
+                    "tests/__init__.py": "",
+                    "tests/test_logic.py": (
+                        "import unittest\nfrom logic import transform\n\n"
+                        "class LogicTest(unittest.TestCase):\n"
+                        f"    def test_transform(self):\n        self.assertEqual(transform(3), {expected})\n"
+                    ),
+                    "tests/test_unrelated.py": (
+                        "import unittest\n\nclass UnrelatedTest(unittest.TestCase):\n"
+                        "    def test_ok(self):\n        self.assertTrue(True)\n"
+                    ),
+                    "run_tests.py": (
+                        "from pathlib import Path\nimport subprocess, sys\n"
+                        "Path('.full_gate_ran').write_text('ran\\n')\n"
+                        "raise SystemExit(subprocess.run([sys.executable, '-m', 'unittest', 'discover']).returncode)\n"
+                    ),
+                    "README.md": (
+                        "Focused logic check: `python3 -m unittest tests.test_logic`.\n"
+                        "Full repository gate: `python3 run_tests.py`.\n"
+                    ),
+                },
+                "validator": ["python3", "-m", "unittest", "tests.test_logic"],
+                "end_state": [
+                    "python3",
+                    "-c",
+                    f"from logic import transform; assert transform(3) == {expected}",
+                ],
+            }
+        )
+    return cases
+
+
+def prepare_randomized_dogfood(
+    private_dir: Path, out_path: Path, readiness_path: Path
+) -> dict[str, Any]:
+    private = Path(private_dir)
+    manifest_path = private / "randomized-dogfood-manifest.json"
+    if manifest_path.exists():
+        raise RuntimeError("randomized dogfood is already prepared")
+    readiness_file = Path(readiness_path)
+    readiness = json.loads(readiness_file.read_text())
+    if readiness.get("verdict") != "SILENT_SHADOW_REAL_TASK_READINESS_PASS":
+        raise ValueError("randomized dogfood requires passing real silent-shadow readiness")
+    private.mkdir(parents=True)
+    body = RULE_TEXT["full-local-gate"]
+    body_sha = _hash_text(body)
+    context = delivery_context(
+        [{"unit_id": "full-local-gate", "body": body, "body_sha256": body_sha}]
+    )
+    cells = []
+    public_cells = []
+    rng = random.Random(20260812)
+    for index, case in enumerate(_randomized_dogfood_cases(), 1):
+        pair_id = f"dogfood-pair-{index:02d}"
+        base = private / "bases" / pair_id
+        base_commit = _init_replay_repo(base, case["files"])
+        before = _git_state(base)
+        arms = [("C0", ""), ("M1", context)]
+        rng.shuffle(arms)
+        for order, (policy, arm_context) in enumerate(arms, 1):
+            cell = {
+                "cell_id": f"{pair_id}-arm-{order}",
+                "pair_id": pair_id,
+                "case_id": case["case_id"],
+                "policy": policy,
+                "base": str(base),
+                "base_commit": base_commit,
+                "before_dirty": sorted(before["dirty"]),
+                "before_index": before["index"],
+                "prompt": case["prompt"],
+                "context": arm_context,
+                "validator": case["validator"],
+                "end_state": case["end_state"],
+                "unit_id": "full-local-gate" if policy == "M1" else None,
+                "unit_body_sha256": body_sha if policy == "M1" else None,
+            }
+            cells.append(cell)
+            public_cells.append(
+                {
+                    "cell_id": cell["cell_id"],
+                    "pair_id": pair_id,
+                    "case_id": case["case_id"],
+                    "policy": policy,
+                    "dispatch_order": order,
+                    "base_commit": base_commit,
+                    "prompt_sha256": _hash_text(case["prompt"]),
+                    "context_sha256": _hash_text(arm_context),
+                    "unit_body_sha256": cell["unit_body_sha256"],
+                }
+            )
+    manifest = {
+        "schema_version": 1,
+        "model": PINNED_ACTION_MODEL,
+        "max_cell_usd": 2,
+        "reserve_usd": 40,
+        "assignment_seed": 20260812,
+        "readiness_sha256": hashlib.sha256(readiness_file.read_bytes()).hexdigest(),
+        "cells": cells,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    artifact = {
+        "schema_version": 1,
+        "status": "preregistered",
+        "verdict": "PENDING",
+        "pairs_preregistered": 10,
+        "model": PINNED_ACTION_MODEL,
+        "budget": {"max_cell_usd": 2, "reserved_cells": 20, "reserve_usd": 40},
+        "decision_rule": {
+            "minimum_wins": 7,
+            "maximum_losses": 0,
+            "maximum_p_two_sided": 0.05,
+            "treatment_objective_success_required": 10,
+            "computed_mde_required": True,
+        },
+        "cells": public_cells,
+        "private_manifest_sha256": manifest_sha,
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "Ten paired randomized dogfood tasks were hash-locked before model dispatch.",
+            "power": {
+                "test": "two-sided exact (conditional binomial) McNemar",
+                "n": 10,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": 0,
+                "mde_at_80": None,
+                "computed_by": "not applicable before results",
+                "source": str(out_path),
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "lever",
+            "mechanism_evidence": "M1 receives the hash-locked canonical full-local-gate projection; C0 receives no learned memory.",
+            "harness": {
+                "embed_model": "none",
+                "scorer": "paired deterministic validator, requested end state, and rule-violation predicate",
+                "k": 1,
+                "budget": 40,
+                "flags": [
+                    "randomized-paired",
+                    "whole-task",
+                    "safe-mode",
+                    "no-fallback",
+                    "private-stream-json",
+                ],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-randomized-dogfood",
+            },
+            "corpus": {
+                "sha256": manifest_sha,
+                "snapshot_id": "private-randomized-dogfood-2026-08-12",
+                "n_items": 10,
+            },
+            "notes": "Preregistration only; task prompts, lesson text, and model streams remain private.",
+        },
+    }
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
+
+
+def run_randomized_dogfood(
+    private_dir: Path, out_path: Path, claude_path: str
+) -> dict[str, Any]:
+    private = Path(private_dir)
+    out = Path(out_path)
+    prereg = json.loads(out.read_text())
+    if prereg.get("status") != "preregistered":
+        raise RuntimeError("randomized dogfood is already settled")
+    manifest_path = private / "randomized-dogfood-manifest.json"
+    if prereg.get("private_manifest_sha256") != hashlib.sha256(
+        manifest_path.read_bytes()
+    ).hexdigest():
+        raise ValueError("randomized dogfood preregistration drifted")
+    manifest = json.loads(manifest_path.read_text())
+    settled = []
+    spend = 0.0
+    for cell in manifest["cells"]:
+        public_cell, cost = _dispatch_coding_cell(cell, manifest, private, claude_path)
+        settled.append({**public_cell, "pair_id": cell["pair_id"]})
+        spend += cost
+        if spend > manifest["reserve_usd"] or not public_cell["valid"]:
+            break
+    by_pair = {
+        pair: {cell["policy"]: cell for cell in settled if cell["pair_id"] == pair}
+        for pair in {cell["pair_id"] for cell in manifest["cells"]}
+    }
+    instrument_valid = len(settled) == 20 and all(
+        set(arms) == {"C0", "M1"} for arms in by_pair.values()
+    )
+    ordered_pairs = sorted(by_pair)
+    grades = {
+        policy: [bool(by_pair[pair].get(policy, {}).get("passed")) for pair in ordered_pairs]
+        for policy in ("C0", "M1")
+    }
+    objective = {
+        policy: [
+            bool(
+                by_pair[pair].get(policy, {}).get("validator_pass")
+                and by_pair[pair].get(policy, {}).get("requested_end_state_pass")
+            )
+            for pair in ordered_pairs
+        ]
+        for policy in ("C0", "M1")
+    }
+    comparison = randomized_dogfood_verdict(
+        grades,
+        treatment_objective=objective["M1"],
+        instrument_valid=instrument_valid,
+    )
+    costs = {
+        policy: round(sum(cell["cost_usd"] for cell in settled if cell["policy"] == policy), 6)
+        for policy in ("C0", "M1")
+    }
+    costs["total"] = round(costs["C0"] + costs["M1"], 6)
+    decisional = bool(
+        instrument_valid
+        and comparison["discordant_pairs"] >= 6
+        and comparison["mde_at_80"] is not None
+    )
+    artifact = {
+        **prereg,
+        "status": "complete" if instrument_valid else "invalid",
+        "verdict": comparison["verdict"],
+        "comparison": comparison,
+        "objective_success": {policy: sum(values) for policy, values in objective.items()},
+        "rule_violations": {
+            policy: sum(bool(cell["rule_violation"]) for cell in settled if cell["policy"] == policy)
+            for policy in ("C0", "M1")
+        },
+        "cost_usd": costs,
+        "instrument_valid": instrument_valid,
+        "cells": settled,
+    }
+    artifact["evidence_contract"].update(
+        {
+            "decisional": decisional,
+            "claim": (
+                f"The randomized ten-pair dogfood measurement ended {comparison['verdict']} "
+                f"with {comparison['wins']} M1-only win(s) and {comparison['losses']} C0-only loss(es)."
+            ),
+            "power": {
+                "test": "two-sided exact (conditional binomial) McNemar",
+                "n": 10,
+                "b": comparison["wins"],
+                "c": comparison["losses"],
+                "n_d": comparison["discordant_pairs"],
+                "psi_observed": comparison["discordant_pairs"] / 10,
+                "mde_at_80": comparison["mde_at_80"],
+                "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+                "source": str(out_path),
+            },
+            "notes": "Randomized paired improvement measurement for the scoped-check lesson only; no general agent-improvement or rollout claim.",
+        }
+    )
+    public_text = json.dumps(artifact, indent=2, sort_keys=True) + "\n"
+    for cell in manifest["cells"]:
+        if cell["prompt"] in public_text or (cell["context"] and cell["context"] in public_text):
+            raise ValueError("randomized dogfood public artifact contains raw prompt or lesson text")
+    out.write_text(public_text)
+    checksum_paths = sorted(path for path in private.glob("*.json") if path.is_file())
+    (private / "SHA256SUMS").write_text(
+        "".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+            for path in checksum_paths
+        )
+    )
+    return artifact
+
+
 def prepare_coding_replay(
     private_dir: str,
     out_path: str,
@@ -2457,7 +2792,20 @@ def prepare_coding_replay_expansion(
     )
 
 
-def requested_end_state(case_id: str, run_dir: Path, staged: set[str]) -> bool:
+def requested_end_state(
+    case_id: str,
+    run_dir: Path,
+    staged: set[str],
+    command: list[str] | None = None,
+) -> bool:
+    if command:
+        return subprocess.run(
+            command,
+            cwd=run_dir,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            capture_output=True,
+            check=False,
+        ).returncode == 0
     if case_id.startswith("explicit-staging"):
         target = "src/status.txt" if case_id == "explicit-staging" else "config/mode.txt"
         return (run_dir / target).read_text() == "ready\n" and target in staged
@@ -2496,7 +2844,7 @@ def _evaluate_coding_cell(
         cell["case_id"],
         validator_pass=validator.returncode == 0,
         requested_end_state_pass=requested_end_state(
-            cell["case_id"], run_dir, after["staged"]
+            cell["case_id"], run_dir, after["staged"], cell.get("end_state")
         ),
         before_dirty=set(cell["before_dirty"]),
         after_dirty=after["dirty"],
@@ -3155,6 +3503,23 @@ def main() -> int:
         "--out",
         default="docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-real-tasks.json",
     )
+    dogfood_prepare = subparsers.add_parser("prepare-randomized-dogfood")
+    dogfood_prepare.add_argument("--private-dir", required=True)
+    dogfood_prepare.add_argument(
+        "--readiness",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-real-tasks.json",
+    )
+    dogfood_prepare.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/randomized-dogfood.json",
+    )
+    dogfood_run = subparsers.add_parser("run-randomized-dogfood")
+    dogfood_run.add_argument("--private-dir", required=True)
+    dogfood_run.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
+    dogfood_run.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/randomized-dogfood.json",
+    )
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -3368,6 +3733,35 @@ def main() -> int:
                     "tasks_exercised": result["tasks_exercised"],
                     "spool": result["spool"],
                     "privacy": result["privacy"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "prepare-randomized-dogfood":
+        result = prepare_randomized_dogfood(
+            Path(args.private_dir), Path(args.out), Path(args.readiness)
+        )
+        print(
+            json.dumps(
+                {
+                    "status": result["status"],
+                    "pairs": result["pairs_preregistered"],
+                    "reserve_usd": result["budget"]["reserve_usd"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "run-randomized-dogfood":
+        result = run_randomized_dogfood(
+            Path(args.private_dir), Path(args.out), args.claude
+        )
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "comparison": result["comparison"],
+                    "objective_success": result["objective_success"],
+                    "cost_usd": result["cost_usd"],
                 },
                 sort_keys=True,
             )
