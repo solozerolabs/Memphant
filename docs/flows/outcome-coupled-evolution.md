@@ -32,6 +32,7 @@ If that gate opens, add only the approved append-only, tenant-bound `memphant.ta
 8. After the ordering-only screen is flat, preregister one admission follow-up. Reuse the four settled `C1` cells by checksum, dispatch only four `A4` relevant-lesson cells, and reserve at most `$10` of the unspent action-look budget. Advance only at 3/4, at least one net win, and zero losses. Do not reinterpret an unexposed historical memory as harmful causal evidence.
 9. Because the admission screen began before its rules could act, run one final mechanism-sensitive isolated replay from a pre-action boundary. Prove repo-file and MemPhant-projection delivery parity without a model call, then compare `C0` against the projected single-lesson pack on two whole scratch-repo tasks. Grade filesystem state, deterministic validators, and the complete tool sequence. Reserve at most `$20`; expand no further unless the treatment has a net win and zero losses. This is an experiment adapter over the existing canonical projection, not production hook or outcome-schema work.
 10. Pin D-2026-08-09b in the existing spec-31 evidence-integrity suite: cover superseded and unresolved-contradiction suppression, compare trace-derived access/recency plus persisted ranking/outcome signals before and after recall, and require the same signals to move in a suppression-removed perturbation. Keep it reader-free and `$0`.
+11. Run the preregistered ten-task silent shadow on isolated coding repositories with exact prompt hashes and unchanged automatic lifecycle settings. Require all ten deterministic validators and requested end states, send only hash/counter/path receipts through the existing outcome and task-memory-event endpoints, simulate one client restart after server acceptance, drain the local JSONL spool, and publish only aggregate public-safe evidence. Any missing task, failed validator, prompt/lifecycle drift, missing exposure link, endpoint failure, residual spool row, or raw-content field closes the gate. This is readiness evidence, never an agent-improvement result.
 
 ## Harness
 
@@ -101,6 +102,20 @@ The first expansion grade incorrectly treated one literal implementation string 
 The opened gate now has one authoritative serving design: MemPhant stores append-only task outcomes and task-to-memory events; repo files remain an optional generated view, not a second store. `POST /v1/task-outcomes` atomically records normalized scope metrics and initial shown/activated units. `POST /v1/task-memory-events` accepts delayed evidence only after recorded exposure, rejects observational helpful/harmful credit, and requires explicit attribution for silence. Both paths are tenant/context bound and idempotent, accept hashes and counters rather than prompt/transcript bodies, and cascade on subject erasure.
 
 Automatic lifecycle changes, prompt injection, veto, inversion, and a Claude hook installer remain closed. The next live step is the preregistered ten-task silent shadow, using a crash-safe local spool; it must prove complete linkage and zero raw-content leakage before any prompt changes.
+
+## Real silent-shadow addendum review (2026-08-12)
+
+- Reuse the four existing whole-task repository contracts as ten independently initialized tasks; repeated task shapes are acceptable because this gate measures telemetry readiness, not model quality.
+- Freeze prompt bytes, validators, model, task repositories, and the maximum spend before dispatch. Do not append memory context or alter agent lifecycle configuration.
+- Grade every task before endpoint writes. The public artifact may contain task IDs, hashes, counts, costs, and aggregate predicates only; prompts, command streams, and model bodies stay in the private checksum-bound directory.
+- Send outcomes before delayed memory evidence, require every delayed unit to appear in the same task's recorded exposure, replay one accepted request after a client restart, and require a fully empty spool.
+- Any failed predicate is an invalid readiness campaign, not a partial pass. A clean result opens only randomized dogfood design; it does not support an agent-improvement claim.
+
+VERDICT: CLEAR. The adapter reuses the existing tasks, endpoints, and spool; no new lifecycle engine, prompt hook, or serving path is justified.
+
+### Real silent-shadow result
+
+The ten-task campaign passed on ten isolated coding repositories. All ten tasks reached deterministic validator-backed requested end states with exact preregistered prompt hashes and unchanged lifecycle configuration. The existing outcome and task-memory-event endpoints accepted 20/20 linked records; one after-accept client restart produced one idempotent replay; the JSONL spool drained to zero. Public evidence contains hashes, counts, costs, paths, and aggregate predicates only; the checksum-verified private directory retains task prompts and model streams. Total model spend was `$0.8039675`. Verdict: `SILENT_SHADOW_REAL_TASK_READINESS_PASS`. This opens only randomized dogfood design and is not evidence that agents improved.
 
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 

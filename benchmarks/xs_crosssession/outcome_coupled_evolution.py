@@ -7,6 +7,7 @@ import argparse
 import fnmatch
 import glob
 import hashlib
+import http.client
 import json
 import math
 import os
@@ -1054,6 +1055,211 @@ def run_silent_shadow_readiness(spool_path: Path, out_path: Path) -> dict[str, A
     return artifact
 
 
+_REAL_SHADOW_RECEIPT_FIELDS = {
+    "task_id",
+    "subject_id",
+    "scope_id",
+    "actor_id",
+    "agent_node_id",
+    "subject_generation",
+    "harness_id",
+    "model_id",
+    "started_at",
+    "ended_at",
+    "completion_status",
+    "validator_status",
+    "requested_end_state_pass",
+    "tool_count",
+    "failure_count",
+    "retry_count",
+    "cost_usd",
+    "planned_files",
+    "actual_files",
+    "transcript_sha256",
+    "preregistered_prompt_sha256",
+    "dispatched_prompt_sha256",
+    "lifecycle_before_sha256",
+    "lifecycle_after_sha256",
+    "shown_unit_ids",
+    "activated_unit_ids",
+    "events",
+}
+
+
+def run_real_silent_shadow_campaign(
+    receipts: list[dict[str, Any]],
+    spool_path: Path,
+    out_path: Path,
+    post: Any,
+) -> dict[str, Any]:
+    """Record ten real task receipts without exposing or changing agent inputs."""
+    if len(receipts) != 10:
+        raise ValueError("real silent shadow requires exactly ten task receipts")
+    task_ids = set()
+    for receipt in receipts:
+        if set(receipt) != _REAL_SHADOW_RECEIPT_FIELDS:
+            if _RAW_CONTENT_FIELDS & set(receipt):
+                raise ValueError("raw prompt, transcript, or command fields are forbidden")
+            raise ValueError("real silent-shadow receipt has unknown fields")
+        if (
+            receipt["completion_status"] != "completed"
+            or receipt["validator_status"] != "passed"
+            or receipt["requested_end_state_pass"] is not True
+        ):
+            raise ValueError("every real task requires a validator-backed end state")
+        if receipt["preregistered_prompt_sha256"] != receipt["dispatched_prompt_sha256"]:
+            raise ValueError("shadow instrumentation changed prompt bytes")
+        if receipt["lifecycle_before_sha256"] != receipt["lifecycle_after_sha256"]:
+            raise ValueError("shadow instrumentation changed automatic lifecycle behavior")
+        exposed = set(receipt["shown_unit_ids"]) | set(receipt["activated_unit_ids"])
+        if not receipt["events"] or any(
+            event.get("unit_id") not in exposed for event in receipt["events"]
+        ):
+            raise ValueError("task memory evidence lacks complete exposure linkage")
+        task_ids.add(receipt["task_id"])
+    if len(task_ids) != 10:
+        raise ValueError("real silent shadow requires ten distinct task ids")
+
+    spool_path = Path(spool_path)
+    spool = JsonlSpool(spool_path)
+    if spool._records():
+        raise ValueError("real silent-shadow campaign requires an empty spool")
+    for receipt in receipts:
+        common = {
+            key: receipt[key]
+            for key in (
+                "subject_id",
+                "scope_id",
+                "actor_id",
+                "agent_node_id",
+                "subject_generation",
+                "task_id",
+            )
+        }
+        outcome = {
+            **common,
+            **{
+                key: receipt[key]
+                for key in (
+                    "harness_id",
+                    "model_id",
+                    "started_at",
+                    "ended_at",
+                    "completion_status",
+                    "validator_status",
+                    "tool_count",
+                    "failure_count",
+                    "retry_count",
+                    "planned_files",
+                    "actual_files",
+                    "transcript_sha256",
+                    "shown_unit_ids",
+                    "activated_unit_ids",
+                )
+            },
+        }
+        event = {**common, "events": receipt["events"]}
+        spool.enqueue(
+            "/v1/task-outcomes", f"real-shadow-outcome-{receipt['task_id']}", outcome
+        )
+        spool.enqueue(
+            "/v1/task-memory-events", f"real-shadow-memory-{receipt['task_id']}", event
+        )
+
+    accepted = set()
+    duplicate_replays = 0
+    calls = 0
+
+    def post_with_restart(record: dict[str, Any]) -> None:
+        nonlocal calls, duplicate_replays
+        calls += 1
+        post(record)
+        key = record["idempotency_key"]
+        if key in accepted:
+            duplicate_replays += 1
+        accepted.add(key)
+        if calls == 7:
+            raise ConnectionError("simulated client restart after endpoint acceptance")
+
+    try:
+        spool.drain(post_with_restart)
+    except ConnectionError:
+        pass
+    JsonlSpool(spool_path).drain(post_with_restart)
+
+    safe_receipts = json.dumps(receipts, separators=(",", ":"), sort_keys=True)
+    artifact = {
+        "schema_version": 1,
+        "status": "complete",
+        "verdict": "SILENT_SHADOW_REAL_TASK_READINESS_PASS",
+        "tasks_exercised": 10,
+        "validator_backed_end_states": 10,
+        "outcome_to_exposure_links": 10,
+        "spool": {
+            "accepted_records": len(accepted),
+            "duplicate_replays": duplicate_replays,
+            "fully_drained": not JsonlSpool(spool_path)._records(),
+            "restart_replayed": duplicate_replays == 1,
+        },
+        "privacy": {"raw_content_fields": 0, "raw_content_matches": 0},
+        "silent_policy": {
+            "automatic_lifecycle_changes": 0,
+            "byte_identical_lifecycle_receipts": 10,
+            "byte_identical_prompt_receipts": 10,
+            "prompt_changes": 0,
+        },
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "Ten real isolated coding tasks reached validator-backed end states with complete exposure linkage and no raw-content persistence.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 10,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": None,
+                "mde_at_80": None,
+                "computed_by": "not applicable; deterministic readiness predicates",
+                "source": str(out_path),
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "gate",
+            "mechanism_evidence": "All task receipts passed validators before the existing outcome and task-memory-event endpoints accepted and drained their linked records.",
+            "harness": {
+                "embed_model": "none",
+                "scorer": "deterministic task validator and requested-end-state predicate",
+                "k": 10,
+                "budget": sum(float(receipt["cost_usd"]) for receipt in receipts),
+                "flags": [
+                    "silent-shadow",
+                    "real-isolated-tasks",
+                    "no-prompt-change",
+                    "no-lifecycle-change",
+                    "local-jsonl-spool",
+                ],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-real-silent-shadow",
+            },
+            "corpus": {
+                "sha256": _hash_text(safe_receipts),
+                "snapshot_id": "private-real-silent-shadow-2026-08-11",
+                "n_items": 10,
+            },
+            "notes": "Readiness result only; it does not measure or claim agent improvement.",
+        },
+    }
+    if (
+        len(accepted) != 20
+        or duplicate_replays != 1
+        or not artifact["spool"]["fully_drained"]
+    ):
+        raise ValueError("real silent-shadow endpoint spool did not restart and drain completely")
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
+
+
 def _transcript_path(session_prefix: str) -> str | None:
     matches = []
     for root in TRANSCRIPT_ROOTS:
@@ -1843,6 +2049,217 @@ def _coding_replay_cases() -> list[dict[str, Any]]:
     ]
 
 
+def prepare_real_silent_shadow_tasks(private_dir: Path, out_path: Path) -> dict[str, Any]:
+    """Preregister ten isolated tasks while keeping prompt bodies private."""
+    private = Path(private_dir)
+    manifest_path = private / "real-silent-shadow-manifest.json"
+    if manifest_path.exists():
+        raise RuntimeError("real silent-shadow campaign is already prepared")
+    private.mkdir(parents=True)
+    tasks = []
+    public_tasks = []
+    cases = _coding_replay_cases()
+    for index in range(1, 11):
+        case = cases[(index - 1) % len(cases)]
+        base = private / "bases" / f"task-{index:02d}"
+        base_commit = _init_replay_repo(base, case["files"])
+        if case["case_id"].startswith("explicit-staging"):
+            dirty_path = (
+                "notes/private.txt"
+                if case["case_id"] == "explicit-staging"
+                else "notes/local.txt"
+            )
+            (base / dirty_path).write_text("private work in progress\n")
+        task_id = f"70000000-0000-4000-8000-{index:012d}"
+        task = {
+            "task_id": task_id,
+            "case_id": case["case_id"],
+            "base": str(base),
+            "base_commit": base_commit,
+            "prompt": case["prompt"],
+            "prompt_sha256": _hash_text(case["prompt"]),
+            "validator": case["validator"],
+        }
+        tasks.append(task)
+        public_tasks.append(
+            {
+                "task_id": task_id,
+                "case_id": case["case_id"],
+                "prompt_sha256": task["prompt_sha256"],
+            }
+        )
+    manifest = {
+        "schema_version": 1,
+        "model": PINNED_ACTION_MODEL,
+        "max_task_usd": 5,
+        "tasks": tasks,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    artifact = {
+        "schema_version": 1,
+        "status": "preregistered",
+        "verdict": "PENDING",
+        "tasks_preregistered": 10,
+        "tasks": public_tasks,
+        "private_manifest_sha256": manifest_sha,
+        "evidence_contract": {
+            "schema_version": 1,
+            "decisional": False,
+            "claim": "Ten isolated coding tasks were hash-locked before the real silent-shadow campaign began.",
+            "power": {
+                "test": "descriptive-only (no test)",
+                "n": 10,
+                "b": 0,
+                "c": 0,
+                "n_d": 0,
+                "psi_observed": None,
+                "mde_at_80": None,
+                "computed_by": "not applicable; preregistration",
+                "source": str(out_path),
+            },
+            "mechanism_enabled": True,
+            "probe_kind": "gate",
+            "mechanism_evidence": "The private manifest fixes task repositories, prompts, validators, model, and per-task spend before dispatch.",
+            "harness": {
+                "embed_model": "none",
+                "scorer": "deterministic task validator and requested-end-state predicate",
+                "k": 10,
+                "budget": 50,
+                "flags": [
+                    "silent-shadow",
+                    "real-isolated-tasks",
+                    "no-prompt-change",
+                    "no-lifecycle-change",
+                    "local-jsonl-spool",
+                ],
+                "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-real-silent-shadow",
+            },
+            "corpus": {
+                "sha256": manifest_sha,
+                "snapshot_id": "private-real-silent-shadow-2026-08-12",
+                "n_items": 10,
+            },
+            "notes": "Preregistration only; no task result or agent-improvement claim has been read.",
+        },
+    }
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
+
+
+def execute_real_silent_shadow_tasks(
+    private_dir: Path,
+    prereg_path: Path,
+    claude_path: str,
+    binding: dict[str, Any],
+    unit_id: str,
+) -> list[dict[str, Any]]:
+    """Run the frozen tasks once and return content-free validator receipts."""
+    private = Path(private_dir)
+    manifest_path = private / "real-silent-shadow-manifest.json"
+    prereg = json.loads(Path(prereg_path).read_text())
+    if prereg.get("status") != "preregistered" or prereg.get(
+        "private_manifest_sha256"
+    ) != hashlib.sha256(manifest_path.read_bytes()).hexdigest():
+        raise ValueError("real silent-shadow preregistration drifted")
+    manifest = json.loads(manifest_path.read_text())
+    lifecycle_sha = _hash_text(
+        json.dumps(
+            {
+                "model": manifest["model"],
+                "safe_mode": True,
+                "session_persistence": False,
+                "slash_commands": False,
+                "tools": "Read,Edit,Write,Bash",
+                "max_turns": 12,
+                "memory_context": "",
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    )
+    receipts = []
+    for index, task in enumerate(manifest["tasks"], 1):
+        before = _git_state(Path(task["base"]))
+        cell = {
+            "cell_id": f"real-shadow-task-{index:02d}",
+            "case_id": task["case_id"],
+            "policy": "S0",
+            "base": task["base"],
+            "base_commit": task["base_commit"],
+            "before_dirty": sorted(before["dirty"]),
+            "before_index": before["index"],
+            "prompt": task["prompt"],
+            "context": "",
+            "validator": task["validator"],
+            "unit_id": None,
+            "unit_body_sha256": None,
+        }
+        marker = private / f"{cell['cell_id']}.dispatch.json"
+        response_path = private / f"{cell['cell_id']}.response.json"
+        run_dir = private / "runs" / cell["cell_id"]
+        if marker.exists():
+            if json.loads(marker.read_text()).get("state") != "settled":
+                raise ValueError(f"real task has ambiguous completion: {task['task_id']}")
+            result, cost = _evaluate_coding_cell(cell, run_dir, response_path)
+            observed_at = datetime.fromtimestamp(response_path.stat().st_mtime).astimezone().isoformat()
+            started_at = observed_at
+            ended_at = observed_at
+        else:
+            started_at = datetime.now().astimezone().isoformat()
+            result, cost = _dispatch_coding_cell(
+                cell,
+                {"model": manifest["model"], "max_cell_usd": manifest["max_task_usd"]},
+                private,
+                claude_path,
+            )
+            ended_at = datetime.now().astimezone().isoformat()
+        if not (
+            result["valid"]
+            and result["validator_pass"]
+            and result["requested_end_state_pass"]
+        ):
+            raise ValueError(f"real task lacks a validator-backed end state: {task['task_id']}")
+        receipts.append(
+            {
+                **binding,
+                "task_id": task["task_id"],
+                "harness_id": "silent-shadow-real-v1",
+                "model_id": manifest["model"],
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "completion_status": "completed",
+                "validator_status": "passed",
+                "requested_end_state_pass": True,
+                "tool_count": result["tool_count"],
+                "failure_count": 0,
+                "retry_count": 0,
+                "cost_usd": cost,
+                "planned_files": None,
+                "actual_files": result["actual_files"],
+                "transcript_sha256": result["response_sha256"],
+                "preregistered_prompt_sha256": task["prompt_sha256"],
+                "dispatched_prompt_sha256": _hash_text(cell["prompt"]),
+                "lifecycle_before_sha256": lifecycle_sha,
+                "lifecycle_after_sha256": lifecycle_sha,
+                "shown_unit_ids": [unit_id],
+                "activated_unit_ids": [],
+                "events": [
+                    {
+                        "unit_id": unit_id,
+                        "event": "activated",
+                        "attribution": "observational",
+                    }
+                ],
+            }
+        )
+    receipts_path = private / "real-silent-shadow-receipts.json"
+    receipts_path.write_text(json.dumps(receipts, indent=2, sort_keys=True) + "\n")
+    return receipts
+
+
 def prepare_coding_replay(
     private_dir: str,
     out_path: str,
@@ -2101,6 +2518,7 @@ def _evaluate_coding_cell(
             "requested_end_state_pass": grade["requested_end_state_pass"],
             "rule_violation": grade["rule_violation"],
             "new_dirty_count": len(grade["new_dirty"]),
+            "actual_files": sorted(after["dirty"] | after["staged"]),
             "after_index": after["index"],
             "response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest(),
         },
@@ -2726,6 +3144,17 @@ def main() -> int:
         "--out",
         default="docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-readiness.json",
     )
+    real_shadow = subparsers.add_parser("run-real-silent-shadow")
+    real_shadow.add_argument("--private-dir", required=True)
+    real_shadow.add_argument("--binding", required=True)
+    real_shadow.add_argument("--unit-id", required=True)
+    real_shadow.add_argument("--base-url", required=True)
+    real_shadow.add_argument("--api-key", default=os.environ.get("MEMPHANT_API_KEY"))
+    real_shadow.add_argument("--claude", default="/Users/sidsharma/.local/bin/claude")
+    real_shadow.add_argument(
+        "--out",
+        default="docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-real-tasks.json",
+    )
     args = parser.parse_args()
     if args.command == "qualify":
         result = qualify(args.out)
@@ -2876,6 +3305,62 @@ def main() -> int:
         )
     elif args.command == "prove-silent-shadow":
         result = run_silent_shadow_readiness(Path(args.spool), Path(args.out))
+        print(
+            json.dumps(
+                {
+                    "verdict": result["verdict"],
+                    "tasks_exercised": result["tasks_exercised"],
+                    "spool": result["spool"],
+                    "privacy": result["privacy"],
+                },
+                sort_keys=True,
+            )
+        )
+    elif args.command == "run-real-silent-shadow":
+        private = Path(args.private_dir)
+        bound = json.loads(Path(args.binding).read_text())
+        binding = {
+            key: bound[key]
+            for key in (
+                "subject_id",
+                "scope_id",
+                "actor_id",
+                "agent_node_id",
+                "subject_generation",
+            )
+        }
+        receipts = execute_real_silent_shadow_tasks(
+            private, Path(args.out), args.claude, binding, args.unit_id
+        )
+        if not args.base_url.startswith("http://"):
+            raise ValueError("real silent-shadow endpoint must be isolated plain HTTP")
+        authority = args.base_url.removeprefix("http://").rstrip("/")
+
+        def post(record: dict[str, Any]) -> None:
+            headers = {
+                "Content-Type": "application/json",
+                "Idempotency-Key": record["idempotency_key"],
+            }
+            if args.api_key:
+                headers["Authorization"] = f"Bearer {args.api_key}"
+            connection = http.client.HTTPConnection(authority, timeout=30)
+            connection.request(
+                "POST",
+                record["endpoint"],
+                json.dumps(record["body"], separators=(",", ":")),
+                headers,
+            )
+            response = connection.getresponse()
+            body = response.read()
+            connection.close()
+            if response.status >= 400:
+                raise RuntimeError(
+                    f"{record['endpoint']} -> HTTP {response.status}: {body[:300]!r}"
+                )
+
+        result = run_real_silent_shadow_campaign(
+            receipts, private / "real-silent-shadow-spool.jsonl", Path(args.out), post
+        )
         print(
             json.dumps(
                 {

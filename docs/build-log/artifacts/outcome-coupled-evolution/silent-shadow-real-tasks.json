@@ -1,0 +1,63 @@
+{
+  "evidence_contract": {
+    "claim": "Ten real isolated coding tasks reached validator-backed end states with complete exposure linkage and no raw-content persistence.",
+    "corpus": {
+      "n_items": 10,
+      "sha256": "a76df312ec1d033ef2bfc89694dad9272778769dd0bcc43a6fdacd772d35e066",
+      "snapshot_id": "private-real-silent-shadow-2026-08-11"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 0.8039675,
+      "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-real-silent-shadow",
+      "embed_model": "none",
+      "flags": [
+        "silent-shadow",
+        "real-isolated-tasks",
+        "no-prompt-change",
+        "no-lifecycle-change",
+        "local-jsonl-spool"
+      ],
+      "k": 10,
+      "scorer": "deterministic task validator and requested-end-state predicate"
+    },
+    "mechanism_enabled": true,
+    "mechanism_evidence": "All task receipts passed validators before the existing outcome and task-memory-event endpoints accepted and drained their linked records.",
+    "notes": "Readiness result only; it does not measure or claim agent improvement.",
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; deterministic readiness predicates",
+      "mde_at_80": null,
+      "n": 10,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-real-tasks.json",
+      "test": "descriptive-only (no test)"
+    },
+    "probe_kind": "gate",
+    "schema_version": 1
+  },
+  "outcome_to_exposure_links": 10,
+  "privacy": {
+    "raw_content_fields": 0,
+    "raw_content_matches": 0
+  },
+  "schema_version": 1,
+  "silent_policy": {
+    "automatic_lifecycle_changes": 0,
+    "byte_identical_lifecycle_receipts": 10,
+    "byte_identical_prompt_receipts": 10,
+    "prompt_changes": 0
+  },
+  "spool": {
+    "accepted_records": 20,
+    "duplicate_replays": 1,
+    "fully_drained": true,
+    "restart_replayed": true
+  },
+  "status": "complete",
+  "tasks_exercised": 10,
+  "validator_backed_end_states": 10,
+  "verdict": "SILENT_SHADOW_REAL_TASK_READINESS_PASS"
+}

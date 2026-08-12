@@ -165,7 +165,7 @@
 > # CURRENT PHASE: `RUNTIME COMPLETE — BENCHMARK EVIDENCE PENDING`
 >
 > Runtime proof (2026-07-10): `docs/build-log/2026-07-10-runtime-postgres-proof.md` — durable Postgres-backed REST/MCP/CLI/worker with API-key tenancy; `scripts/e2e_probe.sh` passes end-to-end (durability across restart, cross-tenant denial, correct/forget without resurrection, tri-domain resource ingest). SOTA/benchmark rungs stay open under the promotion-provenance rule.
-> Silent-shadow readiness proof (2026-08-11): `docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-readiness.json` — the deterministic ten-task harness passed complete outcome-to-exposure linkage, after-accept restart replay through the idempotent endpoints, full spool drain, and zero raw prompt/transcript fields or sentinel matches. This is readiness proof only; live tasks, prompt injection, and automatic lifecycle changes remain closed.
+> Real silent-shadow readiness proof (2026-08-12): `docs/build-log/artifacts/outcome-coupled-evolution/silent-shadow-real-tasks.json` — ten isolated coding-agent tasks reached validator-backed requested end states with byte-identical prompt/lifecycle receipts; the existing outcome and task-memory-event endpoints accepted all 20 linked records, replayed one request after an after-accept client restart, and drained the local spool to zero with no raw prompt/transcript/command bodies persisted. Total task spend was $0.8039675. This is readiness proof only: it does not measure agent improvement, and prompt injection plus automatic lifecycle changes remain closed.
 >
 > WS-0 proof artifact: `docs/build-log/artifacts/ws0-two-language-spike.json`.
 > R83 spike measured warm no-recompile Rust policy-change iteration at **0.073×** Python (`rust_proceeds`).

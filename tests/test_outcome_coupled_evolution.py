@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import benchmarks.xs_crosssession.outcome_coupled_evolution as outcome_module
 
 from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     BudgetLedger,
@@ -39,6 +40,9 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     requested_end_state,
     regrade_coding_replay_expansion,
     run_silent_shadow_readiness,
+    run_real_silent_shadow_campaign,
+    prepare_real_silent_shadow_tasks,
+    execute_real_silent_shadow_tasks,
 )
 
 
@@ -145,6 +149,217 @@ def test_shadow_spool_repairs_only_a_torn_final_append(tmp_path: Path):
     JsonlSpool(spool.path).drain(accepted.append)
 
     assert [record["idempotency_key"] for record in accepted] == ["event-1", "event-2"]
+
+
+def _real_shadow_receipts() -> list[dict]:
+    receipts = []
+    for index in range(1, 11):
+        unit_id = f"60000000-0000-4000-8000-{index:012d}"
+        digest = f"{index:064x}"
+        receipts.append(
+            {
+                "task_id": f"50000000-0000-4000-8000-{index:012d}",
+                "subject_id": "10000000-0000-4000-8000-000000000001",
+                "scope_id": "20000000-0000-4000-8000-000000000001",
+                "actor_id": "30000000-0000-4000-8000-000000000001",
+                "agent_node_id": "40000000-0000-4000-8000-000000000001",
+                "subject_generation": 1,
+                "harness_id": "silent-shadow-real-v1",
+                "model_id": "claude-opus-4-1-20250805",
+                "started_at": f"2026-08-11T01:{index:02d}:00Z",
+                "ended_at": f"2026-08-11T01:{index:02d}:30Z",
+                "completion_status": "completed",
+                "validator_status": "passed",
+                "requested_end_state_pass": True,
+                "tool_count": index,
+                "failure_count": 0,
+                "retry_count": 0,
+                "cost_usd": 0.1,
+                "planned_files": [f"task_{index}.py"],
+                "actual_files": [f"task_{index}.py"],
+                "transcript_sha256": digest,
+                "preregistered_prompt_sha256": digest,
+                "dispatched_prompt_sha256": digest,
+                "lifecycle_before_sha256": "a" * 64,
+                "lifecycle_after_sha256": "a" * 64,
+                "shown_unit_ids": [unit_id],
+                "activated_unit_ids": [],
+                "events": [
+                    {
+                        "unit_id": unit_id,
+                        "event": "helpful",
+                        "attribution": "deterministic_scorer",
+                    }
+                ],
+            }
+        )
+    return receipts
+
+
+def test_real_silent_shadow_requires_ten_validated_linked_private_safe_receipts(tmp_path: Path):
+    accepted = {}
+
+    def post(record):
+        accepted.setdefault(record["idempotency_key"], record)
+
+    artifact = run_real_silent_shadow_campaign(
+        _real_shadow_receipts(),
+        tmp_path / "shadow.jsonl",
+        tmp_path / "proof.json",
+        post,
+    )
+
+    assert artifact["verdict"] == "SILENT_SHADOW_REAL_TASK_READINESS_PASS"
+    assert artifact["tasks_exercised"] == 10
+    assert artifact["validator_backed_end_states"] == 10
+    assert artifact["outcome_to_exposure_links"] == 10
+    assert artifact["spool"] == {
+        "accepted_records": 20,
+        "duplicate_replays": 1,
+        "fully_drained": True,
+        "restart_replayed": True,
+    }
+    assert artifact["privacy"] == {"raw_content_fields": 0, "raw_content_matches": 0}
+    assert artifact["silent_policy"] == {
+        "automatic_lifecycle_changes": 0,
+        "byte_identical_lifecycle_receipts": 10,
+        "byte_identical_prompt_receipts": 10,
+        "prompt_changes": 0,
+    }
+    assert artifact["evidence_contract"]["harness"]["budget"] == pytest.approx(1.0)
+    assert len(accepted) == 20
+    assert not (tmp_path / "shadow.jsonl").read_text()
+
+
+def test_real_silent_shadow_preregisters_ten_private_tasks_without_public_prompts(tmp_path: Path):
+    public = tmp_path / "prereg.json"
+    artifact = prepare_real_silent_shadow_tasks(tmp_path / "private", public)
+
+    assert artifact["status"] == "preregistered"
+    assert artifact["tasks_preregistered"] == 10
+    assert len(artifact["tasks"]) == 10
+    assert all(set(task) == {"task_id", "case_id", "prompt_sha256"} for task in artifact["tasks"])
+    assert "Fix calculator.add" not in public.read_text()
+    manifest = json.loads((tmp_path / "private" / "real-silent-shadow-manifest.json").read_text())
+    assert len(manifest["tasks"]) == 10
+    assert all(task["prompt"] for task in manifest["tasks"])
+
+
+def test_real_silent_shadow_executes_preregistered_prompt_without_context_injection(
+    tmp_path: Path, monkeypatch
+):
+    private = tmp_path / "private"
+    public = tmp_path / "prereg.json"
+    prepare_real_silent_shadow_tasks(private, public)
+    observed = []
+
+    def dispatch(cell, manifest, private_dir, claude_path):
+        observed.append((cell["prompt"], cell["context"], manifest["model"], claude_path))
+        return (
+            {
+                "valid": True,
+                "passed": False,
+                "validator_pass": True,
+                "requested_end_state_pass": True,
+                "cost_usd": 0.01,
+                "tool_count": 2,
+                "response_sha256": "f" * 64,
+                "actual_files": ["src/change.py"],
+            },
+            0.01,
+        )
+
+    monkeypatch.setattr(outcome_module, "_dispatch_coding_cell", dispatch)
+    receipts = execute_real_silent_shadow_tasks(
+        private,
+        public,
+        "/usr/local/bin/claude",
+        {
+            "subject_id": "10000000-0000-4000-8000-000000000001",
+            "scope_id": "20000000-0000-4000-8000-000000000001",
+            "actor_id": "30000000-0000-4000-8000-000000000001",
+            "agent_node_id": "40000000-0000-4000-8000-000000000001",
+            "subject_generation": 1,
+        },
+        "60000000-0000-4000-8000-000000000001",
+    )
+
+    assert len(receipts) == 10
+    assert all(context == "" for _, context, _, _ in observed)
+    assert [outcome_module._hash_text(prompt) for prompt, *_ in observed] == [
+        receipt["dispatched_prompt_sha256"] for receipt in receipts
+    ]
+    assert all(receipt["validator_status"] == "passed" for receipt in receipts)
+
+
+def test_real_silent_shadow_resumes_settled_task_without_redispatch(tmp_path: Path, monkeypatch):
+    private = tmp_path / "private"
+    public = tmp_path / "prereg.json"
+    prepare_real_silent_shadow_tasks(private, public)
+    (private / "real-shadow-task-01.dispatch.json").write_text('{"state":"settled"}\n')
+    (private / "real-shadow-task-01.response.json").write_text("{}\n")
+    (private / "runs" / "real-shadow-task-01").mkdir(parents=True)
+    dispatched = []
+
+    result = {
+        "valid": True,
+        "passed": False,
+        "validator_pass": True,
+        "requested_end_state_pass": True,
+        "cost_usd": 0.01,
+        "tool_count": 2,
+        "response_sha256": "f" * 64,
+        "actual_files": ["src/change.py"],
+    }
+    monkeypatch.setattr(outcome_module, "_evaluate_coding_cell", lambda *args: (result, 0.01))
+
+    def dispatch(*args):
+        dispatched.append(args[0]["cell_id"])
+        return result, 0.01
+
+    monkeypatch.setattr(outcome_module, "_dispatch_coding_cell", dispatch)
+    receipts = execute_real_silent_shadow_tasks(
+        private,
+        public,
+        "/usr/local/bin/claude",
+        {
+            "subject_id": "10000000-0000-4000-8000-000000000001",
+            "scope_id": "20000000-0000-4000-8000-000000000001",
+            "actor_id": "30000000-0000-4000-8000-000000000001",
+            "agent_node_id": "40000000-0000-4000-8000-000000000001",
+            "subject_generation": 1,
+        },
+        "60000000-0000-4000-8000-000000000001",
+    )
+
+    assert len(receipts) == 10
+    assert dispatched == [f"real-shadow-task-{index:02d}" for index in range(2, 11)]
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda rows: rows.pop(), "exactly ten"),
+        (lambda rows: rows[0].update(validator_status="failed"), "validator-backed"),
+        (lambda rows: rows[0].update(dispatched_prompt_sha256="f" * 64), "prompt bytes"),
+        (lambda rows: rows[0].update(events=[]), "exposure linkage"),
+        (lambda rows: rows[0].update(prompt="private"), "raw prompt"),
+    ],
+)
+def test_real_silent_shadow_fails_closed_before_spooling(tmp_path: Path, mutate, message: str):
+    receipts = _real_shadow_receipts()
+    mutate(receipts)
+
+    with pytest.raises(ValueError, match=message):
+        run_real_silent_shadow_campaign(
+            receipts,
+            tmp_path / "shadow.jsonl",
+            tmp_path / "proof.json",
+            lambda record: None,
+        )
+
+    assert not (tmp_path / "proof.json").exists()
+    assert not (tmp_path / "shadow.jsonl").exists()
 
 
 def test_active_context_contains_compact_summary_once_and_stops_before_action():
