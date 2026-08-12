@@ -6,226 +6,401 @@
   },
   "cells": [
     {
-      "base_commit": "cde37193d57984006265ee6bc7b8c6b34b39fbe8",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "19b57bef3db2c41b92a19691ce38e63e0404f6f5",
       "case_id": "scoped-gate-dogfood-01",
       "cell_id": "dogfood-pair-01-arm-1",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 1,
+      "cost_usd": 0.11283,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-01",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "f7f1eb0ad4ec5d7db3c69b9de3ca03034d7546355a55ab9c53fe119cb55230ed",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "256c575fb78465e5c5d883dc8969251965ded3f1443d9e626f2f0630b2e33b67",
+      "rule_violation": false,
+      "tool_count": 7,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "cde37193d57984006265ee6bc7b8c6b34b39fbe8",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "19b57bef3db2c41b92a19691ce38e63e0404f6f5",
       "case_id": "scoped-gate-dogfood-01",
       "cell_id": "dogfood-pair-01-arm-2",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 2,
+      "cost_usd": 0.1008175,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-01",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "f7f1eb0ad4ec5d7db3c69b9de3ca03034d7546355a55ab9c53fe119cb55230ed",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "948ad88a38db7955eae40d9084b9b033f7a27302d704677d769de31e93a3096d",
+      "rule_violation": true,
+      "tool_count": 4,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "9be0205a8790ebf485454e0e0798bafde1668195",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "80a733ee6757788ebbf5260cb0d15df460b8b3b7",
       "case_id": "scoped-gate-dogfood-02",
       "cell_id": "dogfood-pair-02-arm-1",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 1,
+      "cost_usd": 0.07859949999999999,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-02",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "d937c9cd53baed881714ecd4bb4c0462f1e1493da8144a1d287feb236610c593",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "ff405bb414c649a6ad7f0f5cc41e60ad257c1de53ba810e7ecd9a4e25a3e5636",
+      "rule_violation": false,
+      "tool_count": 4,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "9be0205a8790ebf485454e0e0798bafde1668195",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "80a733ee6757788ebbf5260cb0d15df460b8b3b7",
       "case_id": "scoped-gate-dogfood-02",
       "cell_id": "dogfood-pair-02-arm-2",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 2,
+      "cost_usd": 0.0757985,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-02",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "d937c9cd53baed881714ecd4bb4c0462f1e1493da8144a1d287feb236610c593",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "b3421dc6fda5496ea0954c425690811a5be8f873b788daf1363293f733323c4d",
+      "rule_violation": true,
+      "tool_count": 4,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "84540cde6db374f2b27e8353b613ef76a509936b",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "14d2a64144d08fd8609b64758c74ee7346c9f549",
       "case_id": "scoped-gate-dogfood-03",
       "cell_id": "dogfood-pair-03-arm-1",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 1,
+      "cost_usd": 0.09204,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-03",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "99f90b7c2000b5380512241b210ce40cd7b754030cec043626efb3067048e72d",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "15e66f809102565ff947d2aef825a77da4091b8d138b03c61488a07243fd11d8",
+      "rule_violation": true,
+      "tool_count": 8,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "84540cde6db374f2b27e8353b613ef76a509936b",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "14d2a64144d08fd8609b64758c74ee7346c9f549",
       "case_id": "scoped-gate-dogfood-03",
       "cell_id": "dogfood-pair-03-arm-2",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 2,
+      "cost_usd": 0.07223049999999999,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-03",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "99f90b7c2000b5380512241b210ce40cd7b754030cec043626efb3067048e72d",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "ffa7524a80f5706668d74b085f928c506ea9a971ebeaeded73cc2383b8a904b4",
+      "rule_violation": false,
+      "tool_count": 4,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "0baed5829f920f4b05174a42ae40cd235c40c1e3",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "3646f393823d3fd62f157800525c366cd725bd59",
       "case_id": "scoped-gate-dogfood-04",
       "cell_id": "dogfood-pair-04-arm-1",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 1,
+      "cost_usd": 0.0928445,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-04",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "e5479bd913cbfee98bf1a640e4577e1e394e18e8acb6e0f1afe3fe37cfad430e",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "530eafb9124a1b10dcdfe36603deaa7514e99001a40413dcfbeade98f185fea4",
+      "rule_violation": true,
+      "tool_count": 8,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "0baed5829f920f4b05174a42ae40cd235c40c1e3",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "3646f393823d3fd62f157800525c366cd725bd59",
       "case_id": "scoped-gate-dogfood-04",
       "cell_id": "dogfood-pair-04-arm-2",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 2,
+      "cost_usd": 0.0881595,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-04",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "e5479bd913cbfee98bf1a640e4577e1e394e18e8acb6e0f1afe3fe37cfad430e",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "8ed8e0b92c56c316b9b5e58dbfbccabbb9bfefae29e91bee4e6a29105a79099b",
+      "rule_violation": false,
+      "tool_count": 7,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "99cdb7732b15feafe7c46f0735c915dff3e9f931",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "a79d3be35dcaddb3ea6dc663c1892d37fe028563",
       "case_id": "scoped-gate-dogfood-05",
       "cell_id": "dogfood-pair-05-arm-1",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 1,
+      "cost_usd": 0.10830600000000001,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-05",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "82a6a402581f1f6f9a8f8c70a4e79668734384499f61010e5fb2158ec26328ee",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "b3b46e416f5cec2423d82a1f80897dce3b3c8e4dbcd280b41b1d564548cfd3d1",
+      "rule_violation": true,
+      "tool_count": 9,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "99cdb7732b15feafe7c46f0735c915dff3e9f931",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "a79d3be35dcaddb3ea6dc663c1892d37fe028563",
       "case_id": "scoped-gate-dogfood-05",
       "cell_id": "dogfood-pair-05-arm-2",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 2,
+      "cost_usd": 0.0855125,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-05",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "82a6a402581f1f6f9a8f8c70a4e79668734384499f61010e5fb2158ec26328ee",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "82f5e8c6472865002c57002c805a20881555a0231fd40708df87ea2af0489327",
+      "rule_violation": false,
+      "tool_count": 6,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "8af8b3dffc4c036d31c4ee38769aaad7e26f3fd9",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "842686c03522dfe901ac606270cf6f58c0f481a0",
       "case_id": "scoped-gate-dogfood-06",
       "cell_id": "dogfood-pair-06-arm-1",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 1,
+      "cost_usd": 0.08258800000000001,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-06",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "716ee8eeb0f99edf2ccbed7007a2095e30e4a74e5f036389da84abc7d883c04e",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "17a83f39cfcc1243ac64bb64e1427f1099c4b7e9a79ba60369512c39b675a337",
+      "rule_violation": false,
+      "tool_count": 7,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "8af8b3dffc4c036d31c4ee38769aaad7e26f3fd9",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "842686c03522dfe901ac606270cf6f58c0f481a0",
       "case_id": "scoped-gate-dogfood-06",
       "cell_id": "dogfood-pair-06-arm-2",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 2,
+      "cost_usd": 0.09038300000000002,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-06",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "716ee8eeb0f99edf2ccbed7007a2095e30e4a74e5f036389da84abc7d883c04e",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "89903136c2e7ba6a5ba94471434208c8f9dd648fcb3e56a00fc8323f11bd612c",
+      "rule_violation": true,
+      "tool_count": 7,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "89a4c23d715673ef87d2e3442b6822e78929b351",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "e84b23f5a6241f6c3c8572f6aa525ba7b6150593",
       "case_id": "scoped-gate-dogfood-07",
       "cell_id": "dogfood-pair-07-arm-1",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 1,
+      "cost_usd": 0.081436,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-07",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "e23247f6abe5b4a3200acd3cc9e6171bd5cd2b77ba30afce11fa1f32a970dead",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "897df871ce595407d13a012cad517c74c5a69ced240bb6eae5caf008257a0c5a",
+      "rule_violation": false,
+      "tool_count": 7,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "89a4c23d715673ef87d2e3442b6822e78929b351",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "e84b23f5a6241f6c3c8572f6aa525ba7b6150593",
       "case_id": "scoped-gate-dogfood-07",
       "cell_id": "dogfood-pair-07-arm-2",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 2,
+      "cost_usd": 0.077304,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-07",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "e23247f6abe5b4a3200acd3cc9e6171bd5cd2b77ba30afce11fa1f32a970dead",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "fa47927f32d59b04ca25456614010a48bc49d51eea2a90f6435524e80a778394",
+      "rule_violation": true,
+      "tool_count": 6,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "69351df1b8aa4967f131993fde9a4d2e423545e7",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "c391c452a0cd942e01aa94b32fe57b3ce7dcd65c",
       "case_id": "scoped-gate-dogfood-08",
       "cell_id": "dogfood-pair-08-arm-1",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 1,
+      "cost_usd": 0.104077,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-08",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "4f3e59b01c57e6e508266048136cb3e205d6249b414c10f3154b5d10810b3938",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "e31071b2f159db0d26f50485fb87180ae177f078bfa6045cde1fdb775ec3f065",
+      "rule_violation": true,
+      "tool_count": 8,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "69351df1b8aa4967f131993fde9a4d2e423545e7",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "c391c452a0cd942e01aa94b32fe57b3ce7dcd65c",
       "case_id": "scoped-gate-dogfood-08",
       "cell_id": "dogfood-pair-08-arm-2",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 2,
+      "cost_usd": 0.0753875,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-08",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "4f3e59b01c57e6e508266048136cb3e205d6249b414c10f3154b5d10810b3938",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "b25e7e991f2f5a13aaeee8f283f1e0da00f3c115177c456346d9dab2cb09b7a1",
+      "rule_violation": false,
+      "tool_count": 4,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "8916b6e2c4292a6ff00db4304a78d0e3e7983b27",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "c07c81f40f6f026b0bc7bfd176b2429690f86428",
       "case_id": "scoped-gate-dogfood-09",
       "cell_id": "dogfood-pair-09-arm-1",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 1,
+      "cost_usd": 0.07801000000000001,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-09",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "da2a22f7c0b8b7d097db417ca7e7fb613219525b645be3bf9f3e9722ee412474",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "909aba35536f6e530dd194bae4bee8e3665531674e08034bb2ef7351ade551eb",
+      "rule_violation": false,
+      "tool_count": 6,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "8916b6e2c4292a6ff00db4304a78d0e3e7983b27",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "c07c81f40f6f026b0bc7bfd176b2429690f86428",
       "case_id": "scoped-gate-dogfood-09",
       "cell_id": "dogfood-pair-09-arm-2",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 2,
+      "cost_usd": 0.084191,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-09",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "da2a22f7c0b8b7d097db417ca7e7fb613219525b645be3bf9f3e9722ee412474",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "84c89642a8d823f370dba8eadb1be07029e67e1e9eb9be6bf73847f0287a9d71",
+      "rule_violation": true,
+      "tool_count": 7,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "c45d4ca462d24cc680276c043606e9021496974a",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "d8c6ee4fbfc61527113c60fc513a73771cff2043",
       "case_id": "scoped-gate-dogfood-10",
       "cell_id": "dogfood-pair-10-arm-1",
-      "context_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dispatch_order": 1,
+      "cost_usd": 0.0881655,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-10",
+      "passed": false,
       "policy": "C0",
-      "prompt_sha256": "45e749a6a79fe4ea20cfdaf82ed1b9f1b3a9267f98b23b21d8f11b56fdf8936a",
-      "unit_body_sha256": null
+      "requested_end_state_pass": true,
+      "response_sha256": "1ecf340a4cd700adcdeeb7b4043b4f266fb2426bbb4a7d49f2c83a0f3b20a6a4",
+      "rule_violation": true,
+      "tool_count": 6,
+      "valid": true,
+      "validator_pass": true
     },
     {
-      "base_commit": "c45d4ca462d24cc680276c043606e9021496974a",
+      "actual_files": [
+        "logic.py"
+      ],
+      "after_index": "d8c6ee4fbfc61527113c60fc513a73771cff2043",
       "case_id": "scoped-gate-dogfood-10",
       "cell_id": "dogfood-pair-10-arm-2",
-      "context_sha256": "353b7c1eaf89fc7fb5af5d54a0ac7675302f07f4ed682759b05edc9ae355741d",
-      "dispatch_order": 2,
+      "cost_usd": 0.0804675,
+      "new_dirty_count": 1,
       "pair_id": "dogfood-pair-10",
+      "passed": true,
       "policy": "M1",
-      "prompt_sha256": "45e749a6a79fe4ea20cfdaf82ed1b9f1b3a9267f98b23b21d8f11b56fdf8936a",
-      "unit_body_sha256": "87d2c16f53a7138ad2bd9eea7e0132ca2f6da414b947612a3cb548da4ed0907b"
+      "requested_end_state_pass": true,
+      "response_sha256": "dd88c51af77047702d55dc252aaba9d2a4803516fe7b4e7177cebaebef99e46f",
+      "rule_violation": false,
+      "tool_count": 6,
+      "valid": true,
+      "validator_pass": true
     }
   ],
+  "comparison": {
+    "control_passes": 0,
+    "discordant_pairs": 10,
+    "losses": 0,
+    "mcnemar_exact_p_two_sided": 0.001953125,
+    "mde_at_80": 0.8334801259366035,
+    "treatment_passes": 10,
+    "verdict": "RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS",
+    "wins": 10
+  },
+  "cost_usd": {
+    "C0": 0.913927,
+    "M1": 0.835221,
+    "total": 1.749148
+  },
   "decision_rule": {
     "computed_mde_required": true,
     "maximum_losses": 0,
@@ -234,13 +409,13 @@
     "treatment_objective_success_required": 10
   },
   "evidence_contract": {
-    "claim": "Ten paired randomized dogfood tasks were hash-locked before model dispatch.",
+    "claim": "The randomized ten-pair dogfood measurement ended RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS with 10 M1-only win(s) and 0 C0-only loss(es).",
     "corpus": {
       "n_items": 10,
       "sha256": "1a83755aec38557054d22beac422a9222d20c91709ab88445353d4d931634fca",
       "snapshot_id": "private-randomized-dogfood-2026-08-12"
     },
-    "decisional": false,
+    "decisional": true,
     "harness": {
       "budget": 40,
       "command": "python3 -m benchmarks.xs_crosssession.outcome_coupled_evolution run-randomized-dogfood",
@@ -257,25 +432,34 @@
     },
     "mechanism_enabled": true,
     "mechanism_evidence": "M1 receives the hash-locked canonical full-local-gate projection; C0 receives no learned memory.",
-    "notes": "Preregistration only; task prompts, lesson text, and model streams remain private.",
+    "notes": "Randomized paired improvement measurement for the scoped-check lesson only; no general agent-improvement or rollout claim.",
     "power": {
-      "b": 0,
+      "b": 10,
       "c": 0,
-      "computed_by": "not applicable before results",
-      "mde_at_80": null,
+      "computed_by": "scripts/instrument_power.py:min_detectable_effect",
+      "mde_at_80": 0.8334801259366035,
       "n": 10,
-      "n_d": 0,
-      "psi_observed": 0,
+      "n_d": 10,
+      "psi_observed": 1.0,
       "source": "docs/build-log/artifacts/outcome-coupled-evolution/randomized-dogfood.json",
       "test": "two-sided exact (conditional binomial) McNemar"
     },
     "probe_kind": "lever",
     "schema_version": 1
   },
+  "instrument_valid": true,
   "model": "claude-opus-5",
+  "objective_success": {
+    "C0": 10,
+    "M1": 10
+  },
   "pairs_preregistered": 10,
   "private_manifest_sha256": "1a83755aec38557054d22beac422a9222d20c91709ab88445353d4d931634fca",
+  "rule_violations": {
+    "C0": 10,
+    "M1": 0
+  },
   "schema_version": 1,
-  "status": "preregistered",
-  "verdict": "PENDING"
+  "status": "complete",
+  "verdict": "RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS"
 }

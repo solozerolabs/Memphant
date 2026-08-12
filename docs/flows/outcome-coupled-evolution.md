@@ -128,6 +128,10 @@ The ten-task campaign passed on ten isolated coding repositories. All ten tasks 
 
 VERDICT: CLEAR. One existing runner and one focused test module cover the randomized measurement; sequential dispatch preserves the one-shot budget ledger and avoids paid-call races.
 
+### Randomized dogfood result
+
+The preregistered randomized paired measurement passed for the canonical scoped-check lesson. Across ten fresh isolated task pairs, both arms reached 10/10 deterministic validator-backed requested end states; `M1` achieved `accepted_without_violation` on 10/10 while `C0` achieved 0/10 because every control ran the unnecessary full repository gate. That is ten paired wins, zero losses, exact two-sided McNemar `p=0.001953125`, and computed 80%-power MDE `0.8334801259366035`. Treatment cost `$0.835221` versus `$0.913927` control (`$1.749148` total). The instrument, private checksums, and zero-raw-field public artifact passed. Verdict: `RANDOMIZED_DOGFOOD_IMPROVEMENT_PASS` for this lesson and task family only; it is not a general smarter-agent claim and does not authorize automatic production injection.
+
 ## DX review (applied lens, autonomous — gstack-plan-devex-review)
 
 - The first consumer is the benchmark operator, so a single command must produce a machine-readable reason for every skipped arm and never require reading private transcript bodies in committed output.
