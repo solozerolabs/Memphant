@@ -225,6 +225,7 @@ docs/build-log/artifacts/s10-conversion/*/attempts-*.jsonl*
 # decision keys as a paid run. The build log records the round trip instead.
 docs/build-log/artifacts/s10-conversion/s10-stub*.json
 .venv-s6/
+.worktrees/
 
 # HorizonBench source/prompt bodies and paid response state stay local. Only
 # compact hashes, authorization, accounting, and final analysis are committed.
