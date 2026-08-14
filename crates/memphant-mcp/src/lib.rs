@@ -209,7 +209,7 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
     })
 }
 
-const MCP_RECALL_BUDGET_TOKENS: usize = 128;
+const MCP_RECALL_BUDGET_TOKENS: usize = 512;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -962,9 +962,12 @@ pub fn resources_artifact() -> Value {
 #[cfg(test)]
 mod recall_wire_contract {
     use super::*;
-    use memphant_core::{ApiKeyRow, InMemoryStore, NoopEmbedding, SystemClock};
+    use memphant_core::{ApiKeyRow, InMemoryStore, MemoryStore, NoopEmbedding, SystemClock};
     use memphant_runtime::AnyStore;
-    use memphant_types::{ActorId, ScopeId, TenantId, TrustLevel};
+    use memphant_types::{
+        ActorId, ContextualChunk, MemoryKind, NewMemoryUnit, ScopeId, TenantId, TrustLevel,
+        UnitState,
+    };
     use std::sync::Arc;
 
     fn mapped(error: ServiceError) -> serde_json::Value {
@@ -1125,6 +1128,128 @@ mod recall_wire_contract {
             Err(_) => panic!("lower ceiling remains valid"),
         };
         assert_eq!(resolved.actor_trust, TrustLevel::VerifiedTool);
+    }
+
+    #[tokio::test]
+    async fn recall_delivers_the_complete_validated_procedure_in_source_order() {
+        const BODY_CHUNK: &str = "BODY_SENTINEL recall-budget-anchor. Inspect the consumer workflow and zero-job run before choosing the integration boundary. Preserve the exact repository ref and determine whether failure occurred during workflow resolution. This context is deliberately padded so the old MCP budget leaves no room for later procedure steps.";
+        const ACTION_CHUNK: &str = "ACTION_SENTINEL package the required gate as a versioned step-level action, then invoke it from the consumer workflow.";
+        const CHECK_CHUNK: &str = "CHECK_SENTINEL exercise the consumer call site and confirm the workflow creates the expected job before accepting the change.";
+
+        let tenant = TenantId::new();
+        let scope = ScopeId::new();
+        let actor = ActorId::new();
+        let context = memphant_store_testkit::resolved_context(tenant, scope, actor);
+        let store = InMemoryStore::default();
+        store.seed_context_binding(&context);
+        let mut tx = store.begin(&context).await.expect("begin");
+        store
+            .stage_memory_unit(
+                &mut tx,
+                NewMemoryUnit {
+                    tenant_id: tenant,
+                    data_subject_id: context.data_subject_id,
+                    scope_id: scope,
+                    agent_node_id: context.agent_node_id,
+                    subject_generation: context.subject_generation,
+                    kind: MemoryKind::Procedural,
+                    state: UnitState::Validated,
+                    fact_key: Some("recall budget anchor".to_string()),
+                    predicate: None,
+                    body: [BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK].join("\n"),
+                    confidence: Some(1.0),
+                    trust_level: TrustLevel::TrustedSystem,
+                    churn_class: None,
+                    freshness_due_at: None,
+                    actor_id: Some(actor),
+                    source_kind: Some("test".to_string()),
+                    source_ref: "test:mcp-recall-budget".to_string(),
+                    observed_at: "2026-08-14T00:00:00Z".to_string(),
+                    source_episode_id: None,
+                    source_resource_id: None,
+                    deletion_generation: None,
+                    contextual_chunks: [BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, body)| ContextualChunk {
+                            id: format!("procedure-{index}"),
+                            header: format!("[procedure test spans {}-{}]", index + 1, index + 1),
+                            body: body.to_string(),
+                            source_span: None,
+                        })
+                        .collect(),
+                    valid_from: None,
+                    valid_to: None,
+                    transaction_from: None,
+                    transaction_to: None,
+                },
+            )
+            .await
+            .expect("stage validated procedure");
+        store.commit(tx).await.expect("commit validated procedure");
+
+        let key_id = uuid::Uuid::new_v4();
+        let key_hash = "mcp-recall-budget".to_string();
+        store.insert_api_key(ApiKeyRow {
+            id: key_id,
+            tenant_id: tenant,
+            key_hash: key_hash.clone(),
+            label: "recall budget".to_string(),
+            max_trust: TrustLevel::TrustedSystem,
+            data_subject_id: Some(context.data_subject_id),
+            subject_generation: Some(context.subject_generation),
+            actor_id: Some(actor),
+            scope_id: Some(scope),
+            agent_node_id: Some(context.agent_node_id),
+            revoked: false,
+        });
+        let mcp = MemphantMcp::new(
+            MemoryService::new(
+                Arc::new(AnyStore::Mem(store)),
+                Arc::new(SystemClock),
+                Arc::new(NoopEmbedding),
+            ),
+            BoundTenant {
+                tenant,
+                max_trust: TrustLevel::TrustedSystem,
+                subject_id: Some(context.data_subject_id),
+                subject_generation: Some(context.subject_generation),
+                actor_id: Some(actor),
+                scope_id: Some(scope),
+                agent_node_id: Some(context.agent_node_id),
+                api_key_id: Some(key_id),
+                api_key_hash: Some(key_hash),
+                dev_mode: false,
+            },
+        );
+
+        let result = mcp
+            .recall(Parameters(McpRecallRequest {
+                query: "recall budget anchor".to_string(),
+            }))
+            .await;
+        assert_ne!(result.is_error, Some(true), "recall succeeds");
+        let structured = result.structured_content.expect("structured recall");
+        assert_eq!(structured["state"], "hit", "recall envelope: {structured}");
+        let body = structured
+            .pointer("/items/0/body")
+            .and_then(Value::as_str)
+            .expect("recalled procedure body")
+            .to_string();
+        assert!(body.contains(BODY_CHUNK), "body chunk is complete: {body}");
+        assert!(
+            body.contains(ACTION_CHUNK),
+            "action chunk is complete: {body}"
+        );
+        assert!(
+            body.contains(CHECK_CHUNK),
+            "check chunk is complete: {body}"
+        );
+        assert!(
+            body.find("BODY_SENTINEL") < body.find("ACTION_SENTINEL")
+                && body.find("ACTION_SENTINEL") < body.find("CHECK_SENTINEL"),
+            "procedure chunks preserve source order: {body}"
+        );
     }
 }
 
