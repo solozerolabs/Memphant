@@ -12,21 +12,21 @@ use memphant_runtime::AnyStore;
 use memphant_types::{
     AgentNodeId, CorrectRequest, CorrectResult, ENGINE_VERSION, ForgetRequest, ForgetResult,
     MarkRequest, MarkResult, RecallHttpRequest, RecallResponse, ReflectAccepted, ReflectRequest,
-    RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace, ScopeId, SubjectId,
-    TenantId, TraceRequest, TrustLevel,
+    ResolvedMemoryContext, RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace,
+    ScopeId, SubjectId, TenantId, TraceRequest, TrustLevel,
 };
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    Implementation, ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams,
-    ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents, ResourceTemplate,
-    ServerCapabilities, ServerInfo,
+    CallToolResult, Implementation, ListResourceTemplatesResult, ListResourcesResult,
+    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult, Resource,
+    ResourceContents, ResourceTemplate, ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, Json, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
-use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -136,7 +136,7 @@ pub fn mcp_http_authorized(
 
 /// The tenant binding resolved at startup. Stdio serves exactly one
 /// principal; there is no per-request Authorization header.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct BoundTenant {
     pub tenant: TenantId,
     pub max_trust: TrustLevel,
@@ -145,6 +145,9 @@ pub struct BoundTenant {
     pub actor_id: Option<memphant_types::ActorId>,
     pub scope_id: Option<ScopeId>,
     pub agent_node_id: Option<AgentNodeId>,
+    /// The presented key's hash. Recall rechecks this row on every call so a
+    /// persistent stdio session cannot outlive key revocation.
+    pub api_key_hash: Option<String>,
     pub dev_mode: bool,
 }
 
@@ -173,6 +176,7 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
             actor_id: None,
             scope_id: None,
             agent_node_id: None,
+            api_key_hash: None,
             dev_mode: true,
         });
     }
@@ -197,8 +201,54 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
         actor_id: row.actor_id,
         scope_id: row.scope_id,
         agent_node_id: row.agent_node_id,
+        api_key_hash: Some(row.key_hash),
         dev_mode: false,
     })
+}
+
+const MCP_RECALL_BUDGET_TOKENS: usize = 128;
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct McpRecallRequest {
+    query: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum McpRecallState {
+    Hit,
+    Empty,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+struct McpRecallResponse {
+    state: McpRecallState,
+    #[serde(flatten)]
+    response: RecallResponse,
+}
+
+enum McpRecallFailure {
+    Auth(&'static str),
+    Scope(&'static str),
+    Unavailable,
+}
+
+impl McpRecallFailure {
+    fn result(self) -> CallToolResult {
+        match self {
+            Self::Auth(message) => CallToolResult::structured_error(serde_json::json!({
+                "error": {"code": "auth_required", "message": message},
+            })),
+            Self::Scope(message) => CallToolResult::structured_error(serde_json::json!({
+                "error": {"code": "scope_denied", "message": message},
+            })),
+            Self::Unavailable => CallToolResult::structured_error(serde_json::json!({
+                "state": "unavailable",
+                "error": {"code": "backend_unavailable", "message": "memory store unavailable"},
+            })),
+        }
+    }
 }
 
 /// The MCP tool surface: seven verbs over the shared application layer.
@@ -311,6 +361,68 @@ impl MemphantMcp {
         }
     }
 
+    async fn recall_context(&self) -> Result<ResolvedMemoryContext, McpRecallFailure> {
+        if self.bound.dev_mode {
+            return Err(McpRecallFailure::Scope(
+                "MCP recall requires a fully context-bound API key; set MEMPHANT_API_KEY to a key bound to subject, generation, actor, scope, and agent node",
+            ));
+        }
+        let Some(key_hash) = self.bound.api_key_hash.as_deref() else {
+            return Err(McpRecallFailure::Auth(
+                "MCP recall requires an active fully context-bound API key; restart with MEMPHANT_API_KEY",
+            ));
+        };
+        let row = self
+            .service
+            .store()
+            .lookup_api_key(key_hash)
+            .await
+            .map_err(|_| McpRecallFailure::Unavailable)?
+            .ok_or(McpRecallFailure::Auth(
+                "API key is no longer valid; restart with an active fully context-bound API key",
+            ))?;
+        if row.revoked {
+            return Err(McpRecallFailure::Auth(
+                "API key is revoked; restart with an active fully context-bound API key",
+            ));
+        }
+        let (
+            Some(subject_id),
+            Some(subject_generation),
+            Some(actor_id),
+            Some(scope_id),
+            Some(agent_node_id),
+        ) = (
+            row.data_subject_id,
+            row.subject_generation,
+            row.actor_id,
+            row.scope_id,
+            row.agent_node_id,
+        )
+        else {
+            return Err(McpRecallFailure::Scope(
+                "MCP recall requires an API key bound to subject, generation, actor, scope, and agent node",
+            ));
+        };
+        let context = self
+            .service
+            .store()
+            .resolve_memory_context(row.tenant_id, subject_id, actor_id, scope_id, agent_node_id)
+            .await
+            .map_err(|error| match error {
+                StoreError::NotFound(_) => McpRecallFailure::Scope(
+                    "API key binding does not resolve a live memory context; issue a key for that context",
+                ),
+                _ => McpRecallFailure::Unavailable,
+            })?;
+        if context.subject_generation != subject_generation {
+            return Err(McpRecallFailure::Scope(
+                "API key subject generation is stale; issue a key for the current context",
+            ));
+        }
+        Ok(context)
+    }
+
     #[tool(
         description = "Store exactly one episode, resource, or direct unit with provenance.",
         annotations(
@@ -366,32 +478,46 @@ impl MemphantMcp {
             open_world_hint = false
         )
     )]
-    async fn recall(
-        &self,
-        Parameters(request): Parameters<RecallHttpRequest>,
-    ) -> Result<Json<RecallResponse>, String> {
-        let tenant = self.bound.tenant;
-        self.bind_principal(request.actor_id, request.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
-            .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
-        self.service
-            .recall(context, request)
-            .await
-            .map(Json)
-            .map_err(mcp_error)
+    async fn recall(&self, Parameters(request): Parameters<McpRecallRequest>) -> CallToolResult {
+        let context = match self.recall_context().await {
+            Ok(context) => context,
+            Err(error) => return error.result(),
+        };
+        let request = RecallHttpRequest {
+            subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            actor_id: context.actor_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            query: request.query,
+            limit: Some(1),
+            budget_tokens: Some(MCP_RECALL_BUDGET_TOKENS),
+            mode: Some(memphant_types::RecallMode::Fast),
+            include_beliefs: Some(false),
+            transaction_as_of: None,
+            valid_at: None,
+            aggregation_window: None,
+        };
+        let response = match self.service.recall(context, request).await {
+            Ok(response) => response,
+            Err(ServiceError::Core(CoreError::Store(_))) => {
+                return McpRecallFailure::Unavailable.result();
+            }
+            Err(error) => {
+                return CallToolResult::structured_error(serde_json::json!({
+                    "error": {"code": "scope_denied", "message": mcp_error(error)},
+                }));
+            }
+        };
+        let state = if response.items.is_empty() {
+            McpRecallState::Empty
+        } else {
+            McpRecallState::Hit
+        };
+        CallToolResult::structured(
+            serde_json::to_value(McpRecallResponse { state, response })
+                .expect("MCP recall response serializes"),
+        )
     }
 
     #[tool(
@@ -722,6 +848,21 @@ pub fn resources_artifact() -> Value {
 }
 
 #[cfg(test)]
+mod recall_wire_contract {
+    use super::*;
+
+    #[test]
+    fn unavailable_recall_is_a_typed_tool_result() {
+        let result = McpRecallFailure::Unavailable.result();
+        assert_eq!(result.is_error, Some(true));
+        assert_eq!(
+            result.structured_content.expect("structured unavailable")["state"],
+            "unavailable"
+        );
+    }
+}
+
+#[cfg(test)]
 mod deep_runtime_smoke {
     use super::*;
     use memphant_core::{FixedClock, InMemoryStore, MemoryStore};
@@ -842,7 +983,7 @@ mod deep_runtime_smoke {
     }
 
     #[tokio::test]
-    async fn mcp_recall_surfaces_runtime_deep_summary_and_provenance() {
+    async fn runtime_deep_recall_surfaces_summary_and_provenance() {
         let tenant = TenantId::from_u128(91_000);
         let scope = ScopeId::from_u128(91_001);
         let actor = ActorId::from_u128(91_002);
@@ -943,38 +1084,27 @@ mod deep_runtime_smoke {
             let _env = ScopedEnv::set(&variables);
             memphant_runtime::build_service(AnyStore::Mem(store.clone()))
         };
-        let mcp = MemphantMcp::new(
-            service,
-            BoundTenant {
-                tenant,
-                max_trust: TrustLevel::TrustedSystem,
-                subject_id: None,
-                subject_generation: None,
-                actor_id: None,
-                scope_id: None,
-                agent_node_id: None,
-                dev_mode: true,
-            },
-        );
-        let response = mcp
-            .recall(Parameters(RecallHttpRequest {
-                subject_id: context.data_subject_id,
-                scope_id: scope,
-                agent_node_id: context.agent_node_id,
-                subject_generation: 0,
-                actor_id: actor,
-                query: "What is the buried launch code?".into(),
-                limit: Some(4),
-                budget_tokens: Some(128),
-                mode: Some(RecallMode::Deep),
-                include_beliefs: None,
-                transaction_as_of: None,
-                valid_at: None,
-                aggregation_window: None,
-            }))
+        let response = service
+            .recall(
+                context.clone(),
+                RecallHttpRequest {
+                    subject_id: context.data_subject_id,
+                    scope_id: scope,
+                    agent_node_id: context.agent_node_id,
+                    subject_generation: 0,
+                    actor_id: actor,
+                    query: "What is the buried launch code?".into(),
+                    limit: Some(4),
+                    budget_tokens: Some(128),
+                    mode: Some(RecallMode::Deep),
+                    include_beliefs: None,
+                    transaction_as_of: None,
+                    valid_at: None,
+                    aggregation_window: None,
+                },
+            )
             .await
-            .unwrap()
-            .0;
+            .unwrap();
         provider_server.join().unwrap();
         assert_eq!(provider_calls.load(Ordering::SeqCst), 2);
         assert_eq!(

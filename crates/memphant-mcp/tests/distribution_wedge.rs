@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use memphant_core::service::MemoryService;
-use memphant_core::{InMemoryStore, MemoryStore, NoopEmbedding, SystemClock};
+use memphant_core::{ApiKeyRow, InMemoryStore, MemoryStore, NoopEmbedding, SystemClock};
 use memphant_mcp::{
     BoundTenant, MAX_MEMORY_INDEX_BYTES, MAX_MEMORY_INDEX_LINES, MAX_RESOURCE_BYTES,
     MAX_TOPIC_BYTES, MAX_VIEW_CHARACTERS, MemoryCommand, MemphantMcp, anthropic_memory_tool,
@@ -22,6 +22,20 @@ fn handler(
     tenant: TenantId,
     binding: &ContextBindingResponse,
 ) -> MemphantMcp {
+    let key_hash = format!("b3-bound-key-{}", binding.scope_id.as_uuid());
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: tenant,
+        key_hash: key_hash.clone(),
+        label: "distribution wedge".to_string(),
+        max_trust: TrustLevel::TrustedUser,
+        data_subject_id: Some(binding.subject_id),
+        subject_generation: Some(binding.subject_generation),
+        actor_id: Some(binding.actor_id),
+        scope_id: Some(binding.scope_id),
+        agent_node_id: Some(binding.agent_node_id),
+        revoked: false,
+    });
     MemphantMcp::new(
         MemoryService::new(
             Arc::new(AnyStore::Mem(store)),
@@ -36,6 +50,7 @@ fn handler(
             actor_id: Some(binding.actor_id),
             scope_id: Some(binding.scope_id),
             agent_node_id: Some(binding.agent_node_id),
+            api_key_hash: Some(key_hash),
             dev_mode: false,
         },
     )
@@ -539,6 +554,7 @@ async fn canonical_projection_rejects_native_reserved_and_prefix_collisions() {
             actor_id: Some(collision_binding.actor_id),
             scope_id: Some(collision_binding.scope_id),
             agent_node_id: Some(collision_binding.agent_node_id),
+            api_key_hash: None,
             dev_mode: false,
         },
     );
@@ -610,6 +626,7 @@ async fn canonical_projection_rejects_native_reserved_and_prefix_collisions() {
             actor_id: Some(index_binding.actor_id),
             scope_id: Some(index_binding.scope_id),
             agent_node_id: Some(index_binding.agent_node_id),
+            api_key_hash: None,
             dev_mode: false,
         },
     );
@@ -942,17 +959,10 @@ async fn mcp_declares_paginates_and_reads_tenant_bound_resources() {
     let recalled = client
         .call_tool(
             CallToolRequestParams::new("recall").with_arguments(
-                serde_json::json!({
-                    "subject_id": binding.subject_id,
-                    "scope_id": binding.scope_id,
-                    "actor_id": binding.actor_id,
-                    "agent_node_id": binding.agent_node_id,
-                    "subject_generation": binding.subject_generation,
-                    "query": "Episode resource"
-                })
-                .as_object()
-                .cloned()
-                .unwrap(),
+                serde_json::json!({"query": "Episode resource"})
+                    .as_object()
+                    .cloned()
+                    .unwrap(),
             ),
         )
         .await
@@ -1057,6 +1067,7 @@ async fn projection_is_cross_tenant_isolated_and_requires_full_key_binding() {
             actor_id: None,
             scope_id: None,
             agent_node_id: None,
+            api_key_hash: None,
             dev_mode: false,
         },
     );
@@ -1103,6 +1114,7 @@ async fn memory_mutations_honor_the_api_key_trust_ceiling() {
             actor_id: Some(binding.actor_id),
             scope_id: Some(binding.scope_id),
             agent_node_id: Some(binding.agent_node_id),
+            api_key_hash: None,
             dev_mode: false,
         },
     );

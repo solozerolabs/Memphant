@@ -22,27 +22,6 @@ const TOOL_NAMES: [&str; 7] = [
     "retain", "recall", "reflect", "correct", "forget", "trace", "mark",
 ];
 
-fn dev_handler(store: InMemoryStore, tenant: TenantId) -> MemphantMcp {
-    let service = MemoryService::new(
-        Arc::new(AnyStore::Mem(store)),
-        Arc::new(SystemClock),
-        Arc::new(NoopEmbedding),
-    );
-    MemphantMcp::new(
-        service,
-        BoundTenant {
-            tenant,
-            max_trust: TrustLevel::TrustedSystem,
-            subject_id: None,
-            subject_generation: None,
-            actor_id: None,
-            scope_id: None,
-            agent_node_id: None,
-            dev_mode: true,
-        },
-    )
-}
-
 #[test]
 fn artifact_has_camel_case_input_schema_for_all_seven_tools() {
     let generated = memphant_mcp::tools_artifact();
@@ -168,6 +147,29 @@ fn public_tool_schemas_exclude_server_derived_and_engine_control_fields() {
     }
 }
 
+#[test]
+fn recall_schema_accepts_only_a_query() {
+    let tools = memphant_mcp::tools_artifact();
+    let recall = tools
+        .as_array()
+        .expect("tool array")
+        .iter()
+        .find(|tool| tool["name"] == "recall")
+        .expect("recall tool");
+    let schema = &recall["inputSchema"];
+    assert_eq!(schema["additionalProperties"], false);
+    assert_eq!(schema["required"], json!(["query"]));
+    assert_eq!(
+        schema["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .collect::<Vec<_>>(),
+        vec!["query"],
+        "MCP derives all identity and recall controls from its principal"
+    );
+}
+
 #[tokio::test]
 async fn persistent_session_round_trips_retain_then_recall() {
     let store = InMemoryStore::default();
@@ -199,7 +201,38 @@ async fn persistent_session_round_trips_retain_then_recall() {
         )
         .await
         .expect("seed MCP memory context");
-    let handler = dev_handler(store, tenant);
+    let key_hash = "mcp-persistent-session-key".to_string();
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: tenant,
+        key_hash: key_hash.clone(),
+        label: "persistent session".to_string(),
+        max_trust: TrustLevel::TrustedSystem,
+        data_subject_id: Some(binding.subject_id),
+        subject_generation: Some(binding.subject_generation),
+        actor_id: Some(binding.actor_id),
+        scope_id: Some(binding.scope_id),
+        agent_node_id: Some(binding.agent_node_id),
+        revoked: false,
+    });
+    let handler = MemphantMcp::new(
+        MemoryService::new(
+            Arc::new(AnyStore::Mem(store)),
+            Arc::new(SystemClock),
+            Arc::new(NoopEmbedding),
+        ),
+        BoundTenant {
+            tenant,
+            max_trust: TrustLevel::TrustedSystem,
+            subject_id: Some(binding.subject_id),
+            subject_generation: Some(binding.subject_generation),
+            actor_id: Some(binding.actor_id),
+            scope_id: Some(binding.scope_id),
+            agent_node_id: Some(binding.agent_node_id),
+            api_key_hash: Some(key_hash),
+            dev_mode: false,
+        },
+    );
 
     // One duplex pipe carries the whole session — nothing is closed between
     // calls, proving the stdio session is persistent, not one-shot.
@@ -280,14 +313,7 @@ async fn persistent_session_round_trips_retain_then_recall() {
 
     // Recall on the SAME session (stdin never closed): the degraded
     // read-your-own-writes path returns the un-reflected episode body.
-    let recall_args = json!({
-        "subject_id": binding.subject_id,
-        "scope_id": binding.scope_id,
-        "actor_id": binding.actor_id,
-        "agent_node_id": binding.agent_node_id,
-        "subject_generation": binding.subject_generation,
-        "query": "Where is the release region?",
-    });
+    let recall_args = json!({"query": "Where is the release region?"});
     let recalled = client
         .call_tool(
             CallToolRequestParams::new("recall")
@@ -300,6 +326,7 @@ async fn persistent_session_round_trips_retain_then_recall() {
         .structured_content
         .as_ref()
         .expect("recall returns structured content");
+    assert_eq!(structured["state"], "hit");
     assert_eq!(
         structured["items"][0]["body"].as_str(),
         Some("Release region is Taipei.")
@@ -352,6 +379,171 @@ async fn persistent_session_round_trips_retain_then_recall() {
         forgotten.is_error,
         Some(true),
         "authorized forget succeeded"
+    );
+
+    client.cancel().await.expect("client shuts down");
+    server.await.expect("server task joins");
+}
+
+#[tokio::test]
+async fn bound_recall_derives_context_from_the_principal() {
+    let store = InMemoryStore::default();
+    let tenant = TenantId::new();
+    let binding = store
+        .resolve_context_binding(
+            tenant,
+            "mcp-bound-recall".to_string(),
+            ContextBindingRequest {
+                subject: ContextBindingEntityRef {
+                    external_ref: "bound-user".to_string(),
+                    kind: "user".to_string(),
+                },
+                actor: ContextBindingEntityRef {
+                    external_ref: "bound-user".to_string(),
+                    kind: "user".to_string(),
+                },
+                scope: ContextBindingScopeRef {
+                    external_ref: "bound-scope".to_string(),
+                    kind: "user_root".to_string(),
+                    parent_external_ref: None,
+                },
+                agent_node: ContextBindingAgentRef {
+                    external_ref: "bound-agent".to_string(),
+                    parent_external_ref: None,
+                },
+                access_policies: Vec::new(),
+            },
+        )
+        .await
+        .expect("seed MCP memory context");
+    let key_hash = "mcp-bound-recall-key".to_string();
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: tenant,
+        key_hash: key_hash.clone(),
+        label: "bound recall".to_string(),
+        max_trust: TrustLevel::TrustedSystem,
+        data_subject_id: Some(binding.subject_id),
+        subject_generation: Some(binding.subject_generation),
+        actor_id: Some(binding.actor_id),
+        scope_id: Some(binding.scope_id),
+        agent_node_id: Some(binding.agent_node_id),
+        revoked: false,
+    });
+    let handler = MemphantMcp::new(
+        MemoryService::new(
+            Arc::new(AnyStore::Mem(store.clone())),
+            Arc::new(SystemClock),
+            Arc::new(NoopEmbedding),
+        ),
+        BoundTenant {
+            tenant,
+            max_trust: TrustLevel::TrustedSystem,
+            subject_id: Some(binding.subject_id),
+            subject_generation: Some(binding.subject_generation),
+            actor_id: Some(binding.actor_id),
+            scope_id: Some(binding.scope_id),
+            agent_node_id: Some(binding.agent_node_id),
+            api_key_hash: Some(key_hash.clone()),
+            dev_mode: false,
+        },
+    );
+    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
+    let server = tokio::spawn(async move {
+        handler
+            .serve(server_io)
+            .await
+            .expect("server initializes")
+            .waiting()
+            .await
+            .expect("server runs until client disconnect")
+    });
+    let client = ().serve(client_io).await.expect("client initializes");
+
+    let recalled = client
+        .call_tool(
+            CallToolRequestParams::new("recall").with_arguments(
+                json!({"query": "nothing stored in this bound scope"})
+                    .as_object()
+                    .cloned()
+                    .expect("args object"),
+            ),
+        )
+        .await
+        .expect("tools/call recall");
+    assert_ne!(recalled.is_error, Some(true), "bound recall succeeds");
+    assert_eq!(
+        recalled
+            .structured_content
+            .as_ref()
+            .expect("structured recall")["state"],
+        "empty"
+    );
+
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: tenant,
+        key_hash,
+        label: "bound recall".to_string(),
+        max_trust: TrustLevel::TrustedSystem,
+        data_subject_id: Some(binding.subject_id),
+        subject_generation: Some(binding.subject_generation),
+        actor_id: Some(binding.actor_id),
+        scope_id: Some(binding.scope_id),
+        agent_node_id: Some(binding.agent_node_id),
+        revoked: true,
+    });
+    let revoked = client
+        .call_tool(
+            CallToolRequestParams::new("recall").with_arguments(
+                json!({"query": "must not survive key revocation"})
+                    .as_object()
+                    .cloned()
+                    .expect("args object"),
+            ),
+        )
+        .await
+        .expect("tools/call revoked recall");
+    assert_eq!(revoked.is_error, Some(true));
+    assert_eq!(
+        revoked
+            .structured_content
+            .as_ref()
+            .expect("structured auth error")["error"]["code"],
+        "auth_required"
+    );
+
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: tenant,
+        key_hash: "mcp-bound-recall-key".to_string(),
+        label: "tenant only".to_string(),
+        max_trust: TrustLevel::TrustedSystem,
+        data_subject_id: None,
+        subject_generation: None,
+        actor_id: None,
+        scope_id: None,
+        agent_node_id: None,
+        revoked: false,
+    });
+    let partial = client
+        .call_tool(
+            CallToolRequestParams::new("recall").with_arguments(
+                json!({"query": "must require the complete binding"})
+                    .as_object()
+                    .cloned()
+                    .expect("args object"),
+            ),
+        )
+        .await
+        .expect("tools/call partially bound recall");
+    assert_eq!(partial.is_error, Some(true));
+    assert_eq!(
+        partial
+            .structured_content
+            .as_ref()
+            .expect("structured scope error")["error"]["code"],
+        "scope_denied"
     );
 
     client.cancel().await.expect("client shuts down");

@@ -155,6 +155,22 @@ MCP_KEY=$(
 )
 [ -n "$MCP_KEY" ] || fail "scoped MCP key provisioning failed"
 
+# Task 1's C0 control has the same tenant and MCP binary as M1, but an
+# isolated bound context with no units. The only agent-visible request in both
+# arms is `{\"query\": ...}`; the credential selects the scope.
+BIND_C0=$(bind_context "$KEY_A" "probe-mcp-c0")
+SUBJ_C0=$(echo "$BIND_C0" | jget "['subject_id']") || fail "context binding C0 failed: $BIND_C0"
+SCOPE_C0=$(echo "$BIND_C0" | jget "['scope_id']")
+ACTOR_C0=$(echo "$BIND_C0" | jget "['actor_id']")
+AGENT_C0=$(echo "$BIND_C0" | jget "['agent_node_id']")
+GEN_C0=$(echo "$BIND_C0" | jget "['subject_generation']")
+MCP_C0_KEY=$(
+  "$CLI" admin create-key --tenant "$TENANT_A" --max-trust trusted_system \
+    --subject-id "$SUBJ_C0" --subject-generation "$GEN_C0" --scope "$SCOPE_C0" \
+    --actor "$ACTOR_C0" --agent-node "$AGENT_C0" --database-url "$DATABASE_URL" | tail -1
+)
+[ -n "$MCP_C0_KEY" ] || fail "scoped C0 MCP key provisioning failed"
+
 BIND_B=$(bind_context "$KEY_B" "probe-b")
 SUBJ_B=$(echo "$BIND_B" | jget "['subject_id']") || fail "context binding B failed: $BIND_B"
 QS_B="subject_id=$SUBJ_B&subject_generation=$(echo "$BIND_B" | jget "['subject_generation']")&scope_id=$(echo "$BIND_B" | jget "['scope_id']")&actor_id=$(echo "$BIND_B" | jget "['actor_id']")&agent_node_id=$(echo "$BIND_B" | jget "['agent_node_id']")"
@@ -176,6 +192,23 @@ echo "$RECALL1" | jget "['degraded']" | grep -qi false || fail "recall still deg
 TRACE_ID=$(echo "$RECALL1" | jget "['trace_id']")
 UNIT_ID=$(echo "$RECALL1" | jget "['items'][0]['unit_id']")
 
+# Test-only M1 fixture: the source enters through retain + worker like a real
+# episode. Only after its exact compiled unit exists does this probe's scratch
+# transaction set the existing row procedural/validated. This is not a public
+# lifecycle path or an agent-accessible mutation.
+MCP_M1_BODY="Always run the focused contract before the full harness."
+api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:mcp:validated-procedure\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"episode\":{\"source_kind\":\"user\",\"body\":\"$MCP_M1_BODY\"}}}" >/dev/null
+worker_once
+M1_SOURCE_RECALL=$(api "$KEY_A" POST /v1/recall "{$CTX_A,\"query\":\"focused contract full harness\"}")
+M1_UNIT_ID=$(echo "$M1_SOURCE_RECALL" | jget "['items'][0]['unit_id']")
+[ -n "$M1_UNIT_ID" ] || fail "M1 source unit was not recalled: $M1_SOURCE_RECALL"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q \
+  -c "update memphant.memory_unit set kind = 'procedural', state = 'validated' where tenant_id = '$TENANT_A'::uuid and id = '$M1_UNIT_ID'::uuid" \
+  >/dev/null
+M1_ROWS=$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 \
+  -c "select count(*) from memphant.memory_unit where tenant_id = '$TENANT_A'::uuid and id = '$M1_UNIT_ID'::uuid and kind = 'procedural' and state = 'validated'")
+[ "$M1_ROWS" = "1" ] || fail "test-only M1 fixture did not update exactly one source-linked unit"
+
 log "retain code resource (A) with commit revision"
 RES=$(api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:resource:1\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"resource\":{\"uri\":\"repo://demo/src/main.rs\",\"mime_type\":\"text/x-rust\",\"content_hash\":\"sha256:fb731a330c0e0531431869357136178788ef57c7ec89eb9f0db8e398ddefbf8f\",\"kind\":\"code\",\"revision\":\"abc123def\",\"body\":\"fn deploy() { /* canary first, then roll forward */ }\"}}}")
 echo "$RES" | jget "['enqueued'][0]" | grep -q reflect_resource || fail "resource retain not enqueued: $RES"
@@ -190,6 +223,13 @@ env -u DATABASE_URL \
   MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
   MEMPHANT_API_KEY="$MCP_KEY" \
   MEMPHANT_MCP_PROBE_BINARY="$MCP" \
+  MCP_M1_UNIT_ID="$M1_UNIT_ID" \
+  MCP_M1_BODY="$MCP_M1_BODY" \
+  MCP_M1_SUBJECT="$SUBJ_A" \
+  MCP_M1_SCOPE="$SCOPE_A" \
+  MCP_M1_ACTOR="$ACTOR_A" \
+  MCP_M1_AGENT="$AGENT_A" \
+  MCP_M1_GENERATION="$GEN_A" \
   python3 - <<'PY'
 import atexit
 import json
@@ -250,11 +290,21 @@ initialized = receive(1)
 assert "resources" in initialized["capabilities"], initialized
 assert "tools" in initialized["capabilities"], initialized
 send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
-send({"jsonrpc": "2.0", "id": 2, "method": "resources/list", "params": {}})
-first = receive(2)
-assert first["resources"], first
+send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+tools = receive(2)["tools"]
+recall_tool = next(tool for tool in tools if tool["name"] == "recall")
+assert recall_tool["inputSchema"] == {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"],
+    "additionalProperties": False,
+}, recall_tool
 send({"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}})
-second = receive(3)
+first = receive(3)
+assert first["resources"], first
+send({"jsonrpc": "2.0", "id": 4, "method": "resources/list", "params": {}})
+second = receive(4)
 assert [item["uri"] for item in first["resources"]] == [
     item["uri"] for item in second["resources"]
 ]
@@ -265,17 +315,96 @@ target = next(
 uri = target["uri"]
 send({
     "jsonrpc": "2.0",
-    "id": 4,
+    "id": 5,
     "method": "resources/read",
     "params": {"uri": uri},
 })
-read = receive(4)
+read = receive(5)
 assert read["contents"][0]["uri"] == uri, read
 assert read["contents"][0]["text"] == "Real MCP resource body", read
+send({
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "tools/call",
+    "params": {"name": "recall", "arguments": {"query": "focused contract full harness"}},
+})
+m1 = receive(6)
+assert m1.get("isError") is not True, m1
+m1 = m1["structuredContent"]
+assert m1["state"] == "hit", m1
+assert len(m1["items"]) == 1, m1
+assert m1["items"][0]["unit_id"] == os.environ["MCP_M1_UNIT_ID"], m1
+assert m1["items"][0]["body"] == os.environ["MCP_M1_BODY"], m1
+assert m1["items"][0]["inclusion_reason"] == "validated_procedure", m1
+assert m1["citations"][0]["verification"]["status"] == "verified", m1
+send({
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {"name": "trace", "arguments": {
+        "subject_id": os.environ["MCP_M1_SUBJECT"],
+        "scope_id": os.environ["MCP_M1_SCOPE"],
+        "actor_id": os.environ["MCP_M1_ACTOR"],
+        "agent_node_id": os.environ["MCP_M1_AGENT"],
+        "subject_generation": int(os.environ["MCP_M1_GENERATION"]),
+        "trace_id": m1["trace_id"],
+    }},
+})
+trace = receive(7)
+assert trace.get("isError") is not True, trace
+assert os.environ["MCP_M1_UNIT_ID"] in json.dumps(trace["structuredContent"]["context_items"]), trace
 process.stdin.close()
 process.wait(timeout=10)
 assert process.returncode == 0, process.stderr.read()
-print(f"MCP PROBE: resources={len(first['resources'])} read=ok deterministic=ok")
+print(f"MCP PROBE: resources={len(first['resources'])} m1=hit deterministic=ok")
+PY
+
+log "real MCP stdio C0 bound scope returns an empty recall"
+env -u DATABASE_URL \
+  MEMPHANT_APP_DATABASE_URL="$APP_URL" \
+  MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
+  MEMPHANT_API_KEY="$MCP_C0_KEY" \
+  MEMPHANT_MCP_PROBE_BINARY="$MCP" \
+  python3 - <<'PY'
+import json
+import os
+import select
+import subprocess
+
+process = subprocess.Popen(
+    [os.environ["MEMPHANT_MCP_PROBE_BINARY"], "stdio"],
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+)
+
+def send(message):
+    process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
+    process.stdin.flush()
+
+def receive(request_id):
+    while True:
+        ready, _, _ = select.select([process.stdout], [], [], 20)
+        assert ready, f"MCP response {request_id} timed out"
+        response = json.loads(process.stdout.readline())
+        if response.get("id") == request_id:
+            assert "error" not in response, response
+            return response["result"]
+
+send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+    "protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"memphant-c0-probe","version":"1"},
+}})
+receive(1)
+send({"jsonrpc":"2.0","method":"notifications/initialized","params":{}})
+send({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
+    "name":"recall","arguments":{"query":"focused contract full harness"},
+}})
+result = receive(2)
+assert result.get("isError") is not True, result
+assert result["structuredContent"]["state"] == "empty", result
+assert result["structuredContent"]["items"] == [], result
+process.stdin.close()
+process.wait(timeout=10)
+assert process.returncode == 0, process.stderr.read()
+print("MCP PROBE: c0=empty deterministic=ok")
 PY
 
 log "cross-tenant: B fetching A's trace must 404"
