@@ -937,10 +937,30 @@
           ],
           "type": "string"
         },
-        "McpRecallState": {
+        "McpRecallError": {
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/McpRecallErrorCode"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "type": "object"
+        },
+        "McpRecallErrorCode": {
           "enum": [
-            "hit",
-            "empty"
+            "auth_required",
+            "scope_denied",
+            "backend_unavailable",
+            "stale_subject_generation",
+            "subject_erased",
+            "not_found",
+            "invalid_request"
           ],
           "type": "string"
         },
@@ -1128,76 +1148,187 @@
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "abstention": {
-          "type": "boolean"
-        },
-        "candidate_whitelist": {
-          "items": {
-            "$ref": "#/$defs/UnitId"
-          },
-          "type": "array"
-        },
-        "citations": {
-          "items": {
-            "$ref": "#/$defs/RecallCitation"
-          },
-          "type": "array"
-        },
-        "consolidation_lag_ms": {
-          "default": 0,
-          "description": "Non-zero when `degraded: true`: recall drew on raw un-reflected\nepisodes because consolidation had not caught up (spec 08 §4).",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "deep": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DeepRecallSummary"
+      "oneOf": [
+        {
+          "properties": {
+            "abstention": {
+              "type": "boolean"
             },
-            {
-              "type": "null"
+            "candidate_whitelist": {
+              "items": {
+                "$ref": "#/$defs/UnitId"
+              },
+              "type": "array"
+            },
+            "citations": {
+              "items": {
+                "$ref": "#/$defs/RecallCitation"
+              },
+              "type": "array"
+            },
+            "consolidation_lag_ms": {
+              "default": 0,
+              "description": "Non-zero when `degraded: true`: recall drew on raw un-reflected\nepisodes because consolidation had not caught up (spec 08 §4).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "deep": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeepRecallSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "degraded": {
+              "type": "boolean"
+            },
+            "items": {
+              "items": {
+                "$ref": "#/$defs/RecallContextItem"
+              },
+              "type": "array"
+            },
+            "recall_time": {
+              "$ref": "#/$defs/RecallTime"
+            },
+            "state": {
+              "const": "hit",
+              "type": "string"
+            },
+            "suppression_labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "trace_id": {
+              "$ref": "#/$defs/TraceId"
             }
-          ]
-        },
-        "degraded": {
-          "type": "boolean"
-        },
-        "items": {
-          "items": {
-            "$ref": "#/$defs/RecallContextItem"
           },
-          "type": "array"
+          "required": [
+            "state",
+            "trace_id",
+            "items",
+            "candidate_whitelist",
+            "citations",
+            "abstention",
+            "degraded",
+            "suppression_labels",
+            "recall_time"
+          ],
+          "type": "object"
         },
-        "recall_time": {
-          "$ref": "#/$defs/RecallTime"
-        },
-        "state": {
-          "$ref": "#/$defs/McpRecallState"
-        },
-        "suppression_labels": {
-          "items": {
-            "type": "string"
+        {
+          "properties": {
+            "abstention": {
+              "type": "boolean"
+            },
+            "candidate_whitelist": {
+              "items": {
+                "$ref": "#/$defs/UnitId"
+              },
+              "type": "array"
+            },
+            "citations": {
+              "items": {
+                "$ref": "#/$defs/RecallCitation"
+              },
+              "type": "array"
+            },
+            "consolidation_lag_ms": {
+              "default": 0,
+              "description": "Non-zero when `degraded: true`: recall drew on raw un-reflected\nepisodes because consolidation had not caught up (spec 08 §4).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "deep": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeepRecallSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "degraded": {
+              "type": "boolean"
+            },
+            "items": {
+              "items": {
+                "$ref": "#/$defs/RecallContextItem"
+              },
+              "type": "array"
+            },
+            "recall_time": {
+              "$ref": "#/$defs/RecallTime"
+            },
+            "state": {
+              "const": "empty",
+              "type": "string"
+            },
+            "suppression_labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "trace_id": {
+              "$ref": "#/$defs/TraceId"
+            }
           },
-          "type": "array"
+          "required": [
+            "state",
+            "trace_id",
+            "items",
+            "candidate_whitelist",
+            "citations",
+            "abstention",
+            "degraded",
+            "suppression_labels",
+            "recall_time"
+          ],
+          "type": "object"
         },
-        "trace_id": {
-          "$ref": "#/$defs/TraceId"
+        {
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/McpRecallError"
+            },
+            "state": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/McpRecallError"
+            },
+            "state": {
+              "const": "error",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "error"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "state",
-        "trace_id",
-        "items",
-        "candidate_whitelist",
-        "citations",
-        "abstention",
-        "degraded",
-        "suppression_labels",
-        "recall_time"
       ],
-      "title": "McpRecallResponse",
+      "title": "McpRecallOutput",
       "type": "object"
     }
   },

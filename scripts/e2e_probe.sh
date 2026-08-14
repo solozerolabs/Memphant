@@ -38,6 +38,7 @@ WORKER="$ROOT/target/debug/memphant-worker"
 CLI="$ROOT/target/debug/memphant-cli"
 MCP="$ROOT/target/debug/memphant-mcp"
 SERVER_PID=""
+AUTHN_LOGIN="mp_probe_authn_$$"
 
 log()  { printf '\n### %s\n' "$*"; }
 fail() { printf 'PROBE FAILED: %s\n' "$*" >&2; exit 1; }
@@ -47,6 +48,7 @@ fail() { printf 'PROBE FAILED: %s\n' "$*" >&2; exit 1; }
 PROBE_LOGINS=""
 cleanup() {
   [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
+  [ -n "$AUTHN_LOGIN" ] && psql "$DATABASE_URL" -q -c "alter role \"$AUTHN_LOGIN\" login" >/dev/null 2>&1 || true
   for login in $PROBE_LOGINS; do
     psql "$DATABASE_URL" -q -c "drop role if exists \"$login\"" >/dev/null 2>&1 || true
   done
@@ -124,7 +126,7 @@ for pair in "app:memphant_app" "authn:memphant_authn" "worker:memphant_worker"; 
     -c "revoke all on schema memphant from \"$login\"" || fail "could not mint $login"
 done
 APP_URL=$(login_url "mp_probe_app_$$" "$PROBE_PASSWORD")
-AUTHN_URL=$(login_url "mp_probe_authn_$$" "$PROBE_PASSWORD")
+AUTHN_URL=$(login_url "$AUTHN_LOGIN" "$PROBE_PASSWORD")
 WORKER_URL=$(login_url "mp_probe_worker_$$" "$PROBE_PASSWORD")
 
 log "provision tenants + keys via admin CLI"
@@ -324,7 +326,16 @@ print(f"MCP PROBE: resources={len(first['resources'])} deterministic=ok")
 PY
 
 log "real MCP stdio M1 bound scope returns the isolated validated procedure"
-env -u DATABASE_URL MEMPHANT_APP_DATABASE_URL="$APP_URL" MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" MEMPHANT_API_KEY="$MCP_M1_KEY" MEMPHANT_MCP_PROBE_BINARY="$MCP" MCP_M1_UNIT_ID="$M1_UNIT_ID" MCP_M1_BODY="$MCP_M1_BODY" python3 - <<'PY'
+env -u DATABASE_URL \
+  MEMPHANT_APP_DATABASE_URL="$APP_URL" \
+  MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
+  MEMPHANT_API_KEY="$MCP_M1_KEY" \
+  MEMPHANT_MCP_PROBE_BINARY="$MCP" \
+  MCP_M1_UNIT_ID="$M1_UNIT_ID" MCP_M1_BODY="$MCP_M1_BODY" \
+  MCP_M1_SUBJECT_ID="$SUBJ_M1" MCP_M1_SCOPE_ID="$SCOPE_M1" \
+  MCP_M1_ACTOR_ID="$ACTOR_M1" MCP_M1_AGENT_NODE_ID="$AGENT_M1" \
+  MCP_M1_SUBJECT_GENERATION="$GEN_M1" \
+  python3 - <<'PY'
 import json, os, select, subprocess
 p = subprocess.Popen([os.environ["MEMPHANT_MCP_PROBE_BINARY"], "stdio"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
 def call(i, method, params):
@@ -341,6 +352,14 @@ r = r["structuredContent"]
 assert r["state"] == "hit" and len(r["items"]) == 1, r
 assert r["items"][0]["unit_id"] == os.environ["MCP_M1_UNIT_ID"] and r["items"][0]["body"] == os.environ["MCP_M1_BODY"], r
 assert r["items"][0]["inclusion_reason"] == "validated_procedure" and r["citations"][0]["verification"]["status"] == "verified", r
+trace = call(3, "tools/call", {"name":"trace","arguments":{
+    "subject_id":os.environ["MCP_M1_SUBJECT_ID"], "scope_id":os.environ["MCP_M1_SCOPE_ID"],
+    "actor_id":os.environ["MCP_M1_ACTOR_ID"], "agent_node_id":os.environ["MCP_M1_AGENT_NODE_ID"],
+    "subject_generation":int(os.environ["MCP_M1_SUBJECT_GENERATION"]), "trace_id":r["trace_id"],
+}})
+assert trace.get("isError") is not True, trace
+trace = trace["structuredContent"]
+assert any(item["unit_id"] == os.environ["MCP_M1_UNIT_ID"] for item in trace["context_items"]), trace
 p.stdin.close(); p.wait(timeout=10); assert p.returncode == 0, p.stderr.read()
 print("MCP PROBE: m1=hit deterministic=ok")
 PY
@@ -391,6 +410,62 @@ process.stdin.close()
 process.wait(timeout=10)
 assert process.returncode == 0, process.stderr.read()
 print("MCP PROBE: c0=empty deterministic=ok")
+PY
+
+log "real MCP stdio maps a live authn-store outage to unavailable"
+env -u DATABASE_URL \
+  MEMPHANT_APP_DATABASE_URL="$APP_URL" \
+  MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
+  MEMPHANT_API_KEY="$MCP_C0_KEY" \
+  MEMPHANT_MCP_PROBE_BINARY="$MCP" \
+  MCP_PROBE_DATABASE_URL="$DATABASE_URL" \
+  MCP_PROBE_AUTHN_LOGIN="$AUTHN_LOGIN" \
+  python3 - <<'PY'
+import json
+import os
+import select
+import subprocess
+
+process = subprocess.Popen(
+    [os.environ["MEMPHANT_MCP_PROBE_BINARY"], "stdio"],
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+)
+
+def call(request_id, method, params):
+    process.stdin.write(json.dumps({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}, separators=(",", ":")) + "\n")
+    process.stdin.flush()
+    while True:
+        ready, _, _ = select.select([process.stdout], [], [], 20)
+        assert ready, f"MCP response {request_id} timed out"
+        response = json.loads(process.stdout.readline())
+        if response.get("id") == request_id:
+            assert "error" not in response, response
+            return response["result"]
+
+def sql(command):
+    return subprocess.run(
+        ["psql", "-v", "ON_ERROR_STOP=1", "-q", os.environ["MCP_PROBE_DATABASE_URL"], "-c", command],
+        check=True, text=True, capture_output=True,
+    )
+
+login = os.environ["MCP_PROBE_AUTHN_LOGIN"]
+assert login.startswith("mp_probe_authn_") and login.removeprefix("mp_probe_authn_").isdigit(), login
+call(1, "initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"memphant-unavailable-probe","version":"1"}})
+process.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n'); process.stdin.flush()
+first = call(2, "tools/call", {"name":"recall","arguments":{"query":"outage preflight"}})
+assert first.get("isError") is not True and first["structuredContent"]["state"] == "empty", first
+try:
+    sql(f'alter role "{login}" nologin')
+    sql(f"select pg_terminate_backend(pid) from pg_stat_activity where usename = '{login}' and pid <> pg_backend_pid()")
+    unavailable = call(3, "tools/call", {"name":"recall","arguments":{"query":"outage probe"}})
+    assert unavailable.get("isError") is True, unavailable
+    body = unavailable["structuredContent"]
+    assert body["state"] == "unavailable", body
+    assert body["error"] == {"code":"backend_unavailable", "message":"memory store unavailable"}, body
+finally:
+    sql(f'alter role "{login}" login')
+process.stdin.close(); process.wait(timeout=10); assert process.returncode == 0, process.stderr.read()
+print("MCP PROBE: unavailable=typed-redacted deterministic=ok")
 PY
 
 log "cross-tenant: B fetching A's trace must 404"

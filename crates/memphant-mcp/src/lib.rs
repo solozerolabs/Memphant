@@ -219,16 +219,40 @@ struct McpRecallRequest {
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-enum McpRecallState {
-    Hit,
-    Empty,
+enum McpRecallErrorCode {
+    AuthRequired,
+    ScopeDenied,
+    BackendUnavailable,
+    StaleSubjectGeneration,
+    SubjectErased,
+    NotFound,
+    InvalidRequest,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
-struct McpRecallResponse {
-    state: McpRecallState,
-    #[serde(flatten)]
-    response: RecallResponse,
+struct McpRecallError {
+    code: McpRecallErrorCode,
+    message: &'static str,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "state", rename_all = "snake_case")]
+#[schemars(extend("type" = "object"))]
+enum McpRecallOutput {
+    Hit {
+        #[serde(flatten)]
+        response: RecallResponse,
+    },
+    Empty {
+        #[serde(flatten)]
+        response: RecallResponse,
+    },
+    Unavailable {
+        error: McpRecallError,
+    },
+    Error {
+        error: McpRecallError,
+    },
 }
 
 enum McpRecallFailure {
@@ -240,60 +264,92 @@ enum McpRecallFailure {
 impl McpRecallFailure {
     fn result(self) -> CallToolResult {
         match self {
-            Self::Auth(message) => CallToolResult::structured_error(serde_json::json!({
-                "error": {"code": "auth_required", "message": message},
-            })),
-            Self::Scope(message) => CallToolResult::structured_error(serde_json::json!({
-                "error": {"code": "scope_denied", "message": message},
-            })),
-            Self::Unavailable => CallToolResult::structured_error(serde_json::json!({
-                "state": "unavailable",
-                "error": {"code": "backend_unavailable", "message": "memory store unavailable"},
-            })),
+            Self::Auth(message) => mcp_recall_error(McpRecallErrorCode::AuthRequired, message),
+            Self::Scope(message) => mcp_recall_error(McpRecallErrorCode::ScopeDenied, message),
+            Self::Unavailable => mcp_recall_error(
+                McpRecallErrorCode::BackendUnavailable,
+                "memory store unavailable",
+            ),
         }
     }
 }
 
-fn mcp_recall_service_error(error: ServiceError) -> CallToolResult {
-    let (state, code, message) = match error {
-        ServiceError::Core(CoreError::Store(StoreError::Backend(_)))
-        | ServiceError::Core(CoreError::Store(StoreError::Poisoned))
-        | ServiceError::Core(CoreError::ProviderUnavailable(_)) => (
-            Some("unavailable"),
-            "backend_unavailable",
-            "memory store unavailable",
-        ),
-        ServiceError::Core(CoreError::Store(StoreError::PolicyDenied(_)))
-        | ServiceError::Core(CoreError::PolicyDenied(_)) => (
-            None,
-            "scope_denied",
-            "request is outside the resolved memory policy",
-        ),
-        ServiceError::Core(CoreError::Store(StoreError::StaleSubjectGeneration)) => (
-            None,
-            "stale_subject_generation",
-            "subject generation is stale; restart with a current bound API key",
-        ),
-        ServiceError::Core(CoreError::Store(StoreError::SubjectErased)) => {
-            (None, "subject_erased", "subject has been erased")
-        }
-        ServiceError::Core(CoreError::NotFound(_))
-        | ServiceError::Core(CoreError::Store(StoreError::NotFound(_))) => {
-            (None, "not_found", "requested memory context was not found")
-        }
-        ServiceError::Core(CoreError::Invalid(_)) | ServiceError::Invalid(_) => {
-            (None, "invalid_request", "recall request is invalid")
-        }
-        _ => (None, "invalid_request", "recall request is invalid"),
+fn mcp_recall_error(code: McpRecallErrorCode, message: &'static str) -> CallToolResult {
+    let output = match code {
+        McpRecallErrorCode::BackendUnavailable => McpRecallOutput::Unavailable {
+            error: McpRecallError { code, message },
+        },
+        _ => McpRecallOutput::Error {
+            error: McpRecallError { code, message },
+        },
     };
-    let body = serde_json::json!({
-        "error": {"code": code, "message": message},
-    });
-    if state.is_some() {
-        McpRecallFailure::Unavailable.result()
-    } else {
-        CallToolResult::structured_error(body)
-    }
+    CallToolResult::structured_error(
+        serde_json::to_value(output).expect("typed MCP recall error serializes"),
+    )
+}
+
+fn mcp_recall_service_error(error: ServiceError) -> CallToolResult {
+    let (code, message) = match error {
+        ServiceError::Core(error) => match error {
+            CoreError::EmptyBody
+            | CoreError::Invalid(_)
+            | CoreError::ProviderInvalid(_)
+            | CoreError::DeepUnavailable
+            | CoreError::DeepProviderInvalidOutput => (
+                McpRecallErrorCode::InvalidRequest,
+                "recall request is invalid",
+            ),
+            CoreError::NotFound(_) => (
+                McpRecallErrorCode::NotFound,
+                "requested memory context was not found",
+            ),
+            CoreError::PolicyDenied(_) => (
+                McpRecallErrorCode::ScopeDenied,
+                "request is outside the resolved memory policy",
+            ),
+            CoreError::ProviderUnavailable(_) => (
+                McpRecallErrorCode::BackendUnavailable,
+                "memory store unavailable",
+            ),
+            CoreError::Store(error) => match error {
+                StoreError::Poisoned
+                | StoreError::SerializationConflict
+                | StoreError::Backend(_) => (
+                    McpRecallErrorCode::BackendUnavailable,
+                    "memory store unavailable",
+                ),
+                StoreError::NotFound(_) => (
+                    McpRecallErrorCode::NotFound,
+                    "requested memory context was not found",
+                ),
+                StoreError::PolicyDenied(_) => (
+                    McpRecallErrorCode::ScopeDenied,
+                    "request is outside the resolved memory policy",
+                ),
+                StoreError::StaleSubjectGeneration => (
+                    McpRecallErrorCode::StaleSubjectGeneration,
+                    "subject generation is stale; restart with a current bound API key",
+                ),
+                StoreError::SubjectErased => {
+                    (McpRecallErrorCode::SubjectErased, "subject has been erased")
+                }
+                StoreError::TransactionAlreadyCommitted
+                | StoreError::Conflict(_)
+                | StoreError::IdempotencyConflict => (
+                    McpRecallErrorCode::InvalidRequest,
+                    "recall request is invalid",
+                ),
+            },
+        },
+        ServiceError::Invalid(_)
+        | ServiceError::SyncInvalid(_)
+        | ServiceError::SyncConflict(_)
+        | ServiceError::ProjectionTooLarge { .. } => (
+            McpRecallErrorCode::InvalidRequest,
+            "recall request is invalid",
+        ),
+    };
+    mcp_recall_error(code, message)
 }
 
 /// The MCP tool surface: seven verbs over the shared application layer.
@@ -534,7 +590,7 @@ impl MemphantMcp {
 
     #[tool(
         description = "Retrieve cited memory evidence for a query (budgeted, salience-ranked, with provenance).",
-        output_schema = rmcp::handler::server::tool::schema_for_type::<McpRecallResponse>(),
+        output_schema = rmcp::handler::server::tool::schema_for_type::<McpRecallOutput>(),
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -566,14 +622,13 @@ impl MemphantMcp {
             Ok(response) => response,
             Err(error) => return mcp_recall_service_error(error),
         };
-        let state = if response.items.is_empty() {
-            McpRecallState::Empty
+        let output = if response.items.is_empty() {
+            McpRecallOutput::Empty { response }
         } else {
-            McpRecallState::Hit
+            McpRecallOutput::Hit { response }
         };
         CallToolResult::structured(
-            serde_json::to_value(McpRecallResponse { state, response })
-                .expect("MCP recall response serializes"),
+            serde_json::to_value(output).expect("MCP recall response serializes"),
         )
     }
 
@@ -923,8 +978,11 @@ mod recall_wire_contract {
         let result = McpRecallFailure::Unavailable.result();
         assert_eq!(result.is_error, Some(true));
         assert_eq!(
-            result.structured_content.expect("structured unavailable")["state"],
-            "unavailable"
+            result.structured_content.expect("structured unavailable"),
+            serde_json::json!({
+                "state": "unavailable",
+                "error": {"code": "backend_unavailable", "message": "memory store unavailable"},
+            })
         );
     }
 
@@ -933,6 +991,7 @@ mod recall_wire_contract {
         for error in [
             ServiceError::Core(CoreError::Store(StoreError::Backend("down".to_string()))),
             ServiceError::Core(CoreError::Store(StoreError::Poisoned)),
+            ServiceError::Core(CoreError::Store(StoreError::SerializationConflict)),
             ServiceError::Core(CoreError::ProviderUnavailable("down".to_string())),
         ] {
             let result = mapped(error);
@@ -968,6 +1027,21 @@ mod recall_wire_contract {
                 "not_found",
             ),
             (
+                ServiceError::Core(CoreError::Store(StoreError::TransactionAlreadyCommitted)),
+                "invalid_request",
+            ),
+            (
+                ServiceError::Core(CoreError::Store(StoreError::Conflict(
+                    "conflict".to_string(),
+                ))),
+                "invalid_request",
+            ),
+            (
+                ServiceError::Core(CoreError::Store(StoreError::IdempotencyConflict)),
+                "invalid_request",
+            ),
+            (ServiceError::Core(CoreError::EmptyBody), "invalid_request"),
+            (
                 ServiceError::Core(CoreError::Invalid("bad".to_string())),
                 "invalid_request",
             ),
@@ -984,9 +1058,21 @@ mod recall_wire_contract {
                 ServiceError::Core(CoreError::DeepUnavailable),
                 "invalid_request",
             ),
+            (
+                ServiceError::SyncInvalid("bad".to_string()),
+                "invalid_request",
+            ),
+            (
+                ServiceError::SyncConflict("bad".to_string()),
+                "invalid_request",
+            ),
+            (
+                ServiceError::ProjectionTooLarge { max_bytes: 1 },
+                "invalid_request",
+            ),
         ] {
             let result = mapped(error);
-            assert!(result.get("state").is_none(), "{code} is terminal");
+            assert_eq!(result["state"], "error", "{code} is terminal");
             assert_eq!(result["error"]["code"], code);
         }
     }

@@ -200,12 +200,41 @@ fn recall_schema_accepts_only_a_query() {
         recall["outputSchema"].is_object(),
         "recall publishes its wire schema"
     );
+    assert_eq!(recall["outputSchema"]["type"], "object");
     let output = serde_json::to_string(&recall["outputSchema"]).expect("output schema JSON");
-    for state in ["hit", "empty"] {
+    for state in ["hit", "empty", "unavailable", "error"] {
         assert!(
             output.contains(&format!("\"{state}\"")),
             "recall output schema must declare the {state} response state"
         );
+    }
+    let variants = recall["outputSchema"]["oneOf"]
+        .as_array()
+        .expect("recall output has discriminated envelopes");
+    for state in ["hit", "empty", "unavailable", "error"] {
+        let variant = variants
+            .iter()
+            .find(|variant| variant["properties"]["state"]["const"] == state)
+            .unwrap_or_else(|| panic!("missing {state} output envelope"));
+        assert_eq!(variant["type"], "object", "{state} envelope root");
+        assert!(
+            variant["required"]
+                .as_array()
+                .expect("required fields")
+                .iter()
+                .any(|field| field == "state"),
+            "{state} envelope requires its discriminant"
+        );
+        if matches!(state, "unavailable" | "error") {
+            assert!(
+                variant["required"]
+                    .as_array()
+                    .expect("required fields")
+                    .iter()
+                    .any(|field| field == "error"),
+                "{state} envelope requires a typed error"
+            );
+        }
     }
 }
 
@@ -703,10 +732,9 @@ async fn recall_tool_rechecks_the_complete_principal_and_trust_ceiling() {
     partial_bound.subject_id = None;
     let partial = recall_tool_result(handler(partial_bound)).await;
     assert_eq!(partial.is_error, Some(true));
-    assert_eq!(
-        partial.structured_content.expect("partial error")["error"]["code"],
-        "scope_denied"
-    );
+    let partial = partial.structured_content.expect("partial error");
+    assert_eq!(partial["state"], "error");
+    assert_eq!(partial["error"]["code"], "scope_denied");
 
     store.insert_api_key(full_row(&second, TrustLevel::TrustedUser));
     let drifted = recall_tool_result(handler(bound(&first, TrustLevel::TrustedUser))).await;
