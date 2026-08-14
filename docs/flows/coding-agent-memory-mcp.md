@@ -567,3 +567,39 @@ Review decisions:
   capability or weakens the evidence contract.
 
 NO UNRESOLVED DECISIONS
+
+## EXECUTION OUTCOME — 2026-08-14
+
+The cheapest real liveness gate closed the dependent work.
+
+- The query-only MCP recall path is implemented and independently reviewed. It
+  revalidates the bound principal on every call, uses provider-free recall,
+  returns typed `hit | empty | unavailable | error` envelopes, and preserves
+  verified citations. A real scratch-PostgreSQL probe covered empty, exact hit,
+  revoked/drifted principal, and live authn-store outage behavior.
+- Preflight exposed one real delivery defect: the MCP's 128-token ceiling could
+  return provenance while omitting later procedure steps. One boundary
+  regression and one constant change aligned MCP with the service's existing
+  bounded 512-token default.
+- The frozen Codex/Terra-high pair made exactly two task calls. Model-visible
+  prompt, augmentation, MCP discovery, and MCP configuration hashes were equal.
+  Both calls completed, but neither trajectory called MCP recall. Both also
+  independently selected the same step-level composite-Action seam. Therefore
+  the voluntary-pull mechanism failed and the selected card had no demonstrated
+  marginal decision value.
+- The two trajectories used one call each. C0 took 21m44s and M1 17m40s; their
+  recorded output-token counts were 63,941 and 49,582. These are UX/cost
+  observations, not an improvement result. A blind trajectory review narrowly
+  preferred C0, but final untracked source bodies were not preserved by the
+  private archive harness, so no final-code correctness comparison is valid.
+- A fresh USD-0 search found no non-redundant host-triggered rescue task: every
+  open candidate either stated the needed action or exposed it equally through
+  current code, tests, Git history, or learnings. The rescue was killed without
+  another model call.
+
+Consequences: keep the portable read-only MCP surface and its security fixes;
+do not enable voluntary coding recall by default, integrate it into Syndai,
+build the governed procedure lifecycle, ingest coding sessions, tune ranking,
+add another store, or run representation/timing/source/Claude screens from
+this result. Tasks 3–4 and 6–10 remain closed. There is no general coding-agent
+improvement or SOTA claim, and `STATUS.md` is unchanged.

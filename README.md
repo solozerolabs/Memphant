@@ -106,6 +106,50 @@ memphant-cli admin create-key --tenant "$TENANT_ID" \
   --database-url "$PROVISIONER_DATABASE_URL"
 ```
 
+Build the server once, export the scoped key and database URLs in the shell
+that starts the coding agent, and point the client at the absolute binary path:
+
+```bash
+cargo build -p memphant-mcp
+export MEMPHANT_API_KEY=replace-with-the-fully-bound-key
+export MEMPHANT_APP_DATABASE_URL=postgres://...
+export MEMPHANT_AUTHN_DATABASE_URL=postgres://...
+```
+
+For Codex, use a trusted project `.codex/config.toml`. Forward environment
+variable names; never commit their values:
+
+```toml
+[mcp_servers.memphant]
+command = "/absolute/path/to/target/debug/memphant-mcp"
+args = ["stdio"]
+env_vars = ["MEMPHANT_API_KEY", "MEMPHANT_APP_DATABASE_URL", "MEMPHANT_AUTHN_DATABASE_URL"]
+required = true
+enabled_tools = ["recall"]
+```
+
+Verify the effective configuration with `codex mcp list` and
+`codex mcp get memphant`. Remove the project block to disconnect it; use
+`codex mcp remove memphant` only for a configuration added through the CLI.
+
+Claude Code can keep the secret values out of its configuration by inheriting
+the same shell environment:
+
+```bash
+claude mcp add --scope local memphant -- \
+  /absolute/path/to/target/debug/memphant-mcp stdio
+claude mcp get memphant
+claude mcp list
+```
+
+Claude discovers the server's full governed tool set, so restrict mutations
+with the client's permission policy when the intended integration is
+read-only recall. Disconnect with `claude mcp remove --scope local memphant`.
+
+An honest empty recall proves the connection and scope binding, not that an
+agent will voluntarily call memory or that memory improves a coding task.
+Keep native `rg`, LSP, and Git authoritative for the current codebase.
+
 Regenerate committed MCP artifacts only through their owner:
 
 ```bash
