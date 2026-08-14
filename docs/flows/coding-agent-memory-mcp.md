@@ -492,7 +492,7 @@ inspection.
 ```sh
 python3 -m pytest tests/ -q
 python3 -m pytest tests/test_outcome_coupled_evolution.py -q
-python3 -m pytest bindings/python/tests -q
+PYTHONPATH=bindings/python python3 -m pytest bindings/python/tests -q
 python3 scripts/check_evidence_contract.py --report
 python3 scripts/check_evidence_contract.py
 python3 scripts/instrument_power.py --check
@@ -603,3 +603,12 @@ build the governed procedure lifecycle, ingest coding sessions, tune ranking,
 add another store, or run representation/timing/source/Claude screens from
 this result. Tasks 3–4 and 6–10 remain closed. There is no general coding-agent
 improvement or SOTA claim, and `STATUS.md` is unchanged.
+
+Verification completed across the full Python and Rust workspaces, generated
+contract drift, evidence and power checks, all three provider lints, migration
+dry-run, the serialized scratch-PostgreSQL suite, and the real-process E2E
+probe. The scratch suite exposed an old test-harness deadlock: its synchronous
+barrier blocked a Tokio worker before the sibling future could run. The
+test-only barrier now uses Tokio's blocking boundary; the exact regression and
+the complete ignored suite then passed. No product behavior changed for this
+repair.

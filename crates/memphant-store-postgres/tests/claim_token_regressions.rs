@@ -125,7 +125,7 @@ struct BarrierEmbedding(Barrier);
 
 impl EmbeddingProvider for BarrierEmbedding {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        self.0.wait();
+        tokio::task::block_in_place(|| self.0.wait());
         Ok(vec![vec![1.0, 0.0]; texts.len()])
     }
 
