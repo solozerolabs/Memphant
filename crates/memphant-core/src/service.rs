@@ -34,10 +34,10 @@ use crate::{
     CrossRerankCandidateSelection, CrossRerankGranularity, CrossReranker,
     DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, EmbeddingTaskKind, FileSyncTransitionSnapshot,
     ForgetWrite, JobFilter, LexicalScorer, MemoryStore, MutationClaim, MutationClaimOutcome,
-    MutationLedgerStore, MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite,
-    ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket, StructuredSourceKind,
-    StructuredStateProvider, StructuredStateRequest, TaskMemoryEventRow, TaskOutcomeRow,
-    VectorQuery, apply_correction_transition, apply_unit_forget_transition,
+    MutationLedgerStore, MutationResponse, MutationVerb, NoopEmbedding, PackLevers,
+    PreparedCompiledWrite, ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket,
+    StructuredSourceKind, StructuredStateProvider, StructuredStateRequest, TaskMemoryEventRow,
+    TaskOutcomeRow, VectorQuery, apply_correction_transition, apply_unit_forget_transition,
     canonical_mutation_request_hash, correction_rectangles_with_ids, cosine_similarity,
     derive_episode_dedup_key, derive_fact_key, embedding_profile_for, evidence_slices_for_episode,
     fold_structured_observations, non_blank, normalize_component, parse_content_date,
@@ -3626,6 +3626,17 @@ impl<S: MemoryStore> MemoryService<S> {
             worker_compile_concurrency: DEFAULT_WORKER_COMPILE_CONCURRENCY,
             deep_recall_provider: None,
         }
+    }
+
+    /// Reuses this service's store, clock, and deterministic runtime settings
+    /// while removing every recall-time provider. Transport edges that promise
+    /// lexical-only recall use this instead of mutating process environment.
+    pub fn provider_free_recall_clone(&self) -> Self {
+        let mut service = self.clone();
+        service.embedder = Arc::new(NoopEmbedding);
+        service.cross_reranker = None;
+        service.deep_recall_provider = None;
+        service
     }
 
     /// Overrides the rung 4 contextual-chunk write path (default on since the

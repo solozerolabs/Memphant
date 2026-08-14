@@ -168,6 +168,10 @@ fn recall_schema_accepts_only_a_query() {
         vec!["query"],
         "MCP derives all identity and recall controls from its principal"
     );
+    assert!(
+        recall["outputSchema"].is_object(),
+        "recall publishes its wire schema"
+    );
 }
 
 #[tokio::test]
@@ -229,6 +233,7 @@ async fn persistent_session_round_trips_retain_then_recall() {
             actor_id: Some(binding.actor_id),
             scope_id: Some(binding.scope_id),
             agent_node_id: Some(binding.agent_node_id),
+            api_key_id: None,
             api_key_hash: Some(key_hash),
             dev_mode: false,
         },
@@ -444,6 +449,7 @@ async fn bound_recall_derives_context_from_the_principal() {
             actor_id: Some(binding.actor_id),
             scope_id: Some(binding.scope_id),
             agent_node_id: Some(binding.agent_node_id),
+            api_key_id: None,
             api_key_hash: Some(key_hash.clone()),
             dev_mode: false,
         },

@@ -145,6 +145,7 @@ pub struct BoundTenant {
     pub actor_id: Option<memphant_types::ActorId>,
     pub scope_id: Option<ScopeId>,
     pub agent_node_id: Option<AgentNodeId>,
+    pub api_key_id: Option<uuid::Uuid>,
     /// The presented key's hash. Recall rechecks this row on every call so a
     /// persistent stdio session cannot outlive key revocation.
     pub api_key_hash: Option<String>,
@@ -176,6 +177,7 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
             actor_id: None,
             scope_id: None,
             agent_node_id: None,
+            api_key_id: None,
             api_key_hash: None,
             dev_mode: true,
         });
@@ -201,6 +203,7 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
         actor_id: row.actor_id,
         scope_id: row.scope_id,
         agent_node_id: row.agent_node_id,
+        api_key_id: Some(row.id),
         api_key_hash: Some(row.key_hash),
         dev_mode: false,
     })
@@ -251,10 +254,53 @@ impl McpRecallFailure {
     }
 }
 
+fn mcp_recall_service_error(error: ServiceError) -> CallToolResult {
+    let (state, code, message) = match error {
+        ServiceError::Core(CoreError::Store(StoreError::Backend(_)))
+        | ServiceError::Core(CoreError::Store(StoreError::Poisoned))
+        | ServiceError::Core(CoreError::ProviderUnavailable(_)) => (
+            Some("unavailable"),
+            "backend_unavailable",
+            "memory store unavailable",
+        ),
+        ServiceError::Core(CoreError::Store(StoreError::PolicyDenied(_)))
+        | ServiceError::Core(CoreError::PolicyDenied(_)) => (
+            None,
+            "scope_denied",
+            "request is outside the resolved memory policy",
+        ),
+        ServiceError::Core(CoreError::Store(StoreError::StaleSubjectGeneration)) => (
+            None,
+            "stale_subject_generation",
+            "subject generation is stale; restart with a current bound API key",
+        ),
+        ServiceError::Core(CoreError::Store(StoreError::SubjectErased)) => {
+            (None, "subject_erased", "subject has been erased")
+        }
+        ServiceError::Core(CoreError::NotFound(_))
+        | ServiceError::Core(CoreError::Store(StoreError::NotFound(_))) => {
+            (None, "not_found", "requested memory context was not found")
+        }
+        ServiceError::Core(CoreError::Invalid(_)) | ServiceError::Invalid(_) => {
+            (None, "invalid_request", "recall request is invalid")
+        }
+        _ => (None, "invalid_request", "recall request is invalid"),
+    };
+    let body = serde_json::json!({
+        "error": {"code": code, "message": message},
+    });
+    if state.is_some() {
+        McpRecallFailure::Unavailable.result()
+    } else {
+        CallToolResult::structured_error(body)
+    }
+}
+
 /// The MCP tool surface: seven verbs over the shared application layer.
 #[derive(Clone)]
 pub struct MemphantMcp {
     service: MemoryService<AnyStore>,
+    recall_service: MemoryService<AnyStore>,
     bound: BoundTenant,
     tool_router: ToolRouter<Self>,
 }
@@ -340,6 +386,7 @@ impl MemphantMcp {
 impl MemphantMcp {
     pub fn new(service: MemoryService<AnyStore>, bound: BoundTenant) -> Self {
         Self {
+            recall_service: service.provider_free_recall_clone(),
             service,
             bound,
             tool_router: Self::tool_router(),
@@ -386,6 +433,18 @@ impl MemphantMcp {
                 "API key is revoked; restart with an active fully context-bound API key",
             ));
         }
+        if self.bound.api_key_id.is_some_and(|id| id != row.id)
+            || self.bound.tenant != row.tenant_id
+            || self.bound.subject_id != row.data_subject_id
+            || self.bound.subject_generation != row.subject_generation
+            || self.bound.actor_id != row.actor_id
+            || self.bound.scope_id != row.scope_id
+            || self.bound.agent_node_id != row.agent_node_id
+        {
+            return Err(McpRecallFailure::Scope(
+                "API key principal changed after MCP startup; restart with a newly bound API key",
+            ));
+        }
         let (
             Some(subject_id),
             Some(subject_generation),
@@ -404,7 +463,7 @@ impl MemphantMcp {
                 "MCP recall requires an API key bound to subject, generation, actor, scope, and agent node",
             ));
         };
-        let context = self
+        let mut context = self
             .service
             .store()
             .resolve_memory_context(row.tenant_id, subject_id, actor_id, scope_id, agent_node_id)
@@ -420,6 +479,7 @@ impl MemphantMcp {
                 "API key subject generation is stale; issue a key for the current context",
             ));
         }
+        context.actor_trust = clamp_trust(context.actor_trust, row.max_trust);
         Ok(context)
     }
 
@@ -471,6 +531,7 @@ impl MemphantMcp {
 
     #[tool(
         description = "Retrieve cited memory evidence for a query (budgeted, salience-ranked, with provenance).",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<McpRecallResponse>(),
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -498,16 +559,9 @@ impl MemphantMcp {
             valid_at: None,
             aggregation_window: None,
         };
-        let response = match self.service.recall(context, request).await {
+        let response = match self.recall_service.recall(context, request).await {
             Ok(response) => response,
-            Err(ServiceError::Core(CoreError::Store(_))) => {
-                return McpRecallFailure::Unavailable.result();
-            }
-            Err(error) => {
-                return CallToolResult::structured_error(serde_json::json!({
-                    "error": {"code": "scope_denied", "message": mcp_error(error)},
-                }));
-            }
+            Err(error) => return mcp_recall_service_error(error),
         };
         let state = if response.items.is_empty() {
             McpRecallState::Empty

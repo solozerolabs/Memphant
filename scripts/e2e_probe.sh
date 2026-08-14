@@ -171,6 +171,16 @@ MCP_C0_KEY=$(
 )
 [ -n "$MCP_C0_KEY" ] || fail "scoped C0 MCP key provisioning failed"
 
+BIND_M1=$(bind_context "$KEY_A" "probe-mcp-m1")
+SUBJ_M1=$(echo "$BIND_M1" | jget "['subject_id']") || fail "context binding M1 failed: $BIND_M1"
+SCOPE_M1=$(echo "$BIND_M1" | jget "['scope_id']")
+ACTOR_M1=$(echo "$BIND_M1" | jget "['actor_id']")
+AGENT_M1=$(echo "$BIND_M1" | jget "['agent_node_id']")
+GEN_M1=$(echo "$BIND_M1" | jget "['subject_generation']")
+CTX_M1="\"subject_id\":\"$SUBJ_M1\",\"scope_id\":\"$SCOPE_M1\",\"actor_id\":\"$ACTOR_M1\",\"agent_node_id\":\"$AGENT_M1\",\"subject_generation\":$GEN_M1"
+MCP_M1_KEY=$("$CLI" admin create-key --tenant "$TENANT_A" --max-trust trusted_system --subject-id "$SUBJ_M1" --subject-generation "$GEN_M1" --scope "$SCOPE_M1" --actor "$ACTOR_M1" --agent-node "$AGENT_M1" --database-url "$DATABASE_URL" | tail -1)
+[ -n "$MCP_M1_KEY" ] || fail "scoped M1 MCP key provisioning failed"
+
 BIND_B=$(bind_context "$KEY_B" "probe-b")
 SUBJ_B=$(echo "$BIND_B" | jget "['subject_id']") || fail "context binding B failed: $BIND_B"
 QS_B="subject_id=$SUBJ_B&subject_generation=$(echo "$BIND_B" | jget "['subject_generation']")&scope_id=$(echo "$BIND_B" | jget "['scope_id']")&actor_id=$(echo "$BIND_B" | jget "['actor_id']")&agent_node_id=$(echo "$BIND_B" | jget "['agent_node_id']")"
@@ -192,22 +202,14 @@ echo "$RECALL1" | jget "['degraded']" | grep -qi false || fail "recall still deg
 TRACE_ID=$(echo "$RECALL1" | jget "['trace_id']")
 UNIT_ID=$(echo "$RECALL1" | jget "['items'][0]['unit_id']")
 
-# Test-only M1 fixture: the source enters through retain + worker like a real
-# episode. Only after its exact compiled unit exists does this probe's scratch
-# transaction set the existing row procedural/validated. This is not a public
-# lifecycle path or an agent-accessible mutation.
 MCP_M1_BODY="Always run the focused contract before the full harness."
-api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:mcp:validated-procedure\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"episode\":{\"source_kind\":\"user\",\"body\":\"$MCP_M1_BODY\"}}}" >/dev/null
+M1_RETAIN=$(api "$KEY_A" POST /v1/episodes "{$CTX_M1,\"source_ref\":\"probe:mcp:validated-procedure\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"episode\":{\"source_kind\":\"user\",\"body\":\"$MCP_M1_BODY\"}}}")
+M1_EPISODE_ID=$(echo "$M1_RETAIN" | jget "['episode_id']")
+[ -n "$M1_EPISODE_ID" ] || fail "M1 retain returned no episode id: $M1_RETAIN"
 worker_once
-M1_SOURCE_RECALL=$(api "$KEY_A" POST /v1/recall "{$CTX_A,\"query\":\"focused contract full harness\"}")
-M1_UNIT_ID=$(echo "$M1_SOURCE_RECALL" | jget "['items'][0]['unit_id']")
-[ -n "$M1_UNIT_ID" ] || fail "M1 source unit was not recalled: $M1_SOURCE_RECALL"
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q \
-  -c "update memphant.memory_unit set kind = 'procedural', state = 'validated' where tenant_id = '$TENANT_A'::uuid and id = '$M1_UNIT_ID'::uuid" \
-  >/dev/null
-M1_ROWS=$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 \
-  -c "select count(*) from memphant.memory_unit where tenant_id = '$TENANT_A'::uuid and id = '$M1_UNIT_ID'::uuid and kind = 'procedural' and state = 'validated'")
-[ "$M1_ROWS" = "1" ] || fail "test-only M1 fixture did not update exactly one source-linked unit"
+M1_UNIT_ID=$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select id from memphant.memory_unit where tenant_id = '$TENANT_A'::uuid and data_subject_id = '$SUBJ_M1'::uuid and scope_id = '$SCOPE_M1'::uuid and agent_node_id = '$AGENT_M1'::uuid and subject_generation = $GEN_M1 and source_episode_id = '$M1_EPISODE_ID'::uuid")
+[ "$(printf '%s\n' "$M1_UNIT_ID" | sed '/^$/d' | wc -l | tr -d ' ')" = "1" ] || fail "M1 source episode must compile exactly one isolated unit"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "update memphant.memory_unit set kind = 'procedural', state = 'validated' where tenant_id = '$TENANT_A'::uuid and data_subject_id = '$SUBJ_M1'::uuid and scope_id = '$SCOPE_M1'::uuid and agent_node_id = '$AGENT_M1'::uuid and subject_generation = $GEN_M1 and source_episode_id = '$M1_EPISODE_ID'::uuid and id = '$M1_UNIT_ID'::uuid" >/dev/null
 
 log "retain code resource (A) with commit revision"
 RES=$(api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:resource:1\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"resource\":{\"uri\":\"repo://demo/src/main.rs\",\"mime_type\":\"text/x-rust\",\"content_hash\":\"sha256:fb731a330c0e0531431869357136178788ef57c7ec89eb9f0db8e398ddefbf8f\",\"kind\":\"code\",\"revision\":\"abc123def\",\"body\":\"fn deploy() { /* canary first, then roll forward */ }\"}}}")
@@ -223,13 +225,6 @@ env -u DATABASE_URL \
   MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
   MEMPHANT_API_KEY="$MCP_KEY" \
   MEMPHANT_MCP_PROBE_BINARY="$MCP" \
-  MCP_M1_UNIT_ID="$M1_UNIT_ID" \
-  MCP_M1_BODY="$MCP_M1_BODY" \
-  MCP_M1_SUBJECT="$SUBJ_A" \
-  MCP_M1_SCOPE="$SCOPE_A" \
-  MCP_M1_ACTOR="$ACTOR_A" \
-  MCP_M1_AGENT="$AGENT_A" \
-  MCP_M1_GENERATION="$GEN_A" \
   python3 - <<'PY'
 import atexit
 import json
@@ -322,41 +317,32 @@ send({
 read = receive(5)
 assert read["contents"][0]["uri"] == uri, read
 assert read["contents"][0]["text"] == "Real MCP resource body", read
-send({
-    "jsonrpc": "2.0",
-    "id": 6,
-    "method": "tools/call",
-    "params": {"name": "recall", "arguments": {"query": "focused contract full harness"}},
-})
-m1 = receive(6)
-assert m1.get("isError") is not True, m1
-m1 = m1["structuredContent"]
-assert m1["state"] == "hit", m1
-assert len(m1["items"]) == 1, m1
-assert m1["items"][0]["unit_id"] == os.environ["MCP_M1_UNIT_ID"], m1
-assert m1["items"][0]["body"] == os.environ["MCP_M1_BODY"], m1
-assert m1["items"][0]["inclusion_reason"] == "validated_procedure", m1
-assert m1["citations"][0]["verification"]["status"] == "verified", m1
-send({
-    "jsonrpc": "2.0",
-    "id": 7,
-    "method": "tools/call",
-    "params": {"name": "trace", "arguments": {
-        "subject_id": os.environ["MCP_M1_SUBJECT"],
-        "scope_id": os.environ["MCP_M1_SCOPE"],
-        "actor_id": os.environ["MCP_M1_ACTOR"],
-        "agent_node_id": os.environ["MCP_M1_AGENT"],
-        "subject_generation": int(os.environ["MCP_M1_GENERATION"]),
-        "trace_id": m1["trace_id"],
-    }},
-})
-trace = receive(7)
-assert trace.get("isError") is not True, trace
-assert os.environ["MCP_M1_UNIT_ID"] in json.dumps(trace["structuredContent"]["context_items"]), trace
 process.stdin.close()
 process.wait(timeout=10)
 assert process.returncode == 0, process.stderr.read()
-print(f"MCP PROBE: resources={len(first['resources'])} m1=hit deterministic=ok")
+print(f"MCP PROBE: resources={len(first['resources'])} deterministic=ok")
+PY
+
+log "real MCP stdio M1 bound scope returns the isolated validated procedure"
+env -u DATABASE_URL MEMPHANT_APP_DATABASE_URL="$APP_URL" MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" MEMPHANT_API_KEY="$MCP_M1_KEY" MEMPHANT_MCP_PROBE_BINARY="$MCP" MCP_M1_UNIT_ID="$M1_UNIT_ID" MCP_M1_BODY="$MCP_M1_BODY" python3 - <<'PY'
+import json, os, select, subprocess
+p = subprocess.Popen([os.environ["MEMPHANT_MCP_PROBE_BINARY"], "stdio"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+def call(i, method, params):
+    p.stdin.write(json.dumps({"jsonrpc":"2.0","id":i,"method":method,"params":params}, separators=(",", ":")) + "\n"); p.stdin.flush()
+    while True:
+        ready, _, _ = select.select([p.stdout], [], [], 20); assert ready
+        response = json.loads(p.stdout.readline())
+        if response.get("id") == i: assert "error" not in response, response; return response["result"]
+call(1, "initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"memphant-m1-probe","version":"1"}})
+p.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n'); p.stdin.flush()
+r = call(2, "tools/call", {"name":"recall","arguments":{"query":"focused contract full harness"}})
+assert r.get("isError") is not True, r
+r = r["structuredContent"]
+assert r["state"] == "hit" and len(r["items"]) == 1, r
+assert r["items"][0]["unit_id"] == os.environ["MCP_M1_UNIT_ID"] and r["items"][0]["body"] == os.environ["MCP_M1_BODY"], r
+assert r["items"][0]["inclusion_reason"] == "validated_procedure" and r["citations"][0]["verification"]["status"] == "verified", r
+p.stdin.close(); p.wait(timeout=10); assert p.returncode == 0, p.stderr.read()
+print("MCP PROBE: m1=hit deterministic=ok")
 PY
 
 log "real MCP stdio C0 bound scope returns an empty recall"
