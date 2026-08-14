@@ -3156,7 +3156,7 @@ impl InMemoryStore {
         if let Ok(mut state) = self.inner.lock() {
             state
                 .api_keys
-                .retain(|existing| existing.key_hash != row.key_hash);
+                .retain(|existing| existing.id != row.id && existing.key_hash != row.key_hash);
             state.api_keys.push(row);
         }
     }

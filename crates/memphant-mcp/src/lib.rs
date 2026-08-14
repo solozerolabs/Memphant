@@ -6,7 +6,7 @@
 //! (dev) — stdio is a per-principal transport; a missing/revoked key refuses
 //! to start rather than serving an unauthenticated session.
 
-use memphant_core::service::{MemoryService, ServiceError, clamp_trust};
+use memphant_core::service::{MemoryService, ServiceError, clamp_trust, trust_rank};
 use memphant_core::{CoreError, MemoryStore, MutationResponse, StoreError};
 use memphant_runtime::AnyStore;
 use memphant_types::{
@@ -440,6 +440,9 @@ impl MemphantMcp {
             || self.bound.actor_id != row.actor_id
             || self.bound.scope_id != row.scope_id
             || self.bound.agent_node_id != row.agent_node_id
+            // A process may safely honor a lower live ceiling, but it must not
+            // silently acquire a broader authority after startup.
+            || trust_rank(row.max_trust) > trust_rank(self.bound.max_trust)
         {
             return Err(McpRecallFailure::Scope(
                 "API key principal changed after MCP startup; restart with a newly bound API key",
@@ -904,6 +907,16 @@ pub fn resources_artifact() -> Value {
 #[cfg(test)]
 mod recall_wire_contract {
     use super::*;
+    use memphant_core::{ApiKeyRow, InMemoryStore, NoopEmbedding, SystemClock};
+    use memphant_runtime::AnyStore;
+    use memphant_types::{ActorId, ScopeId, TenantId, TrustLevel};
+    use std::sync::Arc;
+
+    fn mapped(error: ServiceError) -> serde_json::Value {
+        mcp_recall_service_error(error)
+            .structured_content
+            .expect("structured recall error")
+    }
 
     #[test]
     fn unavailable_recall_is_a_typed_tool_result() {
@@ -913,6 +926,119 @@ mod recall_wire_contract {
             result.structured_content.expect("structured unavailable")["state"],
             "unavailable"
         );
+    }
+
+    #[test]
+    fn recall_error_mapping_preserves_retryable_and_terminal_codes() {
+        for error in [
+            ServiceError::Core(CoreError::Store(StoreError::Backend("down".to_string()))),
+            ServiceError::Core(CoreError::Store(StoreError::Poisoned)),
+            ServiceError::Core(CoreError::ProviderUnavailable("down".to_string())),
+        ] {
+            let result = mapped(error);
+            assert_eq!(result["state"], "unavailable");
+            assert_eq!(result["error"]["code"], "backend_unavailable");
+        }
+
+        for (error, code) in [
+            (
+                ServiceError::Core(CoreError::Store(StoreError::PolicyDenied(
+                    "denied".to_string(),
+                ))),
+                "scope_denied",
+            ),
+            (
+                ServiceError::Core(CoreError::PolicyDenied("denied".to_string())),
+                "scope_denied",
+            ),
+            (
+                ServiceError::Core(CoreError::Store(StoreError::StaleSubjectGeneration)),
+                "stale_subject_generation",
+            ),
+            (
+                ServiceError::Core(CoreError::Store(StoreError::SubjectErased)),
+                "subject_erased",
+            ),
+            (
+                ServiceError::Core(CoreError::NotFound("unit".to_string())),
+                "not_found",
+            ),
+            (
+                ServiceError::Core(CoreError::Store(StoreError::NotFound("unit"))),
+                "not_found",
+            ),
+            (
+                ServiceError::Core(CoreError::Invalid("bad".to_string())),
+                "invalid_request",
+            ),
+            (ServiceError::Invalid("bad".to_string()), "invalid_request"),
+            (
+                ServiceError::Core(CoreError::ProviderInvalid("bad".to_string())),
+                "invalid_request",
+            ),
+            (
+                ServiceError::Core(CoreError::DeepProviderInvalidOutput),
+                "invalid_request",
+            ),
+            (
+                ServiceError::Core(CoreError::DeepUnavailable),
+                "invalid_request",
+            ),
+        ] {
+            let result = mapped(error);
+            assert!(result.get("state").is_none(), "{code} is terminal");
+            assert_eq!(result["error"]["code"], code);
+        }
+    }
+
+    #[tokio::test]
+    async fn lower_live_trust_ceiling_clamps_the_recalled_principal() {
+        let tenant = TenantId::new();
+        let scope = ScopeId::new();
+        let actor = ActorId::new();
+        let context = memphant_store_testkit::resolved_context(tenant, scope, actor);
+        let store = InMemoryStore::default();
+        store.seed_context_binding(&context);
+        let key_id = uuid::Uuid::new_v4();
+        let key_hash = "mcp-live-trust-ceiling".to_string();
+        store.insert_api_key(ApiKeyRow {
+            id: key_id,
+            tenant_id: tenant,
+            key_hash: key_hash.clone(),
+            label: "live trust ceiling".to_string(),
+            max_trust: TrustLevel::VerifiedTool,
+            data_subject_id: Some(context.data_subject_id),
+            subject_generation: Some(context.subject_generation),
+            actor_id: Some(context.actor_id),
+            scope_id: Some(context.scope_id),
+            agent_node_id: Some(context.agent_node_id),
+            revoked: false,
+        });
+        let mcp = MemphantMcp::new(
+            MemoryService::new(
+                Arc::new(AnyStore::Mem(store)),
+                Arc::new(SystemClock),
+                Arc::new(NoopEmbedding),
+            ),
+            BoundTenant {
+                tenant,
+                max_trust: TrustLevel::TrustedUser,
+                subject_id: Some(context.data_subject_id),
+                subject_generation: Some(context.subject_generation),
+                actor_id: Some(context.actor_id),
+                scope_id: Some(context.scope_id),
+                agent_node_id: Some(context.agent_node_id),
+                api_key_id: Some(key_id),
+                api_key_hash: Some(key_hash),
+                dev_mode: false,
+            },
+        );
+
+        let resolved = match mcp.recall_context().await {
+            Ok(context) => context,
+            Err(_) => panic!("lower ceiling remains valid"),
+        };
+        assert_eq!(resolved.actor_trust, TrustLevel::VerifiedTool);
     }
 }
 

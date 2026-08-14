@@ -22,6 +22,34 @@ const TOOL_NAMES: [&str; 7] = [
     "retain", "recall", "reflect", "correct", "forget", "trace", "mark",
 ];
 
+async fn recall_tool_result(handler: MemphantMcp) -> rmcp::model::CallToolResult {
+    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
+    let server = tokio::spawn(async move {
+        handler
+            .serve(server_io)
+            .await
+            .expect("server initializes")
+            .waiting()
+            .await
+            .expect("server runs until client disconnect")
+    });
+    let client = ().serve(client_io).await.expect("client initializes");
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("recall").with_arguments(
+                json!({"query": "principal recheck"})
+                    .as_object()
+                    .cloned()
+                    .expect("args object"),
+            ),
+        )
+        .await
+        .expect("tools/call recall");
+    client.cancel().await.expect("client shuts down");
+    server.await.expect("server task joins");
+    result
+}
+
 #[test]
 fn artifact_has_camel_case_input_schema_for_all_seven_tools() {
     let generated = memphant_mcp::tools_artifact();
@@ -172,6 +200,13 @@ fn recall_schema_accepts_only_a_query() {
         recall["outputSchema"].is_object(),
         "recall publishes its wire schema"
     );
+    let output = serde_json::to_string(&recall["outputSchema"]).expect("output schema JSON");
+    for state in ["hit", "empty"] {
+        assert!(
+            output.contains(&format!("\"{state}\"")),
+            "recall output schema must declare the {state} response state"
+        );
+    }
 }
 
 #[tokio::test]
@@ -554,6 +589,169 @@ async fn bound_recall_derives_context_from_the_principal() {
 
     client.cancel().await.expect("client shuts down");
     server.await.expect("server task joins");
+}
+
+#[tokio::test]
+async fn recall_tool_rechecks_the_complete_principal_and_trust_ceiling() {
+    let store = InMemoryStore::default();
+    let tenant = TenantId::new();
+    let first = store
+        .resolve_context_binding(
+            tenant,
+            "mcp-principal-first".to_string(),
+            ContextBindingRequest {
+                subject: ContextBindingEntityRef {
+                    external_ref: "principal-first-subject".to_string(),
+                    kind: "user".to_string(),
+                },
+                actor: ContextBindingEntityRef {
+                    external_ref: "principal-first-actor".to_string(),
+                    kind: "user".to_string(),
+                },
+                scope: ContextBindingScopeRef {
+                    external_ref: "principal-first-scope".to_string(),
+                    kind: "user_root".to_string(),
+                    parent_external_ref: None,
+                },
+                agent_node: ContextBindingAgentRef {
+                    external_ref: "principal-first-agent".to_string(),
+                    parent_external_ref: None,
+                },
+                access_policies: Vec::new(),
+            },
+        )
+        .await
+        .expect("first context");
+    let second = store
+        .resolve_context_binding(
+            tenant,
+            "mcp-principal-second".to_string(),
+            ContextBindingRequest {
+                subject: ContextBindingEntityRef {
+                    external_ref: "principal-second-subject".to_string(),
+                    kind: "user".to_string(),
+                },
+                actor: ContextBindingEntityRef {
+                    external_ref: "principal-second-actor".to_string(),
+                    kind: "user".to_string(),
+                },
+                scope: ContextBindingScopeRef {
+                    external_ref: "principal-second-scope".to_string(),
+                    kind: "user_root".to_string(),
+                    parent_external_ref: None,
+                },
+                agent_node: ContextBindingAgentRef {
+                    external_ref: "principal-second-agent".to_string(),
+                    parent_external_ref: None,
+                },
+                access_policies: Vec::new(),
+            },
+        )
+        .await
+        .expect("second context");
+    let key_id = uuid::Uuid::new_v4();
+    let key_hash = "mcp-principal-recheck".to_string();
+    let full_row = |binding: &memphant_types::ContextBindingResponse, max_trust| ApiKeyRow {
+        id: key_id,
+        tenant_id: tenant,
+        key_hash: key_hash.clone(),
+        label: "principal recheck".to_string(),
+        max_trust,
+        data_subject_id: Some(binding.subject_id),
+        subject_generation: Some(binding.subject_generation),
+        actor_id: Some(binding.actor_id),
+        scope_id: Some(binding.scope_id),
+        agent_node_id: Some(binding.agent_node_id),
+        revoked: false,
+    };
+    let bound = |binding: &memphant_types::ContextBindingResponse, max_trust| BoundTenant {
+        tenant,
+        max_trust,
+        subject_id: Some(binding.subject_id),
+        subject_generation: Some(binding.subject_generation),
+        actor_id: Some(binding.actor_id),
+        scope_id: Some(binding.scope_id),
+        agent_node_id: Some(binding.agent_node_id),
+        api_key_id: Some(key_id),
+        api_key_hash: Some(key_hash.clone()),
+        dev_mode: false,
+    };
+    let handler = |bound| {
+        MemphantMcp::new(
+            MemoryService::new(
+                Arc::new(AnyStore::Mem(store.clone())),
+                Arc::new(SystemClock),
+                Arc::new(NoopEmbedding),
+            ),
+            bound,
+        )
+    };
+
+    store.insert_api_key(full_row(&first, TrustLevel::TrustedUser));
+    assert_ne!(
+        recall_tool_result(handler(bound(&first, TrustLevel::TrustedUser)))
+            .await
+            .is_error,
+        Some(true),
+        "the startup principal can recall"
+    );
+
+    let mut partial_row = full_row(&first, TrustLevel::TrustedUser);
+    partial_row.data_subject_id = None;
+    store.insert_api_key(partial_row);
+    let mut partial_bound = bound(&first, TrustLevel::TrustedUser);
+    partial_bound.subject_id = None;
+    let partial = recall_tool_result(handler(partial_bound)).await;
+    assert_eq!(partial.is_error, Some(true));
+    assert_eq!(
+        partial.structured_content.expect("partial error")["error"]["code"],
+        "scope_denied"
+    );
+
+    store.insert_api_key(full_row(&second, TrustLevel::TrustedUser));
+    let drifted = recall_tool_result(handler(bound(&first, TrustLevel::TrustedUser))).await;
+    assert_eq!(drifted.is_error, Some(true));
+    assert_eq!(
+        drifted.structured_content.expect("drift error")["error"]["code"],
+        "scope_denied"
+    );
+
+    store.insert_api_key(full_row(&first, TrustLevel::TrustedSystem));
+    let gained_trust = recall_tool_result(handler(bound(&first, TrustLevel::TrustedUser))).await;
+    assert_eq!(gained_trust.is_error, Some(true));
+    assert_eq!(
+        gained_trust.structured_content.expect("trust error")["error"]["code"],
+        "scope_denied"
+    );
+
+    store.insert_api_key(full_row(&first, TrustLevel::VerifiedTool));
+    assert_ne!(
+        recall_tool_result(handler(bound(&first, TrustLevel::TrustedUser)))
+            .await
+            .is_error,
+        Some(true),
+        "a lower live ceiling remains valid"
+    );
+
+    let mut replaced_key = full_row(&first, TrustLevel::VerifiedTool);
+    replaced_key.key_hash = "replacement-key-hash".to_string();
+    store.insert_api_key(replaced_key);
+    let missing = recall_tool_result(handler(bound(&first, TrustLevel::TrustedUser))).await;
+    assert_eq!(missing.is_error, Some(true));
+    assert_eq!(
+        missing.structured_content.expect("missing error")["error"]["code"],
+        "auth_required"
+    );
+
+    let mut dev = bound(&first, TrustLevel::TrustedUser);
+    dev.dev_mode = true;
+    dev.api_key_hash = None;
+    let dev = recall_tool_result(handler(dev)).await;
+    assert_eq!(dev.is_error, Some(true));
+    assert_eq!(
+        dev.structured_content.expect("dev error")["error"]["code"],
+        "scope_denied"
+    );
 }
 
 #[tokio::test]
