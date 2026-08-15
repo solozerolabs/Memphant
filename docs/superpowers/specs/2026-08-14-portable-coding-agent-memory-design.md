@@ -43,23 +43,27 @@ current repository.
    authenticated HTTP, SDK, CLI, or user interface surfaces. They require an
    explicit `can_forget` key capability that defaults to false and is never
    granted to a coding-agent credential.
-6. Memories are typed fallible experience. No LLM, validator, agent, or human
+6. Historical/as-of audit is also an owner operation. It requires a separate
+   `can_audit_history` key capability that defaults to false and is never
+   granted to a coding-agent credential; normal recall cannot use time-travel
+   inputs to recover excluded versions.
+7. Memories are typed fallible experience. No LLM, validator, agent, or human
    approval queue promotes them to truth.
-7. An LLM may condense bounded evidence, select a memory kind, and propose the
+8. An LLM may condense bounded evidence, select a memory kind, and propose the
    narrowest useful applicability. It does not certify correctness.
-8. Bitemporal history applies to every durable memory. Corrections append a
+9. Bitemporal history applies to every durable memory. Corrections append a
    successor and close the prior interval; they never overwrite history.
-9. Stale, harmful, superseded, expired, and deleted versions are hard-excluded
+10. Stale, harmful, superseded, expired, and deleted versions are hard-excluded
    before every normal retrieval path. Ranking cannot resurrect them.
-10. Hot working state is runtime/client-owned and temporary. Durable current
+11. Hot working state is runtime/client-owned and temporary. Durable current
     compact memories remain one continuously ranked corpus; there are no
     warm/cold serving states or stores.
-11. Coding-agent recall returns zero or one compact memory within a fixed
+12. Coding-agent recall returns zero or one compact memory within a fixed
     512-token response budget. A follow-up uses another, narrower query rather
     than expanding one response.
-12. Default retrieval is provider-free. An LLM call is not required merely to
+13. Default retrieval is provider-free. An LLM call is not required merely to
     choose a memory.
-13. Coding-agent file/resource projections are read-only. Durable writes use
+14. Coding-agent file/resource projections are read-only. Durable writes use
     the five intent tools; projection delete never maps to permanent forget.
 
 ## 3. System boundary
@@ -293,6 +297,14 @@ single operation capability, not a host/agent role hierarchy. Even an agent
 with shell access and its own bearer key therefore cannot bypass MCP with
 `curl`.
 
+The same rule applies to history without conflating it with deletion:
+historical/as-of recall requires `can_audit_history = true`. Coding-agent keys
+never receive it, the MCP recall contract exposes no time-travel input, and the
+HTTP/service boundary rejects historical selectors before retrieval when the
+live key lacks that capability. Owner audit can inspect superseded or
+invalidated history, but erasure remains final: deleted content is unavailable
+even to an authorized historical read.
+
 Owner forget means erasure, not only lifecycle suppression. It removes the
 selected MemPhant-held compact or source body, excerpt, citation payload,
 embedding, derived chunks, blob/cache copies, and writable projections, while
@@ -456,6 +468,8 @@ not justify a model-call comparison between stores.
   identity from it just as query-only recall now does;
 - require an explicit `can_forget` capability on every permanent-deletion
   surface; it defaults false and is never present on coding-agent keys;
+- require a separate `can_audit_history` capability on every historical/as-of
+  read surface; it defaults false and is never present on coding-agent keys;
 - make owner forget erase selected MemPhant-held content and derivatives while
   retaining only a content-free tombstone/receipt;
 - project semantic placement onto the existing hierarchical scope and
@@ -502,11 +516,22 @@ other public surfaces. `recall` remains query-only and principal-derived.
 - Coding-agent credentials never carry permanent-delete authority: no delete
   tool exists on that server, and the same key lacks the `can_forget` capability
   required by every deletion endpoint.
+- Coding-agent credentials cannot time-travel around lifecycle exclusion: they
+  lack `can_audit_history`, and historical/as-of selectors are rejected before
+  retrieval on every public surface.
 - Access to two repositories does not confer permission to write or read a
   shared cross-repository memory; an owner-created scope and explicit grants do.
 - Raw prompts, shell commands, patches, and full transcripts are not required
   by the compact-memory API.
 - All mutations are idempotent and audit-linked.
+- Every MCP tool call and resource read resolves one fully bound live principal;
+  none accepts caller-supplied identity fields, and no operation may exceed the
+  live key's trust ceiling.
+- An open invalidation tombstone blocks direct writes, replay, and promotion for
+  the same memory identity until an explicit correction closes it.
+- Source authorization can narrow compact-memory eligibility but never broaden
+  it; owner erasure overrides bitemporal history.
+- Normal recall never returns raw source bodies or pending consolidation bytes.
 - Backend failure is `unavailable`, never an empty result.
 - Missing optional source hydration is explicit and does not discard the card.
 - Stale/harmful exclusion is fail-closed across primary and degraded recall.
