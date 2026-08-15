@@ -314,17 +314,19 @@ per `Idempotency-Key`, with per-item idempotency for fine-grained replay.
 
 ## 5. MCP Tools
 
+The MCP surface is the **five identity-free coding-agent tools** (R91 — the portable coding-agent lane, distinct from the seven REST verbs §4). The server derives tenant, subject, actor, scope, node, generation, trust, and reporter identity from the live bound key, so no tool carries a caller-supplied principal:
+
 | Tool | Purpose |
 |---|---|
-| `retain` | Store memory or raw episode. |
-| `recall` | Retrieve cited memory evidence. |
-| `reflect` | Request consolidation for a scope. |
-| `correct` | Supersede or invalidate selected memory through an auditable correction. |
-| `forget` | Forget by ID, scope, kind, or policy selector. |
-| `trace` | Inspect a retrieval trace. |
-| `mark` | Report what the caller did with a recall pack (outcome feedback). |
+| `recall` | Retrieve cited memory evidence (compact coding lane; `compact_only`). |
+| `remember` | Store one compact coding memory as an Active unit. |
+| `correct_memory` | Supersede a memory unit with an auditable bitemporal successor. |
+| `invalidate_memory` | Close a memory unit's identity (`stale`/`harmful`) via an open tombstone. |
+| `report_memory_use` | Report what the caller did with a recall pack (outcome feedback). |
 
 MCP clients should get compact text and structured JSON. Large traces are returned as resources or trace references.
+
+**Erasure has no MCP tool.** Permanent forget stays an owner-only HTTP/CLI path gated on the key's `can_forget` capability; history audit (as-of reads) is gated on `can_audit_history`. A coding-agent key carries neither. The REST surface keeps all seven verbs (§4); the MCP surface deliberately omits `retain`/`reflect`/`forget`/`trace` and folds outcome feedback into `report_memory_use` — identity-free tools an agent cannot misuse to widen its own scope. The general-lane `degraded:true`/`consolidation_lagged` recall contract (§4.2) is unchanged and shared.
 
 ### 5.1 MCP Tool Contract
 
@@ -349,8 +351,9 @@ Example `recall` output:
     {"type": "text", "text": "Found 3 cited memories for checkout callback failure."}
   ],
   "structuredContent": {
-    "retrieval_id": "ret_...",
+    "state": "hit",
     "items": [],
+    "trace_id": "ret_...",
     "trace_ref": "memphant://trace/ret_..."
   }
 }
@@ -358,7 +361,7 @@ Example `recall` output:
 
 MCP is intentionally smaller than REST. It exposes agent-useful jobs, not admin inventory endpoints. **Implementation note (rmcp 2.x — R74):** the `rmcp` Rust SDK derives `inputSchema` (via `schemars`) but **not** `outputSchema` from the `#[tool]` macro alone. The canonical path is returning the **`Json<T>` wrapper** on the canonical response type — the framework then derives `outputSchema` from `T` and places the value in `structuredContent`, satisfying "do not hand-author parallel schemas" with no ceremony. The explicit `Tool::with_output_schema<T>()` where `T: JsonSchema` remains the fallback for tools whose return type cannot be the plain `Json<T>` wrapper (`02` §7). Target rmcp 2.x (2.0.0 aligned model types to MCP 2025-11-25).
 
-**`outputSchema` is a published validation contract → response shapes are frozen-additive-only.** Because clients validate `structuredContent` against the declared `outputSchema`, adding a *required* output field post-tag is a breaking change; every field a future version might need must already exist (optional is fine) or the shape must be `additionalProperties`-tolerant. Get the response shapes (§4/§4.2) additive-safe **before the first tag**. **Tool annotations must be serialized explicitly**, because the MCP defaults are the wrong way for a memory store: `idempotentHint` defaults to `false` (so `retain`/`reflect`/`correct`/`forget` must emit `idempotentHint: true`) and `destructiveHint` defaults to `true` (so the non-destructive writes must emit `destructiveHint: false`); `recall`/`trace` carry `readOnlyHint: true`. Silence ships the wrong hint.
+**`outputSchema` is a published validation contract → response shapes are frozen-additive-only.** Because clients validate `structuredContent` against the declared `outputSchema`, adding a *required* output field post-tag is a breaking change; every field a future version might need must already exist (optional is fine) or the shape must be `additionalProperties`-tolerant. Get the response shapes (§4/§4.2) additive-safe **before the first tag**. **Tool annotations must be serialized explicitly**, because the MCP defaults are the wrong way for a memory store: `idempotentHint` defaults to `false` (so the mutating tools `remember`/`correct_memory`/`invalidate_memory`/`report_memory_use` must emit `idempotentHint: true`) and `destructiveHint` defaults to `true` (so the non-destructive writes must emit `destructiveHint: false`); `recall` carries `readOnlyHint: true`. Silence ships the wrong hint.
 
 **Reserved-additive surfaces (named now so the later extension is coherent; NOT built at launch — and deferring is correct, since the 2026-07 stateless MCP RC moves *away* from held-open server push):** the **memory-event taxonomy is now reserved WITH shape** (R78; the shapes live in `20` §3: `memory.promoted`/`memory.superseded`/`memory.contradiction_detected`/`memory.quarantined`/`reflect.completed`) — delivery design is a **transactional outbox** written in the same commit as the trust-event/generation write, consumed via the `GET /v1/events?cursor` poll surface first; webhooks and any MCP `subscriptions/listen`/reverse-DNS extension (`ai.memphant/memory-events`) come later, built post-v1; server-driven `elicitation` for forget-confirm / contradiction-resolve (today HITL rides `destructiveHint`-driven client confirmation); memory-as-listable MCP `resources` + RFC 6570 templates. `reflect` sets `execution.taskSupport: forbidden` at launch, and its `reflect_id` is kept forward-compatible with a future MCP `tasks/get` handle so adopting the Tasks extension later is non-breaking.
 
@@ -396,14 +399,13 @@ Both use the same tool schemas and auth policy. **SSE is not a MemPhant launch t
 
 | Tool | readOnly | destructive | idempotent | Rationale |
 |---|---|---|---|---|
-| `recall`, `trace` | true | — | — | pure read; safe to auto-call |
-| `reflect` | false | false | true | mutates but additive; re-running converges |
-| `retain` | false | false | true (with key) | additive write |
-| `correct` | false | **false** | true | supersedes, never overwrites — old unit stays citable, so **not** destructive |
-| `forget` | false | **true** | true | the only destructive verb; clients should require confirmation |
-| `mark` | false | false | true (per trace+caller) | additive feedback write; safe to auto-call |
+| `recall` | true | — | — | pure read; safe to auto-call |
+| `remember` | false | false | true (with key) | additive compact write |
+| `correct_memory` | false | **false** | true | supersedes, never overwrites — old unit stays citable, so **not** destructive |
+| `invalidate_memory` | false | **false** | true | closes an identity with an auditable tombstone; the closed unit stays citable, so **not** destructive |
+| `report_memory_use` | false | false | true (per trace) | additive feedback write; safe to auto-call |
 
-`openWorldHint` is true only for `resource`-target `retain` (server-side fetch, `06` §3.1).
+No MCP tool sets `destructiveHint: true`: irreversible erasure has no MCP tool (owner-only HTTP/CLI, gated on `can_forget`). `openWorldHint` stays false for all five — none fetches a server-side resource; resource-target ingest is REST `retain` only (`06` §3.1).
 
 **The `memphant://` URI scheme is a frozen contract**: `memphant://memory/{unit_id}`, `memphant://trace/{retrieval_id}`, `memphant://episode/{episode_id}`, and `memphant://resource/{resource_id}`. MCP declares `resources: {}`, lists current projected memory units in deterministic pages of at most 100, advertises all four RFC 6570 templates, and resolves each URI through `resources/read`. Reads are text-only and capped at 64 KiB; larger content returns a typed bound error instead of silently truncating or leaking through another route. These URIs are **stable identifiers, not capability grants** — listing and reading require a fully context-bound API key, and every resolution reuses the tenant/scope/actor policy context. Resource access is read-only; mutations stay on the governed tool/file-sync routes.
 

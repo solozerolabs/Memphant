@@ -30,7 +30,7 @@ MemPhant is the public Apache-2.0 memory substrate repo. Treat `docs/superpowers
 - Fix root causes and add tests or contract checks for regressions.
 - Do not add compatibility shims, feature-flag rot, or temporary bypass paths in this pre-production repo.
 - Preserve unrelated dirty work in this repo and in any private Syndai checkout.
-- `openapi/memphant.v1.json` and `mcp/memphant.tools.v1.json` are generated artifacts — regenerate via the server/mcp binaries, never hand-edit.
+- `openapi/memphant.v1.json`, `mcp/memphant.tools.v1.json`, and `mcp/memphant.resources.v1.json` are generated artifacts — regenerate via the server/mcp binaries, never hand-edit.
 
 ## Benchmark Dataset Cache
 
