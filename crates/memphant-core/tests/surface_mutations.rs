@@ -443,6 +443,74 @@ async fn degraded_fallback_keeps_trace_membership_empty() {
     assert!(error.to_string().contains("canonical inclusion whitelist"));
 }
 
+/// Anti-pattern guard: the compact coding lane (`compact_only`) must never serve
+/// the raw-episode read-your-own-writes fallback. A raw episode has no compact
+/// envelope, so leaking it would violate the compact-only shape contract. The
+/// same fixture that yields a degraded raw item at `compact_only: false` (above)
+/// must return an honest empty at `compact_only: true`.
+#[tokio::test]
+async fn compact_lane_never_serves_the_raw_episode_degraded_fallback() {
+    let store = InMemoryStore::default();
+    let tenant_id = tenant(79_355);
+    let context = memphant_store_testkit::bind_context(&store, tenant_id).await;
+    retain_episode(
+        &store,
+        &context,
+        RetainRequest {
+            tenant_id,
+            data_subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            actor_id: context.actor_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            source_kind: "user".to_string(),
+            source_ref: "test:fixture".to_string(),
+            observed_at: "2026-07-09T00:00:00Z".to_string(),
+            source_trust: TrustLevel::TrustedUser,
+            subject_hint: None,
+            subject: None,
+            predicate: None,
+            body: "Fallback rollout window is Thursday night.".to_string(),
+            compiler_version: "compact-degraded-guard-test".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let service = MemoryService::new(Arc::new(store), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+    let response = service
+        .recall(
+            context.clone(),
+            RecallHttpRequest {
+                compact_only: true,
+                subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                query: "When is the fallback rollout window?".to_string(),
+                limit: Some(8),
+                budget_tokens: Some(256),
+                mode: Some(RecallMode::Fast),
+                include_beliefs: Some(false),
+                transaction_as_of: None,
+                valid_at: None,
+                aggregation_window: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        !response.degraded,
+        "compact lane must not enter degraded mode"
+    );
+    assert!(
+        response.items.is_empty(),
+        "compact lane must not leak a non-compact raw episode: {:?}",
+        response.items
+    );
+}
+
 #[tokio::test]
 async fn another_subjects_full_context_cannot_fetch_a_trace() {
     let store = InMemoryStore::default();

@@ -326,7 +326,7 @@ The MCP surface is the **five identity-free coding-agent tools** (R91 — the po
 
 MCP clients should get compact text and structured JSON. Large traces are returned as resources or trace references.
 
-**Erasure has no MCP tool.** Permanent forget stays an owner-only HTTP/CLI path gated on the key's `can_forget` capability; history audit (as-of reads) is gated on `can_audit_history`. A coding-agent key carries neither. The REST surface keeps all seven verbs (§4); the MCP surface deliberately omits `retain`/`reflect`/`forget`/`trace` and folds outcome feedback into `report_memory_use` — identity-free tools an agent cannot misuse to widen its own scope. The general-lane `degraded:true`/`consolidation_lagged` recall contract (§4.2) is unchanged and shared.
+**Erasure has no MCP tool.** Permanent forget stays an owner-only HTTP/CLI path gated on the key's `can_forget` capability; history audit (as-of reads) is gated on `can_audit_history`. A coding-agent key carries neither. The REST surface keeps all seven verbs (§4); the MCP surface deliberately omits `retain`/`reflect`/`forget`/`trace` and folds outcome feedback into `report_memory_use` — identity-free tools an agent cannot misuse to widen its own scope. The coding lane does **not** serve the raw-episode `degraded:true` read-your-own-writes fallback: `remember` mints an Active compact unit directly, so a compact recall is either a compact hit or honestly empty, never a non-compact raw episode. The general-lane `degraded:true`/`consolidation_lagged` contract (§4.2) is unchanged for the REST recall path.
 
 ### 5.1 MCP Tool Contract
 

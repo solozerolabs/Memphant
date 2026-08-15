@@ -4503,6 +4503,11 @@ impl<S: MemoryStore> MemoryService<S> {
             || request.mode == RecallMode::Deep
             || request.transaction_as_of.is_some()
             || request.valid_at.is_some()
+            // The compact coding lane never serves the raw-episode fallback: its
+            // writes mint Active compact units directly (read-your-own-writes needs
+            // no reflection), and a raw episode has no compact envelope, so serving
+            // it would violate the compact-only shape contract.
+            || request.compact_only
         {
             return Ok(response);
         }
