@@ -861,12 +861,9 @@ pub fn resources_artifact() -> Value {
 #[cfg(test)]
 mod recall_wire_contract {
     use super::*;
-    use memphant_core::{ApiKeyRow, InMemoryStore, MemoryStore, NoopEmbedding, SystemClock};
+    use memphant_core::{ApiKeyRow, InMemoryStore, NoopEmbedding, SystemClock};
     use memphant_runtime::AnyStore;
-    use memphant_types::{
-        ActorId, ContextualChunk, MemoryKind, NewMemoryUnit, ScopeId, TenantId, TrustLevel,
-        UnitState,
-    };
+    use memphant_types::{ActorId, MemoryKind, ScopeId, TenantId, TrustLevel};
     use std::sync::Arc;
 
     fn mapped(error: ServiceError) -> serde_json::Value {
@@ -1043,52 +1040,6 @@ mod recall_wire_contract {
         let context = memphant_store_testkit::resolved_context(tenant, scope, actor);
         let store = InMemoryStore::default();
         store.seed_context_binding(&context);
-        let mut tx = store.begin(&context).await.expect("begin");
-        store
-            .stage_memory_unit(
-                &mut tx,
-                NewMemoryUnit {
-                    tenant_id: tenant,
-                    data_subject_id: context.data_subject_id,
-                    scope_id: scope,
-                    agent_node_id: context.agent_node_id,
-                    subject_generation: context.subject_generation,
-                    kind: MemoryKind::Procedural,
-                    state: UnitState::Validated,
-                    fact_key: Some("recall budget anchor".to_string()),
-                    predicate: None,
-                    body: [BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK].join("\n"),
-                    confidence: Some(1.0),
-                    trust_level: TrustLevel::TrustedSystem,
-                    churn_class: None,
-                    freshness_due_at: None,
-                    actor_id: Some(actor),
-                    source_kind: Some("test".to_string()),
-                    source_ref: "test:mcp-recall-budget".to_string(),
-                    observed_at: "2026-08-14T00:00:00Z".to_string(),
-                    source_episode_id: None,
-                    source_resource_id: None,
-                    deletion_generation: None,
-                    contextual_chunks: [BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, body)| ContextualChunk {
-                            id: format!("procedure-{index}"),
-                            header: format!("[procedure test spans {}-{}]", index + 1, index + 1),
-                            body: body.to_string(),
-                            source_span: None,
-                        })
-                        .collect(),
-                    valid_from: None,
-                    valid_to: None,
-                    transaction_from: None,
-                    transaction_to: None,
-                },
-            )
-            .await
-            .expect("stage validated procedure");
-        store.commit(tx).await.expect("commit validated procedure");
-
         let key_id = uuid::Uuid::new_v4();
         let key_hash = "mcp-recall-budget".to_string();
         store.insert_api_key(ApiKeyRow {
@@ -1106,12 +1057,40 @@ mod recall_wire_contract {
             can_audit_history: false,
             revoked: false,
         });
+        let service = MemoryService::new(
+            Arc::new(AnyStore::Mem(store)),
+            Arc::new(SystemClock),
+            Arc::new(NoopEmbedding),
+        );
+        // Seed a compact procedural memory through the sanctioned write path.
+        // Its single body carries the three sentinels in source order, so the
+        // compact-only MCP recall lane serves the complete procedure.
+        service
+            .remember(
+                &context,
+                "mcp-recall-budget-seed",
+                TrustLevel::TrustedSystem,
+                memphant_types::RememberRequest {
+                    kind: MemoryKind::Procedural,
+                    body: [BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK].join("\n"),
+                    trigger: "recall budget anchor".to_string(),
+                    verification: "the consumer workflow creates the expected job".to_string(),
+                    target_scope_id: None,
+                    valid_from: None,
+                    valid_to: None,
+                    source: memphant_types::MemorySourceInput {
+                        kind: "user".to_string(),
+                        r#ref: "test:mcp-recall-budget".to_string(),
+                        observed_at: "2026-08-14T00:00:00Z".to_string(),
+                        episode_id: None,
+                        resource_id: None,
+                    },
+                },
+            )
+            .await
+            .expect("seed compact procedure");
         let mcp = MemphantMcp::new(
-            MemoryService::new(
-                Arc::new(AnyStore::Mem(store)),
-                Arc::new(SystemClock),
-                Arc::new(NoopEmbedding),
-            ),
+            service,
             BoundTenant {
                 tenant,
                 max_trust: TrustLevel::TrustedSystem,
