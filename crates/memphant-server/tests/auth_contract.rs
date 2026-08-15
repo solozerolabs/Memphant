@@ -45,6 +45,8 @@ fn key_row(token: &str, tenant_id: TenantId, max_trust: TrustLevel, revoked: boo
         actor_id: None,
         scope_id: None,
         agent_node_id: None,
+        can_forget: false,
+        can_audit_history: false,
         revoked,
     }
 }
@@ -1058,5 +1060,122 @@ async fn dev_mode_correction_and_forgetting_still_require_a_resolved_context() {
         let (status, response) = send(&app, "POST", path, None, Some(body)).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{path}");
         assert_eq!(response["error"]["code"], "scope_denied", "{path}");
+    }
+}
+
+/// A scoped app whose single key carries the given capabilities. Coding-agent
+/// keys default both false; owner keys are minted with them true.
+fn capability_app(
+    tenant_id: TenantId,
+    actor_id: ActorId,
+    scope_id: ScopeId,
+    can_forget: bool,
+    can_audit_history: bool,
+) -> axum::Router {
+    let state = AppState::new_in_memory();
+    let mut row = key_row(KEY_SCOPED, tenant_id, TrustLevel::TrustedUser, false);
+    row.actor_id = Some(actor_id);
+    row.scope_id = Some(scope_id);
+    row.can_forget = can_forget;
+    row.can_audit_history = can_audit_history;
+    state.store().insert_api_key(row);
+    memphant_server::app(state)
+}
+
+fn forget_body(
+    subject_id: memphant_types::SubjectId,
+    scope_id: ScopeId,
+    actor_id: ActorId,
+    agent_node_id: memphant_types::AgentNodeId,
+) -> Value {
+    serde_json::json!({
+        "subject_id": subject_id,
+        "scope_id": scope_id,
+        "actor_id": actor_id,
+        "agent_node_id": agent_node_id,
+        "subject_generation": 0,
+        "selector": {
+            "memory_unit_id": memphant_types::UnitId::new(),
+            "episode_id": null,
+            "resource_id": null,
+            "scope_id": scope_id
+        },
+        "reason": "capability test"
+    })
+}
+
+/// An ordinary coding-agent key (`can_forget` default false) is refused at the
+/// forget boundary before any context resolution, even acting inside its own
+/// bound scope. The absence of an MCP delete tool is a convenience; this
+/// capability check is the boundary.
+#[tokio::test]
+async fn agent_key_without_can_forget_is_refused_at_the_forget_boundary() {
+    let tenant_id = tenant(80_900);
+    let scope_id = scope(80_901);
+    let actor_id = actor(80_902);
+    let subject_id = memphant_types::SubjectId::new();
+    let agent_node_id = memphant_types::AgentNodeId::new();
+
+    // Coding-agent key: both capabilities false.
+    let app = capability_app(tenant_id, actor_id, scope_id, false, false);
+    let (status, response) = send(
+        &app,
+        "POST",
+        "/v1/forget",
+        Some(KEY_SCOPED),
+        Some(forget_body(subject_id, scope_id, actor_id, agent_node_id)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(response["error"]["code"], "capability_denied");
+
+    // Contrast: an owner key WITH can_forget clears the capability gate — it
+    // fails later on context resolution (scope_denied), never on capability.
+    let owner_app = capability_app(tenant_id, actor_id, scope_id, true, false);
+    let (owner_status, owner_response) = send(
+        &owner_app,
+        "POST",
+        "/v1/forget",
+        Some(KEY_SCOPED),
+        Some(forget_body(subject_id, scope_id, actor_id, agent_node_id)),
+    )
+    .await;
+    assert_eq!(owner_status, StatusCode::FORBIDDEN);
+    assert_ne!(
+        owner_response["error"]["code"], "capability_denied",
+        "an owner key must clear the capability gate; the failure is downstream"
+    );
+}
+
+/// Supplying an explicit `transaction_as_of`/`valid_at` selector turns recall
+/// into a historical-audit read. A coding-agent key (default false) is refused
+/// on its OWN scope — so it cannot recover stale/superseded/expired bytes by
+/// supplying an earlier time. A no-selector recall never reaches this gate.
+#[tokio::test]
+async fn agent_key_without_can_audit_history_cannot_read_as_of_its_own_scope() {
+    let tenant_id = tenant(81_000);
+    let scope_id = scope(81_001);
+    let actor_id = actor(81_002);
+    let app = capability_app(tenant_id, actor_id, scope_id, false, false);
+
+    for selector in [
+        serde_json::json!({ "transaction_as_of": "2026-01-01T00:00:00Z" }),
+        serde_json::json!({ "valid_at": "2026-01-01T00:00:00Z" }),
+    ] {
+        let mut body = serde_json::json!({
+            "subject_id": memphant_types::SubjectId::new(),
+            "scope_id": scope_id,
+            "actor_id": actor_id,
+            "agent_node_id": memphant_types::AgentNodeId::new(),
+            "subject_generation": 0,
+            "query": "history probe",
+        });
+        for (key, value) in selector.as_object().unwrap() {
+            body[key] = value.clone();
+        }
+        let (status, response) =
+            send(&app, "POST", "/v1/recall", Some(KEY_SCOPED), Some(body)).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{selector}");
+        assert_eq!(response["error"]["code"], "capability_denied", "{selector}");
     }
 }

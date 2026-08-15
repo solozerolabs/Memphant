@@ -5022,7 +5022,8 @@ impl MemoryStore for PgStore {
             .ok_or_else(|| StoreError::Backend("store has no authn capability".to_string()))?;
         let row = sqlx::query(
             "select id, tenant_id, key_hash, label, max_trust, data_subject_id,
-                    subject_generation, actor_id, scope_id, agent_node_id, revoked
+                    subject_generation, actor_id, scope_id, agent_node_id,
+                    can_forget, can_audit_history, revoked
              from memphant.authenticate_api_key($1)",
         )
         .bind(key_hash)
@@ -5064,6 +5065,8 @@ impl MemoryStore for PgStore {
                 .try_get::<Option<Uuid>, _>("agent_node_id")
                 .map_err(backend)?
                 .map(|id| AgentNodeId::from_u128(id.as_u128())),
+            can_forget: row.try_get("can_forget").map_err(backend)?,
+            can_audit_history: row.try_get("can_audit_history").map_err(backend)?,
             revoked: row.try_get("revoked").map_err(backend)?,
         }))
     }

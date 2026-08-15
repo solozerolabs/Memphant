@@ -373,15 +373,18 @@ comparing every startup binding. It replaces `recall_context()` and
    `(tenant_id,data_subject_id,scope_id,agent_node_id,fact_key)`: correction
    emits a replacement plus up to two open valid-time remainders sharing
    `fact_key` (`memphant-core/src/lib.rs:1268-1298`, `store.rs:3454-3457`), which
-   such an index rejects. Instead extend the existing GiST exclusion
-   `memphant_memory_unit_subject_valid_excl`
-   (`20260703_001:841-851`, forward-applied by
-   `20260731_007_semantic_only_subject_exclusion.sql`) — it already carries
-   `subject_generation`, `kind`, and `tstzrange(valid_from,valid_to,'[)') &&` so
-   remainders coexist. Add the compact kinds/`payload ? 'compact'` condition to
-   its `where` clause (keeping the semantic/preference arm intact and its pinning
-   test green), and add a separate partial expression **index** (not unique) over
-   open `payload->'compact'->>'body_sha256'` to back the exact-body lookup.
+   such an index rejects. Add a **separate** GiST exclusion modeled on
+   `memphant_memory_unit_subject_valid_excl` — same key columns plus
+   `tstzrange(valid_from,valid_to,'[)') with &&` so remainders coexist — gated on
+   `where (transaction_to is null and payload ? 'compact')`. Do **not** fold
+   compact kinds into the existing semantic/preference exclusion: migration 007's
+   pinned rule (`exclusion_predicate_matches_the_supersedes_own_kind_set`) ties
+   that constraint's `kind` set to exactly `supersedes_own_kind(kind)==Some(kind)`
+   (`semantic`,`preference`), and adding a `payload`/kind term would break that
+   test. A distinct compact exclusion keyed on `payload ? 'compact'` is
+   orthogonal to that set and leaves the pinned test green. Also add a separate
+   partial expression **index** (not unique) over open
+   `payload->'compact'->>'body_sha256'` to back the exact-body lookup.
    Update the migration head/include list (`memphant-store-postgres/src/lib.rs`)
    and `SCHEMA_COMPAT_REVISION` (`memphant-types/src/lib.rs`) once.
 2. Add a migration check that old rows remain false and only the provisioner
@@ -978,9 +981,11 @@ Four parallel readers checked the plan against the actual code. Blocking items
 folded into the tasks above:
 
 1. **Unique-index vs remainders (Task 1):** the proposed partial unique index on
-   `fact_key` would reject the correction remainders the plan itself keeps. Now
-   extends the existing GiST exclusion `memphant_memory_unit_subject_valid_excl`
-   (valid-time aware) plus a non-unique body-hash index.
+   `fact_key` would reject the correction remainders the plan itself keeps. Now a
+   **separate** valid-time-aware GiST exclusion gated on `payload ? 'compact'`
+   (modeled on `memphant_memory_unit_subject_valid_excl` but not folded into it —
+   migration 007 pins that constraint's kind set to `supersedes_own_kind`), plus
+   a non-unique body-hash index.
 2. **Compact-only eligibility scope (Task 5):** was globally empty-ing every
    existing corpus on the shared `recall_internal` path. Now an explicit
    **coding-lane** predicate selected by recall policy; the general lane and the

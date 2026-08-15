@@ -146,6 +146,12 @@ pub struct AuthedTenant {
     pub max_trust: TrustLevel,
     actor_id: Option<memphant_types::ActorId>,
     scope_id: Option<memphant_types::ScopeId>,
+    /// Permanent-erasure capability, resolved from the live key. Default false;
+    /// coding-agent keys never receive it. Gated at the forget handler.
+    can_forget: bool,
+    /// Historical-audit capability. Default false; gated on any request carrying
+    /// an explicit `transaction_as_of` or `valid_at` selector.
+    can_audit_history: bool,
     dev_mode: bool,
 }
 
@@ -237,6 +243,27 @@ impl AuthedTenant {
             Err(ApiError::scope_denied())
         }
     }
+
+    /// Permanent erasure is owner-only. The absence of an MCP delete tool is a
+    /// convenience, not the boundary; this capability check is.
+    fn require_can_forget(&self) -> Result<(), ApiError> {
+        if self.can_forget {
+            Ok(())
+        } else {
+            Err(ApiError::capability_denied("can_forget"))
+        }
+    }
+
+    /// Any request supplying an explicit `transaction_as_of`/`valid_at` selector
+    /// is a historical-audit read and requires the audit capability. Ordinary
+    /// coding recall (no selector) never reaches this gate.
+    fn require_can_audit_history(&self) -> Result<(), ApiError> {
+        if self.can_audit_history {
+            Ok(())
+        } else {
+            Err(ApiError::capability_denied("can_audit_history"))
+        }
+    }
 }
 
 impl<S: MemoryStore + 'static> FromRequestParts<AppState<S>> for AuthedTenant {
@@ -252,6 +279,8 @@ impl<S: MemoryStore + 'static> FromRequestParts<AppState<S>> for AuthedTenant {
                 max_trust: TrustLevel::TrustedSystem,
                 actor_id: None,
                 scope_id: None,
+                can_forget: true,
+                can_audit_history: true,
                 dev_mode: true,
             });
         }
@@ -279,6 +308,8 @@ impl<S: MemoryStore + 'static> FromRequestParts<AppState<S>> for AuthedTenant {
             max_trust: row.max_trust,
             actor_id: row.actor_id,
             scope_id: row.scope_id,
+            can_forget: row.can_forget,
+            can_audit_history: row.can_audit_history,
             dev_mode: false,
         })
     }
@@ -472,6 +503,13 @@ async fn recall_handler<S: MemoryStore + 'static>(
     StrictJson(request): StrictJson<RecallHttpRequest>,
 ) -> Result<Json<memphant_types::RecallResponse>, ApiError> {
     authed.check_principal(request.actor_id, request.scope_id)?;
+    // Any explicit historical selector turns recall into an audit read: gate it
+    // on the audit capability before touching the store, so an ordinary coding
+    // key cannot recover stale/superseded/expired bytes by supplying an earlier
+    // time.
+    if request.transaction_as_of.is_some() || request.valid_at.is_some() {
+        authed.require_can_audit_history()?;
+    }
     let context = state
         .store()
         .resolve_memory_context(
@@ -534,6 +572,7 @@ async fn forget_handler<S: MutationLedgerStore + 'static>(
     IdempotencyKey(idempotency_key): IdempotencyKey,
     StrictJson(request): StrictJson<memphant_types::ForgetRequest>,
 ) -> Result<Response, ApiError> {
+    authed.require_can_forget()?;
     if request.scope_id != request.selector.scope_id {
         return Err(ApiError::context_binding_conflict(
             "forget scope does not match selector scope".to_string(),
@@ -1203,6 +1242,16 @@ impl ApiError {
             status: StatusCode::UNAUTHORIZED,
             code: "auth_required",
             message: "a valid Authorization: Bearer mk_<key> header is required".to_string(),
+        }
+    }
+
+    fn capability_denied(capability: &'static str) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            code: "capability_denied",
+            message: format!(
+                "this API key lacks the {capability} capability; it is owner-only and default false"
+            ),
         }
     }
 

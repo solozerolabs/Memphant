@@ -1633,6 +1633,12 @@ pub struct ApiKeyRow {
     pub actor_id: Option<ActorId>,
     pub scope_id: Option<ScopeId>,
     pub agent_node_id: Option<AgentNodeId>,
+    /// Permanent-erasure capability. Default false; coding-agent keys never
+    /// receive it. Gated independently of `can_audit_history`.
+    pub can_forget: bool,
+    /// Historical-audit capability (explicit `transaction_as_of`/`valid_at`
+    /// selectors). Default false; coding-agent keys never receive it.
+    pub can_audit_history: bool,
     pub revoked: bool,
 }
 

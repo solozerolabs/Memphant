@@ -31,10 +31,12 @@ const DROP_DEAD_SCHEMA_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260801_009_drop_dead_schema.sql");
 const TASK_OUTCOME_LEDGER_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260808_010_task_outcome_ledger.sql");
+const PORTABLE_AGENT_MEMORY_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260814_011_portable_agent_memory.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260808_010_task_outcome_ledger";
+pub const MIGRATION_HEAD: &str = "20260814_011_portable_agent_memory";
 
 /// Bundled migrations in apply order.
 ///
@@ -72,7 +74,8 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ),
     ("20260801_008_drop_retention_tier", DROP_RETENTION_TIER_SQL),
     ("20260801_009_drop_dead_schema", DROP_DEAD_SCHEMA_SQL),
-    (MIGRATION_HEAD, TASK_OUTCOME_LEDGER_SQL),
+    ("20260808_010_task_outcome_ledger", TASK_OUTCOME_LEDGER_SQL),
+    (MIGRATION_HEAD, PORTABLE_AGENT_MEMORY_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[

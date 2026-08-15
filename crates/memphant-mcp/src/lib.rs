@@ -152,6 +152,19 @@ pub struct BoundTenant {
     pub dev_mode: bool,
 }
 
+/// The fully bound principal resolved live on a single MCP call. Carries the
+/// authorized context plus the live key's id, trust ceiling, and the two
+/// operation capabilities. Returned by `live_principal()`; the capabilities are
+/// default-false and coding-agent keys never receive them.
+#[derive(Debug, Clone)]
+pub struct LivePrincipal {
+    pub context: ResolvedMemoryContext,
+    pub api_key_id: uuid::Uuid,
+    pub max_trust: TrustLevel,
+    pub can_forget: bool,
+    pub can_audit_history: bool,
+}
+
 /// Resolves the fixed tenant from the environment:
 /// - `MEMPHANT_DEV_TENANT=<uuid>` → dev mode (loud, trust ceiling
 ///   `trusted_system`, body tenant ids ignored);
@@ -270,6 +283,17 @@ impl McpRecallFailure {
                 McpRecallErrorCode::BackendUnavailable,
                 "memory store unavailable",
             ),
+        }
+    }
+
+    /// String rendering for the `Result<_, String>` mutation-tool surface, so a
+    /// live-principal failure on a capability-gated tool returns the same typed
+    /// prefix the other mutation errors use.
+    fn as_error_string(&self) -> String {
+        match self {
+            Self::Auth(message) => format!("auth_required: {message}"),
+            Self::Scope(message) => format!("scope_denied: {message}"),
+            Self::Unavailable => "backend_unavailable: memory store unavailable".to_string(),
         }
     }
 }
@@ -464,7 +488,15 @@ impl MemphantMcp {
         }
     }
 
-    async fn recall_context(&self) -> Result<ResolvedMemoryContext, McpRecallFailure> {
+    /// Re-resolve the fully bound principal on THIS call. Every startup binding
+    /// is re-looked-up and compared: a revoked key, binding drift, subject-
+    /// generation drift, or a *raised* live trust ceiling fails closed and asks
+    /// for restart; a lowered ceiling applies immediately. Startup-cached
+    /// identity (`self.bound`) is comparison state, never continuing authority.
+    /// This is the one resolver behind recall, resource reads, and the
+    /// capability-gated tools — the split `bind_principal`/startup-`self.bound`
+    /// path is not authority on its own.
+    async fn live_principal(&self) -> Result<LivePrincipal, McpRecallFailure> {
         if self.bound.dev_mode {
             return Err(McpRecallFailure::Scope(
                 "MCP recall requires a fully context-bound API key; set MEMPHANT_API_KEY to a key bound to subject, generation, actor, scope, and agent node",
@@ -539,7 +571,17 @@ impl MemphantMcp {
             ));
         }
         context.actor_trust = clamp_trust(context.actor_trust, row.max_trust);
-        Ok(context)
+        Ok(LivePrincipal {
+            context,
+            api_key_id: row.id,
+            max_trust: row.max_trust,
+            can_forget: row.can_forget,
+            can_audit_history: row.can_audit_history,
+        })
+    }
+
+    async fn recall_context(&self) -> Result<ResolvedMemoryContext, McpRecallFailure> {
+        Ok(self.live_principal().await?.context)
     }
 
     #[tool(
@@ -731,6 +773,21 @@ impl MemphantMcp {
         }): Parameters<McpMutation<ForgetRequest>>,
     ) -> Result<Json<ForgetResult>, String> {
         let tenant = self.bound.tenant;
+        // Permanent erasure is owner-only. Re-resolve the live principal and
+        // require `can_forget` on THIS call — a coding-agent key (capability
+        // default false) is refused even though the tool is still registered
+        // (Task 6 removes the tool itself). The absence of a delete tool is a
+        // convenience, not the boundary; this check is.
+        if !self
+            .live_principal()
+            .await
+            .map_err(|error| error.as_error_string())?
+            .can_forget
+        {
+            return Err(
+                "capability_denied: this API key lacks the can_forget capability; erasure is owner-only".to_string(),
+            );
+        }
         if request.scope_id != request.selector.scope_id {
             return Err(
                 "context_binding_conflict: forget scope does not match selector scope".to_string(),
@@ -1101,6 +1158,8 @@ mod recall_wire_contract {
             actor_id: Some(context.actor_id),
             scope_id: Some(context.scope_id),
             agent_node_id: Some(context.agent_node_id),
+            can_forget: false,
+            can_audit_history: false,
             revoked: false,
         });
         let mcp = MemphantMcp::new(
@@ -1201,6 +1260,8 @@ mod recall_wire_contract {
             actor_id: Some(actor),
             scope_id: Some(scope),
             agent_node_id: Some(context.agent_node_id),
+            can_forget: false,
+            can_audit_history: false,
             revoked: false,
         });
         let mcp = MemphantMcp::new(

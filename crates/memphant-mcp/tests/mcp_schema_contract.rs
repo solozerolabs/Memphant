@@ -281,6 +281,10 @@ async fn persistent_session_round_trips_retain_then_recall() {
         actor_id: Some(binding.actor_id),
         scope_id: Some(binding.scope_id),
         agent_node_id: Some(binding.agent_node_id),
+        // This round-trip exercises an *authorized* forget, so the key carries
+        // the owner-only erasure capability. Coding-agent keys default false.
+        can_forget: true,
+        can_audit_history: false,
         revoked: false,
     });
     let handler = MemphantMcp::new(
@@ -497,6 +501,8 @@ async fn bound_recall_derives_context_from_the_principal() {
         actor_id: Some(binding.actor_id),
         scope_id: Some(binding.scope_id),
         agent_node_id: Some(binding.agent_node_id),
+        can_forget: false,
+        can_audit_history: false,
         revoked: false,
     });
     let handler = MemphantMcp::new(
@@ -561,6 +567,8 @@ async fn bound_recall_derives_context_from_the_principal() {
         actor_id: Some(binding.actor_id),
         scope_id: Some(binding.scope_id),
         agent_node_id: Some(binding.agent_node_id),
+        can_forget: false,
+        can_audit_history: false,
         revoked: true,
     });
     let revoked = client
@@ -594,6 +602,8 @@ async fn bound_recall_derives_context_from_the_principal() {
         actor_id: None,
         scope_id: None,
         agent_node_id: None,
+        can_forget: false,
+        can_audit_history: false,
         revoked: false,
     });
     let partial = client
@@ -691,6 +701,8 @@ async fn recall_tool_rechecks_the_complete_principal_and_trust_ceiling() {
         actor_id: Some(binding.actor_id),
         scope_id: Some(binding.scope_id),
         agent_node_id: Some(binding.agent_node_id),
+        can_forget: false,
+        can_audit_history: false,
         revoked: false,
     };
     let bound = |binding: &memphant_types::ContextBindingResponse, max_trust| BoundTenant {
@@ -813,6 +825,8 @@ async fn startup_refuses_without_api_key_or_dev_tenant() {
         actor_id: None,
         scope_id: None,
         agent_node_id: None,
+        can_forget: false,
+        can_audit_history: false,
         revoked: true,
     });
     unsafe {

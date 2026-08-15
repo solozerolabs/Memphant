@@ -34,6 +34,8 @@ fn handler(
         actor_id: Some(binding.actor_id),
         scope_id: Some(binding.scope_id),
         agent_node_id: Some(binding.agent_node_id),
+        can_forget: false,
+        can_audit_history: false,
         revoked: false,
     });
     MemphantMcp::new(

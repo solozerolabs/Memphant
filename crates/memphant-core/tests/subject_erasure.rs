@@ -323,6 +323,8 @@ async fn erasure_atomically_removes_only_the_subject_and_all_subject_owned_state
         actor_id: None,
         scope_id: None,
         agent_node_id: None,
+        can_forget: false,
+        can_audit_history: false,
         revoked: false,
     });
     store.insert_api_key(ApiKeyRow {
@@ -336,6 +338,8 @@ async fn erasure_atomically_removes_only_the_subject_and_all_subject_owned_state
         actor_id: Some(erased.actor_id),
         scope_id: Some(erased.scope_id),
         agent_node_id: Some(erased.agent_node_id),
+        can_forget: false,
+        can_audit_history: false,
         revoked: false,
     });
 
