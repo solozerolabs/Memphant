@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use memphant_core::service::MemoryService;
-use memphant_core::{FixedClock, InMemoryStore, MemoryStore, NoopEmbedding};
+use memphant_core::{Clock, FixedClock, InMemoryStore, MemoryStore, NoopEmbedding};
 use memphant_types::{
     CorrectMemoryRequest, CorrectResult, InvalidateMemoryRequest, InvalidationReason, MemoryKind,
     MemorySourceInput, RecallHttpRequest, RecallMode, RememberRequest, RetainEpisodeHttpResponse,
@@ -724,4 +724,83 @@ async fn coding_lane_serves_active_procedural_compact_but_general_lane_does_not(
         !general.contains(&id),
         "general lane still excludes Active procedural"
     );
+}
+
+/// The string-shorthand `source`: a coding agent's first natural `remember`
+/// passes `source` as a bare string. It deserializes to the default `"agent"`
+/// kind with an empty `observed_at` sentinel, and the service stamps the
+/// sentinel with its own clock — so the stored unit carries the clock's now,
+/// not a blank.
+#[tokio::test]
+async fn remember_accepts_string_shorthand_source_and_stamps_clock_now() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(91_000);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    // The whole request arrives as JSON with `source` as a bare string, exactly
+    // as the dogfooded agent sent it.
+    let request: RememberRequest = serde_json::from_value(serde_json::json!({
+        "kind": "procedural",
+        "body": "Run `cargo fmt` before committing.",
+        "trigger": "before any commit touching Rust",
+        "verification": "cargo fmt --check exits 0",
+        "source": "codex:first-remember"
+    }))
+    .expect("string-shorthand source deserializes");
+    assert_eq!(
+        request.source.kind, "agent",
+        "shorthand defaults kind to agent"
+    );
+    assert_eq!(request.source.r#ref, "codex:first-remember");
+    assert_eq!(
+        request.source.observed_at, "",
+        "shorthand yields the sentinel"
+    );
+
+    let response = service
+        .remember(&context, "shorthand-1", TrustLevel::TrustedUser, request)
+        .await
+        .expect("remember with string-shorthand source succeeds");
+    let unit = store
+        .fetch_units_by_ids(&context, &unit_ids(&response))
+        .await
+        .unwrap()
+        .pop()
+        .expect("unit persisted");
+    assert_eq!(unit.source_kind.as_deref(), Some("agent"));
+    assert_eq!(
+        unit.observed_at,
+        CLOCK.now_rfc3339(),
+        "service normalizes the empty sentinel to the clock's now"
+    );
+}
+
+/// The object form still stores the caller's explicit `observed_at` verbatim,
+/// so the shorthand's now-default never leaks into an explicit-timestamp write.
+#[tokio::test]
+async fn remember_object_source_keeps_explicit_observed_at() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(91_100);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    let response = service
+        .remember(
+            &context,
+            "object-1",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Procedural, "run the linters"),
+        )
+        .await
+        .unwrap();
+    let unit = store
+        .fetch_units_by_ids(&context, &unit_ids(&response))
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    // `source()` sets observed_at to 2026-07-02, distinct from the clock's now.
+    assert_eq!(unit.observed_at, "2026-07-02T00:00:00Z");
+    assert_ne!(unit.observed_at, CLOCK.now_rfc3339());
 }

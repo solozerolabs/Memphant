@@ -2401,6 +2401,18 @@ pub fn canonical_projection_fingerprint(
     Ok(format!("{:x}", Sha256::digest(encoded)))
 }
 
+/// Resolve a compact-write `source.observed_at`. A blank value is the string
+/// shorthand's sentinel — the agent supplied no timestamp, so the server stamps
+/// its own clock (the same clock it already uses for transaction time). A
+/// non-blank value must be a canonical UTC RFC3339 instant.
+fn resolve_source_observed_at(value: &str, clock: &dyn Clock) -> Result<String, ServiceError> {
+    if value.trim().is_empty() {
+        Ok(clock.now_rfc3339())
+    } else {
+        canonical_utc_timestamp(value, "source.observed_at")
+    }
+}
+
 fn canonical_utc_timestamp(value: &str, field: &str) -> Result<String, ServiceError> {
     if !(value.ends_with('Z') || value.ends_with("+00:00")) {
         return Err(ServiceError::Invalid(format!(
@@ -4207,7 +4219,6 @@ impl<S: MemoryStore> MemoryService<S> {
             ("verification", request.verification.as_str()),
             ("source.kind", request.source.kind.as_str()),
             ("source.ref", request.source.r#ref.as_str()),
-            ("source.observed_at", request.source.observed_at.as_str()),
         ] {
             if value.trim().is_empty() {
                 return Err(ServiceError::Invalid(format!("{field} must not be blank")));
@@ -4245,7 +4256,7 @@ impl<S: MemoryStore> MemoryService<S> {
             ));
         }
         let observed_at =
-            canonical_utc_timestamp(&request.source.observed_at, "source.observed_at")?;
+            resolve_source_observed_at(&request.source.observed_at, self.clock.as_ref())?;
 
         // The one-card render must fit the 512-token compact ceiling; if not, it
         // is rejected at write time rather than truncated into misleading
@@ -4740,7 +4751,6 @@ impl<S: MemoryStore> MemoryService<S> {
             ("verification", request.verification.as_str()),
             ("reason", request.reason.as_str()),
             ("source.ref", request.source.r#ref.as_str()),
-            ("source.observed_at", request.source.observed_at.as_str()),
         ] {
             if value.trim().is_empty() {
                 return Err(ServiceError::Invalid(format!("{field} must not be blank")));
@@ -4761,7 +4771,7 @@ impl<S: MemoryStore> MemoryService<S> {
             )));
         }
         let observed_at =
-            canonical_utc_timestamp(&request.source.observed_at, "source.observed_at")?;
+            resolve_source_observed_at(&request.source.observed_at, self.clock.as_ref())?;
 
         let claim = MutationClaim::new(
             context,
@@ -4862,13 +4872,13 @@ impl<S: MemoryStore> MemoryService<S> {
                 "reason must not be blank".to_string(),
             ));
         }
-        if request.source.r#ref.trim().is_empty() || request.source.observed_at.trim().is_empty() {
+        if request.source.r#ref.trim().is_empty() {
             return Err(ServiceError::Invalid(
-                "source.ref and source.observed_at must not be blank".to_string(),
+                "source.ref must not be blank".to_string(),
             ));
         }
         let observed_at =
-            canonical_utc_timestamp(&request.source.observed_at, "source.observed_at")?;
+            resolve_source_observed_at(&request.source.observed_at, self.clock.as_ref())?;
         let claim = MutationClaim::new(
             context,
             MutationVerb::Invalidate,

@@ -2205,9 +2205,13 @@ pub struct MemorySourceInput {
     pub resource_id: Option<ResourceId>,
 }
 
-/// The strict object shape of [`MemorySourceInput`] — the single source of
-/// truth for the object contract, reused for both deserialization (so unknown
-/// fields still error) and the object branch of the schema.
+/// The object form of a compact-write source: `kind`, `ref`, and `observed_at`
+/// (a UTC RFC3339 instant) required, with at most one canonical id
+/// (`episode_id` XOR `resource_id`).
+//
+// Also the single source of truth for the strict object contract: it is reused
+// for both deserialization (so unknown fields still error) and the object
+// branch of `MemorySourceInput`'s schema.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct MemorySourceObject {

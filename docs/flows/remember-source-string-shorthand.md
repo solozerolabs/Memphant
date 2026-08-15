@@ -83,7 +83,7 @@ unaffected (it does not reference `MemorySourceInput`).
 
 ```sh
 cd /Users/sidsharma/Memphant/.claude/worktrees/agent-a9bf7a35c7474f7d4 && cargo test -p memphant-types memory_source -- --nocapture
-cd /Users/sidsharma/Memphant/.claude/worktrees/agent-a9bf7a35c7474f7d4 && cargo test -p memphant-core --test compact_remember shorthand -- --nocapture
+cd /Users/sidsharma/Memphant/.claude/worktrees/agent-a9bf7a35c7474f7d4 && cargo test -p memphant-core --test compact_remember
 cd /Users/sidsharma/Memphant/.claude/worktrees/agent-a9bf7a35c7474f7d4 && cargo test -p memphant-mcp --test mcp_schema_contract
 cd /Users/sidsharma/Memphant/.claude/worktrees/agent-a9bf7a35c7474f7d4 && cargo fmt --check
 cd /Users/sidsharma/Memphant/.claude/worktrees/agent-a9bf7a35c7474f7d4 && cargo clippy --all-targets --all-features -- -D warnings

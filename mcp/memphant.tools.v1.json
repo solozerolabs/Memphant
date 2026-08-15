@@ -61,47 +61,56 @@
           "type": "string"
         },
         "MemorySourceInput": {
-          "additionalProperties": false,
-          "description": "Evidence provenance for a compact write. Free-form `kind`/`ref` are\ninformational and never widen eligibility. At most one canonical id\n(`episode_id` XOR `resource_id`) may be present; only a server-resolved\ncanonical resource may carry a source ACL, and that ACL may only narrow.",
-          "properties": {
-            "episode_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/EpisodeId"
+          "description": "Evidence provenance for a compact write: either the object form, or a bare string shorthand for `ref` (kind defaults to \"agent\", observed_at to the server clock).",
+          "oneOf": [
+            {
+              "description": "String shorthand for `ref`; `kind` defaults to \"agent\" and `observed_at` to the server clock.",
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "The object form of a compact-write source: `kind`, `ref`, and `observed_at`\n(a UTC RFC3339 instant) required, with at most one canonical id\n(`episode_id` XOR `resource_id`).",
+              "properties": {
+                "episode_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/EpisodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null
-            },
-            "kind": {
-              "type": "string"
-            },
-            "observed_at": {
-              "type": "string"
-            },
-            "ref": {
-              "type": "string"
-            },
-            "resource_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ResourceId"
+                "kind": {
+                  "type": "string"
                 },
-                {
-                  "type": "null"
+                "observed_at": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "resource_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ResourceId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
+              },
+              "required": [
+                "kind",
+                "ref",
+                "observed_at"
               ],
-              "default": null
+              "type": "object"
             }
-          },
-          "required": [
-            "kind",
-            "ref",
-            "observed_at"
-          ],
-          "type": "object"
+          ]
         },
         "ResourceId": {
           "format": "uuid",
@@ -222,47 +231,56 @@
           "type": "string"
         },
         "MemorySourceInput": {
-          "additionalProperties": false,
-          "description": "Evidence provenance for a compact write. Free-form `kind`/`ref` are\ninformational and never widen eligibility. At most one canonical id\n(`episode_id` XOR `resource_id`) may be present; only a server-resolved\ncanonical resource may carry a source ACL, and that ACL may only narrow.",
-          "properties": {
-            "episode_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/EpisodeId"
+          "description": "Evidence provenance for a compact write: either the object form, or a bare string shorthand for `ref` (kind defaults to \"agent\", observed_at to the server clock).",
+          "oneOf": [
+            {
+              "description": "String shorthand for `ref`; `kind` defaults to \"agent\" and `observed_at` to the server clock.",
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "The object form of a compact-write source: `kind`, `ref`, and `observed_at`\n(a UTC RFC3339 instant) required, with at most one canonical id\n(`episode_id` XOR `resource_id`).",
+              "properties": {
+                "episode_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/EpisodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null
-            },
-            "kind": {
-              "type": "string"
-            },
-            "observed_at": {
-              "type": "string"
-            },
-            "ref": {
-              "type": "string"
-            },
-            "resource_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ResourceId"
+                "kind": {
+                  "type": "string"
                 },
-                {
-                  "type": "null"
+                "observed_at": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "resource_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ResourceId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
+              },
+              "required": [
+                "kind",
+                "ref",
+                "observed_at"
               ],
-              "default": null
+              "type": "object"
             }
-          },
-          "required": [
-            "kind",
-            "ref",
-            "observed_at"
-          ],
-          "type": "object"
+          ]
         },
         "ResourceId": {
           "format": "uuid",
@@ -1195,47 +1213,56 @@
           "type": "string"
         },
         "MemorySourceInput": {
-          "additionalProperties": false,
-          "description": "Evidence provenance for a compact write. Free-form `kind`/`ref` are\ninformational and never widen eligibility. At most one canonical id\n(`episode_id` XOR `resource_id`) may be present; only a server-resolved\ncanonical resource may carry a source ACL, and that ACL may only narrow.",
-          "properties": {
-            "episode_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/EpisodeId"
+          "description": "Evidence provenance for a compact write: either the object form, or a bare string shorthand for `ref` (kind defaults to \"agent\", observed_at to the server clock).",
+          "oneOf": [
+            {
+              "description": "String shorthand for `ref`; `kind` defaults to \"agent\" and `observed_at` to the server clock.",
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "The object form of a compact-write source: `kind`, `ref`, and `observed_at`\n(a UTC RFC3339 instant) required, with at most one canonical id\n(`episode_id` XOR `resource_id`).",
+              "properties": {
+                "episode_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/EpisodeId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null
-            },
-            "kind": {
-              "type": "string"
-            },
-            "observed_at": {
-              "type": "string"
-            },
-            "ref": {
-              "type": "string"
-            },
-            "resource_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ResourceId"
+                "kind": {
+                  "type": "string"
                 },
-                {
-                  "type": "null"
+                "observed_at": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "resource_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ResourceId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
+              },
+              "required": [
+                "kind",
+                "ref",
+                "observed_at"
               ],
-              "default": null
+              "type": "object"
             }
-          },
-          "required": [
-            "kind",
-            "ref",
-            "observed_at"
-          ],
-          "type": "object"
+          ]
         },
         "RememberRequest": {
           "additionalProperties": false,
