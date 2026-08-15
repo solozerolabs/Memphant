@@ -1379,6 +1379,12 @@ pub struct StoredMemoryUnit {
     /// body copied into an Active unit never carries it.
     #[serde(default)]
     pub compact: Option<CompactEnvelope>,
+    /// The invalidation marker (`payload.invalidation`), present iff the unit is
+    /// a bodyless agent invalidation tombstone. Records why the identity was
+    /// archived; the open (`transaction_to is null`) `Invalidated` tombstone is
+    /// what blocks resurrection.
+    #[serde(default)]
+    pub invalidation: Option<InvalidationMarker>,
 }
 
 impl CorrectionHandle {
@@ -2273,6 +2279,17 @@ pub struct CompactEnvelope {
     pub write_channel: String,
 }
 
+/// The `payload.invalidation` marker on a bodyless `Invalidated` tombstone.
+/// Present iff the unit is an agent invalidation tombstone; records why the
+/// stable identity was archived. No table or lifecycle column — this rides in
+/// `payload` alongside `compact`, consistent across both stores.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvalidationMarker {
+    pub kind: InvalidationReason,
+    pub reason: String,
+}
+
 /// The write channel recorded for a direct agent-authored compact memory.
 pub const COMPACT_WRITE_CHANNEL_AGENT: &str = "agent_memory";
 
@@ -2634,6 +2651,7 @@ mod correction_handle_tests {
     #[test]
     fn handle_reads_the_units_own_identity_key_interval_span_and_episode() {
         let unit = StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::from_u128(1),
             tenant_id: TenantId::from_u128(2),

@@ -810,6 +810,7 @@ pub enum MutationVerb {
     Retain,
     Reflect,
     Correct,
+    Invalidate,
     Forget,
     Mark,
     TaskOutcome,
@@ -824,6 +825,7 @@ impl MutationVerb {
             Self::Retain => "retain",
             Self::Reflect => "reflect",
             Self::Correct => "correct",
+            Self::Invalidate => "invalidate",
             Self::Forget => "forget",
             Self::Mark => "mark",
             Self::TaskOutcome => "task_outcome",
@@ -1177,6 +1179,23 @@ impl Default for CorrectionUnitIds {
 }
 
 pub type CorrectOutcome = CorrectResult;
+
+/// One agent invalidation staged through the store seam: close the open target
+/// as `Superseded` and append a current, bodyless `Invalidated` tombstone with
+/// the same stable identity. The tombstone is what blocks resurrection; only a
+/// later `correct_memory` may close it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidationWrite {
+    pub target: UnitId,
+    pub reason_kind: memphant_types::InvalidationReason,
+    pub reason: String,
+    pub source_ref: String,
+    pub observed_at: String,
+    pub now: String,
+    /// Caller-owned tombstone id so the same plan can compile against the exact
+    /// row the transaction will persist.
+    pub tombstone_id: UnitId,
+}
 
 /// A forget applied through the store seam; exactly one target, validated
 /// upstream via `ForgetSelector::exactly_one_target`.
@@ -1901,6 +1920,14 @@ pub trait MemoryStore: Send + Sync {
         &self,
         tx: &mut Self::Txn,
         correction: CorrectionWrite,
+    ) -> impl Future<Output = Result<CorrectOutcome, StoreError>> + Send;
+    /// Close the open target as `Superseded` and append a bodyless `Invalidated`
+    /// tombstone carrying the same stable identity plus a `Supersedes` edge.
+    /// Returns `superseded = [target]`, `created = [tombstone]`.
+    fn stage_invalidation(
+        &self,
+        tx: &mut Self::Txn,
+        invalidation: InvalidationWrite,
     ) -> impl Future<Output = Result<CorrectOutcome, StoreError>> + Send;
     fn apply_correction(
         &self,
@@ -3991,6 +4018,7 @@ impl MemoryStore for InMemoryStore {
 
         let id = UnitId::new();
         tx.memory_units.push(StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id,
             tenant_id: unit.tenant_id,
@@ -4990,6 +5018,71 @@ impl MemoryStore for InMemoryStore {
             } else {
                 "current".to_string()
             },
+            trace_ref: None,
+        })
+    }
+
+    async fn stage_invalidation(
+        &self,
+        tx: &mut Self::Txn,
+        invalidation: InvalidationWrite,
+    ) -> Result<CorrectOutcome, StoreError> {
+        let context = tx.context.clone();
+        let state = self.staged_state(tx)?;
+        let units = state.memory_units.entry(context.tenant_id).or_default();
+        // Same open-generation finder as correction: only the single OPEN,
+        // caller-owned generation may be invalidated.
+        let idx = units
+            .iter()
+            .position(|unit| {
+                unit.id == invalidation.target
+                    && unit.data_subject_id == context.data_subject_id
+                    && unit.subject_generation == context.subject_generation
+                    && unit.scope_id == context.scope_id
+                    && unit.agent_node_id == context.agent_node_id
+                    && unit.actor_id == Some(context.actor_id)
+                    && unit.state != UnitState::Deleted
+                    && unit.transaction_to.is_none()
+            })
+            .ok_or(StoreError::NotFound("memory_unit"))?;
+        let old = units[idx].clone();
+        // Close the predecessor at transaction time.
+        units[idx].state = UnitState::Superseded;
+        units[idx].transaction_to = Some(invalidation.now.clone());
+        // Append the current, bodyless tombstone with the same stable identity.
+        let mut tombstone = old.clone();
+        tombstone.id = invalidation.tombstone_id;
+        tombstone.state = UnitState::Invalidated;
+        tombstone.body = String::new();
+        tombstone.compact = None;
+        tombstone.contextual_chunks = Vec::new();
+        tombstone.invalidation = Some(memphant_types::InvalidationMarker {
+            kind: invalidation.reason_kind,
+            reason: invalidation.reason.clone(),
+        });
+        tombstone.source_ref = invalidation.source_ref.clone();
+        tombstone.observed_at = invalidation.observed_at.clone();
+        tombstone.transaction_from = Some(invalidation.now.clone());
+        tombstone.transaction_to = None;
+        units.push(tombstone);
+
+        let edges = state.memory_edges.entry(context.tenant_id).or_default();
+        edges.push(StoredMemoryEdge {
+            id: EdgeId::new(),
+            tenant_id: context.tenant_id,
+            scope_id: context.scope_id,
+            src_id: invalidation.tombstone_id,
+            dst_id: old.id,
+            kind: MemoryEdgeKind::Supersedes,
+            transaction_from: Some(invalidation.now.clone()),
+            transaction_to: None,
+        });
+
+        Ok(CorrectResult {
+            correction_id: format!("inv_{}", invalidation.tombstone_id.as_uuid()),
+            superseded: vec![old.id],
+            created: vec![invalidation.tombstone_id],
+            correction_kind: "invalidation".to_string(),
             trace_ref: None,
         })
     }
@@ -6806,6 +6899,7 @@ fn quantity_rollups(
             let id = UnitId::from_u128(u128::from_be_bytes(digest[..16].try_into().unwrap()));
             Some(QuantityRollup {
                 unit: StoredMemoryUnit {
+                    invalidation: None,
                     compact: None,
                     id,
                     tenant_id: request.context.tenant_id,
@@ -7003,6 +7097,7 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
         });
     Some(ArtifactBundle {
         unit: StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id,
             tenant_id: request.context.tenant_id,
@@ -8256,6 +8351,7 @@ mod evidence_receipt_tests {
         let start = body.find(quote).unwrap();
         let end = start + quote.len();
         let unit = StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: unit_id,
             tenant_id: context.tenant_id,
@@ -12870,6 +12966,7 @@ mod compiled_citation_tests {
             candidates: Vec::new(),
         };
         let unit = StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::from_u128(81_008),
             tenant_id,
@@ -13122,6 +13219,7 @@ fn minted_unit(
         && candidate.churn_class.as_deref() == Some("volatile"))
     .then(|| now.to_string());
     StoredMemoryUnit {
+        invalidation: None,
         compact: candidate.compact.clone(),
         id,
         tenant_id: input.tenant_id,
@@ -13291,6 +13389,7 @@ fn compose_inferred_beliefs(
         );
         let composed_id = UnitId::new();
         new_units.push(StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: composed_id,
             tenant_id,
@@ -14033,6 +14132,7 @@ mod temporal_grounding_tests {
 
     fn temporal_test_unit(id: u128, body: &str, valid_from: &str) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
@@ -14928,6 +15028,7 @@ mod pack_cost_tests {
 
     fn unit(id: u128, body: &str, chunks: Vec<ContextualChunk>) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
@@ -16479,6 +16580,7 @@ mod deep_call_routing_tests {
 
     fn compiled_unit(id: u128, body: &str) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
@@ -16748,6 +16850,7 @@ mod ranking_channels_fixed_tests {
 
     fn semantic_unit(id: u128, body: &str, fact_key: Option<&str>) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),

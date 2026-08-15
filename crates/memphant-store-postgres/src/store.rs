@@ -717,7 +717,14 @@ impl PgStore {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| StoreError::Backend(error.to_string()))?;
+        let invalidation: Option<memphant_types::InvalidationMarker> = payload
+            .get("invalidation")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| StoreError::Backend(error.to_string()))?;
         Ok(StoredMemoryUnit {
+            invalidation,
             id: UnitId::from_u128(row.try_get::<Uuid, _>("id").map_err(backend)?.as_u128()),
             tenant_id: TenantId::from_u128(
                 row.try_get::<Uuid, _>("tenant_id")
@@ -978,6 +985,11 @@ impl PgStore {
         if let Some(compact) = &unit.compact {
             payload["compact"] = serde_json::to_value(compact).map_err(|error| {
                 StoreError::Backend(format!("compact envelope serialize: {error}"))
+            })?;
+        }
+        if let Some(invalidation) = &unit.invalidation {
+            payload["invalidation"] = serde_json::to_value(invalidation).map_err(|error| {
+                StoreError::Backend(format!("invalidation marker serialize: {error}"))
             })?;
         }
         sqlx::query(
@@ -2201,6 +2213,7 @@ impl MemoryStore for PgStore {
         )?;
         let id = UnitId::new();
         let stored = StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id,
             tenant_id: unit.tenant_id,
@@ -3588,6 +3601,105 @@ impl MemoryStore for PgStore {
             trace_ref: None,
         };
         Ok(result)
+    }
+
+    async fn stage_invalidation(
+        &self,
+        txn: &mut Self::Txn,
+        invalidation: memphant_core::InvalidationWrite,
+    ) -> Result<CorrectOutcome, StoreError> {
+        let context = txn.context.clone();
+        txn.has_subject_writes = true;
+        let tx = &mut txn.tx;
+        let transaction_time: String = sqlx::query_scalar(
+            "select to_char(transaction_timestamp() at time zone 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(backend)?;
+        let old_id = invalidation.target;
+        // Lock the single OPEN generation; a concurrent/repeat invalidation
+        // re-reads the now-superseded row and returns NotFound.
+        let sql = Self::unit_select(
+            "tenant_id = $1 and id = $2 and data_subject_id = $3
+             and subject_generation = $4 and scope_id = $5 and agent_node_id = $6
+             and actor_id = $7 and state <> 'deleted'
+             and transaction_to is null",
+            "for update",
+        );
+        let row = sqlx::query(AssertSqlSafe(sql.as_str()))
+            .bind(context.tenant_id.as_uuid())
+            .bind(old_id.as_uuid())
+            .bind(context.data_subject_id.as_uuid())
+            .bind(context.subject_generation as i64)
+            .bind(context.scope_id.as_uuid())
+            .bind(context.agent_node_id.as_uuid())
+            .bind(context.actor_id.as_uuid())
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(backend)?
+            .ok_or(StoreError::NotFound("memory_unit"))?;
+        let old_unit = Self::unit_from_row(&row)?;
+
+        sqlx::query(
+            "update memphant.memory_unit set state = 'superseded', transaction_to = $8::timestamptz
+             where tenant_id = $1 and id = $2 and data_subject_id = $3
+               and subject_generation = $4 and scope_id = $5 and agent_node_id = $6
+               and actor_id = $7",
+        )
+        .bind(context.tenant_id.as_uuid())
+        .bind(old_id.as_uuid())
+        .bind(context.data_subject_id.as_uuid())
+        .bind(context.subject_generation as i64)
+        .bind(context.scope_id.as_uuid())
+        .bind(context.agent_node_id.as_uuid())
+        .bind(context.actor_id.as_uuid())
+        .bind(&transaction_time)
+        .execute(&mut **tx)
+        .await
+        .map_err(backend)?;
+
+        // The bodyless tombstone carries the same stable identity (kind,
+        // fact_key, valid interval) but no body, chunks, compact, or embedding.
+        let mut tombstone = old_unit.clone();
+        tombstone.id = invalidation.tombstone_id;
+        tombstone.state = memphant_types::UnitState::Invalidated;
+        tombstone.body = String::new();
+        tombstone.compact = None;
+        tombstone.contextual_chunks = Vec::new();
+        tombstone.invalidation = Some(memphant_types::InvalidationMarker {
+            kind: invalidation.reason_kind,
+            reason: invalidation.reason.clone(),
+        });
+        tombstone.source_ref = invalidation.source_ref.clone();
+        tombstone.observed_at = invalidation.observed_at.clone();
+        tombstone.transaction_from = Some(transaction_time.clone());
+        tombstone.transaction_to = None;
+        Self::insert_unit(tx, &tombstone).await?;
+
+        Self::insert_edge(
+            tx,
+            &context,
+            &StoredMemoryEdge {
+                id: EdgeId::new(),
+                tenant_id: context.tenant_id,
+                scope_id: context.scope_id,
+                src_id: invalidation.tombstone_id,
+                dst_id: old_id,
+                kind: memphant_types::MemoryEdgeKind::Supersedes,
+                transaction_from: Some(transaction_time.clone()),
+                transaction_to: None,
+            },
+        )
+        .await?;
+
+        Ok(CorrectResult {
+            correction_id: format!("inv_{}", invalidation.tombstone_id.as_uuid()),
+            superseded: vec![old_id],
+            created: vec![invalidation.tombstone_id],
+            correction_kind: "invalidation".to_string(),
+            trace_ref: None,
+        })
     }
 
     async fn stage_forget(

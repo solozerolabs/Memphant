@@ -1103,6 +1103,18 @@ impl MemoryStore for AnyStore {
         }
     }
 
+    async fn stage_invalidation(
+        &self,
+        tx: &mut Self::Txn,
+        invalidation: memphant_core::InvalidationWrite,
+    ) -> Result<CorrectOutcome, StoreError> {
+        match (self, tx) {
+            (Self::Mem(store), AnyTxn::Mem(tx)) => store.stage_invalidation(tx, invalidation).await,
+            (Self::Pg(store), AnyTxn::Pg(tx)) => store.stage_invalidation(tx, invalidation).await,
+            _ => txn_mismatch(),
+        }
+    }
+
     async fn stage_forget(
         &self,
         tx: &mut Self::Txn,

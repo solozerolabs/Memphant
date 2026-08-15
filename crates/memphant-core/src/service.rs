@@ -814,6 +814,7 @@ mod file_sync_tests {
         body: &str,
     ) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            invalidation: None,
             compact: None,
             id: UnitId::new(),
             tenant_id: context.tenant_id,
@@ -929,6 +930,7 @@ mod file_sync_tests {
             file_sync_admission_snapshot_sha256(&FileSyncTransitionSnapshot::new(
                 vec![
                     StoredMemoryUnit {
+                        invalidation: None,
                         trust_level: TrustLevel::Quarantined,
                         ..first.clone()
                     },
@@ -4693,6 +4695,74 @@ impl<S: MemoryStore> MemoryService<S> {
                     now: self.clock.now_rfc3339(),
                     embedding,
                     unit_ids: Default::default(),
+                },
+            )
+            .await
+            .map_err(|error| match error {
+                StoreError::NotFound(entity) => CoreError::NotFound(entity.to_string()),
+                other => CoreError::Store(other),
+            })?;
+        let response = serialized_mutation_response(200, &result)?;
+        self.store
+            .stage_mutation_response(&mut tx, response.clone())
+            .await?;
+        self.store.commit(tx).await?;
+        Ok(response)
+    }
+
+    /// `invalidate_memory`: archive one open unit as stale/harmful and append a
+    /// current, bodyless tombstone with the same stable identity. Selects by
+    /// unit id only; identity is the context's. The open tombstone blocks
+    /// resurrection (remember/reflect/replay/exact-body); only `correct_memory`
+    /// may later close it.
+    pub async fn invalidate_memory(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        request: memphant_types::InvalidateMemoryRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        if request.reason.trim().is_empty() {
+            return Err(ServiceError::Invalid(
+                "reason must not be blank".to_string(),
+            ));
+        }
+        if request.source.r#ref.trim().is_empty() || request.source.observed_at.trim().is_empty() {
+            return Err(ServiceError::Invalid(
+                "source.ref and source.observed_at must not be blank".to_string(),
+            ));
+        }
+        let observed_at =
+            canonical_utc_timestamp(&request.source.observed_at, "source.observed_at")?;
+        let claim = MutationClaim::new(
+            context,
+            MutationVerb::Invalidate,
+            idempotency_key,
+            canonical_mutation_request_hash(MutationVerb::Invalidate, &request)?,
+        )?;
+
+        let mut tx = self.store.begin(context).await?;
+        match self.store.stage_mutation_claim(&mut tx, claim).await? {
+            MutationClaimOutcome::Replay(response) => {
+                self.store.commit(tx).await?;
+                return Ok(response);
+            }
+            MutationClaimOutcome::Execute => {}
+        }
+        let result = self
+            .store
+            .stage_invalidation(
+                &mut tx,
+                crate::InvalidationWrite {
+                    target: request.memory_unit_id,
+                    reason_kind: request.reason_kind,
+                    reason: request.reason,
+                    source_ref: request.source.r#ref,
+                    observed_at,
+                    now: self.clock.now_rfc3339(),
+                    tombstone_id: memphant_types::UnitId::new(),
                 },
             )
             .await

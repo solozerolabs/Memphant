@@ -9,8 +9,9 @@ use std::sync::Arc;
 use memphant_core::service::MemoryService;
 use memphant_core::{FixedClock, InMemoryStore, MemoryStore, NoopEmbedding};
 use memphant_types::{
-    MemoryKind, MemorySourceInput, RecallHttpRequest, RecallMode, RememberRequest,
-    RetainEpisodeHttpResponse, TrustLevel, UnitState,
+    CorrectResult, InvalidateMemoryRequest, InvalidationReason, MemoryKind, MemorySourceInput,
+    RecallHttpRequest, RecallMode, RememberRequest, RetainEpisodeHttpResponse, TrustLevel,
+    UnitState,
 };
 
 const CLOCK: FixedClock = FixedClock("2026-07-03T00:00:00Z");
@@ -243,4 +244,138 @@ async fn remember_rejects_blank_oversize_and_inferred_preference() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn invalidate_supersedes_predecessor_and_blocks_recall() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(90_400);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    // Remember a semantic compact unit (Active semantic is served by recall).
+    let created = service
+        .remember(
+            &context,
+            "inv-remember",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Semantic, "the deploy command"),
+        )
+        .await
+        .unwrap();
+    let old_id = unit_ids(&created)[0];
+
+    // It is recallable before invalidation.
+    let before = recall_trigger(&service, &context, "the deploy command").await;
+    assert!(before.contains(&old_id), "unit served before invalidation");
+
+    // Invalidate it as stale.
+    let response = service
+        .invalidate_memory(
+            &context,
+            "inv-1",
+            InvalidateMemoryRequest {
+                memory_unit_id: old_id,
+                reason_kind: InvalidationReason::Stale,
+                reason: "superseded by newer runbook".to_string(),
+                source: source(),
+            },
+        )
+        .await
+        .unwrap();
+    let outcome: CorrectResult = serde_json::from_slice(response.body()).unwrap();
+    assert_eq!(outcome.superseded, vec![old_id]);
+    let tombstone_id = outcome.created[0];
+
+    // Predecessor is closed (Superseded); tombstone is a bodyless open
+    // Invalidated row carrying the reason marker.
+    let predecessor = store
+        .fetch_units_by_ids(&context, &[old_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(predecessor.state, UnitState::Superseded);
+    assert!(
+        predecessor.transaction_to.is_some(),
+        "predecessor is closed"
+    );
+
+    let tombstone = store
+        .fetch_units_by_ids(&context, &[tombstone_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(tombstone.state, UnitState::Invalidated);
+    assert!(
+        tombstone.transaction_to.is_none(),
+        "tombstone is current/open"
+    );
+    assert!(tombstone.body.is_empty(), "tombstone is bodyless");
+    assert!(
+        tombstone.compact.is_none(),
+        "tombstone carries no compact body"
+    );
+    let marker = tombstone
+        .invalidation
+        .as_ref()
+        .expect("invalidation marker");
+    assert_eq!(marker.kind, InvalidationReason::Stale);
+    assert_eq!(marker.reason, "superseded by newer runbook");
+
+    // Neither predecessor nor tombstone is served by normal recall.
+    let after = recall_trigger(&service, &context, "the deploy command").await;
+    assert!(
+        !after.contains(&old_id) && !after.contains(&tombstone_id),
+        "invalidated identity is absent from normal recall"
+    );
+
+    // Idempotent replay returns the original receipt.
+    let replay = service
+        .invalidate_memory(
+            &context,
+            "inv-1",
+            InvalidateMemoryRequest {
+                memory_unit_id: old_id,
+                reason_kind: InvalidationReason::Stale,
+                reason: "superseded by newer runbook".to_string(),
+                source: source(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.body(), replay.body());
+}
+
+async fn recall_trigger(
+    service: &MemoryService<InMemoryStore>,
+    context: &memphant_types::ResolvedMemoryContext,
+    query: &str,
+) -> Vec<memphant_types::UnitId> {
+    service
+        .recall(
+            context.clone(),
+            RecallHttpRequest {
+                subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                query: query.to_string(),
+                limit: Some(8),
+                budget_tokens: Some(256),
+                mode: Some(RecallMode::Fast),
+                include_beliefs: Some(true),
+                transaction_as_of: None,
+                valid_at: None,
+                aggregation_window: None,
+            },
+        )
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .map(|item| item.unit_id)
+        .collect()
 }
