@@ -1,0 +1,7 @@
+{
+  "name": "codex-memphant",
+  "version": "0.1.0",
+  "description": "Portable MemPhant coding-agent memory: the five governed MCP tools plus a UserPromptSubmit hook that injects at most one compact card.",
+  "mcpServers": ".mcp.json",
+  "hooks": "hooks/hooks.json"
+}

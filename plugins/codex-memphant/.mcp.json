@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "memphant": {
+      "url": "https://localhost:8787/mcp",
+      "bearer_token_env_var": "MEMPHANT_API_KEY"
+    }
+  }
+}

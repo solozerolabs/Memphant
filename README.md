@@ -100,6 +100,27 @@ binary/image files are not part of the canonical memory projection. Postgres
 remains authoritative; edits commit through the same atomic file-sync path as
 the CLI.
 
+### Codex plugin (automatic one-card delivery)
+
+`plugins/codex-memphant/` bundles the same five-tool MCP server plus a
+`UserPromptSubmit` hook. Run the MCP server in Streamable-HTTP mode
+(`memphant-mcp streamable-http`) and point the plugin at it:
+
+```bash
+export MEMPHANT_MCP_URL="https://localhost:8787/mcp"
+export MEMPHANT_API_KEY="mk_…"   # a fully-bound coding key; no can_forget
+```
+
+The `.mcp.json` bearer transport gives Codex the explicit tools; the hook
+(`hooks/user_prompt_submit.py`, Python stdlib only) calls `recall` at the prompt
+boundary and injects at most one 512-token card via `additionalContext`. On an
+empty scope it injects nothing; on auth/unavailable/timeout it injects nothing
+and logs a terse, secret-free code. **Plugin-bundled hooks are non-managed:
+Codex skips them until you review and trust the hook once** — "automatic" means
+"automatic after that one-time trust prompt." The hook never parses transcripts,
+starts a second service, or touches Postgres directly. Erasure has no hook and
+no MCP tool; it stays an owner-only HTTP/CLI path.
+
 After resolving a context binding, mint the MCP principal with the complete
 server-issued context (the plaintext key is printed once):
 
