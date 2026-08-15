@@ -195,13 +195,11 @@ def test_python_package_artifacts_exist() -> None:
     assert openapi["openapi"] == "3.1.0"
     assert "/v1/recall" in openapi["paths"]
     assert {tool["name"] for tool in mcp_tools} == {
-        "retain",
         "recall",
-        "reflect",
-        "correct",
-        "forget",
-        "trace",
-        "mark",
+        "remember",
+        "correct_memory",
+        "invalidate_memory",
+        "report_memory_use",
     }
 
 

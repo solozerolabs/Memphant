@@ -1,4 +1,4 @@
-//! MemPhant MCP server on rmcp 2.2 (MCP 2025-11-25): seven tools and
+//! MemPhant MCP server on rmcp 2.2 (MCP 2025-11-25): five portable memory tools and
 //! tenant-bound memory resources over the
 //! shared `MemoryService<AnyStore>`, a persistent stdio session, and an
 //! optional streamable-HTTP transport. The tenant is fixed at startup from
@@ -10,10 +10,8 @@ use memphant_core::service::{MemoryService, ServiceError, clamp_trust, trust_ran
 use memphant_core::{CoreError, MemoryStore, MutationResponse, StoreError};
 use memphant_runtime::AnyStore;
 use memphant_types::{
-    AgentNodeId, CorrectRequest, CorrectResult, ENGINE_VERSION, ForgetRequest, ForgetResult,
-    MarkRequest, MarkResult, RecallHttpRequest, RecallResponse, ReflectAccepted, ReflectRequest,
-    ResolvedMemoryContext, RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace,
-    ScopeId, SubjectId, TenantId, TraceRequest, TrustLevel,
+    AgentNodeId, CorrectResult, ENGINE_VERSION, MarkResult, RecallHttpRequest, RecallResponse,
+    ResolvedMemoryContext, RetainEpisodeHttpResponse, ScopeId, SubjectId, TenantId, TrustLevel,
 };
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -473,21 +471,6 @@ impl MemphantMcp {
         }
     }
 
-    fn bind_principal(
-        &self,
-        actor_id: memphant_types::ActorId,
-        scope_id: memphant_types::ScopeId,
-    ) -> Result<(), String> {
-        if self.bound.dev_mode
-            || (self.bound.actor_id.is_none() && self.bound.scope_id.is_none())
-            || (self.bound.actor_id == Some(actor_id) && self.bound.scope_id == Some(scope_id))
-        {
-            Ok(())
-        } else {
-            Err("scope_denied: request is outside the API key principal binding".to_string())
-        }
-    }
-
     /// Re-resolve the fully bound principal on THIS call. Every startup binding
     /// is re-looked-up and compared: a revoked key, binding drift, subject-
     /// generation drift, or a *raised* live trust ceiling fails closed and asks
@@ -585,7 +568,7 @@ impl MemphantMcp {
     }
 
     #[tool(
-        description = "Store exactly one episode, resource, or direct unit with provenance.",
+        description = "Create exactly one self-contained, compact, typed memory (identity-free; the server derives all identity from the live key).",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -593,36 +576,23 @@ impl MemphantMcp {
             open_world_hint = false
         )
     )]
-    async fn retain(
+    async fn remember(
         &self,
         Parameters(McpMutation {
             idempotency_key,
             request,
-        }): Parameters<McpMutation<RetainEpisodeHttpRequest>>,
+        }): Parameters<McpMutation<memphant_types::RememberRequest>>,
     ) -> Result<Json<RetainEpisodeHttpResponse>, String> {
-        let tenant = self.bound.tenant;
-        self.bind_principal(request.actor_id, request.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
+        let live = self
+            .live_principal()
             .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
+            .map_err(|error| error.as_error_string())?;
         let response = self
             .service
-            .retain(
-                &context,
+            .remember(
+                &live.context,
                 &idempotency_key,
-                clamp_trust(context.actor_trust, self.bound.max_trust),
+                live.context.actor_trust,
                 request,
             )
             .await
@@ -679,7 +649,7 @@ impl MemphantMcp {
     }
 
     #[tool(
-        description = "Consolidate a scope's pending episodes/resources into memory units.",
+        description = "Append a corrected bitemporal successor to one open memory (or an open invalidation tombstone) selected by id.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -687,182 +657,32 @@ impl MemphantMcp {
             open_world_hint = false
         )
     )]
-    async fn reflect(
+    async fn correct_memory(
         &self,
         Parameters(McpMutation {
             idempotency_key,
             request,
-        }): Parameters<McpMutation<ReflectRequest>>,
-    ) -> Result<Json<ReflectAccepted>, String> {
-        let tenant = self.bound.tenant;
-        self.bind_principal(request.actor_id, request.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
-            .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
-        let response = self
-            .service
-            .reflect(&context, &idempotency_key, request)
-            .await
-            .map_err(mcp_error)?;
-        decode_mutation_response(response)
-    }
-
-    #[tool(
-        description = "Supersede or invalidate selected memory through an auditable correction.",
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            idempotent_hint = true,
-            open_world_hint = false
-        )
-    )]
-    async fn correct(
-        &self,
-        Parameters(McpMutation {
-            idempotency_key,
-            request,
-        }): Parameters<McpMutation<CorrectRequest>>,
+        }): Parameters<McpMutation<memphant_types::CorrectMemoryRequest>>,
     ) -> Result<Json<CorrectResult>, String> {
-        let tenant = self.bound.tenant;
-        self.bind_principal(request.actor_id, request.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
-            .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
-        decode_mutation_response(
-            self.service
-                .correct(&context, &idempotency_key, request)
-                .await
-                .map_err(mcp_error)?,
-        )
-    }
-
-    #[tool(
-        description = "Forget by memory unit, episode or resource selector; tombstones block re-derivation.",
-        annotations(
-            read_only_hint = false,
-            destructive_hint = true,
-            idempotent_hint = true,
-            open_world_hint = false
-        )
-    )]
-    async fn forget(
-        &self,
-        Parameters(McpMutation {
-            idempotency_key,
-            request,
-        }): Parameters<McpMutation<ForgetRequest>>,
-    ) -> Result<Json<ForgetResult>, String> {
-        let tenant = self.bound.tenant;
-        // Permanent erasure is owner-only. Re-resolve the live principal and
-        // require `can_forget` on THIS call — a coding-agent key (capability
-        // default false) is refused even though the tool is still registered
-        // (Task 6 removes the tool itself). The absence of a delete tool is a
-        // convenience, not the boundary; this check is.
-        if !self
+        let live = self
             .live_principal()
             .await
-            .map_err(|error| error.as_error_string())?
-            .can_forget
-        {
-            return Err(
-                "capability_denied: this API key lacks the can_forget capability; erasure is owner-only".to_string(),
-            );
-        }
-        if request.scope_id != request.selector.scope_id {
-            return Err(
-                "context_binding_conflict: forget scope does not match selector scope".to_string(),
-            );
-        }
-        self.bind_principal(request.actor_id, request.selector.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
-            .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
+            .map_err(|error| error.as_error_string())?;
         decode_mutation_response(
             self.service
-                .forget(&context, &idempotency_key, request)
+                .correct_memory(
+                    &live.context,
+                    &idempotency_key,
+                    live.context.actor_trust,
+                    request,
+                )
                 .await
                 .map_err(mcp_error)?,
         )
     }
 
     #[tool(
-        description = "Inspect a retrieval trace (tenant-bound).",
-        annotations(
-            read_only_hint = true,
-            destructive_hint = false,
-            idempotent_hint = false,
-            open_world_hint = false
-        )
-    )]
-    async fn trace(
-        &self,
-        Parameters(request): Parameters<TraceRequest>,
-    ) -> Result<Json<RetrievalTrace>, String> {
-        let tenant = self.bound.tenant;
-        self.bind_principal(request.actor_id, request.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
-            .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
-        let trace = self
-            .service
-            .trace(&context, request.trace_id)
-            .await
-            .map_err(mcp_error)?
-            .ok_or_else(|| "trace not found".to_string())?;
-        self.bind_principal(trace.actor_id, trace.scope_id)?;
-        Ok(Json(trace))
-    }
-
-    #[tool(
-        description = "Report what the caller did with a recall pack (feeds decay/reinforcement).",
+        description = "Archive one open memory as stale or harmful; a bodyless tombstone blocks re-derivation until an explicit correction.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -870,33 +690,51 @@ impl MemphantMcp {
             open_world_hint = false
         )
     )]
-    async fn mark(
+    async fn invalidate_memory(
         &self,
         Parameters(McpMutation {
             idempotency_key,
             request,
-        }): Parameters<McpMutation<MarkRequest>>,
-    ) -> Result<Json<MarkResult>, String> {
-        let tenant = self.bound.tenant;
-        self.bind_principal(request.actor_id, request.scope_id)?;
-        let context = self
-            .service
-            .store()
-            .resolve_memory_context(
-                tenant,
-                request.subject_id,
-                request.actor_id,
-                request.scope_id,
-                request.agent_node_id,
-            )
+        }): Parameters<McpMutation<memphant_types::InvalidateMemoryRequest>>,
+    ) -> Result<Json<CorrectResult>, String> {
+        let live = self
+            .live_principal()
             .await
-            .map_err(|_| "scope_denied: unresolved memory context".to_string())?;
-        if request.subject_generation != context.subject_generation {
-            return Err("context_binding_conflict: subject generation is stale".to_string());
-        }
+            .map_err(|error| error.as_error_string())?;
         decode_mutation_response(
             self.service
-                .mark(&context, &idempotency_key, request)
+                .invalidate_memory(&live.context, &idempotency_key, request)
+                .await
+                .map_err(mcp_error)?,
+        )
+    }
+
+    #[tool(
+        description = "Report how a recall pack was used (used, ignored, corrected, or failed); ranking evidence only.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn report_memory_use(
+        &self,
+        Parameters(McpMutation {
+            idempotency_key,
+            request,
+        }): Parameters<McpMutation<memphant_types::ReportMemoryUseRequest>>,
+    ) -> Result<Json<MarkResult>, String> {
+        let live = self
+            .live_principal()
+            .await
+            .map_err(|error| error.as_error_string())?;
+        // Reporter identity is derived server-side from the live key, never
+        // caller-supplied.
+        let reporter_id = live.api_key_id.to_string();
+        decode_mutation_response(
+            self.service
+                .report_memory_use(&live.context, &idempotency_key, reporter_id, request)
                 .await
                 .map_err(mcp_error)?,
         )
@@ -914,7 +752,7 @@ impl ServerHandler for MemphantMcp {
         )
             .with_server_info(Implementation::new("memphant", ENGINE_VERSION))
             .with_instructions(
-                "MemPhant memory service: seven governed tools plus read-only tenant-bound memory resources.",
+                "MemPhant memory service: five portable memory tools (recall, remember, correct_memory, invalidate_memory, report_memory_use) plus read-only tenant-bound memory resources.",
             )
     }
 

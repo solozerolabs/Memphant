@@ -77,8 +77,12 @@ Automation may branch on these stable stderr classes:
 
 ## Agent distribution surfaces
 
-`memphant-mcp` serves the seven governed tools and read-only MCP resources on
-the same stdio or Streamable HTTP session. Resource listing requires an API key
+`memphant-mcp` serves the five portable coding-agent memory tools — `recall`,
+`remember`, `correct_memory`, `invalidate_memory`, `report_memory_use` — and
+read-only MCP resources on the same stdio or Streamable HTTP session. The tools
+are identity-free: the server derives tenant, subject, actor, scope, node,
+generation, trust, and reporter identity from the live bound key. Permanent
+erasure has no MCP tool; it is an owner-only HTTP/CLI path gated on `can_forget`. Resource listing requires an API key
 bound to tenant, subject generation, actor, scope, and agent node; it returns
 opaque pages of at most 100 `memphant://memory/{unit_id}` entries. Known
 `memory`, `episode`, `resource`, and `trace` URIs are readable through the

@@ -6,77 +6,26 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Supersede or invalidate selected memory through an auditable correction.",
+    "description": "Append a corrected bitemporal successor to one open memory (or an open invalidation tombstone) selected by id.",
     "inputSchema": {
       "$defs": {
-        "ActorId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AgentNodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "CorrectRequest": {
+        "CorrectMemoryRequest": {
           "additionalProperties": false,
+          "description": "Append a corrected bitemporal successor to one open unit selected by id.\nChanged bytes carry only the correction's fresh provenance; valid-time\nremainders that preserve old bytes keep their old evidence.",
           "properties": {
-            "actor_id": {
-              "$ref": "#/$defs/ActorId"
+            "body": {
+              "type": "string"
             },
-            "agent_node_id": {
-              "$ref": "#/$defs/AgentNodeId"
-            },
-            "correction": {
-              "$ref": "#/$defs/CorrectionPayload"
-            },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
-            },
-            "selector": {
-              "$ref": "#/$defs/CorrectSelector"
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "subject_id": {
-              "$ref": "#/$defs/SubjectId"
-            }
-          },
-          "required": [
-            "subject_id",
-            "scope_id",
-            "actor_id",
-            "agent_node_id",
-            "subject_generation",
-            "selector",
-            "correction"
-          ],
-          "type": "object"
-        },
-        "CorrectSelector": {
-          "additionalProperties": false,
-          "properties": {
             "memory_unit_id": {
               "$ref": "#/$defs/UnitId"
-            }
-          },
-          "required": [
-            "memory_unit_id"
-          ],
-          "type": "object"
-        },
-        "CorrectionPayload": {
-          "additionalProperties": false,
-          "properties": {
-            "observed_at": {
-              "type": "string"
             },
             "reason": {
               "type": "string"
             },
-            "source_ref": {
+            "source": {
+              "$ref": "#/$defs/MemorySourceInput"
+            },
+            "trigger": {
               "type": "string"
             },
             "valid_from": {
@@ -93,23 +42,68 @@
                 "null"
               ]
             },
-            "value": {
+            "verification": {
               "type": "string"
             }
           },
           "required": [
-            "value",
+            "memory_unit_id",
+            "body",
+            "trigger",
+            "verification",
             "reason",
-            "source_ref",
+            "source"
+          ],
+          "type": "object"
+        },
+        "EpisodeId": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "MemorySourceInput": {
+          "additionalProperties": false,
+          "description": "Evidence provenance for a compact write. Free-form `kind`/`ref` are\ninformational and never widen eligibility. At most one canonical id\n(`episode_id` XOR `resource_id`) may be present; only a server-resolved\ncanonical resource may carry a source ACL, and that ACL may only narrow.",
+          "properties": {
+            "episode_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpisodeId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "kind": {
+              "type": "string"
+            },
+            "observed_at": {
+              "type": "string"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "resource_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ResourceId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "kind",
+            "ref",
             "observed_at"
           ],
           "type": "object"
         },
-        "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
+        "ResourceId": {
           "format": "uuid",
           "type": "string"
         },
@@ -127,7 +121,7 @@
           "type": "string"
         },
         "request": {
-          "$ref": "#/$defs/CorrectRequest"
+          "$ref": "#/$defs/CorrectMemoryRequest"
         }
       },
       "required": [
@@ -136,7 +130,7 @@
       ],
       "type": "object"
     },
-    "name": "correct",
+    "name": "correct_memory",
     "outputSchema": {
       "$defs": {
         "UnitId": {
@@ -182,66 +176,54 @@
   },
   {
     "annotations": {
-      "destructiveHint": true,
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Forget by memory unit, episode or resource selector; tombstones block re-derivation.",
+    "description": "Archive one open memory as stale or harmful; a bodyless tombstone blocks re-derivation until an explicit correction.",
     "inputSchema": {
       "$defs": {
-        "ActorId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AgentNodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
         "EpisodeId": {
           "format": "uuid",
           "type": "string"
         },
-        "ForgetRequest": {
+        "InvalidateMemoryRequest": {
           "additionalProperties": false,
+          "description": "Archive one open unit as stale/harmful and append a current, bodyless\ntombstone with the same stable identity. Only `correct_memory` may later\nclose that tombstone; ranking/retrieval can never reopen it.",
           "properties": {
-            "actor_id": {
-              "$ref": "#/$defs/ActorId"
-            },
-            "agent_node_id": {
-              "$ref": "#/$defs/AgentNodeId"
+            "memory_unit_id": {
+              "$ref": "#/$defs/UnitId"
             },
             "reason": {
               "type": "string"
             },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
+            "reason_kind": {
+              "$ref": "#/$defs/InvalidationReason"
             },
-            "selector": {
-              "$ref": "#/$defs/ForgetSelector"
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "subject_id": {
-              "$ref": "#/$defs/SubjectId"
+            "source": {
+              "$ref": "#/$defs/MemorySourceInput"
             }
           },
           "required": [
-            "subject_id",
-            "scope_id",
-            "actor_id",
-            "agent_node_id",
-            "subject_generation",
-            "selector",
-            "reason"
+            "memory_unit_id",
+            "reason_kind",
+            "reason",
+            "source"
           ],
           "type": "object"
         },
-        "ForgetSelector": {
+        "InvalidationReason": {
+          "description": "Why an agent is invalidating a memory. Exactly `stale` or `harmful`.",
+          "enum": [
+            "stale",
+            "harmful"
+          ],
+          "type": "string"
+        },
+        "MemorySourceInput": {
           "additionalProperties": false,
+          "description": "Evidence provenance for a compact write. Free-form `kind`/`ref` are\ninformational and never widen eligibility. At most one canonical id\n(`episode_id` XOR `resource_id`) may be present; only a server-resolved\ncanonical resource may carry a source ACL, and that ACL may only narrow.",
           "properties": {
             "episode_id": {
               "anyOf": [
@@ -254,16 +236,14 @@
               ],
               "default": null
             },
-            "memory_unit_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/UnitId"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null
+            "kind": {
+              "type": "string"
+            },
+            "observed_at": {
+              "type": "string"
+            },
+            "ref": {
+              "type": "string"
             },
             "resource_id": {
               "anyOf": [
@@ -275,13 +255,12 @@
                 }
               ],
               "default": null
-            },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
             }
           },
           "required": [
-            "scope_id"
+            "kind",
+            "ref",
+            "observed_at"
           ],
           "type": "object"
         },
@@ -289,14 +268,6 @@
           "format": "uuid",
           "type": "string"
         },
-        "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
-          "format": "uuid",
-          "type": "string"
-        },
         "UnitId": {
           "format": "uuid",
           "type": "string"
@@ -311,7 +282,7 @@
           "type": "string"
         },
         "request": {
-          "$ref": "#/$defs/ForgetRequest"
+          "$ref": "#/$defs/InvalidateMemoryRequest"
         }
       },
       "required": [
@@ -320,7 +291,7 @@
       ],
       "type": "object"
     },
-    "name": "forget",
+    "name": "invalidate_memory",
     "outputSchema": {
       "$defs": {
         "UnitId": {
@@ -330,170 +301,36 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "deletion_generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
+        "correction_id": {
+          "type": "string"
         },
-        "invalidated_units": {
+        "correction_kind": {
+          "type": "string"
+        },
+        "created": {
           "items": {
             "$ref": "#/$defs/UnitId"
           },
           "type": "array"
         },
-        "policy": {
-          "type": "string"
+        "superseded": {
+          "items": {
+            "$ref": "#/$defs/UnitId"
+          },
+          "type": "array"
         },
         "trace_ref": {
           "type": [
             "string",
             "null"
           ]
-        },
-        "verification": {
-          "type": "string"
         }
       },
       "required": [
-        "deletion_generation",
-        "policy",
-        "invalidated_units",
-        "verification"
-      ],
-      "type": "object"
-    }
-  },
-  {
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
-    },
-    "description": "Report what the caller did with a recall pack (feeds decay/reinforcement).",
-    "inputSchema": {
-      "$defs": {
-        "ActorId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AgentNodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "MarkOutcome": {
-          "enum": [
-            "success",
-            "failure",
-            "corrected",
-            "ignored"
-          ],
-          "type": "string"
-        },
-        "MarkRequest": {
-          "additionalProperties": false,
-          "properties": {
-            "actor_id": {
-              "$ref": "#/$defs/ActorId"
-            },
-            "agent_node_id": {
-              "$ref": "#/$defs/AgentNodeId"
-            },
-            "caller_id": {
-              "type": "string"
-            },
-            "outcome": {
-              "$ref": "#/$defs/MarkOutcome"
-            },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "subject_id": {
-              "$ref": "#/$defs/SubjectId"
-            },
-            "trace_id": {
-              "$ref": "#/$defs/TraceId"
-            },
-            "used_ids": {
-              "items": {
-                "$ref": "#/$defs/UnitId"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "subject_id",
-            "scope_id",
-            "actor_id",
-            "agent_node_id",
-            "subject_generation",
-            "trace_id",
-            "caller_id",
-            "used_ids",
-            "outcome"
-          ],
-          "type": "object"
-        },
-        "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "TraceId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "UnitId": {
-          "format": "uuid",
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "properties": {
-        "idempotency_key": {
-          "maxLength": 255,
-          "minLength": 1,
-          "type": "string"
-        },
-        "request": {
-          "$ref": "#/$defs/MarkRequest"
-        }
-      },
-      "required": [
-        "idempotency_key",
-        "request"
-      ],
-      "type": "object"
-    },
-    "name": "mark",
-    "outputSchema": {
-      "$defs": {
-        "TraceId": {
-          "format": "uuid",
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "accepted": {
-          "type": "boolean"
-        },
-        "trace_id": {
-          "$ref": "#/$defs/TraceId"
-        }
-      },
-      "required": [
-        "accepted",
-        "trace_id"
+        "correction_id",
+        "superseded",
+        "created",
+        "correction_kind"
       ],
       "type": "object"
     }
@@ -1339,110 +1176,10 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Consolidate a scope's pending episodes/resources into memory units.",
+    "description": "Create exactly one self-contained, compact, typed memory (identity-free; the server derives all identity from the live key).",
     "inputSchema": {
       "$defs": {
-        "ActorId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AgentNodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "ReflectRequest": {
-          "additionalProperties": false,
-          "properties": {
-            "actor_id": {
-              "$ref": "#/$defs/ActorId"
-            },
-            "agent_node_id": {
-              "$ref": "#/$defs/AgentNodeId"
-            },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "subject_id": {
-              "$ref": "#/$defs/SubjectId"
-            }
-          },
-          "required": [
-            "subject_id",
-            "scope_id",
-            "actor_id",
-            "agent_node_id",
-            "subject_generation"
-          ],
-          "type": "object"
-        },
-        "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
-          "format": "uuid",
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "properties": {
-        "idempotency_key": {
-          "maxLength": 255,
-          "minLength": 1,
-          "type": "string"
-        },
-        "request": {
-          "$ref": "#/$defs/ReflectRequest"
-        }
-      },
-      "required": [
-        "idempotency_key",
-        "request"
-      ],
-      "type": "object"
-    },
-    "name": "reflect",
-    "outputSchema": {
-      "$defs": {
-        "JobId": {
-          "format": "uuid",
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "properties": {
-        "job_id": {
-          "$ref": "#/$defs/JobId"
-        }
-      },
-      "required": [
-        "job_id"
-      ],
-      "type": "object"
-    }
-  },
-  {
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
-    },
-    "description": "Store exactly one episode, resource, or direct unit with provenance.",
-    "inputSchema": {
-      "$defs": {
-        "ActorId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AgentNodeId": {
+        "EpisodeId": {
           "format": "uuid",
           "type": "string"
         },
@@ -1457,148 +1194,14 @@
           ],
           "type": "string"
         },
-        "ResourceKind": {
-          "enum": [
-            "document",
-            "code",
-            "conversation",
-            "other"
-          ],
-          "type": "string"
-        },
-        "RetainEpisodeHttpRequest": {
+        "MemorySourceInput": {
           "additionalProperties": false,
-          "description": "The retain verb request with exactly one tagged episode, resource, or unit payload.",
+          "description": "Evidence provenance for a compact write. Free-form `kind`/`ref` are\ninformational and never widen eligibility. At most one canonical id\n(`episode_id` XOR `resource_id`) may be present; only a server-resolved\ncanonical resource may carry a source ACL, and that ACL may only narrow.",
           "properties": {
-            "actor_id": {
-              "$ref": "#/$defs/ActorId"
-            },
-            "agent_node_id": {
-              "$ref": "#/$defs/AgentNodeId"
-            },
-            "observed_at": {
-              "type": "string"
-            },
-            "payload": {
-              "$ref": "#/$defs/RetainPayload"
-            },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
-            },
-            "source_ref": {
-              "type": "string"
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "subject_id": {
-              "$ref": "#/$defs/SubjectId"
-            }
-          },
-          "required": [
-            "subject_id",
-            "scope_id",
-            "actor_id",
-            "agent_node_id",
-            "subject_generation",
-            "source_ref",
-            "observed_at",
-            "payload"
-          ],
-          "type": "object"
-        },
-        "RetainEpisodePayload": {
-          "additionalProperties": false,
-          "properties": {
-            "body": {
-              "type": "string"
-            },
-            "predicate": {
-              "default": null,
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "source_kind": {
-              "type": "string"
-            },
-            "subject": {
-              "default": null,
-              "description": "What this episode is *about*, supplied by the caller that authored the\nwrite — typically the agent that just read the directive it is\nrecording. With `predicate` it makes the compiled unit's fact key\nexplicit, which is the only thing that lets it supersede a prior rule\non the same subject; absent either, `derive_fact_key` falls back to the\ncontent-hash auto key exactly as before. Never an LLM call on this\npath — the caller already knows the subject or it does not.",
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "source_kind",
-            "body"
-          ],
-          "type": "object"
-        },
-        "RetainPayload": {
-          "oneOf": [
-            {
-              "additionalProperties": false,
-              "properties": {
-                "episode": {
-                  "$ref": "#/$defs/RetainEpisodePayload"
-                }
-              },
-              "required": [
-                "episode"
-              ],
-              "type": "object"
-            },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "resource": {
-                  "$ref": "#/$defs/RetainResourcePayload"
-                }
-              },
-              "required": [
-                "resource"
-              ],
-              "type": "object"
-            },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "unit": {
-                  "$ref": "#/$defs/RetainUnitPayload"
-                }
-              },
-              "required": [
-                "unit"
-              ],
-              "type": "object"
-            }
-          ]
-        },
-        "RetainResourcePayload": {
-          "additionalProperties": false,
-          "description": "Resource payload for the retain verb (spec 08 §209 `resource` shape).",
-          "properties": {
-            "body": {
-              "default": null,
-              "description": "Durable resource content the worker compiles from.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "content_hash": {
-              "type": "string"
-            },
-            "kind": {
+            "episode_id": {
               "anyOf": [
                 {
-                  "$ref": "#/$defs/ResourceKind"
+                  "$ref": "#/$defs/EpisodeId"
                 },
                 {
                   "type": "null"
@@ -1606,71 +1209,60 @@
               ],
               "default": null
             },
-            "mime_type": {
+            "kind": {
               "type": "string"
             },
-            "revision": {
-              "default": null,
-              "description": "Revision identity (e.g. a code commit hash).",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "uri": {
+            "observed_at": {
               "type": "string"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "resource_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ResourceId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [
-            "uri",
-            "mime_type",
-            "content_hash"
+            "kind",
+            "ref",
+            "observed_at"
           ],
           "type": "object"
         },
-        "RetainUnitPayload": {
+        "RememberRequest": {
           "additionalProperties": false,
-          "description": "Direct pre-compiled unit payload for trusted callers (spec 08 §209 `unit`\nshape). Requires a predicate, confidence, kind, and a subject key — as\neither an explicit `subject` (the server composes the scope-qualified key)\nor a pre-composed `fact_key`. The admission trust policy still applies.",
+          "description": "Create exactly one self-contained, compact, `Active` typed memory. `body`\nis the compact primary rendering; `trigger` (stored in the unit predicate)\nsays when it applies; `verification` (stored in `payload.compact`) says how\nto confirm it. `target_scope_id` is applicability, not caller identity:\nomission means the live key's bound scope; a different scope is authorized\nonly by an owner-created `allow_write` grant plus a canonical source.",
           "properties": {
             "body": {
               "type": "string"
             },
-            "confidence": {
-              "format": "float",
-              "type": "number"
-            },
-            "fact_key": {
-              "default": null,
-              "description": "A pre-composed `{scope_id}:{subject}:{predicate}` key. Optional since\nD1: prefer `subject`, which lets the server apply `derive_fact_key` and\nspares the caller from reimplementing that primitive. When both are\npresent `fact_key` wins, so callers that supplied one before are\nbyte-for-byte unaffected.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
             "kind": {
               "$ref": "#/$defs/MemoryKind"
             },
-            "predicate": {
+            "source": {
+              "$ref": "#/$defs/MemorySourceInput"
+            },
+            "target_scope_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ScopeId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "trigger": {
               "type": "string"
-            },
-            "subject": {
-              "default": null,
-              "description": "The subject this assertion is about. Composed server-side with\n`predicate` into the fact key when `fact_key` is absent.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "target_unit_ids": {
-              "default": null,
-              "description": "Structured-state supersession by exact prior unit id. `None` is an\nordinary keyed write; `Some([])` asserts the subject key is absent;\n`Some([id, ..])` closes those exact active units' generations without\nrequiring the caller to reproduce their subject key. Rank-0 trust only —\nthe compiler fails the write closed for any lower tier.",
-              "items": {
-                "$ref": "#/$defs/UnitId"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
             },
             "valid_from": {
               "default": null,
@@ -1685,25 +1277,25 @@
                 "string",
                 "null"
               ]
+            },
+            "verification": {
+              "type": "string"
             }
           },
           "required": [
             "kind",
-            "predicate",
             "body",
-            "confidence"
+            "trigger",
+            "verification",
+            "source"
           ],
           "type": "object"
         },
+        "ResourceId": {
+          "format": "uuid",
+          "type": "string"
+        },
         "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "UnitId": {
           "format": "uuid",
           "type": "string"
         }
@@ -1717,7 +1309,7 @@
           "type": "string"
         },
         "request": {
-          "$ref": "#/$defs/RetainEpisodeHttpRequest"
+          "$ref": "#/$defs/RememberRequest"
         }
       },
       "required": [
@@ -1726,7 +1318,7 @@
       ],
       "type": "object"
     },
-    "name": "retain",
+    "name": "remember",
     "outputSchema": {
       "$defs": {
         "DedupOutcome": {
@@ -1848,30 +1440,51 @@
   {
     "annotations": {
       "destructiveHint": false,
-      "idempotentHint": false,
+      "idempotentHint": true,
       "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": false
     },
-    "description": "Inspect a retrieval trace (tenant-bound).",
+    "description": "Report how a recall pack was used (used, ignored, corrected, or failed); ranking evidence only.",
     "inputSchema": {
       "$defs": {
-        "ActorId": {
-          "format": "uuid",
+        "MarkOutcome": {
+          "enum": [
+            "success",
+            "failure",
+            "corrected",
+            "ignored"
+          ],
           "type": "string"
         },
-        "AgentNodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
-          "format": "uuid",
-          "type": "string"
+        "ReportMemoryUseRequest": {
+          "additionalProperties": false,
+          "description": "Report how a recall pack was used. Ranking evidence only; the server derives\nthe reporter identity from the live key, so no caller-supplied `caller_id`.",
+          "properties": {
+            "outcome": {
+              "$ref": "#/$defs/MarkOutcome"
+            },
+            "trace_id": {
+              "$ref": "#/$defs/TraceId"
+            },
+            "used_ids": {
+              "items": {
+                "$ref": "#/$defs/UnitId"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "trace_id",
+            "outcome",
+            "used_ids"
+          ],
+          "type": "object"
         },
         "TraceId": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "UnitId": {
           "format": "uuid",
           "type": "string"
         }
@@ -1879,1301 +1492,41 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "actor_id": {
-          "$ref": "#/$defs/ActorId"
+        "idempotency_key": {
+          "maxLength": 255,
+          "minLength": 1,
+          "type": "string"
         },
-        "agent_node_id": {
-          "$ref": "#/$defs/AgentNodeId"
-        },
-        "scope_id": {
-          "$ref": "#/$defs/ScopeId"
-        },
-        "subject_generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "subject_id": {
-          "$ref": "#/$defs/SubjectId"
+        "request": {
+          "$ref": "#/$defs/ReportMemoryUseRequest"
+        }
+      },
+      "required": [
+        "idempotency_key",
+        "request"
+      ],
+      "type": "object"
+    },
+    "name": "report_memory_use",
+    "outputSchema": {
+      "$defs": {
+        "TraceId": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "accepted": {
+          "type": "boolean"
         },
         "trace_id": {
           "$ref": "#/$defs/TraceId"
         }
       },
       "required": [
-        "subject_id",
-        "scope_id",
-        "actor_id",
-        "agent_node_id",
-        "subject_generation",
+        "accepted",
         "trace_id"
-      ],
-      "type": "object"
-    },
-    "name": "trace",
-    "outputSchema": {
-      "$defs": {
-        "ActorId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AgentNodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "AnswerPolicy": {
-          "enum": [
-            "answer_normally",
-            "state_premise_false",
-            "say_exact_target_not_found",
-            "abstain_unknown"
-          ],
-          "type": "string"
-        },
-        "CitationSpan": {
-          "additionalProperties": false,
-          "properties": {
-            "end": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "start": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "start",
-            "end"
-          ],
-          "type": "object"
-        },
-        "CitationUnverifiedReason": {
-          "enum": [
-            "derived_reference",
-            "missing_canonical_citation"
-          ],
-          "type": "string"
-        },
-        "CitationVerification": {
-          "oneOf": [
-            {
-              "additionalProperties": false,
-              "properties": {
-                "receipt": {
-                  "$ref": "#/$defs/EvidenceReceipt"
-                },
-                "status": {
-                  "const": "verified",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "status",
-                "receipt"
-              ],
-              "type": "object"
-            },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "reason": {
-                  "$ref": "#/$defs/CitationUnverifiedReason"
-                },
-                "status": {
-                  "const": "unverified",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "status",
-                "reason"
-              ],
-              "type": "object"
-            }
-          ]
-        },
-        "CorrectionHandle": {
-          "description": "Everything a caller needs to correct a recalled memory in one more round\ntrip, emitted at the exact point the memory was applied (spec plan D1).\n\nIt names the unit and the generation it was written under, the key a\ncorrection must reuse to supersede it, the bitemporal rectangle it claims,\nthe byte range of the source body it was minted from, and the episode that\nbody belongs to. Nothing here is derived from the query: the handle is a\nproperty of the unit, so the same unit yields the same handle on every\nrecall and in the file plane's unit footer.\n\n`fact_key` may be an auto key (`{scope}:auto:{sha256[..16]}`), which never\nsupersedes — a corrector seeing one knows a keyed rewrite is required\nrather than a supersession.",
-          "properties": {
-            "episode_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/EpisodeId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "fact_key": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "source_span": {
-              "description": "`start-end` UTF-8 byte offsets into the source episode or resource\nbody, covering every contextual chunk this unit was minted from.\n`None` when the unit carries no chunk with a parseable span.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "unit_id": {
-              "$ref": "#/$defs/UnitId"
-            },
-            "valid_from": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "valid_to": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "unit_id",
-            "subject_generation"
-          ],
-          "type": "object"
-        },
-        "CrossRerankFailure": {
-          "enum": [
-            "none",
-            "error",
-            "empty",
-            "invalid_score_count",
-            "non_finite_score"
-          ],
-          "type": "string"
-        },
-        "CrossRerankGranularity": {
-          "description": "Granularity of the docs fed to the W8 cross-encoder rerank stage: whole\nunit bodies (the default), or each candidate's flattened\n`contextual_chunks` bodies max-pooled back to one score per candidate\n(fallback: the body when a candidate has no chunks).",
-          "enum": [
-            "unit_body",
-            "contextual_chunks"
-          ],
-          "type": "string"
-        },
-        "CrossRerankTrace": {
-          "properties": {
-            "batch_size": {
-              "format": "uint",
-              "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "candidate_count": {
-              "description": "Candidates in the scored head — NOT docs: under `ContextualChunks`\ngranularity one candidate can contribute several docs (`docs_scored`).",
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "candidate_limit": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "docs_scored": {
-              "default": 0,
-              "description": "Docs actually fed to `CrossReranker::rerank` — equals `candidate_count`\nunder `UnitBody`, the flattened chunk/fallback-body count otherwise.",
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "failure": {
-              "$ref": "#/$defs/CrossRerankFailure"
-            },
-            "granularity": {
-              "$ref": "#/$defs/CrossRerankGranularity",
-              "default": "unit_body"
-            },
-            "input_chars_max": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "input_chars_p50": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "input_chars_p95": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_length": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "model": {
-              "type": "string"
-            },
-            "provider": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "provider",
-            "model",
-            "candidate_limit",
-            "candidate_count",
-            "max_length",
-            "input_chars_p50",
-            "input_chars_p95",
-            "input_chars_max",
-            "failure"
-          ],
-          "type": "object"
-        },
-        "DeepRecallLimits": {
-          "properties": {
-            "max_context_tokens": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_spend_micros": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_tool_iterations": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "wall_time_ms": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "wall_time_ms",
-            "max_tool_iterations",
-            "max_context_tokens",
-            "max_spend_micros"
-          ],
-          "type": "object"
-        },
-        "DeepRecallStatus": {
-          "enum": [
-            "completed",
-            "capped",
-            "partial"
-          ],
-          "type": "string"
-        },
-        "DeepRecallStopReason": {
-          "enum": [
-            "completed",
-            "wall_time",
-            "tool_iterations",
-            "context_tokens",
-            "spend",
-            "provider_error",
-            "invalid_output"
-          ],
-          "type": "string"
-        },
-        "DeepRecallSummary": {
-          "properties": {
-            "evidence": {
-              "$ref": "#/$defs/EvidenceDisposition"
-            },
-            "generation_ids": {
-              "description": "Ordered provider generation IDs for every accepted model turn.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "limits": {
-              "$ref": "#/$defs/DeepRecallLimits"
-            },
-            "status": {
-              "$ref": "#/$defs/DeepRecallStatus"
-            },
-            "stop_reason": {
-              "$ref": "#/$defs/DeepRecallStopReason"
-            },
-            "usage": {
-              "$ref": "#/$defs/DeepRecallUsage"
-            }
-          },
-          "required": [
-            "status",
-            "stop_reason",
-            "limits",
-            "usage",
-            "evidence"
-          ],
-          "type": "object"
-        },
-        "DeepRecallUsage": {
-          "properties": {
-            "context_tokens": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "spend_micros": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "tool_iterations": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "unsettled_context_tokens_upper_bound": {
-              "default": 0,
-              "description": "Conservative tokens that may have been accepted by a provider but\ncould not be settled to provider-native usage before cancellation.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "unsettled_spend_micros_upper_bound": {
-              "default": 0,
-              "description": "Conservative micro-USD that may have been billed but could not be\nsettled before cancellation. This is never included in trace cost.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "wall_time_ms": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "wall_time_ms",
-            "tool_iterations",
-            "context_tokens",
-            "spend_micros"
-          ],
-          "type": "object"
-        },
-        "DegradedRecallTraceItem": {
-          "additionalProperties": false,
-          "properties": {
-            "body": {
-              "type": "string"
-            },
-            "kind": {
-              "$ref": "#/$defs/MemoryKind"
-            }
-          },
-          "required": [
-            "body",
-            "kind"
-          ],
-          "type": "object"
-        },
-        "EpisodeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "EvidenceDisposition": {
-          "additionalProperties": false,
-          "properties": {
-            "answer_policy": {
-              "$ref": "#/$defs/AnswerPolicy"
-            },
-            "contract_revision": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            },
-            "status": {
-              "$ref": "#/$defs/EvidenceStatus"
-            }
-          },
-          "required": [
-            "contract_revision",
-            "status",
-            "answer_policy",
-            "reason"
-          ],
-          "type": "object"
-        },
-        "EvidenceReceipt": {
-          "additionalProperties": false,
-          "properties": {
-            "actor_id": {
-              "$ref": "#/$defs/ActorId"
-            },
-            "agent_node_id": {
-              "$ref": "#/$defs/AgentNodeId"
-            },
-            "citation_id": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "contract_revision": {
-              "type": "string"
-            },
-            "data_subject_id": {
-              "$ref": "#/$defs/SubjectId"
-            },
-            "engine_version": {
-              "type": "string"
-            },
-            "memory_unit_id": {
-              "$ref": "#/$defs/UnitId"
-            },
-            "policy_revision": {
-              "type": "string"
-            },
-            "query_hash": {
-              "type": "string"
-            },
-            "quote_sha256": {
-              "type": "string"
-            },
-            "recalled_at": {
-              "type": "string"
-            },
-            "schema_compat_revision": {
-              "type": "string"
-            },
-            "scope_id": {
-              "$ref": "#/$defs/ScopeId"
-            },
-            "source_body_sha256": {
-              "type": "string"
-            },
-            "source_id": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "source_kind": {
-              "$ref": "#/$defs/EvidenceSourceKind"
-            },
-            "source_ref": {
-              "type": "string"
-            },
-            "source_revision": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "source_trust": {
-              "$ref": "#/$defs/TrustLevel"
-            },
-            "span": {
-              "$ref": "#/$defs/CitationSpan"
-            },
-            "subject_generation": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "tenant_id": {
-              "$ref": "#/$defs/TenantId"
-            },
-            "trace_id": {
-              "$ref": "#/$defs/TraceId"
-            }
-          },
-          "required": [
-            "contract_revision",
-            "citation_id",
-            "trace_id",
-            "tenant_id",
-            "data_subject_id",
-            "scope_id",
-            "actor_id",
-            "agent_node_id",
-            "subject_generation",
-            "memory_unit_id",
-            "source_kind",
-            "source_id",
-            "source_ref",
-            "source_body_sha256",
-            "span",
-            "quote_sha256",
-            "source_trust",
-            "query_hash",
-            "policy_revision",
-            "engine_version",
-            "schema_compat_revision",
-            "recalled_at"
-          ],
-          "type": "object"
-        },
-        "EvidenceSourceKind": {
-          "enum": [
-            "episode",
-            "resource"
-          ],
-          "type": "string"
-        },
-        "EvidenceStatus": {
-          "enum": [
-            "supported",
-            "contradicts-premise",
-            "near-match",
-            "insufficient"
-          ],
-          "type": "string"
-        },
-        "MemoryKind": {
-          "enum": [
-            "episodic",
-            "semantic",
-            "procedural",
-            "belief",
-            "resource",
-            "preference"
-          ],
-          "type": "string"
-        },
-        "ProcedureTraceFact": {
-          "properties": {
-            "safety_status": {
-              "type": "string"
-            },
-            "signal_kind": {
-              "type": "string"
-            },
-            "unit_id": {
-              "$ref": "#/$defs/UnitId"
-            },
-            "validation_state": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "unit_id",
-            "validation_state",
-            "signal_kind",
-            "safety_status"
-          ],
-          "type": "object"
-        },
-        "RecallCandidateTrace": {
-          "properties": {
-            "channel": {
-              "$ref": "#/$defs/RecallChannel"
-            },
-            "channel_rank": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "channel_score": {
-              "format": "float",
-              "type": "number"
-            },
-            "cross_rerank_rank": {
-              "default": null,
-              "description": "1-based rank of this candidate AFTER the W8 cross-encoder rerank stage,\nor `None` when no reranker ran or the candidate sat outside the scored\nhead. Recorded because `fused_rank` alone cannot separate the two\npost-rerank miss classes that need different fixes: \"the reranker never\nsaw the gold\" (raise `candidate_limit`) and \"the reranker saw it and\nstill ranked it below the cut\" (a model-quality problem).",
-              "format": "uint",
-              "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "decay_retrievability": {
-              "default": 0.0,
-              "format": "float",
-              "type": "number"
-            },
-            "derived_by": {
-              "type": "string"
-            },
-            "discard_reason": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/RecallDropReason"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "dsr_difficulty": {
-              "default": null,
-              "format": "float",
-              "type": [
-                "number",
-                "null"
-              ]
-            },
-            "dsr_reinforcement_count": {
-              "default": 0,
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "dsr_stability_days": {
-              "default": null,
-              "format": "float",
-              "type": [
-                "number",
-                "null"
-              ]
-            },
-            "fused_rank": {
-              "format": "uint",
-              "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "fused_score": {
-              "format": "float",
-              "type": [
-                "number",
-                "null"
-              ]
-            },
-            "state": {
-              "$ref": "#/$defs/UnitState"
-            },
-            "transaction_from": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "transaction_to": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "trust_level": {
-              "$ref": "#/$defs/TrustLevel"
-            },
-            "unit_id": {
-              "$ref": "#/$defs/UnitId"
-            },
-            "valid_from": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "valid_to": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "unit_id",
-            "channel",
-            "channel_rank",
-            "channel_score",
-            "derived_by",
-            "trust_level",
-            "state"
-          ],
-          "type": "object"
-        },
-        "RecallChannel": {
-          "enum": [
-            "exact",
-            "lexical",
-            "vector",
-            "temporal",
-            "edge",
-            "deep"
-          ],
-          "type": "string"
-        },
-        "RecallCitation": {
-          "properties": {
-            "derived_from_unit_ids": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/UnitId"
-              },
-              "type": "array"
-            },
-            "episode_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/EpisodeId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "resource_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ResourceId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "unit_id": {
-              "$ref": "#/$defs/UnitId"
-            },
-            "verification": {
-              "$ref": "#/$defs/CitationVerification"
-            }
-          },
-          "required": [
-            "unit_id",
-            "verification"
-          ],
-          "type": "object"
-        },
-        "RecallContextItem": {
-          "properties": {
-            "body": {
-              "type": "string"
-            },
-            "citation_episode_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/EpisodeId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "citation_resource_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ResourceId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "correction": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/CorrectionHandle"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "The D1 correction handle. `None` only on the degraded path, where the\nitem is a raw un-reflected episode and there is no stored unit to\ncorrect — emitting a handle there would name a synthetic id."
-            },
-            "derived_by": {
-              "type": "string"
-            },
-            "derived_from_unit_ids": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/UnitId"
-              },
-              "type": "array"
-            },
-            "inclusion_reason": {
-              "type": "string"
-            },
-            "kind": {
-              "$ref": "#/$defs/MemoryKind"
-            },
-            "suppression_labels": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "unit_id": {
-              "$ref": "#/$defs/UnitId"
-            }
-          },
-          "required": [
-            "unit_id",
-            "body",
-            "kind",
-            "derived_by",
-            "inclusion_reason",
-            "suppression_labels"
-          ],
-          "type": "object"
-        },
-        "RecallDegradationDiagnostic": {
-          "additionalProperties": false,
-          "properties": {
-            "consolidation_lag_ms": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "items": {
-              "items": {
-                "$ref": "#/$defs/DegradedRecallTraceItem"
-              },
-              "type": "array"
-            },
-            "reason": {
-              "$ref": "#/$defs/RecallDegradationReason"
-            }
-          },
-          "required": [
-            "reason",
-            "consolidation_lag_ms",
-            "items"
-          ],
-          "type": "object"
-        },
-        "RecallDegradationReason": {
-          "enum": [
-            "pending_reflection_read_your_own_writes"
-          ],
-          "type": "string"
-        },
-        "RecallDropReason": {
-          "enum": [
-            "tenant",
-            "scope",
-            "privacy",
-            "trust",
-            "state",
-            "stale",
-            "budget",
-            "duplicate",
-            "output_limit",
-            "deleted",
-            "invalidated",
-            "unknown",
-            "protected_category",
-            "below_trust_floor",
-            "irrelevant"
-          ],
-          "type": "string"
-        },
-        "RecallDroppedItem": {
-          "properties": {
-            "reason": {
-              "$ref": "#/$defs/RecallDropReason"
-            },
-            "unit_id": {
-              "$ref": "#/$defs/UnitId"
-            }
-          },
-          "required": [
-            "unit_id",
-            "reason"
-          ],
-          "type": "object"
-        },
-        "RecallMode": {
-          "enum": [
-            "fast",
-            "deep"
-          ],
-          "type": "string"
-        },
-        "RecallPolicyFilter": {
-          "properties": {
-            "detail": {
-              "type": "string"
-            },
-            "reason": {
-              "$ref": "#/$defs/RecallDropReason"
-            }
-          },
-          "required": [
-            "reason",
-            "detail"
-          ],
-          "type": "object"
-        },
-        "RecallTime": {
-          "properties": {
-            "evaluated_at": {
-              "type": "string"
-            },
-            "transaction_as_of": {
-              "type": "string"
-            },
-            "valid_at": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "evaluated_at",
-            "transaction_as_of",
-            "valid_at"
-          ],
-          "type": "object"
-        },
-        "ReflectStageFact": {
-          "properties": {
-            "detail": {
-              "type": "string"
-            },
-            "stage": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "stage",
-            "detail"
-          ],
-          "type": "object"
-        },
-        "ResourceId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "ScopeId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "SubjectId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "TenantId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "TraceId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "TrustLevel": {
-          "enum": [
-            "trusted_user",
-            "trusted_system",
-            "verified_tool",
-            "unverified_tool",
-            "web_content",
-            "agent_output",
-            "imported_external",
-            "quarantined"
-          ],
-          "type": "string"
-        },
-        "UnitId": {
-          "format": "uuid",
-          "type": "string"
-        },
-        "UnitState": {
-          "enum": [
-            "candidate",
-            "active",
-            "superseded",
-            "invalidated",
-            "deleted",
-            "quarantined",
-            "expired",
-            "validated"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "abstention_signal": {
-          "type": "boolean"
-        },
-        "actor_id": {
-          "$ref": "#/$defs/ActorId"
-        },
-        "agent_node_id": {
-          "$ref": "#/$defs/AgentNodeId"
-        },
-        "candidates": {
-          "items": {
-            "$ref": "#/$defs/RecallCandidateTrace"
-          },
-          "type": "array"
-        },
-        "channel_runs": {
-          "items": {
-            "$ref": "#/$defs/ReflectStageFact"
-          },
-          "type": "array"
-        },
-        "citations": {
-          "items": {
-            "$ref": "#/$defs/RecallCitation"
-          },
-          "type": "array"
-        },
-        "consolidation_lag_ms": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "context_items": {
-          "items": {
-            "$ref": "#/$defs/RecallContextItem"
-          },
-          "type": "array"
-        },
-        "cost_micros": {
-          "description": "Metered recall cost. For Deep this currently includes provider-reported\nmodel spend; embedding-provider cost is not yet exposed by the embedder\ncontract and therefore is not included.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "cross_rerank": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CrossRerankTrace"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "cross_rerank_ms": {
-          "default": 0,
-          "description": "R1.5-T1: per-recall wall-clock (ms) spent inside the W8 cross-encoder\nrerank stage ([`crate::CrossReranker`]). `0` when no cross-reranker is installed on the service\n(the default) or the candidate pool was empty — a legitimate \"not\nrun\" value, not a sentinel. `#[serde(default)]` so traces recorded\nbefore this field existed still deserialize.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "data_subject_id": {
-          "$ref": "#/$defs/SubjectId"
-        },
-        "decay_model_id": {
-          "default": "",
-          "type": "string"
-        },
-        "deep": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DeepRecallSummary"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "degradation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RecallDegradationDiagnostic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "dropped_items": {
-          "items": {
-            "$ref": "#/$defs/RecallDroppedItem"
-          },
-          "type": "array"
-        },
-        "engine_version": {
-          "type": "string"
-        },
-        "escalation_reason": {
-          "type": "string"
-        },
-        "feature_flags": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "filter_selectivity": {
-          "format": "float",
-          "type": [
-            "number",
-            "null"
-          ]
-        },
-        "id": {
-          "$ref": "#/$defs/TraceId"
-        },
-        "iterative_scan_depth": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "l4_config_hash": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_gathered_evidence_ids": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "l4_model": {
-          "description": "Model configured on the Deep provider instance.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_observed_model": {
-          "description": "Model actually observed after routing or fallback.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_observed_provider": {
-          "description": "Provider actually observed after routing or fallback.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_prompt_hash": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_provider": {
-          "description": "Provider configured on the Deep provider instance.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_sandbox_id": {
-          "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "l4_workspace_manifest_sha256": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "latency_ms": {
-          "description": "Monotonic top-level recall latency. Deep service calls start timing\nbefore query embedding; provider-loop time remains separately available\nas `deep.usage.wall_time_ms`.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "mode_executed": {
-          "$ref": "#/$defs/RecallMode"
-        },
-        "mode_requested": {
-          "$ref": "#/$defs/RecallMode"
-        },
-        "policy_filters": {
-          "items": {
-            "$ref": "#/$defs/RecallPolicyFilter"
-          },
-          "type": "array"
-        },
-        "policy_revision": {
-          "type": "string"
-        },
-        "procedure_ids": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/UnitId"
-          },
-          "type": "array"
-        },
-        "procedure_validation_states": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ProcedureTraceFact"
-          },
-          "type": "array"
-        },
-        "query_hash": {
-          "type": "string"
-        },
-        "recall_pool_depth": {
-          "default": 0,
-          "description": "R1.5-T0: the `recall_pool_depth` in effect for this recall — the ONE\nknob the vector/rerank/packing-scan internal fan-out derived from\n(never from `k`). Recorded per-trace so latency attribution stays\nobservable across deployments that override\n`MEMPHANT_RECALL_POOL_DEPTH`. `#[serde(default)]` so traces recorded\nbefore this field existed still deserialize (as `0`, a visible \"not\nrecorded\" sentinel — pool depth is never legitimately 0).",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "recall_time": {
-          "$ref": "#/$defs/RecallTime"
-        },
-        "scope_id": {
-          "$ref": "#/$defs/ScopeId"
-        },
-        "subject_generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "tenant_id": {
-          "$ref": "#/$defs/TenantId"
-        },
-        "token_estimate": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "tenant_id",
-        "data_subject_id",
-        "scope_id",
-        "actor_id",
-        "agent_node_id",
-        "subject_generation",
-        "policy_revision",
-        "query_hash",
-        "engine_version",
-        "feature_flags",
-        "channel_runs",
-        "candidates",
-        "policy_filters",
-        "context_items",
-        "dropped_items",
-        "citations",
-        "consolidation_lag_ms",
-        "mode_requested",
-        "mode_executed",
-        "escalation_reason",
-        "abstention_signal",
-        "latency_ms",
-        "token_estimate",
-        "cost_micros",
-        "recall_time"
       ],
       "type": "object"
     }
