@@ -66,6 +66,7 @@ async fn retain_and_reflect(
             compiler_version: "compiler-rung15".to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: seed.source_kind.to_string(),
                 trust_level: seed.trust_level,
                 actor_id: context.actor_id,
@@ -204,6 +205,7 @@ async fn write_compiler_golden_fixtures_pass() {
                     compiler_version: "compiler-wsb-golden".to_string(),
                     candidates: vec![ReflectCandidate {
                         compact: None,
+                        capture: None,
                         source_kind: episode.source_kind.clone(),
                         trust_level: episode.trust_level,
                         // Every compiled unit's `actor_id` must equal the
@@ -416,6 +418,7 @@ async fn reflect_recorded_is_idempotent_for_duplicate_job_delivery() {
         compiler_version: "compiler-wsb-golden".to_string(),
         candidates: vec![ReflectCandidate {
             compact: None,
+            capture: None,
             source_kind: "user".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: context.actor_id,
@@ -496,6 +499,7 @@ async fn invalidation_without_an_open_exact_key_fails_closed() {
             compiler_version: "compiler-invalidation".to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "system".to_string(),
                 trust_level: TrustLevel::TrustedSystem,
                 actor_id: context.actor_id,
@@ -548,6 +552,7 @@ async fn structured_replacement_requires_the_exact_active_target_id() {
         .id;
     let replacement = |target| ReflectCandidate {
         compact: None,
+        capture: None,
         source_kind: "user".to_string(),
         trust_level: TrustLevel::TrustedUser,
         actor_id: context.actor_id,
@@ -656,6 +661,7 @@ async fn reflect_candidate_contextual_chunks_are_stored_with_source_episode() {
             compiler_version: "compiler-ws4-chunks".to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "system".to_string(),
                 trust_level: TrustLevel::TrustedSystem,
                 actor_id: context.actor_id,
@@ -997,6 +1003,7 @@ async fn two_trusted_retains_with_distinct_content_do_not_supersede() {
                 compiler_version: "compiler-auto-subject".to_string(),
                 candidates: vec![ReflectCandidate {
                     compact: None,
+                    capture: None,
                     source_kind: "user".to_string(),
                     trust_level: TrustLevel::TrustedUser,
                     actor_id: context.actor_id,
@@ -1140,6 +1147,7 @@ async fn unit_transaction_from_uses_injected_clock() {
             compiler_version: "compiler-clock-test".to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "user".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: context.actor_id,

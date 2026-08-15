@@ -13,18 +13,18 @@ use futures::{StreamExt, stream};
 #[cfg(test)]
 use memphant_types::TenantId;
 use memphant_types::{
-    COMPILER_VERSION, CanonicalProjectionResponse, CanonicalProjectionUnit, ContextualChunk,
-    CorrectRequest, CorrectionPayload, DegradedRecallTraceItem, ENGINE_VERSION, EpisodeId,
-    FileSyncOperation, FileSyncOperationResult, FileSyncRequest, FileSyncResult,
-    FileSyncUnitMetadata, ForgetRequest, ForgetResult, ForgetTarget, MarkRequest, MarkResult,
-    MemoryKind, NewEpisode, NewResource, RecallContextItem, RecallDegradationDiagnostic,
-    RecallDegradationReason, RecallHttpRequest, RecallMode, RecallRequest, RecallResponse,
-    ReflectAccepted, ReflectCandidate, ReflectInput, ReflectJob, ReflectJobKind, ReflectRequest,
-    ResolvedMemoryContext, ResourceId, ResourceKind, RetainEpisodeHttpRequest,
-    RetainEpisodeHttpResponse, RetrievalTrace, ReviewEvent, StoredEpisode, StoredMemoryUnit,
-    TaskMemoryAttribution, TaskMemoryEventInput, TaskMemoryEventKind, TaskMemoryEventsRequest,
-    TaskMemoryEventsResult, TaskOutcomeRequest, TaskOutcomeResult, TraceId, TrustLevel, UnitId,
-    UnitState,
+    COMPILER_VERSION, CanonicalProjectionResponse, CanonicalProjectionUnit, CaptureMarker,
+    CaptureSource, ContextualChunk, CorrectRequest, CorrectionPayload, DegradedRecallTraceItem,
+    ENGINE_VERSION, EpisodeId, FileSyncOperation, FileSyncOperationResult, FileSyncRequest,
+    FileSyncResult, FileSyncUnitMetadata, ForgetRequest, ForgetResult, ForgetTarget, MarkRequest,
+    MarkResult, MemoryKind, NewEpisode, NewResource, RecallContextItem,
+    RecallDegradationDiagnostic, RecallDegradationReason, RecallHttpRequest, RecallMode,
+    RecallRequest, RecallResponse, ReflectAccepted, ReflectCandidate, ReflectInput, ReflectJob,
+    ReflectJobKind, ReflectRequest, ResolvedMemoryContext, ResourceId, ResourceKind,
+    RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace, ReviewEvent,
+    StoredEpisode, StoredMemoryUnit, TaskMemoryAttribution, TaskMemoryEventInput,
+    TaskMemoryEventKind, TaskMemoryEventsRequest, TaskMemoryEventsResult, TaskOutcomeRequest,
+    TaskOutcomeResult, TraceId, TrustLevel, UnitId, UnitState,
 };
 use sha2::{Digest, Sha256};
 
@@ -1224,6 +1224,7 @@ mod file_sync_tests {
                 compiler_version: COMPILER_VERSION.to_string(),
                 candidates: vec![ReflectCandidate {
                     compact: None,
+                    capture: None,
                     source_kind: "agent".to_string(),
                     trust_level: TrustLevel::AgentOutput,
                     actor_id: context.actor_id,
@@ -1442,6 +1443,7 @@ mod file_sync_tests {
             compiler_version: COMPILER_VERSION.to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "direct".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: context.actor_id,
@@ -4057,6 +4059,7 @@ impl<S: MemoryStore> MemoryService<S> {
                         compiler_version,
                         candidates: vec![ReflectCandidate {
                             compact: None,
+                            capture: None,
                             source_kind: "direct".to_string(),
                             trust_level: assigned_trust,
                             actor_id: context.actor_id,
@@ -4363,6 +4366,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     valid_to: request.valid_to.clone(),
                     target_unit_ids: None,
                     compact: Some(envelope),
+                    capture: None,
                 }],
             },
             Arc::clone(&self.embedder),
@@ -5326,6 +5330,7 @@ impl<S: MemoryStore> MemoryService<S> {
                             compiler_version: COMPILER_VERSION.to_string(),
                             candidates: vec![ReflectCandidate {
                                 compact: None,
+                                capture: None,
                                 source_kind: "direct".to_string(),
                                 trust_level: context.actor_trust,
                                 actor_id: context.actor_id,
@@ -6365,100 +6370,125 @@ impl<S: MemoryStore> MemoryService<S> {
                     // Episode gone (e.g. forgotten before compile): nothing to do.
                     return Ok(());
                 };
-                // W5 temporal grounding: extract the episode's primary content
-                // date (deterministic, clock-free) once. Valid time falls back
-                // to the episode's first observation when the body has no date.
-                // Gated: off ⇒ no date at all.
-                let content_date = if self.temporal_grounding_enabled {
-                    parse_content_date(&episode.body)
-                } else {
-                    None
-                };
-                // `YYYY-MM-DD` for the chunk header slot; midnight-UTC RFC 3339
-                // for the grounded `valid_from`. Both derive from the SAME parsed
-                // date so the header and the window agree.
-                let content_date_header = content_date.map(|date| date.to_string());
-                let valid_from = self.temporal_grounding_enabled.then(|| {
-                    content_date.map_or_else(
-                        || episode.first_observed_at.clone(),
-                        |date| format!("{date}T00:00:00Z"),
-                    )
-                });
-                // Rung 4: mint contextual chunks tied to this raw episode when
-                // the write path is enabled (default on since 2026-07-10).
-                // Every other candidate construction (resource jobs,
-                // direct-unit retains) stays chunk-free — episodes only.
-                let contextual_chunks = if self.contextual_chunks_write_enabled {
-                    episode_contextual_chunks(
-                        episode.id,
-                        &episode.source_kind,
-                        &episode.body,
-                        content_date_header.as_deref(),
-                    )
-                } else {
-                    Vec::new()
-                };
-                // The raw episode candidate is explicitly episodic; derived
-                // candidates keep the compiler's semantic default. Then — only
-                // when W6 fact extraction is on — add mined facts. The
-                // `[date ...]` body prefix couples to temporal grounding only:
-                // `content_date_header` is already `None` unless that flag is on.
-                let mut candidates = vec![ReflectCandidate {
-                    compact: None,
-                    source_kind: episode.source_kind.clone(),
-                    trust_level: episode.source_trust,
-                    actor_id: episode.actor_id,
-                    subject: job.job.subject.clone(),
-                    predicate: job.job.predicate.clone(),
-                    fact_key: None,
-                    kind: Some(MemoryKind::Episodic),
-                    body: episode.body.clone(),
-                    confidence: None,
-                    churn_class: None,
-                    admission_hint: None,
-                    target_unit_ids: None,
-                    contextual_chunks,
-                    valid_from,
-                    valid_to: None,
-                }];
-                if self.fact_extraction_enabled {
-                    candidates.extend(extract_fact_candidates(
+                // Cross-harness CAPTURE seam: a `capture://mirror|summary`
+                // source_ref makes this episode a captured claim, not a
+                // transcript to mine. Mint ONE inert `Belief` candidate carrying
+                // the fresh `Captured` marker and skip episodic/fact/structured
+                // nomination; the Stage A engine ladders it on the reflect tail.
+                if let Some(capture_source) = capture_episode_source(&episode.source_ref) {
+                    let candidate = capture_episode_candidate(
                         &episode,
-                        content_date_header.as_deref(),
-                    ));
-                }
-                if self.structured_state_provider.is_some() {
-                    let projections = match prepared_structured_state {
-                        Some(projections) => projections.to_vec(),
-                        None => self.prepare_structured_state(job, context).await?,
+                        job.job.subject.as_deref(),
+                        capture_source,
+                    );
+                    (
+                        Some(episode.id),
+                        None,
+                        episode.source_ref.clone(),
+                        episode.last_observed_at.clone(),
+                        Some(episode.body.clone()),
+                        vec![candidate],
+                    )
+                } else {
+                    // W5 temporal grounding: extract the episode's primary content
+                    // date (deterministic, clock-free) once. Valid time falls back
+                    // to the episode's first observation when the body has no date.
+                    // Gated: off ⇒ no date at all.
+                    let content_date = if self.temporal_grounding_enabled {
+                        parse_content_date(&episode.body)
+                    } else {
+                        None
                     };
-                    candidates.extend(projections.into_iter().map(|projection| ReflectCandidate {
+                    // `YYYY-MM-DD` for the chunk header slot; midnight-UTC RFC 3339
+                    // for the grounded `valid_from`. Both derive from the SAME parsed
+                    // date so the header and the window agree.
+                    let content_date_header = content_date.map(|date| date.to_string());
+                    let valid_from = self.temporal_grounding_enabled.then(|| {
+                        content_date.map_or_else(
+                            || episode.first_observed_at.clone(),
+                            |date| format!("{date}T00:00:00Z"),
+                        )
+                    });
+                    // Rung 4: mint contextual chunks tied to this raw episode when
+                    // the write path is enabled (default on since 2026-07-10).
+                    // Every other candidate construction (resource jobs,
+                    // direct-unit retains) stays chunk-free — episodes only.
+                    let contextual_chunks = if self.contextual_chunks_write_enabled {
+                        episode_contextual_chunks(
+                            episode.id,
+                            &episode.source_kind,
+                            &episode.body,
+                            content_date_header.as_deref(),
+                        )
+                    } else {
+                        Vec::new()
+                    };
+                    // The raw episode candidate is explicitly episodic; derived
+                    // candidates keep the compiler's semantic default. Then — only
+                    // when W6 fact extraction is on — add mined facts. The
+                    // `[date ...]` body prefix couples to temporal grounding only:
+                    // `content_date_header` is already `None` unless that flag is on.
+                    let mut candidates = vec![ReflectCandidate {
                         compact: None,
-                        kind: structured_projection_kind(&projection.subject),
+                        capture: None,
                         source_kind: episode.source_kind.clone(),
                         trust_level: episode.source_trust,
                         actor_id: episode.actor_id,
-                        subject: Some(projection.subject),
-                        predicate: Some(projection.predicate),
+                        subject: job.job.subject.clone(),
+                        predicate: job.job.predicate.clone(),
                         fact_key: None,
-                        body: projection.body,
+                        kind: Some(MemoryKind::Episodic),
+                        body: episode.body.clone(),
                         confidence: None,
                         churn_class: None,
-                        admission_hint: projection.admission_hint,
-                        target_unit_ids: projection.target_unit_ids,
-                        contextual_chunks: projection.contextual_chunks,
-                        valid_from: projection.valid_from,
-                        valid_to: projection.valid_to,
-                    }));
+                        admission_hint: None,
+                        target_unit_ids: None,
+                        contextual_chunks,
+                        valid_from,
+                        valid_to: None,
+                    }];
+                    if self.fact_extraction_enabled {
+                        candidates.extend(extract_fact_candidates(
+                            &episode,
+                            content_date_header.as_deref(),
+                        ));
+                    }
+                    if self.structured_state_provider.is_some() {
+                        let projections = match prepared_structured_state {
+                            Some(projections) => projections.to_vec(),
+                            None => self.prepare_structured_state(job, context).await?,
+                        };
+                        candidates.extend(projections.into_iter().map(|projection| {
+                            ReflectCandidate {
+                                compact: None,
+                                capture: None,
+                                kind: structured_projection_kind(&projection.subject),
+                                source_kind: episode.source_kind.clone(),
+                                trust_level: episode.source_trust,
+                                actor_id: episode.actor_id,
+                                subject: Some(projection.subject),
+                                predicate: Some(projection.predicate),
+                                fact_key: None,
+                                body: projection.body,
+                                confidence: None,
+                                churn_class: None,
+                                admission_hint: projection.admission_hint,
+                                target_unit_ids: projection.target_unit_ids,
+                                contextual_chunks: projection.contextual_chunks,
+                                valid_from: projection.valid_from,
+                                valid_to: projection.valid_to,
+                            }
+                        }));
+                    }
+                    (
+                        Some(episode.id),
+                        None,
+                        episode.source_ref.clone(),
+                        episode.last_observed_at.clone(),
+                        Some(episode.body.clone()),
+                        candidates,
+                    )
                 }
-                (
-                    Some(episode.id),
-                    None,
-                    episode.source_ref.clone(),
-                    episode.last_observed_at.clone(),
-                    Some(episode.body.clone()),
-                    candidates,
-                )
             }
             ReflectJobKind::ReflectResource => {
                 let Some(resource_id) = job.job.resource_id else {
@@ -6487,6 +6517,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 };
                 let mut candidates = vec![ReflectCandidate {
                     compact: None,
+                    capture: None,
                     source_kind: "resource".to_string(),
                     trust_level: resource.source_trust,
                     actor_id: resource.actor_id,
@@ -6510,6 +6541,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     };
                     candidates.extend(projections.into_iter().map(|projection| ReflectCandidate {
                         compact: None,
+                        capture: None,
                         kind: structured_projection_kind(&projection.subject),
                         source_kind: "resource".to_string(),
                         trust_level: resource.source_trust,
@@ -7745,6 +7777,70 @@ fn extract_facts(body: &str, content_date: Option<&str>) -> Vec<ExtractedFact> {
 /// episode's trust/actor so citations and admission are unchanged, NO contextual
 /// chunks (§3), and NO `valid_from` (the date is baked into the body prefix
 /// instead, so recall's dated-pack pass never double-prefixes).
+/// The reserved `source_ref` scheme that marks a `retain` Episode as a
+/// cross-harness CAPTURE (the write-side seam). An adapter POSTs an Episode with
+/// `source_kind = "agent"` and `source_ref` of the form `capture://mirror` or
+/// `capture://summary`; the reflect nominator (`capture_episode_candidate`)
+/// detects it and mints ONE `Belief` candidate carrying the `CaptureMarker` at
+/// the episode's (AgentOutput-clamped) trust, which the Stage A engine
+/// (`run_capture_crosscheck`) then ladders on reflect. Zero new verb: this rides
+/// `retain` + `reflect`. A trailing path segment after the family is ignored, so
+/// `capture://mirror/MEMORY.md` is a `Mirror` capture (the file path is
+/// human-readable provenance only — identity is the episode subject).
+const CAPTURE_SOURCE_SCHEME: &str = "capture://";
+
+/// Parse a capture `source_ref` into its provenance `CaptureSource` family, or
+/// `None` when the ref is an ordinary (non-capture) episode source.
+fn capture_episode_source(source_ref: &str) -> Option<CaptureSource> {
+    let rest = source_ref.strip_prefix(CAPTURE_SOURCE_SCHEME)?;
+    // The family is the first path segment; anything after `/` is provenance.
+    let family = rest.split('/').next().unwrap_or("");
+    match family {
+        "mirror" => Some(CaptureSource::Mirror),
+        "summary" => Some(CaptureSource::Summary),
+        _ => None,
+    }
+}
+
+/// The single captured `Belief` candidate minted from a capture Episode. It is
+/// keyed on the episode's `subject` so that a `mirror` and a `summary` capture
+/// for the SAME subject share a `fact_key` and the cross-check can pair them
+/// (agree → corroborate, diverge → quarantine). The body is the captured
+/// content verbatim; `capture` carries the fresh `Captured` marker; the trust is
+/// the episode's own (an agent principal clamps to `AgentOutput`, so the unit
+/// projects to an inert `Candidate`). This REPLACES the normal episodic /
+/// fact-extraction / structured candidate set for a capture episode — a capture
+/// is a single provisional claim, not a transcript to mine.
+fn capture_episode_candidate(
+    episode: &StoredEpisode,
+    subject: Option<&str>,
+    source: CaptureSource,
+) -> ReflectCandidate {
+    ReflectCandidate {
+        compact: None,
+        capture: Some(CaptureMarker::captured(source)),
+        source_kind: episode.source_kind.clone(),
+        trust_level: episode.source_trust,
+        actor_id: episode.actor_id,
+        // The captured subject key. Set as an explicit `fact_key` so mirror and
+        // summary bodies (which DIVERGE in the poisoning case) still key to the
+        // same identity — the collision is only representable when the key is
+        // subject-derived, never body-derived.
+        subject: subject.map(str::to_string),
+        predicate: None,
+        fact_key: subject.map(str::to_string),
+        kind: Some(MemoryKind::Belief),
+        body: episode.body.clone(),
+        confidence: Some(1.0),
+        churn_class: None,
+        admission_hint: None,
+        target_unit_ids: None,
+        contextual_chunks: Vec::new(),
+        valid_from: None,
+        valid_to: None,
+    }
+}
+
 fn extract_fact_candidates(
     episode: &StoredEpisode,
     content_date: Option<&str>,
@@ -7753,6 +7849,7 @@ fn extract_fact_candidates(
         .into_iter()
         .map(|fact| ReflectCandidate {
             compact: None,
+            capture: None,
             source_kind: episode.source_kind.clone(),
             trust_level: episode.source_trust,
             actor_id: episode.actor_id,

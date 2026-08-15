@@ -84,6 +84,7 @@ fn input(
         compiler_version: "same-compiler".to_string(),
         candidates: vec![ReflectCandidate {
             compact: None,
+            capture: None,
             source_kind: "direct".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: context.actor_id,

@@ -88,3 +88,21 @@ directly (see above).
 ## Tests
 
 Executable node-stdlib smoke test (no framework): `node --test index.test.ts`.
+
+## Memory capture (write side)
+
+pi is the only harness with no MCP, so this extension is also the only capture
+path. It shells out to the shared capture CLI (`plugins/_shared/memphant_capture.py`):
+
+- `turn_end` / `agent_end` — reads history via `ctx.sessionManager.getEntries()`,
+  summarizes the last turn, posts it tagged `source=summary`.
+- `tool_call` (`write`/`edit`) — copies a memory-file write tagged `source=mirror`.
+  ALLOW-AND-COPY: it never blocks the write.
+
+Both are async and fail-safe. The `turn_end`/`agent_end`/`tool_call` payloads and
+`ctx.sessionManager.getEntries()` are experimental pi surfaces (read defensively;
+update the seams in `index.ts` if pi changes them). Capture config mirrors the
+Claude Code plugin.
+
+Capture smoke test: `node --test capture.test.ts` (stubs the capture CLI via
+`MEMPHANT_CAPTURE_CLI`).

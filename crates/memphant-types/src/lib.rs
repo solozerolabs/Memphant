@@ -1681,6 +1681,14 @@ pub struct ReflectCandidate {
     /// for the coding recall lane. Ordinary compiler candidates leave it `None`.
     #[serde(default)]
     pub compact: Option<CompactEnvelope>,
+    /// The typed capture marker for a cross-harness CAPTURED memory (a mirror
+    /// file-write or a session summary). When present, the minted `Belief`
+    /// candidate carries `payload.capture` and enters the Stage A trust ladder
+    /// (`run_capture_crosscheck`). Ordinary compiler candidates leave it `None`.
+    /// Mirrors `compact` exactly — a serde-default `payload` marker carried
+    /// through the admission mint (`minted_unit`).
+    #[serde(default)]
+    pub capture: Option<CaptureMarker>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

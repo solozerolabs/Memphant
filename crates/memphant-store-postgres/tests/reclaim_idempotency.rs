@@ -118,6 +118,7 @@ async fn reclaimed_resource_job_recompile_does_not_double_insert_units() {
             compiler_version: job.job.compiler_version.clone(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "resource".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: actor,

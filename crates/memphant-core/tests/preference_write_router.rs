@@ -78,6 +78,7 @@ async fn declare(
             compiler_version: COMPILER.to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "user".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: context.actor_id,
@@ -361,6 +362,7 @@ async fn an_untrusted_caller_cannot_mint_a_preference() {
             compiler_version: COMPILER.to_string(),
             candidates: vec![ReflectCandidate {
                 compact: None,
+                capture: None,
                 source_kind: "web".to_string(),
                 trust_level: TrustLevel::WebContent,
                 actor_id: context.actor_id,

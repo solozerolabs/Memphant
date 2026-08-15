@@ -12378,6 +12378,15 @@ async fn prepare_compiled_write_from_snapshot_inner(
                 && unit.fact_key.as_deref() == Some(fact_key.as_str())
                 && unit.body == candidate.body
                 && unit.transaction_to.is_none()
+                // CAPTURE independence: two captures from DIFFERENT provenance
+                // families (a `mirror` file-write and a `summary` of it) must
+                // COEXIST as separate units even when their bodies agree — the
+                // Stage A cross-check needs both to observe the `SourceAgreement`
+                // that promotes them. Merging them here would erase the second
+                // witness before it could be counted. A same-source re-capture
+                // (already blocked at the episode dedup) and every ordinary
+                // duplicate belief still merge exactly as before.
+                && !captures_from_different_sources(unit, &candidate)
                 && !matches!(
                     unit.state,
                     UnitState::Deleted
@@ -13152,6 +13161,7 @@ mod low_trust_projection_tests {
     fn short_raw_evidence_bypasses_the_unkeyed_claim_noise_floor() {
         let candidate = |kind, body: &str| memphant_types::ReflectCandidate {
             compact: None,
+            capture: None,
             source_kind: "agent".to_string(),
             trust_level: TrustLevel::AgentOutput,
             actor_id: ActorId::from_u128(1),
@@ -13532,6 +13542,22 @@ fn candidate_validity_covered_by_unit(
     start_covered && end_covered
 }
 
+/// True iff an existing open unit and a candidate BOTH carry a capture marker
+/// whose provenance `source` families DIFFER (a `Mirror` file-write vs a
+/// `Summary`). Such a pair is the raw material the Stage A cross-check pairs into
+/// a `SourceAgreement` witness, so admission must let them coexist rather than
+/// merge them as duplicate bodies. Non-captures, and same-source re-captures,
+/// return false (merge as usual).
+fn captures_from_different_sources(
+    unit: &StoredMemoryUnit,
+    candidate: &memphant_types::ReflectCandidate,
+) -> bool {
+    match (&unit.capture, &candidate.capture) {
+        (Some(existing), Some(incoming)) => existing.source != incoming.source,
+        _ => false,
+    }
+}
+
 fn has_explicit_subject(candidate: &memphant_types::ReflectCandidate) -> bool {
     if candidate
         .fact_key
@@ -13568,7 +13594,7 @@ fn minted_unit(
     StoredMemoryUnit {
         invalidation: None,
         compact: candidate.compact.clone(),
-        capture: None,
+        capture: candidate.capture.clone(),
         id,
         tenant_id: input.tenant_id,
         data_subject_id: input.data_subject_id,

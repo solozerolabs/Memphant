@@ -77,3 +77,29 @@ empty / not configured) or the `<memphant_memory>` block.
 `python3 -m pytest tests/test_claude_code_hook.py -q` drives the hook with fake
 stdin and an injected fake transport (no sockets), asserting the envelope for
 both events and the 10k truncation.
+
+## Memory capture (write side)
+
+Two capture hooks feed memory back into MemPhant through the write seam (a
+`retain` Episode tagged `source_ref = capture://<source>`); both are async,
+invisible, and fail-safe (they never break a turn and never log secrets):
+
+- `hooks/capture_session.py` (Stop / SessionEnd) — summarizes the transcript's
+  LAST turn via a cheap-model shell-out and posts it tagged `source=summary`.
+- `hooks/capture_file_mirror.py` (PreToolUse `Write|Edit|MultiEdit`) — when the
+  agent writes a memory file (`MEMORY.md`, `AGENTS.md`, or the
+  `MEMPHANT_CAPTURE_MIRROR_FILES` set), copies the content tagged `source=mirror`.
+  ALLOW-AND-COPY: it never blocks the write.
+
+Captured memories land as inert `Belief` candidates; the reflect job's cross-check
+promotes a mirror+summary agreement to `corroborated`/recallable and quarantines a
+divergence. All capture logic lives in the shared core
+(`plugins/_shared/memphant_capture.py`).
+
+Extra config for capture: `MEMPHANT_CAPTURE_URL` (the REST episodes endpoint),
+`MEMPHANT_CAPTURE_SUMMARIZER_CMD` (the cheap-model shell-out; reads the turn on
+stdin, writes bullets to stdout), and the bound identity
+(`MEMPHANT_SUBJECT_ID` / `MEMPHANT_SCOPE_ID` / `MEMPHANT_ACTOR_ID` /
+`MEMPHANT_AGENT_NODE_ID` / `MEMPHANT_SUBJECT_GENERATION`). Unconfigured ⇒ no-op.
+
+Tests: `python3 -m pytest tests/test_claude_code_capture.py tests/test_shared_capture.py -q`.

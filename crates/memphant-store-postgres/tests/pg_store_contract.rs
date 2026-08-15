@@ -3278,6 +3278,7 @@ async fn direct_unit_retain_returns_unit_id_past_scope_page_clamp() {
     let candidates: Vec<ReflectCandidate> = (0..1001)
         .map(|i| ReflectCandidate {
             compact: None,
+            capture: None,
             source_kind: "user".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: actor,
