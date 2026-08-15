@@ -1,0 +1,6 @@
+{
+  "name": "claude-code-memphant",
+  "version": "0.1.0",
+  "description": "Portable MemPhant coding-agent memory for Claude Code: UserPromptSubmit and SessionStart hooks that inject at most one compact memory card as a delimited advisory block.",
+  "hooks": "hooks/hooks.json"
+}

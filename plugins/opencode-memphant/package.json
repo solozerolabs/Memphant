@@ -1,0 +1,27 @@
+{
+  "name": "opencode-memphant",
+  "version": "0.1.0",
+  "description": "MemPhant coding-agent memory for opencode — injects one advisory memory block at the system-prompt boundary.",
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "memphant",
+    "memory"
+  ],
+  "scripts": {
+    "test": "node --test index.test.ts"
+  },
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  }
+}
