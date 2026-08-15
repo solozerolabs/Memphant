@@ -2180,20 +2180,108 @@ pub struct MarkResult {
 // service.
 // ---------------------------------------------------------------------------
 
+/// The default `source.kind` for the string shorthand. A bare-string source is
+/// attributed to the coding agent that authored the write: `"agent"` maps
+/// through `actor_kind_trust` to `AgentOutput` (the non-elevated trust floor),
+/// and being neither `user` nor `correction` it correctly bars a shorthand
+/// `remember` from minting a standing `Preference`.
+pub const MEMORY_SOURCE_DEFAULT_KIND: &str = "agent";
+
 /// Evidence provenance for a compact write. Free-form `kind`/`ref` are
 /// informational and never widen eligibility. At most one canonical id
 /// (`episode_id` XOR `resource_id`) may be present; only a server-resolved
 /// canonical resource may carry a source ACL, and that ACL may only narrow.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
+///
+/// Accepts two wire shapes: the full object (see [`MemorySourceObject`]), or a
+/// bare string shorthand for `ref` — `kind` defaults to
+/// [`MEMORY_SOURCE_DEFAULT_KIND`] and `observed_at` to the empty sentinel the
+/// service replaces with its clock's now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MemorySourceInput {
     pub kind: String,
     pub r#ref: String,
     pub observed_at: String,
-    #[serde(default)]
     pub episode_id: Option<EpisodeId>,
-    #[serde(default)]
     pub resource_id: Option<ResourceId>,
+}
+
+/// The strict object shape of [`MemorySourceInput`] — the single source of
+/// truth for the object contract, reused for both deserialization (so unknown
+/// fields still error) and the object branch of the schema.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct MemorySourceObject {
+    kind: String,
+    r#ref: String,
+    observed_at: String,
+    #[serde(default)]
+    episode_id: Option<EpisodeId>,
+    #[serde(default)]
+    resource_id: Option<ResourceId>,
+}
+
+impl From<MemorySourceObject> for MemorySourceInput {
+    fn from(value: MemorySourceObject) -> Self {
+        Self {
+            kind: value.kind,
+            r#ref: value.r#ref,
+            observed_at: value.observed_at,
+            episode_id: value.episode_id,
+            resource_id: value.resource_id,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for MemorySourceInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+        // Branch on the concrete value rather than `#[serde(untagged)]`: an
+        // untagged enum silently drops `deny_unknown_fields` on its object
+        // variant, whereas deserializing through `MemorySourceObject` keeps the
+        // strict object contract.
+        match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::String(r#ref) => Ok(Self {
+                kind: MEMORY_SOURCE_DEFAULT_KIND.to_string(),
+                r#ref,
+                // Empty sentinel: the service stamps its clock's now.
+                observed_at: String::new(),
+                episode_id: None,
+                resource_id: None,
+            }),
+            other => MemorySourceObject::deserialize(other)
+                .map(Self::from)
+                .map_err(D::Error::custom),
+        }
+    }
+}
+
+impl JsonSchema for MemorySourceInput {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "MemorySourceInput".into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let object = MemorySourceObject::json_schema(generator).to_value();
+        schemars::Schema::try_from(serde_json::json!({
+            "description":
+                "Evidence provenance for a compact write: either the object form, \
+                 or a bare string shorthand for `ref` (kind defaults to \"agent\", \
+                 observed_at to the server clock).",
+            "oneOf": [
+                {
+                    "type": "string",
+                    "description":
+                        "String shorthand for `ref`; `kind` defaults to \"agent\" and \
+                         `observed_at` to the server clock."
+                },
+                object
+            ]
+        }))
+        .expect("MemorySourceInput schema is valid")
+    }
 }
 
 /// Why an agent is invalidating a memory. Exactly `stale` or `harmful`.
@@ -2842,5 +2930,78 @@ mod compact_intent_types_tests {
         // A caller-supplied reporter identity must be rejected.
         report["caller_id"] = serde_json::json!("agent-x");
         assert!(serde_json::from_value::<ReportMemoryUseRequest>(report).is_err());
+    }
+}
+
+#[cfg(test)]
+mod memory_source_input_tests {
+    use super::{MEMORY_SOURCE_DEFAULT_KIND, MemorySourceInput};
+
+    /// A bare JSON string is shorthand for `ref`: `kind` defaults to the agent
+    /// provenance and `observed_at` is the empty sentinel (the service stamps
+    /// its clock's now — the deserializer has no clock).
+    #[test]
+    fn string_shorthand_maps_to_ref_with_defaults() {
+        let parsed: MemorySourceInput =
+            serde_json::from_value(serde_json::json!("chat:first-remember")).unwrap();
+        assert_eq!(parsed.r#ref, "chat:first-remember");
+        assert_eq!(parsed.kind, MEMORY_SOURCE_DEFAULT_KIND);
+        assert_eq!(parsed.kind, "agent");
+        assert_eq!(parsed.observed_at, "");
+        assert!(parsed.episode_id.is_none() && parsed.resource_id.is_none());
+    }
+
+    /// The object form is the unchanged strict contract.
+    #[test]
+    fn object_form_still_parses_fully() {
+        let parsed: MemorySourceInput = serde_json::from_value(serde_json::json!({
+            "kind": "user",
+            "ref": "chat:2",
+            "observed_at": "2026-08-15T00:00:00Z"
+        }))
+        .unwrap();
+        assert_eq!(parsed.kind, "user");
+        assert_eq!(parsed.r#ref, "chat:2");
+        assert_eq!(parsed.observed_at, "2026-08-15T00:00:00Z");
+    }
+
+    /// `deny_unknown_fields` is preserved on the object form (the value-based
+    /// branch keeps the strictness an untagged enum would drop).
+    #[test]
+    fn object_form_rejects_unknown_fields() {
+        let err = serde_json::from_value::<MemorySourceInput>(serde_json::json!({
+            "kind": "user",
+            "ref": "chat:3",
+            "observed_at": "2026-08-15T00:00:00Z",
+            "trust": "elevated"
+        }))
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown field") || err.to_string().contains("trust"),
+            "unknown field must be rejected: {err}"
+        );
+    }
+
+    /// The generated schema advertises both shapes: a `oneOf` whose first branch
+    /// is the string shorthand and whose second is the strict object.
+    #[test]
+    fn schema_advertises_string_or_object() {
+        let schema = schemars::schema_for!(MemorySourceInput);
+        let value = serde_json::to_value(&schema).unwrap();
+        let variants = value["oneOf"].as_array().expect("oneOf variants");
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0]["type"], "string");
+        assert_eq!(variants[1]["type"], "object");
+        assert_eq!(variants[1]["additionalProperties"], false);
+        let required = variants[1]["required"]
+            .as_array()
+            .expect("object required")
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            required,
+            ["kind", "ref", "observed_at"].into_iter().collect()
+        );
     }
 }
