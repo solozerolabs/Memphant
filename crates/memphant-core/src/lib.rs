@@ -1623,6 +1623,8 @@ pub(crate) fn apply_unit_forget_transition(
             unit.deletion_generation = Some(generation);
         }
         unit.transaction_to = Some(now.to_string());
+        // True erasure: scrub content, keep only the content-free tombstone.
+        scrub_unit_content(unit);
         invalidated.push(unit.id);
     }
 
@@ -1649,9 +1651,20 @@ pub(crate) fn apply_unit_forget_transition(
             unit.deletion_generation = Some(generation);
         }
         unit.transaction_to = Some(now.to_string());
+        scrub_unit_content(unit);
         invalidated.push(unit.id);
     }
     Ok(invalidated)
+}
+
+/// Erase the content of a forgotten unit in place, leaving only its
+/// content-free tombstone (state/lineage/receipt). Mirrors the Postgres
+/// `body = '' , payload = '{}'` scrub so the two stores agree.
+fn scrub_unit_content(unit: &mut StoredMemoryUnit) {
+    unit.body = String::new();
+    unit.compact = None;
+    unit.invalidation = None;
+    unit.contextual_chunks = Vec::new();
 }
 
 /// One page of a tenant-bound scope memory export.
@@ -5308,6 +5321,7 @@ impl MemoryStore for InMemoryStore {
                 unit.state = UnitState::Deleted;
                 unit.deletion_generation = Some(deletion_generation);
                 unit.transaction_to = Some(forget.now.clone());
+                scrub_unit_content(unit);
                 invalidated_units.push(unit.id);
             }
         }

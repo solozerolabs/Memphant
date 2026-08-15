@@ -3838,9 +3838,14 @@ impl MemoryStore for PgStore {
                 .await
                 .map_err(backend)?;
                 sqlx::query(
+                    // True erasure, not just a tombstone: blank the body (its
+                    // generated body_tsv clears with it) and drop the payload so
+                    // no compact/invalidation/chunk content survives. Only the
+                    // content-free Deleted tombstone + receipt remain.
                     "update memphant.memory_unit
                      set state = 'deleted', deletion_generation = $8,
-                         transaction_to = $9::timestamptz
+                         transaction_to = $9::timestamptz,
+                         body = '', payload = '{}'::jsonb
                      where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
                        and scope_id = $4 and agent_node_id = $5 and actor_id = $6
                        and state <> 'deleted' and id = any($7)
@@ -3895,7 +3900,8 @@ impl MemoryStore for PgStore {
                          )
                          update memphant.memory_unit
                          set state = 'deleted', deletion_generation = $8,
-                             transaction_to = $9::timestamptz
+                             transaction_to = $9::timestamptz,
+                             body = '', payload = '{{}}'::jsonb
                          where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
                            and scope_id = $4 and agent_node_id = $5 and actor_id = $6
                            and state <> 'deleted' and id in (select id from lineage)
@@ -3954,6 +3960,52 @@ impl MemoryStore for PgStore {
         .execute(&mut **tx)
         .await
         .map_err(backend)?;
+
+        // Citations (span + quote pointers) for the erased units are removed too.
+        let citation_uuids: Vec<Uuid> = invalidated.iter().map(|id| id.as_uuid()).collect();
+        sqlx::query(
+            "delete from memphant.citation
+             where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+               and scope_id = $4 and agent_node_id = $5 and memory_unit_id = any($6)",
+        )
+        .bind(context.tenant_id.as_uuid())
+        .bind(context.data_subject_id.as_uuid())
+        .bind(context.subject_generation as i64)
+        .bind(context.scope_id.as_uuid())
+        .bind(context.agent_node_id.as_uuid())
+        .bind(citation_uuids)
+        .execute(&mut **tx)
+        .await
+        .map_err(backend)?;
+
+        // When the target is a raw source, blank its stored body too, so the
+        // originating content is erased along with the units derived from it.
+        let source_body_table = match forget.target {
+            ForgetTarget::Episode(_) => Some("episode"),
+            ForgetTarget::Resource(_) => Some("resource"),
+            ForgetTarget::MemoryUnit(_) => None,
+        };
+        if let Some(source_table) = source_body_table {
+            sqlx::query(AssertSqlSafe(
+                format!(
+                    "update memphant.{source_table} set body = ''
+                     where tenant_id = $1 and id = $2 and data_subject_id = $3
+                       and subject_generation = $4 and scope_id = $5 and agent_node_id = $6
+                       and actor_id = $7"
+                )
+                .as_str(),
+            ))
+            .bind(context.tenant_id.as_uuid())
+            .bind(source_id)
+            .bind(context.data_subject_id.as_uuid())
+            .bind(context.subject_generation as i64)
+            .bind(context.scope_id.as_uuid())
+            .bind(context.agent_node_id.as_uuid())
+            .bind(context.actor_id.as_uuid())
+            .execute(&mut **tx)
+            .await
+            .map_err(backend)?;
+        }
 
         let outcome = ForgetOutcome {
             deletion_generation: generation as u64,

@@ -601,3 +601,57 @@ async fn correct_memory_can_close_a_tombstone_and_restore_the_identity() {
     );
     assert!(!successor.body.is_empty());
 }
+
+#[tokio::test]
+async fn forget_erases_compact_content_not_just_tombstones() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(90_800);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    let created = service
+        .remember(
+            &context,
+            "fg-1",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Semantic, "a secret runbook"),
+        )
+        .await
+        .unwrap();
+    let id = unit_ids(&created)[0];
+
+    service
+        .forget(
+            &context,
+            "fg-2",
+            memphant_types::ForgetRequest {
+                subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                selector: memphant_types::ForgetSelector {
+                    memory_unit_id: Some(id),
+                    episode_id: None,
+                    resource_id: None,
+                    scope_id: context.scope_id,
+                },
+                reason: "owner erasure".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    // The row survives only as a content-free tombstone: Deleted, empty body,
+    // no compact envelope.
+    let erased = store
+        .fetch_units_by_ids(&context, &[id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(erased.state, UnitState::Deleted);
+    assert!(erased.body.is_empty(), "body erased, not just tombstoned");
+    assert!(erased.compact.is_none(), "compact content erased");
+    assert!(erased.deletion_generation.is_some(), "receipt retained");
+}
