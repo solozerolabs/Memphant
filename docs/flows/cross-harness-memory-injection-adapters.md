@@ -31,14 +31,13 @@ Advisory context from prior sessions — use only if relevant to the current tas
 </memphant_memory>
 ```
 On honest-empty it emits zero bytes (no empty block). This is `advisory_block()`
-in the shared core; the CLI and the three new adapters emit it.
+in the shared core; the CLI and all four adapters emit it via `build_block()`.
 
 **Adapters** (each owns ONLY input-parsing + its injection envelope):
 1. Codex (`plugins/codex-memphant/`) — refactor the existing hook to import the
-   shared core and delete the now-duplicated functions. Behavior preserved
-   exactly (raw card in `additionalContext`) so its existing test passes with an
-   import-path change only; the memori wrapper is a shared-core capability the
-   new adapters adopt.
+   shared core and delete the now-duplicated functions. It emits the same
+   `build_block()` advisory block as every other adapter (no per-harness drift);
+   its test asserts against `build_block()` so all four stay identical.
 2. Claude Code (`plugins/claude-code-memphant/`) — a CC plugin: `plugin.json` +
    `hooks.json` registering `UserPromptSubmit` (stdin `prompt`+`cwd`) and
    `SessionStart` (no prompt → query from `cwd`). One Python hook script imports

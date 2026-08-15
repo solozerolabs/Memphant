@@ -36,16 +36,16 @@ from memphant_recall import (  # noqa: E402  (path is set up above)
     DEFAULT_TIMEOUT_SECONDS,
     MAX_RESPONSE_BYTES,
     RecallError,
+    build_block,
     http_caller,
-    recall_card,
 )
 
 __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "MAX_RESPONSE_BYTES",
     "RecallError",
+    "build_block",
     "http_caller",
-    "recall_card",
     "run",
     "main",
 ]
@@ -77,14 +77,14 @@ def run(stdin, stdout, stderr, caller) -> int:
         return 0
 
     try:
-        card = recall_card(prompt, cwd, caller)
+        block = build_block(prompt, cwd, caller)
     except RecallError as exc:
         # No memory bytes on failure; the code is not "empty search".
         print(f"memphant-hook: no-inject code={exc.code}", file=stderr)
         json.dump(_envelope(""), stdout)
         return 0
 
-    json.dump(_envelope(card), stdout)
+    json.dump(_envelope(block), stdout)
     return 0
 
 

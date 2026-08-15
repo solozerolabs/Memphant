@@ -70,7 +70,16 @@ def test_hit_injects_the_single_card():
     )
     out, err = _run(_event(), caller)
     assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
-    assert out["hookSpecificOutput"]["additionalContext"] == "Run make deploy."
+    # Codex injects the same memori advisory block as every other adapter.
+    injected = out["hookSpecificOutput"]["additionalContext"]
+    assert injected == hook.build_block(
+        "how do we deploy?", "/repo", _fake_caller(
+            on_call=lambda _p: _recall_body(
+                {"state": "hit", "response": {"items": [{"body": "Run make deploy."}]}}
+            )
+        )
+    )
+    assert "<memphant_memory>" in injected and "Run make deploy." in injected
     assert err == ""
 
 
