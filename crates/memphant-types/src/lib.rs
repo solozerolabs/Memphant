@@ -2141,6 +2141,133 @@ pub struct MarkResult {
     pub trace_id: TraceId,
 }
 
+// ---------------------------------------------------------------------------
+// Portable coding-agent memory: the five-tool intent surface.
+//
+// These are the IDENTITY-FREE wire DTOs. None carries tenant, subject, actor,
+// scope, node, generation, trust, reporter, transaction time, or hashes: the
+// server derives all of those from the live bound principal. Free-form source
+// provenance never grants authority. The edge adapters resolve `LivePrincipal`
+// and pass only the authorized context + request + idempotency key into the
+// service.
+// ---------------------------------------------------------------------------
+
+/// Evidence provenance for a compact write. Free-form `kind`/`ref` are
+/// informational and never widen eligibility. At most one canonical id
+/// (`episode_id` XOR `resource_id`) may be present; only a server-resolved
+/// canonical resource may carry a source ACL, and that ACL may only narrow.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MemorySourceInput {
+    pub kind: String,
+    pub r#ref: String,
+    pub observed_at: String,
+    #[serde(default)]
+    pub episode_id: Option<EpisodeId>,
+    #[serde(default)]
+    pub resource_id: Option<ResourceId>,
+}
+
+/// Why an agent is invalidating a memory. Exactly `stale` or `harmful`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InvalidationReason {
+    Stale,
+    Harmful,
+}
+
+impl InvalidationReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stale => "stale",
+            Self::Harmful => "harmful",
+        }
+    }
+}
+
+/// Create exactly one self-contained, compact, `Active` typed memory. `body`
+/// is the compact primary rendering; `trigger` (stored in the unit predicate)
+/// says when it applies; `verification` (stored in `payload.compact`) says how
+/// to confirm it. `target_scope_id` is applicability, not caller identity:
+/// omission means the live key's bound scope; a different scope is authorized
+/// only by an owner-created `allow_write` grant plus a canonical source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RememberRequest {
+    pub kind: MemoryKind,
+    pub body: String,
+    pub trigger: String,
+    pub verification: String,
+    #[serde(default)]
+    pub target_scope_id: Option<ScopeId>,
+    #[serde(default)]
+    pub valid_from: Option<String>,
+    #[serde(default)]
+    pub valid_to: Option<String>,
+    pub source: MemorySourceInput,
+}
+
+/// Append a corrected bitemporal successor to one open unit selected by id.
+/// Changed bytes carry only the correction's fresh provenance; valid-time
+/// remainders that preserve old bytes keep their old evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CorrectMemoryRequest {
+    pub memory_unit_id: UnitId,
+    pub body: String,
+    pub trigger: String,
+    pub verification: String,
+    pub reason: String,
+    #[serde(default)]
+    pub valid_from: Option<String>,
+    #[serde(default)]
+    pub valid_to: Option<String>,
+    pub source: MemorySourceInput,
+}
+
+/// Archive one open unit as stale/harmful and append a current, bodyless
+/// tombstone with the same stable identity. Only `correct_memory` may later
+/// close that tombstone; ranking/retrieval can never reopen it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InvalidateMemoryRequest {
+    pub memory_unit_id: UnitId,
+    pub reason_kind: InvalidationReason,
+    pub reason: String,
+    pub source: MemorySourceInput,
+}
+
+/// Report how a recall pack was used. Ranking evidence only; the server derives
+/// the reporter identity from the live key, so no caller-supplied `caller_id`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReportMemoryUseRequest {
+    pub trace_id: TraceId,
+    pub outcome: MarkOutcome,
+    pub used_ids: Vec<UnitId>,
+}
+
+/// The typed compact-envelope marker persisted under `memory_unit.payload`'s
+/// `compact` key. Its presence is what makes a unit eligible for the portable
+/// coding recall lane (a raw episode body copied into an Active unit never
+/// carries it). `body_sha256` is the SHA-256 of the compact `body` — the public
+/// content hash — and backs the open-tombstone exact-body blockade;
+/// `write_channel` is `agent_memory` for direct agent writes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CompactEnvelope {
+    pub schema_version: u32,
+    pub verification: String,
+    pub body_sha256: String,
+    pub write_channel: String,
+}
+
+/// The write channel recorded for a direct agent-authored compact memory.
+pub const COMPACT_WRITE_CHANNEL_AGENT: &str = "agent_memory";
+
+/// Current `payload.compact` schema version.
+pub const COMPACT_ENVELOPE_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewEvent {
     pub tenant_id: TenantId,
@@ -2585,5 +2712,94 @@ mod recall_drop_reason_tests {
             serde_json::to_string(&RecallDropReason::OutputLimit).unwrap(),
             "\"output_limit\""
         );
+    }
+}
+
+#[cfg(test)]
+mod compact_intent_types_tests {
+    use super::{
+        CorrectMemoryRequest, InvalidateMemoryRequest, InvalidationReason, RememberRequest,
+        ReportMemoryUseRequest,
+    };
+
+    fn remember_json() -> serde_json::Value {
+        serde_json::json!({
+            "kind": "procedural",
+            "body": "Run `cargo fmt` before committing.",
+            "trigger": "before any commit touching Rust",
+            "verification": "cargo fmt --check exits 0",
+            "source": { "kind": "user", "ref": "chat:1", "observed_at": "2026-08-15T00:00:00Z" }
+        })
+    }
+
+    /// The intent surface is identity-free: the server derives tenant/subject/
+    /// actor/scope/node/generation from the live principal, so smuggling any of
+    /// them in the body must be a hard deserialize error, not silently ignored.
+    #[test]
+    fn remember_rejects_identity_fields_in_the_body() {
+        let mut with_identity = remember_json();
+        with_identity["subject_id"] = serde_json::json!("00000000-0000-0000-0000-000000000001");
+        let err = serde_json::from_value::<RememberRequest>(with_identity).unwrap_err();
+        assert!(
+            err.to_string().contains("subject_id") || err.to_string().contains("unknown field"),
+            "identity field must be rejected: {err}"
+        );
+    }
+
+    /// A well-formed compact remember round-trips, and `target_scope_id`/
+    /// valid-time default to absent (applicability, not identity).
+    #[test]
+    fn remember_round_trips_and_defaults_scope_and_validtime() {
+        let parsed: RememberRequest = serde_json::from_value(remember_json()).unwrap();
+        assert!(parsed.target_scope_id.is_none());
+        assert!(parsed.valid_from.is_none() && parsed.valid_to.is_none());
+        assert!(parsed.source.episode_id.is_none() && parsed.source.resource_id.is_none());
+    }
+
+    /// `reason_kind` accepts exactly stale|harmful and nothing else.
+    #[test]
+    fn invalidate_reason_kind_is_closed() {
+        let base = serde_json::json!({
+            "memory_unit_id": "00000000-0000-0000-0000-000000000002",
+            "reason": "superseded by newer guidance",
+            "source": { "kind": "user", "ref": "chat:2", "observed_at": "2026-08-15T00:00:00Z" }
+        });
+        for (kind, ok) in [("stale", true), ("harmful", true), ("obsolete", false)] {
+            let mut body = base.clone();
+            body["reason_kind"] = serde_json::json!(kind);
+            let parsed = serde_json::from_value::<InvalidateMemoryRequest>(body);
+            assert_eq!(parsed.is_ok(), ok, "reason_kind={kind}");
+            if let Ok(req) = parsed {
+                assert!(matches!(
+                    req.reason_kind,
+                    InvalidationReason::Stale | InvalidationReason::Harmful
+                ));
+            }
+        }
+    }
+
+    /// Correct selects by unit id and carries the correction reason; report use
+    /// carries no caller-supplied reporter identity.
+    #[test]
+    fn correct_and_report_shapes_are_identity_free() {
+        let correct = serde_json::json!({
+            "memory_unit_id": "00000000-0000-0000-0000-000000000003",
+            "body": "Updated guidance.",
+            "trigger": "when configuring CI",
+            "verification": "the pipeline is green",
+            "reason": "the old flag was renamed",
+            "source": { "kind": "correction", "ref": "chat:3", "observed_at": "2026-08-15T00:00:00Z" }
+        });
+        serde_json::from_value::<CorrectMemoryRequest>(correct).unwrap();
+
+        let mut report = serde_json::json!({
+            "trace_id": "00000000-0000-0000-0000-000000000004",
+            "outcome": "success",
+            "used_ids": []
+        });
+        serde_json::from_value::<ReportMemoryUseRequest>(report.clone()).unwrap();
+        // A caller-supplied reporter identity must be rejected.
+        report["caller_id"] = serde_json::json!("agent-x");
+        assert!(serde_json::from_value::<ReportMemoryUseRequest>(report).is_err());
     }
 }
