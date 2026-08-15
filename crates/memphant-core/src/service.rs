@@ -5653,6 +5653,40 @@ impl<S: MemoryStore> MemoryService<S> {
         }
     }
 
+    /// `report_memory_use`: the compact, identity-free ranking-evidence report.
+    /// The reporter identity is derived server-side from the live key (never
+    /// caller-supplied), so this maps the identity-free request onto the
+    /// existing `mark` review-event path with `caller_id = reporter_id`. Reuses
+    /// the same review-event uniqueness (silent dedup on a duplicate report for
+    /// one trace/reporter), so no second mechanism is introduced.
+    pub async fn report_memory_use(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        reporter_id: String,
+        request: memphant_types::ReportMemoryUseRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        self.mark(
+            context,
+            idempotency_key,
+            MarkRequest {
+                subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                trace_id: request.trace_id,
+                caller_id: reporter_id,
+                used_ids: request.used_ids,
+                outcome: request.outcome,
+            },
+        )
+        .await
+    }
+
     /// Tenant-bound trace fetch: a trace owned by another tenant is `None`.
     pub async fn trace(
         &self,
