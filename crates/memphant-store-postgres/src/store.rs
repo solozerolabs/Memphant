@@ -3728,12 +3728,15 @@ impl MemoryStore for PgStore {
             ForgetTarget::Episode(_) => "episode",
             ForgetTarget::Resource(_) => "resource",
         };
-        let authorized: bool = sqlx::query_scalar(AssertSqlSafe(
+        // Lock the target row (FOR UPDATE) rather than a non-locking EXISTS, so
+        // a concurrent forget/correct of the same target serializes on it.
+        let authorized: Option<Uuid> = sqlx::query_scalar(AssertSqlSafe(
             format!(
-                "select exists (select 1 from memphant.{table}
+                "select id from memphant.{table}
                  where tenant_id = $1 and id = $2 and data_subject_id = $3
                    and subject_generation = $4 and scope_id = $5 and agent_node_id = $6
-                   and actor_id = $7)"
+                   and actor_id = $7
+                 for update"
             )
             .as_str(),
         ))
@@ -3744,10 +3747,10 @@ impl MemoryStore for PgStore {
         .bind(context.scope_id.as_uuid())
         .bind(context.agent_node_id.as_uuid())
         .bind(context.actor_id.as_uuid())
-        .fetch_one(&mut **tx)
+        .fetch_optional(&mut **tx)
         .await
         .map_err(backend)?;
-        if !authorized {
+        if authorized.is_none() {
             return Err(StoreError::NotFound("forget target"));
         }
 

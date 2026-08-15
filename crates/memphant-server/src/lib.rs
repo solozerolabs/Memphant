@@ -613,6 +613,15 @@ async fn file_sync_handler<S: MutationLedgerStore + 'static>(
     FileSyncJson(request): FileSyncJson,
 ) -> Result<Response, ApiError> {
     authed.check_principal(request.actor_id, request.scope_id)?;
+    // A file-sync plan carrying a Forget operation is a permanent-erasure path
+    // and requires the owner-only capability, exactly like the /v1/forget edge.
+    if request
+        .operations
+        .iter()
+        .any(|op| matches!(op, memphant_types::FileSyncOperation::Forget { .. }))
+    {
+        authed.require_can_forget()?;
+    }
     let mut context = state
         .store()
         .resolve_memory_context(

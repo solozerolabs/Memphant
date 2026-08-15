@@ -218,6 +218,33 @@
           }
         ]
       },
+      "CompactEnvelope": {
+        "additionalProperties": false,
+        "description": "The typed compact-envelope marker persisted under `memory_unit.payload`'s\n`compact` key. Its presence is what makes a unit eligible for the portable\ncoding recall lane (a raw episode body copied into an Active unit never\ncarries it). `body_sha256` is the SHA-256 of the compact `body` — the public\ncontent hash — and backs the open-tombstone exact-body blockade;\n`write_channel` is `agent_memory` for direct agent writes.",
+        "properties": {
+          "body_sha256": {
+            "type": "string"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "verification": {
+            "type": "string"
+          },
+          "write_channel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "verification",
+          "body_sha256",
+          "write_channel"
+        ],
+        "type": "object"
+      },
       "ContextBindingAccessPolicy": {
         "oneOf": [
           {
@@ -1495,6 +1522,31 @@
           "schema_compat_revision"
         ],
         "type": "object"
+      },
+      "InvalidationMarker": {
+        "additionalProperties": false,
+        "description": "The `payload.invalidation` marker on a bodyless `Invalidated` tombstone.\nPresent iff the unit is an agent invalidation tombstone; records why the\nstable identity was archived. No table or lifecycle column — this rides in\n`payload` alongside `compact`, consistent across both stores.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/InvalidationReason"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "InvalidationReason": {
+        "description": "Why an agent is invalidating a memory. Exactly `stale` or `harmful`.",
+        "enum": [
+          "stale",
+          "harmful"
+        ],
+        "type": "string"
       },
       "JobId": {
         "format": "uuid",
@@ -2835,6 +2887,18 @@
               "null"
             ]
           },
+          "compact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompactEnvelope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The typed compact-envelope marker, present iff the unit was written as a\nportable compact memory (`payload.compact`). Read-side only: eligibility\nfor the coding recall lane keys on its presence. A raw episode/resource\nbody copied into an Active unit never carries it."
+          },
           "confidence": {
             "format": "float",
             "type": [
@@ -2882,6 +2946,18 @@
           },
           "id": {
             "$ref": "#/components/schemas/UnitId"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvalidationMarker"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The invalidation marker (`payload.invalidation`), present iff the unit is\na bodyless agent invalidation tombstone. Records why the identity was\narchived; the open (`transaction_to is null`) `Invalidated` tombstone is\nwhat blocks resurrection."
           },
           "kind": {
             "$ref": "#/components/schemas/MemoryKind"
