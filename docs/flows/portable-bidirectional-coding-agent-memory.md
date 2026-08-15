@@ -115,9 +115,18 @@ the old bytes may preserve their old evidence.
 
 `invalidate_memory` locks one open unit, closes it as `Superseded`, and appends
 one current, bodyless `Invalidated` tombstone with the same stable identity.
-Store `{kind: stale|harmful, reason}` under the existing
-`payload.invalidation`; reuse `source_ref` and `observed_at` for its evidence.
-No invalidation table, column, or new lifecycle state is justified.
+Store `{kind: stale|harmful, reason}` under a new typed `payload.invalidation`
+object; reuse `source_ref` and `observed_at` for its evidence. No invalidation
+table or new `UnitState` variant is justified, but this is not payload reuse:
+`memory_unit.payload` today carries only `contextual_chunks`
+(`store.rs:967,706`) and neither `NewMemoryUnit` nor `StoredMemoryUnit`
+(`memphant-types/src/lib.rs:1303-1376`) exposes it, so Task 2 adds one typed
+payload field threaded through both stores. The `Invalidated` variant is also
+overloaded on purpose: reflect already emits `Invalidated` as a *closed
+historical* row (`lib.rs:12250-12258`), whereas this tombstone is the *open,
+current, blocking* row. The two are distinguished by `transaction_to is null`,
+not by a new state; every predicate that treats them differently must key on
+that column, and Task 3 pins both meanings in one test.
 
 An open invalidation or deletion tombstone blocks direct remember, reflect,
 resource/episode compilation, replay, re-embedding, and writable file-sync for
@@ -141,15 +150,31 @@ expand to separately retained material.
 - Exact, lexical, vector, temporal, edge, deep, projection, and degraded paths
   cannot serve excluded states.
 - Normal recall never renders raw episode/resource bodies. When only a pending
-  raw source matches, return typed `unavailable` with
+  raw source matches, the **coding-agent lane** returns typed `unavailable` with
   `consolidation_pending`; do not turn backend/source lag into honest empty.
+  This does **not** change the existing HTTP `degraded:true` read-your-own-writes
+  contract (spec 08 §4, `service.rs:4291`, `degraded_episode_items`): that path
+  stays for the general HTTP/eval/Syndai lane. `consolidation_pending` is a new
+  result type on the compact coding path only; it never rewrites the degraded
+  contract or the tests that pin it. See Task 5 for the exact lane split.
 - Active procedural memories participate in normal recall and canonical
   projection. `Validated` remains available for evidence-backed workflows but
   is not required for fallible agent-authored memory.
-- Portable normal recall admits only units carrying the typed compact-envelope
-  marker in existing payload JSONB. A source compiler must emit a bounded
-  compact envelope or leave the source pending/non-recallable; copying a full
-  episode/resource body into an Active unit is not condensation.
+- Portable normal recall admits only units carrying a new typed compact-envelope
+  marker in `payload.compact` JSONB. This marker does not exist today; the
+  reflect compiler currently mints `Episodic` units that copy the raw episode
+  body verbatim (`service.rs:5917-5931`) and normal recall serves them, so a
+  discriminator is genuinely required. **Scope decision (was open):** the
+  compact-only eligibility predicate applies to the **coding-agent recall lane
+  only**, selected by the caller's recall policy, not globally. The shared
+  `recall_internal` path (`service.rs:4258`, also HTTP `server:494`,
+  `bench_lme.rs:1154`) keeps admitting existing non-compact corpora; otherwise
+  every current DB, LME, and HorizonBench corpus would recall empty. A source
+  compiler on the coding lane must emit a bounded compact envelope or leave the
+  source pending/non-recallable; copying a full episode/resource body into an
+  Active unit is not condensation. No feature flag gates this — the lane is
+  selected by an explicit `RecallPolicy`/mode argument on the request, not a
+  global toggle.
 - The one-card 512-token pack includes body, trigger, verification, provenance,
   lifecycle/currentness cues, and trace ID. If it cannot fit, it is rejected at
   write time as non-compact rather than truncated into misleading context.
@@ -166,6 +191,17 @@ The plugin bundles the same MCP server configuration for explicit agent calls.
 Claude portability is proven later with its native `UserPromptSubmit`
 `additionalContext` hook using the same helper semantics; do not build a
 second retrieval client before the Codex slice survives.
+
+Plugin-bundled hooks are non-managed: Codex skips them until the user reviews
+and trusts the current hook definition (verified against the official plugin
+docs). "Automatic" therefore means "automatic after a one-time trust prompt,"
+not zero-touch. Task 7 docs and the Screen 1 procedure must state the trust
+step, and the C0/M1 timing evidence is collected only on an already-trusted
+hook. Codex `UserPromptSubmit` stdin carries `prompt`, `cwd`, `session_id`,
+`turn_id`, `transcript_path`, `permission_mode`; the helper reads only `prompt`
+and `cwd`. Streamable HTTP with `bearer_token_env_var` is a supported
+`config.toml`/`.mcp.json` transport, so no stdio server is launched from the
+hook.
 
 Official host references:
 
@@ -262,8 +298,8 @@ validator, broad distractor corpus, or “smarter agent/SOTA” claim.
 - Reuse existing `MemoryStore`, mutation ledger, correction rectangles, scope
   policy, `Invalidated`/`Active` states, lineage edges, review events, trace,
   provider-free recall, Streamable HTTP, and projection code.
-- Regenerate `openapi/memphant.v1.json` and `mcp/memphant.tools.v1.json` from
-  binaries. Never hand-edit them.
+- Regenerate `openapi/memphant.v1.json`, `mcp/memphant.tools.v1.json`, and
+  `mcp/memphant.resources.v1.json` from binaries. Never hand-edit them.
 - Do not create experiment validators or run paid models during implementation.
 - Do not update `STATUS.md` until the named product proof and full repository
   gate exist in the same change.
@@ -273,17 +309,27 @@ validator, broad distractor corpus, or “smarter agent/SOTA” claim.
 **Files:**
 
 - Create: `memphant_migrations/versions/20260814_011_portable_agent_memory.sql`
-- Modify: `memphant_migrations/versions/20260703_001_wsa_bootstrap.sql`
-- Modify: `crates/memphant-core/src/lib.rs`
-- Modify: `crates/memphant-store-postgres/src/store.rs`
+  (forward-only; do **not** hand-edit `20260703_001_wsa_bootstrap.sql`).
+- Modify: `crates/memphant-core/src/lib.rs` (`ApiKeyRow`, `MutationVerb` enum —
+  add `Invalidate` + `as_str`; the SQL CHECK alone is insufficient)
+- Modify: `crates/memphant-types/src/lib.rs` (`SCHEMA_COMPAT_REVISION`, line 1732)
+- Modify: `crates/memphant-store-postgres/src/lib.rs` (migration `include_str!`
+  head/include list, lines 29-33 — not `store.rs`)
+- Modify: `crates/memphant-store-postgres/src/store.rs` (`ApiKeyRow` mapping,
+  `authenticate_api_key` result columns)
 - Modify: `crates/memphant-server/src/lib.rs`
 - Modify: `crates/memphant-mcp/src/lib.rs`
 - Modify: `crates/memphant-server/tests/auth_contract.rs`
 - Modify: `crates/memphant-mcp/tests/mcp_schema_contract.rs`
+- Modify: `crates/memphant-mcp/tests/distribution_wedge.rs`,
+  `crates/memphant-core/tests/subject_erasure.rs` — both build `ApiKeyRow {}`
+  literals and break the moment the two columns land.
 - Modify: `tests/test_wsa_migration_contract.py`
 - Modify only as required by changed function signatures:
   `scripts/check_memphant_migration_contract.py`,
-  `scripts/check_memphant_live_catalog.py`, and API-key provisioning callers.
+  `scripts/check_memphant_live_catalog.py` (lines 244/268 expectations),
+  `scripts/check_memphant_migration_class.py` inputs, and API-key provisioning
+  callers.
 
 **Contract:**
 
@@ -309,21 +355,39 @@ comparing every startup binding. It replaces `recall_context()` and
 
 **Steps:**
 
-1. Add the two `boolean not null default false` columns to the new migration
-   and bootstrap `memphant.api_key` definition. In the same migration, widen
-   the existing mutation-ledger verb CHECK to admit `invalidate`, and add
-   `scope_policy.allow_write boolean not null default false`. Add a partial
-   unique index for one open compact generation per stable fact key and a
-   partial expression index over open invalidation `payload.compact.body_sha256`
-   for the exact-body blockade. The unique key is
-   `(tenant_id,data_subject_id,scope_id,agent_node_id,fact_key)` where
-   `transaction_to is null`, `payload ? 'compact'`, and state is Active,
-   Validated, or Invalidated. Extend
-   `memphant.provision_api_key` with default-false capability arguments and
-   preserve least privilege at every current caller. Update the store migration
-   head/include list and `SCHEMA_COMPAT_REVISION` once.
+1. In the **forward-only** `_011` migration (never rewrite bootstrap — precedent
+   b6417369 reverted a bootstrap hand-edit and pinned it at
+   `tests/test_wsa_migration_contract.py:137-148`): add the two
+   `boolean not null default false` columns to `memphant.api_key`; widen the
+   mutation-ledger verb CHECK to admit `invalidate` (this `drop constraint`
+   makes the migration `migration_kind='breaking'` per
+   `check_memphant_migration_class.py:10-26`, matching 007/010); add
+   `scope_policy.allow_write boolean not null default false`;
+   `create or replace` the SECURITY DEFINER `memphant.authenticate_api_key`
+   (`bootstrap:1064-1089`) and `memphant.provision_api_key` to carry the two new
+   capability columns/arguments (default false), plus the matching
+   `alter function ... owner` line. Preserve least privilege at every current
+   caller.
+   For the exact-body blockade and one-open-compact-generation guarantee, do
+   **not** add a bare partial unique index on
+   `(tenant_id,data_subject_id,scope_id,agent_node_id,fact_key)`: correction
+   emits a replacement plus up to two open valid-time remainders sharing
+   `fact_key` (`memphant-core/src/lib.rs:1268-1298`, `store.rs:3454-3457`), which
+   such an index rejects. Instead extend the existing GiST exclusion
+   `memphant_memory_unit_subject_valid_excl`
+   (`20260703_001:841-851`, forward-applied by
+   `20260731_007_semantic_only_subject_exclusion.sql`) — it already carries
+   `subject_generation`, `kind`, and `tstzrange(valid_from,valid_to,'[)') &&` so
+   remainders coexist. Add the compact kinds/`payload ? 'compact'` condition to
+   its `where` clause (keeping the semantic/preference arm intact and its pinning
+   test green), and add a separate partial expression **index** (not unique) over
+   open `payload->'compact'->>'body_sha256'` to back the exact-body lookup.
+   Update the migration head/include list (`memphant-store-postgres/src/lib.rs`)
+   and `SCHEMA_COMPAT_REVISION` (`memphant-types/src/lib.rs`) once.
 2. Add a migration check that old rows remain false and only the provisioner
-   can mint an authorized owner key or owner-managed write grant.
+   can mint an authorized owner key or owner-managed write grant. Add/extend the
+   `test_wsa_migration_contract.py` assertion that the verb widening is
+   forward-migrated and bootstrap is not rewritten.
 3. Extend `ApiKeyRow` and both in-memory/PostgreSQL lookups.
 4. Replace the MCP split binding logic with `live_principal()`. Require all five
    context fields on every MCP call/resource read; compare key ID, tenant,
@@ -332,9 +396,11 @@ comparing every startup binding. It replaces `recall_context()` and
 5. Extend `AuthedTenant` with key ID and capabilities. Re-check capabilities at
    the handler boundary for owner forget and any request with explicit
    `transaction_as_of` or `valid_at`; do not trust body identity.
-6. Add focused tests for default-false migration, unbound key, revocation
-   between calls, principal drift, trust-ceiling drift, agent HTTP forget 403,
-   and agent historical recall 403.
+6. Add focused tests for default-false migration, unbound key, agent HTTP forget
+   403, and agent historical recall 403. For revocation-between-calls, principal
+   drift, and trust-ceiling drift, **extend** the existing recall coverage
+   (`mcp_schema_contract.rs:564-579,624`) to the other four tools rather than
+   duplicating it — those branches already exist for `recall`.
 7. Commit: `feat: bind coding memory operations to live capabilities`.
 
 **Do not add:** a host/agent role, policy engine, capability table, wildcard
@@ -353,17 +419,26 @@ capabilities, or a second authentication middleware.
 - Modify: `crates/memphant-core/tests/embedding_channel.rs` only if shared
   fixtures require the new eligibility contract.
 
-**Types:**
+**Types (prefer stripping identity from existing shapes over parallel DTOs):**
+
+The existing request types already model these intents and must not be
+duplicated wholesale:
+
+- `RetainUnitPayload{kind, predicate, body, valid_from, valid_to, ...}`
+  (`memphant-types/src/lib.rs:1885-1917`) already carries kind/body/valid-time;
+  `RetainRequest.source_kind/source_ref/observed_at` (`lib.rs:343-361`) is the
+  source triple. `RememberRequest` is `RetainUnitPayload` with the identity
+  fields removed and `trigger`/`verification` added — reuse the payload, do not
+  re-declare kind/body/valid-time in a parallel struct.
+- `CorrectRequest{selector: UnitId, correction: CorrectionPayload{value, reason,
+  source_ref, observed_at, valid_from, valid_to}}` (`lib.rs:2003-2024`) is
+  already `UnitId`-selected and already carries `reason`; `CorrectMemoryRequest`
+  is this with identity stripped plus `trigger`/`verification`.
+- `MarkRequest{trace_id, used_ids, outcome}` (`lib.rs:2115-2125`) is
+  `ReportMemoryUseRequest` minus caller-supplied `caller_id`.
 
 ```rust
-pub struct MemorySourceInput {
-    pub kind: String,
-    pub r#ref: String,
-    pub observed_at: String,
-    pub episode_id: Option<EpisodeId>,
-    pub resource_id: Option<ResourceId>,
-}
-
+// Identity-free wire shape; body reuses RetainUnitPayload internally.
 pub struct RememberRequest {
     pub kind: MemoryKind,
     pub body: String,
@@ -372,24 +447,30 @@ pub struct RememberRequest {
     pub target_scope_id: Option<ScopeId>,
     pub valid_from: Option<String>,
     pub valid_to: Option<String>,
-    pub source: MemorySourceInput,
+    pub source: MemorySourceInput, // {kind, ref, observed_at, episode_id?, resource_id?}
 }
 ```
 
 Add equally compact `CorrectMemoryRequest`, `InvalidateMemoryRequest`, and
 `ReportMemoryUseRequest`. Correction/invalidation select by `UnitId` only.
 Their edge adapters resolve `LivePrincipal`, then pass only the authorized
-`ResolvedMemoryContext`, live trust ceiling/key ID where needed, request, and
-idempotency key into `MemoryService`; core does not depend on an MCP auth type.
-No public intent type carries identity.
+`ResolvedMemoryContext`, request, and idempotency key into `MemoryService`;
+core does not depend on an MCP auth type. **Do not** re-pass the trust ceiling
+into core: `context.actor_trust` is already clamped to the key ceiling at every
+edge (`memphant-mcp/src/lib.rs:420,541,583`, `memphant-server/src/lib.rs:428,594`),
+so `min(target, context.actor_trust)` inside the service is sufficient. No
+public intent type carries identity.
 
-Store trigger in the existing `memory_unit.predicate`. Store verification in
-the existing unit `payload.compact` JSONB with `schema_version = 1`,
+Store trigger in the existing `memory_unit.predicate`. Store verification in a
+new typed `payload.compact` JSONB object with `schema_version = 1`,
 `verification`, `body_sha256`, and `write_channel`; body stays the compact
-primary rendering. Extend unit mappers to preserve the typed compact
-metadata rather than creating a table or columns for two strings. The public
-content hash is the existing compact-body SHA-256; do not claim it hashes an
-unprovided external source body.
+primary rendering. Note this is a real type change, not reuse: `payload` today
+holds only `contextual_chunks` and is not surfaced on `NewMemoryUnit`/
+`StoredMemoryUnit`, so add one typed payload field threaded through the types
+crate and both stores (Postgres `store.rs:967,706` and the InMemory store).
+Do not add a table or columns for the two strings. The public content hash is
+the existing compact-body SHA-256; do not claim it hashes an unprovided external
+source body.
 
 **Steps:**
 
@@ -406,14 +487,18 @@ unprovided external source body.
    resolved in the bound context; a resource ACL must authorize the target.
    Free-form source refs and read-only grants are denied for cross-scope writes.
    Never create scopes/grants from this call.
-3. Derive the stable key from resolved context, target scope/node, kind, and
-   semantic subject/normalized trigger with the existing SHA-256
-   primitives. Persist the compact-body SHA-256 in typed payload metadata so an
+3. Reuse the existing `derive_fact_key` = `{scope}:{subject}:{predicate}`
+   (`memphant-core/src/lib.rs:13152-13173`) to derive the stable key; do **not**
+   invent a second key format that re-encodes tenant/subject/scope/node/kind into
+   the hash — those are already columns and in the exclusion key, and a divergent
+   format would break `fact_key` supersession parity with `RetainUnitPayload`
+   writes. Persist the compact-body SHA-256 in `payload.compact.body_sha256` so an
    open tombstone blocks exact-body recreation even if caller provenance drifts.
 4. Reuse the direct-unit persistence path but mint `UnitState::Active`. Preserve
    the caller's evidence source kind/ref in existing provenance columns and set
-   `payload.compact.write_channel = agent_memory`. Do not enqueue reflection
-   for a compact unit.
+   `payload.compact.write_channel = agent_memory`. (The direct-unit path already
+   enqueues nothing — `service.rs:4093` returns `enqueued: Vec::new()` — so
+   "do not enqueue reflection" is a guardrail, not new work.)
 5. Enforce read-your-write behavior and exact mutation-ledger replay.
 6. Add one table-driven in-memory-store test for all six kinds, compactness,
    scope containment, read-grant denial, explicit write-grant placement, and
@@ -458,22 +543,37 @@ both stores and all ingress paths.
 **Steps:**
 
 1. Change correction generation so changed bytes receive fresh source fields,
-   empty contextual chunks/citations, and trust clamped to the minimum of
-   target, actor, and live-key ceiling. Persist the explicit correction reason,
-   refresh compact metadata/body hash, and preserve old evidence only on
-   unchanged valid-time remainders.
+   empty contextual chunks/citations, and trust clamped to `min(target,
+   context.actor_trust)` (already ceiling-clamped; see Task 2). Today the
+   replacement inherits the old unit's `contextual_chunks`/`trust_level`
+   (`lib.rs:1256-1266`) and Postgres clones citations to replacement **and**
+   remainders (`store.rs:3498-3519`) while the InMemory store does **not**
+   (`lib.rs:4877-4960`) — this store divergence must be closed so "no cloned
+   citations" holds in both stores, not just in-memory. Persist the explicit
+   correction reason, refresh compact metadata/body hash, and preserve old
+   evidence only on unchanged valid-time remainders.
 2. Add `stage_invalidation`: `SELECT ... FOR UPDATE` the open target, close it
    as `Superseded` at database transaction time, append an `Invalidated`
-   tombstone with same stable key, empty body, typed reason in the existing
-   payload, source fields, and a
-   `Supersedes` edge.
+   tombstone with same stable key, empty body, typed reason in
+   `payload.invalidation`, source fields, and a `Supersedes` edge. The tombstone
+   is the *open* (`transaction_to is null`) `Invalidated` row and is distinct
+   from reflect's *closed* `Invalidated` rows; pin both in the same test.
 3. Reject correction/invalidation across subject/scope/actor or above the live
    trust ceiling. Allow correction to select an open invalidation tombstone and
    atomically replace it; no other write may do so.
 4. Add one shared open-tombstone lookup to direct remember, compiled-unit
-   persistence, reflect/resource paths, replay, re-embedding, and any remaining
-   writable file-sync service path. Match both stable identity and exact
-   compact-body digest. Delete per-caller partial guards.
+   persistence, reflect/resource paths, replay, and any remaining writable
+   file-sync service path. (There is no re-embedding ingress today — no
+   re-embed/backfill path exists in core/worker/store — so do not invent one to
+   guard.) Today the guards are per-caller and key only on
+   `forgotten_source(source_kind, source_id)`: `is_forgotten` in
+   `stage_compiled_units` (`store.rs:4725-4761`), the deep-snapshot
+   `not exists (... forgotten_source ...)` repeated at `store.rs:2620,2649,2679`,
+   InMemory `is_forgotten_source` (`lib.rs:2648`), and correction
+   (`store.rs:3381`) has **no** tombstone check at all. Replace them with one
+   shared predicate matching both stable identity and exact compact-body digest,
+   and add the missing check to the correction path. Delete the per-caller
+   partial guards.
 5. Pin half-open transaction-time behavior in both in-memory and scratch-store
    testkit: active before transition, no normal value after invalidation, one
    successor only after correction, no dual current generations under a
@@ -503,10 +603,19 @@ both stores and all ingress paths.
 3. In one PostgreSQL transaction, lock the explicit target, persist the
    forgotten-source/no-resurrection marker, traverse the selected stable
    supersedes lineage in both directions, and scrub every lineage member plus
-   composition dependents. Episode/resource erasure also scrubs directly
-   derived units and their correction descendants. Delete embeddings,
-   citations, chunks, and derived payloads; blank/null stored content and
-   source excerpts; retain only content-free `Deleted` tombstones/receipt.
+   composition dependents. **What already exists (reuse, don't rebuild):**
+   bidirectional supersedes traversal for `ForgetTarget::MemoryUnit`
+   (`store.rs:3681-3699`, InMemory `lib.rs:1517-1549`), composition cascade
+   (`delete_composed_dependents`, `store.rs:3802`), embedding hard-delete
+   (`store.rs:3814-3827`), and the `forgotten_source` marker (`store.rs:3626`).
+   **What is new:** forget currently only sets `state='deleted'` and leaves body,
+   `payload` chunks, citations, and episode/resource bodies intact
+   (`store.rs:3711-3773`), and it locks nothing — authorization is a
+   `select exists` (`store.rs:3602-3620`). So the new work is: add `FOR UPDATE`
+   on the target, and blank/null stored content, source excerpts, citations, and
+   derived payloads (not just embeddings), retaining only content-free `Deleted`
+   tombstones/receipt. Episode/resource erasure also scrubs directly derived
+   units and their correction descendants.
 4. Ensure authorized as-of reads return no erased bytes at any time. Preserve
    non-erased related source material unless explicitly selected.
 5. Add one scratch-store behavioral test covering 403/no mutation, authorized
@@ -514,7 +623,20 @@ both stores and all ingress paths.
    source replay blockade.
 6. Commit: `feat: make owner forget a capability-gated erasure`.
 
-### Task 5: Centralize normal eligibility and retire raw fallback
+### Task 5: Add the coding-lane compact predicate without breaking the degraded contract
+
+**Scope decision (was the largest open risk):** the compact-only eligibility and
+the `consolidation_pending` result apply to the **coding-agent recall lane
+only**, selected by an explicit recall policy/mode on the request. `recall_internal`
+(`service.rs:4258`) is shared by HTTP (`server:494`), `bench_lme.rs:1154`, and
+Syndai; no existing unit carries `payload.compact`, and the reflect compiler mints
+raw-body `Episodic` units that normal recall serves today
+(`service.rs:5917-5931`). A global compact-only predicate would recall **empty**
+on every current DB/LME/HorizonBench/Syndai corpus, and AGENTS.md bars a feature
+flag as the escape hatch. Therefore this task **adds** a lane, it does not rewrite
+the default. The existing `degraded:true` read-your-own-writes contract
+(`degraded_episode_items`, `service.rs:4291`; spec 08 §4) stays intact for the
+general lane; `degraded_episode_items` is **not removed**.
 
 **Files:**
 
@@ -524,41 +646,56 @@ both stores and all ingress paths.
 - Modify: `crates/memphant-store-testkit/src/lib.rs`
 - Modify: `crates/memphant-types/src/lib.rs`
 - Modify: `crates/memphant-server/src/lib.rs`
-- Modify: `crates/memphant-server/tests/rest_contract.rs`
+- Modify: `crates/memphant-server/tests/rest_contract.rs` (degraded-path test
+  stays green; add coding-lane cases)
+- Modify: `crates/memphant-core/tests/surface_mutations.rs` and
+  `crates/memphant-store-postgres/tests/pg_store_contract.rs` — both pin
+  `degraded_read_your_own_writes`; assert the general lane is unchanged and the
+  coding lane returns `consolidation_pending`.
 - Modify: `crates/memphant-mcp/src/lib.rs`
 - Modify: focused recall tests under `crates/memphant-core/tests/` and existing
   service/store test modules.
 
 **Steps:**
 
-1. Define `normal_recall_eligible(unit, time, policy)` admitting only typed
-   compact envelopes in current permitted states/kinds. Active and Validated
-   procedural compact units are eligible; belief remains default-off.
-   Invalidated, Superseded, Expired, Deleted, Quarantined, Candidate, and
-   uncondensed/raw-body units are ineligible.
-   Separately define `audit_visible_at(unit, time)` so an authorized audit may
-   see a Superseded predecessor inside its half-open transaction interval while
-   always excluding erased content. Never reuse the normal predicate for audit.
-2. Mirror the normal predicate in every PostgreSQL candidate query before cursor and
-   `LIMIT`, including exact/lexical, vector, temporal, edge, and deep seeds.
-   Core applies it again before scoring/packing.
-3. Remove `degraded_episode_items` and the raw-body call site. Stop compiler
-   projection paths from minting an Active compact marker when they merely copy
-   the source body. If matching raw sources are pending consolidation and no
-   compact unit exists, return a typed service error
-   `ConsolidationPending`; otherwise retain honest empty.
+1. Define `normal_recall_eligible(unit, time, policy)` where the compact-only
+   arm is gated on the coding-lane policy. On the coding lane it admits only typed
+   `payload.compact` envelopes in permitted states/kinds (Active and Validated
+   procedural eligible; belief default-off; Invalidated/Superseded/Expired/
+   Deleted/Quarantined/Candidate/raw-body ineligible). On the general lane it
+   keeps today's behavior. Separately define `audit_visible_at(unit, time)` so an
+   authorized audit sees a Superseded predecessor inside its half-open
+   transaction interval while always excluding erased content — this split is
+   justified because the current `recallable()` already leaks audit visibility
+   into normal recall (`lib.rs:10594`). Never reuse the normal predicate for
+   audit.
+2. **DRY:** the state/valid-time predicate is currently duplicated inline in five
+   PG queries (`store.rs:2459,2831,2611,4083,4124`) and three InMemory sites, and
+   most do **not** filter non-`deleted` states before `LIMIT` (Superseded/Expired/
+   Invalidated/Quarantined rows consume the limit and are dropped later). Do not
+   add a sixth copy: extract one `const NORMAL_ELIGIBLE_SQL` fragment (or a view)
+   interpolated into the candidate queries, and apply the Rust predicate again in
+   core before scoring/packing.
+3. Do **not** remove `degraded_episode_items`. Instead, on the coding lane only,
+   bypass the degraded raw-body fallback and, when matching raw sources are
+   pending consolidation and no compact unit exists, return a typed service
+   `ConsolidationPending`; the general lane still returns `degraded:true`. Also
+   stop the coding-lane compiler paths from minting a `payload.compact` marker
+   when they merely copy a source body (raw `Episodic` copies never get the
+   marker).
 4. Update canonical projection to include current Active procedural memories
    and exclude every tombstone/archive state.
 5. Require `can_audit_history` whenever `transaction_as_of` or `valid_at` is
-   explicitly supplied.
-   Authorized audit uses `audit_visible_at`; erased bytes remain absent
-   regardless of capability.
+   explicitly supplied (no such gate exists today). Authorized audit uses
+   `audit_visible_at`; erased bytes remain absent regardless of capability.
 6. Add one table-driven matrix for create/correct/invalidate/expire/erase across
-   normal now, authorized transaction-as-of, and valid-at reads. Add a pending
-   raw-source regression asserting HTTP maps `ConsolidationPending` to a typed
-   503 error, MCP maps it to typed unavailable, hooks inject no body and log the
-   code, and projections expose no source bytes.
-7. Commit: `feat: make compact lifecycle eligibility fail closed`.
+   normal now, authorized transaction-as-of, and valid-at reads. Add a
+   coding-lane pending-source regression asserting the coding lane maps
+   `ConsolidationPending` to MCP typed unavailable and (if surfaced on HTTP) a
+   typed 503, hooks inject no body and log the code, and projections expose no
+   source bytes — **and** a regression asserting the general HTTP lane still
+   returns `degraded:true` (spec 08 §4, `rest_contract.rs:1281-1373`).
+7. Commit: `feat: add compact coding-lane eligibility without breaking degraded reads`.
 
 ### Task 6: Replace the MCP router with the five intent tools
 
@@ -566,9 +703,15 @@ both stores and all ingress paths.
 
 - Modify: `crates/memphant-mcp/src/lib.rs`
 - Modify: `crates/memphant-mcp/src/file_memory.rs`
-- Modify: `crates/memphant-mcp/tests/mcp_schema_contract.rs`
+- Modify: `crates/memphant-mcp/tests/mcp_schema_contract.rs` (pins the seven
+  names at lines 22/54/155)
 - Modify: `crates/memphant-mcp/tests/distribution_wedge.rs`
 - Modify: `crates/memphant-mcp/tests/edge_auth.rs`
+- Modify: `tests/test_wsd_public_surfaces.py` (hard-asserts the seven tool names
+  at 196-204)
+- Modify: `README.md` (line 80 "seven governed tools"; §87-97 documents the
+  file/anthropic memory tool being removed) — do not defer all README edits to
+  Task 9; the tool-count claim breaks here.
 - Regenerate: `mcp/memphant.tools.v1.json`
 - Regenerate: `mcp/memphant.resources.v1.json`
 
@@ -577,9 +720,14 @@ both stores and all ingress paths.
 1. Keep the query-only `McpRecallRequest` and fixed limit-one/512/provider-free
    defaults. Map the four new intent DTOs to the Task 2 service methods.
 2. Reuse the existing validated `McpMutation<T>` idempotency envelope and derive
-   reporter identity from `live.api_key_id`. Reject duplicate reports
-   for the same trace/principal using the existing review-event uniqueness;
-   remove caller-controlled `caller_id` from this surface.
+   reporter identity from `live.api_key_id`. Duplicate reports for the same
+   trace/principal are handled by the **existing silent dedup** — Postgres
+   `on conflict (tenant_id, trace_id, caller_id) do nothing` (`store.rs:3884`)
+   and InMemory skip (`lib.rs:5248`); do not change this to a hard rejection
+   (that would be new behavior, not reuse). Remove caller-controlled `caller_id`
+   from the wire surface and derive it server-side from `live.api_key_id`; the
+   review-event uniqueness key `(tenant_id, trace_id, caller_id)` (`bootstrap:694`)
+   then keys on the derived reporter identity.
 3. Register exactly the five tool names. Update server metadata and generated
    schema; delete old handler methods rather than keeping aliases.
 4. Remove `MemoryCommand`/`anthropic_memory_tool` from the coding server because
@@ -601,7 +749,10 @@ both stores and all ingress paths.
 - Create: `plugins/codex-memphant/.mcp.json`
 - Create: `plugins/codex-memphant/hooks/hooks.json`
 - Create: `plugins/codex-memphant/hooks/user_prompt_submit.py`
-- Create: `plugins/codex-memphant/tests/test_user_prompt_submit.py`
+- Create: `tests/test_codex_hook.py` — **not** under `plugins/...`. The repo has
+  no `pytest.ini`/`pyproject.toml`/`conftest.py`; the harness runs
+  `python3 -m pytest tests/ -q`, so a test under `plugins/` is never collected.
+  The test imports the hook via an explicit path insert.
 - Modify: `README.md`
 
 **Transport contract:**
@@ -617,13 +768,18 @@ both stores and all ingress paths.
 
 **Steps:**
 
-1. Configure one Streamable HTTP MCP endpoint in `.mcp.json`; the hook and
-   Codex explicit tools use the same URL and bearer key. Do not launch a second
-   stdio server from the hook.
+1. Configure one Streamable HTTP MCP endpoint in `.mcp.json`
+   (`bearer_token_env_var` transport); the hook and Codex explicit tools use the
+   same URL and bearer key. Do not launch a second stdio server from the hook.
+   Document that Codex skips plugin-bundled (non-managed) hooks until the user
+   reviews and trusts them — the boundary is "automatic after one trust prompt."
 2. Implement the hook with Python stdlib only. Read one JSON object from stdin;
    require string `prompt` and `cwd`; construct a bounded query from those two
    fields; perform MCP initialize, initialized notification, and `tools/call`
-   `recall` over the existing endpoint/session header.
+   `recall` over the existing endpoint/session header. Write this stdlib
+   Streamable-HTTP MCP client **once** as an importable helper; Task 8's probe
+   imports the same helper instead of adding a 4th copy-pasted client to
+   `e2e_probe.sh` (which already carries three inline stdio clients at 230-470).
 3. Parse only the typed recall result. On hit, return its already-packed card in
    `additionalContext`; on empty, return empty context; on auth/unavailable,
    write one concise stderr diagnostic and return empty context without
@@ -653,6 +809,11 @@ both stores and all ingress paths.
 
 1. In ephemeral scratch PostgreSQL, provision one fully bound coding key, one
    owner-forget key, and one owner-audit key. Assert coding capabilities false.
+   Note the probe's existing HTTP forget uses the ordinary bound `KEY_A`
+   (`e2e_probe.sh:505`); after Task 1 that call must switch to the owner-forget
+   key or it returns 403. The probe currently drives `memphant-mcp stdio` only;
+   the hook slice needs a `memphant-mcp streamable-http` server started in the
+   probe, not just new calls.
 2. Through real MCP/HTTP binaries execute:
    `remember → recall → correct → recall → invalidate → recall → blocked replay
    → report`, then owner audit and owner forget.
@@ -676,22 +837,33 @@ both stores and all ingress paths.
 **Files:**
 
 - Modify: `README.md`
-- Modify: relevant files under `docs/superpowers/specs/memphant/`
+- Modify: relevant files under `docs/superpowers/specs/memphant/` — including
+  `08-api-sdk-mcp-spec.md` (the coding-lane `consolidation_pending` result and
+  the five-tool surface; the general-lane `degraded:true` contract in §4 stays)
+  and `07-*`/`STATUS.md` references to the old seven tools. If a private Syndai
+  checkout is present, keep the mirrored spec drift-free per AGENTS.md.
+- Modify: `docs/handoff/2026-08-14-portable-coding-agent-memory-handoff.md` and
+  `...-next-session-prompt.md` — add the `Current STATUS mirror: <phase>` line
+  each requires; `tests/test_repo_contract.py::test_handoff_docs_mirror_status_phase`
+  already fails at HEAD without it (pre-existing baseline red this flow must clear).
 - Confirm generated parity: `openapi/memphant.v1.json`
 - Confirm generated parity: `mcp/memphant.tools.v1.json`
 - Confirm generated parity: `mcp/memphant.resources.v1.json`
 - Modify only with named passing proof:
   `docs/superpowers/specs/memphant/STATUS.md`
 - Modify `AGENTS.md` only if implementation reveals a concise durable invariant
-  not already covered. Do not restate this flow.
+  not already covered (candidate: name `mcp/memphant.resources.v1.json` as a
+  generated artifact alongside the two already listed). Do not restate this flow.
 
 **Steps:**
 
 1. Document the five tools, read-only resources, capability boundaries,
    bitemporal behavior, compact envelope, source-vs-kind model, and automatic
-   Codex setup.
-2. Remove normative claims that agent deletion, writable file memory, raw
-   fallback, or Validated-only procedural recall are current behavior.
+   Codex setup (including the one-time hook-trust step).
+2. Remove normative claims that agent deletion, writable file memory, or
+   Validated-only procedural recall are current behavior. Do **not** claim the
+   raw/`degraded` fallback was removed — it stays for the general lane; the
+   coding lane simply does not use it.
 3. Confirm generated schemas match the final binaries and provider docs show
    the same contract. Regenerate only an artifact whose owning generator
    reports a diff; Task 6 owns the MCP artifact change.
@@ -798,7 +970,46 @@ run it or any paid/quality campaign.
 | Reverse Code-Fit | parallel code review | Exact current seams and migration ownership | 2 | CLEAR | Compact discriminator, typed lag, store/runtime mappings applied |
 | Reverse Security | parallel lifecycle review | Capability, ACL, erasure, resurrection | 2 | CLEAR | Both temporal axes, explicit write grants, lineage erasure applied |
 | Reverse KISS | parallel scope review | Remove duplicate surfaces and speculative work | 2 | CLEAR | REST duplication, early docs, tiers, stores, and extra experiments removed |
+| Code-verification review | 4 parallel readers vs live code | Verify every plan claim about existing seams against the tree | 4 | FOLDED | See "Code-verification fold" below |
 
-**VERDICT:** ENG REVIEW CLEARED — the plan is ordered, bounded, and ready for implementation.
+### Code-verification fold (2026-08-14, second review round)
+
+Four parallel readers checked the plan against the actual code. Blocking items
+folded into the tasks above:
+
+1. **Unique-index vs remainders (Task 1):** the proposed partial unique index on
+   `fact_key` would reject the correction remainders the plan itself keeps. Now
+   extends the existing GiST exclusion `memphant_memory_unit_subject_valid_excl`
+   (valid-time aware) plus a non-unique body-hash index.
+2. **Compact-only eligibility scope (Task 5):** was globally empty-ing every
+   existing corpus on the shared `recall_internal` path. Now an explicit
+   **coding-lane** predicate selected by recall policy; the general lane and the
+   `degraded:true` contract (spec 08 §4) are untouched, so `degraded_episode_items`
+   is **not** removed.
+3. **`payload.compact`/`payload.invalidation` are new, not reuse:** `payload`
+   holds only `contextual_chunks` today and is not on the unit structs; both are
+   real typed fields through the types crate and both stores.
+4. **Forward-only migration (Task 1):** bootstrap is not hand-edited (precedent
+   b6417369); the `_011` migration is `migration_kind='breaking'` and also
+   `create or replace`s `authenticate_api_key`.
+5. **DRY / new-vs-existing:** new DTOs strip identity from existing request
+   shapes rather than duplicating them; the eligibility predicate is one shared
+   SQL fragment, not a sixth inline copy; forget's lineage traversal/cascade
+   already exist (only content-scrub + `FOR UPDATE` are new); trust is already
+   ceiling-clamped at the edge; `derive_fact_key` reused as-is.
+6. **Files-list gaps folded:** `MutationVerb` Rust enum, `SCHEMA_COMPAT_REVISION`
+   in memphant-types, migration include list in memphant-store-postgres `lib.rs`,
+   `ApiKeyRow` literals in `subject_erasure.rs`/`distribution_wedge.rs`,
+   seven-tool pins in `test_wsd_public_surfaces.py`/`README.md`,
+   `validated_procedure` pin in the CLI file-plane test, degraded-pin test files,
+   Python hook test relocated to `tests/`, streamable-http probe server, and the
+   pre-existing handoff-mirror baseline failure.
+7. **External contract verified:** Codex `UserPromptSubmit`/`additionalContext`
+   is production; streamable-HTTP + `bearer_token_env_var` supported. New caveat:
+   plugin-bundled hooks require a one-time user trust step ("automatic" ≠
+   zero-touch), now documented in Task 7 and the delivery invariants.
+
+**VERDICT:** ENG REVIEW CLEARED; code-verification findings folded — the plan is
+ordered, bounded, and consistent with the live tree.
 
 NO UNRESOLVED DECISIONS
