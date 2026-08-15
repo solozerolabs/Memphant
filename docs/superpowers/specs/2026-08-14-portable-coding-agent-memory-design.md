@@ -132,6 +132,9 @@ Every recallable memory has:
 
 The rendered compact unit must fit the normal 512-token recall envelope. Longer
 material is evidence, not a compact recall unit, until condensed.
+Recallability also requires an explicit compact-envelope marker in the existing
+unit payload. Copying a retained episode or resource body into an `Active` unit
+does not make it compact or portable.
 
 ### 4.3 Authorization versus applicability
 
@@ -146,6 +149,14 @@ different storage models. Reuse the existing hierarchical `scope` rows
   analogous to choosing the appropriate directory for an `AGENTS.md` or
   `LEARNINGS.md` entry;
 - the server resolves the scope and enforces containment/policy before writing.
+
+Read and write authorization are distinct. A different target scope requires
+an owner-created `scope_policy` grant with explicit write permission for the
+memory kind; the server derives the target agent node from that grant. A read
+grant never authorizes placement. Cross-scope placement also requires a
+canonical retained episode/resource source resolved in the bound context; a
+resource ACL must authorize the target. Free-form source references are
+informational and remain confined to the bound scope.
 
 There is no second applicability table, taxonomy, or free-form authority field.
 A repository-bound caller cannot write to a workspace ancestor. A workspace-
@@ -178,7 +189,9 @@ former transaction interval; normal recall sees neither it nor the tombstone.
 
 Every creation path, including `remember`, reflect, file sync, and source
 replay, rejects a new current unit while an open invalidation tombstone exists
-for the same stable identity. Only `correct_memory` may select that tombstone,
+for the same stable identity or exact compact-body digest. This is an exact
+lineage/content guarantee, not a claim that deterministic code recognizes
+every semantic paraphrase. Only `correct_memory` may select that tombstone,
 close it, and atomically create a new `Active` successor. This is the sole
 ordinary path by which corrected evidence can restore that identity.
 
