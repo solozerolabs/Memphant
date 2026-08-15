@@ -2266,7 +2266,7 @@ pub struct InvalidateMemoryRequest {
 }
 
 /// Report how a recall pack was used. Ranking evidence only; the server derives
-/// the reporter identity from the live key, so no caller-supplied `caller_id`.
+/// the reporter identity from the live key rather than accepting it on the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReportMemoryUseRequest {

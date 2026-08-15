@@ -1458,7 +1458,7 @@
         },
         "ReportMemoryUseRequest": {
           "additionalProperties": false,
-          "description": "Report how a recall pack was used. Ranking evidence only; the server derives\nthe reporter identity from the live key, so no caller-supplied `caller_id`.",
+          "description": "Report how a recall pack was used. Ranking evidence only; the server derives\nthe reporter identity from the live key rather than accepting it on the wire.",
           "properties": {
             "outcome": {
               "$ref": "#/$defs/MarkOutcome"

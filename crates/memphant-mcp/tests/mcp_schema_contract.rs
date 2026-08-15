@@ -1,6 +1,6 @@
 //! MCP contract (Task 7): the committed artifact carries camelCase
 //! `inputSchema` for all seven tools; a persistent in-process rmcp session
-//! completes initialize → tools/list → tools/call retain → recall without
+//! completes initialize → tools/list → tools/call remember → recall without
 //! closing the transport first; startup refuses to bind without a tenant.
 
 use std::path::Path;
@@ -18,8 +18,12 @@ use rmcp::ServiceExt;
 use rmcp::model::CallToolRequestParams;
 use serde_json::{Value, json};
 
-const TOOL_NAMES: [&str; 7] = [
-    "retain", "recall", "reflect", "correct", "forget", "trace", "mark",
+const TOOL_NAMES: [&str; 5] = [
+    "recall",
+    "remember",
+    "correct_memory",
+    "invalidate_memory",
+    "report_memory_use",
 ];
 
 async fn recall_tool_result(handler: MemphantMcp) -> rmcp::model::CallToolResult {
@@ -51,7 +55,7 @@ async fn recall_tool_result(handler: MemphantMcp) -> rmcp::model::CallToolResult
 }
 
 #[test]
-fn artifact_has_camel_case_input_schema_for_all_seven_tools() {
+fn artifact_has_camel_case_input_schema_for_all_five_tools() {
     let generated = memphant_mcp::tools_artifact();
     let committed: Value = serde_json::from_str(
         &std::fs::read_to_string(
@@ -70,6 +74,11 @@ fn artifact_has_camel_case_input_schema_for_all_seven_tools() {
         for name in TOOL_NAMES {
             assert!(names.contains(&name), "missing tool {name}");
         }
+        assert_eq!(
+            names.len(),
+            TOOL_NAMES.len(),
+            "surface must be exactly the five tools, got {names:?}"
+        );
         for tool in tools {
             let name = tool["name"].as_str().unwrap_or_default();
             assert!(
@@ -129,30 +138,36 @@ fn public_tool_schemas_exclude_server_derived_and_engine_control_fields() {
         let name = tool["name"].as_str().expect("tool name");
         let schema = &tool["inputSchema"];
         let encoded = serde_json::to_string(schema).expect("schema JSON");
+        // No server-derived identity, engine-control, or reporter fields on any
+        // public tool: the surface is identity-free and the server derives them
+        // from the live key.
         for forbidden in [
             "tenant_id",
+            "subject_id",
+            "actor_id",
+            "agent_node_id",
+            "subject_generation",
+            "caller_id",
             "allowed_scope_ids",
             "edge_expansion_enabled",
             "rerank_enabled",
             "query_decomposition_enabled",
             "decay_enabled",
+            "compact_only",
         ] {
             assert!(
                 !encoded.contains(forbidden),
                 "tool {name} exposes forbidden field {forbidden}"
             );
         }
-        if name == "retain" {
-            for forbidden in ["source_trust", "compiler_version"] {
-                assert!(
-                    !encoded.contains(forbidden),
-                    "retain exposes server-derived field {forbidden}"
-                );
-            }
-        }
     }
 
-    for name in ["retain", "reflect", "correct", "forget", "mark"] {
+    for name in [
+        "remember",
+        "correct_memory",
+        "invalidate_memory",
+        "report_memory_use",
+    ] {
         let schema = &tools
             .iter()
             .find(|tool| tool["name"] == name)
@@ -239,7 +254,7 @@ fn recall_schema_accepts_only_a_query() {
 }
 
 #[tokio::test]
-async fn persistent_session_round_trips_retain_then_recall() {
+async fn persistent_session_round_trips_remember_recall_invalidate() {
     let store = InMemoryStore::default();
     let tenant = TenantId::new();
     let binding = store
@@ -328,65 +343,36 @@ async fn persistent_session_round_trips_retain_then_recall() {
         assert!(names.contains(&name), "tools/list missing {name}");
     }
 
-    let retain_args = json!({
-        "idempotency_key": "mcp-retain-release-region",
+    // remember: an identity-free compact memory. The server derives all
+    // identity from the live key; the body carries none.
+    let remember_args = json!({
+        "idempotency_key": "mcp-remember-release-region",
         "request": {
-            "subject_id": binding.subject_id,
-            "scope_id": binding.scope_id,
-            "actor_id": binding.actor_id,
-            "agent_node_id": binding.agent_node_id,
-            "subject_generation": binding.subject_generation,
-            "source_ref": "mcp:test:release-region",
-            "observed_at": "2026-07-15T00:00:00Z",
-            "payload": { "episode": {
-                "source_kind": "user",
-                "body": "Release region is Taipei."
-            }}
+            "kind": "semantic",
+            "body": "Release region is Taipei.",
+            "trigger": "the release region",
+            "verification": "the deploy config names apac-taipei",
+            "source": { "kind": "user", "ref": "mcp:test:release-region", "observed_at": "2026-07-15T00:00:00Z" }
         }
     });
-    let retained = client
+    let remembered = client
         .call_tool(
-            CallToolRequestParams::new("retain")
-                .with_arguments(retain_args.as_object().cloned().expect("args object")),
+            CallToolRequestParams::new("remember")
+                .with_arguments(remember_args.as_object().cloned().expect("args object")),
         )
         .await
-        .expect("tools/call retain");
-    assert_ne!(retained.is_error, Some(true), "retain succeeded");
-    let structured = retained
+        .expect("tools/call remember");
+    assert_ne!(remembered.is_error, Some(true), "remember succeeded");
+    let structured = remembered
         .structured_content
         .as_ref()
-        .expect("retain returns structured content");
-    assert!(structured["episode_id"].is_string());
-    let episode_id = structured["episode_id"].clone();
+        .expect("remember returns structured content");
+    let unit_id = structured["unit_ids"][0].clone();
+    assert!(unit_id.is_string(), "remember returns the created unit id");
 
-    let reflect_args = json!({
-        "idempotency_key": "mcp-reflect-release-region",
-        "request": {
-            "subject_id": binding.subject_id,
-            "scope_id": binding.scope_id,
-            "actor_id": binding.actor_id,
-            "agent_node_id": binding.agent_node_id,
-            "subject_generation": binding.subject_generation
-        }
-    });
-    let reflected = client
-        .call_tool(
-            CallToolRequestParams::new("reflect")
-                .with_arguments(reflect_args.as_object().cloned().expect("args object")),
-        )
-        .await
-        .expect("tools/call reflect");
-    assert_ne!(reflected.is_error, Some(true), "reflect accepted");
-    assert!(
-        reflected
-            .structured_content
-            .as_ref()
-            .is_some_and(|body| body["job_id"].is_string())
-    );
-
-    // Recall on the SAME session (stdin never closed): the degraded
-    // read-your-own-writes path returns the un-reflected episode body.
-    let recall_args = json!({"query": "Where is the release region?"});
+    // Recall on the SAME session (stdin never closed): the compact coding lane
+    // serves the just-written memory.
+    let recall_args = json!({"query": "the release region"});
     let recalled = client
         .call_tool(
             CallToolRequestParams::new("recall")
@@ -405,53 +391,40 @@ async fn persistent_session_round_trips_retain_then_recall() {
         Some("Release region is Taipei.")
     );
 
-    let forget_args = |key: &str, subject_generation| {
-        json!({
-            "idempotency_key": key,
-            "request": {
-                "subject_id": binding.subject_id,
-                "scope_id": binding.scope_id,
-                "actor_id": binding.actor_id,
-                "agent_node_id": binding.agent_node_id,
-                "subject_generation": subject_generation,
-                "selector": {
-                    "memory_unit_id": null,
-                    "episode_id": episode_id.clone(),
-                    "resource_id": null,
-                    "scope_id": binding.scope_id,
-                },
-                "reason": "user_request"
-            }
-        })
-    };
-    let stale = client
+    // invalidate the memory; the identity-free request selects by unit id only.
+    let invalidate_args = json!({
+        "idempotency_key": "mcp-invalidate-release-region",
+        "request": {
+            "memory_unit_id": unit_id,
+            "reason_kind": "stale",
+            "reason": "the region moved",
+            "source": { "kind": "user", "ref": "mcp:test:region-moved", "observed_at": "2026-07-16T00:00:00Z" }
+        }
+    });
+    let invalidated = client
         .call_tool(
-            CallToolRequestParams::new("forget").with_arguments(
-                forget_args("mcp-forget-stale", binding.subject_generation + 1)
-                    .as_object()
-                    .cloned()
-                    .expect("args object"),
-            ),
+            CallToolRequestParams::new("invalidate_memory")
+                .with_arguments(invalidate_args.as_object().cloned().expect("args object")),
         )
         .await
-        .expect("tools/call stale forget");
-    assert_eq!(stale.is_error, Some(true));
+        .expect("tools/call invalidate_memory");
+    assert_ne!(invalidated.is_error, Some(true), "invalidate succeeded");
 
-    let forgotten = client
+    // Recall again: the invalidated identity is gone.
+    let recalled_after = client
         .call_tool(
-            CallToolRequestParams::new("forget").with_arguments(
-                forget_args("mcp-forget-valid", binding.subject_generation)
-                    .as_object()
-                    .cloned()
-                    .expect("args object"),
-            ),
+            CallToolRequestParams::new("recall")
+                .with_arguments(recall_args.as_object().cloned().expect("args object")),
         )
         .await
-        .expect("tools/call forget");
-    assert_ne!(
-        forgotten.is_error,
-        Some(true),
-        "authorized forget succeeded"
+        .expect("tools/call recall after invalidate");
+    assert_eq!(
+        recalled_after
+            .structured_content
+            .as_ref()
+            .expect("recall structured")["state"],
+        "empty",
+        "invalidated memory is no longer served"
     );
 
     client.cancel().await.expect("client shuts down");
