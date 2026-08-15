@@ -4416,6 +4416,7 @@ impl<S: MemoryStore> MemoryService<S> {
             // (CI excludes zero), so it is opt-in until a variant earns its keep.
             procedure_recall_enabled: true,
             decay_enabled: true,
+            compact_only: request.compact_only,
             engine_version: ENGINE_VERSION.to_string(),
             transaction_as_of: request.transaction_as_of,
             valid_at: request.valid_at,

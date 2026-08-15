@@ -508,6 +508,13 @@ pub struct RecallRequest {
     pub procedure_recall_enabled: bool,
     #[serde(default = "default_true")]
     pub decay_enabled: bool,
+    /// The portable coding-agent recall lane. When true, only units carrying the
+    /// typed `payload.compact` marker are eligible, and Active procedural compact
+    /// units are served (not Validated-only). Default false keeps the general
+    /// lane — existing non-compact corpora, the degraded read-your-own-writes
+    /// fallback, and every eval — unchanged.
+    #[serde(default)]
+    pub compact_only: bool,
     pub engine_version: String,
     pub transaction_as_of: Option<String>,
     pub valid_at: Option<String>,
@@ -1999,6 +2006,10 @@ pub struct RecallHttpRequest {
     pub budget_tokens: Option<usize>,
     pub mode: Option<RecallMode>,
     pub include_beliefs: Option<bool>,
+    /// Select the portable coding-agent recall lane (compact-only eligibility).
+    /// Defaults false — the general lane.
+    #[serde(default)]
+    pub compact_only: bool,
     pub transaction_as_of: Option<String>,
     pub valid_at: Option<String>,
     #[serde(default)]

@@ -646,6 +646,10 @@ impl MemphantMcp {
             Err(error) => return error.result(),
         };
         let request = RecallHttpRequest {
+            // This is the portable coding-agent lane: only typed compact
+            // envelopes are eligible, and Active procedural compact units are
+            // served.
+            compact_only: true,
             subject_id: context.data_subject_id,
             scope_id: context.scope_id,
             actor_id: context.actor_id,
@@ -1540,6 +1544,7 @@ mod deep_runtime_smoke {
             .recall(
                 context.clone(),
                 RecallHttpRequest {
+                    compact_only: false,
                     subject_id: context.data_subject_id,
                     scope_id: scope,
                     agent_node_id: context.agent_node_id,

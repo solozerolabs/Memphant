@@ -7594,6 +7594,7 @@ where
                             unit,
                             request.include_beliefs,
                             request.procedure_recall_enabled,
+                            request.compact_only,
                             &request.query,
                             &recall_time,
                         )
@@ -8512,6 +8513,7 @@ mod evidence_receipt_tests {
                 .push(citation.clone());
         }
         let request = RecallRequest {
+            compact_only: false,
             context,
             query: "canonical evidence".to_string(),
             k: 1,
@@ -10666,6 +10668,7 @@ fn channel_candidates(
                 unit,
                 request.include_beliefs,
                 request.procedure_recall_enabled,
+                request.compact_only,
                 &request.query,
                 time,
             )
@@ -10697,6 +10700,7 @@ fn channel_candidates(
                     edges,
                     query_tokens,
                     request.procedure_recall_enabled,
+                    request.compact_only,
                     time,
                 ),
                 ChannelPass::Vector => vector_scores
@@ -10714,6 +10718,7 @@ fn edge_score(
     edges: &[StoredMemoryEdge],
     query_tokens: &[String],
     procedure_recall_enabled: bool,
+    compact_only: bool,
     time: &RecallTime,
 ) -> f32 {
     let related_match = edges.iter().any(|edge| {
@@ -10729,9 +10734,15 @@ fn edge_score(
             .iter()
             .find(|candidate| candidate.id == other_id)
             .is_some_and(|candidate| {
-                recallable(candidate, true, procedure_recall_enabled, "", time)
-                    && (lexical_score(candidate, query_tokens) > 0.0
-                        || exact_score(candidate, query_tokens) > 0.0)
+                recallable(
+                    candidate,
+                    true,
+                    procedure_recall_enabled,
+                    compact_only,
+                    "",
+                    time,
+                ) && (lexical_score(candidate, query_tokens) > 0.0
+                    || exact_score(candidate, query_tokens) > 0.0)
             })
     });
     if related_match { 1.0 } else { 0.0 }
@@ -10760,16 +10771,28 @@ fn recallable(
     unit: &StoredMemoryUnit,
     include_beliefs: bool,
     procedure_recall_enabled: bool,
+    compact_only: bool,
     query: &str,
     time: &RecallTime,
 ) -> bool {
     if !bitemporally_recallable(unit, time) || !valid_for_query(unit, query, &time.valid_at) {
         return false;
     }
+    // Coding-agent lane: only typed compact envelopes are eligible. A raw
+    // episode/resource body copied into an Active unit never carries the marker,
+    // so it is excluded here without disturbing the general lane.
+    if compact_only && unit.compact.is_none() {
+        return false;
+    }
     if unit.kind == MemoryKind::Procedural {
-        return procedure_recall_enabled
-            && unit.state == UnitState::Validated
-            && !unsafe_procedure_step(unit);
+        // On the coding lane an Active compact procedure is served; the general
+        // lane keeps the Validated-only rule.
+        let state_ok = if compact_only {
+            matches!(unit.state, UnitState::Active | UnitState::Validated)
+        } else {
+            unit.state == UnitState::Validated
+        };
+        return procedure_recall_enabled && state_ok && !unsafe_procedure_step(unit);
     }
     (matches!(unit.state, UnitState::Active | UnitState::Validated)
         || (unit.state == UnitState::Superseded && unit.transaction_to.is_some()))
@@ -14499,6 +14522,7 @@ mod temporal_grounding_tests {
         let recalled = recall(
             &store,
             RecallRequest {
+                compact_only: false,
                 context: context.clone(),
                 query: "nothing stored".to_string(),
                 k: 1,
@@ -15430,6 +15454,7 @@ mod pack_cost_tests {
     /// cost-charging behaviour under test.
     fn request(budget_tokens: usize) -> RecallRequest {
         RecallRequest {
+            compact_only: false,
             context: ResolvedMemoryContext {
                 tenant_id: TenantId::from_u128(1),
                 data_subject_id: SubjectId::from_u128(1),
@@ -16809,6 +16834,7 @@ mod deep_call_routing_tests {
             recall_with_pool_and_selection_and_deep(
                 &store,
                 RecallRequest {
+                    compact_only: false,
                     context: context.clone(),
                     query: "buried".to_string(),
                     k: 1,
@@ -16873,6 +16899,7 @@ mod deep_call_routing_tests {
         for mode in [RecallMode::Fast, RecallMode::Deep] {
             let error = service
                 .recall_internal(RecallRequest {
+                    compact_only: false,
                     context: context.clone(),
                     query: "denied secret query".to_string(),
                     k: 1,

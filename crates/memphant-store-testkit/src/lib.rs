@@ -177,6 +177,7 @@ fn retain_request(
 
 fn recall_request(context: &ResolvedMemoryContext, query: &str) -> RecallRequest {
     RecallRequest {
+        compact_only: false,
         context: context.clone(),
         query: query.to_string(),
         k: 4,

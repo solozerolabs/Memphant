@@ -872,6 +872,7 @@ async fn mark_replays_exact_response_without_duplicate_review_event() {
         .recall(
             context.clone(),
             RecallHttpRequest {
+                compact_only: false,
                 subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
                 actor_id: context.actor_id,

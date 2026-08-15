@@ -163,6 +163,7 @@ async fn belief_persists_active_but_is_absent_from_default_recall() {
         .recall(
             context.clone(),
             RecallHttpRequest {
+                compact_only: false,
                 subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
                 actor_id: context.actor_id,
@@ -357,6 +358,7 @@ async fn recall_trigger(
         .recall(
             context.clone(),
             RecallHttpRequest {
+                compact_only: false,
                 subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
                 actor_id: context.actor_id,
@@ -654,4 +656,72 @@ async fn forget_erases_compact_content_not_just_tombstones() {
     assert!(erased.body.is_empty(), "body erased, not just tombstoned");
     assert!(erased.compact.is_none(), "compact content erased");
     assert!(erased.deletion_generation.is_some(), "receipt retained");
+}
+
+async fn recall_lane(
+    service: &MemoryService<InMemoryStore>,
+    context: &memphant_types::ResolvedMemoryContext,
+    query: &str,
+    compact_only: bool,
+) -> Vec<memphant_types::UnitId> {
+    service
+        .recall(
+            context.clone(),
+            RecallHttpRequest {
+                subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                query: query.to_string(),
+                limit: Some(8),
+                budget_tokens: Some(256),
+                mode: Some(RecallMode::Fast),
+                include_beliefs: Some(false),
+                compact_only,
+                transaction_as_of: None,
+                valid_at: None,
+                aggregation_window: None,
+            },
+        )
+        .await
+        .unwrap()
+        .items
+        .iter()
+        .map(|item| item.unit_id)
+        .collect()
+}
+
+#[tokio::test]
+async fn coding_lane_serves_active_procedural_compact_but_general_lane_does_not() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(90_900);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    let created = service
+        .remember(
+            &context,
+            "lane-1",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Procedural, "rotate the credentials"),
+        )
+        .await
+        .unwrap();
+    let id = unit_ids(&created)[0];
+
+    // Coding lane (compact_only): the Active procedural compact unit is served.
+    let coding = recall_lane(&service, &context, "rotate the credentials", true).await;
+    assert!(
+        coding.contains(&id),
+        "coding lane serves Active procedural compact"
+    );
+
+    // General lane keeps the Validated-only procedural rule, so an Active
+    // procedural is NOT served there.
+    let general = recall_lane(&service, &context, "rotate the credentials", false).await;
+    assert!(
+        !general.contains(&id),
+        "general lane still excludes Active procedural"
+    );
 }

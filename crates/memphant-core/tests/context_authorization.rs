@@ -84,6 +84,7 @@ async fn stage_unit(
 
 fn recall_request(context: ResolvedMemoryContext, query: &str) -> RecallRequest {
     RecallRequest {
+        compact_only: false,
         context,
         query: query.to_string(),
         k: 8,

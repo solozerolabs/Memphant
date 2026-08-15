@@ -2003,6 +2003,11 @@
               "null"
             ]
           },
+          "compact_only": {
+            "default": false,
+            "description": "Select the portable coding-agent recall lane (compact-only eligibility).\nDefaults false — the general lane.",
+            "type": "boolean"
+          },
           "include_beliefs": {
             "type": [
               "boolean",

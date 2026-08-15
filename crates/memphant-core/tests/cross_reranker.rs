@@ -202,6 +202,7 @@ fn recall_request(
     query: &str,
 ) -> RecallHttpRequest {
     RecallHttpRequest {
+        compact_only: false,
         subject_id: memphant_types::SubjectId::from_u128(tenant_id.as_uuid().as_u128()),
         scope_id,
         agent_node_id: memphant_types::AgentNodeId::from_u128(scope_id.as_uuid().as_u128()),

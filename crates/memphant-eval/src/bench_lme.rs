@@ -1152,6 +1152,7 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
 
         let response = recall_service
             .recall_internal(RecallRequest {
+                compact_only: false,
                 context: context.clone(),
                 query: question.question.clone(),
                 k: options.k,

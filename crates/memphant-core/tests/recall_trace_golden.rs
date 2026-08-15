@@ -50,6 +50,7 @@ async fn recall_writes_trace_for_scope_denial() {
     let error = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: denied_context,
             query: "Which callback version is current?".to_string(),
             k: 3,
@@ -179,6 +180,7 @@ async fn dsr_decay_fold_promotes_reinforced_memory_over_ignored_stale_candidate(
     let priming = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: context.clone(),
             query: "deploy runbook legacy queue atlas cutover checklist".to_string(),
             k: 4,
@@ -248,6 +250,7 @@ async fn dsr_decay_fold_promotes_reinforced_memory_over_ignored_stale_candidate(
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "Which deploy runbook is current?".to_string(),
             k: 1,
@@ -442,6 +445,7 @@ async fn deep_mode_does_not_expand_raw_episode_without_selected_child_anchor() {
     let fast = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: query.clone(),
             k: 1,
@@ -478,6 +482,7 @@ async fn deep_mode_does_not_expand_raw_episode_without_selected_child_anchor() {
     let deep_error = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query,
             k: 2,
@@ -585,6 +590,7 @@ async fn contextual_chunk_recall_finds_source_unit_and_traces_flag() {
     store.commit(tx).await.expect("seed committed");
 
     let chunk_query = || RecallRequest {
+        compact_only: false,
         context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
         query: "What is the albatross codeword?".to_string(),
         k: 1,
@@ -742,6 +748,7 @@ async fn servicenow_query_does_not_trigger_temporal_recency_match() {
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "I am working with our ServiceNow portal".to_string(),
             k: 8,
@@ -906,6 +913,7 @@ async fn high_risk_action_query_drops_private_profile_context() {
         let response = recall(
             &store,
             RecallRequest {
+                compact_only: false,
                 context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
                 query: query.to_string(),
                 k: 8,
@@ -1031,6 +1039,7 @@ async fn recall_drops_expired_validity_window_for_current_query() {
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "Which office is current for the launch review?".to_string(),
             k: 8,
@@ -1171,6 +1180,7 @@ async fn edge_expansion_can_be_disabled_and_traces_related_candidates() {
     let disabled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "What is related to Atlas pipeline?".to_string(),
             k: 2,
@@ -1196,6 +1206,7 @@ async fn edge_expansion_can_be_disabled_and_traces_related_candidates() {
     let enabled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "What is related to Atlas pipeline?".to_string(),
             k: 2,
@@ -1315,6 +1326,7 @@ async fn keyword_stuffed_body_does_not_outrank_a_fully_covered_subject_key() {
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "Which task is the checkout retry rollout paused on and which \
                  constraint gates resuming it?"
@@ -1445,6 +1457,7 @@ async fn packing_collapses_duplicate_decoys_and_preserves_answer_under_budget() 
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "What is required before prod deploy?".to_string(),
             k: 8,
@@ -1599,6 +1612,7 @@ async fn packing_abstains_when_top_evidence_is_unresolved_contradiction() {
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "What is the refund window?".to_string(),
             k: 4,
@@ -1737,6 +1751,7 @@ async fn packing_does_not_abstain_for_resolved_supersedence_edge() {
     let response = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "What is the refund window?".to_string(),
             k: 4,
@@ -2003,6 +2018,7 @@ async fn procedural_memory_replays_only_validated_safe_procedures_and_traces_gat
     let disabled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "How do I recover the flaky importer test?".to_string(),
             k: 4,
@@ -2029,6 +2045,7 @@ async fn procedural_memory_replays_only_validated_safe_procedures_and_traces_gat
     let enabled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: memphant_store_testkit::resolved_context(tenant_id, scope_id, actor_id),
             query: "How do I recover the flaky importer test?".to_string(),
             k: 4,
@@ -2229,6 +2246,7 @@ async fn recall_golden_fixtures_pass() {
         let response = recall(
             &store,
             RecallRequest {
+                compact_only: false,
                 context: context.clone(),
                 query: case.query.clone(),
                 k: 3,

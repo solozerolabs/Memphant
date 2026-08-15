@@ -521,6 +521,7 @@ async fn traces_record_policy_revision_bind_actor_and_survive_policy_updates() {
     let recalled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: context.clone(),
             query: "nothing".to_string(),
             k: 3,

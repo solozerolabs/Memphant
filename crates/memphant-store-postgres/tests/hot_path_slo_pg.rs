@@ -118,6 +118,7 @@ async fn fast_mode_recall_holds_release_hot_path_slo_on_postgres() {
     );
     seed_reference_corpus(&service, &worker, &context).await;
     let request = |()| RecallHttpRequest {
+        compact_only: false,
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
         actor_id: context.actor_id,

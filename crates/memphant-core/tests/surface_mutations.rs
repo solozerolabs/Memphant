@@ -41,6 +41,7 @@ async fn recall_does_not_admit_another_subjects_unit_from_a_caller_supplied_scop
         .recall(
             context,
             RecallHttpRequest {
+                compact_only: false,
                 subject_id: context_a.data_subject_id,
                 scope_id: context_b.scope_id,
                 actor_id: context_a.actor_id,
@@ -318,6 +319,7 @@ async fn degraded_fallback_rejects_another_subjects_pending_episode() {
     .await
     .unwrap();
     let request = RecallHttpRequest {
+        compact_only: false,
         subject_id: context_a.data_subject_id,
         scope_id: context_a.scope_id,
         actor_id: context_a.actor_id,
@@ -371,6 +373,7 @@ async fn degraded_fallback_keeps_trace_membership_empty() {
         .recall(
             context.clone(),
             RecallHttpRequest {
+                compact_only: false,
                 subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
                 actor_id: context.actor_id,
@@ -447,6 +450,7 @@ async fn another_subjects_full_context_cannot_fetch_a_trace() {
     let context_a = memphant_store_testkit::bind_context(&store, tenant_id).await;
     let context_b = memphant_store_testkit::bind_context(&store, tenant_id).await;
     let request = RecallHttpRequest {
+        compact_only: false,
         subject_id: context_a.data_subject_id,
         scope_id: context_a.scope_id,
         actor_id: context_a.actor_id,
@@ -555,6 +559,7 @@ async fn correct_supersedes_old_generation_and_recall_returns_new_value() {
     let recalled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: context.clone(),
             query: "Which callback token is current?".to_string(),
             k: 3,
@@ -631,6 +636,7 @@ async fn forget_marks_memory_deleted_and_recall_hides_it() {
     let recalled = recall(
         &store,
         RecallRequest {
+            compact_only: false,
             context: context.clone(),
             query: "What is the refund window?".to_string(),
             k: 3,
@@ -794,6 +800,7 @@ async fn recall_seeded_unit(
     recall(
         store,
         RecallRequest {
+            compact_only: false,
             context: context.clone(),
             query: query.to_string(),
             k: 4,

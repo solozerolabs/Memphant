@@ -1558,6 +1558,7 @@ async fn bounded_delete_preserves_valid_time_outside_the_deleted_interval() {
     }));
 
     let recall = |transaction_as_of: Option<&str>| RecallHttpRequest {
+        compact_only: false,
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
         agent_node_id: context.agent_node_id,
@@ -1716,6 +1717,7 @@ async fn recurring_exact_body_still_replaces_every_overlapping_active_rectangle(
     );
 
     let request = |tx: Option<&str>| RecallHttpRequest {
+        compact_only: false,
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
         agent_node_id: context.agent_node_id,
@@ -1784,6 +1786,7 @@ async fn projected_updates_support_current_and_transaction_as_of_recall() {
     retain_and_reflect(&new_service, &context, new_body).await;
 
     let request = |query: &str, tx: Option<&str>| RecallHttpRequest {
+        compact_only: false,
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
         agent_node_id: context.agent_node_id,

@@ -42,6 +42,7 @@ async fn fast_mode_recall_holds_release_hot_path_slo() {
     seed_reference_corpus(&store, &context).await;
 
     let request = RecallRequest {
+        compact_only: false,
         context: context.clone(),
         query: "release owner for atlas rollback".to_string(),
         k: 5,

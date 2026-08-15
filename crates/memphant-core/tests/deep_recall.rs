@@ -142,6 +142,7 @@ fn limits() -> DeepRecallLimits {
 
 fn request(context: memphant_types::ResolvedMemoryContext, mode: RecallMode) -> RecallRequest {
     RecallRequest {
+        compact_only: false,
         context,
         query: "What approval is required before Stargate deploy?".to_string(),
         k: 1,

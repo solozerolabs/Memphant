@@ -79,6 +79,7 @@ async fn stage_quantity(
 
 fn request(context: &ResolvedMemoryContext, query: &str) -> RecallRequest {
     RecallRequest {
+        compact_only: false,
         context: context.clone(),
         query: query.to_string(),
         k: 10,

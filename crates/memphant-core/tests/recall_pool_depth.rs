@@ -64,6 +64,7 @@ fn new_unit(context: &ResolvedMemoryContext, fact_key: &str, body: String) -> Ne
 
 fn request(context: &ResolvedMemoryContext, query: &str, k: usize) -> RecallRequest {
     RecallRequest {
+        compact_only: false,
         context: context.clone(),
         query: query.to_string(),
         k,

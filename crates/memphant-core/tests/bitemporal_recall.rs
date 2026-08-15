@@ -77,6 +77,7 @@ async fn recall_resolves_both_time_axes_across_a_split_update_chain() {
     let run = |transaction_as_of: &str, valid_at: &str, query: &str| {
         let store = store.clone();
         let request = RecallRequest {
+            compact_only: false,
             context: context.clone(),
             query: query.to_string(),
             k: 4,
