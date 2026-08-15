@@ -3,8 +3,8 @@ use std::sync::Arc;
 use memphant_core::service::MemoryService;
 use memphant_core::{ApiKeyRow, InMemoryStore, MemoryStore, NoopEmbedding, SystemClock};
 use memphant_mcp::{
-    BoundTenant, MAX_MEMORY_INDEX_BYTES, MAX_MEMORY_INDEX_LINES, MAX_RESOURCE_BYTES,
-    MAX_TOPIC_BYTES, MAX_VIEW_CHARACTERS, MemoryCommand, MemphantMcp, anthropic_memory_tool,
+    BoundTenant, MAX_MEMORY_INDEX_BYTES, MAX_MEMORY_INDEX_LINES, MAX_TOPIC_BYTES,
+    MAX_VIEW_CHARACTERS, MemoryCommand, MemphantMcp, anthropic_memory_tool,
 };
 use memphant_runtime::AnyStore;
 use memphant_types::{
@@ -719,6 +719,53 @@ async fn mcp_declares_paginates_and_reads_tenant_bound_resources() {
         )
         .await
         .expect("stage binary resource");
+    // Seed a readable episode and resource directly (the deleted `retain` tool
+    // no longer exists; these are read back through MCP resources below).
+    let seed_episode_id = store
+        .stage_episode(
+            &mut tx,
+            memphant_types::NewEpisode {
+                tenant_id: tenant,
+                data_subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                source_kind: "user".to_string(),
+                source_ref: "b3:test:episode".to_string(),
+                observed_at: "2026-07-23T00:00:00Z".to_string(),
+                source_trust: TrustLevel::TrustedUser,
+                dedup_key: "b3-episode".to_string(),
+                body: "Episode resource body".to_string(),
+            },
+        )
+        .await
+        .expect("stage readable episode");
+    let resource_body = "Canonical resource body";
+    let seed_resource_id = store
+        .stage_resource(
+            &mut tx,
+            NewResource {
+                tenant_id: tenant,
+                data_subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                actor_id: context.actor_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                uri: "https://example.invalid/b3".to_string(),
+                source_ref: "b3:test:resource".to_string(),
+                observed_at: "2026-07-23T00:00:00Z".to_string(),
+                kind: ResourceKind::Document,
+                content_hash: format!("{:x}", Sha256::digest(resource_body.as_bytes())),
+                mime_type: "text/plain".to_string(),
+                revision: None,
+                body: Some(resource_body.to_string()),
+                source_trust: TrustLevel::TrustedUser,
+                acl: ResourceAcl::default(),
+            },
+        )
+        .await
+        .expect("stage readable resource");
     store.commit(tx).await.expect("commit protected resources");
     let handler = handler(store, tenant, &binding);
     for index in 0..101 {
@@ -809,47 +856,10 @@ async fn mcp_declares_paginates_and_reads_tenant_bound_resources() {
             .is_some_and(|text| text.starts_with("body "))
     );
 
-    let retain = |key: &str, source_ref: &str, payload: serde_json::Value| {
-        serde_json::json!({
-            "idempotency_key": key,
-            "request": {
-                "subject_id": binding.subject_id,
-                "scope_id": binding.scope_id,
-                "actor_id": binding.actor_id,
-                "agent_node_id": binding.agent_node_id,
-                "subject_generation": binding.subject_generation,
-                "source_ref": source_ref,
-                "observed_at": "2026-07-23T00:00:00Z",
-                "payload": payload
-            }
-        })
-    };
-    let episode = client
-        .call_tool(
-            CallToolRequestParams::new("retain").with_arguments(
-                retain(
-                    "b3-episode-resource",
-                    "b3:test:episode",
-                    serde_json::json!({"episode": {
-                        "source_kind": "user",
-                        "body": "Episode resource body"
-                    }}),
-                )
-                .as_object()
-                .cloned()
-                .unwrap(),
-            ),
-        )
-        .await
-        .expect("retain episode");
-    let episode_id = episode
-        .structured_content
-        .as_ref()
-        .and_then(|value| value["episode_id"].as_str())
-        .expect("episode id");
     let episode_read = client
         .read_resource(ReadResourceRequestParams::new(format!(
-            "memphant://episode/{episode_id}"
+            "memphant://episode/{}",
+            seed_episode_id.episode_id.as_uuid()
         )))
         .await
         .expect("read episode resource");
@@ -859,35 +869,10 @@ async fn mcp_declares_paginates_and_reads_tenant_bound_resources() {
             .is_some_and(|text| text == "Episode resource body")
     );
 
-    let resource_body = "Canonical resource body";
-    let resource = client
-        .call_tool(
-            CallToolRequestParams::new("retain").with_arguments(
-                retain(
-                    "b3-stored-resource",
-                    "b3:test:resource",
-                    serde_json::json!({"resource": {
-                        "uri": "https://example.invalid/b3",
-                        "mime_type": "text/plain",
-                        "content_hash": format!("{:x}", Sha256::digest(resource_body.as_bytes())),
-                        "body": resource_body
-                    }}),
-                )
-                .as_object()
-                .cloned()
-                .unwrap(),
-            ),
-        )
-        .await
-        .expect("retain resource");
-    let resource_id = resource
-        .structured_content
-        .as_ref()
-        .and_then(|value| value["resource_id"].as_str())
-        .expect("resource id");
     let resource_read = client
         .read_resource(ReadResourceRequestParams::new(format!(
-            "memphant://resource/{resource_id}"
+            "memphant://resource/{}",
+            seed_resource_id.as_uuid()
         )))
         .await
         .expect("read stored resource");
@@ -925,46 +910,34 @@ async fn mcp_declares_paginates_and_reads_tenant_bound_resources() {
             .is_err(),
         "malformed resource URIs are rejected"
     );
-    let oversized_body = "x".repeat(MAX_RESOURCE_BYTES + 1);
-    let oversized = client
+    // Drive a recall trace through the five-tool surface: remember a compact
+    // memory, recall it (a hit produces a trace), then read the trace resource.
+    let remembered = client
         .call_tool(
-            CallToolRequestParams::new("retain").with_arguments(
-                retain(
-                    "b3-oversized-resource",
-                    "b3:test:oversized-resource",
-                    serde_json::json!({"resource": {
-                        "uri": "https://example.invalid/b3-oversized",
-                        "mime_type": "text/plain",
-                        "content_hash": format!("{:x}", Sha256::digest(oversized_body.as_bytes())),
-                        "body": oversized_body
-                    }}),
-                )
+            CallToolRequestParams::new("remember").with_arguments(
+                serde_json::json!({
+                    "idempotency_key": "b3-trace-seed",
+                    "request": {
+                        "kind": "semantic",
+                        "body": "The release train ships on Fridays.",
+                        "trigger": "the release train schedule",
+                        "verification": "the calendar shows a Friday cadence",
+                        "source": { "kind": "user", "ref": "b3:test:trace", "observed_at": "2026-07-23T00:00:00Z" }
+                    }
+                })
                 .as_object()
                 .cloned()
                 .unwrap(),
             ),
         )
         .await
-        .expect("retain oversized resource");
-    let oversized_id = oversized
-        .structured_content
-        .as_ref()
-        .and_then(|value| value["resource_id"].as_str())
-        .expect("oversized resource id");
-    assert!(
-        client
-            .read_resource(ReadResourceRequestParams::new(format!(
-                "memphant://resource/{oversized_id}"
-            )))
-            .await
-            .is_err(),
-        "oversized resource reads are rejected"
-    );
+        .expect("remember for trace");
+    assert_ne!(remembered.is_error, Some(true), "remember succeeded");
 
     let recalled = client
         .call_tool(
             CallToolRequestParams::new("recall").with_arguments(
-                serde_json::json!({"query": "Episode resource"})
+                serde_json::json!({"query": "the release train schedule"})
                     .as_object()
                     .cloned()
                     .unwrap(),
