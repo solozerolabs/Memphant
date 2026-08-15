@@ -161,6 +161,7 @@ async fn concurrent_direct_same_job_compile_persists_once() {
         job_id,
         compiler_version: "direct-race".to_string(),
         candidates: vec![ReflectCandidate {
+            compact: None,
             source_kind: "direct".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: context.actor_id,

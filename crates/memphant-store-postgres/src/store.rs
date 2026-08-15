@@ -971,7 +971,15 @@ impl PgStore {
         if !valid {
             return Err(StoreError::NotFound("memory context"));
         }
-        let payload = serde_json::json!({ "contextual_chunks": unit.contextual_chunks });
+        let mut payload = serde_json::json!({ "contextual_chunks": unit.contextual_chunks });
+        // The typed compact marker rides in payload.compact. Its presence is
+        // what the coding recall lane and the compact exclusion/body-hash index
+        // key on; a raw-body unit never carries it.
+        if let Some(compact) = &unit.compact {
+            payload["compact"] = serde_json::to_value(compact).map_err(|error| {
+                StoreError::Backend(format!("compact envelope serialize: {error}"))
+            })?;
+        }
         sqlx::query(
             "insert into memphant.memory_unit
                (id, tenant_id, data_subject_id, scope_id, agent_node_id, subject_generation,

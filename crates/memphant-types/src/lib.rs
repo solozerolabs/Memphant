@@ -1652,6 +1652,11 @@ pub struct ReflectCandidate {
     /// `None`.
     #[serde(default)]
     pub target_unit_ids: Option<Vec<UnitId>>,
+    /// The typed compact envelope for a portable agent-authored memory. When
+    /// present, the minted unit carries `payload.compact` and becomes eligible
+    /// for the coding recall lane. Ordinary compiler candidates leave it `None`.
+    #[serde(default)]
+    pub compact: Option<CompactEnvelope>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

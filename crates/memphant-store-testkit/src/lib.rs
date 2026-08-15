@@ -1659,6 +1659,7 @@ pub async fn forget_by_episode_blocks_recompilation<H: StoreHarness>(h: &H) {
         job_id: JobId::new(),
         compiler_version: compiler_version.to_string(),
         candidates: vec![ReflectCandidate {
+            compact: None,
             source_kind: "user".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: actor,
@@ -1789,6 +1790,7 @@ pub async fn forget_by_episode_cascades_through_correction_lineage<H: StoreHarne
             job_id: JobId::new(),
             compiler_version: "compiler-lineage".to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: "user".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: actor,
@@ -1951,6 +1953,7 @@ pub async fn forget_source_cascades_to_composed_dependent<H: StoreHarness>(h: &H
                     job_id: JobId::new(),
                     compiler_version: "compiler-composition".to_string(),
                     candidates: vec![ReflectCandidate {
+                        compact: None,
                         source_kind: source,
                         trust_level: trust,
                         actor_id: actor,
@@ -2203,6 +2206,7 @@ pub async fn semantic_update_supersedes_unit_aged_past_recall_window<H: StoreHar
             job_id: JobId::new(),
             compiler_version: "compiler-supersede".to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: "user".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: actor,
@@ -2229,6 +2233,7 @@ pub async fn semantic_update_supersedes_unit_aged_past_recall_window<H: StoreHar
     // 105 newer unrelated units push the target out of the most-recent-100.
     let fillers: Vec<ReflectCandidate> = (0..105)
         .map(|i| ReflectCandidate {
+            compact: None,
             source_kind: "user".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: actor,

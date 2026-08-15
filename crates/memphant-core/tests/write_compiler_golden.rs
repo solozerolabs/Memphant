@@ -65,6 +65,7 @@ async fn retain_and_reflect(
             job_id: job.id,
             compiler_version: "compiler-rung15".to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: seed.source_kind.to_string(),
                 trust_level: seed.trust_level,
                 actor_id: context.actor_id,
@@ -202,6 +203,7 @@ async fn write_compiler_golden_fixtures_pass() {
                     job_id: job.id,
                     compiler_version: "compiler-wsb-golden".to_string(),
                     candidates: vec![ReflectCandidate {
+                        compact: None,
                         source_kind: episode.source_kind.clone(),
                         trust_level: episode.trust_level,
                         // Every compiled unit's `actor_id` must equal the
@@ -413,6 +415,7 @@ async fn reflect_recorded_is_idempotent_for_duplicate_job_delivery() {
         job_id: job.id,
         compiler_version: "compiler-wsb-golden".to_string(),
         candidates: vec![ReflectCandidate {
+            compact: None,
             source_kind: "user".to_string(),
             trust_level: TrustLevel::TrustedUser,
             actor_id: context.actor_id,
@@ -492,6 +495,7 @@ async fn invalidation_without_an_open_exact_key_fails_closed() {
             job_id: job.id,
             compiler_version: "compiler-invalidation".to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: "system".to_string(),
                 trust_level: TrustLevel::TrustedSystem,
                 actor_id: context.actor_id,
@@ -543,6 +547,7 @@ async fn structured_replacement_requires_the_exact_active_target_id() {
         .expect("seeded target is active")
         .id;
     let replacement = |target| ReflectCandidate {
+        compact: None,
         source_kind: "user".to_string(),
         trust_level: TrustLevel::TrustedUser,
         actor_id: context.actor_id,
@@ -650,6 +655,7 @@ async fn reflect_candidate_contextual_chunks_are_stored_with_source_episode() {
             job_id: job.id,
             compiler_version: "compiler-ws4-chunks".to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: "system".to_string(),
                 trust_level: TrustLevel::TrustedSystem,
                 actor_id: context.actor_id,
@@ -990,6 +996,7 @@ async fn two_trusted_retains_with_distinct_content_do_not_supersede() {
                 job_id: job.id,
                 compiler_version: "compiler-auto-subject".to_string(),
                 candidates: vec![ReflectCandidate {
+                    compact: None,
                     source_kind: "user".to_string(),
                     trust_level: TrustLevel::TrustedUser,
                     actor_id: context.actor_id,
@@ -1132,6 +1139,7 @@ async fn unit_transaction_from_uses_injected_clock() {
             job_id: job.id,
             compiler_version: "compiler-clock-test".to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: "user".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: context.actor_id,

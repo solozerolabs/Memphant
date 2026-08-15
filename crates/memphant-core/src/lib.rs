@@ -12709,6 +12709,7 @@ mod low_trust_projection_tests {
     #[test]
     fn short_raw_evidence_bypasses_the_unkeyed_claim_noise_floor() {
         let candidate = |kind, body: &str| memphant_types::ReflectCandidate {
+            compact: None,
             source_kind: "agent".to_string(),
             trust_level: TrustLevel::AgentOutput,
             actor_id: ActorId::from_u128(1),
@@ -13121,7 +13122,7 @@ fn minted_unit(
         && candidate.churn_class.as_deref() == Some("volatile"))
     .then(|| now.to_string());
     StoredMemoryUnit {
-        compact: None,
+        compact: candidate.compact.clone(),
         id,
         tenant_id: input.tenant_id,
         data_subject_id: input.data_subject_id,

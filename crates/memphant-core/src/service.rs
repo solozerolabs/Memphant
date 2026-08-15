@@ -1213,6 +1213,7 @@ mod file_sync_tests {
                 job_id: memphant_types::JobId::new(),
                 compiler_version: COMPILER_VERSION.to_string(),
                 candidates: vec![ReflectCandidate {
+                    compact: None,
                     source_kind: "agent".to_string(),
                     trust_level: TrustLevel::AgentOutput,
                     actor_id: context.actor_id,
@@ -1430,6 +1431,7 @@ mod file_sync_tests {
             job_id: memphant_types::JobId::new(),
             compiler_version: COMPILER_VERSION.to_string(),
             candidates: vec![ReflectCandidate {
+                compact: None,
                 source_kind: "direct".to_string(),
                 trust_level: TrustLevel::TrustedUser,
                 actor_id: context.actor_id,
@@ -4015,6 +4017,7 @@ impl<S: MemoryStore> MemoryService<S> {
                         job_id,
                         compiler_version,
                         candidates: vec![ReflectCandidate {
+                            compact: None,
                             source_kind: "direct".to_string(),
                             trust_level: assigned_trust,
                             actor_id: context.actor_id,
@@ -4872,6 +4875,7 @@ impl<S: MemoryStore> MemoryService<S> {
                             job_id: memphant_types::JobId::new(),
                             compiler_version: COMPILER_VERSION.to_string(),
                             candidates: vec![ReflectCandidate {
+                                compact: None,
                                 source_kind: "direct".to_string(),
                                 trust_level: context.actor_trust,
                                 actor_id: context.actor_id,
@@ -5916,6 +5920,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 // `[date ...]` body prefix couples to temporal grounding only:
                 // `content_date_header` is already `None` unless that flag is on.
                 let mut candidates = vec![ReflectCandidate {
+                    compact: None,
                     source_kind: episode.source_kind.clone(),
                     trust_level: episode.source_trust,
                     actor_id: episode.actor_id,
@@ -5944,6 +5949,7 @@ impl<S: MemoryStore> MemoryService<S> {
                         None => self.prepare_structured_state(job, context).await?,
                     };
                     candidates.extend(projections.into_iter().map(|projection| ReflectCandidate {
+                        compact: None,
                         kind: structured_projection_kind(&projection.subject),
                         source_kind: episode.source_kind.clone(),
                         trust_level: episode.source_trust,
@@ -5996,6 +6002,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     Vec::new()
                 };
                 let mut candidates = vec![ReflectCandidate {
+                    compact: None,
                     source_kind: "resource".to_string(),
                     trust_level: resource.source_trust,
                     actor_id: resource.actor_id,
@@ -6018,6 +6025,7 @@ impl<S: MemoryStore> MemoryService<S> {
                         None => self.prepare_structured_state(job, context).await?,
                     };
                     candidates.extend(projections.into_iter().map(|projection| ReflectCandidate {
+                        compact: None,
                         kind: structured_projection_kind(&projection.subject),
                         source_kind: "resource".to_string(),
                         trust_level: resource.source_trust,
@@ -7213,6 +7221,7 @@ fn extract_fact_candidates(
     extract_facts(&episode.body, content_date)
         .into_iter()
         .map(|fact| ReflectCandidate {
+            compact: None,
             source_kind: episode.source_kind.clone(),
             trust_level: episode.source_trust,
             actor_id: episode.actor_id,

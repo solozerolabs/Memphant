@@ -497,6 +497,21 @@ source body.
    format would break `fact_key` supersession parity with `RetainUnitPayload`
    writes. Persist the compact-body SHA-256 in `payload.compact.body_sha256` so an
    open tombstone blocks exact-body recreation even if caller provenance drifts.
+
+   **Decision (implementation, 2026-08-15): compact keying + Active minting.**
+   `RememberRequest` carries `trigger` but no separate `subject`, and the key
+   MUST be body-independent so `correct_memory` preserves identity when the body
+   changes. Therefore the compact stable key is
+   `derive_fact_key(scope, subject = normalized(trigger), predicate = kind)` —
+   trigger is the keying dimension, kind disambiguates, body is excluded. This is
+   what makes "a second bare `remember` on the same trigger+kind conflicts (the
+   compact exclusion rejects it); use `correct_memory` to update" the enforced
+   contract. And because the kind-based write router mints Validated (procedural)
+   or Quarantined (low-trust belief) rather than Active, `remember` uses a
+   **dedicated mint-Active seam**, not the admission router — the plan's "mint
+   `UnitState::Active` for all six kinds" cannot come from the router unchanged.
+   The seam reuses `minted_unit` (which now carries `candidate.compact`) with
+   `state = Active`, then stages via the existing compiled-unit persistence.
 4. Reuse the direct-unit persistence path but mint `UnitState::Active`. Preserve
    the caller's evidence source kind/ref in existing provenance columns and set
    `payload.compact.write_channel = agent_memory`. (The direct-unit path already
