@@ -1,5 +1,7 @@
 # Initial prompt: implement portable coding-agent memory Task 1
 
+Current STATUS mirror: RUNTIME COMPLETE — BENCHMARK EVIDENCE PENDING
+
 Copy everything below into a fresh Codex session.
 
 ---
