@@ -379,3 +379,59 @@ async fn recall_trigger(
         .map(|item| item.unit_id)
         .collect()
 }
+
+#[tokio::test]
+async fn an_open_tombstone_blocks_re_remembering_the_same_identity() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(90_500);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    let created = service
+        .remember(
+            &context,
+            "nr-1",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Procedural, "restart the worker"),
+        )
+        .await
+        .unwrap();
+    let old_id = unit_ids(&created)[0];
+
+    service
+        .invalidate_memory(
+            &context,
+            "nr-inv",
+            InvalidateMemoryRequest {
+                memory_unit_id: old_id,
+                reason_kind: InvalidationReason::Harmful,
+                reason: "this advice caused an outage".to_string(),
+                source: source(),
+            },
+        )
+        .await
+        .unwrap();
+
+    // A bare re-remember of the same trigger+kind is refused; the agent must
+    // correct the tombstone instead.
+    let resurrect = service
+        .remember(
+            &context,
+            "nr-2",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Procedural, "restart the worker"),
+        )
+        .await;
+    assert!(resurrect.is_err(), "open tombstone must block re-creation");
+
+    // A DIFFERENT trigger is unaffected.
+    let other = service
+        .remember(
+            &context,
+            "nr-3",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Procedural, "a different runbook step"),
+        )
+        .await;
+    assert!(other.is_ok(), "a distinct identity is not blocked");
+}

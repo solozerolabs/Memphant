@@ -5806,6 +5806,34 @@ impl MemoryStore for InMemoryStore {
             ));
         }
 
+        // No-resurrection: an OPEN invalidation tombstone with the same stable
+        // identity (owner + fact_key + kind) blocks re-creating that identity
+        // through ANY ingress — direct remember, reflect, replay. Only
+        // `correct_memory` may close a tombstone. Matches on stable identity;
+        // because the compact key is body-independent, a re-remember of the same
+        // trigger+kind is caught regardless of body.
+        if let Some(existing) = state.memory_units.get(&tenant) {
+            for new_unit in write.new_units.iter() {
+                let Some(fact_key) = new_unit.fact_key.as_deref() else {
+                    continue;
+                };
+                let blocked = existing.iter().any(|unit| {
+                    unit.state == UnitState::Invalidated
+                        && unit.transaction_to.is_none()
+                        && owned_unit(unit)
+                        && unit.kind == new_unit.kind
+                        && unit.fact_key.as_deref() == Some(fact_key)
+                });
+                if blocked {
+                    return Err(StoreError::Conflict(
+                        "an open invalidation tombstone blocks re-creating this memory; \
+                         use correct_memory to revise it instead"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+
         for update in &write.unit_updates {
             if let Some(unit) = state
                 .memory_units

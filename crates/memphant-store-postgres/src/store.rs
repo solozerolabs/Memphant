@@ -4884,6 +4884,43 @@ impl MemoryStore for PgStore {
                 || forbidden.contains(&("memory_unit", unit.id.as_uuid()))
         };
 
+        // No-resurrection: an OPEN invalidation tombstone with the same stable
+        // identity (owner + fact_key + kind) blocks re-creating that identity
+        // through any ingress. Only correct_memory may close a tombstone. Mirror
+        // of the InMemory guard in stage_compiled_units.
+        for unit in &write.new_units {
+            let Some(fact_key) = unit.fact_key.as_deref() else {
+                continue;
+            };
+            let blocked: bool = sqlx::query_scalar(
+                "select exists (
+                   select 1 from memphant.memory_unit
+                    where tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+                      and scope_id = $4 and agent_node_id = $5 and actor_id = $6
+                      and state = 'invalidated' and transaction_to is null
+                      and fact_key = $7 and kind = $8
+                 )",
+            )
+            .bind(tenant.as_uuid())
+            .bind(context.data_subject_id.as_uuid())
+            .bind(context.subject_generation as i64)
+            .bind(context.scope_id.as_uuid())
+            .bind(context.agent_node_id.as_uuid())
+            .bind(context.actor_id.as_uuid())
+            .bind(fact_key)
+            .bind(enum_str(&unit.kind))
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(backend)?;
+            if blocked {
+                return Err(StoreError::Conflict(
+                    "an open invalidation tombstone blocks re-creating this memory; \
+                     use correct_memory to revise it instead"
+                        .to_string(),
+                ));
+            }
+        }
+
         let mut admitted_ids: HashSet<UnitId> = HashSet::new();
         for unit in &write.new_units {
             if is_forgotten(unit) {
