@@ -57,6 +57,8 @@ contract_test!(fetch_episodes_honors_large_limit);
 contract_test!(semantic_update_supersedes_unit_aged_past_recall_window);
 contract_test!(caller_subject_key_supersedes_without_client_derivation);
 contract_test!(scope_memory_page_paginates_without_overlap);
+contract_test!(capture_crosscheck_promotes_and_quarantines_across_the_write_seam);
+contract_test!(same_subject_captured_beliefs_coexist_for_collision);
 
 /// Pure type-shape check (no store): the staged-write structs carry the tenant
 /// and scope ids through unchanged. Not part of the store contract, so it stays
@@ -82,6 +84,7 @@ fn new_episode_and_unit_shapes_require_tenant_and_scope_ids() {
         body: "Tool result stored as raw episode.".to_string(),
     };
     let unit = NewMemoryUnit {
+        capture: None,
         tenant_id: episode.tenant_id,
         data_subject_id: memphant_types::SubjectId::from_u128(
             episode.tenant_id.as_uuid().as_u128(),

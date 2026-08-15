@@ -7,12 +7,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 
 use memphant_core::{
-    ApiKeyRow, ClaimMutationOutcome, CompiledWrite, CorrectOutcome, CorrectionWrite,
-    EmbeddingProfileRow, EmbeddingRow, FileSyncTransitionSnapshot, ForgetOutcome, ForgetWrite,
-    JOB_DEAD_LETTER_ATTEMPTS, JobFilter, MemoryStore, MutationClaim, MutationClaimOutcome,
-    MutationLedgerStore, MutationResponse, ReflectJobRow, ResolvedMemoryContext, ReviewEventRow,
-    ScopePage, StoreError, SubjectErasureReceipt, TaskMemoryEventRow, TaskOutcomeRow,
-    correction_rectangles_with_ids, deep_unit_is_snapshot_eligible,
+    ApiKeyRow, CaptureCrossCheckReport, CaptureTransition, ClaimMutationOutcome, CompiledWrite,
+    CorrectOutcome, CorrectionWrite, EmbeddingProfileRow, EmbeddingRow, FileSyncTransitionSnapshot,
+    ForgetOutcome, ForgetWrite, JOB_DEAD_LETTER_ATTEMPTS, JobFilter, MemoryStore, MutationClaim,
+    MutationClaimOutcome, MutationLedgerStore, MutationResponse, ReflectJobRow,
+    ResolvedMemoryContext, ReviewEventRow, ScopePage, StoreError, SubjectErasureReceipt,
+    TaskMemoryEventRow, TaskOutcomeRow, correction_rectangles_with_ids,
+    deep_unit_is_snapshot_eligible,
 };
 use memphant_types::{
     ActorId, AgentNodeId, CitationSpan, ContextBindingAccessPolicy, ContextBindingPolicyMode,
@@ -723,7 +724,14 @@ impl PgStore {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| StoreError::Backend(error.to_string()))?;
+        let capture: Option<memphant_types::CaptureMarker> = payload
+            .get("capture")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| StoreError::Backend(error.to_string()))?;
         Ok(StoredMemoryUnit {
+            capture,
             invalidation,
             id: UnitId::from_u128(row.try_get::<Uuid, _>("id").map_err(backend)?.as_u128()),
             tenant_id: TenantId::from_u128(
@@ -990,6 +998,14 @@ impl PgStore {
         if let Some(invalidation) = &unit.invalidation {
             payload["invalidation"] = serde_json::to_value(invalidation).map_err(|error| {
                 StoreError::Backend(format!("invalidation marker serialize: {error}"))
+            })?;
+        }
+        // The typed capture marker rides in payload.capture. Its presence tags
+        // a captured unit's source family + trust-ladder rung + witness set for
+        // the anti-poisoning cross-check; a non-captured write never carries it.
+        if let Some(capture) = &unit.capture {
+            payload["capture"] = serde_json::to_value(capture).map_err(|error| {
+                StoreError::Backend(format!("capture marker serialize: {error}"))
             })?;
         }
         sqlx::query(
@@ -2213,6 +2229,7 @@ impl MemoryStore for PgStore {
         )?;
         let id = UnitId::new();
         let stored = StoredMemoryUnit {
+            capture: unit.capture,
             invalidation: None,
             compact: None,
             id,
@@ -2827,6 +2844,50 @@ impl MemoryStore for PgStore {
         txn: &mut Self::Txn,
     ) -> Result<Vec<StoredMemoryUnit>, StoreError> {
         Self::fetch_scope_open_units_tx(&mut txn.tx, &txn.context).await
+    }
+
+    async fn apply_capture_transitions(
+        &self,
+        context: &ResolvedMemoryContext,
+        transitions: Vec<CaptureTransition>,
+    ) -> Result<CaptureCrossCheckReport, StoreError> {
+        let mut txn = self.begin(context).await?;
+        let mut report = CaptureCrossCheckReport::default();
+        for transition in &transitions {
+            let capture_json = serde_json::to_string(&transition.capture).map_err(|error| {
+                StoreError::Backend(format!("capture marker serialize: {error}"))
+            })?;
+            let updated = sqlx::query(
+                "update memphant.memory_unit
+                    set state = $3,
+                        confidence = $4,
+                        payload = jsonb_set(payload, '{capture}', $5::jsonb, true)
+                  where tenant_id = $1 and id = $2 and data_subject_id = $6
+                    and subject_generation = $7 and scope_id = $8 and agent_node_id = $9
+                    and transaction_to is null",
+            )
+            .bind(context.tenant_id.as_uuid())
+            .bind(transition.id.as_uuid())
+            .bind(enum_str(&transition.state))
+            .bind(transition.confidence)
+            .bind(&capture_json)
+            .bind(context.data_subject_id.as_uuid())
+            .bind(context.subject_generation as i64)
+            .bind(context.scope_id.as_uuid())
+            .bind(context.agent_node_id.as_uuid())
+            .execute(&mut *txn.tx)
+            .await
+            .map_err(backend)?;
+            if updated.rows_affected() != 1 {
+                return Err(StoreError::Conflict(
+                    "capture transition does not match memory context".to_string(),
+                ));
+            }
+            report.record(transition);
+        }
+        txn.has_subject_writes = true;
+        self.commit(txn).await?;
+        Ok(report)
     }
 
     async fn fetch_file_sync_transition_snapshot(

@@ -376,6 +376,7 @@ fn active_projection_unit(
     body: &str,
 ) -> NewMemoryUnit {
     NewMemoryUnit {
+        capture: None,
         tenant_id,
         data_subject_id: binding.subject_id,
         scope_id: binding.scope_id,
@@ -723,6 +724,7 @@ async fn canonical_projection_rejects_an_encoded_payload_over_the_ceiling() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: binding.subject_id,
                 scope_id: binding.scope_id,

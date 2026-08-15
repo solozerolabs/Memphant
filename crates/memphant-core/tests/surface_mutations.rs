@@ -241,6 +241,7 @@ async fn recall_admission_uses_the_scope_grant_for_each_memory_kind() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: source.data_subject_id,
                 scope_id: source.scope_id,
@@ -922,6 +923,7 @@ async fn seed_active_unit(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,

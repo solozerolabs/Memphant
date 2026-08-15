@@ -101,6 +101,7 @@ async fn dsr_decay_fold_promotes_reinforced_memory_over_ignored_stale_candidate(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -137,6 +138,7 @@ async fn dsr_decay_fold_promotes_reinforced_memory_over_ignored_stale_candidate(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -349,6 +351,7 @@ async fn deep_mode_does_not_expand_raw_episode_without_selected_child_anchor() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -407,6 +410,7 @@ async fn deep_mode_does_not_expand_raw_episode_without_selected_child_anchor() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -550,6 +554,7 @@ async fn contextual_chunk_recall_finds_source_unit_and_traces_flag() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -711,6 +716,7 @@ async fn servicenow_query_does_not_trigger_temporal_recency_match() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -793,6 +799,7 @@ async fn high_risk_action_query_drops_private_profile_context() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -829,6 +836,7 @@ async fn high_risk_action_query_drops_private_profile_context() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -865,6 +873,7 @@ async fn high_risk_action_query_drops_private_profile_context() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -966,6 +975,7 @@ async fn recall_drops_expired_validity_window_for_current_query() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1002,6 +1012,7 @@ async fn recall_drops_expired_validity_window_for_current_query() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1094,6 +1105,7 @@ async fn edge_expansion_can_be_disabled_and_traces_related_candidates() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1130,6 +1142,7 @@ async fn edge_expansion_can_be_disabled_and_traces_related_candidates() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1274,6 +1287,7 @@ async fn keyword_stuffed_body_does_not_outrank_a_fully_covered_subject_key() {
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id,
                     data_subject_id: memphant_types::SubjectId::from_u128(
                         tenant_id.as_uuid().as_u128(),
@@ -1380,6 +1394,7 @@ async fn packing_collapses_duplicate_decoys_and_preserves_answer_under_budget() 
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id,
                     data_subject_id: memphant_types::SubjectId::from_u128(
                         tenant_id.as_uuid().as_u128(),
@@ -1420,6 +1435,7 @@ async fn packing_collapses_duplicate_decoys_and_preserves_answer_under_budget() 
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1526,6 +1542,7 @@ async fn packing_abstains_when_top_evidence_is_unresolved_contradiction() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1562,6 +1579,7 @@ async fn packing_abstains_when_top_evidence_is_unresolved_contradiction() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1665,6 +1683,7 @@ async fn packing_does_not_abstain_for_resolved_supersedence_edge() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1701,6 +1720,7 @@ async fn packing_does_not_abstain_for_resolved_supersedence_edge() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1873,6 +1893,7 @@ async fn procedural_memory_replays_only_validated_safe_procedures_and_traces_gat
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1909,6 +1930,7 @@ async fn procedural_memory_replays_only_validated_safe_procedures_and_traces_gat
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1945,6 +1967,7 @@ async fn procedural_memory_replays_only_validated_safe_procedures_and_traces_gat
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -1981,6 +2004,7 @@ async fn procedural_memory_replays_only_validated_safe_procedures_and_traces_gat
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: memphant_types::SubjectId::from_u128(
                     tenant_id.as_uuid().as_u128(),
@@ -2180,6 +2204,7 @@ async fn recall_golden_fixtures_pass() {
                 .stage_memory_unit(
                     &mut tx,
                     NewMemoryUnit {
+                        capture: None,
                         tenant_id: unit_context.tenant_id,
                         data_subject_id: unit_context.data_subject_id,
                         scope_id: unit_context.scope_id,

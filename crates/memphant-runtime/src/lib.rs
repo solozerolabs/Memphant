@@ -959,6 +959,14 @@ impl MemoryStore for AnyStore {
         delegate!(self, store => store.fetch_scope_open_units(context).await)
     }
 
+    async fn apply_capture_transitions(
+        &self,
+        context: &ResolvedMemoryContext,
+        transitions: Vec<memphant_core::CaptureTransition>,
+    ) -> Result<memphant_core::CaptureCrossCheckReport, StoreError> {
+        delegate!(self, store => store.apply_capture_transitions(context, transitions).await)
+    }
+
     async fn fetch_scope_open_units_in_tx(
         &self,
         tx: &mut Self::Txn,

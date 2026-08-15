@@ -197,6 +197,7 @@ async fn seeded_service() -> (
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: context.data_subject_id,
                 scope_id: scope,
@@ -245,6 +246,7 @@ async fn add_bound_unit(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,

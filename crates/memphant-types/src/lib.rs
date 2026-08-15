@@ -1340,6 +1340,10 @@ pub struct NewMemoryUnit {
     pub transaction_from: Option<String>,
     #[serde(default)]
     pub transaction_to: Option<String>,
+    /// The capture marker to persist on `payload.capture` (see
+    /// `StoredMemoryUnit::capture`). `None` for every non-captured write.
+    #[serde(default)]
+    pub capture: Option<CaptureMarker>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1392,6 +1396,13 @@ pub struct StoredMemoryUnit {
     /// what blocks resurrection.
     #[serde(default)]
     pub invalidation: Option<InvalidationMarker>,
+    /// The capture marker (`payload.capture`), present iff the unit was produced
+    /// by a capture channel. Carries the source family + trust-ladder rung +
+    /// witness set the anti-poisoning cross-check advances. A non-captured unit
+    /// (a plain user/tool write) never carries it and is never touched by the
+    /// cross-check.
+    #[serde(default)]
+    pub capture: Option<CaptureMarker>,
 }
 
 impl CorrectionHandle {
@@ -2393,6 +2404,111 @@ pub struct InvalidationMarker {
     pub reason: String,
 }
 
+/// Which capture channel produced a captured memory unit. This is the
+/// provenance FAMILY the cross-check independence rule keys on: an agent's
+/// explicit file-write `Mirror` and its own LLM session `Summary` of that same
+/// write are DIFFERENT sources but, when they agree, form a SINGLE witness
+/// family (see `CaptureWitness::SourceAgreement`) — a confident-but-wrong agent
+/// cannot manufacture two independent witnesses from one belief.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureSource {
+    /// Explicit in-repo file write mirrored into the store (e.g. `MEMORY.md`).
+    Mirror,
+    /// LLM session-end summary of the transcript.
+    Summary,
+}
+
+/// The trust-ladder rung of a captured memory unit. Rides `payload.capture`; it
+/// is deliberately NOT the `TrustLevel` enum, which encodes SOURCE provenance
+/// (the separate high-risk trust-floor layer). Recall-eligibility is driven by
+/// `UnitState`: `Captured` units are `Candidate` (inert); `Corroborated`/
+/// `Durable` are `Active` (recallable); a collision moves the unit to
+/// `Quarantined`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureLadder {
+    /// One source, provisional, recall-inert.
+    Captured,
+    /// One witness family present — promoted to an active, recallable rung.
+    Corroborated,
+    /// Two DISTINCT witness families present.
+    Durable,
+}
+
+/// A witness FAMILY that can advance a captured unit along the ladder. Promotion
+/// to `Durable` requires two DISTINCT families; the same family counts once no
+/// matter how many raw witnesses of that kind exist, which is what blocks
+/// witness-laundering (a single belief mirrored and summarized is one family).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureWitness {
+    /// Two DIFFERENT capture sources agree on the same subject + body.
+    SourceAgreement,
+    /// A positive weak-self-outcome (`review_event` `success`) on a served unit.
+    WeakOutcome,
+    /// The unit survived without contradiction across a horizon (reserved;
+    /// emitted by the survival detector in a later stage).
+    Survival,
+}
+
+/// The `payload.capture` marker on a captured memory unit. Present iff the unit
+/// was produced by a capture channel; rides `payload` alongside `compact` and
+/// `invalidation`, consistent across both stores. `witnesses` is a deduped,
+/// sorted SET — the independence rule counts distinct families, not events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureMarker {
+    pub source: CaptureSource,
+    pub ladder: CaptureLadder,
+    #[serde(default)]
+    pub witnesses: Vec<CaptureWitness>,
+}
+
+impl CaptureMarker {
+    /// A freshly captured, unwitnessed unit from one source.
+    pub fn captured(source: CaptureSource) -> Self {
+        Self {
+            source,
+            ladder: CaptureLadder::Captured,
+            witnesses: Vec::new(),
+        }
+    }
+
+    /// Record a witness family, keeping `witnesses` a deduped, sorted set.
+    /// Returns whether the family was newly added.
+    pub fn record_witness(&mut self, witness: CaptureWitness) -> bool {
+        if self.witnesses.contains(&witness) {
+            return false;
+        }
+        self.witnesses.push(witness);
+        self.witnesses.sort_unstable();
+        true
+    }
+
+    /// The ladder rung implied by the current DISTINCT witness families: zero →
+    /// `Captured`, one → `Corroborated`, two-or-more → `Durable`.
+    pub fn rung_for_witnesses(&self) -> CaptureLadder {
+        match self.distinct_witness_count() {
+            0 => CaptureLadder::Captured,
+            1 => CaptureLadder::Corroborated,
+            _ => CaptureLadder::Durable,
+        }
+    }
+
+    /// Number of DISTINCT witness families (the ladder's promotion counter).
+    pub fn distinct_witness_count(&self) -> usize {
+        let mut families: Vec<CaptureWitness> = self.witnesses.clone();
+        families.sort_unstable();
+        families.dedup();
+        families.len()
+    }
+}
+
 /// The write channel recorded for a direct agent-authored compact memory.
 pub const COMPACT_WRITE_CHANNEL_AGENT: &str = "agent_memory";
 
@@ -2754,6 +2870,7 @@ mod correction_handle_tests {
     #[test]
     fn handle_reads_the_units_own_identity_key_interval_span_and_episode() {
         let unit = StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::from_u128(1),

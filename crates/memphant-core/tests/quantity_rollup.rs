@@ -44,6 +44,7 @@ async fn stage_quantity(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -522,6 +523,7 @@ async fn unrelated_query_does_not_synthesize_or_displace_generic_memory() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,

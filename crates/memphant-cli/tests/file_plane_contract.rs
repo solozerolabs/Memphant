@@ -1056,6 +1056,7 @@ async fn seed_unit_kind(
         .stage_memory_unit(
             &mut transaction,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: binding.subject_id,
                 scope_id: binding.scope_id,

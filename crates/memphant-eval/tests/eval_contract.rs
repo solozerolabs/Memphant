@@ -79,6 +79,33 @@ fn security_smoke_covers_required_attack_lanes() {
 }
 
 #[test]
+fn security_smoke_refuses_crosscheck_lane_without_its_control() {
+    // Non-vacuity for the `missing_no_crosscheck_control` guard (the rung6
+    // `no-edges` idiom on the security path): strip the control lane and the
+    // runner must refuse the paired cross-check poisoning lane.
+    let text = fs::read_to_string(repo_root().join("examples/evals/security-smoke.yaml")).unwrap();
+    let marker = "  - id: capture_poisoning_no_crosscheck_control";
+    let cut = text
+        .find(marker)
+        .expect("control lane present in the committed fixture");
+    let stripped = &text[..cut];
+    assert!(
+        stripped.contains("id: capture_poisoning_crosscheck"),
+        "the cross-check promotion lane must survive the cut"
+    );
+
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("security-smoke-no-control.yaml");
+    fs::write(&path, stripped).unwrap();
+
+    let error = run_security_file(&path).expect_err("must refuse without the control");
+    assert!(
+        error.to_string().contains("missing_no_crosscheck_control"),
+        "{error}"
+    );
+}
+
+#[test]
 fn ops_smoke_covers_blob_gc_deletion_saga_and_compaction() {
     let report = run_ops_file(&repo_root().join("examples/evals/ops-smoke.yaml")).expect("ops");
 

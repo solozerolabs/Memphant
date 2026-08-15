@@ -2018,6 +2018,17 @@ pub trait MemoryStore: Send + Sync {
             self.commit(tx).await
         }
     }
+    /// Apply the anti-poisoning cross-check's decisions to existing captured
+    /// units: set `state`, `confidence`, and `payload.capture` for each named
+    /// unit, context-scoped exactly like the compiled `unit_updates` path. This
+    /// is the WRITE side of the trust ladder; the decisions are computed by the
+    /// pure `compute_capture_crosscheck` over the WRITE SEAM snapshot, never a
+    /// bounded recall pool (store-divergence rule).
+    fn apply_capture_transitions(
+        &self,
+        context: &ResolvedMemoryContext,
+        transitions: Vec<CaptureTransition>,
+    ) -> impl Future<Output = Result<CaptureCrossCheckReport, StoreError>> + Send;
     fn store_trace(
         &self,
         context: &ResolvedMemoryContext,
@@ -4064,6 +4075,7 @@ impl MemoryStore for InMemoryStore {
         tx.memory_units.push(StoredMemoryUnit {
             invalidation: None,
             compact: None,
+            capture: unit.capture.clone(),
             id,
             tenant_id: unit.tenant_id,
             data_subject_id: unit.data_subject_id,
@@ -4484,6 +4496,36 @@ impl MemoryStore for InMemoryStore {
         let context = tx.context.clone();
         let state = self.staged_state(tx)?;
         Ok(in_memory_scope_open_units(state, &context))
+    }
+
+    async fn apply_capture_transitions(
+        &self,
+        context: &ResolvedMemoryContext,
+        transitions: Vec<CaptureTransition>,
+    ) -> Result<CaptureCrossCheckReport, StoreError> {
+        let mut state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        state.validate_context(context)?;
+        let mut report = CaptureCrossCheckReport::default();
+        let units = state.memory_units.entry(context.tenant_id).or_default();
+        for transition in &transitions {
+            let Some(unit) = units.iter_mut().find(|unit| {
+                unit.id == transition.id
+                    && unit.data_subject_id == context.data_subject_id
+                    && unit.subject_generation == context.subject_generation
+                    && unit.scope_id == context.scope_id
+                    && unit.agent_node_id == context.agent_node_id
+                    && unit.transaction_to.is_none()
+            }) else {
+                return Err(StoreError::Conflict(
+                    "capture transition does not match memory context".to_string(),
+                ));
+            };
+            unit.state = transition.state;
+            unit.confidence = transition.confidence;
+            unit.capture = Some(transition.capture.clone());
+            report.record(transition);
+        }
+        Ok(report)
     }
 
     async fn fetch_file_sync_transition_snapshot(
@@ -6976,6 +7018,7 @@ fn quantity_rollups(
                 unit: StoredMemoryUnit {
                     invalidation: None,
                     compact: None,
+                    capture: None,
                     id,
                     tenant_id: request.context.tenant_id,
                     data_subject_id: selected[0].unit.data_subject_id,
@@ -7174,6 +7217,7 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
         unit: StoredMemoryUnit {
             invalidation: None,
             compact: None,
+            capture: None,
             id,
             tenant_id: request.context.tenant_id,
             data_subject_id: members[0].0.data_subject_id,
@@ -8427,6 +8471,7 @@ mod evidence_receipt_tests {
         let start = body.find(quote).unwrap();
         let end = start + quote.len();
         let unit = StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: unit_id,
@@ -12713,6 +12758,209 @@ async fn prepare_compiled_write_from_snapshot_inner(
     })
 }
 
+/// Confidence multiplier a `failure` weak-outcome applies to a served captured
+/// unit. Keyed off the CONFIRMATION signal, never retrieval frequency.
+const CAPTURE_FAILURE_CONFIDENCE_FACTOR: f32 = 0.5;
+
+/// The telemetry class of one cross-check decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureTransitionKind {
+    /// `Candidate -> Active`: a witness family lifted the unit off the inert rung.
+    Promote,
+    /// `-> Quarantined`: a cross-source collision or a `corrected` weak-outcome.
+    Quarantine,
+    /// A `failure` weak-outcome cut confidence; recall eligibility unchanged.
+    Demote,
+    /// A witness family was recorded (e.g. ladder Corroborated -> Durable)
+    /// without changing recall eligibility.
+    Witness,
+}
+
+/// One resolved decision the anti-poisoning cross-check makes about a captured
+/// unit, applied by `MemoryStore::apply_capture_transitions`. Carries the exact
+/// new `state`, `confidence`, and `payload.capture` marker to persist.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaptureTransition {
+    pub id: UnitId,
+    pub kind: CaptureTransitionKind,
+    pub state: UnitState,
+    pub confidence: Option<f32>,
+    pub capture: memphant_types::CaptureMarker,
+}
+
+/// Telemetry summary of an `apply_capture_transitions` batch.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CaptureCrossCheckReport {
+    pub promoted: Vec<UnitId>,
+    pub quarantined: Vec<UnitId>,
+    pub demoted: Vec<UnitId>,
+    pub witnessed: Vec<UnitId>,
+}
+
+impl CaptureCrossCheckReport {
+    pub fn record(&mut self, transition: &CaptureTransition) {
+        match transition.kind {
+            CaptureTransitionKind::Promote => self.promoted.push(transition.id),
+            CaptureTransitionKind::Quarantine => self.quarantined.push(transition.id),
+            CaptureTransitionKind::Demote => self.demoted.push(transition.id),
+            CaptureTransitionKind::Witness => self.witnessed.push(transition.id),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.promoted.is_empty()
+            && self.quarantined.is_empty()
+            && self.demoted.is_empty()
+            && self.witnessed.is_empty()
+    }
+}
+
+fn capture_body_key(unit: &StoredMemoryUnit) -> String {
+    normalize_component(&unit.body)
+}
+
+/// The pure anti-poisoning cross-check. Reads a COMPLETE open-scope snapshot
+/// (from the WRITE SEAM `fetch_scope_open_units`, never a bounded recall pool)
+/// plus the scope's `review_event`s, and returns the state/confidence/marker
+/// transitions to persist. It touches ONLY units carrying a `capture` marker;
+/// a plain user/tool write is never a candidate for promotion, demotion, or
+/// quarantine (the structural false-positive guard). Deterministic and
+/// idempotent: re-running over the resulting snapshot yields no transitions.
+///
+/// - **Source agreement** (two DIFFERENT capture sources agree on the same
+///   subject + body) records a single `SourceAgreement` witness family.
+/// - **Cross-source subject collision** (two DIFFERENT sources, same subject,
+///   DIVERGENT bodies) quarantines every captured unit in the group.
+/// - **Weak self-outcome**: `corrected` quarantines; `failure` cuts confidence;
+///   `success` records a `WeakOutcome` witness family.
+/// - **Independence / ladder**: the rung derives from the DISTINCT witness
+///   families — one family reaches `Corroborated` (active/recallable), two
+///   distinct families reach `Durable`. `SourceAgreement` counts once, so an
+///   agent's mirror-write plus its own summary-of-that-write cannot self-promote
+///   past `Corroborated`.
+pub fn compute_capture_crosscheck(
+    units: &[StoredMemoryUnit],
+    review_events: &[ReviewEvent],
+) -> Vec<CaptureTransition> {
+    use memphant_types::{CaptureLadder, CaptureWitness, MarkOutcome};
+    use std::collections::BTreeMap;
+
+    let eligible: Vec<&StoredMemoryUnit> = units
+        .iter()
+        .filter(|unit| {
+            unit.capture.is_some()
+                && unit.transaction_to.is_none()
+                && matches!(unit.state, UnitState::Candidate | UnitState::Active)
+        })
+        .collect();
+    if eligible.is_empty() {
+        return Vec::new();
+    }
+
+    // Subject groups keyed by (fact_key, kind). A unit without a fact_key is a
+    // singleton: no cross-source agreement or collision is derivable for it.
+    let mut groups: BTreeMap<(String, MemoryKind), Vec<usize>> = BTreeMap::new();
+    for (idx, unit) in eligible.iter().enumerate() {
+        if let Some(fact_key) = &unit.fact_key {
+            groups
+                .entry((fact_key.clone(), unit.kind))
+                .or_default()
+                .push(idx);
+        }
+    }
+
+    let mut quarantine = vec![false; eligible.len()];
+    let mut add_agreement = vec![false; eligible.len()];
+    for members in groups.values() {
+        if members.len() < 2 {
+            continue;
+        }
+        let source_of = |idx: usize| eligible[idx].capture.as_ref().expect("captured").source;
+        let collision = members.iter().any(|&a| {
+            members.iter().any(|&b| {
+                source_of(a) != source_of(b)
+                    && capture_body_key(eligible[a]) != capture_body_key(eligible[b])
+            })
+        });
+        if collision {
+            for &member in members {
+                quarantine[member] = true;
+            }
+            continue;
+        }
+        for &a in members {
+            let agrees = members.iter().any(|&b| {
+                a != b
+                    && source_of(a) != source_of(b)
+                    && capture_body_key(eligible[a]) == capture_body_key(eligible[b])
+            });
+            if agrees {
+                add_agreement[a] = true;
+            }
+        }
+    }
+
+    let mut transitions = Vec::new();
+    for (idx, unit) in eligible.iter().enumerate() {
+        let (mut corrected, mut failure, mut success) = (false, false, false);
+        for event in review_events
+            .iter()
+            .filter(|e| e.used_ids.contains(&unit.id))
+        {
+            match event.outcome {
+                MarkOutcome::Corrected => corrected = true,
+                MarkOutcome::Failure => failure = true,
+                MarkOutcome::Success => success = true,
+                MarkOutcome::Ignored => {}
+            }
+        }
+
+        let mut marker = unit.capture.clone().expect("captured");
+        if add_agreement[idx] {
+            marker.record_witness(CaptureWitness::SourceAgreement);
+        }
+        if success {
+            marker.record_witness(CaptureWitness::WeakOutcome);
+        }
+        // Ladder is monotone up from the DISTINCT witness set; never downgraded.
+        marker.ladder = marker.ladder.max(marker.rung_for_witnesses());
+
+        let hard_quarantine = quarantine[idx] || corrected;
+        let (new_state, kind) = if hard_quarantine {
+            (UnitState::Quarantined, CaptureTransitionKind::Quarantine)
+        } else if unit.state == UnitState::Candidate && marker.ladder >= CaptureLadder::Corroborated
+        {
+            (UnitState::Active, CaptureTransitionKind::Promote)
+        } else if failure {
+            (unit.state, CaptureTransitionKind::Demote)
+        } else {
+            (unit.state, CaptureTransitionKind::Witness)
+        };
+
+        let new_confidence = if hard_quarantine {
+            Some(0.0)
+        } else if failure {
+            Some(unit.confidence.unwrap_or(1.0) * CAPTURE_FAILURE_CONFIDENCE_FACTOR)
+        } else {
+            unit.confidence
+        };
+
+        let changed = new_state != unit.state
+            || new_confidence != unit.confidence
+            || Some(&marker) != unit.capture.as_ref();
+        if changed {
+            transitions.push(CaptureTransition {
+                id: unit.id,
+                kind,
+                state: new_state,
+                confidence: new_confidence,
+                capture: marker,
+            });
+        }
+    }
+    transitions
+}
+
 fn low_trust_projection_state(kind: MemoryKind) -> UnitState {
     if matches!(kind, MemoryKind::Episodic | MemoryKind::Resource) {
         UnitState::Active
@@ -13064,6 +13312,7 @@ mod compiled_citation_tests {
             candidates: Vec::new(),
         };
         let unit = StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::from_u128(81_008),
@@ -13319,6 +13568,7 @@ fn minted_unit(
     StoredMemoryUnit {
         invalidation: None,
         compact: candidate.compact.clone(),
+        capture: None,
         id,
         tenant_id: input.tenant_id,
         data_subject_id: input.data_subject_id,
@@ -13489,6 +13739,7 @@ fn compose_inferred_beliefs(
         new_units.push(StoredMemoryUnit {
             invalidation: None,
             compact: None,
+            capture: None,
             id: composed_id,
             tenant_id,
             data_subject_id,
@@ -13804,6 +14055,7 @@ mod in_memory_mutation_retention_tests {
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: context.tenant_id,
                     data_subject_id: context.data_subject_id,
                     scope_id: context.scope_id,
@@ -13851,6 +14103,7 @@ mod in_memory_mutation_retention_tests {
         target: Option<ForgetTarget>,
     ) -> NewMemoryUnit {
         let mut unit = NewMemoryUnit {
+            capture: None,
             tenant_id: context.tenant_id,
             data_subject_id: context.data_subject_id,
             scope_id: context.scope_id,
@@ -14231,6 +14484,7 @@ mod temporal_grounding_tests {
 
     fn temporal_test_unit(id: u128, body: &str, valid_from: &str) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
@@ -15128,6 +15382,7 @@ mod pack_cost_tests {
 
     fn unit(id: u128, body: &str, chunks: Vec<ContextualChunk>) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
@@ -16681,6 +16936,7 @@ mod deep_call_routing_tests {
 
     fn compiled_unit(id: u128, body: &str) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),
@@ -16953,6 +17209,7 @@ mod ranking_channels_fixed_tests {
 
     fn semantic_unit(id: u128, body: &str, fact_key: Option<&str>) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::from_u128(id),

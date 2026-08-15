@@ -141,6 +141,7 @@ async fn exact_agent_pairs_deny_siblings_until_explicit_grant_across_all_channel
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: root.subject_id,
                 scope_id: source.scope_id,

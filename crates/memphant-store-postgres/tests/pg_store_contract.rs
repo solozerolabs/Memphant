@@ -965,6 +965,7 @@ async fn file_sync_is_atomic_rejects_stale_base_and_serializes_concurrent_batche
 
 fn active_projection_unit(context: &ResolvedMemoryContext, body: &str) -> NewMemoryUnit {
     NewMemoryUnit {
+        capture: None,
         tenant_id: context.tenant_id,
         data_subject_id: context.data_subject_id,
         scope_id: context.scope_id,
@@ -1885,6 +1886,8 @@ pg_contract_test!(fetch_episodes_honors_large_limit);
 pg_contract_test!(semantic_update_supersedes_unit_aged_past_recall_window);
 pg_contract_test!(caller_subject_key_supersedes_without_client_derivation);
 pg_contract_test!(scope_memory_page_paginates_without_overlap);
+pg_contract_test!(capture_crosscheck_promotes_and_quarantines_across_the_write_seam);
+pg_contract_test!(same_subject_captured_beliefs_coexist_for_collision);
 
 #[tokio::test]
 #[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
@@ -3393,6 +3396,7 @@ async fn bitemporal_correction_round_trips_through_postgres_and_forget_erases_hi
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: context.data_subject_id,
                 scope_id: scope,

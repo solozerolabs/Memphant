@@ -135,6 +135,7 @@ async fn seed_reference_corpus(store: &InMemoryStore, context: &ResolvedMemoryCo
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: context.tenant_id,
                     data_subject_id: context.data_subject_id,
                     scope_id: context.scope_id,

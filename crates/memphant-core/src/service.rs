@@ -184,6 +184,7 @@ mod canonical_projection_store_tests {
         body: &str,
     ) -> NewMemoryUnit {
         NewMemoryUnit {
+            capture: None,
             tenant_id: context.tenant_id,
             data_subject_id: context.data_subject_id,
             scope_id: context.scope_id,
@@ -737,6 +738,7 @@ mod file_sync_tests {
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: context.tenant_id,
                     data_subject_id: context.data_subject_id,
                     scope_id: context.scope_id,
@@ -814,6 +816,7 @@ mod file_sync_tests {
         body: &str,
     ) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            capture: None,
             invalidation: None,
             compact: None,
             id: UnitId::new(),
@@ -3599,6 +3602,13 @@ pub struct MemoryService<S: MemoryStore> {
     structured_state_prefetch_concurrency: usize,
     worker_compile_concurrency: usize,
     deep_recall_provider: Option<Arc<dyn DeepRecallProvider>>,
+    /// The anti-poisoning capture cross-check (DEFAULT `true`). When set, the
+    /// reflect job runs `compute_capture_crosscheck` over the WRITE SEAM snapshot
+    /// at the end of every compile and applies the trust-ladder transitions
+    /// (promote / quarantine / demote). OFF is the eval/test CONTROL arm: no
+    /// cross-check runs, so a poisoned captured unit is never quarantined — the
+    /// load-bearing non-vacuity lever. Accuracy-first, so it ships ON.
+    capture_crosscheck_enabled: bool,
 }
 
 impl<S: MemoryStore> Clone for MemoryService<S> {
@@ -3622,6 +3632,7 @@ impl<S: MemoryStore> Clone for MemoryService<S> {
             structured_state_prefetch_concurrency: self.structured_state_prefetch_concurrency,
             worker_compile_concurrency: self.worker_compile_concurrency,
             deep_recall_provider: self.deep_recall_provider.clone(),
+            capture_crosscheck_enabled: self.capture_crosscheck_enabled,
         }
     }
 }
@@ -3647,7 +3658,16 @@ impl<S: MemoryStore> MemoryService<S> {
             structured_state_prefetch_concurrency: DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY,
             worker_compile_concurrency: DEFAULT_WORKER_COMPILE_CONCURRENCY,
             deep_recall_provider: None,
+            capture_crosscheck_enabled: true,
         }
+    }
+
+    /// Overrides the anti-poisoning capture cross-check (default ON). The eval
+    /// `no-crosscheck` control arm and the non-vacuity tests pass `false` to run
+    /// the ablation where a poisoned captured unit is never quarantined.
+    pub fn with_capture_crosscheck_enabled(mut self, enabled: bool) -> Self {
+        self.capture_crosscheck_enabled = enabled;
+        self
     }
 
     /// Reuses this service's store, clock, and deterministic runtime settings
@@ -6564,7 +6584,54 @@ impl<S: MemoryStore> MemoryService<S> {
             job,
         )
         .await?;
+        // Advance the anti-poisoning trust ladder for any captured units in this
+        // scope, off the recall hot path. Reads the WRITE SEAM (never a bounded
+        // recall pool) and the scope's review_events; a no-op when disabled or
+        // when the scope holds no captured units.
+        self.run_capture_crosscheck(context).await?;
         Ok(())
+    }
+
+    /// Run the capture cross-check over one scope and apply the trust-ladder
+    /// transitions. Public so the reflect job, the store-contract suite, and the
+    /// non-vacuity tests can drive it directly. Gated by
+    /// `capture_crosscheck_enabled` (the eval `no-crosscheck` control turns it
+    /// off). Reads the COMPLETE open scope via `fetch_scope_open_units` — the
+    /// store-divergence rule forbids a bounded recall pool here.
+    pub async fn run_capture_crosscheck(
+        &self,
+        context: &ResolvedMemoryContext,
+    ) -> Result<crate::CaptureCrossCheckReport, ServiceError> {
+        if !self.capture_crosscheck_enabled {
+            return Ok(crate::CaptureCrossCheckReport::default());
+        }
+        let units = self.store.fetch_scope_open_units(context).await?;
+        let captured_ids: Vec<UnitId> = units
+            .iter()
+            .filter(|unit| unit.capture.is_some())
+            .map(|unit| unit.id)
+            .collect();
+        if captured_ids.is_empty() {
+            return Ok(crate::CaptureCrossCheckReport::default());
+        }
+        let now = self.clock.now_rfc3339();
+        let time = memphant_types::RecallTime {
+            evaluated_at: now.clone(),
+            transaction_as_of: now.clone(),
+            valid_at: now,
+        };
+        let review_events = self
+            .store
+            .fetch_review_events(context, &captured_ids, &time)
+            .await?;
+        let transitions = crate::compute_capture_crosscheck(&units, &review_events);
+        if transitions.is_empty() {
+            return Ok(crate::CaptureCrossCheckReport::default());
+        }
+        Ok(self
+            .store
+            .apply_capture_transitions(context, transitions)
+            .await?)
     }
 
     async fn prepare_structured_state(

@@ -889,6 +889,7 @@ async fn level_one_file_sync_cannot_read_or_write_semantic_memory() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,

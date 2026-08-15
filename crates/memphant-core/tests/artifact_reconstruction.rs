@@ -15,6 +15,7 @@ fn unit(
     body: &str,
 ) -> NewMemoryUnit {
     NewMemoryUnit {
+        capture: None,
         tenant_id: context.tenant_id,
         data_subject_id: context.data_subject_id,
         scope_id: context.scope_id,

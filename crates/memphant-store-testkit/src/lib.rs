@@ -24,13 +24,14 @@ use memphant_core::{
     reflect_recorded, retain_episode, retain_resource,
 };
 use memphant_types::{
-    ActorId, AgentNodeId, ContextBindingAccessPolicy, ContextBindingAgentRef,
-    ContextBindingEntityRef, ContextBindingRequest, ContextBindingScopeRef, CorrectRequest,
-    CorrectSelector, CorrectionPayload, DeepSnapshotSourceKind, EpisodeId, ForgetRequest,
-    ForgetSelector, JobId, MarkOutcome, MarkRequest, MemoryKind, NewEpisode, NewMemoryUnit,
-    NewResource, RecallContextItem, RecallMode, RecallRequest, RecallTime, ReflectCandidate,
-    ReflectInput, ResolvedMemoryContext, ResolvedMemorySource, ResourceAcl, ResourceExtractorState,
-    ResourceId, ResourceKind, ResourceProtectedCategory, RetainEpisodeHttpRequest, RetainPayload,
+    ActorId, AgentNodeId, CaptureLadder, CaptureMarker, CaptureSource, CaptureWitness,
+    ContextBindingAccessPolicy, ContextBindingAgentRef, ContextBindingEntityRef,
+    ContextBindingRequest, ContextBindingScopeRef, CorrectRequest, CorrectSelector,
+    CorrectionPayload, DeepSnapshotSourceKind, EpisodeId, ForgetRequest, ForgetSelector, JobId,
+    MarkOutcome, MarkRequest, MemoryKind, NewEpisode, NewMemoryUnit, NewResource,
+    RecallContextItem, RecallMode, RecallRequest, RecallTime, ReflectCandidate, ReflectInput,
+    ResolvedMemoryContext, ResolvedMemorySource, ResourceAcl, ResourceExtractorState, ResourceId,
+    ResourceKind, ResourceProtectedCategory, RetainEpisodeHttpRequest, RetainPayload,
     RetainRequest, RetainResourceRequest, RetainUnitPayload, RetrievalTrace, ScopeId, SubjectId,
     TenantId, TraceId, TrustLevel, UnitId, UnitState,
 };
@@ -401,6 +402,7 @@ async fn stage_deep_episode<S: MemoryStore>(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -470,6 +472,7 @@ async fn stage_deep_resource<S: MemoryStore>(
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -535,6 +538,7 @@ pub async fn deep_snapshot_is_authorized_stable_and_read_only<H: StoreHarness>(h
         .await
         .expect("begin mixed linked units");
     let linked_unit = |state: UnitState, label: &str| NewMemoryUnit {
+        capture: None,
         tenant_id: context.tenant_id,
         data_subject_id: context.data_subject_id,
         scope_id: context.scope_id,
@@ -708,6 +712,7 @@ pub async fn deep_snapshot_is_authorized_stable_and_read_only<H: StoreHarness>(h
         .stage_memory_unit(
             &mut bad_link_tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -742,6 +747,7 @@ pub async fn deep_snapshot_is_authorized_stable_and_read_only<H: StoreHarness>(h
         .stage_memory_unit(
             &mut bad_link_tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -1086,6 +1092,7 @@ pub async fn deep_snapshot_binds_historical_rectangle_only<H: StoreHarness>(h: &
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: context.tenant_id,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -1262,6 +1269,7 @@ pub async fn commit_publishes_staged_episode_and_unit<H: StoreHarness>(h: &H) {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
@@ -1378,6 +1386,7 @@ pub async fn recall_candidates_are_tenant_and_scope_scoped<H: StoreHarness>(h: &
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: context.tenant_id,
                     data_subject_id: context.data_subject_id,
                     scope_id: context.scope_id,
@@ -1475,6 +1484,7 @@ pub async fn review_marks_credit_synthetic_sources_and_stay_trace_bound<H: Store
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: tenant,
                     data_subject_id: context.data_subject_id,
                     scope_id: context.scope_id,
@@ -2059,6 +2069,7 @@ pub async fn forget_by_unit_closes_and_purges<H: StoreHarness>(h: &H) {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: context.data_subject_id,
                 scope_id: scope,
@@ -2555,4 +2566,195 @@ pub async fn scope_memory_page_paginates_without_overlap<H: StoreHarness>(h: &H)
         .collect();
     assert!(ids_one.is_disjoint(&ids_two));
     assert_eq!(ids_one.len() + ids_two.len(), 5);
+}
+
+/// Seed one captured BELIEF unit directly through the write seam
+/// (`stage_memory_unit`) with a `payload.capture` marker. Shared by the capture
+/// cross-check contract scenarios so both stores exercise the same path.
+#[allow(clippy::too_many_arguments)]
+async fn seed_captured_belief<S: MemoryStore>(
+    store: &S,
+    context: &ResolvedMemoryContext,
+    subject: &str,
+    body: &str,
+    source: CaptureSource,
+    ladder: CaptureLadder,
+    witnesses: Vec<CaptureWitness>,
+    state: UnitState,
+) -> UnitId {
+    let mut tx = store.begin(context).await.expect("begin");
+    let id = store
+        .stage_memory_unit(
+            &mut tx,
+            NewMemoryUnit {
+                tenant_id: context.tenant_id,
+                data_subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                kind: MemoryKind::Belief,
+                state,
+                fact_key: Some(subject.to_string()),
+                predicate: None,
+                body: body.to_string(),
+                confidence: Some(1.0),
+                trust_level: TrustLevel::AgentOutput,
+                churn_class: None,
+                freshness_due_at: None,
+                actor_id: Some(context.actor_id),
+                source_kind: Some("agent".to_string()),
+                source_ref: format!("capture:{subject}:{body}"),
+                observed_at: CLOCK.0.to_string(),
+                source_episode_id: None,
+                source_resource_id: None,
+                deletion_generation: None,
+                contextual_chunks: Vec::new(),
+                valid_from: None,
+                valid_to: None,
+                transaction_from: None,
+                transaction_to: None,
+                capture: Some(CaptureMarker {
+                    source,
+                    ladder,
+                    witnesses,
+                }),
+            },
+        )
+        .await
+        .expect("stage captured belief");
+    store.commit(tx).await.expect("commit");
+    id
+}
+
+/// The capture cross-check reads the WRITE SEAM (`fetch_scope_open_units`),
+/// promotes an agreeing cross-source pair to Active, and quarantines a diverging
+/// cross-source pair — identically on both stores (store-divergence rule: the
+/// InMemory pass must not diverge from Postgres).
+pub async fn capture_crosscheck_promotes_and_quarantines_across_the_write_seam<H: StoreHarness>(
+    h: &H,
+) {
+    let store = h.store();
+    let tenant = h.fresh_tenant().await;
+    let context = bind_context(store, tenant).await;
+
+    let agree_a = seed_captured_belief(
+        store,
+        &context,
+        "promote key",
+        "Agreed captured fact body.",
+        CaptureSource::Mirror,
+        CaptureLadder::Captured,
+        Vec::new(),
+        UnitState::Candidate,
+    )
+    .await;
+    let agree_b = seed_captured_belief(
+        store,
+        &context,
+        "promote key",
+        "Agreed captured fact body.",
+        CaptureSource::Summary,
+        CaptureLadder::Captured,
+        Vec::new(),
+        UnitState::Candidate,
+    )
+    .await;
+    let good = seed_captured_belief(
+        store,
+        &context,
+        "collide key",
+        "Legit captured fact body.",
+        CaptureSource::Mirror,
+        CaptureLadder::Corroborated,
+        vec![CaptureWitness::SourceAgreement],
+        UnitState::Active,
+    )
+    .await;
+    let poison = seed_captured_belief(
+        store,
+        &context,
+        "collide key",
+        "Poisoned divergent fact body.",
+        CaptureSource::Summary,
+        CaptureLadder::Corroborated,
+        vec![CaptureWitness::SourceAgreement],
+        UnitState::Active,
+    )
+    .await;
+
+    let report = service(store)
+        .run_capture_crosscheck(&context)
+        .await
+        .expect("crosscheck");
+    assert!(report.promoted.contains(&agree_a) && report.promoted.contains(&agree_b));
+    assert!(report.quarantined.contains(&good) && report.quarantined.contains(&poison));
+
+    let units = store
+        .fetch_scope_open_units(&context)
+        .await
+        .expect("scope open units");
+    let state_of = |id: UnitId| {
+        units
+            .iter()
+            .find(|unit| unit.id == id)
+            .map(|unit| unit.state)
+    };
+    assert_eq!(state_of(agree_a), Some(UnitState::Active));
+    assert_eq!(state_of(agree_b), Some(UnitState::Active));
+    assert_eq!(state_of(good), Some(UnitState::Quarantined));
+    assert_eq!(state_of(poison), Some(UnitState::Quarantined));
+
+    // Idempotent: a second pass over the resulting snapshot makes no decisions.
+    let again = service(store)
+        .run_capture_crosscheck(&context)
+        .await
+        .expect("crosscheck idempotent");
+    assert!(again.is_empty(), "cross-check must be idempotent");
+}
+
+/// Two captured BELIEF units on ONE subject key coexist in the store — the
+/// precondition that makes a cross-source collision representable. Beliefs are
+/// deliberately outside the `semantic/preference` subject-uniqueness exclusion
+/// constraint, so this pins the PG-only interaction: the same seed as two
+/// `semantic` candidates would violate `memphant_memory_unit_subject_valid_excl`.
+pub async fn same_subject_captured_beliefs_coexist_for_collision<H: StoreHarness>(h: &H) {
+    let store = h.store();
+    let tenant = h.fresh_tenant().await;
+    let context = bind_context(store, tenant).await;
+
+    seed_captured_belief(
+        store,
+        &context,
+        "coexist key",
+        "First divergent captured body.",
+        CaptureSource::Mirror,
+        CaptureLadder::Captured,
+        Vec::new(),
+        UnitState::Candidate,
+    )
+    .await;
+    seed_captured_belief(
+        store,
+        &context,
+        "coexist key",
+        "Second divergent captured body.",
+        CaptureSource::Summary,
+        CaptureLadder::Captured,
+        Vec::new(),
+        UnitState::Candidate,
+    )
+    .await;
+
+    let units = store
+        .fetch_scope_open_units(&context)
+        .await
+        .expect("scope open units");
+    let same_subject = units
+        .iter()
+        .filter(|unit| unit.fact_key.as_deref() == Some("coexist key"))
+        .count();
+    assert_eq!(
+        same_subject, 2,
+        "two same-subject captured beliefs must coexist for collision detection"
+    );
 }

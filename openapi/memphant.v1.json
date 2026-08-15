@@ -153,6 +153,85 @@
         ],
         "type": "object"
       },
+      "CaptureLadder": {
+        "description": "The trust-ladder rung of a captured memory unit. Rides `payload.capture`; it\nis deliberately NOT the `TrustLevel` enum, which encodes SOURCE provenance\n(the separate high-risk trust-floor layer). Recall-eligibility is driven by\n`UnitState`: `Captured` units are `Candidate` (inert); `Corroborated`/\n`Durable` are `Active` (recallable); a collision moves the unit to\n`Quarantined`.",
+        "oneOf": [
+          {
+            "const": "captured",
+            "description": "One source, provisional, recall-inert.",
+            "type": "string"
+          },
+          {
+            "const": "corroborated",
+            "description": "One witness family present — promoted to an active, recallable rung.",
+            "type": "string"
+          },
+          {
+            "const": "durable",
+            "description": "Two DISTINCT witness families present.",
+            "type": "string"
+          }
+        ]
+      },
+      "CaptureMarker": {
+        "additionalProperties": false,
+        "description": "The `payload.capture` marker on a captured memory unit. Present iff the unit\nwas produced by a capture channel; rides `payload` alongside `compact` and\n`invalidation`, consistent across both stores. `witnesses` is a deduped,\nsorted SET — the independence rule counts distinct families, not events.",
+        "properties": {
+          "ladder": {
+            "$ref": "#/components/schemas/CaptureLadder"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CaptureSource"
+          },
+          "witnesses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CaptureWitness"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "source",
+          "ladder"
+        ],
+        "type": "object"
+      },
+      "CaptureSource": {
+        "description": "Which capture channel produced a captured memory unit. This is the\nprovenance FAMILY the cross-check independence rule keys on: an agent's\nexplicit file-write `Mirror` and its own LLM session `Summary` of that same\nwrite are DIFFERENT sources but, when they agree, form a SINGLE witness\nfamily (see `CaptureWitness::SourceAgreement`) — a confident-but-wrong agent\ncannot manufacture two independent witnesses from one belief.",
+        "oneOf": [
+          {
+            "const": "mirror",
+            "description": "Explicit in-repo file write mirrored into the store (e.g. `MEMORY.md`).",
+            "type": "string"
+          },
+          {
+            "const": "summary",
+            "description": "LLM session-end summary of the transcript.",
+            "type": "string"
+          }
+        ]
+      },
+      "CaptureWitness": {
+        "description": "A witness FAMILY that can advance a captured unit along the ladder. Promotion\nto `Durable` requires two DISTINCT families; the same family counts once no\nmatter how many raw witnesses of that kind exist, which is what blocks\nwitness-laundering (a single belief mirrored and summarized is one family).",
+        "oneOf": [
+          {
+            "const": "source_agreement",
+            "description": "Two DIFFERENT capture sources agree on the same subject + body.",
+            "type": "string"
+          },
+          {
+            "const": "weak_outcome",
+            "description": "A positive weak-self-outcome (`review_event` `success`) on a served unit.",
+            "type": "string"
+          },
+          {
+            "const": "survival",
+            "description": "The unit survived without contradiction across a horizon (reserved;\nemitted by the survival detector in a later stage).",
+            "type": "string"
+          }
+        ]
+      },
       "CitationSpan": {
         "additionalProperties": false,
         "properties": {
@@ -2885,6 +2964,18 @@
           },
           "body": {
             "type": "string"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureMarker"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The capture marker (`payload.capture`), present iff the unit was produced\nby a capture channel. Carries the source family + trust-ladder rung +\nwitness set the anti-poisoning cross-check advances. A non-captured unit\n(a plain user/tool write) never carries it and is never touched by the\ncross-check."
           },
           "churn_class": {
             "type": [

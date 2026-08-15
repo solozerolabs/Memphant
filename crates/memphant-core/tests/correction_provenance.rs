@@ -11,6 +11,7 @@ const CLOCK: FixedClock = FixedClock("2030-01-01T00:00:00Z");
 
 fn old_unit() -> StoredMemoryUnit {
     StoredMemoryUnit {
+        capture: None,
         invalidation: None,
         compact: None,
         id: UnitId::new(),
@@ -57,6 +58,7 @@ async fn correction_boundary_canonicalizes_utc_and_rejects_blank_source() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,

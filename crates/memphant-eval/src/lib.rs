@@ -1021,6 +1021,23 @@ pub fn run_security_file(path: &Path) -> EvalResult<SecurityReport> {
             "missing required security lanes: {missing:?}"
         )));
     }
+    // A capture cross-check poisoning lane may not stand without its paired
+    // `no-crosscheck` control arm — the same refuse-promotion-if-control-missing
+    // idiom rung6 enforces for its `no-edges` control. Without the control there
+    // is no evidence the quarantine came from the cross-check rather than from a
+    // seed that was already inert, so the promotion is refused.
+    let is_control = |id: &str| id.contains("no_crosscheck") || id.contains("no-crosscheck");
+    let has_crosscheck_lane = lane_results
+        .iter()
+        .any(|lane| lane.id.contains("crosscheck") && !is_control(&lane.id));
+    let has_no_crosscheck_control = lane_results.iter().any(|lane| is_control(&lane.id));
+    if has_crosscheck_lane && !has_no_crosscheck_control {
+        return Err(EvalError::Failed(
+            "capture cross-check poisoning lane present without its control: \
+             missing_no_crosscheck_control"
+                .to_string(),
+        ));
+    }
     let passed = lane_results.iter().all(|lane| lane.passed);
     Ok(SecurityReport {
         id: suite.id,
@@ -2950,6 +2967,7 @@ async fn seed_store(
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: unit_tenant_id,
                     data_subject_id: memphant_types::SubjectId::from_u128(
                         unit_tenant_id.as_uuid().as_u128(),

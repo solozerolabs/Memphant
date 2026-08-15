@@ -17,6 +17,7 @@ async fn recall_resolves_both_time_axes_across_a_split_update_chain() {
         .stage_memory_unit(
             &mut tx,
             NewMemoryUnit {
+                capture: None,
                 tenant_id: tenant,
                 data_subject_id: context.data_subject_id,
                 scope_id: context.scope_id,

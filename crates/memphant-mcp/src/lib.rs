@@ -1288,6 +1288,7 @@ mod deep_runtime_smoke {
             .stage_memory_unit(
                 &mut tx,
                 NewMemoryUnit {
+                    capture: None,
                     tenant_id: tenant,
                     data_subject_id: context.data_subject_id,
                     scope_id: scope,

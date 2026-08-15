@@ -33,6 +33,7 @@ fn tenant(value: u128) -> TenantId {
 
 fn new_unit(context: &ResolvedMemoryContext, fact_key: &str, body: String) -> NewMemoryUnit {
     NewMemoryUnit {
+        capture: None,
         tenant_id: context.tenant_id,
         data_subject_id: context.data_subject_id,
         scope_id: context.scope_id,
