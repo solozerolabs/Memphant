@@ -204,14 +204,10 @@ echo "$RECALL1" | jget "['degraded']" | grep -qi false || fail "recall still deg
 TRACE_ID=$(echo "$RECALL1" | jget "['trace_id']")
 UNIT_ID=$(echo "$RECALL1" | jget "['items'][0]['unit_id']")
 
+# M1 is seeded through the MCP `remember` tool itself (below), so the coding
+# lane has a compact Active procedural memory to serve. The old HTTP-retain +
+# SQL-force-to-validated path is gone with the compact-only MCP lane.
 MCP_M1_BODY="Always run the focused contract before the full harness."
-M1_RETAIN=$(api "$KEY_A" POST /v1/episodes "{$CTX_M1,\"source_ref\":\"probe:mcp:validated-procedure\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"episode\":{\"source_kind\":\"user\",\"body\":\"$MCP_M1_BODY\"}}}")
-M1_EPISODE_ID=$(echo "$M1_RETAIN" | jget "['episode_id']")
-[ -n "$M1_EPISODE_ID" ] || fail "M1 retain returned no episode id: $M1_RETAIN"
-worker_once
-M1_UNIT_ID=$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select id from memphant.memory_unit where tenant_id = '$TENANT_A'::uuid and data_subject_id = '$SUBJ_M1'::uuid and actor_id = '$ACTOR_M1'::uuid and scope_id = '$SCOPE_M1'::uuid and agent_node_id = '$AGENT_M1'::uuid and subject_generation = $GEN_M1 and source_episode_id = '$M1_EPISODE_ID'::uuid and body = '$MCP_M1_BODY'")
-[ "$(printf '%s\n' "$M1_UNIT_ID" | sed '/^$/d' | wc -l | tr -d ' ')" = "1" ] || fail "M1 source episode must compile exactly one isolated unit"
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "update memphant.memory_unit set kind = 'procedural', state = 'validated' where tenant_id = '$TENANT_A'::uuid and data_subject_id = '$SUBJ_M1'::uuid and actor_id = '$ACTOR_M1'::uuid and scope_id = '$SCOPE_M1'::uuid and agent_node_id = '$AGENT_M1'::uuid and subject_generation = $GEN_M1 and source_episode_id = '$M1_EPISODE_ID'::uuid and body = '$MCP_M1_BODY' and id = '$M1_UNIT_ID'::uuid" >/dev/null
 
 log "retain code resource (A) with commit revision"
 RES=$(api "$KEY_A" POST /v1/episodes "{$CTX_A,\"source_ref\":\"probe:resource:1\",\"observed_at\":\"2026-07-15T00:00:00Z\",\"payload\":{\"resource\":{\"uri\":\"repo://demo/src/main.rs\",\"mime_type\":\"text/x-rust\",\"content_hash\":\"sha256:fb731a330c0e0531431869357136178788ef57c7ec89eb9f0db8e398ddefbf8f\",\"kind\":\"code\",\"revision\":\"abc123def\",\"body\":\"fn deploy() { /* canary first, then roll forward */ }\"}}}")
@@ -325,16 +321,13 @@ assert process.returncode == 0, process.stderr.read()
 print(f"MCP PROBE: resources={len(first['resources'])} deterministic=ok")
 PY
 
-log "real MCP stdio M1 bound scope returns the isolated validated procedure"
+log "real MCP stdio M1 bound scope: remember -> recall(hit) -> trace resource"
 env -u DATABASE_URL \
   MEMPHANT_APP_DATABASE_URL="$APP_URL" \
   MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" \
   MEMPHANT_API_KEY="$MCP_M1_KEY" \
   MEMPHANT_MCP_PROBE_BINARY="$MCP" \
-  MCP_M1_UNIT_ID="$M1_UNIT_ID" MCP_M1_BODY="$MCP_M1_BODY" \
-  MCP_M1_SUBJECT_ID="$SUBJ_M1" MCP_M1_SCOPE_ID="$SCOPE_M1" \
-  MCP_M1_ACTOR_ID="$ACTOR_M1" MCP_M1_AGENT_NODE_ID="$AGENT_M1" \
-  MCP_M1_SUBJECT_GENERATION="$GEN_M1" \
+  MCP_M1_BODY="$MCP_M1_BODY" \
   python3 - <<'PY'
 import json, os, select, subprocess
 p = subprocess.Popen([os.environ["MEMPHANT_MCP_PROBE_BINARY"], "stdio"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -344,22 +337,25 @@ def call(i, method, params):
         ready, _, _ = select.select([p.stdout], [], [], 20); assert ready
         response = json.loads(p.stdout.readline())
         if response.get("id") == i: assert "error" not in response, response; return response["result"]
+body = os.environ["MCP_M1_BODY"]
 call(1, "initialize", {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"memphant-m1-probe","version":"1"}})
 p.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n'); p.stdin.flush()
-r = call(2, "tools/call", {"name":"recall","arguments":{"query":"focused contract full harness"}})
-assert r.get("isError") is not True, r
-r = r["structuredContent"]
+# Seed a compact procedural memory through the identity-free remember tool.
+rem = call(2, "tools/call", {"name":"remember","arguments":{"idempotency_key":"probe-m1-remember","request":{
+    "kind":"procedural","body":body,"trigger":"the focused contract habit",
+    "verification":"the focused test passes before the full harness",
+    "source":{"kind":"user","ref":"probe:m1:remember","observed_at":"2026-07-15T00:00:00Z"}}}})
+assert rem.get("isError") is not True, rem
+unit_id = rem["structuredContent"]["unit_ids"][0]
+# The compact coding lane serves the Active procedural memory.
+r = call(3, "tools/call", {"name":"recall","arguments":{"query":"the focused contract habit"}})["structuredContent"]
 assert r["state"] == "hit" and len(r["items"]) == 1, r
-assert r["items"][0]["unit_id"] == os.environ["MCP_M1_UNIT_ID"] and r["items"][0]["body"] == os.environ["MCP_M1_BODY"], r
-assert r["items"][0]["inclusion_reason"] == "validated_procedure" and r["citations"][0]["verification"]["status"] == "verified", r
-trace = call(3, "tools/call", {"name":"trace","arguments":{
-    "subject_id":os.environ["MCP_M1_SUBJECT_ID"], "scope_id":os.environ["MCP_M1_SCOPE_ID"],
-    "actor_id":os.environ["MCP_M1_ACTOR_ID"], "agent_node_id":os.environ["MCP_M1_AGENT_NODE_ID"],
-    "subject_generation":int(os.environ["MCP_M1_SUBJECT_GENERATION"]), "trace_id":r["trace_id"],
-}})
-assert trace.get("isError") is not True, trace
-trace = trace["structuredContent"]
-assert any(item["unit_id"] == os.environ["MCP_M1_UNIT_ID"] for item in trace["context_items"]), trace
+assert r["items"][0]["unit_id"] == unit_id and r["items"][0]["body"] == body, r
+trace_id = r["trace_id"]
+# The trace is read through the MCP resource surface (no trace tool).
+tr = call(4, "resources/read", {"uri": f"memphant://trace/{trace_id}"})
+assert tr["contents"][0]["text"], tr
+assert trace_id in tr["contents"][0]["text"], tr
 p.stdin.close(); p.wait(timeout=10); assert p.returncode == 0, p.stderr.read()
 print("MCP PROBE: m1=hit deterministic=ok")
 PY
@@ -502,6 +498,16 @@ RECALL3=$(api "$KEY_A" POST /v1/recall "{$CTX_A,\"query\":\"Where is the release
 echo "$RECALL3" | jget "['items'][0]['body']" | grep -q "Osaka" || fail "correction not reflected: $RECALL3"
 
 log "forget episode + no resurrection"
+# Owner forget is capability-gated (Task 1). A coding key is refused; grant the
+# tenant-service KEY_A (the only tenant-A key with a null context binding) the
+# owner-only can_forget capability before exercising erasure.
+FORGET_DENIED=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+  -H "Authorization: Bearer $KEY_A" -H "Idempotency-Key: probe-$(uuidgen)" \
+  -H 'content-type: application/json' \
+  -d "{$CTX_A,\"selector\":{\"episode_id\":\"$EPISODE_ID\",\"scope_id\":\"$SCOPE_A\"},\"reason\":\"probe forget\"}" \
+  "$BASE/v1/forget")
+[ "$FORGET_DENIED" = "403" ] || fail "forget without can_forget must be 403, got $FORGET_DENIED"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "update memphant.api_key set can_forget = true where tenant_id = '$TENANT_A'::uuid and data_subject_id is null" >/dev/null
 FORGET=$(api "$KEY_A" POST /v1/forget "{$CTX_A,\"selector\":{\"episode_id\":\"$EPISODE_ID\",\"scope_id\":\"$SCOPE_A\"},\"reason\":\"probe forget\"}")
 echo "$FORGET" | jget "['verification']" | grep -q "authorized_transaction_committed" || fail "forget verification not clean: $FORGET"
 api "$KEY_A" POST /v1/reflect "{$CTX_A}" >/dev/null
