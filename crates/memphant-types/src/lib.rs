@@ -1373,6 +1373,12 @@ pub struct StoredMemoryUnit {
     pub last_reinforced_at: Option<String>,
     #[serde(default)]
     pub reinforcement_count: u32,
+    /// The typed compact-envelope marker, present iff the unit was written as a
+    /// portable compact memory (`payload.compact`). Read-side only: eligibility
+    /// for the coding recall lane keys on its presence. A raw episode/resource
+    /// body copied into an Active unit never carries it.
+    #[serde(default)]
+    pub compact: Option<CompactEnvelope>,
 }
 
 impl CorrectionHandle {
@@ -2623,6 +2629,7 @@ mod correction_handle_tests {
     #[test]
     fn handle_reads_the_units_own_identity_key_interval_span_and_episode() {
         let unit = StoredMemoryUnit {
+            compact: None,
             id: UnitId::from_u128(1),
             tenant_id: TenantId::from_u128(2),
             data_subject_id: SubjectId::from_u128(3),

@@ -809,6 +809,7 @@ mod file_sync_tests {
         body: &str,
     ) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            compact: None,
             id: UnitId::new(),
             tenant_id: context.tenant_id,
             data_subject_id: context.data_subject_id,

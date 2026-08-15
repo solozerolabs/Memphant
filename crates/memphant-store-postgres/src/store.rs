@@ -711,6 +711,12 @@ impl PgStore {
             .transpose()
             .map_err(|error| StoreError::Backend(error.to_string()))?
             .unwrap_or_default();
+        let compact: Option<memphant_types::CompactEnvelope> = payload
+            .get("compact")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| StoreError::Backend(error.to_string()))?;
         Ok(StoredMemoryUnit {
             id: UnitId::from_u128(row.try_get::<Uuid, _>("id").map_err(backend)?.as_u128()),
             tenant_id: TenantId::from_u128(
@@ -788,6 +794,7 @@ impl PgStore {
             reinforcement_count: row
                 .try_get::<i32, _>("reinforcement_count")
                 .map_err(backend)? as u32,
+            compact,
         })
     }
 
@@ -2186,6 +2193,7 @@ impl MemoryStore for PgStore {
         )?;
         let id = UnitId::new();
         let stored = StoredMemoryUnit {
+            compact: None,
             id,
             tenant_id: unit.tenant_id,
             data_subject_id: unit.data_subject_id,

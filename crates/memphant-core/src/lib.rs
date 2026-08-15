@@ -3991,6 +3991,7 @@ impl MemoryStore for InMemoryStore {
 
         let id = UnitId::new();
         tx.memory_units.push(StoredMemoryUnit {
+            compact: None,
             id,
             tenant_id: unit.tenant_id,
             data_subject_id: unit.data_subject_id,
@@ -6805,6 +6806,7 @@ fn quantity_rollups(
             let id = UnitId::from_u128(u128::from_be_bytes(digest[..16].try_into().unwrap()));
             Some(QuantityRollup {
                 unit: StoredMemoryUnit {
+                    compact: None,
                     id,
                     tenant_id: request.context.tenant_id,
                     data_subject_id: selected[0].unit.data_subject_id,
@@ -7001,6 +7003,7 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
         });
     Some(ArtifactBundle {
         unit: StoredMemoryUnit {
+            compact: None,
             id,
             tenant_id: request.context.tenant_id,
             data_subject_id: members[0].0.data_subject_id,
@@ -8253,6 +8256,7 @@ mod evidence_receipt_tests {
         let start = body.find(quote).unwrap();
         let end = start + quote.len();
         let unit = StoredMemoryUnit {
+            compact: None,
             id: unit_id,
             tenant_id: context.tenant_id,
             data_subject_id: context.data_subject_id,
@@ -12865,6 +12869,7 @@ mod compiled_citation_tests {
             candidates: Vec::new(),
         };
         let unit = StoredMemoryUnit {
+            compact: None,
             id: UnitId::from_u128(81_008),
             tenant_id,
             data_subject_id,
@@ -13116,6 +13121,7 @@ fn minted_unit(
         && candidate.churn_class.as_deref() == Some("volatile"))
     .then(|| now.to_string());
     StoredMemoryUnit {
+        compact: None,
         id,
         tenant_id: input.tenant_id,
         data_subject_id: input.data_subject_id,
@@ -13284,6 +13290,7 @@ fn compose_inferred_beliefs(
         );
         let composed_id = UnitId::new();
         new_units.push(StoredMemoryUnit {
+            compact: None,
             id: composed_id,
             tenant_id,
             data_subject_id,
@@ -14025,6 +14032,7 @@ mod temporal_grounding_tests {
 
     fn temporal_test_unit(id: u128, body: &str, valid_from: &str) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
             data_subject_id: SubjectId::from_u128(1),
@@ -14919,6 +14927,7 @@ mod pack_cost_tests {
 
     fn unit(id: u128, body: &str, chunks: Vec<ContextualChunk>) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
             data_subject_id: SubjectId::from_u128(1),
@@ -16469,6 +16478,7 @@ mod deep_call_routing_tests {
 
     fn compiled_unit(id: u128, body: &str) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
             data_subject_id: SubjectId::from_u128(2),
@@ -16737,6 +16747,7 @@ mod ranking_channels_fixed_tests {
 
     fn semantic_unit(id: u128, body: &str, fact_key: Option<&str>) -> StoredMemoryUnit {
         StoredMemoryUnit {
+            compact: None,
             id: UnitId::from_u128(id),
             tenant_id: TenantId::from_u128(1),
             data_subject_id: SubjectId::from_u128(1),

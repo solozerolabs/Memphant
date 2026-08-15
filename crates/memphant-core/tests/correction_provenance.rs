@@ -11,6 +11,7 @@ const CLOCK: FixedClock = FixedClock("2030-01-01T00:00:00Z");
 
 fn old_unit() -> StoredMemoryUnit {
     StoredMemoryUnit {
+        compact: None,
         id: UnitId::new(),
         tenant_id: TenantId::new(),
         data_subject_id: SubjectId::new(),
