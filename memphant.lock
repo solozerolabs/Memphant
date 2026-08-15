@@ -2,7 +2,7 @@
   "engine_version": "0.1.0-ws0",
   "compiler_version": "compiler-0.1.0-ws0",
   "trace_schema_version": "trace-0.1.0-ws0",
-  "schema_compat_revision": "20260808_010_task_outcome_ledger",
+  "schema_compat_revision": "20260814_011_portable_agent_memory",
   "methodology_version": "memphant-methodology-2026-07-03",
   "export_schema_version": "export-0.1.0-ws0"
 }
