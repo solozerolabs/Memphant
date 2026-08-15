@@ -1155,6 +1155,20 @@ pub struct CorrectionWrite {
     /// them caller-owned lets later operations in the same plan compile
     /// against the exact units that the transaction will persist.
     pub unit_ids: CorrectionUnitIds,
+    /// Set by `correct_memory` (never by the plain `correct` verb). When
+    /// present, the successor is a fresh COMPACT unit: its compact envelope is
+    /// replaced (new verification + body digest), cloned contextual chunks and
+    /// any inherited invalidation marker are dropped, and its trust is clamped.
+    /// Absent for ordinary corrections, which keep the clone-forward behavior.
+    pub compact_refresh: Option<CompactRefresh>,
+}
+
+/// The compact-successor refresh applied to a `correct_memory` replacement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompactRefresh {
+    pub envelope: memphant_types::CompactEnvelope,
+    /// The successor's trust is clamped to `min(predecessor, this)`.
+    pub trust_ceiling: TrustLevel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1209,6 +1223,23 @@ pub struct ForgetWrite {
 pub struct ForgetOutcome {
     pub deletion_generation: u64,
     pub invalidated_units: Vec<UnitId>,
+}
+
+/// Apply a `correct_memory` compact refresh to the successor replacement (both
+/// stores call this): install the fresh compact envelope, drop cloned
+/// contextual chunks and any inherited invalidation marker, and clamp trust to
+/// `min(predecessor, ceiling)`. A no-op for ordinary corrections
+/// (`refresh == None`), which keep the clone-forward behavior.
+pub fn apply_compact_refresh(replacement: &mut StoredMemoryUnit, refresh: Option<&CompactRefresh>) {
+    let Some(refresh) = refresh else { return };
+    let mut envelope = refresh.envelope.clone();
+    // The digest always tracks the replacement's actual body.
+    envelope.body_sha256 = sha256_hex(&replacement.body);
+    replacement.compact = Some(envelope);
+    replacement.contextual_chunks = Vec::new();
+    replacement.invalidation = None;
+    replacement.trust_level =
+        crate::service::clamp_trust(replacement.trust_level, refresh.trust_ceiling);
 }
 
 pub fn correction_rectangles(
@@ -4937,7 +4968,7 @@ impl MemoryStore for InMemoryStore {
             .cloned()
             .ok_or(StoreError::NotFound("memory_unit"))?;
         let old_id = old_unit.id;
-        let (replacement, remainders) = correction_rectangles_with_ids(
+        let (mut replacement, remainders) = correction_rectangles_with_ids(
             &old_unit,
             &correction.correction,
             &correction.source_ref,
@@ -4946,6 +4977,7 @@ impl MemoryStore for InMemoryStore {
             &correction.now,
             &correction.unit_ids,
         )?;
+        apply_compact_refresh(&mut replacement, correction.compact_refresh.as_ref());
         let new_id = replacement.id;
         let remainder_ids: Vec<UnitId> = remainders.iter().map(|unit| unit.id).collect();
         let old_embeddings: Vec<EmbeddingRow> = state
@@ -6526,6 +6558,7 @@ where
         .stage_correction(
             &mut tx,
             CorrectionWrite {
+                compact_refresh: None,
                 selector: request.selector,
                 source_ref: request.correction.source_ref.clone(),
                 observed_at: request.correction.observed_at.clone(),
@@ -14001,6 +14034,7 @@ mod in_memory_mutation_retention_tests {
 
     fn correction(id: UnitId, value: &str) -> CorrectionWrite {
         CorrectionWrite {
+            compact_refresh: None,
             selector: CorrectSelector { memory_unit_id: id },
             source_ref: "test:correction".to_string(),
             observed_at: "2026-07-15T00:00:00Z".to_string(),

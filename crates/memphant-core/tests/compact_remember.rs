@@ -9,9 +9,9 @@ use std::sync::Arc;
 use memphant_core::service::MemoryService;
 use memphant_core::{FixedClock, InMemoryStore, MemoryStore, NoopEmbedding};
 use memphant_types::{
-    CorrectResult, InvalidateMemoryRequest, InvalidationReason, MemoryKind, MemorySourceInput,
-    RecallHttpRequest, RecallMode, RememberRequest, RetainEpisodeHttpResponse, TrustLevel,
-    UnitState,
+    CorrectMemoryRequest, CorrectResult, InvalidateMemoryRequest, InvalidationReason, MemoryKind,
+    MemorySourceInput, RecallHttpRequest, RecallMode, RememberRequest, RetainEpisodeHttpResponse,
+    TrustLevel, UnitState,
 };
 
 const CLOCK: FixedClock = FixedClock("2026-07-03T00:00:00Z");
@@ -434,4 +434,170 @@ async fn an_open_tombstone_blocks_re_remembering_the_same_identity() {
         )
         .await;
     assert!(other.is_ok(), "a distinct identity is not blocked");
+}
+
+#[tokio::test]
+async fn correct_memory_refreshes_the_compact_envelope_and_supersedes() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(90_600);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    let created = service
+        .remember(
+            &context,
+            "cm-1",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Semantic, "the api endpoint"),
+        )
+        .await
+        .unwrap();
+    let old_id = unit_ids(&created)[0];
+    let old = store
+        .fetch_units_by_ids(&context, &[old_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    let old_digest = old.compact.unwrap().body_sha256;
+
+    let response = service
+        .correct_memory(
+            &context,
+            "cm-2",
+            TrustLevel::TrustedUser,
+            CorrectMemoryRequest {
+                memory_unit_id: old_id,
+                body: "Use the v2 endpoint at /api/v2.".to_string(),
+                trigger: "the api endpoint".to_string(),
+                verification: "curl /api/v2 returns 200".to_string(),
+                reason: "v1 was retired".to_string(),
+                valid_from: None,
+                valid_to: None,
+                source: MemorySourceInput {
+                    kind: "correction".to_string(),
+                    r#ref: "chat:fix".to_string(),
+                    observed_at: "2026-07-03T00:00:00Z".to_string(),
+                    episode_id: None,
+                    resource_id: None,
+                },
+            },
+        )
+        .await
+        .unwrap();
+    let outcome: CorrectResult = serde_json::from_slice(response.body()).unwrap();
+    assert_eq!(outcome.superseded, vec![old_id]);
+    let successor_id = outcome.created[0];
+
+    // Predecessor is closed; successor is a fresh Active compact unit with a
+    // NEW body digest and verification, and no cloned invalidation marker.
+    let predecessor = store
+        .fetch_units_by_ids(&context, &[old_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(predecessor.state, UnitState::Superseded);
+
+    let successor = store
+        .fetch_units_by_ids(&context, &[successor_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(successor.state, UnitState::Active);
+    let compact = successor.compact.as_ref().expect("successor is compact");
+    assert_ne!(compact.body_sha256, old_digest, "body digest refreshed");
+    assert_eq!(compact.verification, "curl /api/v2 returns 200");
+    assert_eq!(successor.body, "Use the v2 endpoint at /api/v2.");
+    assert!(successor.invalidation.is_none());
+}
+
+#[tokio::test]
+async fn correct_memory_can_close_a_tombstone_and_restore_the_identity() {
+    let store = Arc::new(InMemoryStore::default());
+    let tenant_id = memphant_types::TenantId::from_u128(90_700);
+    let context = memphant_store_testkit::bind_context(store.as_ref(), tenant_id).await;
+    let service = MemoryService::new(store.clone(), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+
+    let created = service
+        .remember(
+            &context,
+            "ct-1",
+            TrustLevel::TrustedUser,
+            remember_request(MemoryKind::Procedural, "deploy step"),
+        )
+        .await
+        .unwrap();
+    let old_id = unit_ids(&created)[0];
+
+    let inv = service
+        .invalidate_memory(
+            &context,
+            "ct-inv",
+            InvalidateMemoryRequest {
+                memory_unit_id: old_id,
+                reason_kind: InvalidationReason::Stale,
+                reason: "process changed".to_string(),
+                source: source(),
+            },
+        )
+        .await
+        .unwrap();
+    let inv_outcome: CorrectResult = serde_json::from_slice(inv.body()).unwrap();
+    let tombstone_id = inv_outcome.created[0];
+
+    // Only correct_memory may close a tombstone; do so and restore the identity.
+    let restored = service
+        .correct_memory(
+            &context,
+            "ct-fix",
+            TrustLevel::TrustedUser,
+            CorrectMemoryRequest {
+                memory_unit_id: tombstone_id,
+                body: "The revised deploy step.".to_string(),
+                trigger: "deploy step".to_string(),
+                verification: "the pipeline is green".to_string(),
+                reason: "restored with the new process".to_string(),
+                valid_from: None,
+                valid_to: None,
+                source: MemorySourceInput {
+                    kind: "correction".to_string(),
+                    r#ref: "chat:restore".to_string(),
+                    observed_at: "2026-07-03T00:00:00Z".to_string(),
+                    episode_id: None,
+                    resource_id: None,
+                },
+            },
+        )
+        .await
+        .unwrap();
+    let restored_outcome: CorrectResult = serde_json::from_slice(restored.body()).unwrap();
+    assert_eq!(restored_outcome.superseded, vec![tombstone_id]);
+    let successor_id = restored_outcome.created[0];
+
+    let tombstone = store
+        .fetch_units_by_ids(&context, &[tombstone_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(tombstone.state, UnitState::Superseded, "tombstone closed");
+
+    let successor = store
+        .fetch_units_by_ids(&context, &[successor_id])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(successor.state, UnitState::Active);
+    assert!(
+        successor.compact.is_some(),
+        "restored unit is compact again"
+    );
+    assert!(
+        successor.invalidation.is_none(),
+        "no inherited tombstone marker"
+    );
+    assert!(!successor.body.is_empty());
 }

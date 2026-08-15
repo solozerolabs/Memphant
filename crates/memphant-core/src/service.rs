@@ -4688,6 +4688,7 @@ impl<S: MemoryStore> MemoryService<S> {
             .stage_correction(
                 &mut tx,
                 CorrectionWrite {
+                    compact_refresh: None,
                     selector: request.selector,
                     source_ref: request.correction.source_ref.clone(),
                     observed_at: request.correction.observed_at.clone(),
@@ -4695,6 +4696,132 @@ impl<S: MemoryStore> MemoryService<S> {
                     now: self.clock.now_rfc3339(),
                     embedding,
                     unit_ids: Default::default(),
+                },
+            )
+            .await
+            .map_err(|error| match error {
+                StoreError::NotFound(entity) => CoreError::NotFound(entity.to_string()),
+                other => CoreError::Store(other),
+            })?;
+        let response = serialized_mutation_response(200, &result)?;
+        self.store
+            .stage_mutation_response(&mut tx, response.clone())
+            .await?;
+        self.store.commit(tx).await?;
+        Ok(response)
+    }
+
+    /// `correct_memory`: append a corrected bitemporal successor to one open
+    /// unit (or an open invalidation tombstone) selected by id. Reuses the
+    /// correction machinery but the successor is a fresh COMPACT unit — new
+    /// compact envelope (verification + body digest), no cloned citations or
+    /// contextual chunks, trust clamped to `min(predecessor, actor)`. Correcting
+    /// an open tombstone is the only sanctioned way to restore an invalidated
+    /// identity; the no-resurrection guard on remember/reflect stays closed.
+    pub async fn correct_memory(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        assigned_trust: TrustLevel,
+        request: memphant_types::CorrectMemoryRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        for (field, value) in [
+            ("body", request.body.as_str()),
+            ("trigger", request.trigger.as_str()),
+            ("verification", request.verification.as_str()),
+            ("reason", request.reason.as_str()),
+            ("source.ref", request.source.r#ref.as_str()),
+            ("source.observed_at", request.source.observed_at.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(ServiceError::Invalid(format!("{field} must not be blank")));
+            }
+        }
+        validate_valid_interval(request.valid_from.as_deref(), request.valid_to.as_deref())?;
+        let rendered = format!(
+            "{}\n{}\n{}\n{}:{}",
+            request.body,
+            request.trigger,
+            request.verification,
+            request.source.kind,
+            request.source.r#ref,
+        );
+        if crate::conservative_token_estimate(&rendered) > MCP_COMPACT_TOKEN_CEILING {
+            return Err(ServiceError::Invalid(format!(
+                "corrected compact memory renders to more than {MCP_COMPACT_TOKEN_CEILING} tokens"
+            )));
+        }
+        let observed_at =
+            canonical_utc_timestamp(&request.source.observed_at, "source.observed_at")?;
+
+        let claim = MutationClaim::new(
+            context,
+            MutationVerb::Correct,
+            idempotency_key,
+            canonical_mutation_request_hash(MutationVerb::Correct, &request)?,
+        )?;
+
+        let envelope = memphant_types::CompactEnvelope {
+            schema_version: memphant_types::COMPACT_ENVELOPE_SCHEMA_VERSION,
+            verification: request.verification.clone(),
+            body_sha256: crate::sha256_hex(&request.body),
+            write_channel: memphant_types::COMPACT_WRITE_CHANNEL_AGENT.to_string(),
+        };
+
+        let embedding = if self.embedder.dimensions() > 0 {
+            run_embedding_task(
+                Arc::clone(&self.embedder),
+                vec![request.body.clone()],
+                EmbeddingTaskKind::Document,
+            )
+            .await
+            .map_err(|error| {
+                CoreError::Store(StoreError::Backend(format!("embedding failed: {error}")))
+            })?
+            .into_iter()
+            .next()
+            .filter(|vector| !vector.is_empty())
+            .map(|vector| (embedding_profile_for(self.embedder.as_ref()), vector))
+        } else {
+            None
+        };
+
+        let mut tx = self.store.begin(context).await?;
+        match self.store.stage_mutation_claim(&mut tx, claim).await? {
+            MutationClaimOutcome::Replay(response) => {
+                self.store.commit(tx).await?;
+                return Ok(response);
+            }
+            MutationClaimOutcome::Execute => {}
+        }
+        let result = self
+            .store
+            .stage_correction(
+                &mut tx,
+                CorrectionWrite {
+                    selector: memphant_types::CorrectSelector {
+                        memory_unit_id: request.memory_unit_id,
+                    },
+                    source_ref: request.source.r#ref.clone(),
+                    observed_at: observed_at.clone(),
+                    correction: memphant_types::CorrectionPayload {
+                        value: request.body,
+                        reason: request.reason,
+                        source_ref: request.source.r#ref,
+                        observed_at,
+                        valid_from: request.valid_from,
+                        valid_to: request.valid_to,
+                    },
+                    now: self.clock.now_rfc3339(),
+                    embedding,
+                    unit_ids: Default::default(),
+                    compact_refresh: Some(crate::CompactRefresh {
+                        envelope,
+                        trust_ceiling: assigned_trust,
+                    }),
                 },
             )
             .await
@@ -5125,6 +5252,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     prepared.push(PreparedFileSyncOperation::Correct {
                         memory_unit_id: base.unit_id,
                         write: CorrectionWrite {
+                            compact_refresh: None,
                             selector: memphant_types::CorrectSelector {
                                 memory_unit_id: base.unit_id,
                             },

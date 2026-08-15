@@ -3469,7 +3469,7 @@ impl MemoryStore for PgStore {
         .await
         .map_err(backend)?;
 
-        let (replacement, remainders) = correction_rectangles_with_ids(
+        let (mut replacement, remainders) = correction_rectangles_with_ids(
             &old_unit,
             &correction.correction,
             &correction.source_ref,
@@ -3478,6 +3478,7 @@ impl MemoryStore for PgStore {
             &transaction_time,
             &correction.unit_ids,
         )?;
+        memphant_core::apply_compact_refresh(&mut replacement, correction.compact_refresh.as_ref());
         let new_id = replacement.id;
         let remainder_ids: Vec<UnitId> = remainders.iter().map(|unit| unit.id).collect();
         Self::insert_unit(tx, &replacement).await?;

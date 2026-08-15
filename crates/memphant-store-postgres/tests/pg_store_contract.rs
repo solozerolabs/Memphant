@@ -3441,6 +3441,7 @@ async fn bitemporal_correction_round_trips_through_postgres_and_forget_erases_hi
         .expect("old embedding");
 
     let correction_write = CorrectionWrite {
+        compact_refresh: None,
         selector: CorrectSelector {
             memory_unit_id: old_id,
         },

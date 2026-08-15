@@ -52,6 +52,7 @@ async fn recall_resolves_both_time_axes_across_a_split_update_chain() {
         .apply_correction(
             &context,
             CorrectionWrite {
+                compact_refresh: None,
                 selector: CorrectSelector {
                     memory_unit_id: old_id,
                 },
