@@ -48,6 +48,11 @@ use crate::{
     tokenize, validate_structured_observations_for_request, validate_valid_interval,
 };
 
+/// The compact one-card token ceiling. A `remember`/`correct_memory` write
+/// whose rendered card exceeds this is rejected at write time as non-compact
+/// rather than truncated into misleading recall context later.
+pub const MCP_COMPACT_TOKEN_CEILING: usize = 512;
+
 pub const DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY: usize = 4;
 pub const MAX_STRUCTURED_STATE_PREFETCH_CONCURRENCY: usize = 16;
 pub const DEFAULT_WORKER_COMPILE_CONCURRENCY: usize = 16;
@@ -4165,6 +4170,217 @@ impl<S: MemoryStore> MemoryService<S> {
                 Ok(response)
             }
         }
+    }
+
+    /// `remember`: create exactly one self-contained, compact, `Active` typed
+    /// memory from a live coding-agent principal. Identity comes entirely from
+    /// `context`; the request is identity-free.
+    ///
+    /// Unlike the kind-based write router — which degrades an agent-trust
+    /// candidate to a quarantined belief and never mints `Active` for a
+    /// low-trust author — a compact write is a first-class authoring action, so
+    /// it is routed through the high-trust append arm to obtain a single
+    /// `Active` unit of the declared kind, and the stored `trust_level` is then
+    /// set back to the caller's actual clamped trust (the routing decision and
+    /// the provenance trust are independent). The compact stable key is
+    /// `derive_fact_key(scope, normalized(trigger), trigger)` — body-independent,
+    /// so a later `correct_memory` preserves identity; the exclusion's own
+    /// `kind` column keeps different kinds on one trigger distinct. A second
+    /// bare `remember` on the same trigger+kind conflicts at the compact
+    /// exclusion — callers must use `correct_memory` to update.
+    pub async fn remember(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        assigned_trust: TrustLevel,
+        request: memphant_types::RememberRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        // --- structural validation (identity is the context's, never the body) ---
+        for (field, value) in [
+            ("body", request.body.as_str()),
+            ("trigger", request.trigger.as_str()),
+            ("verification", request.verification.as_str()),
+            ("source.kind", request.source.kind.as_str()),
+            ("source.ref", request.source.r#ref.as_str()),
+            ("source.observed_at", request.source.observed_at.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(ServiceError::Invalid(format!("{field} must not be blank")));
+            }
+        }
+        if request.source.episode_id.is_some() && request.source.resource_id.is_some() {
+            return Err(ServiceError::Invalid(
+                "source may carry at most one canonical id (episode_id XOR resource_id)"
+                    .to_string(),
+            ));
+        }
+        // A preference is a standing user constraint: accept it only when the
+        // evidence is an explicit user declaration or correction, never an
+        // inferred one.
+        if request.kind == memphant_types::MemoryKind::Preference
+            && !matches!(request.source.kind.as_str(), "user" | "correction")
+        {
+            return Err(ServiceError::Invalid(
+                "preference memory requires a source.kind of 'user' or 'correction'".to_string(),
+            ));
+        }
+        validate_valid_interval(request.valid_from.as_deref(), request.valid_to.as_deref())?;
+        // `target_scope_id` is applicability, not identity. Omission means the
+        // bound scope. A DIFFERENT target is authorized only by an owner-created
+        // `allow_write` grant plus a canonical source (not yet wired); until
+        // then a mismatched target is refused rather than silently redirected to
+        // the bound scope.
+        if let Some(target) = request.target_scope_id
+            && target != context.scope_id
+        {
+            return Err(ServiceError::Invalid(
+                "cross-scope remember requires an owner-created allow_write grant \
+                 (not yet supported); omit target_scope_id to write to the bound scope"
+                    .to_string(),
+            ));
+        }
+        let observed_at =
+            canonical_utc_timestamp(&request.source.observed_at, "source.observed_at")?;
+
+        // The one-card render must fit the 512-token compact ceiling; if not, it
+        // is rejected at write time rather than truncated into misleading
+        // context later.
+        let rendered = format!(
+            "{}\n{}\n{}\n{}:{}",
+            request.body,
+            request.trigger,
+            request.verification,
+            request.source.kind,
+            request.source.r#ref,
+        );
+        if crate::conservative_token_estimate(&rendered) > MCP_COMPACT_TOKEN_CEILING {
+            return Err(ServiceError::Invalid(format!(
+                "compact memory renders to more than {MCP_COMPACT_TOKEN_CEILING} tokens; \
+                 split it or shorten body/trigger/verification"
+            )));
+        }
+
+        let claim = MutationClaim::new(
+            context,
+            MutationVerb::Retain,
+            idempotency_key,
+            canonical_mutation_request_hash(MutationVerb::Retain, &request)?,
+        )?;
+
+        let envelope = memphant_types::CompactEnvelope {
+            schema_version: memphant_types::COMPACT_ENVELOPE_SCHEMA_VERSION,
+            verification: request.verification.clone(),
+            body_sha256: crate::sha256_hex(&request.body),
+            write_channel: memphant_types::COMPACT_WRITE_CHANNEL_AGENT.to_string(),
+        };
+
+        // Idempotency probe first, exactly as the direct-unit retain arm does:
+        // an exact replay returns the original receipt without re-minting.
+        let mut probe = self.store.begin(context).await?;
+        match self
+            .store
+            .stage_mutation_claim(&mut probe, claim.clone())
+            .await?
+        {
+            MutationClaimOutcome::Replay(response) => {
+                self.store.commit(probe).await?;
+                return Ok(response);
+            }
+            MutationClaimOutcome::Execute => self.store.rollback(probe).await?,
+        }
+
+        let job_id = memphant_types::JobId::new();
+        let subject = normalize_component(&request.trigger);
+        let prepared = prepare_compiled_write_owned(
+            self.store.as_ref(),
+            ReflectInput {
+                tenant_id: context.tenant_id,
+                data_subject_id: context.data_subject_id,
+                scope_id: context.scope_id,
+                agent_node_id: context.agent_node_id,
+                subject_generation: context.subject_generation,
+                actor_id: context.actor_id,
+                source_ref: request.source.r#ref.clone(),
+                observed_at: observed_at.clone(),
+                source_body: Some(request.body.clone()),
+                episode_id: None,
+                resource_id: None,
+                job_id,
+                compiler_version: COMPILER_VERSION.to_string(),
+                candidates: vec![ReflectCandidate {
+                    source_kind: request.source.kind.clone(),
+                    // Route through the high-trust append arm so the unit is
+                    // minted Active with the declared kind; the stored trust is
+                    // corrected to `assigned_trust` below.
+                    trust_level: TrustLevel::TrustedSystem,
+                    actor_id: context.actor_id,
+                    subject: non_blank(Some(&subject)).map(|value| value.to_string()),
+                    predicate: Some(request.trigger.clone()),
+                    fact_key: None,
+                    kind: Some(request.kind),
+                    body: request.body.clone(),
+                    confidence: Some(1.0),
+                    churn_class: None,
+                    admission_hint: None,
+                    contextual_chunks: Vec::new(),
+                    valid_from: request.valid_from.clone(),
+                    valid_to: request.valid_to.clone(),
+                    target_unit_ids: None,
+                    compact: Some(envelope),
+                }],
+            },
+            Arc::clone(&self.embedder),
+            self.clock.as_ref(),
+            Some(context),
+        )
+        .await?;
+        let PreparedCompiledWrite::Write {
+            trace,
+            created_unit_ids: unit_ids,
+            mut write,
+            ..
+        } = prepared
+        else {
+            return Err(CoreError::Store(StoreError::Conflict(
+                "compact remember unexpectedly matched an existing reflect trace".to_string(),
+            ))
+            .into());
+        };
+        // The routing trust was a device to reach the Active arm; the persisted
+        // provenance trust is the caller's actual clamped ceiling.
+        for unit in &mut write.new_units {
+            unit.trust_level = assigned_trust;
+        }
+
+        let mut tx = self.store.begin(context).await?;
+        match self.store.stage_mutation_claim(&mut tx, claim).await? {
+            MutationClaimOutcome::Replay(response) => {
+                self.store.commit(tx).await?;
+                return Ok(response);
+            }
+            MutationClaimOutcome::Execute => {}
+        }
+        self.store
+            .stage_compiled_units(&mut tx, None, write)
+            .await?;
+        let result = RetainEpisodeHttpResponse {
+            episode_id: None,
+            resource_id: None,
+            unit_ids,
+            dedup: None,
+            assigned_trust: Some(assigned_trust),
+            enqueued: Vec::new(),
+            trace_ref: Some(format!("memphant://trace/{}", trace.job_id.as_uuid())),
+        };
+        let response = serialized_mutation_response(200, &result)?;
+        self.store
+            .stage_mutation_response(&mut tx, response.clone())
+            .await?;
+        self.store.commit(tx).await?;
+        Ok(response)
     }
 
     /// The recall verb with the read-your-own-writes degraded fallback: when

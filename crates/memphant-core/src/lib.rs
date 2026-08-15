@@ -10369,7 +10369,7 @@ fn run_block_token_cost(chunks: &[ContextualChunk], start: usize, end: usize) ->
 /// and punctuation-heavy tool output. One token per three source bytes is a
 /// conservative operating estimate for the pinned Qwen reader while the word
 /// floor preserves behavior for unusually long whitespace-token sequences.
-fn conservative_token_estimate(text: &str) -> usize {
+pub(crate) fn conservative_token_estimate(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
@@ -13185,7 +13185,7 @@ pub fn derive_fact_key(
     }
 }
 
-fn sha256_hex(value: &str) -> String {
+pub(crate) fn sha256_hex(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     let digest = hasher.finalize();
