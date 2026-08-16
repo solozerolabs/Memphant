@@ -89,6 +89,7 @@ impl DeepRecallProvider for CountingDeep {
 fn request(context: &memphant_types::ResolvedMemoryContext, mode: RecallMode) -> RecallHttpRequest {
     RecallHttpRequest {
         compact_only: false,
+        serve_captures: false,
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
         actor_id: context.actor_id,

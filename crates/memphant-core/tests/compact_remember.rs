@@ -164,6 +164,7 @@ async fn belief_persists_active_but_is_absent_from_default_recall() {
             context.clone(),
             RecallHttpRequest {
                 compact_only: false,
+                serve_captures: false,
                 subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
                 actor_id: context.actor_id,
@@ -359,6 +360,7 @@ async fn recall_trigger(
             context.clone(),
             RecallHttpRequest {
                 compact_only: false,
+                serve_captures: false,
                 subject_id: context.data_subject_id,
                 scope_id: context.scope_id,
                 actor_id: context.actor_id,
@@ -679,6 +681,7 @@ async fn recall_lane(
                 mode: Some(RecallMode::Fast),
                 include_beliefs: Some(false),
                 compact_only,
+                serve_captures: false,
                 transaction_as_of: None,
                 valid_at: None,
                 aggregation_window: None,

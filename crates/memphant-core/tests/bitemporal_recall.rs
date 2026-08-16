@@ -79,6 +79,7 @@ async fn recall_resolves_both_time_axes_across_a_split_update_chain() {
         let store = store.clone();
         let request = RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.clone(),
             query: query.to_string(),
             k: 4,

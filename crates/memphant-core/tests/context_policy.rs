@@ -523,6 +523,7 @@ async fn traces_record_policy_revision_bind_actor_and_survive_policy_updates() {
         &store,
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.clone(),
             query: "nothing".to_string(),
             k: 3,

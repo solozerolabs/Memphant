@@ -128,6 +128,7 @@ async fn recall_items(
         ctx.clone(),
         RecallHttpRequest {
             compact_only,
+            serve_captures: false,
             subject_id: ctx.data_subject_id,
             scope_id: ctx.scope_id,
             actor_id: ctx.actor_id,
@@ -835,6 +836,7 @@ async fn a_survival_mark_promotes_a_served_candidate_without_a_new_episode() {
             ctx.clone(),
             RecallHttpRequest {
                 compact_only: true,
+                serve_captures: false,
                 subject_id: ctx.data_subject_id,
                 scope_id: ctx.scope_id,
                 actor_id: ctx.actor_id,

@@ -41,6 +41,7 @@ fn retain_request(context: &ResolvedMemoryContext, body: &str) -> RetainEpisodeH
 fn recall_request(context: &ResolvedMemoryContext, query: &str) -> RecallHttpRequest {
     RecallHttpRequest {
         compact_only: false,
+        serve_captures: false,
         subject_id: context.data_subject_id,
         scope_id: context.scope_id,
         agent_node_id: context.agent_node_id,

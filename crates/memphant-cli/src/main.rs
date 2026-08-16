@@ -315,9 +315,16 @@ mod http_verbs {
                         "valid_to": flags.get("valid-to"),
                     }})
                 } else {
+                    // `subject`/`predicate` are optional: they make the compiled
+                    // unit's fact key explicit (the only thing that lets a rule
+                    // supersede a prior one on the same subject, and the key a
+                    // capture channel pairs on); absent, the auto content-hash
+                    // key is used, exactly as before.
                     json!({ "episode": {
                         "source_kind": flags.get("source-kind").cloned().unwrap_or_else(|| "user".to_string()),
                         "body": required(flags, "body")?,
+                        "subject": flags.get("subject"),
+                        "predicate": flags.get("predicate"),
                     }})
                 };
                 Ok(json!({
@@ -347,6 +354,12 @@ mod http_verbs {
                     "mode": flags.get("mode"),
                     "include_beliefs": flags.contains_key("include-beliefs").then_some(true),
                     "compact_only": flags.contains_key("compact-only"),
+                    // Bare `memphant recall` is the coding union lane: serve the
+                    // agent's own captured Candidates alongside its retained
+                    // facts. `--general` opts out to the anti-poison general lane;
+                    // `--compact-only` selects the higher-precision card lane
+                    // (which serves captures too).
+                    "serve_captures": !flags.contains_key("general"),
                     "transaction_as_of": flags.get("transaction-as-of"),
                     "valid_at": flags.get("valid-at"),
                 }))

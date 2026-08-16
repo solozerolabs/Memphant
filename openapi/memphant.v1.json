@@ -2126,6 +2126,11 @@
           "scope_id": {
             "$ref": "#/components/schemas/ScopeId"
           },
+          "serve_captures": {
+            "default": false,
+            "description": "The union (coding) lane's capture signal, orthogonal to `compact_only`.\nWhen true, captured `Candidate` units are served alongside general live\nfacts without the compact-only card restriction — the default a bare\n`memphant recall` sends. `compact_only` implies it. Default false keeps\nthe general lane's anti-poison guarantee.",
+            "type": "boolean"
+          },
           "subject_generation": {
             "format": "uint64",
             "minimum": 0,

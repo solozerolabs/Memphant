@@ -585,6 +585,142 @@ async fn retain_reflect_recall_then_forget_round_trips_over_http() {
     );
 }
 
+/// The `memphant recall` default-lane decision (docs/specs/cli-recall-default-lane.md):
+/// a BARE `memphant recall` is the coding union lane — it serves the agent's own
+/// freshly-captured, still-unconfirmed Candidate WITHOUT any flags, labelled
+/// `captured_unconfirmed`. PERTURBATION: the same recall with `--general` opts
+/// into the anti-poison general lane and must NOT surface the Candidate.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bare_recall_serves_captured_candidate_general_hides_it() {
+    let (url, binding, state) = spawn_server().await;
+    let subject = binding.subject_id.as_uuid().to_string();
+    let scope = binding.scope_id.as_uuid().to_string();
+    let actor = binding.actor_id.as_uuid().to_string();
+    let agent = binding.agent_node_id.as_uuid().to_string();
+    let generation = binding.subject_generation.to_string();
+
+    // A cross-harness CAPTURE: an `agent` episode whose source_ref is
+    // `capture://summary`. The reflect nominator mints ONE inert Semantic
+    // Candidate carrying the capture marker.
+    let (captured, ok) = cli(
+        &url,
+        &[
+            "retain",
+            "--subject-id",
+            &subject,
+            "--scope",
+            &scope,
+            "--actor",
+            &actor,
+            "--agent-node",
+            &agent,
+            "--subject-generation",
+            &generation,
+            "--idempotency-key",
+            "cli-capture-magic-byte",
+            "--source-kind",
+            "agent",
+            "--source-ref",
+            "capture://summary",
+            "--subject",
+            "acme-magic-byte",
+            "--observed-at",
+            "2026-08-01T00:00:00Z",
+            "--body",
+            "The acme wire format magic byte is 0xA7.",
+        ],
+    );
+    assert!(ok, "capture retain exits zero: {captured}");
+
+    let (_reflected, ok) = cli(
+        &url,
+        &[
+            "reflect",
+            "--subject-id",
+            &subject,
+            "--scope",
+            &scope,
+            "--actor",
+            &actor,
+            "--agent-node",
+            &agent,
+            "--subject-generation",
+            &generation,
+            "--idempotency-key",
+            "cli-capture-reflect",
+        ],
+    );
+    assert!(ok, "capture reflect exits zero");
+    state
+        .service()
+        .run_worker_tick(usize::MAX)
+        .await
+        .expect("worker mints the captured Candidate");
+
+    // BARE recall (no lane flags) — the union lane serves the Candidate.
+    let (bare, ok) = cli(
+        &url,
+        &[
+            "recall",
+            "--json",
+            "--subject-id",
+            &subject,
+            "--scope",
+            &scope,
+            "--actor",
+            &actor,
+            "--agent-node",
+            &agent,
+            "--subject-generation",
+            &generation,
+            "--query",
+            "acme magic byte",
+        ],
+    );
+    assert!(ok, "bare recall exits zero: {bare}");
+    let item = &bare["items"][0];
+    assert_eq!(
+        item["body"].as_str(),
+        Some("The acme wire format magic byte is 0xA7."),
+        "bare recall serves the captured Candidate: {bare}"
+    );
+    assert!(
+        item["inclusion_reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("captured_unconfirmed"),
+        "captured Candidate is labelled unconfirmed: {bare}"
+    );
+
+    // `--general` opts out: the anti-poison lane hides the Candidate.
+    let (general, ok) = cli(
+        &url,
+        &[
+            "recall",
+            "--json",
+            "--general",
+            "--subject-id",
+            &subject,
+            "--scope",
+            &scope,
+            "--actor",
+            &actor,
+            "--agent-node",
+            &agent,
+            "--subject-generation",
+            &generation,
+            "--query",
+            "acme magic byte",
+        ],
+    );
+    assert!(ok, "general recall exits zero: {general}");
+    assert_eq!(
+        general["items"].as_array().map(Vec::len),
+        Some(0),
+        "general lane must hide the unconfirmed Candidate (anti-poison): {general}"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn resource_retain_and_trace_round_trip_over_http() {
     let (url, binding, state) = spawn_server().await;

@@ -4537,6 +4537,7 @@ impl<S: MemoryStore> MemoryService<S> {
             procedure_recall_enabled: true,
             decay_enabled: true,
             compact_only: request.compact_only,
+            serve_captures: request.serve_captures,
             engine_version: ENGINE_VERSION.to_string(),
             transaction_as_of: request.transaction_as_of,
             valid_at: request.valid_at,

@@ -150,6 +150,7 @@ async fn recall_ids(
             ctx.clone(),
             RecallHttpRequest {
                 compact_only: false,
+                serve_captures: false,
                 subject_id: ctx.data_subject_id,
                 scope_id: ctx.scope_id,
                 actor_id: ctx.actor_id,

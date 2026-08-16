@@ -634,6 +634,7 @@ impl MemphantMcp {
             // `kind=Belief` candidates, so excluding beliefs here would make
             // captured coding memory permanently un-injectable on this lane.
             compact_only: true,
+            serve_captures: false,
             subject_id: context.data_subject_id,
             scope_id: context.scope_id,
             actor_id: context.actor_id,
@@ -1546,6 +1547,7 @@ mod deep_runtime_smoke {
                 context.clone(),
                 RecallHttpRequest {
                     compact_only: false,
+                    serve_captures: false,
                     subject_id: context.data_subject_id,
                     scope_id: scope,
                     agent_node_id: context.agent_node_id,

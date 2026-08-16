@@ -75,6 +75,7 @@ async fn stage(
 fn request(context: &ResolvedMemoryContext) -> RecallRequest {
     RecallRequest {
         compact_only: false,
+        serve_captures: false,
         context: context.clone(),
         query: "Write a proposal for 'Aurora Routing Plan'".to_string(),
         k: 10,

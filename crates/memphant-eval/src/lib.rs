@@ -1975,6 +1975,7 @@ async fn run_syndai_file_memory(
         &context.store,
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.resolved(),
             query: fixture.query.clone(),
             k: 8,
@@ -2087,6 +2088,7 @@ async fn recall_golden_case(
         &context.store,
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.resolved(),
             query: case.query.clone(),
             k: case.k.unwrap_or(8),
@@ -2573,6 +2575,7 @@ async fn run_high_risk_lane(lane: &SecurityLane) -> EvalResult<String> {
         &context.store,
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.resolved(),
             query: lane.query.clone(),
             k: 8,
@@ -2691,6 +2694,7 @@ async fn run_deletion_lane(lane: &SecurityLane) -> EvalResult<String> {
         &context.store,
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.resolved(),
             query: case.query,
             k: 8,

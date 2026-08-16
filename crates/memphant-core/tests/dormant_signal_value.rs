@@ -99,6 +99,7 @@ async fn seed_edge(
 fn req(ctx: &ResolvedMemoryContext, query: &str, edge: bool, decay: bool) -> RecallRequest {
     RecallRequest {
         compact_only: false,
+        serve_captures: false,
         context: ctx.clone(),
         query: query.to_string(),
         k: 8,

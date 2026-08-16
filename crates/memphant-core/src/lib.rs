@@ -7648,6 +7648,7 @@ where
                             request.include_beliefs,
                             request.procedure_recall_enabled,
                             request.compact_only,
+                            request.serve_captures,
                             &request.query,
                             &recall_time,
                         )
@@ -8568,6 +8569,7 @@ mod evidence_receipt_tests {
         }
         let request = RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context,
             query: "canonical evidence".to_string(),
             k: 1,
@@ -10732,6 +10734,7 @@ fn channel_candidates(
                 request.include_beliefs,
                 request.procedure_recall_enabled,
                 request.compact_only,
+                request.serve_captures,
                 &request.query,
                 time,
             )
@@ -10764,6 +10767,7 @@ fn channel_candidates(
                     query_tokens,
                     request.procedure_recall_enabled,
                     request.compact_only,
+                    request.serve_captures,
                     time,
                 ),
                 ChannelPass::Vector => vector_scores
@@ -10775,6 +10779,7 @@ fn channel_candidates(
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edge_score(
     unit: &StoredMemoryUnit,
     units: &[StoredMemoryUnit],
@@ -10782,6 +10787,7 @@ fn edge_score(
     query_tokens: &[String],
     procedure_recall_enabled: bool,
     compact_only: bool,
+    serve_captures: bool,
     time: &RecallTime,
 ) -> f32 {
     let related_match = edges.iter().any(|edge| {
@@ -10802,6 +10808,7 @@ fn edge_score(
                     true,
                     procedure_recall_enabled,
                     compact_only,
+                    serve_captures,
                     "",
                     time,
                 ) && (lexical_score(candidate, query_tokens) > 0.0
@@ -10835,30 +10842,40 @@ fn recallable(
     include_beliefs: bool,
     procedure_recall_enabled: bool,
     compact_only: bool,
+    serve_captures: bool,
     query: &str,
     time: &RecallTime,
 ) -> bool {
     if !bitemporally_recallable(unit, time) || !valid_for_query(unit, query, &time.valid_at) {
         return false;
     }
-    // Coding-agent lane: two eligible classes — typed compact envelopes
-    // (`remember`/`correct_memory` cards) and CAPTURED units (`payload.capture`,
-    // ceiling-fitted at mint). A raw episode/resource body copied into an
-    // Active unit carries neither marker, so it is excluded here without
-    // disturbing the general lane. Captured units are labelled through
-    // `inclusion_reason` (`captured_confirmed`/`captured_unconfirmed`).
+    // Two orthogonal lane axes are folded into this gate:
+    //   * `compact_only` — the CARD RESTRICTION (only typed compact envelopes
+    //     and captures are eligible). The MCP/projection curated-card surfaces.
+    //   * `serve_captures` — the CANDIDATE signal (serve unconfirmed captures
+    //     alongside live facts). The bare `memphant recall` union lane sets it.
+    // `compact_only` IMPLIES `serve_captures` (the card lane has always served
+    // captures), so the card lane needs no second flag. The general lane leaves
+    // both false and keeps `Candidate` invisible (anti-poison).
+    let serve_captures = serve_captures || compact_only;
+    // Card restriction: gated on `compact_only` ALONE. A raw episode/resource
+    // body copied into an Active unit carries neither marker, so it is excluded
+    // on the card lane without disturbing the general OR the union lane.
+    // Captured units are labelled through `inclusion_reason`
+    // (`captured_confirmed`/`captured_unconfirmed`).
     if compact_only && unit.compact.is_none() && unit.capture.is_none() {
         return false;
     }
-    // Coding lane only: an UNCONFIRMED capture (`Candidate`, one source, no
-    // witness) is served, labelled, so the agent that produced it sees it
-    // again on the next task; the general lane keeps Candidate invisible.
+    // An UNCONFIRMED capture (`Candidate`, one source, no witness) is served,
+    // labelled, on any capture-serving lane (card OR union), so the agent that
+    // produced it sees it again on the next task; the general lane keeps
+    // Candidate invisible.
     let captured_candidate =
-        compact_only && unit.capture.is_some() && unit.state == UnitState::Candidate;
+        serve_captures && unit.capture.is_some() && unit.state == UnitState::Candidate;
     if unit.kind == MemoryKind::Procedural {
-        // On the coding lane an Active compact procedure is served; the general
-        // lane keeps the Validated-only rule.
-        let state_ok = if compact_only {
+        // On a capture-serving lane an Active compact procedure is served; the
+        // general lane keeps the Validated-only rule.
+        let state_ok = if serve_captures {
             matches!(unit.state, UnitState::Active | UnitState::Validated) || captured_candidate
         } else {
             unit.state == UnitState::Validated
@@ -13366,6 +13383,132 @@ mod capture_independence_tests {
         let survived = captured_unit(survived_marker);
         assert!(!is_independent_source(&survived, &candidate));
     }
+
+    fn now() -> RecallTime {
+        RecallTime {
+            evaluated_at: "2026-08-16T00:00:00Z".to_string(),
+            transaction_as_of: "2026-08-16T00:00:00Z".to_string(),
+            valid_at: "2026-08-16T00:00:00Z".to_string(),
+        }
+    }
+
+    /// A plainly-retained Active Semantic unit — no compact envelope, no
+    /// capture marker — the shape `memphant retain` reflects into.
+    fn plain_active_semantic() -> StoredMemoryUnit {
+        let mut unit = captured_unit(CaptureMarker::captured(CaptureSource::Summary));
+        unit.capture = None;
+        unit.kind = MemoryKind::Semantic;
+        unit.state = UnitState::Active;
+        unit
+    }
+
+    /// A freshly-captured, unconfirmed Candidate. Captures mint `Semantic`, so
+    /// `include_beliefs` never gates them.
+    fn captured_candidate_semantic() -> StoredMemoryUnit {
+        let mut unit = captured_unit(CaptureMarker::captured(CaptureSource::Summary));
+        unit.kind = MemoryKind::Semantic;
+        unit.state = UnitState::Candidate;
+        unit
+    }
+
+    /// The CLI union (coding) lane — `serve_captures=true, compact_only=false` —
+    /// serves BOTH a captured Candidate and a plain Active fact. Beliefs are not
+    /// requested (`include_beliefs=false`); captures are Semantic, so they show
+    /// regardless.
+    #[test]
+    fn union_lane_serves_captured_candidate_and_plain_active_fact() {
+        let time = now();
+        assert!(
+            recallable(
+                &captured_candidate_semantic(),
+                false,
+                true,
+                false,
+                true,
+                "",
+                &time
+            ),
+            "union lane must serve the unconfirmed captured Candidate"
+        );
+        assert!(
+            recallable(
+                &plain_active_semantic(),
+                false,
+                true,
+                false,
+                true,
+                "",
+                &time
+            ),
+            "union lane must serve the plainly-retained Active fact"
+        );
+    }
+
+    /// The general lane — `serve_captures=false, compact_only=false` — keeps its
+    /// anti-poison guarantee (no Candidates) while still serving Active facts.
+    /// PERTURBATION vs the union test: flipping `serve_captures` off must hide
+    /// the Candidate and only the Candidate.
+    #[test]
+    fn general_lane_hides_candidate_but_keeps_active_fact() {
+        let time = now();
+        assert!(
+            !recallable(
+                &captured_candidate_semantic(),
+                false,
+                true,
+                false,
+                false,
+                "",
+                &time
+            ),
+            "general lane must hide the unconfirmed captured Candidate (anti-poison)"
+        );
+        assert!(
+            recallable(
+                &plain_active_semantic(),
+                false,
+                true,
+                false,
+                false,
+                "",
+                &time
+            ),
+            "general lane still serves the plainly-retained Active fact"
+        );
+    }
+
+    /// The card lane — `compact_only=true` — keeps its restriction: a
+    /// marker-less Active unit (no compact envelope, no capture) is NOT served,
+    /// even though it is a live fact, while the captured Candidate still is
+    /// (compact_only implies serve_captures).
+    #[test]
+    fn card_lane_restriction_survives_the_union_change() {
+        let time = now();
+        assert!(
+            !recallable(
+                &plain_active_semantic(),
+                false,
+                true,
+                true,
+                false,
+                "",
+                &time
+            ),
+            "card lane must not serve a marker-less raw Active unit"
+        );
+        assert!(
+            recallable(
+                &captured_candidate_semantic(),
+                false,
+                true,
+                true,
+                false,
+                "",
+                &time
+            ),
+            "card lane still serves the captured Candidate"
+        );
+    }
 }
 
 fn mint_compiled_citations(
@@ -15094,6 +15237,7 @@ mod temporal_grounding_tests {
             &store,
             RecallRequest {
                 compact_only: false,
+                serve_captures: false,
                 context: context.clone(),
                 query: "nothing stored".to_string(),
                 k: 1,
@@ -16027,6 +16171,7 @@ mod pack_cost_tests {
     fn request(budget_tokens: usize) -> RecallRequest {
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: ResolvedMemoryContext {
                 tenant_id: TenantId::from_u128(1),
                 data_subject_id: SubjectId::from_u128(1),
@@ -17408,6 +17553,7 @@ mod deep_call_routing_tests {
                 &store,
                 RecallRequest {
                     compact_only: false,
+                    serve_captures: false,
                     context: context.clone(),
                     query: "buried".to_string(),
                     k: 1,
@@ -17473,6 +17619,7 @@ mod deep_call_routing_tests {
             let error = service
                 .recall_internal(RecallRequest {
                     compact_only: false,
+                    serve_captures: false,
                     context: context.clone(),
                     query: "denied secret query".to_string(),
                     k: 1,

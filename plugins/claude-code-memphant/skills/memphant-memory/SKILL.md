@@ -28,8 +28,12 @@ The `memphant` binary is on PATH and its identity + endpoint come from env
 Recall (prints a compact card; `--json` for the raw response):
 
 ```
-memphant recall --query "<what you are about to do, or the error>" --compact-only --include-beliefs --limit 5
+memphant recall --query "<what you are about to do, or the error>" --limit 5
 ```
+
+A bare recall serves your own captured and retained memory; unconfirmed captures
+are labelled `[unconfirmed]`. Add `--compact-only` to narrow to curated cards, or
+`--general` to drop unconfirmed captures.
 
 Retain a durable, non-repo fact (one sentence, imperative, with the trigger):
 

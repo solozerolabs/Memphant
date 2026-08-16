@@ -515,6 +515,15 @@ pub struct RecallRequest {
     /// fallback, and every eval — unchanged.
     #[serde(default)]
     pub compact_only: bool,
+    /// The union (coding) lane's capture signal, orthogonal to `compact_only`.
+    /// When true, captured `Candidate` units are served alongside the general
+    /// lane's live facts (labelled `captured_unconfirmed`), WITHOUT the
+    /// compact-only card restriction. `compact_only` implies this inside
+    /// `recallable`, so the card lane (MCP/projection) is unchanged. Default
+    /// false keeps the general lane's anti-poison guarantee: non-CLI consumers
+    /// never see `Candidate` units.
+    #[serde(default)]
+    pub serve_captures: bool,
     pub engine_version: String,
     pub transaction_as_of: Option<String>,
     pub valid_at: Option<String>,
@@ -2029,6 +2038,13 @@ pub struct RecallHttpRequest {
     /// Defaults false — the general lane.
     #[serde(default)]
     pub compact_only: bool,
+    /// The union (coding) lane's capture signal, orthogonal to `compact_only`.
+    /// When true, captured `Candidate` units are served alongside general live
+    /// facts without the compact-only card restriction — the default a bare
+    /// `memphant recall` sends. `compact_only` implies it. Default false keeps
+    /// the general lane's anti-poison guarantee.
+    #[serde(default)]
+    pub serve_captures: bool,
     pub transaction_as_of: Option<String>,
     pub valid_at: Option<String>,
     #[serde(default)]

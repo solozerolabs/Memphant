@@ -226,6 +226,7 @@ async fn recall_serves_the_live_preference_and_not_the_retired_one() {
         &store,
         RecallRequest {
             compact_only: false,
+            serve_captures: false,
             context: context.clone(),
             query: "always start function argument names with".to_string(),
             k: 10,

@@ -1817,6 +1817,7 @@ fn retain_request(
 fn recall_request(context: &ResolvedMemoryContext, query: &str) -> RecallRequest {
     RecallRequest {
         compact_only: false,
+        serve_captures: false,
         context: context.clone(),
         query: query.to_string(),
         k: 4,
@@ -2724,6 +2725,7 @@ async fn degraded_read_your_own_writes_serves_unreflected_episodes() {
             context.clone(),
             RecallHttpRequest {
                 compact_only: false,
+                serve_captures: false,
                 subject_id: context.data_subject_id,
                 scope_id: scope,
                 agent_node_id: context.agent_node_id,
@@ -2950,6 +2952,7 @@ async fn stub_embeddings_persist_and_power_the_vector_channel() {
             context.clone(),
             RecallHttpRequest {
                 compact_only: false,
+                serve_captures: false,
                 subject_id: context.data_subject_id,
                 scope_id: scope,
                 agent_node_id: context.agent_node_id,
@@ -3520,6 +3523,7 @@ async fn bitemporal_correction_round_trips_through_postgres_and_forget_erases_hi
             store,
             RecallRequest {
                 compact_only: false,
+                serve_captures: false,
                 context: context.clone(),
                 query: query.to_string(),
                 k: 4,
