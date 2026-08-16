@@ -360,3 +360,171 @@ No new schema, no service verb, no manual labeling, no synthetic tasks, no proxy
 authorize GO, and **no binary full-tail GO** — the estimand can't support it. Stage 0 can STOP
 on infeasibility; Stage 1 estimates but never concludes; only an isolated single-component
 Stage 2 pilot on fresh traffic can say "build this one component."
+
+## Phase 3 — Memory substrate: types, stores, consolidation (8-team synthesis, 2026-08-15)
+
+Prompted by the first end-to-end cross-repo battery. Eight teams (codebase, live DB, tests,
+Context7 docs, 2026 research, OSS code audit, experimental design, devil's advocate) answered:
+*why does capture store one type via one channel, is the substrate itself limited, what else is
+broken, and what should the long-term default be?* Everything below is evidence-backed
+(file:line / SQL / URL in the team reports); this section is the authoritative distillation.
+
+### The diagnosis (authoritative)
+
+**The substrate is rich; the live path is thin.** The question was framed as "only 1 memory type,
+only 1 storage mode" — the schema disagrees: `MemoryKind` has 6 kinds (Episodic, Semantic,
+Procedural, Belief, Resource, Preference), `MemoryEdgeKind` has 6, units are bitemporal, every unit
+gets a pgvector embedding + BM25 tsv, and FSRS columns exist. What is limited is **routing and
+wiring**, not schema:
+
+| Layer | Exists? | Wired on the live capture→inject path? | Evidence |
+| --- | --- | --- | --- |
+| Kinds | 6 | capture mints **Belief only** — by design ("single provisional claim", service.rs:7805-7813); Procedural has no live mint site outside explicit `remember` (0 voluntary calls in dogfood); Semantic effectively dead (fact extraction default OFF); Preference never minted by agents | codebase §1 |
+| Channels | 2 (summary, mirror) | Codex = **summary only** (`apply_patch` invisible to hooks) → SourceAgreement witness impossible there | codebase §1, plan §Arch |
+| Vector | written for every unit | **disabled on the served coding lane** — 3 embeddings written, never read; recall = FTS + recency + `ilike(fact_key)` | DB §4 |
+| Graph (`memory_edge`) | 6 kinds, read at recall | only when `edge_expansion_enabled` (**default false**); capture writes 0 edges; Belief arm has **no supersession** (`supersedes_own_kind → None`) | DB §4, codebase §1 |
+| Consolidation | columns exist | **`reinforcement_count/stability_days/last_reinforced_at/difficulty/freshness_due_at` have NO UPDATE path anywhere** — write-once dead weight; `AdmissionAction::Merge` is a **no-op**; body-merge needs byte-exact equality; same-subject recapture = 24h idempotency replay, then `compact_valid_excl` **error** | DB §3/§5, codebase §3 |
+| Trust ladder | full state machine | **bypassed**: retain never clamps to `source_kind`, dogfood/battery actors are `system`/`trusted_system` → captures born `active/trusted_system`, `Promote` (needs Candidate) moot | DB §6, codebase §4b, devil §4 |
+| Episodic | kind + table | compiler mints episodes **1:1**, no rollup/aggregation stage; captures deliberately skip the Episodic unit copy | codebase §1 |
+| Dead tables | 4 | `belief_observation, trust_event, blob_ledger, event_outbox` — zero references in any crate | DB §2 |
+
+So capture = one channel + one kind + one card, on a lattice whose consolidation, vector, graph and
+trust layers are all present and all dormant. Belief-only was **faithful design intent** (KISS
+demand probe); everything else in the table is accident or never-finished.
+
+### New defects (beyond the four fixed today: include_beliefs, md-bullet false-drop, observed_at="", compact=None)
+
+| # | Sev | Defect | Where | Minimal fix |
+| --- | --- | --- | --- | --- |
+| P0-A | **CRITICAL** | **Design deadlock.** Enforcing the intended trust floor (AgentOutput→Candidate) makes captures **unrecallable** (`recallable()` needs Active/Validated) → never reviewed → no WeakOutcome; SourceAgreement impossible on Codex; the plan's **"survival" witness is not implemented**. Captured memory on Codex would be permanently inert; today it is served *only because* the floor is broken. | lib.rs:10841-10844, 12641-12648, 12882+; plan:80 | Serve `Candidate` captured units on the coding lane **labelled unconfirmed** + implement the survival witness (served → task ended without revert/contradiction ⇒ WeakOutcome promote). |
+| P0-B | HIGH | Idempotency key = `capture:{source}:{subject}` → any stable subject with a different body ⇒ ledger hash mismatch ⇒ **409 silently swallowed** (capture lost). Fires on *every* capture once the subject key is stabilised. | memphant_capture.py:444; store.rs:1452 | Key on `sha256(body)`; subject is identity, not idempotency. |
+| P0-C | HIGH | Capture body cap 8192 chars vs MCP recall budget **512 tokens** (`max(words, len/3)`) ⇒ any summary >~1500 chars is a silent Budget drop, un-injectable; capture skips the ceiling check `remember` enforces. | memphant_capture.py:59; mcp/lib.rs:223,632; lib.rs:9695-9718 | Enforce `MCP_COMPACT_TOKEN_CEILING` in `capture_episode_candidate` (and cap summarizer ~1200 chars). |
+| P1-A | HIGH | Trust floor unenforced (retain uses `assigned_trust` only, never clamps by `source_kind`); battery key `--max-trust trusted_system`. Anti-poisoning is off in the only e2e harness. | service.rs:3872-3990; run_battery.sh:60,77 | Clamp `assigned_trust ≤ actor_kind_trust(source_kind)` in retain; battery key `AgentOutput`. |
+| P1-B | HIGH | Fragmentation: subject key = first 8 tokens of the summarizer's first line (wording-dependent) — the body-derived identity the code comment says it must not be. Result: 3 units for one contract, `reinforcement_count=0`, 0 edges, and the 1-card lane serves an arbitrary fragment. | memphant_capture.py:287-296; service.rs:7838 | Deterministic stable key (below) + reinforce-on-same-source-repeat + supersede-edge. |
+| P1-C | MED | `limit: Some(1)` on the coding lane; `dropped: output_limit` on every trace. Every peer defaults 5–10 budgeted. | mcp/lib.rs:631 | `limit: Some(3)` under the same 512 budget (max 5). |
+| P1-D | MED | Belief→Semantic promotion unreachable for captures (`is_independent_source` needs differing `source_kind`; all captures are `agent`). | lib.rs:13664-13675 | Independence = differing **channel** (`payload.capture.source`) or outcome witness, not `source_kind`. |
+| P2 | LOW | `confidence: Some(1.0)` on summarizer output (contradicts "confidence keys off confirmation"); compact `verification` empty; fact_key stored token-normalised so `ilike` family only matches normalised queries. | service.rs:7845, 7827 | 0.5; leave verification empty (captures have none); note. |
+
+Devil's-advocate finding adopted verbatim: **the file arm is the real control**, not bare — memphant
+must beat a `MEMORY.md` written by the same summarizer, or Postgres is governance infrastructure for
+an unproven need.
+
+### What the evidence says (three independent lenses agree)
+
+- **Value axis = efficiency on complex tasks, not correctness.** Sandelin's 2026 controlled coding-
+  memory bench: quality identical across {none, memory, curated file}; memory saved **22–32 % cost /
+  28–40 % turns on complex tasks, 0 on simple** — an exact replication of our 6/6-correct + x1/x3
+  overhead. SWE-ContextBench: *free* agent-chosen reuse **net negative** (+24 % cost, no gain); only
+  oracle selection helps ⇒ **precision over recall**. Cross-domain-transfer + ReasoningBank:
+  **abstracted insights help; raw low-level traces cause negative transfer** ⇒ episodic-as-raw-card is
+  measured-harmful.
+- **Consolidation is moving to ADD-only + supersede-by-time + links.** mem0 v3 (63k★) rolled back
+  LLM UPDATE/DELETE to additive + md5 dedup + `linked_memory_ids`; graphiti never deletes (`invalid_at`
+  by valid-time order); MemOS archives losers with `MERGED_TO`; langmem `enable_deletes=False`.
+  **Stable identity keys are rule-based** (cognee `uuid5(normalised name)`, graphiti normalise→MinHash),
+  similarity thresholds (0.6/0.8/0.85) are only a *candidate gate* before a judge. This is exactly
+  MemPhant's bitemporal row + unused edge table.
+- **Coding-native memory converged on flat-file pinned tier + searched tail.** Claude Code
+  (CLAUDE.md/MEMORY.md), Letta Code (MemFS in git, `dream` reflection, `reason` = commit message),
+  OpenHands MEMORY.md, LongMemEval-V2 (agent-over-files 72.5 % > RAG store 48.5 %). Taxonomy that
+  survives: prefs/conventions/**gotchas**/tooling commands/architecture — not transcripts. Injection
+  clusters at **5–10 items** budgeted with recency decay + MMR.
+- **Poison is real and persistent** (HEARTBEAT: routine saves persist pollution up to 91 %; MINJA >95 %)
+  ⇒ keep the ladder, provenance caps, quarantine; never inject-by-default without a label.
+- **No neutral evidence that graph beats vector for coding memory**; modality rankings reverse across
+  model families (MemDelta); embedding choice > architecture. Graph pays only for genuinely temporal /
+  conflicting facts — MemPhant's trust-ladder niche.
+
+### The call (authoritative) — long-term default balancing latency, performance, cost, UX
+
+1. **Types: three, chosen deterministically by CHANNEL — no LLM classifier.** A classifier is a second
+   hallucination surface (haiku already fabricated conventions) and every OSS system that types by
+   LLM is moving away from it.
+   - `belief` ← session-summary channel (external contracts, env/system facts, cross-repo). LLM stays
+     here only (one flash-lite call/session).
+   - `procedural` ← **deterministic** triggers: (a) error→fix pairs (tool `exit≠0`/traceback followed
+     by the edit/command that made it pass, zero LLM); (b) the same normalised command sequence in
+     ≥3 sessions ⇒ *one* LLM call writes the skill text (skill crystallisation, Voyager/SkillOps
+     pattern); (c) file-mirror of workflow notes where hooks allow. Served Active on the coding lane
+     (already true), labelled.
+   - `preference` ← explicit user `remember`/correction only (unchanged).
+   - **Episodic = provenance rows, never units or cards.** Keep the raw `episode` (with `capture://`
+     source_ref) as the witness/lineage a belief points to; do not mint Episodic units or inject them
+     (raw traces are measured-harmful).
+   - `resource` (cached Context7/web slices keyed `(library, version, query)`) is **gated** to Stage D:
+     real value hypothesis (user's), but no repeat-rate number yet.
+2. **Stores: Postgres stays source of truth; add a flat-file projection as the primary delivery.**
+   Render *durable-rung* units (and the pinned tier: top prefs + gotchas ≤ 2 k chars) to
+   `.memphant/MEMORY.md` per repo + `~/.memphant/MEMORY.md` cross-repo, from a reflect-job renderer;
+   the agent greps it for free (zero hot-path latency, transparent/editable UX, works on hookless
+   harnesses, converts "grep beats memory" from competitor to channel, sidesteps the 1-card drop).
+   MCP `recall` stays for cross-machine/tenant with `limit 3` (max 5) under 512 tokens. **Vector:**
+   enable on the coding lane (embeddings already paid for). **Graph:** populate `supersedes`/
+   `same_subject` edges at capture consolidation (cheap, `insert_edge` exists); keep
+   `edge_expansion` off until a temporal-conflict use case is measured. **FSRS:** wire the UPDATE
+   path (reinforce/decay) — the columns exist for this. **Delete** the 4 dead tables (pre-prod).
+3. **Consolidation: two-stage, rule first, LLM only in the ambiguous band; ADD-only, never delete.**
+   Stage 1 (deterministic, $0): `subject = repo_slug + normalised topic key`; same source + same key
+   ⇒ **reinforce** (`reinforcement_count++`, `last_reinforced_at`, body refresh as a new row +
+   `supersedes` edge to the old — no overwrite, no delete); idempotency = `sha256(body)`. Stage 2
+   (gated): cosine ≥ 0.8 top-5 as a *candidate gate* → LLM DUPLICATE/UPDATE/NEW judge (MemOS/crewAI
+   pattern) — only after Stage 1 shows fragmentation still matters. Different-channel same-key stays
+   the SourceAgreement witness (unchanged, per the coexistence tests).
+4. **Trust: enforce the floor AND make the ladder serviceable (resolves P0-A).** retain clamps to
+   `source_kind`; captured units land `Candidate`; the coding lane **serves Candidate captured units
+   with a visible `[unconfirmed]` label** (precision-gated as today — abstain when unsure); a
+   **survival witness** promotes: served → task ended green with no revert/contradiction ⇒ WeakOutcome
+   ⇒ Validated. Independence for promotion = differing *channel* or an outcome witness. Confidence
+   prior 0.5. Battery/dogfood keys clamped to `AgentOutput`.
+5. **Injection UX:** one advisory block, ≤ 3–5 items, ≤ 512 tokens, ranked by trust rung ×
+   reinforcement × recency (14 d half-life), each item labelled confirmed/unconfirmed, valid-time
+   shown when superseded; log which items were *used* (cognee `used_element_ids`) to feed the ladder.
+   Plus the always-on pinned tier via the file projection. Precision over recall: fewer, surer cards.
+6. **Measure with the right control before expanding further.** The decisive tranche (~$250):
+   arms {bare, memphant-3card, MEMORY.md-projection} × tasks {cross-repo `xrepo` (exists), env
+   gotcha `tzgotcha` (exists)}, **n = 15 paired same-task** (paired SD ≈ 60 k ⇒ detects ≈ 15 %),
+   memory pre-seeded from a prior seeding session (variance control), arm order randomised, cold
+   homes, tasks authored blind to seeds; endpoints preregistered: Δtotal_tokens/Δtool_calls
+   conditioned on judge-correct (primary), correctness, poison-follow rate; Wilcoxon signed-rank;
+   **go bar = ≥ 15 % median token reduction AND memphant ≥ file arm.** Second tranche (~$150) adds
+   error→fix + skill arms only on signal.
+
+Latency/perf/cost summary: capture is async and mostly deterministic (LLM = one flash-lite call per
+session for beliefs + one per skill crystallisation ≈ fractions of a cent); hot-path latency 0 via
+the file projection, ~30–50 ms via MCP; storage cost unchanged (Postgres + one embedding/unit);
+UX = the agent greps a file it already trusts, sees confirmed vs unconfirmed, and the user can read/
+edit/delete memory as text while Postgres keeps trust, provenance, tenancy and time.
+
+### Open questions — answered
+
+| Question | Answer |
+| --- | --- |
+| Why one type / one channel today? | Design intent (KISS demand probe: "capture = single provisional claim", summary spine + mirror augment). Belief-only + first-line key + 1 card were the accidents inside that intent; the dormant substrate (no reinforcement UPDATE, vector off on the lane, no belief supersession, unimplemented survival witness) is unfinished wiring, not decisions. |
+| Is it storing things only one way? | Yes on Codex (summary only); mirror elsewhere. Fix = deterministic channels (error→fix, repeated-command, fetch) + the file projection, not more LLM channels. |
+| Should capture classify type? | Yes — **by channel, deterministically**. Never by an LLM classifier. |
+| Flat files vs DB vs vectors vs graph — which? | **All, in roles:** Postgres = truth (trust/provenance/time/tenancy); flat file = delivery + pinned tier; vector+BM25 = the searched tail (enable vector on the lane); graph = supersession/lineage edges only, no traversal until a temporal-conflict case is measured. Not a competition. |
+| Test all combinations? | No — the field's evidence already ranks them; test the two live questions (N-card vs 1-card; file vs MCP) at n = 15 first, then expand only on signal. |
+| Are there more bugs? | Yes — P0-A/B/C + P1-A..D above; the reinforcement columns and `Merge` are dead code; four dead tables. |
+| Best UX? | Memory the agent already trusts (a greppable file), small labelled advisory cards, never silent, always editable; measured on cost/turns, not claimed on correctness. |
+
+### Staged plan (each stage gates the next; $0 until Stage C)
+
+- **Stage A — make the loop honest ($0, tests first).** P0-B idempotency→body hash; P0-C ceiling in
+  `capture_episode_candidate`; P1-A trust clamp + battery key AgentOutput; P0-A Candidate served
+  labelled + survival witness; stable subject key + reinforce-on-repeat + `supersedes` edge (real
+  `Merge`); vector on the coding lane; `limit 3`; confidence 0.5. Tests (tests team, ranked): MCP
+  `recall()` hit on a captured belief; core coding-lane recall with `include_beliefs` perturbation +
+  `compact.is_some()`; bulleted-prose vs bulleted-code `is_repo_recoverable` pair; poster payload
+  shape + `observed_at=""` rejected server-side; PG clone via `with_scratch_db`; same-source
+  recapture ⇒ 1 unit `reinforcement_count=2` (scoped so the coexistence tests still hold).
+- **Stage B — channels + projection ($0).** Deterministic error→fix procedural capture; repeated-
+  command skill trigger; `MEMORY.md` projection renderer (durable rung + pinned tier); `[unconfirmed]`
+  labelling in the advisory block; delete the 4 dead tables.
+- **Stage C — the decisive experiment (~$250, gated on Sid).** As specified in call #6.
+- **Stage D — only on signal.** LLM dedup judge for the ambiguous band; `resource` fetch cache;
+  `edge_expansion`; Semantic promotion of captured beliefs.
+
+### What Phase 3 deliberately does NOT do
+
+No LLM type classifier; no Episodic units or episodic cards; no graph traversal at recall; no
+LLM UPDATE/DELETE of memories; no new harness adapters before Stage C reports; no correctness claims.
