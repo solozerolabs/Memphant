@@ -1423,6 +1423,11 @@ fn render_projection(response: &CanonicalProjectionResponse) -> Result<RenderedP
         {
             return Err(format!("projection contains duplicate fact_key {fact_key}"));
         }
+        // The editable canonical projection admits ONLY editable canonical kinds.
+        // This is not the same surface as the read-only Python recall delivery
+        // (`plugins/_shared/memphant_projection.py`), which intentionally shows
+        // belief/episodic/preference + unconfirmed Candidates. Do not widen this
+        // to match it. See docs/specs/canonical-file-projection.md.
         if !matches!(item.kind, MemoryKind::Semantic | MemoryKind::Procedural) {
             return Err(format!(
                 "projection contains unsupported kind for unit {id}"

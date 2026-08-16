@@ -74,6 +74,11 @@ def instructions_path(cwd: str) -> str:
         if os.path.exists(candidate):
             return candidate
     return os.path.join(cwd, "AGENTS.md")
+# This read-only recall-delivery surface DELIBERATELY accepts a WIDER kind set
+# (belief/episodic/preference + unconfirmed Candidates) than the editable Rust
+# canonical projection (`file_plane.rs` / `file_memory.rs`, Semantic|Procedural
+# only). The two are different products that both emit a `MEMORY.md`; do NOT
+# "align" them. See docs/specs/canonical-file-projection.md.
 _GROUPS = (("Procedures", ("procedural",)), ("Facts", ("semantic", "belief", "episodic")), ("Preferences", ("preference",)))
 _ANCHOR_RE = re.compile(r"[^a-z0-9]+")
 

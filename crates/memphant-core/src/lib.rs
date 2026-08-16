@@ -3701,6 +3701,11 @@ fn in_memory_canonical_projection_units(
                 && unit.deletion_generation.is_none()
                 && unit.trust_level != TrustLevel::Quarantined
                 && bitemporally_recallable(unit, &time)
+                // Canonical projection = the editable, write-back surface (compile/
+                // sync + MCP memory tool). It admits ONLY editable canonical kinds
+                // and excludes Candidates. The read-only Python recall delivery
+                // surface is intentionally wider; the two must not be aligned.
+                // See docs/specs/canonical-file-projection.md.
                 && matches!(
                     (unit.kind, unit.state),
                     (
