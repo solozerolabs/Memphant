@@ -464,10 +464,15 @@ def load_transcript_messages(path: str) -> list:
         if not isinstance(record, dict):
             continue
         inner = record.get("message")
+        payload = record.get("payload")
         if isinstance(inner, dict) and "role" in inner:
             messages.append({"role": inner.get("role"), "content": inner.get("content")})
         elif "role" in record and "content" in record:
             messages.append({"role": record.get("role"), "content": record.get("content")})
+        elif isinstance(payload, dict) and payload.get("type") == "message" and "role" in payload:
+            # Codex rollout: {"type":"response_item","payload":{"type":"message",
+            # "role","content":[{"type":"input_text"|"output_text","text"}]}}.
+            messages.append({"role": payload.get("role"), "content": payload.get("content")})
     return messages
 
 
