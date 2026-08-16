@@ -1,0 +1,2 @@
+r1-date	The test suite passes in CI but `npm test` FAILS when you run it locally. Make `npm test` pass locally. Do NOT modify the test file or weaken any assertion; the test itself is correct.
+r2-date	Add a new test file test/date2.test.mjs that asserts dayOfMonth('2026-06-01') equals 1 (same style as the existing date1 test), wire it so `npm test` runs both tests, and make the whole suite pass. Do not weaken assertions.

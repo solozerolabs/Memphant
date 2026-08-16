@@ -237,3 +237,4 @@ docs/build-log/artifacts/horizonbench-confirmation*/*.jsonl
 docs/build-log/artifacts/horizonbench-confirmation*/*.jsonl.lock
 docs/build-log/artifacts/horizonbench-confirmation*/*.log
 docs/build-log/artifacts/horizonbench-confirmation*/reader-cache/
+scripts/battery/.state/

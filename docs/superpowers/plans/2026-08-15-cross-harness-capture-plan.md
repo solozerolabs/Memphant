@@ -136,17 +136,23 @@ promoted/quarantined, later recalled?).
 transition detector at session end writes a `review_event`; the reflect job uses it as the
 promotion/demotion witness. This is the highest-ROI anti-poisoning signal and it's ~free.
 
-**Phase 2 — demand read (measure, then decide).** From Phase 0/1 telemetry on real Syndai
-sessions: how often is a captured memory later recalled AND does it change an outcome
-(the coding-lift instrument we already built)? THIS answers the deferred demand question.
-If the recall-and-lift rate is meaningful, proceed; if flat, stop — the cheap win is
-plumbing, not more pipeline.
+**Phase 2 — demand read (census → observe → single-component pilot).** NOT a binary
+full-tail GO: the instrument observes the value of memory we *already* capture, while the tail
+changes capture coverage/quality — a different quantity. So Phase 2 is a feasibility census (is
+this even measurable at Syndai's independent-subject scale?), an observational read (estimate
+recall rate × lift × outcome value), then an isolated causal pilot of the *single cheapest tail
+component*, which is the only stage that can license "build this one component." Each remaining
+component earns its own pilot only if the first pays. **Executable design: see "Phase 2 —
+demand read: executable design" at the end of this doc.**
 
-**Deferred behind the Phase 2 gate (the devil's cost warning, respected):** the Codex
-file-mirror workspace-diff fallback (its hooks can't see `apply_patch`); the opposite-bias
-second extractor; the byte-offset resumable tailer (Phase 0 reads the whole transcript at
-session end — the tailer is only needed for mid-session/streaming capture); resource/RAG
-capture (the one path that genuinely lacks dedup/valid-time — do not ship it broken).
+**The tail = the pilot candidates, one at a time (the devil's cost warning, respected).**
+These are no longer "deferred behind one gate" — each is a *single-component pilot candidate*
+Phase 2 chooses among (Stage 1 fingers whichever most limits recall): the Codex file-mirror
+workspace-diff fallback (its hooks can't see `apply_patch`); the opposite-bias second extractor;
+the byte-offset resumable tailer (Phase 0 reads the whole transcript at session end — the tailer
+is only needed for mid-session/streaming capture); resource/RAG capture (the one path that
+genuinely lacks dedup/valid-time — do not ship it broken). Only the one that wins its pilot gets
+built; the rest wait for their own.
 
 ## What we explicitly do NOT build
 
@@ -203,3 +209,154 @@ missing). Every test pairs a positive assertion with a removal-perturbation:
 - Run against BOTH InMemory and Postgres stores (store-divergence rule): capture's
   dedup/promotion reads via the write seam (`fetch_scope_open_units`), never the bounded
   recall pool.
+
+## Phase 2 — demand read: executable design
+
+**What the decision actually is (reframed — the estimand correction).** The naive framing
+"measure whether captured memory pays off, then GO/STOP the whole tail" is the *wrong estimand*.
+The instrument can only observe the value of memory *we already capture*; the deferred tail
+(Codex diff-fallback, second extractor, resumable tailer, RAG capture) changes capture *coverage
+and quality* — a different quantity. High observed lift could mean the cheap path already grabs
+everything valuable (tail not worth building); low recall could mean the missing tail *is* the
+bottleneck (tail exactly worth building). So a binary full-tail GO is unsupported. **The most a
+demand read can license is the single cheapest tail component, run as a marginal-value pilot.**
+Phase 2 is therefore three stages: a **feasibility census** (is this even measurable at Syndai's
+scale?), an **observational read** (estimate the multiplicands), and a **single-component pilot**
+(the only thing that can say "build this one component").
+
+```
+Stage 0  FEASIBILITY CENSUS ($0)           can we even measure it here?
+  independent-subject count · ICC · max attainable power
+  + stand up exposure-receipt + shadow-retrieval eligibility
+        │  underpowered / not observable → STOP (revisit at more traffic; do not spend)
+        ▼
+Stage 1  OBSERVATIONAL READ ($0)           estimate the pieces of tail value
+  cross-session recall-of-captured rate · causal-lift-per-eligible-recall (obs.)
+  · weak-outcome density · which missing tail-component most limits recall
+        │  hash the artifact = PREREG #1 (frozen before any Stage-1 look)
+        ▼
+Stage 2  SINGLE-COMPONENT PILOT (causal, FRESH traffic)   the only GO-capable stage
+  build the cheapest tail component Stage 1 fingered · isolated per-subject holdout
+  · terminal fully-observed outcome · PREREG #2 (sized from Stage 1, new non-overlapping traffic)
+        │
+        ▼  GO(component) iff  incremental_eligible_recalls × lift_per_recall × outcome_value
+                              − component_cost  clears materiality δ, CI-backed.
+           Never a binary full-tail GO. Each component earns its own pilot.
+```
+
+### Reuse — zero new plumbing except one exposure receipt
+
+Everything the read needs already exists, with **one** genuinely new instrument:
+- `memphant.retrieval_trace` (served unit ids in `candidates`/`citations`) = the recall
+  *candidate* signal — necessary but **not sufficient** (a candidate is not proof the unit was
+  rendered, fit the context budget, and was seen before the action). **New (small): an
+  exposure receipt** logged by the injection hook — eligible ids, actually-rendered ids, token
+  position, arm, and immutable session+task ids — so treatment is observed, not assumed.
+- `payload.capture` provenance = the *captured*-vs-seeded discriminator.
+- `memphant.review_event` weak self-outcome = the outcome signal; `memphant.mutation_ledger`
+  = write-back.
+- `scripts/mcp_usage_report.sql` = the read to extend (`demand_funnel.sql` shares its
+  subject/since params and served-unit CTE, does not re-derive them). Injection hooks +
+  `dogfood_bootstrap.sh` = the live wiring already merged.
+
+New artifacts, total: the exposure receipt (hook-side), `scripts/demand_funnel.sql`, **two**
+preregistrations (Stage 1 pre-look; Stage 2 sized from Stage 1's hashed artifact, on fresh
+traffic — one prereg cannot both precede Stage 1 and freeze Stage-2 params from Stage-1 data),
+and a `sha256(subject_id) mod 2` arm split. No schema, no service verb, no labeling.
+
+### Stage 0 — feasibility census (is it measurable here at all? $0, do FIRST)
+
+The subject census is load-bearing: effective N is *independent subjects*, not sessions —
+many sessions from a few subjects add almost no power under within-subject correlation.
+Before any measurement, compute from existing traffic:
+- **independent eligible subjects** (distinct coding `data_subject_id`s with real coding
+  sessions), **task-episode count**, **weak-outcome density** (terminal outcomes per 100
+  sessions), and an **ICC** estimate → feed `instrument_power.py` for **maximum attainable
+  power**. If the ceiling can't detect a material effect, **STOP** — the honest result is "not
+  measurable at this scale," not a fabricated GO. Revisit when traffic grows.
+- Stand up the **exposure receipt** and **shadow-retrieval eligibility** (run identical
+  retrieval in both arms, record which episodes are eligible) so Stages 1–2 observe treatment
+  correctly and define eligibility identically across arms (prevents the treatment-affected-
+  denominator trap: injection changes downstream code/captures/retrieval, so eligibility must
+  be fixed by shadow retrieval *before* suppression, analyzed ITT over eligible episodes).
+
+### Stage 1 — observational read ($0; estimates the tail-value multiplicands)
+
+Over existing tables, attribution **cross-session** (a later session serving an earlier
+session's captured unit; the causal claim is Stage 2's, never the funnel's):
+1. **captured** → **promoted** (`corroborated`/`durable`) → **recalled-captured** (a promoted
+   unit *delivered* — per the exposure receipt, not merely a candidate — in a later session's
+   recall for the same subject) → **outcome-coupled** (followed, forward in time, by a
+   *terminal fully-observed* weak-positive: change produced, prescribed validation attempted,
+   result known, no censoring — not merely "no revert seen", which encodes absence of
+   observation).
+2. Estimate the two multiplicands the pilot needs: **recall-of-captured rate** and an
+   observational **lift-per-eligible-recall**. And fingerprint **which missing tail component
+   most limits recall** (coverage gap on Codex apply_patch → diff-fallback; precision on the
+   ambiguous band → second extractor; mid-session latency → tailer) so Stage 2 pilots the
+   cheapest high-leverage one.
+
+**Controls (non-vacuity, perturbation-based):**
+- *Capture-OFF subject* must read `recalled-captured = 0` (else the provenance join leaks).
+- *Within-stratum shuffle:* re-pair recalls with outcomes **within subject × task × time
+  block** (a global shuffle destroys structure and proves little); coupling must collapse to
+  chance. Validates the join, not yet the causal construct.
+
+Freeze Stage 1's output as a **hashed artifact = preregistration #1**, committed before the
+first look (the `a2fad02f`/`601fdb5c` discipline).
+
+### Stage 2 — single-component pilot (the only GO-capable stage; causal, fresh traffic)
+
+Build the one cheapest tail component Stage 1 fingered, then measure *its marginal value* on
+**new, non-overlapping** traffic (preregistration #2, sized from Stage 1).
+- **Isolate capture, not injection-at-large:** contrast *capture-sourced injection on* vs
+  *suppressed*, seeded memory served identically in both arms, so the delta is attributable to
+  captured units — and specifically to the units the new component adds.
+- **Randomize per subject** (`sha256(subject_id) mod 2`, a real hash so time-ordered ids can't
+  correlate the arm with batching) — the shared per-subject store means a session-level split
+  lets a holdout's captures leak into a later treatment session. Report arm balance across
+  strata. (Per-subject costs N; that is exactly why Stage 0's subject census gates this.)
+- **Primary = capture-attributable outcome-coupling delta** on a **terminal fully-observed
+  outcome** (no proxy switching — the repeated-question fallback may seed *power* but cannot
+  authorize GO, as it changes the scientific question).
+- **GO(component) iff** `incremental_eligible_recalls × lift_per_recall × outcome_value −
+  component_cost` clears a preregistered **materiality δ** (the value that makes *that
+  component* worth its build+run cost), CI-backed with a sequential-look α guard (the
+  usage-cap-interrupted Horizon run is the cautionary case). Never a binary full-tail GO —
+  each remaining component earns its own pilot only if the first pays.
+
+### Cost, calendar, invalidators
+
+Marginal spend ≈ **$0** through Stage 1 (observational + hooks + weak-outcome pure git/CI; the
+one new cost is the small exposure receipt). Stage 2 spends only the build of *one* cheap
+component. Real cost is **calendar** to accumulate independent-subject N — which is precisely
+why Stage 0 computes the power ceiling before anything. Invalidators, all in our ledger of scars:
+- *Too few independent subjects* → Stage 0 STOP (don't fake power with session count).
+- *Saturation regime:* Syndai tasks rarely need non-repo knowledge → flat for a true reason
+  (reconciles the OctoBench null) → legitimate STOP.
+- *Store-divergence / stale-binary:* run against the served path (superuser bypasses RLS);
+  rebuild `memphant-mcp` after any merge or it returns the pre-identity-free `missing field
+  subject_id`.
+
+### Open questions — resolved (authoritative calls)
+
+| Question | Call |
+| --- | --- |
+| Decision shape | **Not binary full-tail GO.** Census → observational → single cheapest-component pilot; each component earns its own pilot. |
+| Feasibility precondition | **Independent-subject census + ICC + max attainable power FIRST.** Underpowered → STOP, don't fake it with session count. |
+| Is a recall "delivered"? | **Exposure receipt** (rendered ids + token position + arm), not a bare `candidates` membership. |
+| Eligibility across arms | **Shadow retrieval before suppression**, identical both arms; ITT over eligible episodes (kills the treatment-affected denominator). |
+| What the causal arm contrasts | Capture-sourced injection **on vs suppressed**, seeded held constant. |
+| Randomization unit | **Subject** (`sha256(subject_id) mod 2`); session-level only for the coarse injection-in-general secondary. |
+| Attribution window | **Cross-session**; causal claim carried by the Stage 2 holdout only. |
+| Primary outcome | **Terminal fully-observed** weak-positive (validation attempted + result known, no censoring). No proxy switching for GO. |
+| Preregistration | **Two:** #1 pre-Stage-1 (hashed artifact); #2 sizes Stage 2 from #1, on fresh non-overlapping traffic. |
+| Shuffle control | **Within subject × task × time stratum**, not global. |
+| GO threshold | Component's `incr_recalls × lift × value − cost` clears a preregistered **materiality δ**, not p<0.05 vs 0. |
+
+### What Phase 2 deliberately does NOT do
+
+No new schema, no service verb, no manual labeling, no synthetic tasks, no proxy-switching to
+authorize GO, and **no binary full-tail GO** — the estimand can't support it. Stage 0 can STOP
+on infeasibility; Stage 1 estimates but never concludes; only an isolated single-component
+Stage 2 pilot on fresh traffic can say "build this one component."
