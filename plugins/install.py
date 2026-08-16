@@ -32,7 +32,7 @@ import sys
 
 PLUGIN_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(PLUGIN_ROOT, "_shared"))
-from memphant_projection import STABLE_BLOCK, upsert_managed_block  # noqa: E402
+from memphant_projection import STABLE_BLOCK, instructions_path, upsert_managed_block  # noqa: E402
 
 # The two hooks each harness wires, as (event, plugin-relative script).
 _CODEX_HOOKS = [
@@ -48,17 +48,20 @@ _CLAUDE_HOOKS = [
 # --- repo wiring (surface: file + cli) ------------------------------------
 
 def write_agents_block(repo: str) -> str:
-    """Upsert the stable MemPhant block into <repo>/AGENTS.md. Returns a status."""
-    path = os.path.join(repo, "AGENTS.md")
+    """Upsert the one-line MemPhant pointer into the repo's agent-instructions
+    file — an existing AGENTS.md/CLAUDE.md/GEMINI.md, else a newly created
+    AGENTS.md. Returns a status naming the file (e.g. `AGENTS.md:written`)."""
+    path = instructions_path(repo)
+    name = os.path.basename(path)
     try:
         existing = open(path, encoding="utf-8").read()
     except OSError:
         existing = ""
     updated = upsert_managed_block(existing, STABLE_BLOCK)
     if updated == existing:
-        return "agents:unchanged"
+        return f"{name}:unchanged"
     open(path, "w", encoding="utf-8").write(updated)
-    return "agents:written"
+    return f"{name}:{'created' if not existing else 'written'}"
 
 
 def gitignore_memphant(repo: str) -> str:

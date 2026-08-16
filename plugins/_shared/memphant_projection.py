@@ -49,16 +49,29 @@ MAX_LINE_CHARS = 240
 RECALL_QUERY_SUFFIX = "gotchas conventions contracts procedures"
 
 _INSTRUCTION = (
-    "Memory from prior sessions lives in `.memphant/MEMORY.md` — conventions, "
-    "gotchas, external contracts, and procedures this project has already learned. "
-    "Prefer retrieval-led reasoning over pre-training-led reasoning: read it before "
-    "deriving anything it might already cover."
+    "Prior-session memory for this project (conventions, gotchas, external "
+    "contracts, procedures) is in `.memphant/MEMORY.md`; read it before deriving — "
+    "prefer retrieval-led over pre-training-led reasoning."
 )
 
-# The AGENTS.md managed block is a STABLE pointer (instruction only), so a
-# committed AGENTS.md is byte-identical every session — the changing memory index
-# lives in `.memphant/MEMORY.md`, which is gitignored/on-demand.
-STABLE_BLOCK = f"{BEGIN_MARKER}\n{_INSTRUCTION}\n{END_MARKER}"
+# The managed block is a ONE-LINE STABLE pointer with inline markers, so a
+# committed instructions file gains a single line, byte-identical every session —
+# the changing memory index lives in `.memphant/MEMORY.md` (gitignored/on-demand).
+STABLE_BLOCK = f"{BEGIN_MARKER} {_INSTRUCTION} {END_MARKER}"
+
+# Agent-instructions files, in priority order. The projection/installer writes the
+# pointer into the FIRST that already exists (so a CLAUDE.md-only repo is respected
+# and no surprise file appears); if none exist it CREATES AGENTS.md — the de-facto
+# standard every coding harness reads.
+INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
+
+
+def instructions_path(cwd: str) -> str:
+    for name in INSTRUCTION_FILES:
+        candidate = os.path.join(cwd, name)
+        if os.path.exists(candidate):
+            return candidate
+    return os.path.join(cwd, "AGENTS.md")
 _GROUPS = (("Procedures", ("procedural",)), ("Facts", ("semantic", "belief", "episodic")), ("Preferences", ("preference",)))
 _ANCHOR_RE = re.compile(r"[^a-z0-9]+")
 
@@ -186,7 +199,7 @@ def render_projection(cwd: str, recall_json) -> dict:
     memory_path = os.path.join(cwd, MEMORY_RELPATH)
     os.makedirs(os.path.dirname(memory_path), exist_ok=True)
     _write_if_changed(memory_path, render_memory_md(items))
-    agents_path = os.path.join(cwd, "AGENTS.md")
+    agents_path = instructions_path(cwd)
     try:
         with open(agents_path, "r", encoding="utf-8") as handle:
             existing = handle.read()

@@ -10,20 +10,32 @@ inst = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(inst)
 
 
-def test_agents_block_is_stable_and_idempotent(tmp_path):
+def test_agents_block_creates_agents_md_when_absent_and_is_idempotent(tmp_path):
     repo = str(tmp_path)
-    assert inst.write_agents_block(repo) == "agents:written"
+    # No instructions file exists ⇒ create the de-facto-standard AGENTS.md.
+    assert inst.write_agents_block(repo) == "AGENTS.md:created"
     first = (tmp_path / "AGENTS.md").read_text()
-    assert inst.BEGIN if False else "memphant:begin" in first
-    assert ".memphant/MEMORY.md" in first
-    # Re-run changes nothing (byte-identical, status unchanged).
-    assert inst.write_agents_block(repo) == "agents:unchanged"
+    assert "memphant:begin" in first and ".memphant/MEMORY.md" in first
+    # The pointer is a SINGLE line (inline markers), not a multi-line block.
+    block = first[first.index("<!-- memphant:begin -->"): first.index("<!-- memphant:end -->")]
+    assert "\n" not in block
+    # Re-run changes nothing.
+    assert inst.write_agents_block(repo) == "AGENTS.md:unchanged"
     assert (tmp_path / "AGENTS.md").read_text() == first
+
+
+def test_agents_block_targets_existing_claude_md_and_makes_no_agents_md(tmp_path):
+    # A CLAUDE.md-only repo (Claude Code) gets the pointer in CLAUDE.md; no
+    # surprise AGENTS.md is created.
+    (tmp_path / "CLAUDE.md").write_text("# House rules\n")
+    assert inst.write_agents_block(str(tmp_path)) == "CLAUDE.md:written"
+    assert "memphant:begin" in (tmp_path / "CLAUDE.md").read_text()
+    assert not (tmp_path / "AGENTS.md").exists()
 
 
 def test_agents_block_preserves_user_text(tmp_path):
     (tmp_path / "AGENTS.md").write_text("# Rules\n\n- stdlib only\n")
-    inst.write_agents_block(str(tmp_path))
+    assert inst.write_agents_block(str(tmp_path)) == "AGENTS.md:written"
     text = (tmp_path / "AGENTS.md").read_text()
     assert text.startswith("# Rules\n\n- stdlib only\n")
     assert "<!-- memphant:begin -->" in text
@@ -70,7 +82,7 @@ def test_register_hooks_no_config_dir(tmp_path):
 
 def test_install_repo_only_with_harness_none(tmp_path):
     steps = inst.install(str(tmp_path), harness="none")
-    assert steps == ["agents:written", "gitignore:added"]
+    assert steps == ["AGENTS.md:created", "gitignore:added"]
     assert (tmp_path / "AGENTS.md").exists() and (tmp_path / ".gitignore").exists()
 
 

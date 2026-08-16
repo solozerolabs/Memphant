@@ -34,8 +34,10 @@ def test_render_groups_labels_and_is_byte_stable(tmp_path):
     assert agents.startswith(proj.BEGIN_MARKER) and agents.rstrip().endswith(proj.END_MARKER)
     # The AGENTS.md block is a STABLE pointer: retrieval-led instruction + a
     # pointer to MEMORY.md, and NO per-session index (that lives in MEMORY.md).
-    assert "retrieval-led reasoning over pre-training-led reasoning" in agents.lower()
+    assert "retrieval-led over pre-training-led reasoning" in agents.lower()
     assert ".memphant/MEMORY.md" in agents
+    # A single-line pointer: inline markers, no newline between them.
+    assert "\n" not in agents[agents.index(proj.BEGIN_MARKER): agents.index(proj.END_MARKER)]
     assert "| procedural |" not in agents  # the changing index is NOT in AGENTS.md
     # The block is content-independent (stable across totally different recalls).
     assert proj.render_index_block(_recall()["items"]) == proj.render_index_block([])
