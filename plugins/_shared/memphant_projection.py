@@ -21,7 +21,9 @@ pre-training-led reasoning". This module renders exactly that from a recall:
                               outside the markers is never touched.
 
 CLI:  python3 memphant_projection.py --cwd <dir>
-      fetches `/v1/recall` (general lane, include_beliefs, limit 20, budget 4096,
+      fetches `/v1/recall` (coding lane: compact_only + include_beliefs, so
+      freshly-captured Candidate units are served labelled `[unconfirmed]`;
+      limit 20, budget 4096,
       query = "<repo_slug> gotchas conventions contracts procedures") using the
       MEMPHANT_CAPTURE_URL-derived base + bearer + identity env, then renders.
       Fail-safe: any error ⇒ silent, exit 0.
@@ -227,6 +229,12 @@ def http_recall_fetch(url: str, bearer: str, identity: dict, timeout: float = DE
             "limit": 20,
             "budget_tokens": 4096,
             "include_beliefs": True,
+            # The projection is a CODING delivery surface, so it recalls on the
+            # coding lane (compact_only). This is what serves freshly-CAPTURED
+            # Candidate units — the general lane keeps Candidates invisible, so a
+            # just-captured memory would render nothing until some later session
+            # promoted it. The renderer already labels these `[unconfirmed]`.
+            "compact_only": True,
         }
         data = json.dumps(request_body).encode("utf-8")
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {bearer}"}

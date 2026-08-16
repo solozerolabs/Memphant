@@ -135,5 +135,5 @@ def test_http_recall_fetch_request_shape(monkeypatch):
     assert out == {"items": []}
     body = seen["body"]
     assert body["query"] == "q" and body["limit"] == 20 and body["budget_tokens"] == 4096 and body["include_beliefs"] is True
-    assert "compact_only" not in body  # general lane
+    assert body["compact_only"] is True  # coding lane: serves captured Candidates ([unconfirmed])
     assert seen["headers"]["Authorization"] == "Bearer k"
