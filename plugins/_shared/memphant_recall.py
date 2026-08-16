@@ -5,12 +5,37 @@ ONE implementation, four thin harness adapters. Python hooks import this module;
 TypeScript adapters (opencode, pi) shell out to its CLI. Stdlib only.
 
 As a library:
-    recall_card(prompt, cwd, caller) -> str
+    recall_items(prompt, cwd, caller) -> list[dict]
         Run the MCP handshake (initialize -> initialized -> tools/call recall)
-        through an injectable `caller` and return the single already-packed
-        compact card body on a hit, "" on an honest empty, or raise RecallError
-        (a secret-free code) on any failure / pending state. Behavior is
-        unchanged from the original Codex hook so its test still passes.
+        through an injectable `caller` and return the served items (each a
+        `RecallContextItem`: unit_id, body, kind, inclusion_reason, ...) on a
+        hit, [] on an honest empty, or raise RecallError (a secret-free code)
+        on any failure / pending state.
+
+    render_cards(items) -> str
+        Render up to MAX_CARD_ITEMS items as one card, one line per item, each
+        prefixed `[unconfirmed]` when its `inclusion_reason` carries the
+        `captured_unconfirmed` token (a Candidate capture that has not yet
+        earned a survival witness) and unprefixed otherwise, bounded to
+        MAX_CARD_CHARS. Precision over recall: the server already filters; we
+        never pad.
+
+    recall_card(prompt, cwd, caller) -> str
+        recall_items + render_cards, plus the EXPOSURE RECEIPT (below) on a
+        hit. "" on an honest empty.
+
+Exposure receipt (the contract a Stop hook reads to post a survival
+`/v1/mark` Success for every served unit — the WeakOutcome witness that
+promotes Candidate captures):
+    <cwd>/.memphant/.served.json   — JSON Lines, one record appended per hit:
+    {"ts": <RFC 3339 UTC>, "query_sha256": <hex of the bounded query>,
+     "trace_id": <retrieval trace id the mark must cite>,
+     "unit_ids": [<served unit id in served order>, ...],
+     "labels": {<unit id>: "confirmed" | "unconfirmed", ...}}
+    The directory is created on demand and `.memphant/.served.json` is added
+    to `.git/info/exclude` when cwd is inside a git repo (worktree-aware via
+    `git rev-parse --git-path`). Any failure to write is silently ignored —
+    the receipt never breaks a host turn.
 
     advisory_block(card) -> str
         Wrap a non-empty card in the memori-style delimited advisory block. An
@@ -37,17 +62,29 @@ Guarantees:
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 
-# Hard ceilings: a compact card is <=512 tokens; cap the raw response so a
-# misbehaving endpoint cannot flood the agent's context.
+# Hard ceilings: the server packs at most a few compact items into a 512-token
+# budget; cap the raw response so a misbehaving endpoint cannot flood the
+# agent's context, and bound the rendered card independently of the server.
 MAX_RESPONSE_BYTES = 64 * 1024
 MAX_QUERY_CHARS = 4096
 DEFAULT_TIMEOUT_SECONDS = 2.0
+# Peer injection systems default to 5-10 items; the MCP lane serves <=3 under
+# its 512-token budget. Never render more than this even if a server does.
+MAX_CARD_ITEMS = 5
+MAX_CARD_CHARS = 2000
+UNCONFIRMED_TOKEN = "captured_unconfirmed"
+UNCONFIRMED_LABEL = "[unconfirmed]"
+RECEIPT_DIR = ".memphant"
+RECEIPT_FILE = ".served.json"
 
 PROTOCOL_VERSION = "2025-11-25"
 
@@ -134,10 +171,10 @@ def http_caller(base_url: str, bearer: str, timeout: float):
     return call
 
 
-def recall_card(prompt: str, cwd: str, caller) -> str:
+def recall_items(prompt: str, cwd: str, caller) -> list:
     """Run initialize -> initialized -> tools/call recall through `caller`.
 
-    Returns the single already-packed card string on a hit, or "" on an honest
+    Returns the served items (list of dicts) on a hit, or [] on an honest
     empty. Raises RecallError (secret-free code) on any failure or a typed
     unavailable/consolidation_pending result.
     """
@@ -177,18 +214,144 @@ def recall_card(prompt: str, cwd: str, caller) -> str:
     state = structured.get("state")
     if state == "hit":
         items = structured.get("response", {}).get("items") or structured.get("items") or []
+        items = [item for item in items if isinstance(item, dict)]
         if not items:
             raise RecallError("malformed")
-        # The card is the already-packed compact body; the server enforces the
-        # 512-token ceiling, so we render it verbatim.
-        return str(items[0].get("body", "")).strip()
+        # The retrieval trace id rides on each item so the exposure receipt can
+        # record it: a survival `/v1/mark` must cite the trace that served the ids
+        # (the server rejects a mark whose trace does not exist).
+        trace_id = structured.get("trace_id") or structured.get("response", {}).get("trace_id")
+        for item in items:
+            item.setdefault("_trace_id", trace_id)
+        return items[:MAX_CARD_ITEMS]
     if state == "empty":
-        return ""
+        return []
     if state in ("unavailable", "consolidation_pending"):
         raise RecallError("consolidation_pending")
     if state == "error":
         raise RecallError("unavailable")
     raise RecallError("malformed")
+
+
+def is_unconfirmed(item: dict) -> bool:
+    """A served item is unconfirmed when the server says so: its
+    `inclusion_reason` carries the `captured_unconfirmed` token, or it exposes a
+    Candidate `state`. Anything else (Active procedures, promoted captures with
+    `captured_confirmed`) is confirmed and renders unprefixed."""
+    reason = str(item.get("inclusion_reason") or "")
+    if UNCONFIRMED_TOKEN in reason:
+        return True
+    return str(item.get("state") or "").lower() == "candidate"
+
+
+def render_cards(items: list) -> str:
+    """Render up to MAX_CARD_ITEMS items as one card body, one line per item.
+
+    A single item renders as its bare body (byte-identical to the historical
+    single-card behaviour); N>1 render as `- ` bullets in served order. Each
+    line is prefixed `[unconfirmed] ` when `is_unconfirmed`. The whole card is
+    bounded to MAX_CARD_CHARS (the last line is truncated, later ones dropped).
+    Empty / bodyless items yield "".
+    """
+    lines = []
+    for item in items[:MAX_CARD_ITEMS]:
+        body = " ".join(str(item.get("body", "")).split()) if len(items) > 1 else str(item.get("body", "")).strip()
+        if not body:
+            continue
+        prefix = f"{UNCONFIRMED_LABEL} " if is_unconfirmed(item) else ""
+        lines.append(f"{prefix}{body}")
+    if not lines:
+        return ""
+    if len(lines) == 1:
+        return lines[0][:MAX_CARD_CHARS]
+    out = []
+    used = 0
+    for line in lines:
+        line = f"- {line}"
+        room = MAX_CARD_CHARS - used - (1 if out else 0)
+        if room <= 0:
+            break
+        if len(line) > room:
+            line = line[:room]
+        out.append(line)
+        used += len(line) + (1 if len(out) > 1 else 0)
+    return "\n".join(out)
+
+
+def _git_exclude_receipt(cwd: str) -> None:
+    """Best-effort: keep the receipt out of `git status` (worktree-aware)."""
+    try:
+        exclude = subprocess.run(
+            ["git", "rev-parse", "--git-path", "info/exclude"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+        if exclude.returncode != 0:
+            return
+        path = exclude.stdout.strip()
+        if not path:
+            return
+        if not os.path.isabs(path):
+            path = os.path.join(cwd, path)
+        entry = f"{RECEIPT_DIR}/{RECEIPT_FILE}"
+        existing = ""
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                existing = handle.read()
+        if entry in existing.splitlines():
+            return
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            if existing and not existing.endswith("\n"):
+                handle.write("\n")
+            handle.write(entry + "\n")
+    except Exception:
+        return
+
+
+def write_receipt(cwd: str, query: str, items: list) -> None:
+    """Append one exposure-receipt record (see module docstring) for a hit.
+    Silently ignores every failure — the receipt never breaks a host turn."""
+    if not cwd or not items:
+        return
+    try:
+        unit_ids = [str(item["unit_id"]) for item in items if item.get("unit_id")]
+        if not unit_ids:
+            return
+        record = {
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "query_sha256": hashlib.sha256(query.encode("utf-8")).hexdigest(),
+            "trace_id": next((str(i["_trace_id"]) for i in items if i.get("_trace_id")), None),
+            "unit_ids": unit_ids,
+            "labels": {
+                str(item["unit_id"]): ("unconfirmed" if is_unconfirmed(item) else "confirmed")
+                for item in items
+                if item.get("unit_id")
+            },
+        }
+        directory = os.path.join(cwd, RECEIPT_DIR)
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, RECEIPT_FILE), "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, separators=(",", ":")) + "\n")
+        _git_exclude_receipt(cwd)
+    except Exception:
+        return
+
+
+def recall_card(prompt: str, cwd: str, caller) -> str:
+    """recall_items + render_cards, writing the exposure receipt on a hit.
+
+    Returns the rendered card on a hit, or "" on an honest empty. Raises
+    RecallError (secret-free code) on any failure or pending state.
+    """
+    items = recall_items(prompt, cwd, caller)
+    if not items:
+        return ""
+    write_receipt(cwd, _bounded_query(prompt, cwd), items)
+    return render_cards(items)
 
 
 def advisory_block(card: str) -> str:

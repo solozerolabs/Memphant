@@ -58,13 +58,30 @@ def test_user_prompt_submit_injects_wrapped_block():
             {"state": "hit", "response": {"items": [{"body": "Run make deploy."}]}}
         )
     )
-    event = {"hook_event_name": "UserPromptSubmit", "prompt": "how do we deploy?", "cwd": "/repo"}
-    out, err = _run(event, caller)
-    hso = out["hookSpecificOutput"]
-    assert hso["hookEventName"] == "UserPromptSubmit"
-    assert hso["additionalContext"].startswith("<memphant_memory>")
-    assert "Run make deploy." in hso["additionalContext"]
+    out, err = _run({"hook_event_name": "UserPromptSubmit", "prompt": "how do we deploy?", "cwd": "/repo"}, caller)
+    assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    injected = out["hookSpecificOutput"]["additionalContext"]
+    assert injected.startswith(hook.ADVISORY_OPEN)
+    assert injected.endswith(hook.ADVISORY_CLOSE)
+    assert hook.ADVISORY_HEADER in injected
+    assert "Run make deploy." in injected
+    assert "[unconfirmed]" not in injected
     assert err == ""
+
+
+def test_user_prompt_submit_injects_n_labelled_cards_and_writes_receipt(tmp_path):
+    items = [
+        {"unit_id": "u1", "body": "Run make deploy.", "inclusion_reason": "validated_procedure"},
+        {"unit_id": "u2", "body": "Migrations go first.", "inclusion_reason": "belief captured_unconfirmed"},
+    ]
+    caller = _fake_caller(on_call=lambda _p: _recall_body({"state": "hit", "response": {"items": items}}))
+    out, err = _run({"hook_event_name": "UserPromptSubmit", "prompt": "deploy?", "cwd": str(tmp_path)}, caller)
+    injected = out["hookSpecificOutput"]["additionalContext"]
+    assert "- Run make deploy.\n- [unconfirmed] Migrations go first." in injected
+    assert err == ""
+    record = json.loads((tmp_path / ".memphant" / ".served.json").read_text().splitlines()[0])
+    assert record["unit_ids"] == ["u1", "u2"]
+    assert record["labels"] == {"u1": "confirmed", "u2": "unconfirmed"}
 
 
 def test_session_start_uses_cwd_and_labels_event():

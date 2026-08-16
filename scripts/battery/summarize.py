@@ -19,20 +19,29 @@ MODELS = [
     "google/gemini-2.5-flash-lite",   # backup 1 — same provider, cheaper
     "openai/gpt-5-mini",              # backup 2 — cross-provider resilience
 ]
+# OUTPUT CONTRACT (parsed by plugins/_shared/memphant_capture.py `parse_topic`):
+#   line 1:  TOPIC: <2-5 word lowercase noun phrase>   -- the stable subject key
+#   lines 2+: 1-4 terse bullets                         -- the stored body
+#   or exactly NONE (no TOPIC line) when nothing durable was learned.
 PROMPT = (
     "From this coding session turn, extract ONLY non-obvious fixes, gotchas, "
     "error->resolution facts, or conventions the agent DISCOVERED that are NOT "
     "recoverable from the repo itself (environmental, external, or experiential). "
-    "1-4 terse token-efficient bullets. Never reproduce secret values. Do NOT "
-    "restate the task or capture routine actions. If nothing durable and non-repo "
-    "was learned, output exactly: NONE."
+    "Output format: the FIRST line must be exactly `TOPIC: <2-5 word lowercase "
+    "noun phrase>` naming the external system, component, or gotcha (generic, "
+    "no repo-specific file names, so the same knowledge always gets the same "
+    "topic regardless of wording); then 1-4 terse token-efficient bullets. Never "
+    "reproduce secret values. Do NOT restate the task or capture routine actions. "
+    "If nothing durable and non-repo was learned, output exactly: NONE (no TOPIC "
+    "line)."
 )
 
 
 def _is_none(out: str) -> bool:
-    # Robust no-capture detection: models wrap it ("* None", "NONE.", "- none")
-    # so compare on alphanumerics only, not an exact string.
-    return re.sub(r"[^a-z0-9]", "", out.lower()) in ("", "none")
+    # Robust no-capture detection: models wrap it ("* None", "NONE.", "- none",
+    # or a stray "TOPIC: none" line) so compare on alphanumerics only.
+    body = re.sub(r"(?im)^\s*topic\s*:.*$", "", out)
+    return re.sub(r"[^a-z0-9]", "", body.lower()) in ("", "none")
 
 
 def _call(model: str, turn: str, key: str) -> str:

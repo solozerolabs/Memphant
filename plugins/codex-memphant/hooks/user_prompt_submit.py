@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex UserPromptSubmit hook: inject at most one MemPhant compact card.
+"""Codex UserPromptSubmit hook: inject the MemPhant advisory block (<=5 labelled cards).
 
 Thin adapter over the shared recall core (`plugins/_shared/memphant_recall.py`).
 This file owns ONLY Codex's input-parsing and its hook envelope; all recall
@@ -9,7 +9,8 @@ core so every harness shares one implementation.
 Codex passes one JSON object on stdin (`prompt`, `cwd`, `session_id`,
 `turn_id`, ...). We build a bounded query from `prompt`+`cwd`, call the recall
 core, and return a Codex hook envelope whose `additionalContext` is either zero
-bytes or the single honest recalled card.
+bytes or the honest recalled cards (each labelled `[unconfirmed]` when it is a
+not-yet-witnessed capture); the shared core also writes the exposure receipt.
 
 Behavior is preserved exactly (raw card in `additionalContext`); the memori
 advisory-block wrapper is a shared-core capability the newer adapters adopt.

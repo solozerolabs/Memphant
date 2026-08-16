@@ -11,6 +11,10 @@ the shared core reads the last turn, applies the exclusion filters, summarizes
 via the cheap-model shell-out, and POSTs it tagged `source=summary`. Subagent
 Stop events carry `agent_id`, which the core skips.
 
+After the summary capture, two best-effort steps: the survival witness
+(`session_outcome` -> ONE `/v1/mark` over the injection hook's exposure receipt
+`<cwd>/.memphant/.served.json`, then truncate it) and the AGENTS.md projection.
+
 Async + fail-safe: any error is swallowed to a secret-free status code and the
 hook ALWAYS exits 0 (an empty allow) so it can never break a Claude Code turn.
 
@@ -31,14 +35,39 @@ sys.path.insert(
 
 from memphant_capture import (  # noqa: E402  (path is set up above)
     build_capture,
+    http_marker,
     http_poster,
     load_transcript_messages,
     make_live_summarizer,
+    mark_url_from_capture_url,
+    post_survival_mark,
     resolve_capture_config,
+    session_outcome,
 )
+from memphant_projection import project  # noqa: E402
 
 
-def run(stdin, stdout, stderr, build) -> int:
+def _session_start(transcript_path) -> str:
+    """First `timestamp` in the JSONL transcript (RFC3339) — bounds the exposure
+    receipt to this session; "" when unknown."""
+    if not isinstance(transcript_path, str) or not transcript_path:
+        return ""
+    try:
+        with open(transcript_path, "r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                try:
+                    record = json.loads(line)
+                except (ValueError, TypeError):
+                    continue
+                ts = record.get("timestamp") if isinstance(record, dict) else None
+                if isinstance(ts, str) and ts:
+                    return ts
+    except OSError:
+        pass
+    return ""
+
+
+def run(stdin, stdout, stderr, build, marker=None, projector=None) -> int:
     try:
         raw = stdin.read()
         event = json.loads(raw) if raw.strip() else {}
@@ -67,10 +96,23 @@ def run(stdin, stdout, stderr, build) -> int:
     }
     try:
         result = build(payload)
+        print(f"memphant-capture: code={result.code}", file=stderr)
     except Exception:
         print("memphant-capture: no-capture code=internal", file=stderr)
-        return 0
-    print(f"memphant-capture: code={result.code}", file=stderr)
+
+    # Best-effort tail: survival witness + projection. Never raises. Claude Code
+    # transcripts do not expose tool exit codes, so the outcome rests on the
+    # last turn's text (correction / unresolved-failure markers).
+    cwd = payload["cwd"]
+    if marker is not None and cwd:
+        outcome = session_outcome(messages)
+        code = post_survival_mark(cwd, outcome, marker, since=_session_start(transcript_path) or None)
+        print(f"memphant-capture: survival={code}", file=stderr)
+    if projector is not None and cwd:
+        try:
+            print(f"memphant-capture: projection={projector(cwd)}", file=stderr)
+        except Exception:
+            print("memphant-capture: projection=projection_error", file=stderr)
     return 0
 
 
@@ -81,8 +123,9 @@ def main() -> int:
         return 0
     summarizer = make_live_summarizer(config)
     poster = http_poster(config["url"], config["bearer"], config["identity"])
+    marker = http_marker(mark_url_from_capture_url(config["url"]), config["bearer"], config["identity"])
     build = lambda payload: build_capture(payload, summarizer=summarizer, poster=poster)  # noqa: E731
-    return run(sys.stdin, sys.stdout, sys.stderr, build)
+    return run(sys.stdin, sys.stdout, sys.stderr, build, marker=marker, projector=project)
 
 
 if __name__ == "__main__":

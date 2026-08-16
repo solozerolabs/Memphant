@@ -215,3 +215,134 @@ def test_cli_diagnostics_never_leak_prompt_or_bearer():
     )
     assert "SECRET-PROMPT-TOKEN" not in err
     assert "SECRET-BEARER" not in err
+
+
+# --- N-card rendering with confirmed/unconfirmed labels ---------------------
+
+
+def _items(*specs):
+    return [
+        {"unit_id": uid, "body": body, "inclusion_reason": reason}
+        for uid, body, reason in specs
+    ]
+
+
+def test_render_cards_single_item_is_the_bare_body():
+    assert core.render_cards(_items(("u1", "Run make deploy.", "validated_procedure"))) == "Run make deploy."
+
+
+def test_render_cards_n_items_are_bullets_in_served_order_with_labels():
+    card = core.render_cards(
+        _items(
+            ("u1", "First.", "validated_procedure"),
+            ("u2", "Second.", "belief captured_unconfirmed"),
+            ("u3", "Third.", "belief captured_confirmed"),
+        )
+    )
+    assert card == "- First.\n- [unconfirmed] Second.\n- Third."
+
+
+def test_render_cards_label_requires_the_exact_token():
+    # Non-vacuity perturbations: the label appears ONLY for the token (or an
+    # exposed Candidate state), never for confirmed captures or plain items.
+    assert core.render_cards(_items(("u1", "X.", "belief captured_unconfirmed"))) == "[unconfirmed] X."
+    assert core.render_cards(_items(("u1", "X.", "belief captured_confirmed"))) == "X."
+    assert core.render_cards(_items(("u1", "X.", "captured"))) == "X."
+    assert core.render_cards([{"unit_id": "u1", "body": "X.", "state": "candidate"}]) == "[unconfirmed] X."
+    assert core.render_cards([{"unit_id": "u1", "body": "X.", "state": "active"}]) == "X."
+
+
+def test_render_cards_caps_items_and_total_chars():
+    many = _items(*((f"u{i}", "x" * 600, "validated_procedure") for i in range(8)))
+    card = core.render_cards(many)
+    assert len(card) <= core.MAX_CARD_CHARS
+    assert card.count("- ") <= core.MAX_CARD_ITEMS
+    # A single oversized body is bounded too.
+    assert len(core.render_cards(_items(("u1", "y" * 5000, "r")))) == core.MAX_CARD_CHARS
+
+
+def test_recall_card_renders_n_labelled_cards_and_empty_is_unchanged(tmp_path):
+    caller = _fake_caller(
+        on_call=lambda _p: _recall_body(
+            {
+                "state": "hit",
+                "response": {
+                    "items": _items(
+                        ("u1", "Run make deploy.", "validated_procedure"),
+                        ("u2", "Migrations first.", "belief captured_unconfirmed"),
+                    )
+                },
+            }
+        )
+    )
+    assert core.recall_card("q", str(tmp_path), caller) == "- Run make deploy.\n- [unconfirmed] Migrations first."
+    empty = _fake_caller(on_call=lambda _p: _recall_body({"state": "empty"}))
+    assert core.recall_card("q", str(tmp_path), empty) == ""
+    assert core.build_block("q", str(tmp_path), empty) == ""
+
+
+# --- exposure receipt --------------------------------------------------------
+
+
+def test_receipt_is_appended_per_hit_with_ids_labels_and_query_hash(tmp_path):
+    caller = _fake_caller(
+        on_call=lambda _p: _recall_body(
+            {
+                "state": "hit",
+                "trace_id": "trace-123",
+                "response": {
+                    "items": _items(
+                        ("u1", "A.", "validated_procedure"),
+                        ("u2", "B.", "belief captured_unconfirmed"),
+                    )
+                },
+            }
+        )
+    )
+    core.recall_card("how?", str(tmp_path), caller)
+    core.recall_card("how?", str(tmp_path), caller)
+    lines = (tmp_path / core.RECEIPT_DIR / core.RECEIPT_FILE).read_text().splitlines()
+    assert len(lines) == 2
+    record = json.loads(lines[0])
+    assert set(record) == {"ts", "query_sha256", "trace_id", "unit_ids", "labels"}
+    # The trace that SERVED the ids must ride the receipt: a survival /v1/mark
+    # is rejected by the server unless it cites the real retrieval trace.
+    assert record["trace_id"] == "trace-123"
+    assert record["ts"].endswith("Z")
+    assert record["unit_ids"] == ["u1", "u2"]
+    assert record["labels"] == {"u1": "confirmed", "u2": "unconfirmed"}
+    expected = core.hashlib.sha256(core._bounded_query("how?", str(tmp_path)).encode()).hexdigest()
+    assert record["query_sha256"] == expected
+
+
+def test_no_receipt_on_empty_and_receipt_failure_never_raises(tmp_path):
+    empty = _fake_caller(on_call=lambda _p: _recall_body({"state": "empty"}))
+    core.recall_card("q", str(tmp_path), empty)
+    assert not (tmp_path / core.RECEIPT_DIR).exists()
+    # An unwritable cwd (a regular file) is silently ignored, still a hit.
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    hit = _fake_caller(
+        on_call=lambda _p: _recall_body(
+            {"state": "hit", "response": {"items": _items(("u1", "A.", "r"))}}
+        )
+    )
+    assert core.recall_card("q", str(blocker), hit) == "A."
+
+
+def test_receipt_is_git_excluded_inside_a_repo(tmp_path):
+    subprocess = core.subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    hit = _fake_caller(
+        on_call=lambda _p: _recall_body(
+            {"state": "hit", "response": {"items": _items(("u1", "A.", "r"))}}
+        )
+    )
+    core.recall_card("q", str(tmp_path), hit)
+    core.recall_card("q", str(tmp_path), hit)  # idempotent: one exclude line
+    exclude = (tmp_path / ".git" / "info" / "exclude").read_text().splitlines()
+    assert exclude.count(".memphant/.served.json") == 1
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=str(tmp_path), capture_output=True, text=True
+    ).stdout
+    assert ".memphant" not in status

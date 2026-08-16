@@ -8,9 +8,23 @@ per-harness adapters. Python hooks import this module; TypeScript adapters
 Two capture channels feed the Stage A trust ladder through the Part-1 write seam
 (a `retain` Episode tagged `source_ref = capture://<source>`):
 
-- **summary** — a session-end LLM summary of the transcript's LAST turn.
+- **summary** — a session-end LLM summary of the transcript's LAST turn. The
+  summarizer's first line is `TOPIC: <2-5 word noun phrase>` (the stable subject
+  `<repo_slug>:<topic>`); the bullets below it are the body, capped to the
+  injectable card size (`MAX_SUMMARY_BODY_CHARS`).
 - **mirror**  — an explicit in-repo memory-file write (MEMORY.md, AGENTS.md, ...),
   copied verbatim. No LLM.
+- **errfix**  — deterministic error->fix pairs from tool events (errfix_capture.py),
+  posted here as `kind: procedural`. No LLM.
+
+Idempotency-Key = `capture:<source>:<sha256(body)[:32]>` — the SUBJECT is the
+unit's identity, the BODY hash is the idempotency, so a new body under a stable
+subject is never dropped as a ledger-hash 409.
+
+Also here: the survival witness (`session_outcome` + `post_survival_mark`): at
+session end the injection hook's exposure receipt (`.memphant/.served.json`)
+is turned into ONE `/v1/mark` labelling the served units success|failure|
+corrected, then truncated.
 
 Both land as inert `Belief` candidates at `AgentOutput` trust; the reflect job's
 cross-check ladders them (mirror + summary agree → corroborated; diverge →
@@ -44,6 +58,7 @@ a silent no-op; a skipped turn is a normal outcome, not a failure.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -51,12 +66,17 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+import uuid
 from typing import Callable, Optional
 
 # --- ceilings -------------------------------------------------------------
 
 # A captured body is bounded so a runaway transcript cannot flood the store.
+# The MIRROR channel may carry a whole memory file; the SUMMARY channel must fit
+# the coding lane's per-card ceiling (512 tokens ≈ max(words, chars/3)), so a
+# summary is capped much lower or it silently becomes un-injectable.
 MAX_CAPTURE_BODY_CHARS = 8192
+MAX_SUMMARY_BODY_CHARS = 1200
 MAX_SUMMARIZER_INPUT_CHARS = 32 * 1024
 DEFAULT_SUMMARIZER_TIMEOUT_SECONDS = 20.0
 DEFAULT_POST_TIMEOUT_SECONDS = 3.0
@@ -65,7 +85,17 @@ DEFAULT_POST_TIMEOUT_SECONDS = 3.0
 # trivial to be worth a memory.
 MIN_MEANINGFUL_CHARS = 40
 
-CAPTURE_SOURCES = ("mirror", "summary")
+# "errfix" = the deterministic error->fix channel (see errfix_capture.py); its
+# items are built elsewhere and only POSTed through `http_poster`.
+CAPTURE_SOURCES = ("mirror", "summary", "errfix")
+
+# The summarizer's FIRST line names the topic (see scripts/battery/summarize.py):
+#   TOPIC: <2-5 word lowercase noun phrase>
+_TOPIC_LINE = re.compile(r"^\s*[-*]?\s*\**\s*topic\s*\**\s*:\s*(.+?)\s*$", re.I)
+_TOPIC_MAX_TOKENS = 6
+
+# Exposure receipt written by the injection hook (one JSON record per served hit).
+SERVED_RECEIPT_RELPATH = os.path.join(".memphant", ".served.json")
 
 
 # --- secret redaction (runs BEFORE anything else) -------------------------
@@ -295,6 +325,68 @@ def _subject_key(body: str) -> str:
     return " ".join(_tokens(body)[:8])
 
 
+def repo_slug(cwd: str) -> str:
+    """The subject namespace for a working directory: basename of the git
+    toplevel, else basename of `cwd`, else "global". Deterministic, no network."""
+    cwd = (cwd or "").strip()
+    if not cwd:
+        return "global"
+    try:
+        top = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if top.returncode == 0 and top.stdout.strip():
+            return os.path.basename(top.stdout.strip().rstrip("/")) or "global"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return os.path.basename(cwd.rstrip("/")) or "global"
+
+
+def normalise_topic(topic: str) -> str:
+    """lowercase, alnum+space only, collapsed spaces, at most 6 tokens."""
+    return " ".join(_tokens(topic)[:_TOPIC_MAX_TOKENS])
+
+
+def parse_topic(summary: str) -> tuple[Optional[str], str]:
+    """Split a summarizer output into (normalised_topic | None, body-without-the-
+    TOPIC-line). The TOPIC line must be the FIRST non-blank line; anything else
+    leaves the body untouched and returns None (legacy subject key applies)."""
+    lines = (summary or "").splitlines()
+    for idx, line in enumerate(lines):
+        if not line.strip():
+            continue
+        match = _TOPIC_LINE.match(line)
+        if not match:
+            return None, summary
+        topic = normalise_topic(match.group(1))
+        rest = "\n".join(lines[idx + 1:]).strip()
+        return (topic or None), rest
+    return None, summary
+
+
+def truncate_at_boundary(text: str, limit: int) -> str:
+    """Cap `text` at `limit` chars, cutting at the last newline before the limit
+    (never mid-bullet). Falls back to a hard cut when a single line is longer
+    than the limit."""
+    text = text or ""
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = head.rfind("\n")
+    if cut <= 0:
+        return head.rstrip()
+    return head[:cut].rstrip()
+
+
+def _idempotency_key(item: dict) -> str:
+    """Idempotency = (source, body hash). The SUBJECT is the unit's identity
+    (`fact_key`) but must NOT be the idempotency key: a stable subject with a new
+    body would otherwise mismatch the ledger's hash and be dropped as a 409."""
+    digest = hashlib.sha256((item.get("body") or "").encode("utf-8")).hexdigest()
+    return f"capture:{item['source']}:{digest[:32]}"
+
+
 # --- the orchestrator -----------------------------------------------------
 
 def build_capture(payload: dict, *, summarizer: Callable[[str], str], poster: Callable[[dict], None]) -> CaptureResult:
@@ -361,12 +453,16 @@ def build_capture(payload: dict, *, summarizer: Callable[[str], str], poster: Ca
     except Exception:
         # A summarizer failure is a silent no-op, never a broken turn.
         return _skip("summarizer_error", source)
-    # The summary is model output: redact again defensively, then bound it.
+    # The summary is model output: redact again defensively, split off the TOPIC
+    # line (the stable subject), then bound the body to the injectable card size.
     summary = redact_secrets((summary or "").strip())
-    if len(summary) < MIN_MEANINGFUL_CHARS:
+    topic, body = parse_topic(summary)
+    body = truncate_at_boundary(body.strip(), MAX_SUMMARY_BODY_CHARS)
+    if len(body) < MIN_MEANINGFUL_CHARS:
         return _skip("empty_summary", source)
-    summary = summary[:MAX_CAPTURE_BODY_CHARS]
-    item = {"source": "summary", "subject": _subject_key(summary), "body": summary, "cwd": payload.get("cwd", "")}
+    cwd = payload.get("cwd", "")
+    subject = f"{repo_slug(cwd)}:{topic}" if topic else _subject_key(body)
+    item = {"source": "summary", "subject": subject, "body": body, "cwd": cwd}
     poster(item)
     return CaptureResult(posted=True, code="posted", source="summary", subject=item["subject"])
 
@@ -421,6 +517,14 @@ def http_poster(
     """
 
     def post(item: dict) -> None:
+        # The CHANNEL is the kind hint: `capture://errfix` mints Procedural server-side
+        # (`capture_kind`); the episode payload is `deny_unknown_fields`, so no `kind`
+        # field may ride here — sending one would 422 the whole capture.
+        episode = {
+            "source_kind": "agent",
+            "body": item["body"],
+            "subject": item["subject"],
+        }
         request_body = {
             "subject_id": identity["subject_id"],
             "scope_id": identity["scope_id"],
@@ -429,25 +533,180 @@ def http_poster(
             "subject_generation": identity["subject_generation"],
             "source_ref": f"capture://{item['source']}",
             "observed_at": identity.get("observed_at", ""),
-            "payload": {
-                "episode": {
-                    "source_kind": "agent",
-                    "body": item["body"],
-                    "subject": item["subject"],
-                }
-            },
+            "payload": {"episode": episode},
         }
         data = json.dumps(request_body).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {bearer}",
-            "Idempotency-Key": f"capture:{item['source']}:{item['subject']}",
+            "Idempotency-Key": _idempotency_key(item),
         }
         request = urllib.request.Request(url, data=data, headers=headers, method="POST")
         with urllib.request.urlopen(request, timeout=timeout) as response:
             response.read(1)  # drain; we do not surface the body
 
     return post
+
+
+# --- survival witness: session outcome -> /v1/mark over the exposure receipt --
+
+_CORRECTION_MARKERS = (
+    "no,", "no.", "wrong", "revert", "that's not", "thats not", "that is not",
+    "undo", "don't do that", "dont do that", "not what i", "incorrect", "stop,",
+)
+_FAILURE_MARKERS = (
+    "i couldn't", "i could not", "unable to", "failed to", "error persists",
+    "still failing", "still fails", "i was not able", "i wasn't able",
+)
+
+
+def session_outcome(messages: list, rollout_events: Optional[list] = None) -> str:
+    """Deterministic label for the session's LAST turn: "corrected" when the final
+    USER message carries a correction marker; "failure" when the last assistant
+    turn carries an unresolved error/apology marker, or the last observed tool
+    result failed with no later success; else "success". `rollout_events` is the
+    ordered list of `{"ok": bool}` tool events (from errfix_capture) — optional."""
+    turns = [m for m in (messages or []) if isinstance(m, dict) and m.get("role") in _TEXT_ROLES]
+    last_user = next((_message_text(m) for m in reversed(turns) if m.get("role") == "user"), "")
+    last_assistant = next((_message_text(m) for m in reversed(turns) if m.get("role") == "assistant"), "")
+    lowered_user = f" {last_user.lower()} "
+    if any(marker in lowered_user for marker in _CORRECTION_MARKERS):
+        return "corrected"
+    lowered_assistant = last_assistant.lower()
+    if any(marker in lowered_assistant for marker in _FAILURE_MARKERS):
+        return "failure"
+    for event in reversed(rollout_events or []):
+        if isinstance(event, dict) and "ok" in event:
+            return "success" if event["ok"] else "failure"
+    return "success"
+
+
+def _receipt_path(cwd: str) -> str:
+    return os.path.join(cwd or ".", SERVED_RECEIPT_RELPATH)
+
+
+def read_served_receipt(cwd: str, since: Optional[str] = None) -> list:
+    """Served (injected) unit ids for this session grouped by retrieval trace:
+    `[{"trace_id", "unit_ids": [...]}, ...]`, from the injection hook's exposure
+    receipt (`<cwd>/.memphant/.served.json`, one JSON record per line
+    `{"ts","query_sha256","trace_id","unit_ids":[...],"labels":{}}`; a JSON array
+    is also tolerated). `since` (RFC3339) keeps only records at/after the session start;
+    when unset or unparsable every record counts. Missing/garbled ⇒ []."""
+    try:
+        with open(_receipt_path(cwd), "r", encoding="utf-8") as handle:
+            raw = handle.read()
+    except OSError:
+        return []
+    records = []
+    stripped = raw.strip()
+    if stripped.startswith("["):
+        try:
+            records = [r for r in json.loads(stripped) if isinstance(r, dict)]
+        except (ValueError, TypeError):
+            records = []
+    else:
+        for line in stripped.splitlines():
+            try:
+                record = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+    seen, groups = set(), {}
+    since_key = _ts_key(since) if since else None
+    for record in records:
+        ts_key = _ts_key(record.get("ts"))
+        if since_key and ts_key and ts_key < since_key:
+            continue
+        # A mark is a verdict on ONE retrieval trace (the server rejects a mark
+        # whose trace_id it never served), so served ids stay grouped by trace.
+        trace_id = record.get("trace_id")
+        for unit_id in record.get("unit_ids") or []:
+            if isinstance(unit_id, str) and unit_id not in seen:
+                seen.add(unit_id)
+                groups.setdefault(trace_id, []).append(unit_id)
+    return [{"trace_id": tid, "unit_ids": ids} for tid, ids in groups.items() if ids]
+
+
+def _ts_key(value) -> Optional[str]:
+    """Second-granular UTC sort key `YYYY-MM-DDTHH:MM:SS` for an RFC3339 string
+    (any offset/fraction shape) or an epoch number; None when unparsable."""
+    from datetime import datetime, timezone
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(float(value), timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        if isinstance(value, str) and value:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc)
+            return parsed.strftime("%Y-%m-%dT%H:%M:%S")
+    except (ValueError, OverflowError, OSError):
+        pass
+    return None
+
+
+def clear_served_receipt(cwd: str) -> None:
+    try:
+        with open(_receipt_path(cwd), "w", encoding="utf-8"):
+            pass
+    except OSError:
+        pass
+
+
+def mark_url_from_capture_url(capture_url: str) -> str:
+    """`.../v1/episodes` -> `.../v1/mark` (same host, same auth)."""
+    return re.sub(r"/v1/episodes/?$", "/v1/mark", (capture_url or "").rstrip())
+
+
+def http_marker(url: str, bearer: str, identity: dict, timeout: float = DEFAULT_POST_TIMEOUT_SECONDS) -> Callable[..., None]:
+    """A `/v1/mark` poster: `mark(outcome, used_ids, trace_id)`. Request shape = the
+    server's `MarkRequest` (identity + trace_id + caller_id + used_ids + outcome
+    ∈ success|failure|corrected|ignored)."""
+
+    def mark(outcome: str, used_ids: list, trace_id: Optional[str] = None) -> None:
+        request_body = {
+            "subject_id": identity["subject_id"],
+            "scope_id": identity["scope_id"],
+            "actor_id": identity["actor_id"],
+            "agent_node_id": identity["agent_node_id"],
+            "subject_generation": identity["subject_generation"],
+            # The trace that SERVED these ids (from the exposure receipt); the
+            # server rejects a mark citing a trace it never produced.
+            "trace_id": str(trace_id) if trace_id else str(uuid.uuid4()),
+            "caller_id": "memphant-capture",
+            "used_ids": list(used_ids),
+            "outcome": outcome,
+        }
+        data = json.dumps(request_body).encode("utf-8")
+        # `mark` is a mutation: the server requires an Idempotency-Key. Deterministic
+        # over (outcome, served ids) so a hook re-run for the same session is a replay.
+        idem = hashlib.sha256(f"{outcome}:{trace_id}:{','.join(sorted(map(str, used_ids)))}".encode()).hexdigest()[:32]
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {bearer}",
+            "Idempotency-Key": f"capture-mark:{idem}",
+        }
+        request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response.read(1)
+
+    return mark
+
+
+def post_survival_mark(cwd: str, outcome: str, marker: Callable[..., None], since: Optional[str] = None) -> str:
+    """The Stop-hook survival witness: read the exposure receipt, POST one mark
+    labelling every served unit with the session `outcome`, then truncate the
+    receipt. Returns a secret-free status code; NEVER raises."""
+    try:
+        groups = read_served_receipt(cwd, since=since)
+        if not groups:
+            return "no_receipt"
+        for group in groups:  # one mark per retrieval trace that served ids
+            marker(outcome, group["unit_ids"], group.get("trace_id"))
+        clear_served_receipt(cwd)
+        return f"marked_{outcome}"
+    except Exception:
+        return "mark_error"
 
 
 def load_transcript_messages(path: str) -> list:
@@ -572,11 +831,23 @@ def main(argv=None, stdin=None, stderr=None) -> int:
     poster = http_poster(config["url"], config["bearer"], config["identity"])
     try:
         result = build_capture(payload, summarizer=summarizer, poster=poster)
+        print(f"memphant-capture: code={result.code}", file=stderr)
     except Exception:
         # Never break a host turn; never surface a body.
         print("memphant-capture: no-capture code=internal", file=stderr)
-        return 0
-    print(f"memphant-capture: code={result.code}", file=stderr)
+
+    # Session-end tail for the CLI adapters (pi/opencode `turn_end` → summary):
+    # survival witness over the exposure receipt + the AGENTS.md projection.
+    cwd = payload.get("cwd") or ""
+    if payload.get("source") == "summary" and cwd:
+        marker = http_marker(mark_url_from_capture_url(config["url"]), config["bearer"], config["identity"])
+        outcome = session_outcome(payload.get("messages") or [])
+        print(f"memphant-capture: survival={post_survival_mark(cwd, outcome, marker)}", file=stderr)
+        try:
+            from memphant_projection import project  # local: projection imports this module
+            print(f"memphant-capture: projection={project(cwd)}", file=stderr)
+        except Exception:
+            print("memphant-capture: projection=projection_error", file=stderr)
     return 0
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code memory-injection hook: inject at most one MemPhant card.
+"""Claude Code memory-injection hook: inject the MemPhant advisory block (<=5 labelled cards).
 
 Thin adapter over the shared recall core (`plugins/_shared/memphant_recall.py`).
 This file owns ONLY Claude Code's input-parsing, its 10k injection cap, and its

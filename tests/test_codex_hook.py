@@ -62,25 +62,43 @@ def _event():
     return {"prompt": "how do we deploy?", "cwd": "/repo", "session_id": "s1"}
 
 
+def _hit(items):
+    return _fake_caller(on_call=lambda _p: _recall_body({"state": "hit", "response": {"items": items}}))
+
+
 def test_hit_injects_the_single_card():
-    caller = _fake_caller(
-        on_call=lambda _p: _recall_body(
-            {"state": "hit", "response": {"items": [{"body": "Run make deploy."}]}}
-        )
-    )
-    out, err = _run(_event(), caller)
+    items = [{"unit_id": "u1", "body": "Run make deploy.", "inclusion_reason": "validated_procedure"}]
+    out, err = _run(_event(), _hit(items))
     assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
     # Codex injects the same memori advisory block as every other adapter.
     injected = out["hookSpecificOutput"]["additionalContext"]
-    assert injected == hook.build_block(
-        "how do we deploy?", "/repo", _fake_caller(
-            on_call=lambda _p: _recall_body(
-                {"state": "hit", "response": {"items": [{"body": "Run make deploy."}]}}
-            )
-        )
-    )
+    assert injected == hook.build_block("how do we deploy?", "/repo", _hit(items))
     assert "<memphant_memory>" in injected and "Run make deploy." in injected
+    assert "[unconfirmed]" not in injected  # confirmed items carry no label
     assert err == ""
+
+
+def test_hit_injects_n_cards_in_served_order_with_labels(tmp_path):
+    items = [
+        {"unit_id": "u1", "body": "Run make deploy.", "inclusion_reason": "validated_procedure"},
+        {"unit_id": "u2", "body": "Migrations go first.", "inclusion_reason": "belief captured_unconfirmed"},
+        {"unit_id": "u3", "body": "Then smoke-test.", "inclusion_reason": "belief captured_confirmed"},
+    ]
+    event = {"prompt": "how do we deploy?", "cwd": str(tmp_path), "session_id": "s1"}
+    out, err = _run(event, _hit(items))
+    injected = out["hookSpecificOutput"]["additionalContext"]
+    assert injected.count("\n- ") == 3, injected
+    assert injected.index("Run make deploy.") < injected.index("Migrations go first.") < injected.index("Then smoke-test.")
+    assert "- [unconfirmed] Migrations go first." in injected
+    assert "[unconfirmed] Run make deploy." not in injected
+    assert "[unconfirmed] Then smoke-test." not in injected
+    assert err == ""
+    # Exposure receipt: the Stop hook reads which units were actually served.
+    receipt = (tmp_path / ".memphant" / ".served.json").read_text().splitlines()
+    assert len(receipt) == 1
+    record = json.loads(receipt[0])
+    assert record["unit_ids"] == ["u1", "u2", "u3"]
+    assert record["labels"] == {"u1": "confirmed", "u2": "unconfirmed", "u3": "confirmed"}
 
 
 def test_empty_injects_nothing_without_error():
