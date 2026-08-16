@@ -2622,6 +2622,7 @@ async fn seed_captured_belief<S: MemoryStore>(
                     source,
                     ladder,
                     witnesses,
+                    truncated: false,
                 }),
             },
         )
@@ -2715,6 +2716,198 @@ pub async fn capture_crosscheck_promotes_and_quarantines_across_the_write_seam<H
         .await
         .expect("crosscheck idempotent");
     assert!(again.is_empty(), "cross-check must be idempotent");
+}
+
+/// One capture POST through the service write seam: a `retain` Episode tagged
+/// `capture://<family>` keyed on `subject`, at the agent clamp.
+async fn post_capture<S: MutationLedgerStore + Clone + 'static>(
+    svc: &MemoryService<S>,
+    context: &ResolvedMemoryContext,
+    idempotency_key: &str,
+    family: &str,
+    subject: &str,
+    body: &str,
+) {
+    svc.retain(
+        context,
+        idempotency_key,
+        TrustLevel::AgentOutput,
+        RetainEpisodeHttpRequest {
+            subject_id: context.data_subject_id,
+            scope_id: context.scope_id,
+            actor_id: context.actor_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            source_ref: format!("capture://{family}"),
+            observed_at: CLOCK.0.to_string(),
+            payload: RetainPayload::Episode(memphant_types::RetainEpisodePayload {
+                source_kind: "agent".to_string(),
+                body: body.to_string(),
+                subject: Some(subject.to_string()),
+                predicate: None,
+            }),
+        },
+    )
+    .await
+    .expect("retain capture");
+    let outcome = svc
+        .run_worker_tick_scoped(tenant_filter(context), usize::MAX)
+        .await
+        .expect("worker tick");
+    assert_eq!(
+        outcome.failed, 0,
+        "capture job must not dead-letter: {outcome:?}"
+    );
+}
+
+/// The SAME-CHANNEL capture arm, driven through the service on both stores:
+/// a `summary` re-capture of one key with an agreeing (normalised-equal) body
+/// REINFORCES the open unit (no fragment; `reinforcement_count` 1,
+/// `last_reinforced_at` set); a re-capture with a NEW body SUPERSEDES it within
+/// the channel (old `Superseded` + transaction-closed, `Supersedes` edge
+/// new→old, count carried) — the insert of the second open generation on one
+/// key is legal on PG because the old row is closed first. The captured
+/// `Candidate` is served on the coding lane labelled `captured_unconfirmed`
+/// and NOT on the general lane. Every positive has its perturbation inline.
+pub async fn same_channel_capture_reinforces_supersedes_and_serves_on_the_coding_lane<
+    H: StoreHarness,
+>(
+    h: &H,
+) {
+    let store = h.store();
+    let tenant = h.fresh_tenant().await;
+    let context = bind_context(store, tenant).await;
+    let svc = service(store);
+    let open_captured = || async {
+        store
+            .fetch_scope_open_units(&context)
+            .await
+            .expect("open units")
+            .into_iter()
+            .filter(|unit| unit.capture.is_some())
+            .collect::<Vec<_>>()
+    };
+    let lane = |compact_only: bool| {
+        let mut request = recall_request(&context, "which command runs the integration suite");
+        request.compact_only = compact_only;
+        request
+    };
+
+    post_capture(
+        &svc,
+        &context,
+        "cap-pg-1",
+        "summary",
+        "integration suite",
+        "Run the integration suite with make integ.",
+    )
+    .await;
+    let first = open_captured().await;
+    assert_eq!(first.len(), 1, "one captured unit: {first:?}");
+    assert_eq!(first[0].state, UnitState::Candidate);
+    assert_eq!(first[0].reinforcement_count, 0);
+    assert!(
+        first[0].compact.is_none(),
+        "captures carry no compact envelope"
+    );
+
+    // Coding lane serves the unconfirmed capture, labelled; general lane does not.
+    let coding = recall(store, lane(true), None, &CLOCK)
+        .await
+        .expect("recall");
+    let served = coding
+        .items
+        .iter()
+        .find(|item| item.unit_id == first[0].id)
+        .expect("coding lane serves the captured Candidate");
+    assert_eq!(served.inclusion_reason, "captured_unconfirmed");
+    let general = recall(store, lane(false), None, &CLOCK)
+        .await
+        .expect("recall");
+    assert!(
+        general.items.iter().all(|item| item.unit_id != first[0].id),
+        "general lane keeps Candidate invisible: {:?}",
+        general.items
+    );
+
+    // Same channel, agreeing body (whitespace/case jitter) ⇒ reinforce.
+    post_capture(
+        &svc,
+        &context,
+        "cap-pg-2",
+        "summary",
+        "integration suite",
+        "run the integration   suite with make INTEG.",
+    )
+    .await;
+    let reinforced = open_captured().await;
+    assert_eq!(reinforced.len(), 1, "no fragment: {reinforced:?}");
+    assert_eq!(reinforced[0].id, first[0].id);
+    assert_eq!(reinforced[0].reinforcement_count, 1);
+    assert!(reinforced[0].last_reinforced_at.is_some());
+
+    // Same channel, new body ⇒ supersede within the channel.
+    post_capture(
+        &svc,
+        &context,
+        "cap-pg-3",
+        "summary",
+        "integration suite",
+        "Run the integration suite with cargo test --features integ.",
+    )
+    .await;
+    let open = open_captured().await;
+    assert_eq!(open.len(), 1, "one open unit after supersession: {open:?}");
+    let new = &open[0];
+    assert_ne!(new.id, first[0].id);
+    assert_eq!(new.reinforcement_count, 1, "count carried forward");
+    let old = store
+        .fetch_units_by_ids(&context, &[first[0].id])
+        .await
+        .expect("fetch old")
+        .pop()
+        .expect("old unit still stored");
+    assert_eq!(old.state, UnitState::Superseded);
+    assert!(old.transaction_to.is_some());
+    let edges = store
+        .fetch_edges(&context, &[new.id, old.id], &deep_time(CLOCK.0))
+        .await
+        .expect("edges");
+    assert!(
+        edges.iter().any(|edge| {
+            edge.kind == memphant_types::MemoryEdgeKind::Supersedes
+                && edge.src_id == new.id
+                && edge.dst_id == old.id
+        }),
+        "Supersedes edge new→old: {edges:?}"
+    );
+    let coding = recall(store, lane(true), None, &CLOCK)
+        .await
+        .expect("recall");
+    assert!(coding.items.iter().any(|item| item.unit_id == new.id));
+    assert!(
+        coding.items.iter().all(|item| item.unit_id != old.id),
+        "perturbation: the superseded capture is no longer served"
+    );
+
+    // Different channel on the same key still coexists (the witness rule).
+    post_capture(
+        &svc,
+        &context,
+        "cap-pg-4",
+        "mirror",
+        "integration suite",
+        "Run the integration suite with cargo test --features integ.",
+    )
+    .await;
+    let after_mirror = store
+        .fetch_scope_open_units(&context)
+        .await
+        .expect("open units")
+        .into_iter()
+        .filter(|unit| unit.capture.is_some())
+        .count();
+    assert_eq!(after_mirror, 2, "mirror + summary coexist on one key");
 }
 
 /// Two captured BELIEF units on ONE subject key coexist in the store — the

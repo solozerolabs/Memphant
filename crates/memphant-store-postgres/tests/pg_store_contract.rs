@@ -1888,6 +1888,7 @@ pg_contract_test!(caller_subject_key_supersedes_without_client_derivation);
 pg_contract_test!(scope_memory_page_paginates_without_overlap);
 pg_contract_test!(capture_crosscheck_promotes_and_quarantines_across_the_write_seam);
 pg_contract_test!(same_subject_captured_beliefs_coexist_for_collision);
+pg_contract_test!(same_channel_capture_reinforces_supersedes_and_serves_on_the_coding_lane);
 
 #[tokio::test]
 #[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]

@@ -222,6 +222,18 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
 
 const MCP_RECALL_BUDGET_TOKENS: usize = 512;
 
+/// How many compact items the coding-agent recall lane may serve per call.
+///
+/// Peer injection systems (memori, mem0, claude-mem, ...) default to 5–10
+/// budgeted items; we were serving exactly one, so every trace showed
+/// `dropped: output_limit` and validated procedures never travelled together.
+/// The 512-token budget above is the binding ceiling — three items is what fits
+/// without diluting precision (SWE-ContextBench: misfired context is
+/// net-negative), and the harness renders each with a confirmed/unconfirmed
+/// label. Hard cap 5.
+const MCP_RECALL_ITEM_LIMIT: usize = 3;
+const _: () = assert!(MCP_RECALL_ITEM_LIMIT <= 5);
+
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct McpRecallRequest {
@@ -628,7 +640,7 @@ impl MemphantMcp {
             agent_node_id: context.agent_node_id,
             subject_generation: context.subject_generation,
             query: request.query,
-            limit: Some(1),
+            limit: Some(MCP_RECALL_ITEM_LIMIT),
             budget_tokens: Some(MCP_RECALL_BUDGET_TOKENS),
             mode: Some(memphant_types::RecallMode::Fast),
             include_beliefs: Some(true),
@@ -1030,12 +1042,17 @@ mod recall_wire_contract {
         assert_eq!(resolved.actor_trust, TrustLevel::VerifiedTool);
     }
 
-    #[tokio::test]
-    async fn recall_delivers_the_complete_validated_procedure_in_source_order() {
-        const BODY_CHUNK: &str = "BODY_SENTINEL recall-budget-anchor. Inspect the consumer workflow and zero-job run before choosing the integration boundary. Preserve the exact repository ref and determine whether failure occurred during workflow resolution. This context is deliberately padded so the old MCP budget leaves no room for later procedure steps.";
-        const ACTION_CHUNK: &str = "ACTION_SENTINEL package the required gate as a versioned step-level action, then invoke it from the consumer workflow.";
-        const CHECK_CHUNK: &str = "CHECK_SENTINEL exercise the consumer call site and confirm the workflow creates the expected job before accepting the change.";
-
+    /// One bound tenant over an in-memory store: the service (for seeding
+    /// through sanctioned write paths) plus the `BoundTenant` an MCP session
+    /// would resolve. `max_trust` is the api key ceiling.
+    fn bound_fixture(
+        key_hash: &str,
+        max_trust: TrustLevel,
+    ) -> (
+        memphant_types::ResolvedMemoryContext,
+        MemoryService<AnyStore>,
+        BoundTenant,
+    ) {
         let tenant = TenantId::new();
         let scope = ScopeId::new();
         let actor = ActorId::new();
@@ -1043,13 +1060,12 @@ mod recall_wire_contract {
         let store = InMemoryStore::default();
         store.seed_context_binding(&context);
         let key_id = uuid::Uuid::new_v4();
-        let key_hash = "mcp-recall-budget".to_string();
         store.insert_api_key(ApiKeyRow {
             id: key_id,
             tenant_id: tenant,
-            key_hash: key_hash.clone(),
-            label: "recall budget".to_string(),
-            max_trust: TrustLevel::TrustedSystem,
+            key_hash: key_hash.to_string(),
+            label: key_hash.to_string(),
+            max_trust,
             data_subject_id: Some(context.data_subject_id),
             subject_generation: Some(context.subject_generation),
             actor_id: Some(actor),
@@ -1064,25 +1080,45 @@ mod recall_wire_contract {
             Arc::new(SystemClock),
             Arc::new(NoopEmbedding),
         );
-        // Seed a compact procedural memory through the sanctioned write path.
-        // Its single body carries the three sentinels in source order, so the
-        // compact-only MCP recall lane serves the complete procedure.
+        let bound = BoundTenant {
+            tenant,
+            max_trust,
+            subject_id: Some(context.data_subject_id),
+            subject_generation: Some(context.subject_generation),
+            actor_id: Some(actor),
+            scope_id: Some(scope),
+            agent_node_id: Some(context.agent_node_id),
+            api_key_id: Some(key_id),
+            api_key_hash: Some(key_hash.to_string()),
+            dev_mode: false,
+        };
+        (context, service, bound)
+    }
+
+    /// Seed one compact procedural memory through the sanctioned write path.
+    async fn seed_procedure(
+        service: &MemoryService<AnyStore>,
+        context: &memphant_types::ResolvedMemoryContext,
+        idempotency_key: &str,
+        trigger: &str,
+        body: &str,
+    ) {
         service
             .remember(
-                &context,
-                "mcp-recall-budget-seed",
+                context,
+                idempotency_key,
                 TrustLevel::TrustedSystem,
                 memphant_types::RememberRequest {
                     kind: MemoryKind::Procedural,
-                    body: [BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK].join("\n"),
-                    trigger: "recall budget anchor".to_string(),
+                    body: body.to_string(),
+                    trigger: trigger.to_string(),
                     verification: "the consumer workflow creates the expected job".to_string(),
                     target_scope_id: None,
                     valid_from: None,
                     valid_to: None,
                     source: memphant_types::MemorySourceInput {
                         kind: "user".to_string(),
-                        r#ref: "test:mcp-recall-budget".to_string(),
+                        r#ref: format!("test:{idempotency_key}"),
                         observed_at: "2026-08-14T00:00:00Z".to_string(),
                         episode_id: None,
                         resource_id: None,
@@ -1091,29 +1127,39 @@ mod recall_wire_contract {
             )
             .await
             .expect("seed compact procedure");
-        let mcp = MemphantMcp::new(
-            service,
-            BoundTenant {
-                tenant,
-                max_trust: TrustLevel::TrustedSystem,
-                subject_id: Some(context.data_subject_id),
-                subject_generation: Some(context.subject_generation),
-                actor_id: Some(actor),
-                scope_id: Some(scope),
-                agent_node_id: Some(context.agent_node_id),
-                api_key_id: Some(key_id),
-                api_key_hash: Some(key_hash),
-                dev_mode: false,
-            },
-        );
+    }
 
+    async fn recall_structured(mcp: &MemphantMcp, query: &str) -> Value {
         let result = mcp
             .recall(Parameters(McpRecallRequest {
-                query: "recall budget anchor".to_string(),
+                query: query.to_string(),
             }))
             .await;
         assert_ne!(result.is_error, Some(true), "recall succeeds");
-        let structured = result.structured_content.expect("structured recall");
+        result.structured_content.expect("structured recall")
+    }
+
+    #[tokio::test]
+    async fn recall_delivers_the_complete_validated_procedure_in_source_order() {
+        const BODY_CHUNK: &str = "BODY_SENTINEL recall-budget-anchor. Inspect the consumer workflow and zero-job run before choosing the integration boundary. Preserve the exact repository ref and determine whether failure occurred during workflow resolution. This context is deliberately padded so the old MCP budget leaves no room for later procedure steps.";
+        const ACTION_CHUNK: &str = "ACTION_SENTINEL package the required gate as a versioned step-level action, then invoke it from the consumer workflow.";
+        const CHECK_CHUNK: &str = "CHECK_SENTINEL exercise the consumer call site and confirm the workflow creates the expected job before accepting the change.";
+
+        let (context, service, bound) =
+            bound_fixture("mcp-recall-budget", TrustLevel::TrustedSystem);
+        // Its single body carries the three sentinels in source order, so the
+        // compact-only MCP recall lane serves the complete procedure.
+        seed_procedure(
+            &service,
+            &context,
+            "mcp-recall-budget-seed",
+            "recall budget anchor",
+            &[BODY_CHUNK, ACTION_CHUNK, CHECK_CHUNK].join("\n"),
+        )
+        .await;
+        let mcp = MemphantMcp::new(service, bound);
+
+        let structured = recall_structured(&mcp, "recall budget anchor").await;
         assert_eq!(structured["state"], "hit", "recall envelope: {structured}");
         let body = structured
             .pointer("/items/0/body")
@@ -1134,6 +1180,141 @@ mod recall_wire_contract {
                 && body.find("ACTION_SENTINEL") < body.find("CHECK_SENTINEL"),
             "procedure chunks preserve source order: {body}"
         );
+    }
+
+    #[tokio::test]
+    async fn recall_serves_several_distinct_procedures_up_to_the_item_limit() {
+        // Four short procedures on the same anchor: the lane serves more than
+        // one (the old `limit: 1` dropped the rest as `output_limit`) but never
+        // more than MCP_RECALL_ITEM_LIMIT, each a distinct unit with its own
+        // body intact — this is what the harness renders as N labelled lines.
+        let (context, service, bound) =
+            bound_fixture("mcp-recall-n-items", TrustLevel::TrustedSystem);
+        for step in 1..=4 {
+            seed_procedure(
+                &service,
+                &context,
+                &format!("mcp-recall-n-items-{step}"),
+                &format!("recall budget anchor step {step}"),
+                &format!("STEP{step}_SENTINEL recall budget anchor: run step {step} of the deploy checklist."),
+            )
+            .await;
+        }
+        let mcp = MemphantMcp::new(service, bound);
+
+        let structured = recall_structured(&mcp, "recall budget anchor deploy checklist").await;
+        assert_eq!(structured["state"], "hit", "recall envelope: {structured}");
+        let items = structured["items"].as_array().expect("items array");
+        assert!(
+            items.len() > 1 && items.len() <= MCP_RECALL_ITEM_LIMIT,
+            "serves 1 < n <= {MCP_RECALL_ITEM_LIMIT} items, got {}: {structured}",
+            items.len()
+        );
+        let unit_ids = items
+            .iter()
+            .map(|item| {
+                item["unit_id"]
+                    .as_str()
+                    .expect("unit_id is a string")
+                    .to_string()
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            unit_ids.len(),
+            items.len(),
+            "every served item is a distinct unit"
+        );
+        for item in items {
+            let body = item["body"].as_str().expect("body");
+            assert!(
+                body.contains("_SENTINEL recall budget anchor: run step "),
+                "each served body is one intact procedure: {body}"
+            );
+        }
+        // Honest empty is unchanged: an unrelated query serves nothing.
+        let empty = recall_structured(&mcp, "zzqx unrelated nonsense token").await;
+        assert_eq!(empty["state"], "empty", "unrelated query: {empty}");
+    }
+
+    #[tokio::test]
+    async fn mcp_recall_serves_a_captured_belief() {
+        // The product-lane e2e: a cross-harness CAPTURE lands exactly as
+        // plugins/_shared/memphant_capture.py::http_poster posts it (a `retain`
+        // Episode tagged `capture://summary`, `source_kind = "agent"`, with a
+        // subject key), the reflect tick mints the captured Belief, and the
+        // coding-lane MCP recall serves it.
+        const CAPTURED_BODY: &str = "CAPTURE_SENTINEL deploy runbook: run `make deploy` only after the migration job reports zero pending rows.";
+        let (context, service, bound) =
+            bound_fixture("mcp-recall-capture", TrustLevel::TrustedSystem);
+        service
+            .retain(
+                &context,
+                "capture:summary:deploy-runbook",
+                TrustLevel::TrustedSystem,
+                memphant_types::RetainEpisodeHttpRequest {
+                    subject_id: context.data_subject_id,
+                    scope_id: context.scope_id,
+                    actor_id: context.actor_id,
+                    agent_node_id: context.agent_node_id,
+                    subject_generation: context.subject_generation,
+                    source_ref: "capture://summary".to_string(),
+                    observed_at: "2026-08-14T00:00:00Z".to_string(),
+                    payload: memphant_types::RetainPayload::Episode(
+                        memphant_types::RetainEpisodePayload {
+                            source_kind: "agent".to_string(),
+                            body: CAPTURED_BODY.to_string(),
+                            subject: Some("deploy-runbook".to_string()),
+                            predicate: None,
+                        },
+                    ),
+                },
+            )
+            .await
+            .expect("retain capture");
+        let outcome = service
+            .run_worker_tick_scoped(
+                memphant_core::JobFilter {
+                    tenant: Some(context.tenant_id),
+                    scope: Some(context.scope_id),
+                },
+                16,
+            )
+            .await
+            .expect("worker tick");
+        assert_eq!(
+            outcome.failed, 0,
+            "capture job does not dead-letter: {outcome:?}"
+        );
+        let mcp = MemphantMcp::new(service, bound);
+
+        let structured = recall_structured(&mcp, "deploy runbook make deploy").await;
+        assert_eq!(
+            structured["state"], "hit",
+            "captured belief is served: {structured}"
+        );
+        let items = structured["items"].as_array().expect("items array");
+        let item = items
+            .iter()
+            .find(|item| {
+                item["body"]
+                    .as_str()
+                    .is_some_and(|body| body.contains("CAPTURE_SENTINEL"))
+            })
+            .unwrap_or_else(|| panic!("captured body is served: {structured}"));
+        assert!(
+            item["unit_id"].as_str().is_some(),
+            "served item names its unit id (exposure receipt)"
+        );
+        // Whether the capture lands Active (trusted key) or Candidate
+        // (`captured_unconfirmed`), the inclusion reason must be one the
+        // harness can label — never an unlabelled third state.
+        let reason = item["inclusion_reason"].as_str().expect("inclusion_reason");
+        if reason.contains("captured_") {
+            assert!(
+                reason.contains("captured_confirmed") || reason.contains("captured_unconfirmed"),
+                "captured inclusion reason is labelable: {reason}"
+            );
+        }
     }
 }
 

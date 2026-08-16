@@ -2425,6 +2425,13 @@ pub enum CaptureSource {
     Mirror,
     /// LLM session-end summary of the transcript.
     Summary,
+    /// Deterministic error→fix pairing (a failing command followed by the fix
+    /// that made it pass). Mints a `Procedural` card, not a `Belief`; a
+    /// DIFFERENT family from `Summary`, so an errfix and a summary that agree
+    /// form a `SourceAgreement` witness. Serialized as `errfix`, the same
+    /// token as its `capture://errfix` source_ref family.
+    #[serde(rename = "errfix")]
+    ErrFix,
 }
 
 /// The trust-ladder rung of a captured memory unit. Rides `payload.capture`; it
@@ -2475,6 +2482,11 @@ pub struct CaptureMarker {
     pub ladder: CaptureLadder,
     #[serde(default)]
     pub witnesses: Vec<CaptureWitness>,
+    /// True when the captured body was cut at a paragraph/bullet boundary to fit
+    /// the compact one-card ceiling at mint; the card is still injectable, but
+    /// the reader should know it is not the whole capture.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
 }
 
 impl CaptureMarker {
@@ -2484,6 +2496,7 @@ impl CaptureMarker {
             source,
             ladder: CaptureLadder::Captured,
             witnesses: Vec::new(),
+            truncated: false,
         }
     }
 

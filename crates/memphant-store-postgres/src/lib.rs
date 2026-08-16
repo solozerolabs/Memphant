@@ -33,10 +33,12 @@ const TASK_OUTCOME_LEDGER_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260808_010_task_outcome_ledger.sql");
 const PORTABLE_AGENT_MEMORY_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260814_011_portable_agent_memory.sql");
+const DROP_DEAD_TABLES_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260815_012_drop_dead_tables.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260814_011_portable_agent_memory";
+pub const MIGRATION_HEAD: &str = "20260815_012_drop_dead_tables";
 
 /// Bundled migrations in apply order.
 ///
@@ -75,7 +77,11 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ("20260801_008_drop_retention_tier", DROP_RETENTION_TIER_SQL),
     ("20260801_009_drop_dead_schema", DROP_DEAD_SCHEMA_SQL),
     ("20260808_010_task_outcome_ledger", TASK_OUTCOME_LEDGER_SQL),
-    (MIGRATION_HEAD, PORTABLE_AGENT_MEMORY_SQL),
+    (
+        "20260814_011_portable_agent_memory",
+        PORTABLE_AGENT_MEMORY_SQL,
+    ),
+    (MIGRATION_HEAD, DROP_DEAD_TABLES_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[
@@ -93,13 +99,9 @@ const REQUIRED_TABLES: &[&str] = &[
     "embedding_profile",
     "embedding",
     "citation",
-    "trust_event",
-    "event_outbox",
     "retrieval_trace",
     "deletion_generation",
     "job_state",
-    "blob_ledger",
-    "belief_observation",
     "review_event",
     "mutation_ledger",
     "task_outcome",

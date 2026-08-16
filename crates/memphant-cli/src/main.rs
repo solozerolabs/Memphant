@@ -96,7 +96,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: memphant <compile|sync|verify|lock|retain|recall|reflect|correct|forget|mark|trace|structured-state|db|admin> [options]; memory context commands use --subject-id <uuid> --scope <uuid> --actor <uuid> --agent-node <uuid> --subject-generation <n> (env: MEMPHANT_URL, MEMPHANT_API_KEY)"
+                "usage: memphant <compile|sync|verify|lock|retain|recall|reflect|correct|forget|mark|trace|structured-state|db|admin> [options]; memory context commands use --subject-id <uuid> --scope <uuid> --actor <uuid> --agent-node <uuid> --subject-generation <n> or env MEMPHANT_SUBJECT_ID/MEMPHANT_SCOPE_ID/MEMPHANT_ACTOR_ID/MEMPHANT_AGENT_NODE_ID/MEMPHANT_SUBJECT_GENERATION (env: MEMPHANT_URL or MEMPHANT_CAPTURE_URL, MEMPHANT_API_KEY); recall prints a card, --json for raw"
             );
             ExitCode::from(2)
         }
@@ -142,6 +142,7 @@ mod http_verbs {
                 ),
                 None,
                 None,
+                true,
             );
         }
         if !positional.is_empty() {
@@ -157,10 +158,51 @@ mod http_verbs {
             "mark" => "/v1/mark",
             other => return Err(format!("unknown verb: {other}")),
         };
+        // Mutating verbs need an idempotency key; a fresh uuid is the env-only
+        // default so an agent can `memphant retain ...` without minting one.
         let idempotency_key = matches!(verb, "retain" | "reflect" | "correct" | "forget" | "mark")
-            .then(|| required(&flags, "idempotency-key").map(str::to_string))
-            .transpose()?;
-        request("POST", path, Some(body), idempotency_key.as_deref())
+            .then(|| {
+                flags
+                    .get("idempotency-key")
+                    .cloned()
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+            });
+        let raw = verb != "recall" || flags.contains_key("json");
+        request("POST", path, Some(body), idempotency_key.as_deref(), raw)
+    }
+
+    /// The compact human-readable recall card (default `recall` output). One
+    /// line per item — `[unit_id] kind: body` — plus the trace id so the
+    /// agent can `memphant mark --trace <id> --success --used <ids>`.
+    pub(crate) fn render_card(response: &Value) -> String {
+        let items = response
+            .get("items")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let trace = response
+            .get("trace_id")
+            .and_then(Value::as_str)
+            .unwrap_or("-");
+        if items.is_empty() {
+            return format!("memphant: no memory for this query (trace {trace})\n");
+        }
+        let mut out = format!("memphant memory ({} items, trace {trace}):\n", items.len());
+        for item in &items {
+            let id = item.get("unit_id").and_then(Value::as_str).unwrap_or("?");
+            let kind = item.get("kind").and_then(Value::as_str).unwrap_or("?");
+            let body = item
+                .get("body")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .replace('\n', "\n    ");
+            out.push_str(&format!("- [{id}] {kind}: {body}\n"));
+        }
+        out.push_str("mark outcome: memphant mark --trace ");
+        out.push_str(trace);
+        out.push_str(" --success --used <unit_id,...>\n");
+        out
     }
 
     /// `--flag value` pairs plus bare `--resource` style booleans.
@@ -190,6 +232,10 @@ mod http_verbs {
         Ok((flags, positional))
     }
 
+    fn now_rfc3339() -> String {
+        jiff::Timestamp::now().to_string()
+    }
+
     fn required<'a>(flags: &'a HashMap<String, String>, name: &str) -> Result<&'a str, String> {
         flags
             .get(name)
@@ -197,15 +243,34 @@ mod http_verbs {
             .ok_or_else(|| format!("missing required flag --{name}"))
     }
 
-    fn ids(
+    /// A flag value, or the named env var when the flag is absent. Lets the
+    /// battery / a coding agent drive the verbs with identity from the
+    /// environment (`MEMPHANT_SUBJECT_ID` …) instead of five flags per call.
+    fn flag_or_env(
+        flags: &HashMap<String, String>,
+        name: &str,
+        env: &str,
+    ) -> Result<String, String> {
+        flags
+            .get(name)
+            .cloned()
+            .or_else(|| {
+                std::env::var(env)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+            })
+            .ok_or_else(|| format!("missing required flag --{name} (or env {env})"))
+    }
+
+    pub(crate) fn ids(
         flags: &HashMap<String, String>,
     ) -> Result<(String, String, String, String, u64), String> {
         Ok((
-            required(flags, "subject-id")?.to_string(),
-            required(flags, "scope")?.to_string(),
-            required(flags, "actor")?.to_string(),
-            required(flags, "agent-node")?.to_string(),
-            required(flags, "subject-generation")?
+            flag_or_env(flags, "subject-id", "MEMPHANT_SUBJECT_ID")?,
+            flag_or_env(flags, "scope", "MEMPHANT_SCOPE_ID")?,
+            flag_or_env(flags, "actor", "MEMPHANT_ACTOR_ID")?,
+            flag_or_env(flags, "agent-node", "MEMPHANT_AGENT_NODE_ID")?,
+            flag_or_env(flags, "subject-generation", "MEMPHANT_SUBJECT_GENERATION")?
                 .parse()
                 .map_err(|error| format!("--subject-generation: {error}"))?,
         ))
@@ -254,8 +319,8 @@ mod http_verbs {
                     "actor_id": actor,
                     "agent_node_id": agent_node_id,
                     "subject_generation": subject_generation,
-                    "source_ref": required(flags, "source-ref")?,
-                    "observed_at": required(flags, "observed-at")?,
+                    "source_ref": flags.get("source-ref").cloned().unwrap_or_else(|| "memphant-cli".to_string()),
+                    "observed_at": flags.get("observed-at").cloned().unwrap_or_else(now_rfc3339),
                     "payload": payload,
                 }))
             }
@@ -273,6 +338,8 @@ mod http_verbs {
                     "budget_tokens": flags.get("budget-tokens").map(|value| value.parse::<usize>()
                         .map_err(|error| format!("--budget-tokens: {error}"))).transpose()?,
                     "mode": flags.get("mode"),
+                    "include_beliefs": flags.contains_key("include-beliefs").then_some(true),
+                    "compact_only": flags.contains_key("compact-only"),
                     "transaction_as_of": flags.get("transaction-as-of"),
                     "valid_at": flags.get("valid-at"),
                 }))
@@ -337,11 +404,47 @@ mod http_verbs {
                         .get("used")
                         .map(|used| used.split(',').map(str::trim).filter(|id| !id.is_empty()).collect::<Vec<_>>())
                         .unwrap_or_default(),
-                    "outcome": required(flags, "outcome")?,
+                    "outcome": mark_outcome(flags)?,
                 }))
             }
             other => Err(format!("unknown verb: {other}")),
         }
+    }
+
+    /// `--outcome <o>` or one of the bare `--success|--failure|--corrected|--ignored`.
+    fn mark_outcome(flags: &HashMap<String, String>) -> Result<String, String> {
+        if let Some(outcome) = flags.get("outcome") {
+            return Ok(outcome.clone());
+        }
+        ["success", "failure", "corrected", "ignored"]
+            .into_iter()
+            .find(|name| flags.contains_key(*name))
+            .map(str::to_string)
+            .ok_or_else(|| {
+                "missing --outcome <success|failure|corrected|ignored> (or --success …)".to_string()
+            })
+    }
+
+    /// `MEMPHANT_URL`, else the origin of `MEMPHANT_CAPTURE_URL` (the battery
+    /// / hooks export `<base>/v1/episodes`), else the local default.
+    pub(crate) fn base_url() -> String {
+        std::env::var("MEMPHANT_URL")
+            .ok()
+            .filter(|url| !url.trim().is_empty())
+            .or_else(|| {
+                std::env::var("MEMPHANT_CAPTURE_URL")
+                    .ok()
+                    .filter(|url| !url.trim().is_empty())
+                    .and_then(|url| origin_of(&url))
+            })
+            .unwrap_or_else(|| DEFAULT_URL.to_string())
+    }
+
+    /// `scheme://host[:port]` of a URL, or `None` when it has no scheme.
+    pub(crate) fn origin_of(url: &str) -> Option<String> {
+        let (scheme, rest) = url.split_once("://")?;
+        let host = rest.split('/').next()?.split('?').next()?;
+        (!host.is_empty()).then(|| format!("{scheme}://{host}"))
     }
 
     fn request(
@@ -349,11 +452,9 @@ mod http_verbs {
         path: &str,
         body: Option<Value>,
         idempotency_key: Option<&str>,
+        raw: bool,
     ) -> Result<ExitCode, String> {
-        let base = std::env::var("MEMPHANT_URL")
-            .ok()
-            .filter(|url| !url.trim().is_empty())
-            .unwrap_or_else(|| DEFAULT_URL.to_string());
+        let base = base_url();
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .http_status_as_error(false)
@@ -391,15 +492,99 @@ mod http_verbs {
             .body_mut()
             .read_json()
             .map_err(|error| format!("{method} {url}: non-JSON response: {error}"))?;
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
-        );
+        if raw || !(200..300).contains(&status) {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).map_err(|error| error.to_string())?
+            );
+        } else {
+            print!("{}", render_card(&value));
+        }
         if (200..300).contains(&status) {
             Ok(ExitCode::SUCCESS)
         } else {
             eprintln!("http_status={status}");
             Ok(ExitCode::from(1))
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn identity_falls_back_to_env_and_flags_win() {
+            // Process-global env: one test owns all five vars.
+            let vars = [
+                ("MEMPHANT_SUBJECT_ID", "s-env"),
+                ("MEMPHANT_SCOPE_ID", "scope-env"),
+                ("MEMPHANT_ACTOR_ID", "actor-env"),
+                ("MEMPHANT_AGENT_NODE_ID", "agent-env"),
+                ("MEMPHANT_SUBJECT_GENERATION", "3"),
+            ];
+            for (name, value) in vars {
+                // SAFETY: single-threaded test module; no other test reads these.
+                unsafe { std::env::set_var(name, value) };
+            }
+            let env_only = ids(&HashMap::new()).expect("env identity");
+            assert_eq!(
+                env_only,
+                (
+                    "s-env".into(),
+                    "scope-env".into(),
+                    "actor-env".into(),
+                    "agent-env".into(),
+                    3
+                )
+            );
+            let flags = HashMap::from([("subject-id".to_string(), "s-flag".to_string())]);
+            assert_eq!(ids(&flags).expect("flag wins").0, "s-flag");
+            for (name, _) in vars {
+                unsafe { std::env::remove_var(name) };
+            }
+            let error = ids(&HashMap::new()).expect_err("no identity anywhere");
+            assert!(
+                error.contains("--subject-id") && error.contains("MEMPHANT_SUBJECT_ID"),
+                "{error}"
+            );
+        }
+
+        #[test]
+        fn base_url_uses_capture_url_origin() {
+            assert_eq!(
+                origin_of("http://127.0.0.1:8091/v1/episodes").as_deref(),
+                Some("http://127.0.0.1:8091")
+            );
+            assert_eq!(origin_of("not a url"), None);
+        }
+
+        #[test]
+        fn card_renders_items_and_trace() {
+            let card = render_card(&json!({
+                "trace_id": "t-1",
+                "items": [
+                    {"unit_id": "u-1", "kind": "procedural", "body": "use make types\nbefore commit"},
+                    {"unit_id": "u-2", "kind": "semantic", "body": "KV binding map is required"}
+                ]
+            }));
+            assert!(
+                card.starts_with("memphant memory (2 items, trace t-1):\n"),
+                "{card}"
+            );
+            assert!(
+                card.contains("- [u-1] procedural: use make types\n    before commit\n"),
+                "{card}"
+            );
+            assert!(
+                card.contains("- [u-2] semantic: KV binding map is required\n"),
+                "{card}"
+            );
+            assert!(
+                card.contains("memphant mark --trace t-1 --success --used"),
+                "{card}"
+            );
+            let empty = render_card(&json!({"trace_id": "t-2", "items": []}));
+            assert_eq!(empty, "memphant: no memory for this query (trace t-2)\n");
         }
     }
 }

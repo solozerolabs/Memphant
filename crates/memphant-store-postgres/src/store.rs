@@ -4939,10 +4939,20 @@ impl MemoryStore for PgStore {
         }
 
         // Apply state transitions BEFORE inserts so the partial unique
-        // scope-subject index never sees two open semantic generations.
+        // scope-subject index never sees two open semantic generations. A
+        // `reinforced_at` update (same-channel re-capture) is the one path
+        // that advances `reinforcement_count`/`last_reinforced_at`; it leaves
+        // the unit OPEN (`transaction_to` stays null), whereas every closing
+        // update stamps the transaction time.
         for update in &write.unit_updates {
             let updated = sqlx::query(
-                "update memphant.memory_unit set state = $3, transaction_to = $4::timestamptz
+                "update memphant.memory_unit
+                    set state = $3,
+                        transaction_to = case when $11::bool then $4::timestamptz else null end,
+                        reinforcement_count = reinforcement_count
+                            + case when $10::timestamptz is null then 0 else 1 end,
+                        last_reinforced_at = coalesce($10::timestamptz, last_reinforced_at),
+                        updated_at = now()
                  where tenant_id = $1 and id = $2 and data_subject_id = $5
                    and subject_generation = $6 and scope_id = $7 and agent_node_id = $8
                    and actor_id = $9",
@@ -4956,6 +4966,8 @@ impl MemoryStore for PgStore {
             .bind(context.scope_id.as_uuid())
             .bind(context.agent_node_id.as_uuid())
             .bind(context.actor_id.as_uuid())
+            .bind(&update.reinforced_at)
+            .bind(update.transaction_to.is_some())
             .execute(&mut **tx)
             .await
             .map_err(backend)?;

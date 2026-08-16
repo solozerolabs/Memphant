@@ -59,6 +59,7 @@ contract_test!(caller_subject_key_supersedes_without_client_derivation);
 contract_test!(scope_memory_page_paginates_without_overlap);
 contract_test!(capture_crosscheck_promotes_and_quarantines_across_the_write_seam);
 contract_test!(same_subject_captured_beliefs_coexist_for_collision);
+contract_test!(same_channel_capture_reinforces_supersedes_and_serves_on_the_coding_lane);
 
 /// Pure type-shape check (no store): the staged-write structs carry the tenant
 /// and scope ids through unchanged. Not part of the store contract, so it stays

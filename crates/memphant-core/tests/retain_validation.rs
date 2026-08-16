@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use memphant_core::service::MemoryService;
 use memphant_core::{FixedClock, InMemoryStore, NoopEmbedding};
+use memphant_core::{JobFilter, MemoryStore};
 use memphant_types::{
     MemoryKind, ResolvedMemoryContext, RetainEpisodeHttpRequest, RetainEpisodeHttpResponse,
-    RetainPayload, RetainUnitPayload, TenantId, TrustLevel,
+    RetainEpisodePayload, RetainPayload, RetainUnitPayload, TenantId, TrustLevel, UnitState,
 };
 
 const CLOCK: FixedClock = FixedClock("2030-01-01T00:00:00Z");
@@ -97,6 +98,14 @@ async fn retain_rejects_invalid_provenance_confidence_and_valid_time() {
     let mut request = base.clone();
     request.observed_at = "not-a-time+00:00".to_string();
     cases.push((request, "invalid request: observed_at must be RFC3339"));
+    // A blank observed_at (what a capture adapter posts when it forgets to
+    // stamp the episode) is rejected, never defaulted server-side.
+    let mut request = base.clone();
+    request.observed_at = String::new();
+    cases.push((
+        request,
+        "invalid request: observed_at must use a UTC offset",
+    ));
     for confidence in [f32::NAN, -0.1, 1.1] {
         let mut request = base.clone();
         let RetainPayload::Unit(unit) = &mut request.payload else {
@@ -166,4 +175,87 @@ async fn retain_rejects_invalid_provenance_confidence_and_valid_time() {
             "validation must fail before context/store lookup"
         );
     }
+}
+
+/// Trust FLOOR by source kind: an `agent`-authored episode retained under a
+/// TRUSTED-SYSTEM key still lands at `AgentOutput` → `Candidate`. CONTROL: the
+/// same episode with `source_kind = "system"` keeps the key's trust and mints
+/// `Active` — the clamp is the source kind's doing, not the key's.
+#[tokio::test]
+async fn retain_clamps_episode_trust_to_its_source_kind() {
+    let store = InMemoryStore::default();
+    let service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(NoopEmbedding),
+    );
+    let tenant = TenantId::new();
+    let context = memphant_store_testkit::bind_context(&store, tenant).await;
+    let episode = |source_kind: &str, source_ref: &str| RetainEpisodeHttpRequest {
+        subject_id: context.data_subject_id,
+        scope_id: context.scope_id,
+        actor_id: context.actor_id,
+        agent_node_id: context.agent_node_id,
+        subject_generation: context.subject_generation,
+        source_ref: source_ref.to_string(),
+        observed_at: "2030-01-01T00:00:00Z".to_string(),
+        payload: RetainPayload::Episode(RetainEpisodePayload {
+            source_kind: source_kind.to_string(),
+            body: "The worker restarts every night at two.".to_string(),
+            subject: Some("worker restart".to_string()),
+            predicate: Some("schedule".to_string()),
+        }),
+    };
+    for (key, source_kind, source_ref) in [
+        ("agent-under-system-key", "agent", "capture://summary"),
+        ("system-under-system-key", "system", "ops:cron"),
+    ] {
+        let response = service
+            .retain(
+                &context,
+                key,
+                TrustLevel::TrustedSystem,
+                episode(source_kind, source_ref),
+            )
+            .await
+            .expect("retain episode");
+        let result: RetainEpisodeHttpResponse = serde_json::from_slice(response.body()).unwrap();
+        let expected = if source_kind == "agent" {
+            TrustLevel::AgentOutput
+        } else {
+            TrustLevel::TrustedSystem
+        };
+        assert_eq!(result.assigned_trust, Some(expected), "{source_kind}");
+    }
+    let outcome = service
+        .run_worker_tick_scoped(
+            JobFilter {
+                tenant: Some(tenant),
+                scope: Some(context.scope_id),
+            },
+            8,
+        )
+        .await
+        .expect("worker tick");
+    assert_eq!(outcome.failed, 0);
+    let units = store
+        .fetch_scope_open_units(&context)
+        .await
+        .expect("open units");
+    let captured = units
+        .iter()
+        .find(|unit| unit.capture.is_some())
+        .expect("captured unit");
+    assert_eq!(captured.trust_level, TrustLevel::AgentOutput);
+    assert_eq!(
+        captured.state,
+        UnitState::Candidate,
+        "agent-authored capture is clamped below the key: {captured:?}"
+    );
+    let system = units
+        .iter()
+        .find(|unit| unit.source_ref == "ops:cron")
+        .expect("system unit");
+    assert_eq!(system.trust_level, TrustLevel::TrustedSystem);
+    assert_eq!(system.state, UnitState::Active, "control: {system:?}");
 }

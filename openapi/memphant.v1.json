@@ -183,6 +183,10 @@
           "source": {
             "$ref": "#/components/schemas/CaptureSource"
           },
+          "truncated": {
+            "description": "True when the captured body was cut at a paragraph/bullet boundary to fit\nthe compact one-card ceiling at mint; the card is still injectable, but\nthe reader should know it is not the whole capture.",
+            "type": "boolean"
+          },
           "witnesses": {
             "default": [],
             "items": {
@@ -208,6 +212,11 @@
           {
             "const": "summary",
             "description": "LLM session-end summary of the transcript.",
+            "type": "string"
+          },
+          {
+            "const": "errfix",
+            "description": "Deterministic error→fix pairing (a failing command followed by the fix\nthat made it pass). Mints a `Procedural` card, not a `Belief`; a\nDIFFERENT family from `Summary`, so an errfix and a summary that agree\nform a `SourceAgreement` witness. Serialized as `errfix`, the same\ntoken as its `capture://errfix` source_ref family.",
             "type": "string"
           }
         ]

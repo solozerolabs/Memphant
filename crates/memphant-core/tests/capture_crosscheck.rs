@@ -73,6 +73,7 @@ async fn seed_captured(
                     source,
                     ladder,
                     witnesses,
+                    truncated: false,
                 }),
             },
         )

@@ -259,6 +259,7 @@ async fn explicit_deep_without_provider_surfaces_stable_error() {
         &url,
         &[
             "recall",
+            "--json",
             "--subject-id",
             &subject,
             "--scope",
@@ -353,6 +354,7 @@ async fn packaged_cli_and_rest_deep_use_runtime_streaming_provider_only_when_exp
         &url,
         &[
             "recall",
+            "--json",
             "--subject-id",
             &subject,
             "--scope",
@@ -376,6 +378,7 @@ async fn packaged_cli_and_rest_deep_use_runtime_streaming_provider_only_when_exp
         &url,
         &[
             "recall",
+            "--json",
             "--subject-id",
             &subject,
             "--scope",
@@ -507,6 +510,7 @@ async fn retain_reflect_recall_then_forget_round_trips_over_http() {
         &url,
         &[
             "recall",
+            "--json",
             "--subject-id",
             &subject,
             "--scope",
@@ -558,6 +562,7 @@ async fn retain_reflect_recall_then_forget_round_trips_over_http() {
         &url,
         &[
             "recall",
+            "--json",
             "--subject-id",
             &subject,
             "--scope",
@@ -657,6 +662,7 @@ async fn resource_retain_and_trace_round_trip_over_http() {
         &url,
         &[
             "recall",
+            "--json",
             "--subject-id",
             &subject,
             "--scope",

@@ -3873,7 +3873,7 @@ impl<S: MemoryStore> MemoryService<S> {
         &self,
         context: &ResolvedMemoryContext,
         idempotency_key: &str,
-        assigned_trust: TrustLevel,
+        mut assigned_trust: TrustLevel,
         mut request: RetainEpisodeHttpRequest,
     ) -> Result<MutationResponse, ServiceError>
     where
@@ -3916,6 +3916,14 @@ impl<S: MemoryStore> MemoryService<S> {
                 }
                 if episode.body.trim().is_empty() {
                     return Err(CoreError::EmptyBody.into());
+                }
+                // Trust FLOOR by source kind: the API key's ceiling never lifts an
+                // episode above what its own `source_kind` earns, so an
+                // `agent`-authored episode (every capture) lands at
+                // `AgentOutput` → `Candidate`, even under a trusted-system key.
+                let source_ceiling = memphant_types::actor_kind_trust(&episode.source_kind);
+                if crate::trust_risk_rank(source_ceiling) > crate::trust_risk_rank(assigned_trust) {
+                    assigned_trust = source_ceiling;
                 }
             }
             memphant_types::RetainPayload::Unit(unit) => {
@@ -4145,6 +4153,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 }
                 let dedup_key =
                     derive_episode_dedup_key(&episode.source_kind, &source_ref, &episode.body);
+                let is_capture = capture_episode_source(&source_ref).is_some();
                 let outcome = self
                     .store
                     .stage_episode(
@@ -4165,6 +4174,14 @@ impl<S: MemoryStore> MemoryService<S> {
                         },
                     )
                     .await?;
+                // A capture RE-OBSERVED through the same channel (the episode
+                // dedup matched, so its reflect job will not re-run) reinforces
+                // the captured unit(s) it minted — the write-seam half of the
+                // compiler's same-channel reinforce arm.
+                if outcome.dedup.matched && is_capture {
+                    self.reinforce_captured_episode_units(&mut tx, context, outcome.episode_id)
+                        .await?;
+                }
                 self.store
                     .enqueue_reflect(
                         &mut tx,
@@ -4207,6 +4224,74 @@ impl<S: MemoryStore> MemoryService<S> {
                 Ok(response)
             }
         }
+    }
+
+    /// Reinforce every OPEN captured unit minted from `episode_id`: a same-body
+    /// re-capture through the same channel dedups at the episode seam (so no
+    /// compile re-runs), and this is where that re-observation lands on the
+    /// unit — `reinforcement_count + 1`, `last_reinforced_at = now` — as a
+    /// direct compiled write of `Merge` actions through the one store update
+    /// path (`UnitUpdate::reinforced_at`, InMemory and PG alike).
+    async fn reinforce_captured_episode_units(
+        &self,
+        tx: &mut S::Txn,
+        context: &ResolvedMemoryContext,
+        episode_id: memphant_types::EpisodeId,
+    ) -> Result<(), ServiceError> {
+        let now = self.clock.now_rfc3339();
+        let unit_updates: Vec<crate::UnitUpdate> = self
+            .store
+            .fetch_scope_open_units_in_tx(tx)
+            .await?
+            .into_iter()
+            .filter(|unit| {
+                unit.capture.is_some()
+                    && unit.source_episode_id == Some(episode_id)
+                    && matches!(
+                        unit.state,
+                        UnitState::Candidate | UnitState::Active | UnitState::Validated
+                    )
+            })
+            .map(|unit| crate::UnitUpdate {
+                id: unit.id,
+                state: unit.state,
+                transaction_to: None,
+                reinforced_at: Some(now.clone()),
+            })
+            .collect();
+        if unit_updates.is_empty() {
+            return Ok(());
+        }
+        let job_id = memphant_types::JobId::new();
+        let actions = vec![memphant_types::AdmissionAction::Merge; unit_updates.len()];
+        self.store
+            .stage_compiled_units(
+                tx,
+                None,
+                CompiledWrite {
+                    job_id,
+                    compiler_version: COMPILER_VERSION.to_string(),
+                    new_units: Vec::new(),
+                    new_edges: Vec::new(),
+                    citations: Vec::new(),
+                    unit_updates,
+                    trace: memphant_types::ReflectTrace {
+                        tenant_id: context.tenant_id,
+                        scope_id: context.scope_id,
+                        job_id,
+                        episode_id: Some(episode_id),
+                        resource_id: None,
+                        compiler_version: COMPILER_VERSION.to_string(),
+                        cost_units: actions.len() as u32,
+                        actions,
+                        stages: Vec::new(),
+                    },
+                    embedding_profile: None,
+                    embeddings: Vec::new(),
+                },
+            )
+            .await?;
+        Ok(())
     }
 
     /// `remember`: create exactly one self-contained, compact, `Active` typed
@@ -5887,6 +5972,12 @@ impl<S: MemoryStore> MemoryService<S> {
                     .stage_mutation_response(&mut tx, response.clone())
                     .await?;
                 self.store.commit(tx).await?;
+                // A mark is a WITNESS (WeakOutcome) for the captured units it names.
+                // Advance the trust ladder now rather than waiting for an unrelated
+                // future episode's reflect job: a Candidate served this session must
+                // be able to promote on this session's survival verdict. Idempotent
+                // and off the recall hot path (same call the reflect job makes).
+                self.run_capture_crosscheck(context).await?;
                 Ok(response)
             }
         }
@@ -6376,18 +6467,23 @@ impl<S: MemoryStore> MemoryService<S> {
                 // the fresh `Captured` marker and skip episodic/fact/structured
                 // nomination; the Stage A engine ladders it on the reflect tail.
                 if let Some(capture_source) = capture_episode_source(&episode.source_ref) {
-                    let candidate = capture_episode_candidate(
+                    // A body that cannot be cut under the compact ceiling mints
+                    // nothing (empty candidate set ⇒ an empty trace, never an
+                    // un-injectable card).
+                    let candidates = capture_episode_candidate(
                         &episode,
                         job.job.subject.as_deref(),
                         capture_source,
-                    );
+                    )
+                    .into_iter()
+                    .collect();
                     (
                         Some(episode.id),
                         None,
                         episode.source_ref.clone(),
                         episode.last_observed_at.clone(),
                         Some(episode.body.clone()),
-                        vec![candidate],
+                        candidates,
                     )
                 } else {
                     // W5 temporal grounding: extract the episode's primary content
@@ -7798,37 +7894,75 @@ fn capture_episode_source(source_ref: &str) -> Option<CaptureSource> {
     match family {
         "mirror" => Some(CaptureSource::Mirror),
         "summary" => Some(CaptureSource::Summary),
+        "errfix" => Some(CaptureSource::ErrFix),
         _ => None,
     }
 }
 
-/// The single captured `Belief` candidate minted from a capture Episode. It is
-/// keyed on the episode's `subject` so that a `mirror` and a `summary` capture
-/// for the SAME subject share a `fact_key` and the cross-check can pair them
-/// (agree → corroborate, diverge → quarantine). The body is the captured
-/// content verbatim; `capture` carries the fresh `Captured` marker; the trust is
-/// the episode's own (an agent principal clamps to `AgentOutput`, so the unit
-/// projects to an inert `Candidate`). This REPLACES the normal episodic /
-/// fact-extraction / structured candidate set for a capture episode — a capture
-/// is a single provisional claim, not a transcript to mine.
+/// The memory kind a capture channel mints. The KIND HINT is the channel
+/// itself: `capture://errfix` (the deterministic error→fix pairing) is a
+/// procedure, every other family is a provisional belief. Carrying the hint in
+/// the `source_ref` keeps it zero-schema — no payload field, no job column.
+fn capture_kind(source: CaptureSource) -> MemoryKind {
+    match source {
+        CaptureSource::ErrFix => MemoryKind::Procedural,
+        CaptureSource::Mirror | CaptureSource::Summary => MemoryKind::Belief,
+    }
+}
+
+/// Cut a captured body down to fit `MCP_COMPACT_TOKEN_CEILING`, at the last
+/// paragraph/bullet boundary (a line break) under the ceiling. Returns
+/// `Some(body, truncated)` — the body untouched when it already fits — or
+/// `None` when even the first line is over the ceiling and no injectable card
+/// can be made of it.
+fn fit_capture_body_to_ceiling(body: &str) -> Option<(String, bool)> {
+    if crate::conservative_token_estimate(body) <= MCP_COMPACT_TOKEN_CEILING {
+        return Some((body.to_string(), false));
+    }
+    let mut kept = String::new();
+    for line in body.lines() {
+        let candidate = if kept.is_empty() {
+            line.to_string()
+        } else {
+            format!("{kept}\n{line}")
+        };
+        if crate::conservative_token_estimate(&candidate) > MCP_COMPACT_TOKEN_CEILING {
+            break;
+        }
+        kept = candidate;
+    }
+    (!kept.trim().is_empty()).then_some((kept, true))
+}
+
+/// The single captured candidate minted from a capture Episode — a `Belief`
+/// for `mirror`/`summary`, a `Procedural` for `errfix` (see `capture_kind`). It
+/// is keyed on the episode's `subject` so that a `mirror` and a `summary`
+/// capture for the SAME subject share a `fact_key` and the cross-check can pair
+/// them (agree → corroborate, diverge → quarantine). The body is the captured
+/// content, cut to the compact one-card ceiling if it overflows (a capture is
+/// served on the coding lane by its `capture` marker, so an un-injectable card
+/// must never be minted); `capture` carries the fresh `Captured` marker; the
+/// trust is the episode's own (an agent principal clamps to `AgentOutput`, so
+/// the unit projects to an inert `Candidate`). Confidence starts at 0.5: a
+/// single-source capture is a provisional claim, not a verified fact. This
+/// REPLACES the normal episodic / fact-extraction / structured candidate set
+/// for a capture episode — a capture is a single provisional claim, not a
+/// transcript to mine. `None` when the body cannot be cut under the ceiling.
 fn capture_episode_candidate(
     episode: &StoredEpisode,
     subject: Option<&str>,
     source: CaptureSource,
-) -> ReflectCandidate {
-    // Render a compact envelope so the captured belief is eligible on the
-    // coding-agent lane (compact_only recall drops any unit with `compact.is_none()`).
-    // The summarizer already keeps capture bodies compact, so no ceiling check is
-    // needed here (unlike the synchronous `remember` path, which can reject).
-    let envelope = memphant_types::CompactEnvelope {
-        schema_version: memphant_types::COMPACT_ENVELOPE_SCHEMA_VERSION,
-        verification: String::new(),
-        body_sha256: crate::sha256_hex(&episode.body),
-        write_channel: memphant_types::COMPACT_WRITE_CHANNEL_AGENT.to_string(),
-    };
-    ReflectCandidate {
-        compact: Some(envelope),
-        capture: Some(CaptureMarker::captured(source)),
+) -> Option<ReflectCandidate> {
+    let (body, truncated) = fit_capture_body_to_ceiling(&episode.body)?;
+    let mut capture = CaptureMarker::captured(source);
+    capture.truncated = truncated;
+    Some(ReflectCandidate {
+        // No compact envelope: the coding lane serves a captured unit by its
+        // `capture` marker (see `recallable`), and an envelope would put two
+        // same-subject captures from different channels — which must COEXIST —
+        // under `memphant_memory_unit_compact_valid_excl`.
+        compact: None,
+        capture: Some(capture),
         source_kind: episode.source_kind.clone(),
         trust_level: episode.source_trust,
         actor_id: episode.actor_id,
@@ -7839,16 +7973,16 @@ fn capture_episode_candidate(
         subject: subject.map(str::to_string),
         predicate: None,
         fact_key: subject.map(str::to_string),
-        kind: Some(MemoryKind::Belief),
-        body: episode.body.clone(),
-        confidence: Some(1.0),
+        kind: Some(capture_kind(source)),
+        body,
+        confidence: Some(0.5),
         churn_class: None,
         admission_hint: None,
         target_unit_ids: None,
         contextual_chunks: Vec::new(),
         valid_from: None,
         valid_to: None,
-    }
+    })
 }
 
 fn extract_fact_candidates(

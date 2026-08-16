@@ -46,13 +46,9 @@ REQUIRED_TABLES = {
     "embedding_profile",
     "embedding",
     "citation",
-    "trust_event",
-    "event_outbox",
     "retrieval_trace",
     "deletion_generation",
     "job_state",
-    "blob_ledger",
-    "belief_observation",
     "review_event",
     "mutation_ledger",
     "schema_migrations",
@@ -74,13 +70,9 @@ SUBJECT_OWNED_ROOTS = {
     "memory_edge",
     "embedding",
     "citation",
-    "trust_event",
-    "event_outbox",
     "retrieval_trace",
     "deletion_generation",
     "job_state",
-    "blob_ledger",
-    "belief_observation",
     "review_event",
     "api_key",
     "forgotten_source",
@@ -669,11 +661,7 @@ def test_auxiliary_data_plane_tables_are_subject_context_owned() -> None:
         "memory_edge",
         "embedding",
         "citation",
-        "trust_event",
-        "event_outbox",
         "deletion_generation",
-        "blob_ledger",
-        "belief_observation",
         "forgotten_source",
         }
 
@@ -702,7 +690,7 @@ def test_auxiliary_unit_references_are_full_context_cascades() -> None:
         "references memphant.memory_unit (tenant_id, data_subject_id, scope_id, "
         "agent_node_id, subject_generation, id) on delete cascade"
     )
-    for table in ("memory_edge", "embedding", "citation", "belief_observation"):
+    for table in ("memory_edge", "embedding", "citation"):
         assert unit_fk in " ".join(_table_block(sql_text().lower(), table).split()), table
 
     for columns in (

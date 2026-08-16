@@ -1423,6 +1423,11 @@ pub struct UnitUpdate {
     pub id: UnitId,
     pub state: UnitState,
     pub transaction_to: Option<String>,
+    /// `Some(now)` when this write REINFORCES the unit (a same-channel
+    /// re-capture whose body agrees): the store bumps `reinforcement_count`
+    /// by one and sets `last_reinforced_at` — the one update path those
+    /// columns have.
+    pub reinforced_at: Option<String>,
 }
 
 /// The full output of one reflect compilation. `persist_compiled_units`
@@ -5932,6 +5937,10 @@ impl MemoryStore for InMemoryStore {
             {
                 unit.state = update.state;
                 unit.transaction_to = update.transaction_to.clone();
+                if let Some(reinforced_at) = &update.reinforced_at {
+                    unit.reinforcement_count = unit.reinforcement_count.saturating_add(1);
+                    unit.last_reinforced_at = Some(reinforced_at.clone());
+                }
             }
         }
 
@@ -7064,7 +7073,7 @@ fn quantity_rollups(
         .collect()
 }
 
-fn trust_risk_rank(trust: TrustLevel) -> u8 {
+pub(crate) fn trust_risk_rank(trust: TrustLevel) -> u8 {
     match trust {
         TrustLevel::TrustedUser | TrustLevel::TrustedSystem => 0,
         TrustLevel::VerifiedTool => 1,
@@ -10289,7 +10298,16 @@ fn context_item_for(
         suppression_labels_for(&candidate.unit, tenant_edges, live_candidate_ids);
     let derived_by = derived_by_for_unit(&candidate.unit).to_string();
     let matched_contextual_chunk = contextual_chunk_score(&candidate.unit, query_tokens) > 0.0;
-    let inclusion_reason = if candidate.unit.kind == MemoryKind::Procedural
+    // A captured unit is labelled by its confirmation state so the injecting
+    // layer can render "unconfirmed" without a types change: `Candidate` = one
+    // source, no witness; anything else on the recall path is witnessed.
+    let inclusion_reason = if candidate.unit.capture.is_some() {
+        if candidate.unit.state == UnitState::Candidate {
+            "captured_unconfirmed"
+        } else {
+            "captured_confirmed"
+        }
+    } else if candidate.unit.kind == MemoryKind::Procedural
         && procedure_signal_kind(&candidate.unit) == "failure"
     {
         "validated_failure_pattern"
@@ -10823,23 +10841,32 @@ fn recallable(
     if !bitemporally_recallable(unit, time) || !valid_for_query(unit, query, &time.valid_at) {
         return false;
     }
-    // Coding-agent lane: only typed compact envelopes are eligible. A raw
-    // episode/resource body copied into an Active unit never carries the marker,
-    // so it is excluded here without disturbing the general lane.
-    if compact_only && unit.compact.is_none() {
+    // Coding-agent lane: two eligible classes — typed compact envelopes
+    // (`remember`/`correct_memory` cards) and CAPTURED units (`payload.capture`,
+    // ceiling-fitted at mint). A raw episode/resource body copied into an
+    // Active unit carries neither marker, so it is excluded here without
+    // disturbing the general lane. Captured units are labelled through
+    // `inclusion_reason` (`captured_confirmed`/`captured_unconfirmed`).
+    if compact_only && unit.compact.is_none() && unit.capture.is_none() {
         return false;
     }
+    // Coding lane only: an UNCONFIRMED capture (`Candidate`, one source, no
+    // witness) is served, labelled, so the agent that produced it sees it
+    // again on the next task; the general lane keeps Candidate invisible.
+    let captured_candidate =
+        compact_only && unit.capture.is_some() && unit.state == UnitState::Candidate;
     if unit.kind == MemoryKind::Procedural {
         // On the coding lane an Active compact procedure is served; the general
         // lane keeps the Validated-only rule.
         let state_ok = if compact_only {
-            matches!(unit.state, UnitState::Active | UnitState::Validated)
+            matches!(unit.state, UnitState::Active | UnitState::Validated) || captured_candidate
         } else {
             unit.state == UnitState::Validated
         };
         return procedure_recall_enabled && state_ok && !unsafe_procedure_step(unit);
     }
     (matches!(unit.state, UnitState::Active | UnitState::Validated)
+        || captured_candidate
         || (unit.state == UnitState::Superseded && unit.transaction_to.is_some()))
         && (include_beliefs || unit.kind != MemoryKind::Belief)
 }
@@ -12247,9 +12274,18 @@ async fn prepare_compiled_write_from_snapshot_inner(
         return Err(StoreError::Conflict("subject generation is stale".to_string()).into());
     }
     let now = clock.now_rfc3339();
-    let originals: HashMap<UnitId, (UnitState, Option<String>)> = working
+    let originals: HashMap<UnitId, (UnitState, Option<String>, u32)> = working
         .iter()
-        .map(|unit| (unit.id, (unit.state, unit.transaction_to.clone())))
+        .map(|unit| {
+            (
+                unit.id,
+                (
+                    unit.state,
+                    unit.transaction_to.clone(),
+                    unit.reinforcement_count,
+                ),
+            )
+        })
         .collect();
     let mut new_ids: HashSet<UnitId> = HashSet::new();
     let mut new_edges: Vec<StoredMemoryEdge> = Vec::new();
@@ -12373,10 +12409,32 @@ async fn prepare_compiled_write_from_snapshot_inner(
             Vec::new()
         };
 
+        // CAPTURE, SAME CHANNEL: a re-capture of a key this channel already
+        // holds either REINFORCES the open unit (bodies agree) or SUPERSEDES
+        // it within the channel (bodies differ). Handled before the generic
+        // dedup below so a same-channel re-capture never fragments into a
+        // second open unit; different-channel captures fall through and
+        // coexist (see `captures_from_different_sources`).
+        if candidate.capture.is_some()
+            && let Some(action) = admit_same_channel_capture(
+                &mut working,
+                &mut new_ids,
+                &mut new_edges,
+                &input,
+                &candidate,
+                &fact_key,
+                high_trust,
+                &now,
+            )
+        {
+            actions.push(action);
+            continue;
+        }
+
         let action = if let Some(existing_index) = working.iter().position(|unit| {
             unit.scope_id == input.scope_id
                 && unit.fact_key.as_deref() == Some(fact_key.as_str())
-                && unit.body == candidate.body
+                && capture_bodies_agree(unit, &candidate)
                 && unit.transaction_to.is_none()
                 // CAPTURE independence: two captures from DIFFERENT provenance
                 // families (a `mirror` file-write and a `summary` of it) must
@@ -12704,14 +12762,18 @@ async fn prepare_compiled_write_from_snapshot_inner(
         .iter()
         .filter(|unit| !new_ids.contains(&unit.id))
         .filter_map(|unit| {
-            let (original_state, original_transaction_to) = originals.get(&unit.id)?;
-            (unit.state != *original_state || unit.transaction_to != *original_transaction_to).then(
-                || UnitUpdate {
+            let (original_state, original_transaction_to, original_reinforcement_count) =
+                originals.get(&unit.id)?;
+            let reinforced = unit.reinforcement_count > *original_reinforcement_count;
+            (unit.state != *original_state
+                || unit.transaction_to != *original_transaction_to
+                || reinforced)
+                .then(|| UnitUpdate {
                     id: unit.id,
                     state: unit.state,
                     transaction_to: unit.transaction_to.clone(),
-                },
-            )
+                    reinforced_at: reinforced.then(|| now.clone()),
+                })
         })
         .collect();
 
@@ -13198,6 +13260,96 @@ mod low_trust_projection_tests {
     }
 }
 
+#[cfg(test)]
+mod capture_independence_tests {
+    use super::*;
+    use memphant_types::{CaptureMarker, CaptureSource, CaptureWitness};
+
+    fn captured_unit(marker: CaptureMarker) -> StoredMemoryUnit {
+        StoredMemoryUnit {
+            invalidation: None,
+            compact: None,
+            capture: Some(marker),
+            id: UnitId::new(),
+            tenant_id: TenantId::from_u128(1),
+            data_subject_id: SubjectId::from_u128(1),
+            scope_id: ScopeId::from_u128(1),
+            agent_node_id: AgentNodeId::from_u128(1),
+            subject_generation: 0,
+            kind: MemoryKind::Belief,
+            state: UnitState::Candidate,
+            fact_key: Some("k".to_string()),
+            predicate: None,
+            body: "Build with cargo build --release.".to_string(),
+            confidence: Some(0.5),
+            trust_level: TrustLevel::AgentOutput,
+            freshness_due_at: None,
+            churn_class: None,
+            actor_id: Some(ActorId::from_u128(1)),
+            source_kind: Some("agent".to_string()),
+            source_ref: "capture://summary".to_string(),
+            observed_at: "2026-07-01T00:00:00Z".to_string(),
+            source_episode_id: None,
+            source_resource_id: None,
+            deletion_generation: None,
+            contextual_chunks: Vec::new(),
+            valid_from: None,
+            valid_to: None,
+            transaction_from: Some("2026-07-01T00:00:00Z".to_string()),
+            transaction_to: None,
+            difficulty: None,
+            stability_days: None,
+            last_reinforced_at: None,
+            reinforcement_count: 0,
+        }
+    }
+
+    fn capture_candidate() -> memphant_types::ReflectCandidate {
+        memphant_types::ReflectCandidate {
+            compact: None,
+            capture: Some(CaptureMarker::captured(CaptureSource::Summary)),
+            source_kind: "agent".to_string(),
+            trust_level: TrustLevel::AgentOutput,
+            actor_id: ActorId::from_u128(1),
+            subject: Some("k".to_string()),
+            predicate: None,
+            fact_key: Some("k".to_string()),
+            kind: Some(MemoryKind::Belief),
+            body: "Build with cargo build --release.".to_string(),
+            confidence: Some(0.5),
+            churn_class: None,
+            admission_hint: None,
+            target_unit_ids: None,
+            contextual_chunks: Vec::new(),
+            valid_from: None,
+            valid_to: None,
+        }
+    }
+
+    /// A same-channel re-capture is NOT an independent source (it reinforces),
+    /// but once the outcome ledger has vouched (`WeakOutcome`) the pair is
+    /// independent and promotable. PERTURBATION: a `Survival` witness alone
+    /// is not an outcome and does not make it independent.
+    #[test]
+    fn weak_outcome_witness_makes_a_same_channel_capture_independent() {
+        let candidate = capture_candidate();
+        let bare = captured_unit(CaptureMarker::captured(CaptureSource::Summary));
+        assert!(!is_independent_source(&bare, &candidate));
+        assert!(!can_promote_belief(&bare, &candidate));
+
+        let mut vouched_marker = CaptureMarker::captured(CaptureSource::Summary);
+        vouched_marker.record_witness(CaptureWitness::WeakOutcome);
+        let vouched = captured_unit(vouched_marker);
+        assert!(is_independent_source(&vouched, &candidate));
+        assert!(can_promote_belief(&vouched, &candidate));
+
+        let mut survived_marker = CaptureMarker::captured(CaptureSource::Summary);
+        survived_marker.record_witness(CaptureWitness::Survival);
+        let survived = captured_unit(survived_marker);
+        assert!(!is_independent_source(&survived, &candidate));
+    }
+}
+
 fn mint_compiled_citations(
     input: &ReflectInput,
     units: &[StoredMemoryUnit],
@@ -13558,6 +13710,112 @@ fn captures_from_different_sources(
     }
 }
 
+/// Body agreement for the generic dedup: byte-equal for every ordinary
+/// candidate; whitespace/case-normalised (`capture_body_key`, the cross-check's
+/// own agreement key) when the candidate is a capture, whose summarizer output
+/// legitimately jitters in whitespace between sessions.
+fn capture_bodies_agree(
+    unit: &StoredMemoryUnit,
+    candidate: &memphant_types::ReflectCandidate,
+) -> bool {
+    unit.body == candidate.body
+        || (candidate.capture.is_some()
+            && capture_body_key(unit) == normalize_component(&candidate.body))
+}
+
+/// The same-channel capture arm. Finds the OPEN unit (transaction-open,
+/// `Candidate`/`Active`/`Validated`) on this scope + key + kind from the SAME
+/// capture family as the candidate and:
+///
+/// * bodies agree (normalised) ⇒ REINFORCE: no mint; the unit's
+///   `reinforcement_count`/`last_reinforced_at` advance through `UnitUpdate`.
+///   A replay of the SAME source episode (episode dedup re-enqueues the job) is
+///   not a new observation and does not count. If the pair is promotable
+///   (`can_promote_belief`, e.g. a `WeakOutcome` witness already vouches for
+///   the unit) the arm stands aside so the generic dedup promotes it.
+/// * bodies differ ⇒ SUPERSEDE within the channel: mint the new unit, close
+///   the old one (`Superseded`, transaction-closed — the same close the
+///   knowledge arm applies), link `Supersedes` new→old and carry the old
+///   `reinforcement_count` forward. Never deletes.
+///
+/// `None` = no same-channel incumbent (or promotable): the caller's ordinary
+/// path applies. Ordinary beliefs never enter here — `supersedes_own_kind`
+/// stays `None` for `Belief`, so this is the ONLY belief supersession, and it
+/// is capture-marked and same-channel by construction.
+#[allow(clippy::too_many_arguments)]
+fn admit_same_channel_capture(
+    working: &mut Vec<StoredMemoryUnit>,
+    new_ids: &mut HashSet<UnitId>,
+    new_edges: &mut Vec<StoredMemoryEdge>,
+    input: &ReflectInput,
+    candidate: &memphant_types::ReflectCandidate,
+    fact_key: &str,
+    high_trust: bool,
+    now: &str,
+) -> Option<AdmissionAction> {
+    let incoming = candidate.capture.as_ref()?;
+    let kind = candidate.kind.unwrap_or(MemoryKind::Belief);
+    let existing_index = working.iter().position(|unit| {
+        unit.scope_id == input.scope_id
+            && unit.fact_key.as_deref() == Some(fact_key)
+            && unit.kind == kind
+            && unit.transaction_to.is_none()
+            && matches!(
+                unit.state,
+                UnitState::Candidate | UnitState::Active | UnitState::Validated
+            )
+            && unit
+                .capture
+                .as_ref()
+                .is_some_and(|marker| marker.source == incoming.source)
+            && candidate_targets_unit(candidate, unit, now)
+    })?;
+    if capture_bodies_agree(&working[existing_index], candidate) {
+        if can_promote_belief(&working[existing_index], candidate) {
+            return None;
+        }
+        let existing = &mut working[existing_index];
+        if existing.source_episode_id != input.episode_id {
+            existing.reinforcement_count = existing.reinforcement_count.saturating_add(1);
+            existing.last_reinforced_at = Some(now.to_string());
+        }
+        return Some(AdmissionAction::Merge);
+    }
+    let old = working[existing_index].clone();
+    let new_id = UnitId::new();
+    let state = if high_trust {
+        UnitState::Active
+    } else {
+        low_trust_projection_state(kind)
+    };
+    let mut unit = minted_unit(
+        new_id,
+        input,
+        kind,
+        state,
+        fact_key.to_string(),
+        candidate,
+        now,
+    );
+    unit.reinforcement_count = old.reinforcement_count;
+    unit.last_reinforced_at = old.last_reinforced_at.clone();
+    working[existing_index].state = UnitState::Superseded;
+    working[existing_index].transaction_to = Some(now.to_string());
+    working.push(unit);
+    new_ids.insert(new_id);
+    new_edges.push(StoredMemoryEdge {
+        id: EdgeId::new(),
+        tenant_id: input.tenant_id,
+        scope_id: input.scope_id,
+        src_id: new_id,
+        dst_id: old.id,
+        kind: MemoryEdgeKind::Supersedes,
+        transaction_from: Some(now.to_string()),
+        transaction_to: None,
+    });
+    Some(AdmissionAction::Supersede)
+}
+
 fn has_explicit_subject(candidate: &memphant_types::ReflectCandidate) -> bool {
     if candidate
         .fact_key
@@ -13674,7 +13932,22 @@ fn is_independent_source(
     // the actor never varies and independence is carried entirely by the source
     // channel. A different `source_kind` corroborating the same fact is what
     // promotes a belief; a repeat from the same channel only merges.
+    //
+    // Captures all arrive as `source_kind = "agent"`, so for them independence
+    // is carried by the capture channel instead: two capture FAMILIES
+    // (`payload.capture.source`) never meet here — admission keeps them as
+    // separate units (`captures_from_different_sources`) and the cross-check
+    // pairs them into a `SourceAgreement` witness — so the only in-arm
+    // independence a capture can show is a `WeakOutcome` witness already on
+    // the unit: the outcome ledger, not the agent, vouched for it. A
+    // same-family re-capture without one is still one channel and only
+    // reinforces.
     existing.source_kind.as_deref() != Some(candidate.source_kind.as_str())
+        || existing.capture.as_ref().is_some_and(|marker| {
+            marker
+                .witnesses
+                .contains(&memphant_types::CaptureWitness::WeakOutcome)
+        })
 }
 
 fn can_promote_belief(
