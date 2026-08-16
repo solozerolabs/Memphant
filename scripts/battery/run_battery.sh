@@ -25,7 +25,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 STATE="$ROOT/scripts/battery/.state"
 ENVF="$STATE/env.sh"
-TASKS="$ROOT/scripts/battery/tasks.txt"
+TASKS="${TASKS_FILE:-$ROOT/scripts/battery/tasks.txt}"
 YURIVAN="${YURIVAN_REPO:-/Users/sidsharma/yurivan}"
 ADMIN="${ADMIN_DATABASE_URL:-postgres://memphant:memphant@localhost:5432/postgres}"
 DB="memphant_battery"

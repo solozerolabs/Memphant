@@ -7816,8 +7816,18 @@ fn capture_episode_candidate(
     subject: Option<&str>,
     source: CaptureSource,
 ) -> ReflectCandidate {
+    // Render a compact envelope so the captured belief is eligible on the
+    // coding-agent lane (compact_only recall drops any unit with `compact.is_none()`).
+    // The summarizer already keeps capture bodies compact, so no ceiling check is
+    // needed here (unlike the synchronous `remember` path, which can reject).
+    let envelope = memphant_types::CompactEnvelope {
+        schema_version: memphant_types::COMPACT_ENVELOPE_SCHEMA_VERSION,
+        verification: String::new(),
+        body_sha256: crate::sha256_hex(&episode.body),
+        write_channel: memphant_types::COMPACT_WRITE_CHANNEL_AGENT.to_string(),
+    };
     ReflectCandidate {
-        compact: None,
+        compact: Some(envelope),
         capture: Some(CaptureMarker::captured(source)),
         source_kind: episode.source_kind.clone(),
         trust_level: episode.source_trust,

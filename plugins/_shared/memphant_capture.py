@@ -228,24 +228,37 @@ _CODE_LINE = re.compile(
     re.X,
 )
 
+# Leading markdown noise — a list/quote marker (`* `, `- `, `1. `, `> `) then any
+# emphasis run (`**bold**`, `_em_`, `` `code` ``). Stripped before the code-shape
+# test: `*` at line-start is markdown far more often than a C-comment line in a
+# prose SUMMARY, so a bullet/bold glyph must never count as code on its own (a
+# bullet whose CONTENT is code — `* import x` — is still caught after the strip).
+_LIST_MARKER = re.compile(r"^\s*(?:[-*+>]\s+|\d+[.)]\s+)?[*_~`]*")
+
 
 def is_repo_recoverable(text: str) -> bool:
     """Best-effort: True when the content is predominantly code / shell / paths,
     which `grep` recovers from the repo far better than memory can. Conservative
     — only fires when the MAJORITY of non-empty lines look like code, or the whole
-    body is a single fenced code block."""
+    body is a single fenced code block.
+
+    The summarizer emits markdown BULLETS, so the leading list/quote marker is
+    stripped before the code-shape test — otherwise a `* `-bullet of plain prose
+    trips `_CODE_LINE`'s `*` (comment-continuation) alternative and every bulleted
+    summary is wrongly dropped. A bullet whose CONTENT is code is still caught."""
     lines = [ln for ln in (text or "").splitlines() if ln.strip()]
     if not lines:
         return False
+    codeish = lambda ln: bool(_CODE_LINE.match(_LIST_MARKER.sub("", ln)))
     fenced = (text or "").strip().count("```")
     stripped = (text or "").strip()
     if stripped.startswith("```") and fenced >= 2:
         # A body that is essentially one code block.
         non_fence = [ln for ln in lines if not ln.strip().startswith("```")]
-        code = sum(1 for ln in non_fence if _CODE_LINE.match(ln))
+        code = sum(1 for ln in non_fence if codeish(ln))
         if non_fence and code / len(non_fence) >= 0.5:
             return True
-    code_lines = sum(1 for ln in lines if _CODE_LINE.match(ln))
+    code_lines = sum(1 for ln in lines if codeish(ln))
     return code_lines / len(lines) > 0.6
 
 
@@ -526,8 +539,15 @@ def _load_identity() -> Optional[dict]:
             except ValueError:
                 return None
         identity[field_name] = value
-    identity["observed_at"] = os.environ.get("MEMPHANT_CAPTURE_OBSERVED_AT", "")
+    # The episode was observed NOW (at capture time); default to it. An empty
+    # observed_at is rejected by the retain endpoint (needs RFC3339 with offset).
+    identity["observed_at"] = os.environ.get("MEMPHANT_CAPTURE_OBSERVED_AT") or _now_rfc3339()
     return identity
+
+
+def _now_rfc3339() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
 
 
 def main(argv=None, stdin=None, stderr=None) -> int:
