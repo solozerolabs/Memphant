@@ -191,13 +191,20 @@ mod http_verbs {
         for item in &items {
             let id = item.get("unit_id").and_then(Value::as_str).unwrap_or("?");
             let kind = item.get("kind").and_then(Value::as_str).unwrap_or("?");
+            // Surface the trust label so the model does not treat an unconfirmed
+            // capture as established fact (parity with the file/hooks surfaces).
+            let unconfirmed = item
+                .get("inclusion_reason")
+                .and_then(Value::as_str)
+                .is_some_and(|reason| reason.contains("captured_unconfirmed"));
+            let label = if unconfirmed { "[unconfirmed] " } else { "" };
             let body = item
                 .get("body")
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .trim()
                 .replace('\n', "\n    ");
-            out.push_str(&format!("- [{id}] {kind}: {body}\n"));
+            out.push_str(&format!("- [{id}] {label}{kind}: {body}\n"));
         }
         out.push_str("mark outcome: memphant mark --trace ");
         out.push_str(trace);
@@ -585,6 +592,26 @@ mod http_verbs {
             );
             let empty = render_card(&json!({"trace_id": "t-2", "items": []}));
             assert_eq!(empty, "memphant: no memory for this query (trace t-2)\n");
+        }
+
+        #[test]
+        fn card_labels_unconfirmed_captures() {
+            let card = render_card(&json!({
+                "trace_id": "t-3",
+                "items": [
+                    {"unit_id": "c-1", "kind": "belief", "inclusion_reason": "captured_unconfirmed:coding_lane", "body": "acme magic byte is 0xA7"},
+                    {"unit_id": "c-2", "kind": "semantic", "inclusion_reason": "fused_top_k", "body": "confirmed fact"}
+                ]
+            }));
+            assert!(
+                card.contains("- [c-1] [unconfirmed] belief: acme magic byte is 0xA7\n"),
+                "{card}"
+            );
+            // A confirmed/normal item carries no label prefix.
+            assert!(
+                card.contains("- [c-2] semantic: confirmed fact\n"),
+                "{card}"
+            );
         }
     }
 }

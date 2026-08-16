@@ -6,6 +6,16 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+# The MCP binary runs its OWN recall (it binds a store + core service), so it
+# needs a live embedder or the dense Vector channel silently degrades to
+# NoopEmbedding (lexical-only recall). Mirror memphant-server: ship fastembed by
+# default so a standalone `cargo build -p memphant-mcp` is not vector-dead and no
+# longer depends on workspace feature-unification to pull the feature in.
+[features]
+default = ["fastembed"]
+fastembed = ["memphant-runtime/fastembed"]
+qwen3 = ["memphant-runtime/qwen3"]
+
 [dependencies]
 axum.workspace = true
 memphant-core.workspace = true
