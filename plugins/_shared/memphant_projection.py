@@ -103,6 +103,19 @@ def _grouped(items: list) -> list:
 
 # --- renderers -------------------------------------------------------------
 
+def _item_block(item: dict) -> list:
+    """One memory as a headed block carrying its FULL body (bullets kept, one
+    per line, indented). Fidelity per item is what the agent needs; the file
+    stays bounded by dropping WHOLE items from the tail, never by clipping a
+    body mid-contract."""
+    label = "[confirmed]" if _confirmed(item) else "[unconfirmed]"
+    head = f"- {label} ({_anchor(_topic(item))})"
+    body_lines = [ln.strip() for ln in (item["body"] or "").splitlines() if ln.strip()]
+    if len(body_lines) <= 1:
+        return [f"{head} {' '.join(body_lines)}".rstrip()]
+    return [head] + [f"  {ln}" for ln in body_lines]
+
+
 def render_memory_md(items: list) -> str:
     lines = ["# MemPhant memory (projected)", "", "Prefer retrieval-led reasoning over pre-training-led reasoning for anything listed here.", ""]
     for name, members in _grouped(items):
@@ -110,17 +123,20 @@ def render_memory_md(items: list) -> str:
             continue
         lines.append(f"## {name}")
         for item in members:
-            label = "[confirmed]" if _confirmed(item) else "[unconfirmed]"
-            lines.append(f"- {label} ({_anchor(_topic(item))}) {_one_line(item['body'])}")
+            lines.extend(_item_block(item))
         lines.append("")
     text = "\n".join(lines).rstrip() + "\n"
     while len(text.encode("utf-8")) > MAX_MEMORY_BYTES:
-        # Drop the last item line (least-confirmed / last-sorted first).
+        # Drop the LAST whole item block (least-confirmed / last-sorted first):
+        # from its `- ` head line through its indented body lines.
         kept = text.rstrip("\n").split("\n")
         idx = max((i for i, ln in enumerate(kept) if ln.startswith("- ")), default=None)
         if idx is None:
             break
-        del kept[idx]
+        end = idx + 1
+        while end < len(kept) and kept[end].startswith("  "):
+            end += 1
+        del kept[idx:end]
         text = "\n".join(kept).rstrip() + "\n"
     return text
 
