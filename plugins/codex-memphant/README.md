@@ -5,6 +5,21 @@ out. Thin adapters over the shared cores (`plugins/_shared/memphant_recall.py`,
 `plugins/_shared/memphant_capture.py`); all logic lives there, one implementation
 per concern.
 
+## Install
+
+One command, from your repo:
+
+```
+python3 /path/to/memphant/plugins/install.py
+```
+
+Auto-detects Codex (`~/.codex`/`$CODEX_HOME`), registers the UserPromptSubmit +
+Stop hooks (merged into `hooks.json`), writes the stable MemPhant block into this
+repo's `AGENTS.md`, and gitignores `.memphant/`. Idempotent. Then set the env vars
+it prints (`--print-env`). The MCP server registration for the `hooks` surface
+stays in `.mcp.json` (deployment-specific); the always-in-context `AGENTS.md`
+pointer makes the `file`/`cli` surfaces work with no MCP at all.
+
 ## Recall (read side)
 
 `hooks/user_prompt_submit.py` (UserPromptSubmit) injects at most one MemPhant

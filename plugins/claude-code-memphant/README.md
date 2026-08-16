@@ -50,15 +50,22 @@ is unset:
 
 ## Install
 
-Add the plugin to your Claude Code plugins. With the repo checked out:
+One command, from your repo:
 
 ```
-# ~/.claude/settings.json (or project .claude/settings.json) — point at the plugin dir
+python3 /path/to/memphant/plugins/install.py
 ```
 
-Claude Code discovers `.claude-plugin/plugin.json` and registers the hooks in
-`hooks/hooks.json`. Set `MEMPHANT_MCP_URL` and `MEMPHANT_API_KEY` in the
-environment Claude Code runs in.
+It auto-detects Claude Code (`~/.claude`) and Codex (`~/.codex`/`$CODEX_HOME`),
+registers the recall + capture hooks (merged into the harness `hooks.json`, never
+duplicating your own hooks), writes the stable MemPhant block into this repo's
+`AGENTS.md`, and adds `.memphant/` to `.gitignore`. Idempotent — re-run any time.
+Flags: `--repo DIR`, `--harness auto|codex|claude-code|none`, `--print-env`.
+
+Then set the two deployment-specific values it prints (`MEMPHANT_MCP_URL` +
+`MEMPHANT_API_KEY`, plus `MEMPHANT_CAPTURE_URL` for capture). Nothing else to edit:
+the always-in-context `AGENTS.md` pointer makes the `file`/`cli` surfaces work even
+before the hooks fire.
 
 ## Manual verification
 

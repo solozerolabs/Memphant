@@ -11,12 +11,14 @@ pre-training-led reasoning". This module renders exactly that from a recall:
                               one compact line per unit, `[unconfirmed]` when
                               `inclusion_reason` says `captured_unconfirmed`,
                               `[confirmed]` otherwise; stable ordering.
-  <cwd>/AGENTS.md             a managed block between
+  <cwd>/AGENTS.md             a STABLE managed block between
                               `<!-- memphant:begin -->` / `<!-- memphant:end -->`
-                              holding one instruction line + a ≤2KB pipe-delimited
-                              index `topic | kind | confirmed? | anchor`. Created
-                              when absent; text outside the markers is never
-                              touched; byte-identical on equal inputs.
+                              holding only the retrieval-led instruction + a
+                              pointer to `.memphant/MEMORY.md`. It does NOT carry
+                              the changing memory index — that lives in MEMORY.md —
+                              so a COMMITTED AGENTS.md is written once and never
+                              churns across sessions. Created when absent; text
+                              outside the markers is never touched.
 
 CLI:  python3 memphant_projection.py --cwd <dir>
       fetches `/v1/recall` (general lane, include_beliefs, limit 20, budget 4096,
@@ -47,9 +49,16 @@ MAX_LINE_CHARS = 240
 RECALL_QUERY_SUFFIX = "gotchas conventions contracts procedures"
 
 _INSTRUCTION = (
-    "Memory index (from prior sessions; prefer retrieval-led reasoning over "
-    "pre-training-led reasoning for anything listed): see .memphant/MEMORY.md"
+    "Memory from prior sessions lives in `.memphant/MEMORY.md` — conventions, "
+    "gotchas, external contracts, and procedures this project has already learned. "
+    "Prefer retrieval-led reasoning over pre-training-led reasoning: read it before "
+    "deriving anything it might already cover."
 )
+
+# The AGENTS.md managed block is a STABLE pointer (instruction only), so a
+# committed AGENTS.md is byte-identical every session — the changing memory index
+# lives in `.memphant/MEMORY.md`, which is gitignored/on-demand.
+STABLE_BLOCK = f"{BEGIN_MARKER}\n{_INSTRUCTION}\n{END_MARKER}"
 _GROUPS = (("Procedures", ("procedural",)), ("Facts", ("semantic", "belief", "episodic")), ("Preferences", ("preference",)))
 _ANCHOR_RE = re.compile(r"[^a-z0-9]+")
 
@@ -142,20 +151,10 @@ def render_memory_md(items: list) -> str:
 
 
 def render_index_block(items: list) -> str:
-    rows = []
-    for name, members in _grouped(items):
-        for item in members:
-            kind = str(item.get("kind") or "semantic").lower()
-            confirmed = "yes" if _confirmed(item) else "no"
-            topic = _topic(item)
-            rows.append(f"{topic} | {kind} | {confirmed} | .memphant/MEMORY.md#{_anchor(topic)}")
-    header = [BEGIN_MARKER, _INSTRUCTION]
-    body = ["topic | kind | confirmed? | anchor"] + rows if rows else []
-    while True:
-        block = "\n".join(header + body + [END_MARKER])
-        if len(block.encode("utf-8")) <= MAX_INDEX_BYTES or len(body) <= 1:
-            return block
-        body.pop()
+    """The AGENTS.md managed block. STABLE by design (ignores `items`): it is a
+    pointer to `.memphant/MEMORY.md`, not the memory index, so a committed
+    AGENTS.md never churns. The index itself lives in MEMORY.md."""
+    return STABLE_BLOCK
 
 
 def upsert_managed_block(existing: str, block: str) -> str:
