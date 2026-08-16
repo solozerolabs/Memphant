@@ -7901,12 +7901,19 @@ fn capture_episode_source(source_ref: &str) -> Option<CaptureSource> {
 
 /// The memory kind a capture channel mints. The KIND HINT is the channel
 /// itself: `capture://errfix` (the deterministic error→fix pairing) is a
-/// procedure, every other family is a provisional belief. Carrying the hint in
-/// the `source_ref` keeps it zero-schema — no payload field, no job column.
+/// procedure; every other family is a semantic fact. Trust lives in the unit
+/// STATE (a capture lands `Candidate` via the trust clamp and is served
+/// labelled `[unconfirmed]` until the survival witness promotes it), NOT in the
+/// kind — so a captured fact is `Semantic`, not `Belief`. Minting `Semantic`
+/// also decouples capture delivery from `include_beliefs`: the coding lane
+/// serves a captured Candidate by its `capture` marker regardless of kind, and
+/// the general lane still hides Candidates (anti-poison), so no surface has to
+/// opt into beliefs to see captures. Carrying the hint in the `source_ref`
+/// keeps it zero-schema — no payload field, no job column.
 fn capture_kind(source: CaptureSource) -> MemoryKind {
     match source {
         CaptureSource::ErrFix => MemoryKind::Procedural,
-        CaptureSource::Mirror | CaptureSource::Summary => MemoryKind::Belief,
+        CaptureSource::Mirror | CaptureSource::Summary => MemoryKind::Semantic,
     }
 }
 

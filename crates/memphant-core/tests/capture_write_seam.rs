@@ -1,7 +1,8 @@
 //! Capture WRITE SEAM — end-to-end BDD tests for the service verb that SETS the
 //! `payload.capture` marker (Stage A only READS it). A capture is a `retain`
 //! Episode whose `source_ref` is `capture://mirror` or `capture://summary`; the
-//! reflect nominator mints ONE inert `Belief` candidate carrying the fresh
+//! reflect nominator mints ONE inert `Semantic` candidate (trust lives in the
+//! `Candidate` STATE + the `Captured` marker, not the kind) carrying the fresh
 //! `Captured` marker, and the Stage A engine (`run_capture_crosscheck`) ladders
 //! it on the reflect tail.
 //!
@@ -168,10 +169,10 @@ async fn mirror_and_summary_agree_promote_to_corroborated_and_recallable() {
     assert_eq!(
         captured.len(),
         2,
-        "both captures minted as beliefs: {captured:?}"
+        "both captures minted as semantic facts: {captured:?}"
     );
     for unit in &captured {
-        assert_eq!(unit.kind, MemoryKind::Belief);
+        assert_eq!(unit.kind, MemoryKind::Semantic);
         assert_eq!(unit.state, UnitState::Active, "promoted to active");
         assert_eq!(
             unit.trust_level,
@@ -359,8 +360,8 @@ async fn capture_can_never_become_a_preference() {
     let captured = open_captured_units(&store, &ctx).await;
     assert!(!captured.is_empty());
     assert!(
-        captured.iter().all(|u| u.kind == MemoryKind::Belief),
-        "a capture is always a belief, never a preference: {captured:?}"
+        captured.iter().all(|u| u.kind == MemoryKind::Semantic),
+        "a preference-sounding summary is a Semantic capture at Candidate state, never a Preference: {captured:?}"
     );
 }
 
@@ -427,7 +428,7 @@ async fn resynced_mirror_does_not_resurrect_an_invalidated_capture() {
 /// (`compact_only: false`) does NOT serve a Candidate; `include_beliefs: false`
 /// drops it from the coding lane too.
 #[tokio::test]
-async fn captured_belief_is_served_on_the_coding_lane() {
+async fn captured_semantic_is_served_on_the_coding_lane() {
     let store = Arc::new(InMemoryStore::default());
     let ctx =
         memphant_store_testkit::bind_context(store.as_ref(), TenantId::from_u128(92_050)).await;
@@ -463,11 +464,15 @@ async fn captured_belief_is_served_on_the_coding_lane() {
         general.iter().all(|item| item.unit_id != unit.id),
         "the general lane keeps Candidate invisible: {general:?}"
     );
+    // A captured Semantic is delivered on the coding lane REGARDLESS of
+    // include_beliefs — trust lives in the Candidate state, not a Belief kind,
+    // so no coding surface has to opt into beliefs to see captures.
     let no_beliefs = recall_items(&svc, &ctx, "cargo nextest unit tests", true, false).await;
     assert!(
-        no_beliefs.iter().all(|item| item.unit_id != unit.id),
-        "perturbation: include_beliefs=false drops it: {no_beliefs:?}"
+        no_beliefs.iter().any(|item| item.unit_id == unit.id),
+        "a captured Semantic is served on the coding lane even with include_beliefs=false: {no_beliefs:?}"
     );
+    assert_eq!(unit.kind, MemoryKind::Semantic);
 }
 
 /// A CONFIRMED capture (promoted to `Active` by a `SourceAgreement`) is served

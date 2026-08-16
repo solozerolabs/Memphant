@@ -12692,10 +12692,28 @@ async fn prepare_compiled_write_from_snapshot_inner(
             // data subject or a trusted user may declare one. An untrusted
             // caller's preference hint degrades to a belief exactly as a
             // semantic hint does, rather than minting a standing constraint.
-            let low_trust_kind = candidate
-                .kind
-                .filter(|kind| !matches!(kind, MemoryKind::Semantic | MemoryKind::Preference))
-                .unwrap_or(MemoryKind::Belief);
+            // A CAPTURE is exempt from the semantic→belief degradation: its
+            // trust lives in the unit STATE (it lands `Candidate` via
+            // `low_trust_projection_state`) and the capture ladder, not in the
+            // kind. So honor its kind hint (Semantic/Procedural) — anti-poison
+            // still holds (Candidate state: general lane hides it, coding lane
+            // serves it labelled `[unconfirmed]`; AgentOutput trust label stays
+            // for high-risk suppression). This decouples capture delivery from
+            // `include_beliefs`. Non-capture untrusted hints still degrade:
+            // an untrusted caller may not mint a standing Semantic/Preference.
+            let low_trust_kind = if candidate.capture.is_some() {
+                // Preference stays blocked even for a capture (a standing
+                // constraint is actor-gated); every other kind hint is honored.
+                candidate
+                    .kind
+                    .filter(|kind| *kind != MemoryKind::Preference)
+                    .unwrap_or(MemoryKind::Semantic)
+            } else {
+                candidate
+                    .kind
+                    .filter(|kind| !matches!(kind, MemoryKind::Semantic | MemoryKind::Preference))
+                    .unwrap_or(MemoryKind::Belief)
+            };
             let unit = minted_unit(
                 new_id,
                 &input,
