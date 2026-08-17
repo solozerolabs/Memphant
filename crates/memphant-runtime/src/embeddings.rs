@@ -31,9 +31,10 @@
 //!
 //! Reranking (W8): a local cross-encoder ([`FastEmbedCrossReranker`]) over
 //! fastembed's `TextRerank`, implementing the core [`CrossReranker`] seam. The
-//! default reranker model is `BAAI/bge-reranker-base` (fastembed's default,
-//! ~1.1 GB ONNX download on first use). Like the embedder it downloads lazily
-//! into the local fastembed cache and never in the default/CI build.
+//! default reranker model is `BAAI/bge-reranker-v2-m3` (the 2026-08-17
+//! bake-off winner; `MEMPHANT_RERANK_MODEL` selects an alternate built-in).
+//! Like the embedder it downloads lazily into the local fastembed cache on
+//! first use and never in the default/CI build.
 
 use std::sync::Mutex;
 
@@ -362,6 +363,43 @@ impl EmbeddingProvider for Qwen3Provider {
     }
 }
 
+/// `MEMPHANT_RERANK_MODEL` → a fastembed built-in cross-encoder + its provenance
+/// id. Default (unset) = `bge-reranker-v2-m3` — the 2026-08-17 real-corpus
+/// bake-off winner (ties hosted voyage-rerank-2.5 on coding recall@10, net +2,
+/// zero false demotions; strictly dominates the older bge-reranker-base). The
+/// others are opt-back / comparison arms, all self-hosted (fastembed downloads
+/// on first use). ponytail: four built-ins, add a BYO fallthrough only if a
+/// fifth model is needed.
+fn fastembed_reranker_model_from_env() -> Result<(RerankerModel, String), EmbedError> {
+    match std::env::var("MEMPHANT_RERANK_MODEL")
+        .ok()
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        None | Some("bge-reranker-v2-m3") => Ok((
+            RerankerModel::BGERerankerV2M3,
+            "fastembed:bge-reranker-v2-m3".to_string(),
+        )),
+        Some("bge-reranker-base") => Ok((
+            RerankerModel::BGERerankerBase,
+            FASTEMBED_RERANKER_ID.to_string(),
+        )),
+        Some("jina-v1-turbo") => Ok((
+            RerankerModel::JINARerankerV1TurboEn,
+            "fastembed:jina-reranker-v1-turbo-en".to_string(),
+        )),
+        Some("jina-v2-multilingual") => Ok((
+            RerankerModel::JINARerankerV2BaseMultiligual,
+            "fastembed:jina-reranker-v2-base-multilingual".to_string(),
+        )),
+        Some(other) => Err(EmbedError::Unavailable(format!(
+            "MEMPHANT_RERANK_MODEL expected bge-reranker-base, bge-reranker-v2-m3, \
+             jina-v1-turbo, or jina-v2-multilingual, got {other:?}"
+        ))),
+    }
+}
+
 /// Cross-encoder reranker (W8) over fastembed's `TextRerank`, implementing the
 /// core [`CrossReranker`] seam. `rerank` is `&self` (the trait is object-safe
 /// and shared behind an `Arc`), but fastembed's inference takes `&mut self`, so
@@ -372,8 +410,9 @@ pub struct FastEmbedCrossReranker {
 }
 
 impl FastEmbedCrossReranker {
-    /// Initializes `BAAI/bge-reranker-base` (downloads ~1.1 GB into the local
-    /// fastembed cache on first use; never in the default/CI build).
+    /// Initializes the env-selected cross-encoder (default `bge-reranker-v2-m3`;
+    /// `with_config` overwrites `config.model` with the real loaded id). Downloads
+    /// into the local fastembed cache on first use; never in the default/CI build.
     pub fn new() -> Result<Self, EmbedError> {
         Self::with_config(CrossRerankerConfig {
             provider: "fastembed".to_string(),
@@ -384,9 +423,10 @@ impl FastEmbedCrossReranker {
         })
     }
 
-    pub fn with_config(config: CrossRerankerConfig) -> Result<Self, EmbedError> {
-        let options = RerankInitOptions::new(RerankerModel::BGERerankerBase)
-            .with_max_length(config.max_length);
+    pub fn with_config(mut config: CrossRerankerConfig) -> Result<Self, EmbedError> {
+        let (model_kind, model_id) = fastembed_reranker_model_from_env()?;
+        config.model = model_id;
+        let options = RerankInitOptions::new(model_kind).with_max_length(config.max_length);
         let model = TextRerank::try_new(options)
             .map_err(|error| EmbedError::Unavailable(error.to_string()))?;
         Ok(Self {

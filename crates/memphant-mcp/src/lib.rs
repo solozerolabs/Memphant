@@ -1534,6 +1534,9 @@ mod deep_runtime_smoke {
             ),
             ("MEMPHANT_DEEP_OPENROUTER_BASE_URL", base_url),
             ("MEMPHANT_EMBEDDINGS", "off".to_string()),
+            // Pin rerank off: this scripts an exact deep-provider interaction and
+            // rerank (on by default) would reorder the snapshot non-deterministically.
+            ("MEMPHANT_CROSS_RERANK", "off".to_string()),
         ];
         let service = {
             let _env_lock = DEEP_ENV_LOCK

@@ -238,6 +238,10 @@ fn build_deep_service(
         ),
         ("MEMPHANT_DEEP_OPENROUTER_BASE_URL", base_url.to_string()),
         ("MEMPHANT_EMBEDDINGS", "off".to_string()),
+        // Rerank is on-by-default (server default), but this test scripts an
+        // exact deep-provider interaction; pin it off so the snapshot fed to the
+        // scripted provider stays deterministic (same reason embeddings are off).
+        ("MEMPHANT_CROSS_RERANK", "off".to_string()),
     ];
     let _env_lock = DEEP_ENV_LOCK
         .lock()

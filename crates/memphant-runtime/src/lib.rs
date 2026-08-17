@@ -428,10 +428,23 @@ pub fn build_service(store: AnyStore) -> MemoryService<AnyStore> {
                 .unwrap_or_else(|error| panic!("MEMPHANT_RERANK_GRANULARITY: {error}")),
         );
     let service = if cross_rerank_enabled_from_env() {
-        let reranker = build_cross_reranker().unwrap_or_else(|error| {
-            panic!("MEMPHANT_CROSS_RERANK=1: {error}");
-        });
-        service.with_cross_reranker(reranker)
+        match build_cross_reranker() {
+            Ok(reranker) => service.with_cross_reranker(reranker),
+            // On-by-default: a binary that can't build the reranker (e.g. built
+            // without the fastembed feature) serves without rerank rather than
+            // refusing to boot. An EXPLICIT opt-in stays loud — a misconfig there
+            // is worth a crash.
+            Err(error) if cross_rerank_explicitly_enabled_from_env() => {
+                panic!("MEMPHANT_CROSS_RERANK: {error}");
+            }
+            Err(error) => {
+                eprintln!(
+                    "memphant: cross-rerank on by default but reranker unavailable \
+                     ({error}) — serving without rerank"
+                );
+                service
+            }
+        }
     } else {
         service
     };
@@ -688,14 +701,30 @@ fn resource_chunks_write_from_env() -> bool {
     )
 }
 
-/// `MEMPHANT_CROSS_RERANK` → bool. Truthy (`1`/`true`/`on`, case-insensitive)
-/// enables the R1.5-T1 W8 cross-encoder rerank seam (the flag [`build_service`]
-/// gates [`build_cross_reranker`] construction behind); unset/empty/anything
-/// else keeps it OFF (the shipped default — recall stays byte-identical to
-/// today, no reranker constructed, no model-load cost). Mirrors
-/// `resource_chunks_write_from_env`/`recall_pool_depth_from_env`. Named
-/// distinctly from the retired heuristic rerank's request-level
+/// `MEMPHANT_CROSS_RERANK` → bool. DEFAULT ON since 2026-08-17: the W8
+/// cross-encoder (`bge-reranker-v2-m3`, self-hosted, $0) measured a clean +2 on
+/// the coding lane and is the only lever that rescues buried paraphrased-code
+/// golds, so pre-prod every user gets it. Set `0`/`false`/`off`
+/// (case-insensitive) to disable; unset/empty/anything else = ON. The
+/// [`build_service`] gate constructs [`build_cross_reranker`] only when this is
+/// on. Named distinctly from the retired heuristic rerank's request-level flag.
 fn cross_rerank_enabled_from_env() -> bool {
+    !matches!(
+        std::env::var("MEMPHANT_CROSS_RERANK")
+            .ok()
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("0") | Some("false") | Some("off")
+    )
+}
+
+/// True only when the operator EXPLICITLY set a truthy `MEMPHANT_CROSS_RERANK`
+/// (vs the on-by-default with the var unset). Lets [`build_service`] crash loud
+/// on an explicit opt-in whose reranker fails to build, while the default-on
+/// path degrades gracefully.
+fn cross_rerank_explicitly_enabled_from_env() -> bool {
     matches!(
         std::env::var("MEMPHANT_CROSS_RERANK")
             .ok()
@@ -1797,8 +1826,8 @@ mod tests {
     /// here is safe against parallel test execution; restored before
     /// returning.
     #[test]
-    fn cross_rerank_enabled_from_env_parses_truthy_values_and_defaults_false() {
-        use super::cross_rerank_enabled_from_env;
+    fn cross_rerank_enabled_from_env_defaults_on_and_only_explicit_off_disables() {
+        use super::{cross_rerank_enabled_from_env, cross_rerank_explicitly_enabled_from_env};
 
         const VAR: &str = "MEMPHANT_CROSS_RERANK";
         let saved = std::env::var(VAR).ok();
@@ -1809,27 +1838,53 @@ mod tests {
             std::env::remove_var(VAR);
         }
         assert!(
-            !cross_rerank_enabled_from_env(),
-            "unset defaults to OFF (byte-identical-to-today shipped default)"
+            cross_rerank_enabled_from_env(),
+            "unset defaults to ON (2026-08-17: bge-reranker-v2-m3 measured +2 on the coding lane)"
+        );
+        assert!(
+            !cross_rerank_explicitly_enabled_from_env(),
+            "unset is NOT an explicit opt-in (default-on degrades gracefully)"
         );
 
-        for off_value in ["", "0", "false", "off", "no", "garbage"] {
+        for off_value in ["0", "false", "off", "OFF", "  false  "] {
             unsafe {
                 std::env::set_var(VAR, off_value);
             }
             assert!(
                 !cross_rerank_enabled_from_env(),
-                "{off_value:?} must not enable cross-rerank"
+                "{off_value:?} must disable cross-rerank (case/whitespace-insensitive)"
             );
         }
 
-        for truthy in ["1", "true", "on", "TRUE", "On", "  1  "] {
+        // Anything not an explicit off value keeps it ON (fail-on), but only
+        // truthy strings count as an EXPLICIT opt-in.
+        for on_value in [
+            "", "1", "true", "on", "TRUE", "On", "  1  ", "yes", "garbage",
+        ] {
             unsafe {
-                std::env::set_var(VAR, truthy);
+                std::env::set_var(VAR, on_value);
             }
             assert!(
                 cross_rerank_enabled_from_env(),
-                "{truthy:?} must enable cross-rerank (truthy, case/whitespace-insensitive)"
+                "{on_value:?} must keep cross-rerank ON (only 0/false/off disable)"
+            );
+        }
+        for explicit in ["1", "true", "on", "TRUE", "  on  "] {
+            unsafe {
+                std::env::set_var(VAR, explicit);
+            }
+            assert!(
+                cross_rerank_explicitly_enabled_from_env(),
+                "{explicit:?} is an explicit opt-in (crash-loud on build failure)"
+            );
+        }
+        for not_explicit in ["", "yes", "garbage", "0"] {
+            unsafe {
+                std::env::set_var(VAR, not_explicit);
+            }
+            assert!(
+                !cross_rerank_explicitly_enabled_from_env(),
+                "{not_explicit:?} is not an explicit truthy opt-in"
             );
         }
 
