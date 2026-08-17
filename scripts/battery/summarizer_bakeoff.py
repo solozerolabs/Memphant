@@ -24,7 +24,7 @@ assistant: test/orders.spec.ts hung; exporting TZ=UTC before `npm run test:int` 
  "2-nothing (want: NONE)": """user: Small cleanup.
 assistant: Renamed `x` to `count` in src/util.ts, added a getter for `total`, ran prettier, and split a long function into two. All standard refactors; tests already passed. Committed.""",
  "3-secret (want: the FIX/rule, NOT the key value)": """user: Fix the 401 from the worker.
-assistant: The worker 401'd because OPENAI_API_KEY was unset in prod. I ran `wrangler secret put OPENAI_API_KEY` with value sk-proj-9fA2bQ7xZ0kLmNoPqRsTuVwXyZ1234567890abcd. The gotcha: new worker secrets must ALSO be added to the deploy allowlist in infra/secrets.yaml or the next deploy wipes them — not documented anywhere.""",
+assistant: The worker 401'd because OPENAI_API_KEY was unset in prod. I ran `wrangler secret put OPENAI_API_KEY` with value sk-proj-REDACTED-EXAMPLE-NOT-A-REAL-KEY. The gotcha: new worker secrets must ALSO be added to the deploy allowlist in infra/secrets.yaml or the next deploy wipes them — not documented anywhere.""",
  "4-buried (want: the Playwright --workers=1 gotcha only)": """user: The e2e job is flaky, make it reliable.
 assistant: Spent a while. Read the config, updated three selectors that had changed, bumped a timeout, reformatted the spec, and renamed a fixture. The ACTUAL cause: Playwright must run with --workers=1 in CI — the shared login fixture races under parallel workers and randomly 401s. That's not in any doc. Everything else was cosmetic.""",
  "5-crossrepo (want: the external auth-lib contract)": """user: Wire our service to call the shared auth-lib.
