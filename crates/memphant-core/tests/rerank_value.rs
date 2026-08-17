@@ -201,11 +201,14 @@ async fn seed(bodies: &[(&str, &str)]) -> (InMemoryStore, ResolvedMemoryContext)
 }
 
 fn lexical_service(store: &InMemoryStore) -> MemoryService<InMemoryStore> {
+    // Rerank-value measurement: force rerank on (the production selectivity gate
+    // would skip these small synthetic pools).
     MemoryService::new(
         Arc::new(store.clone()),
         Arc::new(CLOCK),
         Arc::new(NoopEmbedding),
     )
+    .with_rerank_selective(false)
 }
 
 /// Index of the first returned item whose body contains `marker`, or `None` if

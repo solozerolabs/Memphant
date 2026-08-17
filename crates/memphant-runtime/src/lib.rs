@@ -426,7 +426,8 @@ pub fn build_service(store: AnyStore) -> MemoryService<AnyStore> {
         .with_cross_rerank_granularity(
             cross_rerank_granularity_from_env()
                 .unwrap_or_else(|error| panic!("MEMPHANT_RERANK_GRANULARITY: {error}")),
-        );
+        )
+        .with_rerank_selective(rerank_selective_from_env());
     let service = if cross_rerank_enabled_from_env() {
         match build_cross_reranker() {
             Ok(reranker) => service.with_cross_reranker(reranker),
@@ -711,6 +712,23 @@ fn resource_chunks_write_from_env() -> bool {
 fn cross_rerank_enabled_from_env() -> bool {
     !matches!(
         std::env::var("MEMPHANT_CROSS_RERANK")
+            .ok()
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("0") | Some("false") | Some("off")
+    )
+}
+
+/// `MEMPHANT_RERANK_SELECTIVE` → bool. DEFAULT ON: recall skips the ~10s
+/// cross-encoder on recalls it provably can't help (small pool, or a top exact
+/// hit) so a hosted server doesn't rerank every recall. Set `0`/`false`/`off`
+/// to force rerank whenever a reranker is wired (a full-rerank measurement arm);
+/// unset/empty/anything else = selective. Inert unless rerank is enabled.
+fn rerank_selective_from_env() -> bool {
+    !matches!(
+        std::env::var("MEMPHANT_RERANK_SELECTIVE")
             .ok()
             .as_deref()
             .map(str::trim)

@@ -938,7 +938,12 @@ async fn run_bench_lme_async(options: &BenchLmeOptions) -> Result<BenchLmeReport
     // `recall_with_pool` itself, landing in `RetrievalTrace::cross_rerank_ms`
     // for both instead of only printing to bench's stderr).
     let recall_service = if options.cross_rerank {
-        recall_service.with_cross_reranker(memphant_runtime::build_cross_reranker()?)
+        // The bench measures rerank VALUE, so force rerank on every query
+        // (bypass the production selectivity gate that skips easy recalls) —
+        // otherwise the arm conflates the gate with the reranker's lift.
+        recall_service
+            .with_rerank_selective(false)
+            .with_cross_reranker(memphant_runtime::build_cross_reranker()?)
     } else {
         recall_service
     };

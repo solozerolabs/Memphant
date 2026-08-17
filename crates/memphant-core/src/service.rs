@@ -3598,6 +3598,12 @@ pub struct MemoryService<S: MemoryStore> {
     cross_reranker: Option<Arc<dyn CrossReranker>>,
     cross_rerank_candidate_selection: CrossRerankCandidateSelection,
     cross_rerank_granularity: CrossRerankGranularity,
+    /// Selectivity gate for the (default-on) cross-encoder rerank (DEFAULT
+    /// `true`). When `true`, recall skips rerank on recalls it provably cannot
+    /// help (see `should_rerank`) so a hosted server doesn't pay the ~10s
+    /// cross-encoder on every recall. `false` = always rerank when a reranker is
+    /// wired — the rerank-mechanism tests and any full-rerank measurement arm.
+    rerank_selective: bool,
     structured_state_provider: Option<Arc<dyn StructuredStateProvider>>,
     structured_state_prefetch_concurrency: usize,
     worker_compile_concurrency: usize,
@@ -3628,6 +3634,7 @@ impl<S: MemoryStore> Clone for MemoryService<S> {
             cross_reranker: self.cross_reranker.clone(),
             cross_rerank_candidate_selection: self.cross_rerank_candidate_selection,
             cross_rerank_granularity: self.cross_rerank_granularity,
+            rerank_selective: self.rerank_selective,
             structured_state_provider: self.structured_state_provider.clone(),
             structured_state_prefetch_concurrency: self.structured_state_prefetch_concurrency,
             worker_compile_concurrency: self.worker_compile_concurrency,
@@ -3654,6 +3661,7 @@ impl<S: MemoryStore> MemoryService<S> {
             cross_reranker: None,
             cross_rerank_candidate_selection: CrossRerankCandidateSelection::FusedHead,
             cross_rerank_granularity: CrossRerankGranularity::UnitBody,
+            rerank_selective: true,
             structured_state_provider: None,
             structured_state_prefetch_concurrency: DEFAULT_STRUCTURED_STATE_PREFETCH_CONCURRENCY,
             worker_compile_concurrency: DEFAULT_WORKER_COMPILE_CONCURRENCY,
@@ -3829,6 +3837,15 @@ impl<S: MemoryStore> MemoryService<S> {
     /// `--rerank-granularity`. Inert unless a cross-reranker is installed.
     pub fn with_cross_rerank_granularity(mut self, granularity: CrossRerankGranularity) -> Self {
         self.cross_rerank_granularity = granularity;
+        self
+    }
+
+    /// Overrides the rerank selectivity gate (default `true`). The runtime
+    /// threads `MEMPHANT_RERANK_SELECTIVE` here; rerank-mechanism tests and a
+    /// full-rerank measurement arm pass `false` to force rerank whenever a
+    /// cross-reranker is installed. Inert unless a cross-reranker is installed.
+    pub fn with_rerank_selective(mut self, selective: bool) -> Self {
+        self.rerank_selective = selective;
         self
     }
 
@@ -4577,6 +4594,7 @@ impl<S: MemoryStore> MemoryService<S> {
                 self.cross_rerank_granularity,
                 self.deep_recall_provider.as_deref(),
                 deep_started_at,
+                self.rerank_selective,
             )
             .await
             .map_err(ServiceError::from);
@@ -4621,6 +4639,7 @@ impl<S: MemoryStore> MemoryService<S> {
             self.cross_rerank_granularity,
             self.deep_recall_provider.as_deref(),
             deep_started_at,
+            self.rerank_selective,
         )
         .await?;
 

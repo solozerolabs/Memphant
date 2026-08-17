@@ -7331,6 +7331,8 @@ where
         CrossRerankGranularity::default(),
         None,
         None,
+        // Convenience wrapper: production default (selective rerank).
+        true,
     )
     .await
 }
@@ -7379,6 +7381,9 @@ where
         CrossRerankGranularity::default(),
         deep_provider,
         deep_started_at,
+        // Convenience wrapper uses the production default (selective rerank).
+        // Callers needing full-rerank control go through the service builder.
+        true,
     )
     .await
 }
@@ -7398,6 +7403,7 @@ pub(crate) async fn recall_with_pool_and_selection_and_deep_started<S>(
     cross_rerank_granularity: CrossRerankGranularity,
     deep_provider: Option<&dyn DeepRecallProvider>,
     deep_started_at: Option<std::time::Instant>,
+    rerank_selective: bool,
 ) -> Result<RecallResponse, CoreError>
 where
     S: MemoryStore,
@@ -7416,6 +7422,7 @@ where
         cross_rerank_granularity,
         deep_provider,
         deep_started_at,
+        rerank_selective,
     )
     .await
 }
@@ -7542,6 +7549,7 @@ async fn recall_with_pool_and_selection_impl<S>(
     cross_rerank_granularity: CrossRerankGranularity,
     deep_provider: Option<&dyn DeepRecallProvider>,
     deep_started_at: Option<std::time::Instant>,
+    rerank_selective: bool,
 ) -> Result<RecallResponse, CoreError>
 where
     S: MemoryStore,
@@ -7973,7 +7981,9 @@ where
     // tracing/log dependency in this crate to hook a real "debug" level into.
     let mut cross_rerank_ms: u64 = 0;
     let mut cross_rerank = None;
-    if let Some(reranker) = cross_reranker {
+    if let Some(reranker) =
+        cross_reranker.filter(|_| !rerank_selective || should_rerank(&fused, request.k))
+    {
         if cross_rerank_candidate_selection == CrossRerankCandidateSelection::VectorLexicalBalanced
         {
             promote_vector_lexical_balanced(
@@ -9042,6 +9052,34 @@ fn unsafe_procedure_step(unit: &StoredMemoryUnit) -> bool {
     ]
     .iter()
     .any(|phrase| body.contains(phrase))
+}
+
+/// Selectivity gate for the (default-on, ~10s) cross-encoder rerank stage: skip
+/// it when it provably cannot help, so a hosted server doesn't pay the
+/// cross-encoder on every recall. Both skips are win-preserving — the measured
+/// rerank win was on PARAPHRASED queries with no exact hit and the gold buried
+/// deep in the pool, and neither skip fires on those:
+///
+/// - `fused.len() <= k`: every candidate is already inside the returned top-k,
+///   so reordering cannot change recall@k (this alone makes the degenerate
+///   pool=1 recall a no-op).
+/// - the top fused candidate matched via [`RecallChannel::Exact`]: the query
+///   names its own answer, so a cross-encoder can't beat the exact hit; the
+///   paraphrased queries where rerank earns its keep have no exact top hit.
+///
+/// ponytail: no threshold knob — both conditions are always-correct-to-skip.
+/// Add a tunable query-hardness classifier only if real traffic shows these
+/// still leave too much rerank load (RRF k=60 compresses fused scores too much
+/// for a score-margin gate to discriminate, so that is deliberately not tried).
+fn should_rerank(fused: &[CandidateAccumulator], k: usize) -> bool {
+    if fused.len() <= k {
+        return false;
+    }
+    !fused.first().is_some_and(|top| {
+        top.channels
+            .iter()
+            .any(|(channel, _, _)| *channel == RecallChannel::Exact)
+    })
 }
 
 /// W8 cross-encoder rerank stage: reorder the top `pool` fused candidates by a
@@ -15991,6 +16029,39 @@ mod pack_cost_tests {
             decay,
             channels: Vec::new(),
         }
+    }
+
+    #[test]
+    fn should_rerank_skips_easy_recalls_but_keeps_the_buried_gold_case() {
+        let exact = |id: u128, score: f32| {
+            let mut c = candidate(unit(id, "body", Vec::new()), score);
+            c.channels = vec![(RecallChannel::Exact, 0, score)];
+            c
+        };
+        let fuzzy = |id: u128, score: f32| {
+            let mut c = candidate(unit(id, "body", Vec::new()), score);
+            c.channels = vec![
+                (RecallChannel::Vector, 0, score),
+                (RecallChannel::Lexical, 3, score),
+            ];
+            c
+        };
+
+        // pool <= k: every candidate already returned → skip (also covers pool=1).
+        let small: Vec<_> = (0..5).map(|i| fuzzy(i, 1.0 - i as f32 * 0.1)).collect();
+        assert!(!should_rerank(&small, 10));
+
+        // deep pool, top is an EXACT hit → easy recall → skip.
+        let mut easy: Vec<_> = (0..40).map(|i| fuzzy(i + 1, 0.5)).collect();
+        easy.insert(0, exact(0, 1.0));
+        assert!(!should_rerank(&easy, 10));
+
+        // deep pool, NO exact top hit (paraphrased query, gold buried) → the
+        // win case → rerank. Perturbation: flipping the top to Exact skips it.
+        let mut hard: Vec<_> = (0..41).map(|i| fuzzy(i, 0.5)).collect();
+        assert!(should_rerank(&hard, 10));
+        hard[0].channels = vec![(RecallChannel::Exact, 0, 0.5)];
+        assert!(!should_rerank(&hard, 10));
     }
 
     /// The A-recency control's whole read rule, tested without the env flag so

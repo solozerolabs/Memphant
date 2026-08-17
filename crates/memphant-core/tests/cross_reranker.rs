@@ -167,11 +167,15 @@ fn test_config(candidate_limit: usize) -> CrossRerankerConfig {
 }
 
 fn stub_service(store: InMemoryStore) -> MemoryService<InMemoryStore> {
+    // These tests exercise the rerank MECHANISM (determinism, fail-open,
+    // granularity) on small stub pools; force rerank on (the production
+    // selectivity gate would otherwise skip small/exact pools).
     MemoryService::new(
         Arc::new(store),
         Arc::new(CLOCK),
         Arc::new(StubEmbedding::default()),
     )
+    .with_rerank_selective(false)
 }
 
 fn retain_request(
@@ -328,6 +332,7 @@ async fn vector_lexical_balance_preserves_a_vector_only_candidate_for_reranking(
         Arc::new(CLOCK),
         Arc::new(QuotaTestEmbedding),
     )
+    .with_rerank_selective(false)
     .with_cross_reranker(Arc::new(BoostReranker {
         needle: target.to_string(),
     }))
@@ -347,6 +352,7 @@ async fn vector_lexical_balance_preserves_a_vector_only_candidate_for_reranking(
         Arc::new(CLOCK),
         Arc::new(QuotaTestEmbedding),
     )
+    .with_rerank_selective(false)
     .with_cross_rerank_candidate_selection(CrossRerankCandidateSelection::VectorLexicalBalanced)
     .with_cross_reranker(Arc::new(BoostReranker {
         needle: target.to_string(),
