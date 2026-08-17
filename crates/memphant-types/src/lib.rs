@@ -592,10 +592,6 @@ pub struct RecallCandidateTrace {
     #[serde(default)]
     pub decay_retrievability: f32,
     #[serde(default)]
-    pub dsr_stability_days: Option<f32>,
-    #[serde(default)]
-    pub dsr_difficulty: Option<f32>,
-    #[serde(default)]
     pub dsr_reinforcement_count: u32,
     pub trust_level: TrustLevel,
     pub state: UnitState,
@@ -1386,10 +1382,6 @@ pub struct StoredMemoryUnit {
     pub transaction_from: Option<String>,
     pub transaction_to: Option<String>,
     #[serde(default)]
-    pub difficulty: Option<f32>,
-    #[serde(default)]
-    pub stability_days: Option<f32>,
-    #[serde(default)]
     pub last_reinforced_at: Option<String>,
     #[serde(default)]
     pub reinforcement_count: u32,
@@ -1781,7 +1773,7 @@ pub const TRACE_SCHEMA_VERSION: &str = "trace-0.1.0-ws0";
 /// `MIGRATION_HEAD` and this value, so a correctly-migrated database reported
 /// as incompatible and the server never became ready. Pinned by
 /// `migrations_manifest.rs::schema_compat_revision_matches_the_newest_migration`.
-pub const SCHEMA_COMPAT_REVISION: &str = "20260814_011_portable_agent_memory";
+pub const SCHEMA_COMPAT_REVISION: &str = "20260817_013_drop_dead_fsrs_columns";
 pub const METHODOLOGY_VERSION: &str = "memphant-methodology-2026-07-03";
 pub const EXPORT_SCHEMA_VERSION: &str = "export-0.1.0-ws0";
 
@@ -2937,8 +2929,6 @@ mod correction_handle_tests {
             valid_to: None,
             transaction_from: None,
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         };

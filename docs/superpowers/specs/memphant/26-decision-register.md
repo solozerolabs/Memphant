@@ -490,12 +490,19 @@ correction lineage (`lib.rs:1519,1604-1608,1640-1642,5350`); this touched only
 `ChannelPass::Edge` / `edge_score` / the flag. Only 3 of 6 edge kinds are written;
 expansion targets the written kinds.
 
-**Decision C (parked).** FSRS `stability_days`/`difficulty` are dead columns
-(computed each recall then discarded, never persisted; `store.rs:4948-4955`
-excludes them from every UPDATE). Retrievability still reorders MARKED units.
-**Deferred choice:** persist them (a real spaced-repetition schedule) **or** drop
-the columns + default seeding. Lean: delete unless marking volume justifies a
-schedule (YAGNI). Not blocking A or B.
+**Decision C (IMPLEMENTED 2026-08-17 → DELETED).** FSRS `stability_days`/
+`difficulty` were dead columns (staged NULL on insert, never written back — no
+`UPDATE ... SET` for either exists; the recall decay seed read
+`unit.stability_days.unwrap_or(DEFAULT_STABILITY_DAYS)`, so a perpetually-NULL
+column always resolved to the 7.0/5.0 default). **Chose delete** (YAGNI; persisting
+would be a real spaced-repetition feature whose value accrues only for marked
+units, and marking is sparse). Dropped both columns via migration
+`20260817_013_drop_dead_fsrs_columns.sql` (`breaking`) and removed the fields from
+`StoredMemoryUnit`, the PG select/insert, the `DecayScore` struct, and
+`RecallCandidateTrace.dsr_stability_days`/`dsr_difficulty`; the decay seed now
+reads the `DEFAULT_*` constants directly. Retrievability still reorders MARKED
+units via `review_event` + `reinforcement_count` (untouched). OpenAPI + trace-schema
+snapshots regenerated. Not blocking anything.
 
 **Reopen/verify test.** A: an MCP recall on a lexically-disjoint-but-semantically-
 near query returns the right unit (perturbation: remove the embedder → case

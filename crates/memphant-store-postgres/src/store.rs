@@ -690,7 +690,7 @@ impl PgStore {
                     source_resource_id, deletion_generation, payload,
                     {valid_from} as valid_from, {valid_to} as valid_to,
                     {tx_from} as transaction_from, {tx_to} as transaction_to,
-                    difficulty, stability_days, {reinforced} as last_reinforced_at,
+                    {reinforced} as last_reinforced_at,
                     reinforcement_count, tenant_id
              from memphant.memory_unit where {where_clause} {tail}",
             freshness = ts("freshness_due_at"),
@@ -801,8 +801,6 @@ impl PgStore {
                 row.try_get("transaction_from").map_err(backend)?,
             ),
             transaction_to: canonical_timestamp(row.try_get("transaction_to").map_err(backend)?),
-            difficulty: row.try_get("difficulty").map_err(backend)?,
-            stability_days: row.try_get("stability_days").map_err(backend)?,
             last_reinforced_at: canonical_timestamp(
                 row.try_get("last_reinforced_at").map_err(backend)?,
             ),
@@ -1012,15 +1010,15 @@ impl PgStore {
             "insert into memphant.memory_unit
                (id, tenant_id, data_subject_id, scope_id, agent_node_id, subject_generation,
                 kind, state, fact_key, predicate, body, payload, confidence, trust_level,
-                valid_from, valid_to, transaction_from, transaction_to, difficulty,
-                stability_days, last_reinforced_at, reinforcement_count, freshness_due_at,
+                valid_from, valid_to, transaction_from, transaction_to,
+                last_reinforced_at, reinforcement_count, freshness_due_at,
                 deletion_generation, actor_id, source_kind, source_ref, observed_at,
                 source_episode_id,
                 source_resource_id, churn_class)
              values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                      $15::timestamptz, $16::timestamptz, coalesce($17::timestamptz, now()),
-                     $18::timestamptz, $19, $20, $21::timestamptz, $22, $23::timestamptz,
-                     $24, $25, $26, $27, $28::timestamptz, $29, $30, $31)",
+                     $18::timestamptz, $19::timestamptz, $20, $21::timestamptz,
+                     $22, $23, $24, $25, $26::timestamptz, $27, $28, $29)",
         )
         .bind(unit.id.as_uuid())
         .bind(unit.tenant_id.as_uuid())
@@ -1040,8 +1038,6 @@ impl PgStore {
         .bind(&unit.valid_to)
         .bind(&unit.transaction_from)
         .bind(&unit.transaction_to)
-        .bind(unit.difficulty)
-        .bind(unit.stability_days)
         .bind(&unit.last_reinforced_at)
         .bind(unit.reinforcement_count as i32)
         .bind(&unit.freshness_due_at)
@@ -2259,8 +2255,6 @@ impl MemoryStore for PgStore {
             valid_to: unit.valid_to,
             transaction_from: unit.transaction_from,
             transaction_to: unit.transaction_to,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         };
@@ -2743,7 +2737,6 @@ impl MemoryStore for PgStore {
                       to_char(valid_to at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as valid_to,
                       to_char(transaction_from at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as transaction_from,
                       to_char(transaction_to at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as transaction_to,
-                      difficulty, stability_days,
                       to_char(last_reinforced_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as last_reinforced_at,
                       reinforcement_count, tenant_id, deep_source_kind, deep_source_id,
                       deep_source_body, deep_source_acl

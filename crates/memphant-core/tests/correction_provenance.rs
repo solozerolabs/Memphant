@@ -41,8 +41,6 @@ fn old_unit() -> StoredMemoryUnit {
         valid_to: Some("2027-01-01T00:00:00Z".to_string()),
         transaction_from: Some("2026-01-01T00:00:00Z".to_string()),
         transaction_to: None,
-        difficulty: None,
-        stability_days: None,
         last_reinforced_at: None,
         reinforcement_count: 0,
     }

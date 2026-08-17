@@ -32,7 +32,7 @@ handicaps every downstream value measurement. This hand-off fixes both.
 | **Reflect / sleep jobs** | ✅ wired, real consolidation | `claim_reflect_jobs` (SKIP LOCKED) → `persist_compiled_units` writes merges/supersedes/derives (`lib.rs:12134-12145`); kind-dispatched supersession (`lib.rs:13144-13158`) |
 | **reinforcement_count / confidence** | ✅ persisted-and-served | lifecycle UPDATE increments `reinforcement_count` (`store.rs:4952-4953`); `confidence` bound on insert, surfaced on `MemoryRecord` |
 | **Vector embeddings** | ⚠️ **split-brain** | Write path embeds (`service.rs:4787,4900,5320`), store does exact `<=>` halfvec scan per-profile (`store.rs:2908,2960`), **HTTP `/v1/recall` serves vectors** (`memphant-server/src/lib.rs:532`). **But the native MCP `recall` tool is `NoopEmbedding` by design** (`memphant-mcp/src/lib.rs:479` → `service.rs:3678-3683`) → lexical-only. **← WORK ITEM A** |
-| **FSRS decay** | ⚠️ **partial** | retrievability reorders **marked units only** (`lib.rs:11842-11870`, `7954`); `stability_days`/`difficulty` computed each recall then **discarded — dead columns**, never in any UPDATE (`store.rs:4948-4955`). **← FUTURE (parked)** |
+| **FSRS decay** | ⚠️ **partial** | retrievability reorders **marked units only** (`lib.rs:11842-11870`, `7954`) via `review_event`+`reinforcement_count`. The `stability_days`/`difficulty` dead columns were **DELETED** (Decision C, 2026-08-17, migration `20260817_013`); the decay seed reads the `DEFAULT_*` constants. |
 | **Knowledge-graph edges (recall expansion)** | ⚠️ **unwired + non-functional** | `edge_expansion_enabled` hardcoded `false` in the only public entry (`service.rs:4532`), absent from the wire type; forced-on it still surfaces nothing (see §3). **← WORK ITEM B** |
 | **Knowledge-graph edges (lineage substrate)** | ✅ used — do NOT delete | `DerivedFrom`/`Supersedes` drive correction lineage, invalidation, bitemporal remainder splitting (`lib.rs:1519,1604-1608,1640-1642,5350`) |
 
@@ -202,6 +202,12 @@ written kinds.
 ---
 
 ## 4. Already done
+- **DECISION C — FSRS dead columns: DELETED (2026-08-17).** `stability_days`/
+  `difficulty` were staged NULL and never written back (no `UPDATE ... SET`
+  existed); the decay seed always resolved to the `DEFAULT_*` constants. Dropped
+  both columns (migration `20260817_013`, `breaking`) + type fields + PG bindings
+  + `DecayScore`/`RecallCandidateTrace.dsr_*`; OpenAPI + trace-schema snapshots
+  regenerated. Chose delete over persist (YAGNI). See 26 §10 Decision C.
 - **WORK ITEM B — edge recall-expansion: fixed, measured, LEAVE-OFF (2026-08-17).**
   Root-caused the "non-functional" null to a harness artifact (edges seeded with a
   future `transaction_from`); channel works. Load-bearing perturbation-checked
@@ -235,10 +241,10 @@ written kinds.
   must be deleted/hidden before recall, else the agent re-greps and memory saves
   nothing. See `[[memphant-stageAB-and-surface-verdict]]`,
   `[[memphant-capture-revived-2026-08-15]]`.
-- **FSRS write-back or delete:** `stability_days`/`difficulty` are dead columns.
-  Either persist them (a real spaced-repetition schedule — but value accrues
-  only for marked units, and marking is sparse) or drop the columns + default
-  seeding. Lean: delete unless marking volume justifies a schedule (YAGNI).
+- **FSRS write-back or delete:** ✅ **DONE 2026-08-17 → deleted** (Decision C, §4).
+  The dead `stability_days`/`difficulty` columns were dropped. If a real
+  spaced-repetition schedule is ever wanted, it is a fresh feature (persist
+  computed state on review), not a resurrection of these columns.
 - **Kind classifier vs channel-provenance:** kind is currently pure channel
   provenance. A classifier is a separate, unproven bet — not in scope here.
 

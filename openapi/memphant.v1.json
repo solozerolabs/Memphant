@@ -1789,27 +1789,11 @@
               }
             ]
           },
-          "dsr_difficulty": {
-            "default": null,
-            "format": "float",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
           "dsr_reinforcement_count": {
             "default": 0,
             "format": "uint32",
             "minimum": 0,
             "type": "integer"
-          },
-          "dsr_stability_days": {
-            "default": null,
-            "format": "float",
-            "type": [
-              "number",
-              "null"
-            ]
           },
           "fused_rank": {
             "format": "uint",
@@ -3033,14 +3017,6 @@
               "null"
             ]
           },
-          "difficulty": {
-            "default": null,
-            "format": "float",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
           "fact_key": {
             "type": [
               "string",
@@ -3124,14 +3100,6 @@
               {
                 "type": "null"
               }
-            ]
-          },
-          "stability_days": {
-            "default": null,
-            "format": "float",
-            "type": [
-              "number",
-              "null"
             ]
           },
           "state": {

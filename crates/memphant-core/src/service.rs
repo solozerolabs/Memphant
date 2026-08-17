@@ -846,8 +846,6 @@ mod file_sync_tests {
             valid_to: None,
             transaction_from: Some(CLOCK.0.to_string()),
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         }

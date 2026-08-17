@@ -35,10 +35,12 @@ const PORTABLE_AGENT_MEMORY_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260814_011_portable_agent_memory.sql");
 const DROP_DEAD_TABLES_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260815_012_drop_dead_tables.sql");
+const DROP_DEAD_FSRS_COLUMNS_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260817_013_drop_dead_fsrs_columns.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260815_012_drop_dead_tables";
+pub const MIGRATION_HEAD: &str = "20260817_013_drop_dead_fsrs_columns";
 
 /// Bundled migrations in apply order.
 ///
@@ -81,7 +83,8 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "20260814_011_portable_agent_memory",
         PORTABLE_AGENT_MEMORY_SQL,
     ),
-    (MIGRATION_HEAD, DROP_DEAD_TABLES_SQL),
+    ("20260815_012_drop_dead_tables", DROP_DEAD_TABLES_SQL),
+    (MIGRATION_HEAD, DROP_DEAD_FSRS_COLUMNS_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[

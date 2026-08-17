@@ -4113,8 +4113,6 @@ impl MemoryStore for InMemoryStore {
             valid_to: unit.valid_to,
             transaction_from: unit.transaction_from,
             transaction_to: unit.transaction_to,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         });
@@ -7067,8 +7065,6 @@ fn quantity_rollups(
                     valid_to: None,
                     transaction_from: None,
                     transaction_to: None,
-                    difficulty: None,
-                    stability_days: None,
                     last_reinforced_at: None,
                     reinforcement_count: 0,
                 },
@@ -7267,8 +7263,6 @@ fn artifact_bundle(units: &[StoredMemoryUnit], request: &RecallRequest) -> Optio
             valid_to: None,
             transaction_from: None,
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         },
@@ -7877,8 +7871,6 @@ where
                 fused_score: None,
                 cross_rerank_rank: None,
                 decay_retrievability: decay.retrievability,
-                dsr_stability_days: decay.stability_days,
-                dsr_difficulty: decay.difficulty,
                 dsr_reinforcement_count: decay.reinforcement_count,
                 trust_level: unit.trust_level,
                 state: unit.state,
@@ -7921,8 +7913,6 @@ where
                 fused_score: None,
                 cross_rerank_rank: None,
                 decay_retrievability: decay.retrievability,
-                dsr_stability_days: decay.stability_days,
-                dsr_difficulty: decay.difficulty,
                 dsr_reinforcement_count: decay.reinforcement_count,
                 trust_level: unit.trust_level,
                 state: unit.state,
@@ -8516,8 +8506,6 @@ mod evidence_receipt_tests {
             valid_to: None,
             transaction_from: Some(NOW.to_string()),
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         };
@@ -9306,8 +9294,6 @@ struct CandidateAccumulator {
 #[derive(Clone, Copy)]
 struct DecayScore {
     retrievability: f32,
-    stability_days: Option<f32>,
-    difficulty: Option<f32>,
     reinforcement_count: u32,
 }
 
@@ -9315,8 +9301,6 @@ impl DecayScore {
     fn neutral(unit: &StoredMemoryUnit) -> Self {
         Self {
             retrievability: 1.0,
-            stability_days: unit.stability_days,
-            difficulty: unit.difficulty,
             reinforcement_count: unit.reinforcement_count,
         }
     }
@@ -11830,9 +11814,12 @@ fn decay_score_for(
     }
 
     let fsrs = FSRS::default();
+    // Seed the FSRS state from constants: the per-unit stability_days/difficulty
+    // columns were never persisted (always NULL), so this always used the
+    // defaults — the dead columns were dropped (26 §10 Decision C).
     let mut state = MemoryState {
-        stability: unit.stability_days.unwrap_or(DEFAULT_STABILITY_DAYS),
-        difficulty: unit.difficulty.unwrap_or(DEFAULT_DIFFICULTY),
+        stability: DEFAULT_STABILITY_DAYS,
+        difficulty: DEFAULT_DIFFICULTY,
     };
     let mut reinforcement_count = unit.reinforcement_count;
     let mut seen = std::collections::HashSet::new();
@@ -11877,8 +11864,6 @@ fn decay_score_for(
 
     DecayScore {
         retrievability,
-        stability_days: Some(state.stability),
-        difficulty: Some(state.difficulty),
         reinforcement_count,
     }
 }
@@ -13337,8 +13322,6 @@ mod capture_independence_tests {
             valid_to: None,
             transaction_from: Some("2026-07-01T00:00:00Z".to_string()),
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         }
@@ -13670,8 +13653,6 @@ mod compiled_citation_tests {
             valid_to: None,
             transaction_from: None,
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         };
@@ -14046,8 +14027,6 @@ fn minted_unit(
         valid_to: candidate.valid_to.clone(),
         transaction_from: Some(now.to_string()),
         transaction_to: None,
-        difficulty: None,
-        stability_days: None,
         last_reinforced_at: None,
         reinforcement_count: 0,
     }
@@ -14232,8 +14211,6 @@ fn compose_inferred_beliefs(
             valid_to: None,
             transaction_from: Some(now.to_string()),
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         });
@@ -14981,8 +14958,6 @@ mod temporal_grounding_tests {
             valid_to: None,
             transaction_from: None,
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         }
@@ -15880,8 +15855,6 @@ mod pack_cost_tests {
             valid_to: None,
             transaction_from: None,
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         }
@@ -17433,8 +17406,6 @@ mod deep_call_routing_tests {
             valid_to: None,
             transaction_from: Some("2026-07-25T00:00:00Z".to_string()),
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         }
@@ -17710,8 +17681,6 @@ mod ranking_channels_fixed_tests {
             valid_to: None,
             transaction_from: None,
             transaction_to: None,
-            difficulty: None,
-            stability_days: None,
             last_reinforced_at: None,
             reinforcement_count: 0,
         }
