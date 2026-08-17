@@ -451,22 +451,44 @@ embedder. No explicit conditional was needed — the existing recall vector gate
 no-model (`NoopEmbedding`) build, so the portable lane is preserved. Perturbation-
 checked test in `crates/memphant-core/tests/provider_free_recall.rs`.
 
-**Decision B (greenlit fix+measure, not delete).** Repair the edge
-recall-expansion channel, then measure its value. It is currently **unwired**
-(`edge_expansion_enabled` hardcoded false, `service.rs:4532`, absent from the wire
-type) **and non-functional when forced on** (the `DerivedFrom` detail is dropped
-downstream of channel scoring in `dormant_signal_value.rs`; root cause unpinned).
-That null is a **vacuity/bug signature, NOT proof edges add no value** — so
-deleting the channel would foreclose an unmeasured mechanism. **Reason:** we have
-never measured working edge expansion. Fix the downstream drop, expose the flag on
-the wire (default off), make the EDGE-1/EDGE-2 test verdicts load-bearing +
-perturbation-checked, then run a coding-haystack measurement (must raise retrieval
-of an edge-reachable, query-disjoint unit **without** resurfacing superseded
-content). **Hard constraint:** the edge **substrate** stays — `Supersedes`/
-`DerivedFrom` are load-bearing for correction lineage (`lib.rs:1519,1604-1608,
-1640-1642,5350`); this decision touches only `ChannelPass::Edge` / `edge_score` /
-the flag. Only 3 of 6 edge kinds are ever written; expansion targets the written
-kinds.
+**Decision B (measured 2026-08-17 → LEAVE-OFF; flag exposed, substrate stays).**
+Repaired the edge recall-expansion channel and measured it. **Finding: the
+channel was never broken.** The audit's "non-functional when forced on / detail
+dropped downstream, root cause unpinned" was **entirely a test-harness artifact**:
+`dormant_signal_value.rs::seed_edge` staged edges under `SystemClock` (wall-clock
+`transaction_from`, "the future" relative to the fixed recall clock), so
+`fetch_edges` correctly excluded them and the Edge channel never saw them. Seeding
+edges at the recall clock makes edge ON pull in the query-disjoint `DerivedFrom`
+detail (`channels=[(Edge, 1, 1.0)]`) and the corpus harness reports
+`details_on=12 details_off=0 poison_hits=0` — value-positive and non-poisoning.
+Done: repro fixed; EDGE-1/EDGE-2 asserts made load-bearing + perturbation-checked;
+a 12-topic corpus measurement added. **Flag placement (corrected):** an attempt to
+expose `edge_expansion_enabled` on the public `RecallHttpRequest` tripped a tested
+invariant — `rest_contract.rs::openapi_request_schemas_exclude_server_derived_and_engine_control_fields`
+explicitly forbids `edge_expansion_enabled`/`decay_enabled`/`rerank_enabled` from
+the public request schema. Engine-control flags are **server-controlled, never
+client wire fields**. So the flag stays on the core `RecallRequest` (hardcoded
+`false` in `service.rs`, = the LEAVE-OFF default), reachable for A/B via the core
+request exactly as `dormant_signal_value.rs` and the eval harness use it. A future
+served A/B would add a **server-side** (env/config) toggle following the same
+convention as the other engine flags — not a client-facing wire field.
+
+**Why the default STAYS OFF (not wire-on):** the Edge channel only **re-scores
+units already in the candidate pool** — it performs **no dedicated edge-neighbor
+fetch**. On Postgres the pool is bounded (FTS-matched + recency-top-100 +
+fact-key), so a truly query-disjoint, non-recent edge-reachable unit never enters
+the pool and edge expansion cannot reach it. The InMemory corpus number
+(`details_on=12`) **overstates production reach** because `InMemoryStore` returns
+ALL units (store-divergence; see [[memphant-store-divergence-antipattern]]). So
+the measured value is real for **in-pool** edge-reachable units but **unproven at
+scale**, and defaulting on adds per-recall edge-scoring cost for bounded benefit.
+**Path to unlock (future, not built):** add an edge-neighbor pool fetch (pull the
+edge-neighbors of the FTS/recency-matched heads into the pool), then re-measure on
+a Postgres-backed corpus; only then reconsider wire-on. **Hard constraint honored:**
+the edge **substrate** stays — `Supersedes`/`DerivedFrom` are load-bearing for
+correction lineage (`lib.rs:1519,1604-1608,1640-1642,5350`); this touched only
+`ChannelPass::Edge` / `edge_score` / the flag. Only 3 of 6 edge kinds are written;
+expansion targets the written kinds.
 
 **Decision C (parked).** FSRS `stability_days`/`difficulty` are dead columns
 (computed each recall then discarded, never persisted; `store.rs:4948-4955`
@@ -477,6 +499,7 @@ schedule (YAGNI). Not blocking A or B.
 
 **Reopen/verify test.** A: an MCP recall on a lexically-disjoint-but-semantically-
 near query returns the right unit (perturbation: remove the embedder → case
-flips). B: edge ON serves the edge-reachable unit and edge OFF does not (remove
-the edge → ON case flips); corpus measurement returns a positive, non-poisoning
-verdict before the flag defaults on.
+flips). B: edge ON serves the in-pool edge-reachable unit and edge OFF does not
+(remove the edge → ON case flips), and no superseded unit is ever resurfaced —
+both load-bearing in `dormant_signal_value.rs`. Reopen the wire-on question only
+behind an edge-neighbor pool fetch measured on a Postgres-backed corpus.

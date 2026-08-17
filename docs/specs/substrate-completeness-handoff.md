@@ -116,6 +116,26 @@ cheapest first:
 
 ## 3. WORK ITEM B — fix + measure edge recall-expansion
 
+> **✅ DONE 2026-08-17 → verdict LEAVE-OFF (flag exposed, substrate stays).**
+> The channel was **never broken**: the "non-functional when forced on" null was
+> a test-harness artifact — `dormant_signal_value.rs::seed_edge` staged edges
+> under `SystemClock` (future `transaction_from` vs the fixed recall clock), so
+> `fetch_edges` correctly excluded them. Seeding at the recall clock makes edge
+> ON pull in the query-disjoint `DerivedFrom` detail; the 12-topic corpus harness
+> reports `details_on=12 details_off=0 poison_hits=0` (value-positive,
+> non-poisoning). Done: repro fixed, EDGE-1/EDGE-2 asserts load-bearing +
+> perturbation-checked, corpus measurement added. **Flag stays server-controlled**
+> (core `RecallRequest`, hardcoded off) — NOT a public wire field: a tested
+> invariant (`rest_contract.rs`) forbids engine-control flags
+> (`edge_expansion_enabled`/`decay_enabled`/`rerank_enabled`) from the public
+> request schema, so a served A/B uses a server-side toggle, not client input.
+> **Default stays OFF:** the Edge channel only re-scores units ALREADY in the
+> candidate pool — no dedicated edge-neighbor fetch — so on Postgres (FTS +
+> recency-100 + fact-key pool) a query-disjoint, non-recent edge-reachable unit
+> never enters the pool. The InMemory corpus number overstates reach (InMemory
+> returns all units). Path to unlock: an edge-neighbor pool fetch, re-measured on
+> a Postgres-backed corpus. Full record: 26 §10 Decision B. As-was analysis below.
+
 ### Problem (two layers)
 1. **Unwired in production:** the only public entry hardcodes
    `edge_expansion_enabled: false` (`service.rs:4532`) and the flag is absent
@@ -182,6 +202,15 @@ written kinds.
 ---
 
 ## 4. Already done
+- **WORK ITEM B — edge recall-expansion: fixed, measured, LEAVE-OFF (2026-08-17).**
+  Root-caused the "non-functional" null to a harness artifact (edges seeded with a
+  future `transaction_from`); channel works. Load-bearing perturbation-checked
+  EDGE-1/EDGE-2 asserts + a 12-topic corpus measurement
+  (`details_on=12 details_off=0 poison_hits=0`). Flag stays a server-controlled
+  engine-control field on the core `RecallRequest` (hardcoded off), NOT a public
+  wire field — a tested invariant forbids it there. Verdict LEAVE-OFF: no
+  edge-neighbor pool fetch exists, so production reach is pool-bounded and the
+  InMemory number overstates it. Substrate untouched. See 26 §10 Decision B.
 - **WORK ITEM A — vector recall on the native MCP tool (2026-08-17).** Renamed
   `provider_free_recall_clone` → `ambient_free_recall_clone` and stopped
   stripping the local embedder; the MCP `recall` tool now serves the dense
