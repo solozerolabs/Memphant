@@ -10,11 +10,12 @@ use memphant_core::deep_recall::{
 use memphant_core::service::MemoryService;
 use memphant_core::{
     CrossReranker, CrossRerankerConfig, EmbedError, EmbeddingProvider, FixedClock, InMemoryStore,
-    MemoryStore,
+    MemoryStore, NoopEmbedding,
 };
 use memphant_types::{
-    ActorId, DeepProviderIdentity, DeepRecallLimits, MemoryKind, NewMemoryUnit, RecallHttpRequest,
-    RecallMode, ScopeId, TenantId, TrustLevel, UnitState,
+    ActorId, DeepProviderIdentity, DeepRecallLimits, MemoryKind, NewMemoryUnit, RecallChannel,
+    RecallHttpRequest, RecallMode, ResolvedMemoryContext, RetainEpisodeHttpRequest,
+    RetainEpisodePayload, RetainPayload, ScopeId, TenantId, TrustLevel, UnitState,
 };
 
 const CLOCK: FixedClock = FixedClock("2026-08-14T00:00:00Z");
@@ -107,7 +108,7 @@ fn request(context: &memphant_types::ResolvedMemoryContext, mode: RecallMode) ->
 }
 
 #[tokio::test]
-async fn provider_free_recall_clone_never_invokes_ambient_providers() {
+async fn ambient_free_recall_clone_keeps_embedder_but_strips_ambient_providers() {
     let store = InMemoryStore::default();
     let tenant = TenantId::new();
     let scope = ScopeId::new();
@@ -171,19 +172,19 @@ async fn provider_free_recall_clone_never_invokes_ambient_providers() {
             config_hash: "config".to_string(),
         },
     )));
-    let provider_free = service.provider_free_recall_clone();
+    let ambient_free = service.ambient_free_recall_clone();
 
-    let response = provider_free
+    let response = ambient_free
         .recall(context.clone(), request(&context, RecallMode::Fast))
         .await
-        .expect("lexical-only recall works");
+        .expect("recall works");
     assert_eq!(response.items.len(), 1);
     assert_eq!(
         response.items[0].body,
         "provider-free lexical recall remains available"
     );
 
-    let _ = provider_free
+    let _ = ambient_free
         .recall(
             context,
             request(
@@ -192,7 +193,157 @@ async fn provider_free_recall_clone_never_invokes_ambient_providers() {
             ),
         )
         .await;
-    assert_eq!(embedding_calls.load(Ordering::SeqCst), 0);
+    // The LOCAL embedder is kept — the clone runs the vector channel, so the
+    // MCP `recall` tool is semantic, not lexical-only.
+    assert!(
+        embedding_calls.load(Ordering::SeqCst) > 0,
+        "the recall clone keeps the local embedder and embeds the query"
+    );
+    // The AMBIENT providers stay stripped: no reranker, no deep-recall provider.
     assert_eq!(reranker_calls.load(Ordering::SeqCst), 0);
     assert_eq!(deep_calls.load(Ordering::SeqCst), 0);
+}
+
+/// A fixture embedder that maps a "topic" (`zephyr`/`alpha`) to one cluster and
+/// everything else to an orthogonal one, so a query and a stored body sharing
+/// NO tokens are still embedding-near. The ONLY channel that can surface such a
+/// unit is the vector channel — lexical/trigram cannot.
+#[derive(Clone, Copy, Default)]
+struct TopicEmbedding;
+
+impl EmbeddingProvider for TopicEmbedding {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Ok(texts
+            .iter()
+            .map(|text| {
+                let lower = text.to_lowercase();
+                if lower.contains("zephyr") || lower.contains("alpha") {
+                    vec![1.0, 0.0]
+                } else {
+                    vec![0.0, 1.0]
+                }
+            })
+            .collect())
+    }
+
+    fn dimensions(&self) -> usize {
+        2
+    }
+
+    fn id(&self) -> &str {
+        "test-topic-embedding"
+    }
+}
+
+fn topic_retain(context: &ResolvedMemoryContext, body: &str) -> RetainEpisodeHttpRequest {
+    RetainEpisodeHttpRequest {
+        subject_id: context.data_subject_id,
+        scope_id: context.scope_id,
+        actor_id: context.actor_id,
+        agent_node_id: context.agent_node_id,
+        subject_generation: context.subject_generation,
+        source_ref: "test:topic".to_string(),
+        observed_at: "2026-08-14T00:00:00Z".to_string(),
+        payload: RetainPayload::Episode(RetainEpisodePayload {
+            source_kind: "user".to_string(),
+            body: body.to_string(),
+            subject: None,
+            predicate: None,
+        }),
+    }
+}
+
+fn semantic_request(context: &ResolvedMemoryContext, query: &str) -> RecallHttpRequest {
+    RecallHttpRequest {
+        compact_only: false,
+        serve_captures: false,
+        subject_id: context.data_subject_id,
+        scope_id: context.scope_id,
+        actor_id: context.actor_id,
+        agent_node_id: context.agent_node_id,
+        subject_generation: context.subject_generation,
+        query: query.to_string(),
+        limit: Some(5),
+        budget_tokens: Some(512),
+        mode: Some(RecallMode::Fast),
+        include_beliefs: Some(true),
+        transaction_as_of: None,
+        valid_at: None,
+        aggregation_window: None,
+    }
+}
+
+/// WORK ITEM A: the recall clone the MCP `recall` tool uses must serve the
+/// dense vector channel, so the coding agent's own retrieval is semantic — not
+/// lexical-only. Perturbation-checked per the golden-non-vacuity rule: remove
+/// the embedder and the vector channel goes dark, so the surfacing is provably
+/// the vector channel and not lexical overlap.
+#[tokio::test]
+async fn recall_clone_serves_the_vector_channel_for_lexically_disjoint_queries() {
+    let store = InMemoryStore::default();
+    let service = MemoryService::new(
+        Arc::new(store.clone()),
+        Arc::new(CLOCK),
+        Arc::new(TopicEmbedding),
+    );
+    let tenant = TenantId::new();
+    let context = memphant_store_testkit::bind_context(&store, tenant).await;
+
+    // Body tokens are DISJOINT from the query below, but embedding-near.
+    service
+        .retain(
+            &context,
+            concat!("test:", line!()),
+            TrustLevel::TrustedUser,
+            topic_retain(&context, "zephyr gamma delta protocol"),
+        )
+        .await
+        .expect("retain");
+    service.run_worker_tick(usize::MAX).await.expect("reflect");
+
+    // The recall clone the MCP tool binds (`memphant-mcp/src/lib.rs`).
+    let clone = service.ambient_free_recall_clone();
+    let response = clone
+        .recall(context.clone(), semantic_request(&context, "alpha beta"))
+        .await
+        .expect("recall");
+    let trace = clone
+        .trace(&context, response.trace_id)
+        .await
+        .expect("trace fetch")
+        .expect("trace stored");
+    assert!(
+        trace
+            .candidates
+            .iter()
+            .any(|candidate| candidate.channel == RecallChannel::Vector),
+        "the recall clone must run the vector channel (it is stripped to Noop today)"
+    );
+    assert!(
+        response
+            .items
+            .iter()
+            .any(|item| item.body.contains("zephyr")),
+        "a lexically-disjoint, embedding-near query surfaces the unit through the clone"
+    );
+
+    // Perturbation: remove the embedder → the vector channel goes dark, proving
+    // the surfacing above was the vector channel and not lexical overlap.
+    let noop = MemoryService::new(Arc::new(store), Arc::new(CLOCK), Arc::new(NoopEmbedding));
+    let noop_response = noop
+        .recall(context.clone(), semantic_request(&context, "alpha beta"))
+        .await
+        .expect("recall");
+    let noop_trace = noop
+        .trace(&context, noop_response.trace_id)
+        .await
+        .expect("trace fetch")
+        .expect("trace stored");
+    assert!(
+        noop_trace
+            .candidates
+            .iter()
+            .all(|candidate| candidate.channel != RecallChannel::Vector),
+        "perturbation: with the embedder removed the vector channel produces nothing"
+    );
 }

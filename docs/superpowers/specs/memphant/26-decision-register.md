@@ -438,15 +438,18 @@ Full as-built map, anchors, acceptance, and the kickoff prompt live in
 `docs/specs/substrate-completeness-handoff.md`; this register records the
 decisions only.
 
-**Decision A (greenlit, not yet built).** Wire the native MCP `recall` tool to a
-live embedder so it serves the dense Vector channel. Today it is provider-free by
-design (`provider_free_recall_clone()` → `NoopEmbedding`,
-`memphant-mcp/src/lib.rs:479`, `memphant-core/src/service.rs:3678-3683`) and
-returns **lexical-only**; the vector channel is served only on HTTP `/v1/recall`.
+**Decision A (IMPLEMENTED 2026-08-17).** Wire the native MCP `recall` tool to a
+live embedder so it serves the dense Vector channel. It had been provider-free by
+design (`provider_free_recall_clone()` → `NoopEmbedding`) and returned
+**lexical-only**; the vector channel was served only on HTTP `/v1/recall`.
 **Reason:** "semantic recall" is the product pitch and the agent's own tool must
 honor it; it is also a prerequisite for a fair Stage-C efficiency measurement.
-Preserve the portable no-model lane by making the embedder **conditional on
-`dimensions() > 0`** (fastembed build → vectors; stripped build → lexical).
+**As built:** the clone was renamed `ambient_free_recall_clone` and now strips
+only the ambient providers (cross-reranker, deep-recall), keeping the local
+embedder. No explicit conditional was needed — the existing recall vector gate
+(`if self.embedder.dimensions() > 0`) already falls back to lexical for a
+no-model (`NoopEmbedding`) build, so the portable lane is preserved. Perturbation-
+checked test in `crates/memphant-core/tests/provider_free_recall.rs`.
 
 **Decision B (greenlit fix+measure, not delete).** Repair the edge
 recall-expansion channel, then measure its value. It is currently **unwired**

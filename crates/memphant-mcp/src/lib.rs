@@ -476,7 +476,7 @@ impl MemphantMcp {
 impl MemphantMcp {
     pub fn new(service: MemoryService<AnyStore>, bound: BoundTenant) -> Self {
         Self {
-            recall_service: service.provider_free_recall_clone(),
+            recall_service: service.ambient_free_recall_clone(),
             service,
             bound,
             tool_router: Self::tool_router(),

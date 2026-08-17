@@ -34,10 +34,10 @@ use crate::{
     CrossRerankCandidateSelection, CrossRerankGranularity, CrossReranker,
     DEFAULT_RECALL_POOL_DEPTH, EmbeddingProvider, EmbeddingTaskKind, FileSyncTransitionSnapshot,
     ForgetWrite, JobFilter, LexicalScorer, MemoryStore, MutationClaim, MutationClaimOutcome,
-    MutationLedgerStore, MutationResponse, MutationVerb, NoopEmbedding, PackLevers,
-    PreparedCompiledWrite, ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket,
-    StructuredSourceKind, StructuredStateProvider, StructuredStateRequest, TaskMemoryEventRow,
-    TaskOutcomeRow, VectorQuery, apply_correction_transition, apply_unit_forget_transition,
+    MutationLedgerStore, MutationResponse, MutationVerb, PackLevers, PreparedCompiledWrite,
+    ReflectJobRow, ScopePage, StoreError, StructuredExtractionPacket, StructuredSourceKind,
+    StructuredStateProvider, StructuredStateRequest, TaskMemoryEventRow, TaskOutcomeRow,
+    VectorQuery, apply_correction_transition, apply_unit_forget_transition,
     canonical_mutation_request_hash, correction_rectangles_with_ids, cosine_similarity,
     derive_episode_dedup_key, derive_fact_key, embedding_profile_for, evidence_slices_for_episode,
     fold_structured_observations, non_blank, normalize_component, parse_content_date,
@@ -3673,11 +3673,17 @@ impl<S: MemoryStore> MemoryService<S> {
     }
 
     /// Reuses this service's store, clock, and deterministic runtime settings
-    /// while removing every recall-time provider. Transport edges that promise
-    /// lexical-only recall use this instead of mutating process environment.
-    pub fn provider_free_recall_clone(&self) -> Self {
+    /// while removing the AMBIENT recall-time providers — the cross-encoder
+    /// reranker and the deep-recall provider, both external/network-backed and
+    /// non-deterministic. The local embedder is KEPT: it is in-process and
+    /// deterministic, and stripping it silently downgraded the MCP `recall`
+    /// tool to lexical-only (the dense vector channel never ran). Portability
+    /// is preserved without the strip — a no-model build constructs the service
+    /// with `NoopEmbedding` (`dimensions() == 0`), which the recall vector gate
+    /// already treats as "channel honestly disabled". Transport edges that must
+    /// avoid the ambient providers use this instead of mutating process env.
+    pub fn ambient_free_recall_clone(&self) -> Self {
         let mut service = self.clone();
-        service.embedder = Arc::new(NoopEmbedding);
         service.cross_reranker = None;
         service.deep_recall_provider = None;
         service

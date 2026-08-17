@@ -45,6 +45,18 @@ and third; FSRS is parked with a clear future call.
 
 ## 2. WORK ITEM A — vector recall on the native MCP tool
 
+> **✅ DONE 2026-08-17.** The recall clone now keeps the local embedder:
+> `provider_free_recall_clone` → **`ambient_free_recall_clone`**
+> (`memphant-core/src/service.rs`) strips only the ambient providers
+> (cross-reranker, deep-recall), not the embedder. The downstream vector gate
+> (`service.rs` `if self.embedder.dimensions() > 0`) already falls back to
+> lexical for a no-model (`NoopEmbedding`) build, so the portable lane is
+> preserved without the strip. Perturbation-checked test:
+> `crates/memphant-core/tests/provider_free_recall.rs::recall_clone_serves_the_vector_channel_for_lexically_disjoint_queries`
+> (lexically-disjoint, embedding-near query surfaces the unit via the Vector
+> channel; remove the embedder → the channel goes dark). The historical
+> as-was analysis below is retained for the record.
+
 ### Problem
 The agent's own `recall` MCP tool is semantically blind. `MemphantMcp::new`
 builds `recall_service = service.provider_free_recall_clone()`
@@ -169,7 +181,13 @@ written kinds.
 
 ---
 
-## 4. Already done (2026-08-16, committed)
+## 4. Already done
+- **WORK ITEM A — vector recall on the native MCP tool (2026-08-17).** Renamed
+  `provider_free_recall_clone` → `ambient_free_recall_clone` and stopped
+  stripping the local embedder; the MCP `recall` tool now serves the dense
+  vector channel. One-line fix (delete the `NoopEmbedding` swap) + honesty
+  rename + perturbation-checked test; the old lexical-only-contract test flipped
+  to assert the embedder is kept while ambient providers stay stripped.
 - `capture_kind`: mirror/summary → **Semantic** (was Belief), errfix →
   Procedural (`service.rs:7914-7919`).
 - Union recall lane (`serve_captures`) + dual file-projection pinned
