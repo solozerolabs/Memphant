@@ -7942,7 +7942,7 @@ fn fit_capture_body_to_ceiling(body: &str) -> Option<(String, bool)> {
     (!kept.trim().is_empty()).then_some((kept, true))
 }
 
-/// The single captured candidate minted from a capture Episode — a `Belief`
+/// The single captured candidate minted from a capture Episode — a `Semantic`
 /// for `mirror`/`summary`, a `Procedural` for `errfix` (see `capture_kind`). It
 /// is keyed on the episode's `subject` so that a `mirror` and a `summary`
 /// capture for the SAME subject share a `fact_key` and the cross-check can pair

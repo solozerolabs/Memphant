@@ -6,11 +6,15 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-# The MCP binary runs its OWN recall (it binds a store + core service), so it
-# needs a live embedder or the dense Vector channel silently degrades to
-# NoopEmbedding (lexical-only recall). Mirror memphant-server: ship fastembed by
-# default so a standalone `cargo build -p memphant-mcp` is not vector-dead and no
-# longer depends on workspace feature-unification to pull the feature in.
+# fastembed is needed for the MCP `remember` WRITE path: it embeds unit bodies on
+# ingest (full embedder, dimensions() > 0) so the dense Vector channel has vectors
+# to search. Without it, `cargo build -p memphant-mcp` stores no embeddings and the
+# server's `/v1/recall` vector channel is dead for anything this binary wrote.
+# NOTE: the MCP's own `recall` tool is provider-free BY DESIGN (NoopEmbedding, the
+# compact-only portable lane) and is lexical regardless of this feature — vector
+# recall is served on the HTTP `/v1/recall` path, not the native MCP recall tool.
+# Mirror memphant-server: ship fastembed by default rather than depend on workspace
+# feature-unification to pull it in.
 [features]
 default = ["fastembed"]
 fastembed = ["memphant-runtime/fastembed"]

@@ -430,3 +430,50 @@ posture already adopted for high-risk args, applied to promotion.
 build with outcome-verified, per-entry-reversible admission per this decision.
 Phase A stays flat → the lane stays closed and only the three borrowed data-shape
 invariants (above) apply to any promotion path that does open.
+
+## 10. Substrate Completeness — Vector-on-MCP + Edge Recall-Expansion (D-2026-08-16)
+
+A three-trace substrate audit found the served path **schema-rich, served-thin**.
+Full as-built map, anchors, acceptance, and the kickoff prompt live in
+`docs/specs/substrate-completeness-handoff.md`; this register records the
+decisions only.
+
+**Decision A (greenlit, not yet built).** Wire the native MCP `recall` tool to a
+live embedder so it serves the dense Vector channel. Today it is provider-free by
+design (`provider_free_recall_clone()` → `NoopEmbedding`,
+`memphant-mcp/src/lib.rs:479`, `memphant-core/src/service.rs:3678-3683`) and
+returns **lexical-only**; the vector channel is served only on HTTP `/v1/recall`.
+**Reason:** "semantic recall" is the product pitch and the agent's own tool must
+honor it; it is also a prerequisite for a fair Stage-C efficiency measurement.
+Preserve the portable no-model lane by making the embedder **conditional on
+`dimensions() > 0`** (fastembed build → vectors; stripped build → lexical).
+
+**Decision B (greenlit fix+measure, not delete).** Repair the edge
+recall-expansion channel, then measure its value. It is currently **unwired**
+(`edge_expansion_enabled` hardcoded false, `service.rs:4532`, absent from the wire
+type) **and non-functional when forced on** (the `DerivedFrom` detail is dropped
+downstream of channel scoring in `dormant_signal_value.rs`; root cause unpinned).
+That null is a **vacuity/bug signature, NOT proof edges add no value** — so
+deleting the channel would foreclose an unmeasured mechanism. **Reason:** we have
+never measured working edge expansion. Fix the downstream drop, expose the flag on
+the wire (default off), make the EDGE-1/EDGE-2 test verdicts load-bearing +
+perturbation-checked, then run a coding-haystack measurement (must raise retrieval
+of an edge-reachable, query-disjoint unit **without** resurfacing superseded
+content). **Hard constraint:** the edge **substrate** stays — `Supersedes`/
+`DerivedFrom` are load-bearing for correction lineage (`lib.rs:1519,1604-1608,
+1640-1642,5350`); this decision touches only `ChannelPass::Edge` / `edge_score` /
+the flag. Only 3 of 6 edge kinds are ever written; expansion targets the written
+kinds.
+
+**Decision C (parked).** FSRS `stability_days`/`difficulty` are dead columns
+(computed each recall then discarded, never persisted; `store.rs:4948-4955`
+excludes them from every UPDATE). Retrievability still reorders MARKED units.
+**Deferred choice:** persist them (a real spaced-repetition schedule) **or** drop
+the columns + default seeding. Lean: delete unless marking volume justifies a
+schedule (YAGNI). Not blocking A or B.
+
+**Reopen/verify test.** A: an MCP recall on a lexically-disjoint-but-semantically-
+near query returns the right unit (perturbation: remove the embedder → case
+flips). B: edge ON serves the edge-reachable unit and edge OFF does not (remove
+the edge → ON case flips); corpus measurement returns a positive, non-poisoning
+verdict before the flag defaults on.

@@ -40,6 +40,12 @@ The first public build implements every stage **contract** — the stage slot, i
 
 The stage contract is more important than the first implementation. It preserves levers.
 
+**As-built note (served-path audit, 2026-08-16).** The stage *contracts* all exist; three channel *behaviors* diverge from this spec on the served path. Full map + fixes in `docs/specs/substrate-completeness-handoff.md`.
+
+- **Stage 3 vector — split-brain.** The dense vector channel is served on the HTTP `/v1/recall` path (`memphant-server`), but the native MCP `recall` tool is provider-free by design (`NoopEmbedding`, `memphant-mcp/src/lib.rs:479` → `memphant-core/src/service.rs:3678-3683`), so the agent's own tool returns **lexical-only** results. Known gap, being fixed (hand-off Work Item A). The store-side search is exact brute-force `<=>` halfvec scan per-profile (`memphant-store-postgres/src/store.rs:2908,2960`) — intentionally no ANN/HNSW, despite the Stage-3 contract's "ANN/exact" wording.
+- **Stage 4 edge expansion — unwired + non-functional.** `edge_expansion_enabled` is hardcoded `false` in the only public entry (`service.rs:4532`) and is absent from the wire type; forced on in tests it still surfaces nothing (the `DerivedFrom` detail is dropped downstream of channel scoring; root cause unpinned). Being fixed + measured (hand-off Work Item B). Scope-critical distinction: the edge **substrate** (`Supersedes`/`DerivedFrom`) is load-bearing for correction lineage and must **NOT** be deleted — only the recall-expansion channel is dead. Only 3 of 6 edge kinds are ever written (`Supersedes`/`DerivedFrom`/`SameSubject`; never `Contradicts`/`Cites`/`DependsOn`).
+- **FSRS decay — retrievability reorders MARKED units only.** `stability_days`/`difficulty` are computed each recall then discarded — dead columns, never persisted (no UPDATE writes them). "Persist-or-delete" is a parked future decision.
+
 ## 1.2 Fusion Weighting + Context Assembly
 
 **Fusion (Stage 5)** is weighted RRF — `fused = Σ_channel w[ch]·1/(60 + rank_ch)`. The interface is frozen; the weights are a checked-in table (learned weights are rung-13, data-gated). The vector is keyed by `query_features` deterministically (no hot-path LLM):
