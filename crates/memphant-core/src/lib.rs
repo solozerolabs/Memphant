@@ -7754,6 +7754,35 @@ where
         }
         None => None,
     };
+    // Targeted-injection floor: drop procedural/adherence lessons the query does
+    // not semantically trigger, so a lesson injects only when relevant (measured
+    // over-injection fix — see `PROCEDURAL_RELEVANCE_FLOOR`). Only when a vector
+    // query actually ran; a no-embedder recall leaves procedural admission
+    // exactly as before. ponytail: silent drop (not traced in `dropped_items`) —
+    // trace it under a dedicated RecallDropReason if the gate ever needs an
+    // audit trail; today it mirrors the vector channel's own silent top-N bound.
+    if let Some(scores) = vector_scores.as_ref() {
+        // The literal-trigger signal must be CONTENT overlap, not stopword
+        // overlap: "write a haiku about the ocean" shares "a"/"the"/"about" with
+        // a coding lesson's body but does not NAME it, so filter the query to
+        // content tokens before the exact/lexical check (else every query trips
+        // the signal and the floor never bites — measured 2026-08-18).
+        let content_query: Vec<String> = query_tokens
+            .iter()
+            .filter(|token| !is_stopword(token))
+            .cloned()
+            .collect();
+        tenant_units.retain(|unit| {
+            let has_lexical_signal = exact_score(unit, &content_query) > 0.0
+                || lexical_score(unit, &content_query) > 0.0;
+            procedural_relevance_admits(
+                unit.kind,
+                scores.get(&unit.id).copied(),
+                PROCEDURAL_RELEVANCE_FLOOR,
+                has_lexical_signal,
+            )
+        });
+    }
     let artifact_bundle = artifact_bundle(&tenant_units, &request);
     if let Some(bundle) = artifact_bundle {
         let source_ids = bundle
@@ -8957,6 +8986,108 @@ fn trace_filter_drops(
             })
         })
         .collect()
+}
+
+/// Targeted-injection floor for adherence/procedural lessons. Calibrated
+/// 2026-08-18 against real bge-small on a two-lesson probe (a full-local-gate
+/// lesson + a SQL-migration lesson): a verify-task scores cos 0.636–0.753 to its
+/// OWN lesson but only 0.539–0.608 to the wrong lesson, and a migration-task
+/// 0.737 to its own vs 0.494 to the gate lesson. A floor of 0.62 keeps every
+/// right-lesson match and drops every wrong-lesson AND every off-topic task
+/// (haiku 0.484, recipe 0.513). Without a floor EVERY Active compact procedural
+/// unit injects on EVERY query (measured over-injection — an "ocean haiku" task
+/// pulled in coding lessons). CAVEAT: the right-vs-wrong margin is THIN (0.608 vs
+/// 0.636) — two similar coding lessons sit close in bge-small space, so 0.62 is
+/// deliberately precision-leaning (better to miss a marginal lesson than inject a
+/// wrong one, per the adherence B-slice evidence that broad injection is
+/// flat/harmful). ponytail: a const, not a `MemoryService` knob — the value is
+/// corpus/embedder-dependent and wants calibration on real lessons; promote it to
+/// an env-tunable field the moment a measured corpus shows 0.62 is wrong.
+const PROCEDURAL_RELEVANCE_FLOOR: f32 = 0.62;
+
+/// Whether a candidate clears the procedural relevance gate. Only PROCEDURAL
+/// units are gated; everything else passes. A gated lesson is admitted with REAL
+/// relevance evidence: either the vector channel scored it at/above the floor,
+/// OR the query literally hit its trigger/body (`has_lexical_signal` — a
+/// non-zero exact or lexical token overlap). A lesson with NO signal at all
+/// (semantically far AND no token overlap — the measured over-injection case,
+/// e.g. an "ocean haiku" task pulling in a coding lesson) does not pass.
+/// `vector_score == None` means absent from the vector top-N; a lexical hit can
+/// still admit it. The CALLER only applies this when a vector query ran, so a
+/// no-embedder recall skips the gate entirely and keeps prior behaviour.
+/// A minimal English function-word set, used ONLY to keep the procedural
+/// relevance gate's literal-trigger signal from firing on stopword overlap
+/// (`the`/`a`/`about` are shared by nearly every query, so counting them as a
+/// trigger hit defeats the floor). Deliberately small and greppable — not a
+/// full stoplist; content tokens are what a lesson's trigger is keyed on.
+fn is_stopword(token: &str) -> bool {
+    matches!(
+        token,
+        "a" | "an"
+            | "the"
+            | "to"
+            | "of"
+            | "in"
+            | "on"
+            | "and"
+            | "or"
+            | "for"
+            | "it"
+            | "is"
+            | "be"
+            | "so"
+            | "as"
+            | "at"
+            | "by"
+            | "if"
+            | "my"
+            | "me"
+            | "i"
+            | "you"
+            | "your"
+            | "with"
+            | "that"
+            | "this"
+            | "about"
+            | "from"
+            | "but"
+            | "not"
+            | "are"
+            | "was"
+            | "were"
+            | "can"
+            | "do"
+            | "does"
+            | "did"
+            | "has"
+            | "have"
+            | "had"
+            | "will"
+            | "would"
+            | "should"
+            | "could"
+            | "then"
+            | "than"
+            | "into"
+            | "out"
+            | "up"
+            | "no"
+            | "yes"
+            | "please"
+            | "make"
+            | "sure"
+    )
+}
+
+fn procedural_relevance_admits(
+    kind: MemoryKind,
+    vector_score: Option<f32>,
+    floor: f32,
+    has_lexical_signal: bool,
+) -> bool {
+    kind != MemoryKind::Procedural
+        || has_lexical_signal
+        || vector_score.is_some_and(|score| score >= floor)
 }
 
 fn procedure_drop_reason(
@@ -16028,6 +16159,51 @@ mod pack_cost_tests {
             cross_rerank_rank: None,
             decay,
             channels: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn procedural_relevance_floor_gates_only_procedural_and_only_below_floor() {
+        let floor = super::PROCEDURAL_RELEVANCE_FLOOR;
+        use super::procedural_relevance_admits;
+        use memphant_types::MemoryKind;
+        let admits = |v: Option<f32>, lex: bool| {
+            procedural_relevance_admits(MemoryKind::Procedural, v, floor, lex)
+        };
+
+        // Procedural, no lexical hit: admitted iff a vector score clears the floor.
+        assert!(admits(Some(0.71), false));
+        assert!(admits(Some(floor), false));
+        assert!(!admits(Some(0.48), false));
+        // No vector evidence AND no lexical hit → dropped (the over-injection case).
+        assert!(!admits(None, false));
+        // A literal lexical/exact hit admits it even with sub-floor / no vector
+        // score — a lesson whose trigger/body the query actually names (the
+        // provider-free lexical-recall case).
+        assert!(admits(None, true));
+        assert!(admits(Some(0.10), true));
+
+        // Every other kind is never gated — even with no score and no lexical hit.
+        for kind in [
+            MemoryKind::Semantic,
+            MemoryKind::Belief,
+            MemoryKind::Episodic,
+            MemoryKind::Resource,
+            MemoryKind::Preference,
+        ] {
+            assert!(
+                procedural_relevance_admits(kind, None, floor, false),
+                "{kind:?}"
+            );
+        }
+        // Calibrated band at the 0.62 const (no lexical overlap): a verify-task
+        // clears the floor to its OWN lesson (right-lesson min 0.636) but not to
+        // the WRONG lesson (cross-injection max 0.608), and off-topic tasks fail
+        // outright — migration→gate 0.494, recipe 0.513, ocean-haiku 0.484.
+        assert!(admits(Some(0.636), false), "right-lesson match must pass");
+        assert!(admits(Some(0.737), false), "own-lesson match must pass");
+        for reject in [0.608_f32, 0.494, 0.513, 0.484] {
+            assert!(!admits(Some(reject), false), "must floor out {reject}");
         }
     }
 
