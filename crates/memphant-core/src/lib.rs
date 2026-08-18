@@ -9015,6 +9015,24 @@ const PROCEDURAL_RELEVANCE_FLOOR: f32 = 0.62;
 /// `vector_score == None` means absent from the vector top-N; a lexical hit can
 /// still admit it. The CALLER only applies this when a vector query ran, so a
 /// no-embedder recall skips the gate entirely and keeps prior behaviour.
+/// The text embedded for a unit's recall vector. A PROCEDURAL/adherence lesson
+/// matches on its TRIGGER (the "when to apply" condition), which separates the
+/// lesson from unrelated tasks far better than its advice body — measured
+/// 2026-08-18 against bge-small: a reworded verify-task scores cos 0.636 to its
+/// lesson's trigger but only 0.53 to the body, and the wrong lesson's body
+/// scores 0.60+ (the body-embedding's cross-injection). The recall relevance
+/// floor keys on this vector, so embedding the trigger is what makes it
+/// discriminate. Everything else — and a trigger-less procedural unit (e.g. a
+/// captured errfix with no explicit trigger) — embeds the body as before.
+fn recall_embedding_text(unit: &StoredMemoryUnit) -> String {
+    match (unit.kind, unit.predicate.as_deref()) {
+        (MemoryKind::Procedural, Some(trigger)) if !trigger.trim().is_empty() => {
+            trigger.to_string()
+        }
+        _ => unit.body.clone(),
+    }
+}
+
 /// A minimal English function-word set, used ONLY to keep the procedural
 /// relevance gate's literal-trigger signal from firing on stopword overlap
 /// (`the`/`a`/`about` are shared by nearly every query, so counting them as a
@@ -12981,7 +12999,7 @@ async fn prepare_compiled_write_from_snapshot_inner(
     let (embedding_profile, embeddings) =
         if embedder.provider().dimensions() > 0 && !new_units.is_empty() {
             let profile = embedding_profile_for(embedder.provider());
-            let bodies: Vec<String> = new_units.iter().map(|unit| unit.body.clone()).collect();
+            let bodies: Vec<String> = new_units.iter().map(recall_embedding_text).collect();
             let vectors = embedder
                 .embed_documents(bodies)
                 .await
@@ -16159,6 +16177,35 @@ mod pack_cost_tests {
             cross_rerank_rank: None,
             decay,
             channels: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn recall_embedding_text_uses_trigger_for_procedural_lessons_else_body() {
+        use super::recall_embedding_text;
+        let mut u = unit(1, "the advice body", Vec::new());
+        u.kind = MemoryKind::Procedural;
+        u.predicate = Some("verifying a code change".to_string());
+        assert_eq!(recall_embedding_text(&u), "verifying a code change");
+
+        // Procedural with no trigger → body (e.g. a captured errfix).
+        u.predicate = None;
+        assert_eq!(recall_embedding_text(&u), "the advice body");
+        u.predicate = Some("   ".to_string());
+        assert_eq!(recall_embedding_text(&u), "the advice body");
+
+        // Every non-procedural kind embeds the body even with a predicate set.
+        for kind in [
+            MemoryKind::Semantic,
+            MemoryKind::Belief,
+            MemoryKind::Episodic,
+            MemoryKind::Resource,
+            MemoryKind::Preference,
+        ] {
+            let mut v = unit(2, "another body", Vec::new());
+            v.kind = kind;
+            v.predicate = Some("a trigger".to_string());
+            assert_eq!(recall_embedding_text(&v), "another body", "{kind:?}");
         }
     }
 
