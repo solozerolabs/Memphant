@@ -1,38 +1,8 @@
 use std::process::ExitCode;
-use std::sync::Arc;
 
-use axum::extract::{Request, State};
-use axum::middleware::{Next, from_fn_with_state};
-use axum::response::{IntoResponse, Response};
 use memphant_mcp::MemphantMcp;
+use memphant_mcp::http::{McpAuth, allowed_hosts, streamable_http_router};
 use rmcp::ServiceExt;
-use rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
-};
-
-/// Per-request auth gate for the streamable-HTTP transport (stdio is
-/// per-principal by construction and needs none).
-#[derive(Clone)]
-struct McpAuth {
-    dev_mode: bool,
-    expected_key: Option<String>,
-}
-
-async fn require_auth(State(auth): State<McpAuth>, request: Request, next: Next) -> Response {
-    let header = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok());
-    if memphant_mcp::mcp_http_authorized(auth.dev_mode, auth.expected_key.as_deref(), header) {
-        next.run(request).await
-    } else {
-        (
-            axum::http::StatusCode::UNAUTHORIZED,
-            "unauthorized: MCP streamable-http requires `Authorization: Bearer <MEMPHANT_API_KEY>`\n",
-        )
-            .into_response()
-    }
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -101,8 +71,16 @@ async fn run_stdio() -> ExitCode {
     }
 }
 
-/// Streamable-HTTP transport (MCP 2025-11-25) on `MEMPHANT_MCP_BIND`
-/// (default 127.0.0.1:3333), path `/mcp`.
+/// Streamable-HTTP transport (MCP 2026-07-28, stateless) on
+/// `MEMPHANT_MCP_BIND` (default 127.0.0.1:3333), path `/mcp`.
+///
+/// Stateless by construction: `NeverSessionManager` + `legacy_session_mode =
+/// false`, so no `Mcp-Session-Id` is ever minted, every POST is self-contained
+/// (any machine can answer any request, restarts drop nothing), and older
+/// (2025-03-26..2025-11-25) clients are served their `initialize` handshake
+/// per-request without a session. `json_response = true` answers single-shot
+/// tool calls as plain `application/json` (rmcp still falls back to SSE if a
+/// handler streams notifications).
 async fn run_streamable_http() -> ExitCode {
     let handler = match build_handler().await {
         Ok(handler) => handler,
@@ -116,20 +94,15 @@ async fn run_streamable_http() -> ExitCode {
         .ok()
         .map(|key| key.trim().to_string())
         .filter(|key| !key.is_empty());
-    let service = StreamableHttpService::new(
-        move || Ok(handler.clone()),
-        Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default(),
+    let extra_hosts = std::env::var("MEMPHANT_MCP_ALLOWED_HOSTS").ok();
+    let router = streamable_http_router(
+        handler,
+        McpAuth {
+            dev_mode,
+            expected_key,
+        },
+        allowed_hosts(extra_hosts.as_deref()),
     );
-    let router = axum::Router::new()
-        .nest_service("/mcp", service)
-        .layer(from_fn_with_state(
-            McpAuth {
-                dev_mode,
-                expected_key,
-            },
-            require_auth,
-        ));
     let bind = std::env::var("MEMPHANT_MCP_BIND").unwrap_or_else(|_| "127.0.0.1:3333".to_string());
     match tokio::net::TcpListener::bind(&bind).await {
         Ok(listener) => {

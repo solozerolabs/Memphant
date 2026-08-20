@@ -1,4 +1,5 @@
-//! MemPhant MCP server on rmcp 2.2 (MCP 2025-11-25): five portable memory tools and
+//! MemPhant MCP server on rmcp 3.1 (MCP 2026-07-28, stateless streamable-HTTP
+//! with legacy-client compatibility): five portable memory tools and
 //! tenant-bound memory resources over the
 //! shared `MemoryService<AnyStore>`, a persistent stdio session, and an
 //! optional streamable-HTTP transport. The tenant is fixed at startup from
@@ -16,9 +17,9 @@ use memphant_types::{
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolResult, Implementation, ListResourceTemplatesResult, ListResourcesResult,
-    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult, Resource,
-    ResourceContents, ResourceTemplate, ServerCapabilities, ServerInfo,
+    CacheScope, CallToolResult, Implementation, ListResourceTemplatesResult, ListResourcesResult,
+    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
+    Resource, ResourceContents, ResourceTemplate, ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, Json, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -29,6 +30,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 mod file_memory;
+pub mod http;
 pub use file_memory::{
     ANTHROPIC_MEMORY_TOOL_TYPE, MAX_DIRECTORY_BYTES, MAX_DIRECTORY_ENTRIES, MAX_MEMORY_INDEX_BYTES,
     MAX_MEMORY_INDEX_LINES, MAX_RESOURCE_BYTES, MAX_TOPIC_BYTES, MAX_VIEW_CHARACTERS, MEMORY_ROOT,
@@ -774,7 +776,7 @@ impl ServerHandler for MemphantMcp {
     async fn list_resources(
         &self,
         request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, ErrorData> {
         let projection = self.memory_projection().await.map_err(memory_mcp_error)?;
         let snapshot = projection.snapshot().await.map_err(memory_mcp_error)?;
@@ -786,10 +788,8 @@ impl ServerHandler for MemphantMcp {
             100,
         )
         .map_err(memory_mcp_error)?;
-        Ok(ListResourcesResult {
-            meta: None,
-            next_cursor,
-            resources: items
+        let mut result = ListResourcesResult::with_all_items(
+            items
                 .into_iter()
                 .map(|item| {
                     Resource::new(
@@ -808,32 +808,66 @@ impl ServerHandler for MemphantMcp {
                     .with_size(item.body.len() as u64)
                 })
                 .collect(),
-        })
+        );
+        result.next_cursor = next_cursor;
+        if supports_cache_hints(&context) {
+            // Tenant memory listing: private to this principal, short freshness
+            // window (SEP-2549 requires the fields for 2026-07-28 peers).
+            result = result
+                .with_ttl_ms(RESOURCE_TTL_MS)
+                .with_cache_scope(CacheScope::Private);
+        }
+        Ok(result)
     }
 
     async fn read_resource(
         &self,
         request: ReadResourceRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResult, ErrorData> {
+        context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
         let content = self
             .read_bound_resource(&request.uri)
             .await
             .map_err(memory_mcp_error)?;
-        Ok(ReadResourceResult::new(vec![
+        let mut result = ReadResourceResult::new(vec![
             ResourceContents::text(content.text, content.uri).with_mime_type(content.mime_type),
-        ]))
+        ]);
+        if supports_cache_hints(&context) {
+            result = result
+                .with_ttl_ms(RESOURCE_TTL_MS)
+                .with_cache_scope(CacheScope::Private);
+        }
+        Ok(result.into())
     }
 
     async fn list_resource_templates(
         &self,
         _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<ListResourceTemplatesResult, ErrorData> {
-        Ok(ListResourceTemplatesResult::with_all_items(
-            resource_templates(),
-        ))
+        let mut result = ListResourceTemplatesResult::with_all_items(resource_templates());
+        if supports_cache_hints(&context) {
+            // Templates are static per build: shared caching is safe, generous ttl.
+            result = result
+                .with_ttl_ms(TEMPLATE_TTL_MS)
+                .with_cache_scope(CacheScope::Public);
+        }
+        Ok(result)
     }
+}
+
+/// Freshness window for tenant-bound resource listings/reads (SEP-2549).
+const RESOURCE_TTL_MS: u64 = 15_000;
+/// Freshness window for the static resource-template list (SEP-2549).
+const TEMPLATE_TTL_MS: u64 = 300_000;
+
+/// Whether the peer negotiated 2026-07-28+ and therefore expects the
+/// `ttlMs`/`cacheScope` cache hints (mirrors the `#[tool_handler]`-generated
+/// `tools/list` gating).
+fn supports_cache_hints(context: &RequestContext<RoleServer>) -> bool {
+    context
+        .protocol_version()
+        .is_some_and(|version| version >= rmcp::model::ProtocolVersion::V_2026_07_28)
 }
 
 fn memory_mcp_error(error: MemoryToolError) -> ErrorData {

@@ -25,7 +25,7 @@ axum.workspace = true
 memphant-core.workspace = true
 memphant-runtime = { path = "../memphant-runtime" }
 memphant-types.workspace = true
-rmcp = { version = "2.2", features = [
+rmcp = { version = "3.1", features = [
   "server",
   "macros",
   "schemars",
@@ -43,5 +43,5 @@ uuid.workspace = true
 
 [dev-dependencies]
 memphant-store-testkit.workspace = true
-rmcp = { version = "2.2", features = ["client"] }
+rmcp = { version = "3.1", features = ["client"] }
 tempfile.workspace = true
