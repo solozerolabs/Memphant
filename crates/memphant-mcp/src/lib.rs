@@ -6,6 +6,20 @@
 //! `MEMPHANT_API_KEY` (sha256 → api_key lookup) or `MEMPHANT_DEV_TENANT`
 //! (dev) — stdio is a per-principal transport; a missing/revoked key refuses
 //! to start rather than serving an unauthenticated session.
+//!
+//! Capability model (server-enforced, not a client convention): every tool
+//! resolves the live key on each call (`live_principal`), and the ONE
+//! destructive tool — `invalidate_memory` (archive + re-derivation-blocking
+//! tombstone) — additionally requires the owner-only `can_forget` capability,
+//! exactly like REST `/v1/forget`'s `require_can_forget`. A context-bound
+//! coding key (`can_forget=false`) is refused server-side with
+//! `capability_denied`, so it cannot destroy memory even if a client omits the
+//! tool from its allowlist. `remember` and `correct_memory` are
+//! non-destructive: the former mints usable Active memory but at the key's
+//! CLAMPED provenance trust (an `agent_output` key stores units at
+//! `agent_output`, so it cannot forge higher-trust memory that would suppress a
+//! genuinely trusted unit), the latter appends a bitemporal successor that
+//! leaves the prior value historically readable.
 
 use memphant_core::service::{MemoryService, ServiceError, clamp_trust, trust_rank};
 use memphant_core::{CoreError, MemoryStore, MutationResponse, StoreError};
@@ -165,6 +179,21 @@ pub struct LivePrincipal {
     pub can_audit_history: bool,
 }
 
+impl LivePrincipal {
+    /// Owner-only destructive-operation gate, mirroring the REST edge's
+    /// `require_can_forget` (`crates/memphant-server/src/lib.rs`). Default
+    /// false; a context-bound coding key never carries it. Gates the MCP
+    /// tombstone path (`invalidate_memory`) so the capability model is a
+    /// server-side moat, not a client-allowlist convention.
+    fn require_can_forget(&self) -> Result<(), McpRecallFailure> {
+        if self.can_forget {
+            Ok(())
+        } else {
+            Err(McpRecallFailure::CapabilityDenied("can_forget"))
+        }
+    }
+}
+
 /// Resolves the fixed tenant from the environment:
 /// - `MEMPHANT_DEV_TENANT=<uuid>` → dev mode (loud, trust ceiling
 ///   `trusted_system`, body tenant ids ignored);
@@ -283,6 +312,11 @@ enum McpRecallOutput {
 enum McpRecallFailure {
     Auth(&'static str),
     Scope(&'static str),
+    /// The live key lacks an owner-only operation capability (the name, e.g.
+    /// `can_forget`). Mirrors the REST edge's `capability_denied` (403), so a
+    /// destructive MCP tool refuses a context-bound coding key server-side
+    /// rather than relying on the consumer's client allowlist.
+    CapabilityDenied(&'static str),
     Unavailable,
 }
 
@@ -291,6 +325,14 @@ impl McpRecallFailure {
         match self {
             Self::Auth(message) => mcp_recall_error(McpRecallErrorCode::AuthRequired, message),
             Self::Scope(message) => mcp_recall_error(McpRecallErrorCode::ScopeDenied, message),
+            // Capability denial is raised only on the mutation tools (which use
+            // `as_error_string`); recall never reaches it. Map to the nearest
+            // existing recall code so `result()` stays total without widening
+            // the recall output schema with an unreachable variant.
+            Self::CapabilityDenied(_) => mcp_recall_error(
+                McpRecallErrorCode::ScopeDenied,
+                "this API key lacks a required owner-only capability",
+            ),
             Self::Unavailable => mcp_recall_error(
                 McpRecallErrorCode::BackendUnavailable,
                 "memory store unavailable",
@@ -305,6 +347,10 @@ impl McpRecallFailure {
         match self {
             Self::Auth(message) => format!("auth_required: {message}"),
             Self::Scope(message) => format!("scope_denied: {message}"),
+            // Byte-identical to the REST edge's `capability_denied` message.
+            Self::CapabilityDenied(capability) => format!(
+                "capability_denied: this API key lacks the {capability} capability; it is owner-only and default false"
+            ),
             Self::Unavailable => "backend_unavailable: memory store unavailable".to_string(),
         }
     }
@@ -601,6 +647,14 @@ impl MemphantMcp {
             .live_principal()
             .await
             .map_err(|error| error.as_error_string())?;
+        // Non-destructive: writing a NEW unit is capability-ungated. The MCP
+        // coding lane mints usable Active memory by design (recall serves it
+        // back to the same principal), but the PERSISTED provenance trust is
+        // the key's clamped ceiling — `live.context.actor_trust` was clamped to
+        // `row.max_trust` in `live_principal`, so an `agent_output` key stores
+        // its units at `agent_output`, never at a higher tier. It therefore
+        // cannot forge high-trust memory that would suppress or supersede
+        // genuinely trusted units (the anti-poisoning boundary, spec 06).
         let response = self
             .service
             .remember(
@@ -699,10 +753,10 @@ impl MemphantMcp {
     }
 
     #[tool(
-        description = "Archive one open memory as stale or harmful; a bodyless tombstone blocks re-derivation until an explicit correction.",
+        description = "Archive one open memory as stale or harmful; a bodyless tombstone blocks re-derivation until an explicit correction. Requires the owner-only can_forget capability.",
         annotations(
             read_only_hint = false,
-            destructive_hint = false,
+            destructive_hint = true,
             idempotent_hint = true,
             open_world_hint = false
         )
@@ -717,6 +771,17 @@ impl MemphantMcp {
         let live = self
             .live_principal()
             .await
+            .map_err(|error| error.as_error_string())?;
+        // Destructive: this archives a unit and mints a re-derivation-blocking
+        // tombstone, the MCP analogue of REST `/v1/forget`. Gate it on the same
+        // owner-only capability BEFORE touching the store, so a context-bound
+        // coding key (can_forget=false) gets a clean typed refusal, never a
+        // silent success. `correct_memory` and `remember` stay ungated: the
+        // former only appends a bitemporal successor (the prior value stays
+        // historically readable — not destruction), the latter mints new units
+        // at the key's CLAMPED provenance trust so it cannot forge high-trust
+        // memory (it does not, and need not, block serving).
+        live.require_can_forget()
             .map_err(|error| error.as_error_string())?;
         decode_mutation_response(
             self.service
@@ -912,7 +977,9 @@ mod recall_wire_contract {
     use super::*;
     use memphant_core::{ApiKeyRow, InMemoryStore, NoopEmbedding, SystemClock};
     use memphant_runtime::AnyStore;
-    use memphant_types::{ActorId, MemoryKind, ScopeId, TenantId, TrustLevel};
+    use memphant_types::{
+        ActorId, InvalidateMemoryRequest, MemoryKind, ScopeId, TenantId, TrustLevel,
+    };
     use std::sync::Arc;
 
     fn mapped(error: ServiceError) -> serde_json::Value {
@@ -1079,10 +1146,25 @@ mod recall_wire_contract {
 
     /// One bound tenant over an in-memory store: the service (for seeding
     /// through sanctioned write paths) plus the `BoundTenant` an MCP session
-    /// would resolve. `max_trust` is the api key ceiling.
+    /// would resolve. `max_trust` is the api key ceiling; the key carries no
+    /// owner capabilities (the coding-agent default).
     fn bound_fixture(
         key_hash: &str,
         max_trust: TrustLevel,
+    ) -> (
+        memphant_types::ResolvedMemoryContext,
+        MemoryService<AnyStore>,
+        BoundTenant,
+    ) {
+        bound_fixture_with_capabilities(key_hash, max_trust, false)
+    }
+
+    /// `bound_fixture` with an explicit `can_forget` capability, for exercising
+    /// the destructive-tool gate on `invalidate_memory`.
+    fn bound_fixture_with_capabilities(
+        key_hash: &str,
+        max_trust: TrustLevel,
+        can_forget: bool,
     ) -> (
         memphant_types::ResolvedMemoryContext,
         MemoryService<AnyStore>,
@@ -1106,7 +1188,7 @@ mod recall_wire_contract {
             actor_id: Some(actor),
             scope_id: Some(scope),
             agent_node_id: Some(context.agent_node_id),
-            can_forget: false,
+            can_forget,
             can_audit_history: false,
             revoked: false,
         });
@@ -1350,6 +1432,145 @@ mod recall_wire_contract {
                 "captured inclusion reason is labelable: {reason}"
             );
         }
+    }
+
+    /// Seeds one compact semantic memory through the MCP `remember` tool and
+    /// returns the created unit id, so the capability tests below invalidate a
+    /// real, recall-served unit rather than a synthetic id.
+    async fn remember_unit(mcp: &MemphantMcp, idempotency_key: &str, trigger: &str) -> String {
+        let response = mcp
+            .remember(Parameters(McpMutation {
+                idempotency_key: idempotency_key.to_string(),
+                request: memphant_types::RememberRequest {
+                    kind: MemoryKind::Semantic,
+                    body: format!("A durable fact about {trigger}."),
+                    trigger: trigger.to_string(),
+                    verification: "the fact was directly stated".to_string(),
+                    target_scope_id: None,
+                    valid_from: None,
+                    valid_to: None,
+                    source: memphant_types::MemorySourceInput {
+                        kind: "user".to_string(),
+                        r#ref: format!("test:{idempotency_key}"),
+                        observed_at: "2026-08-19T00:00:00Z".to_string(),
+                        episode_id: None,
+                        resource_id: None,
+                    },
+                },
+            }))
+            .await;
+        match response {
+            Ok(Json(body)) => body.unit_ids[0].as_uuid().to_string(),
+            Err(error) => panic!("remember seeds a unit: {error}"),
+        }
+    }
+
+    fn invalidate_params(unit_id: &str) -> Parameters<McpMutation<InvalidateMemoryRequest>> {
+        Parameters(McpMutation {
+            idempotency_key: format!("inv-{unit_id}"),
+            request: InvalidateMemoryRequest {
+                memory_unit_id: memphant_types::UnitId::from_u128(
+                    uuid::Uuid::parse_str(unit_id).expect("unit uuid").as_u128(),
+                ),
+                reason_kind: memphant_types::InvalidationReason::Stale,
+                reason: "no longer true".to_string(),
+                source: memphant_types::MemorySourceInput {
+                    kind: "user".to_string(),
+                    r#ref: "test:invalidate".to_string(),
+                    observed_at: "2026-08-19T12:00:00Z".to_string(),
+                    episode_id: None,
+                    resource_id: None,
+                },
+            },
+        })
+    }
+
+    /// DEFENSE-IN-DEPTH: `invalidate_memory` (destroy + re-derivation-blocking
+    /// tombstone) refuses a context-bound coding key that lacks `can_forget`,
+    /// with the same `capability_denied` prefix the REST forget edge uses, and
+    /// it does so WITHOUT mutating memory — the unit is still recall-served
+    /// afterward. This is the fix's core property: the capability model is a
+    /// server-side moat, not a client-allowlist convention.
+    #[tokio::test]
+    async fn invalidate_memory_refuses_a_key_without_can_forget() {
+        let (context, service, bound) =
+            bound_fixture_with_capabilities("mcp-no-forget", TrustLevel::AgentOutput, false);
+        let _ = &context;
+        let mcp = MemphantMcp::new(service, bound);
+        let unit_id = remember_unit(&mcp, "no-forget-seed", "the invalidate gate").await;
+
+        let denial = match mcp.invalidate_memory(invalidate_params(&unit_id)).await {
+            Ok(_) => panic!("a key without can_forget must be refused"),
+            Err(error) => error,
+        };
+        assert!(
+            denial.starts_with("capability_denied:"),
+            "MCP invalidate denial mirrors the REST capability code: {denial}"
+        );
+        assert!(
+            denial.contains("can_forget"),
+            "the denial names the missing capability: {denial}"
+        );
+
+        // The refusal happened before any write: the unit is still served.
+        let after = recall_structured(&mcp, "the invalidate gate").await;
+        assert_eq!(after["state"], "hit", "unit survives a denied invalidate");
+    }
+
+    /// A key that carries `can_forget` (the owner/tenant-service class) still
+    /// invalidates successfully — the gate refuses only the unentitled key.
+    #[tokio::test]
+    async fn invalidate_memory_succeeds_for_a_key_with_can_forget() {
+        let (context, service, bound) =
+            bound_fixture_with_capabilities("mcp-can-forget", TrustLevel::TrustedSystem, true);
+        let _ = &context;
+        let mcp = MemphantMcp::new(service, bound);
+        let unit_id = remember_unit(&mcp, "can-forget-seed", "the entitled path").await;
+
+        if let Err(error) = mcp.invalidate_memory(invalidate_params(&unit_id)).await {
+            panic!("a can_forget key invalidates: {error}");
+        }
+
+        let after = recall_structured(&mcp, "the entitled path").await;
+        assert_eq!(
+            after["state"], "empty",
+            "invalidated identity is not served"
+        );
+    }
+
+    /// `remember` stays callable and mints usable (Active, recall-served)
+    /// memory — that is the coding lane's purpose — but the MCP write path
+    /// CLAMPS the stored provenance trust to the key ceiling: an `agent_output`
+    /// key (bound context trust `trusted_user`) stores its unit at
+    /// `agent_output`, not the higher context trust. That clamp — applied on
+    /// the MCP path, not just REST — is what stops a coding key from forging
+    /// high-trust memory that could suppress a genuinely trusted unit.
+    #[tokio::test]
+    async fn remember_under_agent_output_clamps_stored_trust_but_is_served() {
+        let (context, service, bound) =
+            bound_fixture_with_capabilities("mcp-agent-output", TrustLevel::AgentOutput, false);
+        let mcp = MemphantMcp::new(service, bound);
+        let unit_id = remember_unit(&mcp, "agent-output-seed", "provenance clamp").await;
+
+        let stored = MemoryStore::scope_memory_page(mcp.service.store(), &context, None, 50)
+            .await
+            .expect("scope page")
+            .items
+            .into_iter()
+            .find(|unit| unit.id.as_uuid().to_string() == unit_id)
+            .expect("the remembered unit is stored");
+        assert_eq!(
+            stored.trust_level,
+            TrustLevel::AgentOutput,
+            "the MCP path clamps stored trust to the key ceiling, below the bound context trust"
+        );
+
+        // The unit is served — a coding key's remembered memory is usable.
+        let served = recall_structured(&mcp, "provenance clamp").await;
+        assert_eq!(
+            served["state"], "hit",
+            "remembered coding memory is served back to its own principal"
+        );
     }
 }
 

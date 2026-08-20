@@ -185,12 +185,12 @@
   },
   {
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Archive one open memory as stale or harmful; a bodyless tombstone blocks re-derivation until an explicit correction.",
+    "description": "Archive one open memory as stale or harmful; a bodyless tombstone blocks re-derivation until an explicit correction. Requires the owner-only can_forget capability.",
     "inputSchema": {
       "$defs": {
         "EpisodeId": {

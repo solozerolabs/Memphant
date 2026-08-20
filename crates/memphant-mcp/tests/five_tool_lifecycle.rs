@@ -61,8 +61,11 @@ async fn five_tool_lifecycle_over_one_persistent_session() {
         actor_id: Some(binding.actor_id),
         scope_id: Some(binding.scope_id),
         agent_node_id: Some(binding.agent_node_id),
-        // A coding-agent key: no owner capabilities.
-        can_forget: false,
+        // This lifecycle exercises the destructive `invalidate_memory` tool at
+        // step 6, so the key carries the owner-only capability that gate now
+        // requires. A context-bound coding key (can_forget=false) is refused
+        // there instead — proven in `edge_auth.rs`.
+        can_forget: true,
         can_audit_history: false,
         revoked: false,
     });
