@@ -12,6 +12,10 @@ kill_signal = 'SIGTERM'
 [env]
   MEMPHANT_BIND = '[::]:3000'  # 6PN is IPv6; 0.0.0.0 refuses cross-app connections
   MEMPHANT_MCP_BIND = '[::]:3333'  # read only by the mcp process; same IPv6 rule as MEMPHANT_BIND
+  # rmcp's Host validation defaults to loopback-only (DNS-rebinding defense);
+  # every non-loopback authority clients dial must be listed or the transport
+  # 4xxes before auth. Loopback (fly proxy) is always accepted implicitly.
+  MEMPHANT_MCP_ALLOWED_HOSTS = 'memphant-prod.internal:3333,mcp.process.memphant-prod.internal:3333'
   RUST_LOG = 'info'
   # Phase A serves deterministic profile facts (retain + projection reads);
   # the dense channel is unused. This also removes the HuggingFace model

@@ -44,6 +44,22 @@ private 6PN only, no `[http_service]`, same never-scale-to-zero rule as the
 other groups. Tools: `recall`, `remember`, `correct_memory`,
 `invalidate_memory`, `report_memory_use`.
 
+**Stateless (MCP 2026-07-28, rmcp 3.x).** The transport is sessionless: no
+`Mcp-Session-Id` is ever minted, every POST is self-contained, and single-shot
+tool calls are answered as plain `application/json`. Ops consequences: the
+`mcp` group can scale to N machines behind plain round-robin with zero
+affinity, restarts/redeploys drop no client state, and legacy
+(2025-03-26..2025-11-25) clients are still served — their `initialize` is
+answered per-request without a session.
+
+**Host allow-list.** rmcp validates the HTTP `Host` header (DNS-rebinding
+defense) and accepts only loopback by default. `MEMPHANT_MCP_ALLOWED_HOSTS`
+(fly.toml `[env]`, comma-separated `host[:port]`) must list every non-loopback
+authority clients dial — currently `memphant-prod.internal:3333` and
+`mcp.process.memphant-prod.internal:3333`. A missing entry surfaces as a 4xx
+on every request BEFORE auth; add the authority there, not by disabling the
+check. `fly proxy` traffic arrives as `127.0.0.1:3333` and is always accepted.
+
 **Env / secrets.** The process reuses the existing app secrets
 `MEMPHANT_APP_DATABASE_URL` + `MEMPHANT_AUTHN_DATABASE_URL` (role-scoped served
 URLs shared with server/worker; `DATABASE_URL` is refused). It additionally
