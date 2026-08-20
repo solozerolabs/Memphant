@@ -37,10 +37,13 @@ const DROP_DEAD_TABLES_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260815_012_drop_dead_tables.sql");
 const DROP_DEAD_FSRS_COLUMNS_SQL: &str =
     include_str!("../../../memphant_migrations/versions/20260817_013_drop_dead_fsrs_columns.sql");
+const CAPTURE_UNITS_EXEMPT_FROM_SUBJECT_EXCLUSION_SQL: &str = include_str!(
+    "../../../memphant_migrations/versions/20260819_014_capture_units_exempt_from_subject_exclusion.sql"
+);
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260817_013_drop_dead_fsrs_columns";
+pub const MIGRATION_HEAD: &str = "20260819_014_capture_units_exempt_from_subject_exclusion";
 
 /// Bundled migrations in apply order.
 ///
@@ -84,7 +87,14 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         PORTABLE_AGENT_MEMORY_SQL,
     ),
     ("20260815_012_drop_dead_tables", DROP_DEAD_TABLES_SQL),
-    (MIGRATION_HEAD, DROP_DEAD_FSRS_COLUMNS_SQL),
+    (
+        "20260817_013_drop_dead_fsrs_columns",
+        DROP_DEAD_FSRS_COLUMNS_SQL,
+    ),
+    (
+        MIGRATION_HEAD,
+        CAPTURE_UNITS_EXEMPT_FROM_SUBJECT_EXCLUSION_SQL,
+    ),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[

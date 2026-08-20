@@ -2912,10 +2912,13 @@ pub async fn same_channel_capture_reinforces_supersedes_and_serves_on_the_coding
 }
 
 /// Two captured BELIEF units on ONE subject key coexist in the store — the
-/// precondition that makes a cross-source collision representable. Beliefs are
-/// deliberately outside the `semantic/preference` subject-uniqueness exclusion
-/// constraint, so this pins the PG-only interaction: the same seed as two
-/// `semantic` candidates would violate `memphant_memory_unit_subject_valid_excl`.
+/// precondition that makes a cross-source collision representable. Captured
+/// units are deliberately outside the `semantic/preference` subject-uniqueness
+/// exclusion constraint (migration 014 exempts anything carrying
+/// `payload.capture`, of any kind), so this pins the PG-only interaction: the
+/// same two captures seeded WITHOUT their capture marker — two bare `semantic`
+/// units on one key with overlapping valid time — would violate
+/// `memphant_memory_unit_subject_valid_excl`.
 pub async fn same_subject_captured_beliefs_coexist_for_collision<H: StoreHarness>(h: &H) {
     let store = h.store();
     let tenant = h.fresh_tenant().await;
