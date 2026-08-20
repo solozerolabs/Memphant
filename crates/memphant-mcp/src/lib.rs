@@ -615,7 +615,7 @@ impl MemphantMcp {
     }
 
     #[tool(
-        description = "Retrieve cited memory evidence for a query (budgeted, salience-ranked, with provenance).",
+        description = "Use when you need prior context not in your prompt — past research/search results, how similar tasks were done before, or user preferences.",
         output_schema = rmcp::handler::server::tool::schema_for_type::<McpRecallOutput>(),
         annotations(
             read_only_hint = true,

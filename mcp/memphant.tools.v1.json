@@ -360,7 +360,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Retrieve cited memory evidence for a query (budgeted, salience-ranked, with provenance).",
+    "description": "Use when you need prior context not in your prompt — past research/search results, how similar tasks were done before, or user preferences.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
