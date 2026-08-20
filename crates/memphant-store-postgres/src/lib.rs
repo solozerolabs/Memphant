@@ -40,10 +40,12 @@ const DROP_DEAD_FSRS_COLUMNS_SQL: &str =
 const CAPTURE_UNITS_EXEMPT_FROM_SUBJECT_EXCLUSION_SQL: &str = include_str!(
     "../../../memphant_migrations/versions/20260819_014_capture_units_exempt_from_subject_exclusion.sql"
 );
+const REVOKE_TENANT_API_KEY_SQL: &str =
+    include_str!("../../../memphant_migrations/versions/20260820_015_revoke_tenant_api_key.sql");
 
 /// Newest migration understood by this binary. Readiness permits a newer
 /// database head only while its recorded compatibility floor remains here.
-pub const MIGRATION_HEAD: &str = "20260819_014_capture_units_exempt_from_subject_exclusion";
+pub const MIGRATION_HEAD: &str = "20260820_015_revoke_tenant_api_key";
 
 /// Bundled migrations in apply order.
 ///
@@ -92,9 +94,10 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         DROP_DEAD_FSRS_COLUMNS_SQL,
     ),
     (
-        MIGRATION_HEAD,
+        "20260819_014_capture_units_exempt_from_subject_exclusion",
         CAPTURE_UNITS_EXEMPT_FROM_SUBJECT_EXCLUSION_SQL,
     ),
+    (MIGRATION_HEAD, REVOKE_TENANT_API_KEY_SQL),
 ];
 
 const REQUIRED_TABLES: &[&str] = &[

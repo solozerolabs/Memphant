@@ -1282,3 +1282,244 @@ async fn scope_core_admits_tenant_service_keys_and_refuses_context_bound_keys() 
     assert_eq!(foreign_status, StatusCode::FORBIDDEN, "{foreign_body}");
     assert_eq!(foreign_body["error"]["code"], "scope_denied");
 }
+
+fn recall_body_from_binding(binding: &Value) -> Value {
+    serde_json::json!({
+        "subject_id": binding["subject_id"],
+        "scope_id": binding["scope_id"],
+        "actor_id": binding["actor_id"],
+        "agent_node_id": binding["agent_node_id"],
+        "subject_generation": binding["subject_generation"],
+        "query": "q",
+    })
+}
+
+fn mint_body_from_binding(binding: &Value, label: &str) -> Value {
+    serde_json::json!({
+        "kind": "context_bound",
+        "label": label,
+        "subject_id": binding["subject_id"],
+        "scope_id": binding["scope_id"],
+        "actor_id": binding["actor_id"],
+        "agent_node_id": binding["agent_node_id"],
+        "subject_generation": binding["subject_generation"],
+    })
+}
+
+/// The per-run key lifecycle: a tenant-service key mints a context-bound key,
+/// the minted secret authenticates recall immediately, revocation is
+/// tenant-scoped, idempotent, and takes effect on the next request. The
+/// plaintext secret exists only in the mint response — the store holds its
+/// SHA-256 and nothing else.
+#[tokio::test]
+async fn api_key_mint_recall_revoke_roundtrip_is_tenant_scoped_and_immediate() {
+    let tenant_a = tenant(82_000);
+    let tenant_b = tenant(82_001);
+    let state = memphant_server::AppState::new_in_memory();
+    state
+        .store()
+        .insert_api_key(key_row(KEY_A, tenant_a, TrustLevel::TrustedSystem, false));
+    state
+        .store()
+        .insert_api_key(key_row(KEY_B, tenant_b, TrustLevel::TrustedSystem, false));
+    let app = memphant_server::app(state.clone());
+
+    let (bind_status, binding) = send(
+        &app,
+        "PUT",
+        "/v1/context-bindings/api-key-roundtrip",
+        Some(KEY_A),
+        Some(context_binding_body()),
+    )
+    .await;
+    assert_eq!(bind_status, StatusCode::OK, "{binding}");
+
+    let (mint_status, minted) = send(
+        &app,
+        "POST",
+        "/v1/api-keys",
+        Some(KEY_A),
+        Some(mint_body_from_binding(&binding, "syndai-run:test-run-1")),
+    )
+    .await;
+    assert_eq!(mint_status, StatusCode::OK, "{minted}");
+    let secret = minted["secret"].as_str().expect("secret").to_string();
+    let key_id = minted["key_id"].as_str().expect("key_id").to_string();
+    assert!(secret.starts_with("mk_"));
+    assert_eq!(minted["kind"], "context_bound");
+    assert_eq!(minted["label"], "syndai-run:test-run-1");
+    assert_eq!(minted["max_trust"], "agent_output");
+    assert_eq!(minted["can_forget"], false);
+    assert_eq!(minted["can_audit_history"], false);
+
+    // The store holds the hash, never the plaintext; the minted row carries
+    // exactly the pinned caps and the full principal binding.
+    let row = memphant_core::MemoryStore::lookup_api_key(
+        state.store(),
+        &memphant_server::api_key_hash(&secret),
+    )
+    .await
+    .expect("lookup")
+    .expect("minted row");
+    assert_eq!(row.id.to_string(), key_id);
+    assert_ne!(row.key_hash, secret);
+    assert!(!row.key_hash.contains(&secret));
+    assert_eq!(row.max_trust, TrustLevel::AgentOutput);
+    assert!(!row.can_forget && !row.can_audit_history && !row.revoked);
+    assert!(row.scope_id.is_some() && row.actor_id.is_some());
+
+    // The minted key serves recall on its bound principal immediately.
+    let (recall_status, recall_response) = send(
+        &app,
+        "POST",
+        "/v1/recall",
+        Some(secret.as_str()),
+        Some(recall_body_from_binding(&binding)),
+    )
+    .await;
+    assert_eq!(recall_status, StatusCode::OK, "{recall_response}");
+
+    // ...but can neither mint keys nor revoke them.
+    let (bound_mint_status, bound_mint) = send(
+        &app,
+        "POST",
+        "/v1/api-keys",
+        Some(secret.as_str()),
+        Some(mint_body_from_binding(&binding, "syndai-run:escalate")),
+    )
+    .await;
+    assert_eq!(bound_mint_status, StatusCode::FORBIDDEN, "{bound_mint}");
+    assert_eq!(bound_mint["error"]["code"], "scope_denied");
+    let (bound_revoke_status, _) = send(
+        &app,
+        "DELETE",
+        &format!("/v1/api-keys/{key_id}"),
+        Some(secret.as_str()),
+        None,
+    )
+    .await;
+    assert_eq!(bound_revoke_status, StatusCode::FORBIDDEN);
+
+    // Another tenant's service key cannot revoke it: 204 (no existence
+    // oracle) but the key stays live.
+    let (foreign_status, _) = send(
+        &app,
+        "DELETE",
+        &format!("/v1/api-keys/{key_id}"),
+        Some(KEY_B),
+        None,
+    )
+    .await;
+    assert_eq!(foreign_status, StatusCode::NO_CONTENT);
+    let (still_status, _) = send(
+        &app,
+        "POST",
+        "/v1/recall",
+        Some(secret.as_str()),
+        Some(recall_body_from_binding(&binding)),
+    )
+    .await;
+    assert_eq!(still_status, StatusCode::OK);
+
+    // The owning tenant revokes; the key fails closed on the very next
+    // request; a second delete is idempotent.
+    let (revoke_status, _) = send(
+        &app,
+        "DELETE",
+        &format!("/v1/api-keys/{key_id}"),
+        Some(KEY_A),
+        None,
+    )
+    .await;
+    assert_eq!(revoke_status, StatusCode::NO_CONTENT);
+    let (revoked_recall_status, revoked_recall) = send(
+        &app,
+        "POST",
+        "/v1/recall",
+        Some(secret.as_str()),
+        Some(recall_body_from_binding(&binding)),
+    )
+    .await;
+    assert_eq!(
+        revoked_recall_status,
+        StatusCode::UNAUTHORIZED,
+        "{revoked_recall}"
+    );
+    assert_eq!(revoked_recall["error"]["code"], "auth_required");
+    let (again_status, _) = send(
+        &app,
+        "DELETE",
+        &format!("/v1/api-keys/{key_id}"),
+        Some(KEY_A),
+        None,
+    )
+    .await;
+    assert_eq!(again_status, StatusCode::NO_CONTENT);
+}
+
+/// Capability caps are validated, never granted: a mint request asking for
+/// more than the kind's pinned caps is a 422, and a stale generation fails
+/// closed exactly like every other bound surface.
+#[tokio::test]
+async fn api_key_mint_refuses_cap_escalation_and_stale_generation() {
+    let tenant_a = tenant(82_100);
+    let state = memphant_server::AppState::new_in_memory();
+    state
+        .store()
+        .insert_api_key(key_row(KEY_A, tenant_a, TrustLevel::TrustedSystem, false));
+    let app = memphant_server::app(state.clone());
+    let (_, binding) = send(
+        &app,
+        "PUT",
+        "/v1/context-bindings/api-key-caps",
+        Some(KEY_A),
+        Some(context_binding_body()),
+    )
+    .await;
+
+    for escalation in [
+        serde_json::json!({"max_trust": "trusted_system"}),
+        serde_json::json!({"max_trust": "trusted_user"}),
+        serde_json::json!({"can_forget": true}),
+        serde_json::json!({"can_audit_history": true}),
+    ] {
+        let mut body = mint_body_from_binding(&binding, "syndai-run:caps");
+        for (name, value) in escalation.as_object().expect("escalation") {
+            body[name] = value.clone();
+        }
+        let (status, response) = send(&app, "POST", "/v1/api-keys", Some(KEY_A), Some(body)).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "escalation {escalation} response {response}"
+        );
+        assert_eq!(response["error"]["code"], "invalid_request");
+    }
+
+    // Restating the pinned caps exactly is allowed.
+    let mut pinned = mint_body_from_binding(&binding, "syndai-run:pinned");
+    pinned["max_trust"] = serde_json::json!("agent_output");
+    pinned["can_forget"] = serde_json::json!(false);
+    pinned["can_audit_history"] = serde_json::json!(false);
+    let (pinned_status, pinned_response) =
+        send(&app, "POST", "/v1/api-keys", Some(KEY_A), Some(pinned)).await;
+    assert_eq!(pinned_status, StatusCode::OK, "{pinned_response}");
+
+    let mut stale = mint_body_from_binding(&binding, "syndai-run:stale");
+    stale["subject_generation"] =
+        serde_json::json!(binding["subject_generation"].as_u64().unwrap() + 1);
+    let (stale_status, stale_response) =
+        send(&app, "POST", "/v1/api-keys", Some(KEY_A), Some(stale)).await;
+    assert_eq!(stale_status, StatusCode::CONFLICT, "{stale_response}");
+    assert_eq!(stale_response["error"]["code"], "context_binding_conflict");
+
+    let (blank_status, _) = send(
+        &app,
+        "POST",
+        "/v1/api-keys",
+        Some(KEY_A),
+        Some(mint_body_from_binding(&binding, "   ")),
+    )
+    .await;
+    assert_eq!(blank_status, StatusCode::UNPROCESSABLE_ENTITY);
+}

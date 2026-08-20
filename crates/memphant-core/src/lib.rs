@@ -1688,6 +1688,14 @@ pub struct EmbeddingRow {
     pub vec: Vec<f32>,
 }
 
+/// Mints one API bearer secret: `mk_` + two v4 UUIDs' hex (244 bits of OS
+/// randomness). The single generator shared by the admin CLI and the HTTP
+/// mint route; the caller emits the plaintext exactly once and only its
+/// SHA-256 is ever stored.
+pub fn generate_api_key_secret() -> String {
+    format!("mk_{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
+}
+
 /// An API key row: the tenant binding + trust ceiling resolved at the edge.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiKeyRow {
@@ -2162,6 +2170,30 @@ pub trait MemoryStore: Send + Sync {
         &self,
         key_hash: &str,
     ) -> impl Future<Output = Result<Option<ApiKeyRow>, StoreError>> + Send;
+    /// Provisions one API key row for `tenant` and returns its id. The single
+    /// key-creation path shared by the admin CLI and the HTTP mint route —
+    /// there is deliberately no second one. `scoped_context` binds the key to
+    /// a resolved principal (the context-bound class); `None` mints an unbound
+    /// tenant-service key. Capability flags are always created false on this
+    /// path; only its SHA-256 `key_hash` is ever stored.
+    fn create_api_key(
+        &self,
+        tenant: TenantId,
+        key_hash: &str,
+        label: &str,
+        max_trust: TrustLevel,
+        scoped_context: Option<&ResolvedMemoryContext>,
+    ) -> impl Future<Output = Result<Uuid, StoreError>> + Send;
+    /// Tenant-scoped revocation for the served HTTP path: revokes the key only
+    /// when it belongs to `tenant`. Returns `true` when a live key was revoked
+    /// now, `false` when it was already revoked, missing, or another tenant's
+    /// (indistinguishable on purpose — no cross-tenant existence oracle).
+    /// The operator CLI's global-by-id revoke is a separate admin surface.
+    fn revoke_tenant_api_key(
+        &self,
+        tenant: TenantId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, StoreError>> + Send;
     fn resolve_context_binding(
         &self,
         tenant: TenantId,
@@ -6162,6 +6194,54 @@ impl MemoryStore for InMemoryStore {
             .iter()
             .find(|row| row.key_hash == key_hash)
             .cloned())
+    }
+
+    async fn create_api_key(
+        &self,
+        tenant: TenantId,
+        key_hash: &str,
+        label: &str,
+        max_trust: TrustLevel,
+        scoped_context: Option<&ResolvedMemoryContext>,
+    ) -> Result<Uuid, StoreError> {
+        if scoped_context.is_some_and(|context| context.tenant_id != tenant) {
+            return Err(StoreError::PolicyDenied(
+                "API key context does not match tenant".to_string(),
+            ));
+        }
+        let id = Uuid::now_v7();
+        let mut state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        state
+            .api_keys
+            .retain(|existing| existing.id != id && existing.key_hash != key_hash);
+        state.api_keys.push(ApiKeyRow {
+            id,
+            tenant_id: tenant,
+            key_hash: key_hash.to_string(),
+            label: label.to_string(),
+            max_trust,
+            data_subject_id: scoped_context.map(|context| context.data_subject_id),
+            subject_generation: scoped_context.map(|context| context.subject_generation),
+            actor_id: scoped_context.map(|context| context.actor_id),
+            scope_id: scoped_context.map(|context| context.scope_id),
+            agent_node_id: scoped_context.map(|context| context.agent_node_id),
+            can_forget: false,
+            can_audit_history: false,
+            revoked: false,
+        });
+        Ok(id)
+    }
+
+    async fn revoke_tenant_api_key(&self, tenant: TenantId, id: Uuid) -> Result<bool, StoreError> {
+        let mut state = self.inner.lock().map_err(|_| StoreError::Poisoned)?;
+        Ok(state
+            .api_keys
+            .iter_mut()
+            .find(|row| row.id == id && row.tenant_id == tenant && !row.revoked)
+            .map(|row| {
+                row.revoked = true;
+            })
+            .is_some())
     }
 
     async fn resolve_context_binding(

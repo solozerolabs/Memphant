@@ -337,7 +337,7 @@ async fn pg_store_runs_with_separate_least_privilege_credentials() {
     let tenant = TenantId::from_u128(tenant_uuid.as_u128());
     provisioner
         .create_api_key(
-            tenant_uuid,
+            tenant,
             "split-role-hash",
             "test",
             TrustLevel::TrustedUser,

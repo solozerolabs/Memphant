@@ -5,7 +5,7 @@ use axum::extract::{DefaultBodyLimit, FromRequest, FromRequestParts, Path, Query
 use axum::http::request::Parts;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use memphant_core::service::{
     MAX_CANONICAL_PROJECTION_ENCODED_BYTES, MemoryService, ServiceError, clamp_trust,
@@ -15,13 +15,14 @@ use memphant_core::{
     StoreError, SystemClock, validate_idempotency_key,
 };
 use memphant_types::{
-    ActorId, AgentNodeId, CanonicalProjectionResponse, ContextBindingRequest,
-    ContextBindingResponse, CorrectRequest, ENGINE_VERSION, ErrorBody, ErrorEnvelope,
-    FileSyncRequest, FileSyncResult, HealthResponse, MAX_FILE_SYNC_REQUEST_ENCODED_BYTES,
-    MarkRequest, RecallHttpRequest, ReflectAccepted, ReflectRequest, RetainEpisodeHttpRequest,
-    RetainEpisodeHttpResponse, RetrievalTrace, SCHEMA_COMPAT_REVISION, ScopeId,
-    ScopeMemoryResponse, SubjectId, TRACE_SCHEMA_VERSION, TaskMemoryEventsRequest,
-    TaskMemoryEventsResult, TaskOutcomeRequest, TaskOutcomeResult, TenantId, TrustLevel,
+    ActorId, AgentNodeId, ApiKeyKind, ApiKeyMintRequest, ApiKeyMintResponse,
+    CanonicalProjectionResponse, ContextBindingRequest, ContextBindingResponse, CorrectRequest,
+    ENGINE_VERSION, ErrorBody, ErrorEnvelope, FileSyncRequest, FileSyncResult, HealthResponse,
+    MAX_FILE_SYNC_REQUEST_ENCODED_BYTES, MarkRequest, RecallHttpRequest, ReflectAccepted,
+    ReflectRequest, RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace,
+    SCHEMA_COMPAT_REVISION, ScopeId, ScopeMemoryResponse, SubjectId, TRACE_SCHEMA_VERSION,
+    TaskMemoryEventsRequest, TaskMemoryEventsResult, TaskOutcomeRequest, TaskOutcomeResult,
+    TenantId, TrustLevel,
 };
 use schemars::JsonSchema;
 use schemars::generate::{SchemaGenerator, SchemaSettings};
@@ -47,6 +48,8 @@ const SCOPE_MEMORY_PATH: &str = "/v1/scopes/{id}/memory";
 const CANONICAL_PROJECTION_PATH: &str = "/v1/scopes/{id}/projection";
 const SCOPE_CORE_PATH: &str = "/v1/scopes/{id}/core";
 const CONTEXT_BINDING_PATH: &str = "/v1/context-bindings/{client_ref}";
+const API_KEYS_PATH: &str = "/v1/api-keys";
+const API_KEY_PATH: &str = "/v1/api-keys/{id}";
 
 const DOCUMENTED_OPENAPI_PATHS: &[&str] = &[
     EPISODES_PATH,
@@ -63,6 +66,8 @@ const DOCUMENTED_OPENAPI_PATHS: &[&str] = &[
     CANONICAL_PROJECTION_PATH,
     SCOPE_CORE_PATH,
     CONTEXT_BINDING_PATH,
+    API_KEYS_PATH,
+    API_KEY_PATH,
     HEALTH_PATH,
 ];
 
@@ -345,7 +350,110 @@ pub fn app<S: MutationLedgerStore + 'static>(state: AppState<S>) -> Router {
         )
         .route(SCOPE_CORE_PATH, get(scope_core_handler::<S>))
         .route(CONTEXT_BINDING_PATH, put(context_binding_handler::<S>))
+        .route(API_KEYS_PATH, post(mint_api_key_handler::<S>))
+        .route(API_KEY_PATH, delete(revoke_api_key_handler::<S>))
         .with_state(state)
+}
+
+/// `POST /v1/api-keys`: mint one context-bound key (the MCP principal class)
+/// for a resolved binding tuple. Tenant-service keys only — the same gate as
+/// context bindings and the scope-core read; a context-bound key can never
+/// mint keys. Capability caps are PINNED per kind and validated, never
+/// clamped: `context_bound` ⇒ `max_trust=agent_output`, `can_forget=false`,
+/// `can_audit_history=false`; asking for anything else is a 422. The secret
+/// is generated server-side, returned exactly once, and only its SHA-256 is
+/// stored (`generate_api_key_secret` + `api_key_hash`).
+async fn mint_api_key_handler<S: MemoryStore + 'static>(
+    State(state): State<AppState<S>>,
+    authed: AuthedTenant,
+    StrictJson(request): StrictJson<ApiKeyMintRequest>,
+) -> Result<Json<ApiKeyMintResponse>, ApiError> {
+    authed.require_tenant_service_key()?;
+    let label = request.label.trim();
+    if label.is_empty() || request.label.len() > 255 {
+        return Err(ApiError::invalid("label must be 1 to 255 non-blank bytes"));
+    }
+    // Pinned caps for the context-bound kind. Exact-or-omitted, never clamped.
+    let ApiKeyKind::ContextBound = request.kind;
+    if request
+        .max_trust
+        .is_some_and(|trust| trust != TrustLevel::AgentOutput)
+    {
+        return Err(ApiError::invalid(
+            "context_bound keys are pinned to max_trust=agent_output; omit max_trust or state it exactly",
+        ));
+    }
+    if request.can_forget == Some(true) {
+        return Err(ApiError::invalid(
+            "context_bound keys never carry can_forget; omit it or state false",
+        ));
+    }
+    if request.can_audit_history == Some(true) {
+        return Err(ApiError::invalid(
+            "context_bound keys never carry can_audit_history; omit it or state false",
+        ));
+    }
+    let context = state
+        .store()
+        .resolve_memory_context(
+            authed.tenant,
+            request.subject_id,
+            request.actor_id,
+            request.scope_id,
+            request.agent_node_id,
+        )
+        .await
+        .map_err(|error| match error {
+            StoreError::NotFound(_) => ApiError::scope_denied(),
+            other => ApiError::from(other),
+        })?;
+    if request.subject_generation != context.subject_generation {
+        return Err(ApiError::context_binding_conflict(
+            "subject generation is stale".to_string(),
+        ));
+    }
+    let secret = memphant_core::generate_api_key_secret();
+    let key_id = state
+        .store()
+        .create_api_key(
+            authed.tenant,
+            &api_key_hash(&secret),
+            label,
+            TrustLevel::AgentOutput,
+            Some(&context),
+        )
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(ApiKeyMintResponse {
+        key_id: key_id.to_string(),
+        secret,
+        kind: request.kind,
+        label: label.to_string(),
+        max_trust: TrustLevel::AgentOutput,
+        can_forget: false,
+        can_audit_history: false,
+    }))
+}
+
+/// `DELETE /v1/api-keys/{id}`: tenant-scoped, idempotent revocation. 204
+/// whether the key was live, already revoked, missing, or another tenant's
+/// (the store refuses cross-tenant revocation and the response deliberately
+/// does not distinguish, so ids are not an existence oracle). Revocation is
+/// effective immediately: both REST auth and MCP `live_principal` re-resolve
+/// the key on every request.
+async fn revoke_api_key_handler<S: MemoryStore + 'static>(
+    State(state): State<AppState<S>>,
+    authed: AuthedTenant,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    authed.require_tenant_service_key()?;
+    let key_id = Uuid::parse_str(&id).map_err(|_| ApiError::invalid("invalid API key id"))?;
+    state
+        .store()
+        .revoke_tenant_api_key(authed.tenant, key_id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn context_binding_handler<S: MemoryStore + 'static>(
@@ -1109,6 +1217,30 @@ fn openapi_paths() -> serde_json::Map<String, Value> {
             vec![string_path_param("client_ref")],
         ),
     );
+    let mut mint = path_item("post", "ApiKeyMintRequest", "ApiKeyMintResponse");
+    mint["post"]["description"] = json!(
+        "Mints one context-bound API key for a resolved binding tuple. Tenant-service keys only. Capability caps are pinned per kind and validated (422), never silently granted. The secret is returned exactly once; only its SHA-256 is stored."
+    );
+    paths.insert(API_KEYS_PATH.to_string(), mint);
+    paths.insert(
+        API_KEY_PATH.to_string(),
+        json!({
+            "delete": {
+                "description": "Tenant-scoped, idempotent API-key revocation; 204 whether or not the key was live. Revocation takes effect on the next request.",
+                "parameters": [path_param("id")],
+                "responses": {
+                    "204": { "description": "revoked (or already gone)" },
+                    "default": {
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+                            }
+                        }
+                    }
+                }
+            }
+        }),
+    );
     paths
 }
 
@@ -1139,6 +1271,8 @@ fn component_schemas() -> serde_json::Map<String, Value> {
     seed_component::<HealthResponse>(&mut generator);
     seed_component::<ContextBindingRequest>(&mut generator);
     seed_component::<ContextBindingResponse>(&mut generator);
+    seed_component::<ApiKeyMintRequest>(&mut generator);
+    seed_component::<ApiKeyMintResponse>(&mut generator);
     seed_component::<ErrorEnvelope>(&mut generator);
     generator.take_definitions(true)
 }

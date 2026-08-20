@@ -39,7 +39,7 @@ use memphant_types::{
     EpisodeId, JobId, MemoryKind, NewEpisode, NewMemoryEdge, NewMemoryUnit, NewResource,
     RecallTime, RecordMaterial, ReflectJob, ReflectTrace, ResourceId, RetainOutcome,
     RetrievalTrace, ScopeId, StoredEpisode, StoredMemoryEdge, StoredMemoryUnit, StoredResource,
-    SubjectId, TenantId, TraceId, UnitId,
+    SubjectId, TenantId, TraceId, TrustLevel, UnitId,
 };
 use uuid::Uuid;
 
@@ -88,7 +88,14 @@ pub async fn build_app_store() -> Result<AnyStore, StoreError> {
         env_url("DATABASE_URL"),
     ) {
         (Some(url), Some(auth_url), None) => {
-            let store = PgStore::connect_app(&url, &auth_url).await?;
+            // Optional: HTTP API-key mint/revoke needs the provisioner
+            // capability, which the served app deliberately lacks by default.
+            let store = match env_url("MEMPHANT_PROVISION_DATABASE_URL") {
+                Some(provision_url) => {
+                    PgStore::connect_app_with_provisioner(&url, &auth_url, &provision_url).await?
+                }
+                None => PgStore::connect_app(&url, &auth_url).await?,
+            };
             Ok(AnyStore::Pg(store))
         }
         (None, None, None) => {
@@ -1361,6 +1368,21 @@ impl MemoryStore for AnyStore {
 
     async fn lookup_api_key(&self, key_hash: &str) -> Result<Option<ApiKeyRow>, StoreError> {
         delegate!(self, store => store.lookup_api_key(key_hash).await)
+    }
+
+    async fn create_api_key(
+        &self,
+        tenant: TenantId,
+        key_hash: &str,
+        label: &str,
+        max_trust: TrustLevel,
+        scoped_context: Option<&ResolvedMemoryContext>,
+    ) -> Result<Uuid, StoreError> {
+        delegate!(self, store => MemoryStore::create_api_key(store, tenant, key_hash, label, max_trust, scoped_context).await)
+    }
+
+    async fn revoke_tenant_api_key(&self, tenant: TenantId, id: Uuid) -> Result<bool, StoreError> {
+        delegate!(self, store => MemoryStore::revoke_tenant_api_key(store, tenant, id).await)
     }
 
     async fn resolve_context_binding(

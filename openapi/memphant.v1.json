@@ -36,6 +36,116 @@
         ],
         "type": "string"
       },
+      "ApiKeyKind": {
+        "description": "The kind of API key a tenant-service principal may mint over HTTP. One\nkind today: the fully context-BOUND key class MCP recall binds to\n(`live_principal`), with pinned capability caps. Unbound tenant-service\nkeys remain operator-provisioned (CLI), never mintable over HTTP.",
+        "enum": [
+          "context_bound"
+        ],
+        "type": "string"
+      },
+      "ApiKeyMintRequest": {
+        "additionalProperties": false,
+        "description": "`POST /v1/api-keys`: mint one context-bound key for an already-resolved\nbinding tuple. The tenant comes from the authenticated service key, never\nfrom the body. Capability caps are PINNED per kind server-side\n(`context_bound` ⇒ `max_trust=agent_output`, `can_forget=false`,\n`can_audit_history=false`); a request may omit them or restate exactly the\npinned values — asking for more (or anything else) is rejected with 422,\nnever silently clamped.",
+        "properties": {
+          "actor_id": {
+            "$ref": "#/components/schemas/ActorId"
+          },
+          "agent_node_id": {
+            "$ref": "#/components/schemas/AgentNodeId"
+          },
+          "can_audit_history": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "can_forget": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ApiKeyKind"
+          },
+          "label": {
+            "description": "Operator-facing label, e.g. \"syndai-run:{run_id}\". 1–255 bytes,\nnon-blank.",
+            "type": "string"
+          },
+          "max_trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ScopeId"
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subject_id": {
+            "$ref": "#/components/schemas/SubjectId"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "subject_id",
+          "actor_id",
+          "scope_id",
+          "agent_node_id",
+          "subject_generation"
+        ],
+        "type": "object"
+      },
+      "ApiKeyMintResponse": {
+        "description": "The mint receipt. `secret` is returned exactly ONCE and never stored —\nonly its SHA-256 is persisted.",
+        "properties": {
+          "can_audit_history": {
+            "type": "boolean"
+          },
+          "can_forget": {
+            "type": "boolean"
+          },
+          "key_id": {
+            "description": "The key row id — the handle `DELETE /v1/api-keys/{key_id}` revokes.",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ApiKeyKind"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_trust": {
+            "$ref": "#/components/schemas/TrustLevel"
+          },
+          "secret": {
+            "description": "The bearer secret (`mk_…`). Returned once; store it or lose it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "secret",
+          "kind",
+          "label",
+          "max_trust",
+          "can_forget",
+          "can_audit_history"
+        ],
+        "type": "object"
+      },
       "CanonicalProjectionResponse": {
         "description": "The complete, unranked, tenant-bound file-projection snapshot evaluated at one RFC3339 server-clock instant.",
         "properties": {
@@ -3555,6 +3665,70 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/api-keys": {
+      "post": {
+        "description": "Mints one context-bound API key for a resolved binding tuple. Tenant-service keys only. Capability caps are pinned per kind and validated (422), never silently granted. The secret is returned exactly once; only its SHA-256 is stored.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyMintRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyMintResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-keys/{id}": {
+      "delete": {
+        "description": "Tenant-scoped, idempotent API-key revocation; 204 whether or not the key was live. Revocation takes effect on the next request.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "revoked (or already gone)"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/context-bindings/{client_ref}": {
       "put": {
         "parameters": [

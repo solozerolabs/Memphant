@@ -2700,6 +2700,58 @@ pub struct CanonicalProjectionResponse {
     pub fingerprint: String,
 }
 
+/// The kind of API key a tenant-service principal may mint over HTTP. One
+/// kind today: the fully context-BOUND key class MCP recall binds to
+/// (`live_principal`), with pinned capability caps. Unbound tenant-service
+/// keys remain operator-provisioned (CLI), never mintable over HTTP.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiKeyKind {
+    ContextBound,
+}
+
+/// `POST /v1/api-keys`: mint one context-bound key for an already-resolved
+/// binding tuple. The tenant comes from the authenticated service key, never
+/// from the body. Capability caps are PINNED per kind server-side
+/// (`context_bound` ⇒ `max_trust=agent_output`, `can_forget=false`,
+/// `can_audit_history=false`); a request may omit them or restate exactly the
+/// pinned values — asking for more (or anything else) is rejected with 422,
+/// never silently clamped.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ApiKeyMintRequest {
+    pub kind: ApiKeyKind,
+    /// Operator-facing label, e.g. "syndai-run:{run_id}". 1–255 bytes,
+    /// non-blank.
+    pub label: String,
+    pub subject_id: SubjectId,
+    pub actor_id: ActorId,
+    pub scope_id: ScopeId,
+    pub agent_node_id: AgentNodeId,
+    pub subject_generation: u64,
+    #[serde(default)]
+    pub max_trust: Option<TrustLevel>,
+    #[serde(default)]
+    pub can_forget: Option<bool>,
+    #[serde(default)]
+    pub can_audit_history: Option<bool>,
+}
+
+/// The mint receipt. `secret` is returned exactly ONCE and never stored —
+/// only its SHA-256 is persisted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ApiKeyMintResponse {
+    /// The key row id — the handle `DELETE /v1/api-keys/{key_id}` revokes.
+    pub key_id: String,
+    /// The bearer secret (`mk_…`). Returned once; store it or lose it.
+    pub secret: String,
+    pub kind: ApiKeyKind,
+    pub label: String,
+    pub max_trust: TrustLevel,
+    pub can_forget: bool,
+    pub can_audit_history: bool,
+}
+
 /// The budgeted, deterministic core read for pre-injection: a RANKED,
 /// budget-fitted compact envelope of the bitemporally-current memory, anchored
 /// to the canonical projection's integrity semantics (`fingerprint` +

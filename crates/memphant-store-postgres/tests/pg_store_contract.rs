@@ -2636,13 +2636,7 @@ async fn api_key_lookup_and_revocation_round_trip() {
     let key_hash = format!("hash-{}", Uuid::now_v7());
 
     let key_id = store
-        .create_api_key(
-            tenant.as_uuid(),
-            &key_hash,
-            "contract",
-            TrustLevel::TrustedUser,
-            None,
-        )
+        .create_api_key(tenant, &key_hash, "contract", TrustLevel::TrustedUser, None)
         .await
         .expect("create key");
 
@@ -2681,7 +2675,7 @@ async fn scoped_api_key_round_trips_the_full_memory_context() {
 
     store
         .create_api_key(
-            tenant.as_uuid(),
+            tenant,
             &key_hash,
             "scoped-contract",
             TrustLevel::TrustedUser,

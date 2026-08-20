@@ -253,6 +253,28 @@ impl PgStore {
         .await
     }
 
+    /// `connect_app` plus the provisioner capability, for deployments that
+    /// opt into HTTP API-key mint/revoke (`POST`/`DELETE /v1/api-keys`). The
+    /// provisioner pool assumes `memphant_provisioner`, which has execute on
+    /// the provisioning SECURITY DEFINER functions and no table access
+    /// (`role_matrix.rs`) — the served app/authn capabilities stay exactly as
+    /// in `connect_app`. Without this, those routes 503.
+    pub async fn connect_app_with_provisioner(
+        database_url: &str,
+        auth_database_url: &str,
+        provision_database_url: &str,
+    ) -> Result<Self, StoreError> {
+        Self::connect_pools(
+            PoolSpec::capability(database_url, APP_ROLE),
+            Some(PoolSpec::capability(auth_database_url, AUTHN_ROLE)),
+            Some(PoolSpec::capability(
+                provision_database_url,
+                PROVISIONER_ROLE,
+            )),
+        )
+        .await
+    }
+
     pub async fn connect_worker(database_url: &str) -> Result<Self, StoreError> {
         Self::connect_pools(PoolSpec::capability(database_url, WORKER_ROLE), None, None).await
     }
@@ -573,40 +595,12 @@ impl PgStore {
         Ok(id)
     }
 
-    pub async fn create_api_key(
-        &self,
-        tenant: Uuid,
-        key_hash: &str,
-        label: &str,
-        max_trust: TrustLevel,
-        scoped_context: Option<&ResolvedMemoryContext>,
-    ) -> Result<Uuid, StoreError> {
-        let pool = self.provision_pool.as_ref().ok_or_else(|| {
-            StoreError::Backend("store has no provisioner capability".to_string())
-        })?;
-        if scoped_context.is_some_and(|context| context.tenant_id.as_uuid() != tenant) {
-            return Err(StoreError::PolicyDenied(
-                "API key context does not match tenant".to_string(),
-            ));
-        }
-        let id: Uuid = sqlx::query_scalar(
-            "select memphant.provision_api_key($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-        )
-        .bind(tenant)
-        .bind(key_hash)
-        .bind(label)
-        .bind(enum_str(&max_trust))
-        .bind(scoped_context.map(|context| context.data_subject_id.as_uuid()))
-        .bind(scoped_context.map(|context| context.subject_generation as i64))
-        .bind(scoped_context.map(|context| context.actor_id.as_uuid()))
-        .bind(scoped_context.map(|context| context.scope_id.as_uuid()))
-        .bind(scoped_context.map(|context| context.agent_node_id.as_uuid()))
-        .fetch_one(pool)
-        .await
-        .map_err(backend)?;
-        Ok(id)
-    }
+    // Key creation lives on the `MemoryStore` trait (`create_api_key`): one
+    // shared path for the admin CLI and the HTTP mint route.
 
+    /// GLOBAL revoke by id — the operator CLI surface (`memphant admin
+    /// revoke-key`). Served code must use the trait's tenant-scoped
+    /// `revoke_tenant_api_key` instead.
     pub async fn revoke_api_key(&self, id: Uuid) -> Result<bool, StoreError> {
         let pool = self.provision_pool.as_ref().ok_or_else(|| {
             StoreError::Backend("store has no provisioner capability".to_string())
@@ -5356,6 +5350,54 @@ impl MemoryStore for PgStore {
             can_audit_history: row.try_get("can_audit_history").map_err(backend)?,
             revoked: row.try_get("revoked").map_err(backend)?,
         }))
+    }
+
+    async fn create_api_key(
+        &self,
+        tenant: TenantId,
+        key_hash: &str,
+        label: &str,
+        max_trust: TrustLevel,
+        scoped_context: Option<&ResolvedMemoryContext>,
+    ) -> Result<Uuid, StoreError> {
+        let pool = self.provision_pool.as_ref().ok_or_else(|| {
+            StoreError::Backend("store has no provisioner capability".to_string())
+        })?;
+        if scoped_context.is_some_and(|context| context.tenant_id != tenant) {
+            return Err(StoreError::PolicyDenied(
+                "API key context does not match tenant".to_string(),
+            ));
+        }
+        let id: Uuid = sqlx::query_scalar(
+            "select memphant.provision_api_key($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        )
+        .bind(tenant.as_uuid())
+        .bind(key_hash)
+        .bind(label)
+        .bind(enum_str(&max_trust))
+        .bind(scoped_context.map(|context| context.data_subject_id.as_uuid()))
+        .bind(scoped_context.map(|context| context.subject_generation as i64))
+        .bind(scoped_context.map(|context| context.actor_id.as_uuid()))
+        .bind(scoped_context.map(|context| context.scope_id.as_uuid()))
+        .bind(scoped_context.map(|context| context.agent_node_id.as_uuid()))
+        .fetch_one(pool)
+        .await
+        .map_err(backend)?;
+        Ok(id)
+    }
+
+    async fn revoke_tenant_api_key(&self, tenant: TenantId, id: Uuid) -> Result<bool, StoreError> {
+        let pool = self.provision_pool.as_ref().ok_or_else(|| {
+            StoreError::Backend("store has no provisioner capability".to_string())
+        })?;
+        let revoked: Option<bool> =
+            sqlx::query_scalar("select memphant.revoke_tenant_api_key($1, $2)")
+                .bind(tenant.as_uuid())
+                .bind(id)
+                .fetch_optional(pool)
+                .await
+                .map_err(backend)?;
+        Ok(revoked.unwrap_or(false))
     }
 
     async fn resolve_context_binding(

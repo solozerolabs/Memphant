@@ -713,11 +713,7 @@ fn admin_create_key(args: &[String]) -> ExitCode {
     };
 
     // The plaintext key is printed exactly ONCE; only its sha256 is stored.
-    let plaintext = format!(
-        "mk_{}{}",
-        uuid::Uuid::new_v4().simple(),
-        uuid::Uuid::new_v4().simple()
-    );
+    let plaintext = memphant_core::generate_api_key_secret();
     let key_hash = sha256_hex(&plaintext);
 
     let context_names = [
@@ -770,7 +766,13 @@ fn admin_create_key(args: &[String]) -> ExitCode {
                 None
             };
             store
-                .create_api_key(tenant_id, &key_hash, "cli", trust, context.as_ref())
+                .create_api_key(
+                    TenantId::from_u128(tenant_id.as_u128()),
+                    &key_hash,
+                    "cli",
+                    trust,
+                    context.as_ref(),
+                )
                 .await
                 .map_err(|error| error.to_string())
         })
