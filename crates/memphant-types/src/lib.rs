@@ -2700,6 +2700,41 @@ pub struct CanonicalProjectionResponse {
     pub fingerprint: String,
 }
 
+/// The budgeted, deterministic core read for pre-injection: a RANKED,
+/// budget-fitted compact envelope of the bitemporally-current memory, anchored
+/// to the canonical projection's integrity semantics (`fingerprint` +
+/// `subject_generation`). Ranking is the recall engine's Fast lane — no
+/// sampling, total-order tie-breaks — so identical inputs against an unchanged
+/// store produce an identical envelope, suitable for prompt-cache-friendly
+/// injection. The budget is honored SERVER-side: packing stops before the item
+/// that would exceed it and never truncates mid-item.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct ScopeCoreResponse {
+    pub tenant_id: TenantId,
+    pub subject_id: SubjectId,
+    pub actor_id: ActorId,
+    pub scope_id: ScopeId,
+    pub agent_node_id: AgentNodeId,
+    pub subject_generation: u64,
+    /// RFC3339 server-clock instant the canonical-projection `fingerprint` was
+    /// evaluated at; the ranked read runs within the same request.
+    pub evaluated_at: String,
+    /// The canonical projection's fingerprint at `evaluated_at` — the same
+    /// value `GET /v1/scopes/{id}/projection` returns, so a consumer can prove
+    /// which memory state the core was compiled from.
+    pub fingerprint: String,
+    /// Echo of the honored hard token budget (conservative server-side
+    /// estimate, one token per three bytes with a whitespace-word floor).
+    pub token_budget: u32,
+    /// Ranked, budget-fitted compact items, best-first.
+    pub items: Vec<RecallContextItem>,
+    pub trace_id: TraceId,
+    /// True when the envelope drew on raw un-reflected episodes because
+    /// consolidation had not caught up (read-your-own-writes fallback).
+    pub degraded: bool,
+    pub abstention: bool,
+}
+
 /// Maximum encoded JSON body accepted by `POST /v1/file-sync`.
 pub const MAX_FILE_SYNC_REQUEST_ENCODED_BYTES: usize = 2_097_152;
 

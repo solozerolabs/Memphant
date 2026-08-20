@@ -2909,6 +2909,78 @@
         ],
         "type": "object"
       },
+      "ScopeCoreResponse": {
+        "description": "The budgeted, deterministic core read for pre-injection: a RANKED,\nbudget-fitted compact envelope of the bitemporally-current memory, anchored\nto the canonical projection's integrity semantics (`fingerprint` +\n`subject_generation`). Ranking is the recall engine's Fast lane — no\nsampling, total-order tie-breaks — so identical inputs against an unchanged\nstore produce an identical envelope, suitable for prompt-cache-friendly\ninjection. The budget is honored SERVER-side: packing stops before the item\nthat would exceed it and never truncates mid-item.",
+        "properties": {
+          "abstention": {
+            "type": "boolean"
+          },
+          "actor_id": {
+            "$ref": "#/components/schemas/ActorId"
+          },
+          "agent_node_id": {
+            "$ref": "#/components/schemas/AgentNodeId"
+          },
+          "degraded": {
+            "description": "True when the envelope drew on raw un-reflected episodes because\nconsolidation had not caught up (read-your-own-writes fallback).",
+            "type": "boolean"
+          },
+          "evaluated_at": {
+            "description": "RFC3339 server-clock instant the canonical-projection `fingerprint` was\nevaluated at; the ranked read runs within the same request.",
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "The canonical projection's fingerprint at `evaluated_at` — the same\nvalue `GET /v1/scopes/{id}/projection` returns, so a consumer can prove\nwhich memory state the core was compiled from.",
+            "type": "string"
+          },
+          "items": {
+            "description": "Ranked, budget-fitted compact items, best-first.",
+            "items": {
+              "$ref": "#/components/schemas/RecallContextItem"
+            },
+            "type": "array"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ScopeId"
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subject_id": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "tenant_id": {
+            "$ref": "#/components/schemas/TenantId"
+          },
+          "token_budget": {
+            "description": "Echo of the honored hard token budget (conservative server-side\nestimate, one token per three bytes with a whitespace-word floor).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trace_id": {
+            "$ref": "#/components/schemas/TraceId"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_id",
+          "actor_id",
+          "scope_id",
+          "agent_node_id",
+          "subject_generation",
+          "evaluated_at",
+          "fingerprint",
+          "token_budget",
+          "items",
+          "trace_id",
+          "degraded",
+          "abstention"
+        ],
+        "type": "object"
+      },
       "ScopeId": {
         "format": "uuid",
         "type": "string"
@@ -3838,6 +3910,94 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReflectAccepted"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scopes/{id}/core": {
+      "get": {
+        "description": "Budgeted, deterministic core read for pre-injection: a ranked, budget-fitted compact envelope of the bitemporally-current memory, anchored to the canonical projection's fingerprint and subject_generation. The token budget is honored server-side and items are never truncated mid-item. Tenant-service keys only; context-bound keys are refused.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_node_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_generation",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "format": "string",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token_budget",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeCoreResponse"
                 }
               }
             }

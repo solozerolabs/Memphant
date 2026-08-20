@@ -45,6 +45,7 @@ const FILE_SYNC_PATH: &str = "/v1/file-sync";
 const TRACE_PATH: &str = "/v1/traces/{id}";
 const SCOPE_MEMORY_PATH: &str = "/v1/scopes/{id}/memory";
 const CANONICAL_PROJECTION_PATH: &str = "/v1/scopes/{id}/projection";
+const SCOPE_CORE_PATH: &str = "/v1/scopes/{id}/core";
 const CONTEXT_BINDING_PATH: &str = "/v1/context-bindings/{client_ref}";
 
 const DOCUMENTED_OPENAPI_PATHS: &[&str] = &[
@@ -60,6 +61,7 @@ const DOCUMENTED_OPENAPI_PATHS: &[&str] = &[
     TRACE_PATH,
     SCOPE_MEMORY_PATH,
     CANONICAL_PROJECTION_PATH,
+    SCOPE_CORE_PATH,
     CONTEXT_BINDING_PATH,
     HEALTH_PATH,
 ];
@@ -341,6 +343,7 @@ pub fn app<S: MutationLedgerStore + 'static>(state: AppState<S>) -> Router {
             CANONICAL_PROJECTION_PATH,
             get(canonical_projection_handler::<S>),
         )
+        .route(SCOPE_CORE_PATH, get(scope_core_handler::<S>))
         .route(CONTEXT_BINDING_PATH, put(context_binding_handler::<S>))
         .with_state(state)
 }
@@ -925,6 +928,59 @@ async fn canonical_projection_handler<S: MemoryStore + 'static>(
     Ok(Json(state.service.canonical_projection(&context).await?))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScopeCoreQuery {
+    subject_id: SubjectId,
+    actor_id: ActorId,
+    agent_node_id: AgentNodeId,
+    subject_generation: u64,
+    /// The task query the core is ranked against.
+    query: String,
+    /// Hard server-honored token budget for the returned envelope.
+    token_budget: u32,
+}
+
+/// The budgeted deterministic core read (pre-injection). Tenant-service keys
+/// only: a context-bound key (the MCP principal class) is refused here and
+/// keeps its pinned recall through `POST /v1/recall`. The raw unranked
+/// projection endpoint above stays unchanged for audit/debug.
+async fn scope_core_handler<S: MemoryStore + 'static>(
+    State(state): State<AppState<S>>,
+    authed: AuthedTenant,
+    Path(id): Path<String>,
+    Query(query): Query<ScopeCoreQuery>,
+) -> Result<Json<memphant_types::ScopeCoreResponse>, ApiError> {
+    authed.require_tenant_service_key()?;
+    let uuid = Uuid::parse_str(&id).map_err(|_| ApiError::invalid("invalid scope id"))?;
+    let scope_id = ScopeId::from_u128(uuid.as_u128());
+    let context = state
+        .store()
+        .resolve_memory_context(
+            authed.tenant,
+            query.subject_id,
+            query.actor_id,
+            scope_id,
+            query.agent_node_id,
+        )
+        .await
+        .map_err(|error| match error {
+            StoreError::NotFound(_) => ApiError::scope_denied(),
+            other => ApiError::from(other),
+        })?;
+    if query.subject_generation != context.subject_generation {
+        return Err(ApiError::context_binding_conflict(
+            "subject generation is stale".to_string(),
+        ));
+    }
+    Ok(Json(
+        state
+            .service
+            .scope_core(&context, query.query, query.token_budget)
+            .await?,
+    ))
+}
+
 pub fn openapi_document() -> Value {
     json!({
         "openapi": "3.1.0",
@@ -1024,6 +1080,22 @@ fn openapi_paths() -> serde_json::Map<String, Value> {
         "Returns the complete bitemporally-current canonical projection at one server-clock instant, returned as evaluated_at. Responses exceeding {MAX_CANONICAL_PROJECTION_ENCODED_BYTES} encoded JSON bytes fail with 413 and are never truncated."
     ));
     paths.insert(CANONICAL_PROJECTION_PATH.to_string(), canonical_projection);
+    let mut scope_core = get_path_item(
+        "ScopeCoreResponse",
+        vec![
+            path_param("id"),
+            required_query_param("subject_id", "uuid"),
+            required_query_param("actor_id", "uuid"),
+            required_query_param("agent_node_id", "uuid"),
+            required_query_param("subject_generation", "integer"),
+            required_query_param("query", "string"),
+            required_query_param("token_budget", "integer"),
+        ],
+    );
+    scope_core["get"]["description"] = json!(
+        "Budgeted, deterministic core read for pre-injection: a ranked, budget-fitted compact envelope of the bitemporally-current memory, anchored to the canonical projection's fingerprint and subject_generation. The token budget is honored server-side and items are never truncated mid-item. Tenant-service keys only; context-bound keys are refused."
+    );
+    paths.insert(SCOPE_CORE_PATH.to_string(), scope_core);
     paths.insert(
         HEALTH_PATH.to_string(),
         get_path_item("HealthResponse", Vec::new()),
@@ -1063,6 +1135,7 @@ fn component_schemas() -> serde_json::Map<String, Value> {
     seed_component::<RetrievalTrace>(&mut generator);
     seed_component::<ScopeMemoryResponse>(&mut generator);
     seed_component::<CanonicalProjectionResponse>(&mut generator);
+    seed_component::<memphant_types::ScopeCoreResponse>(&mut generator);
     seed_component::<HealthResponse>(&mut generator);
     seed_component::<ContextBindingRequest>(&mut generator);
     seed_component::<ContextBindingResponse>(&mut generator);

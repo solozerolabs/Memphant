@@ -59,6 +59,11 @@ pub const DEFAULT_WORKER_COMPILE_CONCURRENCY: usize = 16;
 pub const MAX_WORKER_COMPILE_CONCURRENCY: usize = 128;
 /// The maximum encoded JSON payload returned by the canonical projection read.
 pub const MAX_CANONICAL_PROJECTION_ENCODED_BYTES: usize = 1_048_576;
+/// Defensive ceilings on caller-supplied recall sizing, for symmetry with the
+/// scope endpoint's clamp. No allocation is driven by these (output is bounded
+/// by the candidate pool), so they only reject absurd values.
+pub const MAX_RECALL_LIMIT: usize = 1_000;
+pub const MAX_RECALL_BUDGET_TOKENS: usize = 1_000_000;
 /// Maximum-length future timestamp emitted by the canonical Jiff formatter.
 const MAX_CANONICAL_PROJECTION_TIMESTAMP: &str = "9999-12-30T22:00:00.999999999Z";
 
@@ -4534,11 +4539,6 @@ impl<S: MemoryStore> MemoryService<S> {
         context: ResolvedMemoryContext,
         request: RecallHttpRequest,
     ) -> Result<RecallResponse, ServiceError> {
-        // Defensive ceilings on caller-supplied sizing, for symmetry with the
-        // scope endpoint's clamp. No allocation is driven by these (output is
-        // bounded by the candidate pool), so they only reject absurd values.
-        const MAX_RECALL_LIMIT: usize = 1_000;
-        const MAX_RECALL_BUDGET_TOKENS: usize = 1_000_000;
         let k = request.limit.unwrap_or(8).clamp(1, MAX_RECALL_LIMIT);
         self.recall_internal(RecallRequest {
             context,
@@ -6072,6 +6072,86 @@ impl<S: MemoryStore> MemoryService<S> {
                 .await?,
         )?;
         canonical_projection_response(context, evaluated_at, items)
+    }
+
+    /// The budgeted, deterministic core read for pre-injection (spec: Syndai
+    /// memory-toggle §1/§2.B). Composes the EXISTING recall ranking with the
+    /// canonical projection's integrity anchor — no second ranker:
+    ///
+    /// - Ranking is the recall Fast lane pinned (no Deep provider, no
+    ///   sampling); Fast ordering carries total-order tie-breaks, so identical
+    ///   inputs against an unchanged store yield an identical envelope.
+    /// - `token_budget` is honored by the recall pack: it stops before the
+    ///   item that would exceed the budget and never truncates mid-item. The
+    ///   item-count cap is pinned to [`MAX_RECALL_LIMIT`] so the budget is the
+    ///   binding constraint.
+    /// - `fingerprint` is the canonical projection fingerprint at
+    ///   `evaluated_at` — computed over the full projection item set (the
+    ///   response's own encoded size is budget-bounded, so the projection
+    ///   read's 413 byte ceiling does not apply here).
+    /// - The degraded read-your-own-writes fallback serves raw episodes
+    ///   `k`-limited, not budget-limited, so this seam budget-fits those items
+    ///   with the same conservative estimator before returning them.
+    pub async fn scope_core(
+        &self,
+        context: &ResolvedMemoryContext,
+        query: String,
+        token_budget: u32,
+    ) -> Result<memphant_types::ScopeCoreResponse, ServiceError> {
+        if token_budget == 0 {
+            return Err(ServiceError::Invalid(
+                "token_budget must be at least 1".to_string(),
+            ));
+        }
+        let budget = (token_budget as usize).min(MAX_RECALL_BUDGET_TOKENS);
+        let evaluated_at = self.clock.now_rfc3339();
+        let fingerprint = canonical_projection_fingerprint(&projection_items(
+            self.store
+                .canonical_projection_units(context, &evaluated_at)
+                .await?,
+        )?)?;
+        let recall = self
+            .recall(
+                context.clone(),
+                RecallHttpRequest {
+                    subject_id: context.data_subject_id,
+                    scope_id: context.scope_id,
+                    actor_id: context.actor_id,
+                    agent_node_id: context.agent_node_id,
+                    subject_generation: context.subject_generation,
+                    query,
+                    limit: Some(MAX_RECALL_LIMIT),
+                    budget_tokens: Some(budget),
+                    mode: Some(RecallMode::Fast),
+                    include_beliefs: None,
+                    compact_only: false,
+                    serve_captures: false,
+                    transaction_as_of: None,
+                    valid_at: None,
+                    aggregation_window: None,
+                },
+            )
+            .await?;
+        let items = if recall.degraded {
+            budget_fit_items(recall.items, budget)
+        } else {
+            recall.items
+        };
+        Ok(memphant_types::ScopeCoreResponse {
+            tenant_id: context.tenant_id,
+            subject_id: context.data_subject_id,
+            actor_id: context.actor_id,
+            scope_id: context.scope_id,
+            agent_node_id: context.agent_node_id,
+            subject_generation: context.subject_generation,
+            evaluated_at,
+            fingerprint,
+            token_budget,
+            items,
+            trace_id: recall.trace_id,
+            degraded: recall.degraded,
+            abstention: recall.abstention,
+        })
     }
 
     /// One worker tick: claims up to `batch` reflect jobs (unfiltered across
@@ -8088,6 +8168,26 @@ fn degraded_episode_items(
             // fact key and no generation to correct. A handle would name a row
             // that does not exist.
             correction: None,
+        })
+        .collect()
+}
+
+/// Greedy in-order budget fit over already-ranked items: stops adding items
+/// when the next would exceed `budget_tokens`, never truncating mid-item. The
+/// packed recall path already enforces this invariant internally; this seam
+/// exists for the degraded raw-episode fallback, whose items are `k`-limited
+/// rather than budget-limited.
+fn budget_fit_items(items: Vec<RecallContextItem>, budget_tokens: usize) -> Vec<RecallContextItem> {
+    let mut total = 0usize;
+    items
+        .into_iter()
+        .take_while(|item| {
+            let cost = crate::conservative_token_estimate(&item.body);
+            if total + cost > budget_tokens {
+                return false;
+            }
+            total += cost;
+            true
         })
         .collect()
 }
