@@ -1,7 +1,7 @@
-# MemPhant production cell — private-only (6PN), reached by syndai-prod at
+# MemPhant production cell — private-only (6PN), reached by its consumer app at
 # http://memphant-prod.internal:3000. No public service on purpose:
 # a serviceless app must keep restart=always and never scale to zero
-# (see Syndai LEARNINGS fly-serviceless-worker-autostop-reaps-it).
+# (a Fly serviceless app with autostart/autostop would be reaped — keep restart=always).
 app = 'memphant-prod'
 primary_region = 'sjc'
 kill_signal = 'SIGTERM'

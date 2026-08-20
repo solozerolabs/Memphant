@@ -1,18 +1,19 @@
 # memphant-prod cell — runbook (2026-08-05)
 
-One cell serving the Syndai dogfood (Phase A repo profiles), owner-approved
-BYOC into the existing Supabase project rather than a new instance ($0).
+One private consumer cell (its app-specific tenant/consumer wiring is in
+`porting.md` § Syndai MCP Integration — kept out of this public repo),
+owner-approved BYOC into the existing Supabase project rather than a new
+instance ($0).
 
 ## Topology
 
 | piece | value |
 |---|---|
 | Fly app | `memphant-prod` (org personal, sjc), **private-only** — no public service; reached at `http://memphant-prod.internal:3000` over 6PN |
-| processes | `server` (memphant-server) + `worker` (memphant-worker) + `mcp` (memphant-mcp streamable-http, port 3333), shared-1x/512MB each, `restart=always` (serviceless app — never scale to zero, see Syndai LEARNINGS `fly-serviceless-worker-autostop-reaps-it`) |
-| DB | `memphant` schema in Supabase project `wmnzjmrysnzjthldgffh` (Finn) — BYOC per `deploy/provider-profiles/supabase.env.example`; 28 tables, migrations 9/9, `bootstrap-check=clean` |
+| processes | `server` (memphant-server) + `worker` (memphant-worker) + `mcp` (memphant-mcp streamable-http, port 3333), shared-1x/512MB each, `restart=always` (serviceless app — never scale to zero; a Fly serviceless app with autostop would be reaped) |
+| DB | `memphant` schema in the BYOC Supabase project — per `deploy/provider-profiles/supabase.env.example`; migration head `20260817_013`, `bootstrap-check=clean` |
 | served creds | `memphant_{app,authn,worker}_login` NOINHERIT non-superuser roles (RLS is real); provisioned via `scripts/provision_login_roles.sh`; secrets on the Fly app |
-| tenant | `syndai-dogfood` `fe7b06e6-…`, api key `syndai-prod-worker` (max_trust `trusted_system` — required by the repo-profiler system actor) |
-| consumer config | syndai/prod doppler: `MEMPHANT_API_BASE_URL=http://memphant-prod.internal:3000`, `MEMPHANT_API_KEY=mk_…`; `MEMPHANT_REPO_PROFILE_ENABLED` set only after the slice deploys |
+| tenant / consumer config | app-specific — see `porting.md` § Syndai MCP Integration (tenant id, the two key kinds, consumer Doppler config). Kept out of this public repo. |
 | CI | `.github/workflows/deploy.yml` redeploys on main pushes touching runtime paths; app-scoped `FLY_API_TOKEN` (1y) in repo secrets |
 
 Credentials live in `~/.memphant-private/prod-cell/login_roles.env` (0600) and
@@ -24,7 +25,7 @@ in Fly/doppler secrets — never in git.
    Pre-create the six capability roles and `grant <role> to postgres` before
    the first migration run (the same `set_role` class the evalrank deploy hit).
 2. **Migrations refuse the 6543 transaction pooler** — use the direct
-   `db.<ref>.supabase.co:5432` host. Syndai's `DATABASE_URL` is the pooler
+   `db.<ref>.supabase.co:5432` host. The BYOC app's `DATABASE_URL` is the pooler
    form; rewrite user/host (strip the `.<ref>` username suffix).
 3. **Session-pooler usernames need the `<role>.<ref>` suffix** if the served
    URLs are later moved onto the pooler; today they use the direct host.
@@ -75,14 +76,14 @@ REQUIRES a **new** app secret:
 
 **Key kinds — do not mix them up.** The cell now uses two distinct key shapes:
 
-- **Tenant-service key (UNBOUND)** — what Syndai's repo-profiler uses for
+- **Tenant-service key (UNBOUND)** — what the REST consumer (repo-profiler) uses for
   `PUT /v1/context-bindings/…` on the server (`require_tenant_service_key`);
   it must NOT be context-bound.
 - **Context-BOUND key** — what the MCP process needs: bound to subject,
   generation, actor, scope, and agent node. MCP `recall` refuses a key that is
   not fully context-bound. This is the `MEMPHANT_API_KEY` secret above.
 
-One key cannot serve both paths; the existing `syndai-prod-worker` key (server
+One key cannot serve both paths; the REST-consumer key (see `porting.md`; server
 PUT path) is not a substitute for the MCP key.
 
 **Reaching it from a laptop** (there is no public route):
@@ -107,9 +108,9 @@ Liveness signal is `flyctl status` + the startup log line
 - **Migrator-password exposure (2026-08-05):** `apply_memphant_migrations.py`
   echoed the failing psql command line — including the Supabase `postgres`
   password — into a local session transcript once. The script is patched to
-  redact; **rotating the Finn `postgres` password is recommended.**
+  redact; **rotating the BYOC project's `postgres` password is recommended.**
 - Shared-DB blast radius is the accepted trade of the $0 BYOC decision: heavy
-  MemPhant load or a bad migration contends with Syndai prod. Revisit at the
+  MemPhant load or a bad migration contends with the shared BYOC project. Revisit at the
   first sign of contention; the exit is the $10/mo dedicated project.
 
 ## Bring-up failures (2026-08-05, all fixed — check here first on redeploy issues)
@@ -132,8 +133,8 @@ flyctl deploy --remote-only --app memphant-prod
 flyctl status --app memphant-prod
 flyctl logs --app memphant-prod
 
-# reach it from syndai-prod (the only network that can)
-flyctl ssh console -a syndai-prod -C "curl -s http://memphant-prod.internal:3000/v1/health"
+# reach it from the consumer app (the only network that can)
+flyctl ssh console -a <consumer-app> -C "curl -s http://memphant-prod.internal:3000/v1/health"
 
 # rotate the api key: provision a new one, set doppler, revoke the old id
 # (memphant.revoke_api_key('<key_id>'))
