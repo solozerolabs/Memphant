@@ -102,11 +102,19 @@ def merge_hooks(existing: dict, plugin_root: str, hooks: list) -> dict:
     return out
 
 
-def register_hooks(config_dir: str, plugin_root: str, hooks: list) -> str:
-    """Merge our hooks into <config_dir>/hooks.json. Returns a status."""
+def register_hooks(
+    config_dir: str, plugin_root: str, hooks: list, hooks_file: str = "hooks.json"
+) -> str:
+    """Merge our hooks into <config_dir>/<hooks_file>. Returns a status.
+
+    Codex reads hooks.json; Claude Code reads hooks ONLY from settings.json —
+    a hooks.json in ~/.claude is silently ignored (verified 2026-08-19), so the
+    claude-code target must merge into settings.json, preserving every other
+    settings key (merge_hooks copies the whole dict and only rewrites "hooks").
+    """
     if not config_dir or not os.path.isdir(config_dir):
         return "hooks:no_config_dir"
-    path = os.path.join(config_dir, "hooks.json")
+    path = os.path.join(config_dir, hooks_file)
     try:
         existing = json.load(open(path, encoding="utf-8"))
         if not isinstance(existing, dict):
@@ -122,14 +130,15 @@ def register_hooks(config_dir: str, plugin_root: str, hooks: list) -> str:
 
 
 def detect_harnesses() -> list:
-    """[(name, config_dir, hooks), ...] for each harness config dir present."""
+    """[(name, config_dir, hooks, hooks_file), ...] per harness config dir present."""
     found = []
     codex = os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
     if os.path.isdir(codex):
-        found.append(("codex", codex, _CODEX_HOOKS))
+        found.append(("codex", codex, _CODEX_HOOKS, "hooks.json"))
     claude = os.path.expanduser("~/.claude")
     if os.path.isdir(claude):
-        found.append(("claude-code", claude, _CLAUDE_HOOKS))
+        # Claude Code only honors hooks defined in settings.json.
+        found.append(("claude-code", claude, _CLAUDE_HOOKS, "settings.json"))
     return found
 
 
@@ -150,8 +159,10 @@ def install(repo: str, harness: str = "auto", plugin_root: str = PLUGIN_ROOT) ->
         targets = [t for t in targets if t[0] == harness]
         if not targets:
             steps.append(f"hooks:{harness}_not_found")
-    for name, config_dir, hooks in targets:
-        steps.append(f"{name}:{register_hooks(config_dir, plugin_root, hooks)}")
+    for name, config_dir, hooks, hooks_file in targets:
+        steps.append(
+            f"{name}:{register_hooks(config_dir, plugin_root, hooks, hooks_file=hooks_file)}"
+        )
     return steps
 
 
