@@ -1900,3 +1900,173 @@ where
         serde_json::from_slice(&bytes).expect("deserialize response"),
     )
 }
+
+fn scope_core_path(binding: &ContextBindingResponse, query: &str, token_budget: u32) -> String {
+    format!(
+        "/v1/scopes/{}/core?subject_id={}&actor_id={}&agent_node_id={}&subject_generation={}&query={}&token_budget={}",
+        binding.scope_id.as_uuid(),
+        binding.subject_id.as_uuid(),
+        binding.actor_id.as_uuid(),
+        binding.agent_node_id.as_uuid(),
+        binding.subject_generation,
+        query,
+        token_budget,
+    )
+}
+
+/// The conservative server-side token estimator's contract, restated here so
+/// the budget assertions below are grounded in the same arithmetic.
+fn conservative_tokens(text: &str) -> usize {
+    text.split_whitespace().count().max(text.len().div_ceil(3))
+}
+
+#[tokio::test]
+async fn scope_core_is_ranked_budget_fitted_deterministic_and_projection_anchored() {
+    let tenant_id = tenant(97_000);
+    let (app, state) = dev_app_with_state(tenant_id);
+    let binding = bind_context(&app, "scope-core").await;
+    let context = state
+        .store()
+        .resolve_memory_context(
+            tenant_id,
+            binding.subject_id,
+            binding.actor_id,
+            binding.scope_id,
+            binding.agent_node_id,
+        )
+        .await
+        .expect("resolve core context");
+
+    let small_body = "The favorite deploy region is eu-west-1.";
+    let bodies = [
+        small_body,
+        "A second favorite deploy region note pinning us-east-2 for batch workloads.",
+        "A third favorite deploy region observation about ap-south-1 latency for the nightly sync.",
+    ];
+    let mut tx = state.store().begin(&context).await.expect("begin seed");
+    for (index, body) in bodies.iter().enumerate() {
+        state
+            .store()
+            .stage_memory_unit(
+                &mut tx,
+                active_projection_unit(
+                    tenant_id,
+                    &binding,
+                    &format!("rest:scope-core:{index}"),
+                    &format!("core:{index}"),
+                    body,
+                ),
+            )
+            .await
+            .expect("stage core unit");
+    }
+    state.store().commit(tx).await.expect("commit seed");
+
+    // A budget that covers everything returns every ranked item, never more
+    // than the budget, and anchors to the projection's integrity semantics.
+    let full_path = scope_core_path(&binding, "favorite%20deploy%20region", 1_000);
+    let full: Value = json_request(&app, "GET", &full_path, None::<()>).await.1;
+    let full_bodies: Vec<&str> = full["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["body"].as_str().expect("body"))
+        .collect();
+    assert_eq!(full_bodies.len(), 3, "{full}");
+    for body in &full_bodies {
+        assert!(bodies.contains(body), "mid-item truncation: {body}");
+    }
+    assert_eq!(full["subject_generation"], binding.subject_generation);
+    assert_eq!(full["token_budget"], 1_000);
+    assert_eq!(full["evaluated_at"], REST_TEST_CLOCK.0);
+    assert_eq!(full["degraded"], false);
+
+    let projection: CanonicalProjectionResponse = json_request(
+        &app,
+        "GET",
+        &format!(
+            "/v1/scopes/{}/projection?subject_id={}&actor_id={}&agent_node_id={}&subject_generation={}",
+            binding.scope_id.as_uuid(),
+            binding.subject_id.as_uuid(),
+            binding.actor_id.as_uuid(),
+            binding.agent_node_id.as_uuid(),
+            binding.subject_generation,
+        ),
+        None::<()>,
+    )
+    .await
+    .1;
+    assert_eq!(
+        full["fingerprint"].as_str().expect("fingerprint"),
+        projection.fingerprint,
+        "core must carry the projection's fingerprint"
+    );
+
+    // A budget that only the smallest item fits under returns exactly that
+    // item, whole: the server stops before the item that would exceed the
+    // budget and never truncates mid-item.
+    let small_budget = conservative_tokens(small_body) as u32;
+    assert!(
+        bodies[1..]
+            .iter()
+            .all(|body| conservative_tokens(body) > small_budget as usize)
+    );
+    let tight_path = scope_core_path(&binding, "favorite%20deploy%20region", small_budget);
+    let tight: Value = json_request(&app, "GET", &tight_path, None::<()>).await.1;
+    let tight_bodies: Vec<&str> = tight["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["body"].as_str().expect("body"))
+        .collect();
+    assert_eq!(tight_bodies, vec![small_body], "{tight}");
+
+    // Deterministic: identical inputs produce an identical envelope.
+    let repeat: Value = json_request(&app, "GET", &full_path, None::<()>).await.1;
+    assert_eq!(repeat["items"], full["items"]);
+    assert_eq!(repeat["fingerprint"], full["fingerprint"]);
+}
+
+#[tokio::test]
+async fn scope_core_stale_subject_generation_fails_closed() {
+    let tenant_id = tenant(97_100);
+    let app = dev_app(tenant_id);
+    let binding = bind_context(&app, "scope-core-stale").await;
+
+    let stale = format!(
+        "/v1/scopes/{}/core?subject_id={}&actor_id={}&agent_node_id={}&subject_generation={}&query=q&token_budget=100",
+        binding.scope_id.as_uuid(),
+        binding.subject_id.as_uuid(),
+        binding.actor_id.as_uuid(),
+        binding.agent_node_id.as_uuid(),
+        binding.subject_generation + 1,
+    );
+    let request = Request::builder()
+        .method("GET")
+        .uri(stale)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body: Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(body["error"]["code"], "context_binding_conflict");
+}
+
+#[tokio::test]
+async fn scope_core_rejects_a_zero_token_budget() {
+    let tenant_id = tenant(97_200);
+    let app = dev_app(tenant_id);
+    let binding = bind_context(&app, "scope-core-zero").await;
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(scope_core_path(&binding, "q", 0))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body: Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(body["error"]["code"], "invalid_request");
+}

@@ -1180,3 +1180,105 @@ async fn agent_key_without_can_audit_history_cannot_read_as_of_its_own_scope() {
         assert_eq!(response["error"]["code"], "capability_denied", "{selector}");
     }
 }
+
+/// The budgeted core read is a tenant-service-key surface: the context-bound
+/// principal class (the MCP key kind) must NOT gain it — it keeps the pinned
+/// recall through `POST /v1/recall` — and a foreign tenant's service key must
+/// not see the scope at all.
+#[tokio::test]
+async fn scope_core_admits_tenant_service_keys_and_refuses_context_bound_keys() {
+    let tenant_a = tenant(81_500);
+    let state = memphant_server::AppState::new_in_memory();
+    state
+        .store()
+        .insert_api_key(key_row(KEY_A, tenant_a, TrustLevel::TrustedSystem, false));
+    state.store().insert_api_key(key_row(
+        KEY_B,
+        tenant(81_501),
+        TrustLevel::TrustedSystem,
+        false,
+    ));
+    let app = memphant_server::app(state.clone());
+
+    let (bind_status, binding) = send(
+        &app,
+        "PUT",
+        "/v1/context-bindings/scope-core-auth",
+        Some(KEY_A),
+        Some(context_binding_body()),
+    )
+    .await;
+    assert_eq!(bind_status, StatusCode::OK, "{binding}");
+
+    // Mint a context-BOUND key on exactly the bound principal (the MCP key
+    // kind for this scope).
+    let mut bound = key_row(
+        "mk_scope_core_bound",
+        tenant_a,
+        TrustLevel::TrustedUser,
+        false,
+    );
+    bound.actor_id = Some(
+        binding["actor_id"]
+            .as_str()
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .map(|value| ActorId::from_u128(value.as_u128()))
+            .expect("actor id"),
+    );
+    bound.scope_id = Some(
+        binding["scope_id"]
+            .as_str()
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .map(|value| ScopeId::from_u128(value.as_u128()))
+            .expect("scope id"),
+    );
+    state.store().insert_api_key(bound);
+
+    let core_path = format!(
+        "/v1/scopes/{}/core?subject_id={}&actor_id={}&agent_node_id={}&subject_generation={}&query=q&token_budget=100",
+        binding["scope_id"].as_str().unwrap(),
+        binding["subject_id"].as_str().unwrap(),
+        binding["actor_id"].as_str().unwrap(),
+        binding["agent_node_id"].as_str().unwrap(),
+        binding["subject_generation"].as_u64().unwrap(),
+    );
+
+    // Tenant-service key: admitted.
+    let (service_status, service_body) = send(&app, "GET", &core_path, Some(KEY_A), None).await;
+    assert_eq!(service_status, StatusCode::OK, "{service_body}");
+    assert_eq!(
+        service_body["subject_generation"].as_u64().unwrap(),
+        binding["subject_generation"].as_u64().unwrap()
+    );
+    assert_eq!(service_body["fingerprint"].as_str().unwrap().len(), 64);
+
+    // Context-bound key on the very same principal: refused here...
+    let (bound_status, bound_body) =
+        send(&app, "GET", &core_path, Some("mk_scope_core_bound"), None).await;
+    assert_eq!(bound_status, StatusCode::FORBIDDEN, "{bound_body}");
+    assert_eq!(bound_body["error"]["code"], "scope_denied");
+
+    // ...while its pinned recall lane stays open, unchanged.
+    let recall_body = serde_json::json!({
+        "subject_id": binding["subject_id"],
+        "scope_id": binding["scope_id"],
+        "actor_id": binding["actor_id"],
+        "agent_node_id": binding["agent_node_id"],
+        "subject_generation": binding["subject_generation"],
+        "query": "q",
+    });
+    let (recall_status, recall_response) = send(
+        &app,
+        "POST",
+        "/v1/recall",
+        Some("mk_scope_core_bound"),
+        Some(recall_body),
+    )
+    .await;
+    assert_eq!(recall_status, StatusCode::OK, "{recall_response}");
+
+    // A foreign tenant's service key cannot resolve the scope: fails closed.
+    let (foreign_status, foreign_body) = send(&app, "GET", &core_path, Some(KEY_B), None).await;
+    assert_eq!(foreign_status, StatusCode::FORBIDDEN, "{foreign_body}");
+    assert_eq!(foreign_body["error"]["code"], "scope_denied");
+}
