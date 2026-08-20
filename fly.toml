@@ -11,6 +11,7 @@ kill_signal = 'SIGTERM'
 
 [env]
   MEMPHANT_BIND = '[::]:3000'  # 6PN is IPv6; 0.0.0.0 refuses cross-app connections
+  MEMPHANT_MCP_BIND = '[::]:3333'  # read only by the mcp process; same IPv6 rule as MEMPHANT_BIND
   RUST_LOG = 'info'
   # Phase A serves deterministic profile facts (retain + projection reads);
   # the dense channel is unused. This also removes the HuggingFace model
@@ -22,9 +23,15 @@ kill_signal = 'SIGTERM'
 [processes]
   server = 'memphant-server'
   worker = 'memphant-worker'
+  mcp = 'memphant-mcp streamable-http'
 
 # No [http_service]: private networking only. Secrets carry the three served
 # database URLs (never DATABASE_URL — the server refuses the migrator cred).
+# The mcp process reuses MEMPHANT_APP_DATABASE_URL + MEMPHANT_AUTHN_DATABASE_URL
+# (already app secrets, shared with server/worker) and additionally REQUIRES the
+# MEMPHANT_API_KEY secret — a context-BOUND tenant key (mk_…); the process
+# refuses to start without it (resolve_tenant). Laptop access:
+# `fly proxy 3333 -a memphant-prod`. See docs/deployment/prod-cell-runbook.md.
 
 [[restart]]
   policy = 'always'
@@ -41,6 +48,13 @@ kill_signal = 'SIGTERM'
   cpus = 1
   memory_mb = 512
   processes = ['worker']
+  count = 1
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
+  processes = ['mcp']
   count = 1
 
 [checks.server_health]

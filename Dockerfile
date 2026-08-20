@@ -10,7 +10,8 @@ COPY . .
 RUN cargo build --locked --release -j 2 \
   -p memphant-server \
   -p memphant-worker \
-  -p memphant-cli
+  -p memphant-cli \
+  -p memphant-mcp
 
 # One-shot bootstrap image: applies the bundled migrations and gives the served
 # capability roles usable credentials. Kept as its own stage so the runtime
@@ -38,6 +39,7 @@ WORKDIR /app
 COPY --from=builder /app/target/release/memphant-server /usr/local/bin/memphant-server
 COPY --from=builder /app/target/release/memphant-worker /usr/local/bin/memphant-worker
 COPY --from=builder /app/target/release/memphant-cli /usr/local/bin/memphant-cli
+COPY --from=builder /app/target/release/memphant-mcp /usr/local/bin/memphant-mcp
 COPY --from=builder /app/config/structured-state-v2.txt /etc/memphant/structured-state-v2.txt
 RUN ln -s /usr/local/bin/memphant-cli /usr/local/bin/memphant
 

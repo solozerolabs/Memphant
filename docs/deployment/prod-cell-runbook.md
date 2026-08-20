@@ -8,7 +8,7 @@ BYOC into the existing Supabase project rather than a new instance ($0).
 | piece | value |
 |---|---|
 | Fly app | `memphant-prod` (org personal, sjc), **private-only** — no public service; reached at `http://memphant-prod.internal:3000` over 6PN |
-| processes | `server` (memphant-server) + `worker` (memphant-worker), shared-1x/512MB each, `restart=always` (serviceless app — never scale to zero, see Syndai LEARNINGS `fly-serviceless-worker-autostop-reaps-it`) |
+| processes | `server` (memphant-server) + `worker` (memphant-worker) + `mcp` (memphant-mcp streamable-http, port 3333), shared-1x/512MB each, `restart=always` (serviceless app — never scale to zero, see Syndai LEARNINGS `fly-serviceless-worker-autostop-reaps-it`) |
 | DB | `memphant` schema in Supabase project `wmnzjmrysnzjthldgffh` (Finn) — BYOC per `deploy/provider-profiles/supabase.env.example`; 28 tables, migrations 9/9, `bootstrap-check=clean` |
 | served creds | `memphant_{app,authn,worker}_login` NOINHERIT non-superuser roles (RLS is real); provisioned via `scripts/provision_login_roles.sh`; secrets on the Fly app |
 | tenant | `syndai-dogfood` `fe7b06e6-…`, api key `syndai-prod-worker` (max_trust `trusted_system` — required by the repo-profiler system actor) |
@@ -35,6 +35,52 @@ in Fly/doppler secrets — never in git.
    SECURITY DEFINER functions as `postgres` instead:
    `select memphant.provision_tenant(...)` / `memphant.provision_api_key(...)`
    (key hash = sha256 hex of the `mk_…` token).
+
+## MCP process group (`mcp`)
+
+`memphant-mcp streamable-http` runs as a third process group on the same image,
+serving MCP (streamable-HTTP, path `/mcp`) on `MEMPHANT_MCP_BIND=[::]:3333` —
+private 6PN only, no `[http_service]`, same never-scale-to-zero rule as the
+other groups. Tools: `recall`, `remember`, `correct_memory`,
+`invalidate_memory`, `report_memory_use`.
+
+**Env / secrets.** The process reuses the existing app secrets
+`MEMPHANT_APP_DATABASE_URL` + `MEMPHANT_AUTHN_DATABASE_URL` (role-scoped served
+URLs shared with server/worker; `DATABASE_URL` is refused). It additionally
+REQUIRES a **new** app secret:
+
+- `MEMPHANT_API_KEY` — the `mk_…` token of a **context-BOUND** key for the
+  fixed tenant. The binary resolves its tenant from this key at startup
+  (`resolve_tenant`, sha256 → `api_key` row) and refuses to start if the key is
+  missing, unknown, or revoked. Every streamable-HTTP request must also present
+  it as `Authorization: Bearer <MEMPHANT_API_KEY>` — a 401 otherwise. Mint via
+  `select memphant.provision_api_key(...)` as `postgres` (trap 5 above), then
+  `fly secrets set MEMPHANT_API_KEY=mk_… -a memphant-prod`.
+
+**Key kinds — do not mix them up.** The cell now uses two distinct key shapes:
+
+- **Tenant-service key (UNBOUND)** — what Syndai's repo-profiler uses for
+  `PUT /v1/context-bindings/…` on the server (`require_tenant_service_key`);
+  it must NOT be context-bound.
+- **Context-BOUND key** — what the MCP process needs: bound to subject,
+  generation, actor, scope, and agent node. MCP `recall` refuses a key that is
+  not fully context-bound. This is the `MEMPHANT_API_KEY` secret above.
+
+One key cannot serve both paths; the existing `syndai-prod-worker` key (server
+PUT path) is not a substitute for the MCP key.
+
+**Reaching it from a laptop** (there is no public route):
+
+```bash
+fly proxy 3333 -a memphant-prod
+# then point the MCP client at http://127.0.0.1:3333/mcp with
+# Authorization: Bearer $MEMPHANT_API_KEY
+```
+
+No health check is configured for the `mcp` group: the only route (`/mcp`)
+sits behind the bearer gate, so an unauthenticated HTTP check would 401.
+Liveness signal is `flyctl status` + the startup log line
+`memphant-mcp: streamable-http on http://[::]:3333/mcp`.
 
 ## Standing caveats
 
