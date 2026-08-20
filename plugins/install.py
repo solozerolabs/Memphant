@@ -57,6 +57,11 @@ def write_agents_block(repo: str) -> str:
         existing = open(path, encoding="utf-8").read()
     except OSError:
         existing = ""
+    if "<!-- memphant:begin -->" in existing:
+        # A block already exists — the repo owns its wording (e.g. trimmed to
+        # fit a merged-chain byte budget). Idempotence keys on the MARKERS,
+        # never the content: a re-run must not clobber a curated block.
+        return f"{name}:present"
     updated = upsert_managed_block(existing, STABLE_BLOCK)
     if updated == existing:
         return f"{name}:unchanged"
