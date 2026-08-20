@@ -60,8 +60,10 @@ def write_agents_block(repo: str) -> str:
     if "<!-- memphant:begin -->" in existing:
         # A block already exists — the repo owns its wording (e.g. trimmed to
         # fit a merged-chain byte budget). Idempotence keys on the MARKERS,
-        # never the content: a re-run must not clobber a curated block.
-        return f"{name}:present"
+        # never the content: a re-run must not clobber a curated block, so
+        # return the existing "unchanged" no-write status rather than
+        # re-expanding the block to STABLE_BLOCK.
+        return f"{name}:unchanged"
     updated = upsert_managed_block(existing, STABLE_BLOCK)
     if updated == existing:
         return f"{name}:unchanged"
