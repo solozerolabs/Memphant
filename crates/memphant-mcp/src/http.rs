@@ -133,7 +133,13 @@ pub fn streamable_http_router(
             let principal = CURRENT_PRINCIPAL
                 .try_with(BoundTenant::clone)
                 .unwrap_or_else(|_| unbound_tenant());
-            Ok(MemphantMcp::new(factory_service.clone(), principal))
+            // Recall-only on the HTTP transport: the four mutating tools are
+            // server-disabled here (writes/forgets are backend-owned over private
+            // REST). stdio keeps the full surface.
+            Ok(MemphantMcp::new_recall_only(
+                factory_service.clone(),
+                principal,
+            ))
         },
         Arc::new(NeverSessionManager::default()),
         config,

@@ -573,14 +573,50 @@ impl MemphantMcp {
     }
 }
 
+/// The four mutating tools, disabled on the recall-only (streamable-HTTP)
+/// surface. Keep in sync with the `#[tool]` methods below; `recall` is the only
+/// read tool and is never listed here.
+pub const MUTATING_TOOLS: [&str; 4] = [
+    "remember",
+    "correct_memory",
+    "invalidate_memory",
+    "report_memory_use",
+];
+
 #[tool_router(router = tool_router)]
 impl MemphantMcp {
+    /// Full surface: all five tools. Used by stdio (a per-principal transport)
+    /// and the canonical `tools_artifact`.
     pub fn new(service: MemoryService<AnyStore>, bound: BoundTenant) -> Self {
+        Self::with_router(service, bound, Self::tool_router())
+    }
+
+    /// Recall-only surface for the streamable-HTTP transport. The four mutating
+    /// tools are disabled — hidden from `tools/list` and rejected by `call` — so
+    /// a context-bound coding key reaching MemPhant over the (backend-proxied,
+    /// 6PN) HTTP path can only recall. In the Syndai integration every write and
+    /// forget is backend-owned over private REST (lanes 1/3) plus MemPhant's
+    /// reflect worker, so nothing is lost; stdio and the canonical artifact keep
+    /// all five. This is server-enforced, unlike the consumer's client-side
+    /// `--allowedTools` fence.
+    pub fn new_recall_only(service: MemoryService<AnyStore>, bound: BoundTenant) -> Self {
+        let mut tool_router = Self::tool_router();
+        for name in MUTATING_TOOLS {
+            tool_router = tool_router.with_disabled(name);
+        }
+        Self::with_router(service, bound, tool_router)
+    }
+
+    fn with_router(
+        service: MemoryService<AnyStore>,
+        bound: BoundTenant,
+        tool_router: ToolRouter<Self>,
+    ) -> Self {
         Self {
             recall_service: service.ambient_free_recall_clone(),
             service,
             bound,
-            tool_router: Self::tool_router(),
+            tool_router,
         }
     }
 

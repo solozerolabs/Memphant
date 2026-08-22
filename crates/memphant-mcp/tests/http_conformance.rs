@@ -317,14 +317,20 @@ async fn stateless_tools_list_has_no_session_and_carries_cache_hints() {
         .iter()
         .map(|tool| tool["name"].as_str().expect("tool name"))
         .collect();
+    // The streamable-HTTP transport is RECALL-ONLY: `recall` is served and the
+    // four mutating tools are server-disabled (hidden from tools/list and
+    // rejected by call). Writes/forgets are backend-owned over private REST.
+    assert!(tools.contains(&"recall"), "recall missing in {tools:?}");
     for name in [
-        "recall",
         "remember",
         "correct_memory",
         "invalidate_memory",
         "report_memory_use",
     ] {
-        assert!(tools.contains(&name), "missing {name} in {tools:?}");
+        assert!(
+            !tools.contains(&name),
+            "{name} must be hidden on the recall-only HTTP surface, got {tools:?}"
+        );
     }
 }
 
@@ -462,6 +468,46 @@ async fn per_request_bearer_binds_each_call_to_its_own_tenant() {
     assert!(
         !body_b.contains("SENTINEL_A"),
         "tenant B must NOT recall tenant A's memory: {body_b}"
+    );
+}
+
+/// Server-enforced recall-only: a `tools/call` for a mutating tool is REJECTED
+/// over the HTTP surface even with a valid, fully context-bound key — proving
+/// the disable is a server guarantee, not the consumer's client-side
+/// `--allowedTools` fence. A stolen coding key cannot POST `remember` here.
+#[tokio::test]
+async fn mutating_tool_call_is_rejected_over_http() {
+    let (store, service) = store_and_service();
+    seed_bound_memory(&store, &service, "mk_recall_only_key", "PRESEED").await;
+    let addr = serve_service(service).await;
+
+    let auth = "Bearer mk_recall_only_key".to_string();
+    let response = post(
+        addr,
+        &addr.to_string(),
+        &[
+            ("Authorization", &auth),
+            ("MCP-Protocol-Version", "2025-11-25"),
+        ],
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {"name": "remember", "arguments": {}},
+        }),
+    )
+    .await;
+    // A disabled tool is not minted: no successful remember response (which would
+    // carry `unit_ids`), and the call is refused.
+    assert!(
+        !response.body.contains("unit_ids"),
+        "a disabled mutating tool must not execute: {}",
+        response.body
+    );
+    assert!(
+        response.body.contains("error") || response.body.contains("Invalid"),
+        "a disabled mutating tool call must be refused: {}",
+        response.body
     );
 }
 
