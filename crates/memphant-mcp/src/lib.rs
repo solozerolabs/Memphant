@@ -2,10 +2,13 @@
 //! with legacy-client compatibility): five portable memory tools and
 //! tenant-bound memory resources over the
 //! shared `MemoryService<AnyStore>`, a persistent stdio session, and an
-//! optional streamable-HTTP transport. The tenant is fixed at startup from
-//! `MEMPHANT_API_KEY` (sha256 → api_key lookup) or `MEMPHANT_DEV_TENANT`
-//! (dev) — stdio is a per-principal transport; a missing/revoked key refuses
-//! to start rather than serving an unauthenticated session.
+//! optional streamable-HTTP transport. stdio fixes its tenant at startup from
+//! `MEMPHANT_API_KEY` (sha256 → api_key lookup) or `MEMPHANT_DEV_TENANT` (dev):
+//! it is a per-principal transport, and a missing/revoked key refuses to start
+//! rather than serving an unauthenticated session. The streamable-HTTP
+//! transport is multi-tenant instead — it authenticates the presented Bearer
+//! per request (`resolve_http_principal`) and binds each request to that key's
+//! tenant, mirroring the REST edge.
 //!
 //! Capability model (server-enforced, not a client convention): every tool
 //! resolves the live key on each call (`live_principal`), and the ONE
@@ -108,44 +111,43 @@ fn decode_mutation_response<T: DeserializeOwned>(
         .map_err(|_| "backend unavailable".to_string())
 }
 
-/// Constant-time string equality (length may leak). Compares a presented bearer
-/// token to the process key without a timing side channel.
-pub fn constant_time_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.iter().zip(b) {
-        diff |= x ^ y;
-    }
-    diff == 0
+/// Why a per-request MCP auth attempt failed, mapped to an HTTP status by the
+/// streamable-HTTP gate. Mirrors the REST edge: a missing / unknown / revoked /
+/// non-`mk_` bearer is `Unauthorized` (401); a store lookup failure is
+/// `Unavailable` (503, REST `backend_unavailable`) so a backend outage never
+/// masquerades as an auth rejection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpAuthReject {
+    Unauthorized,
+    Unavailable,
 }
 
-/// Whether an MCP streamable-HTTP request is authorized. Dev mode (auth
-/// explicitly disabled and logged loudly at startup) allows all; otherwise the
-/// `Authorization: Bearer <token>` header must equal the process key. This
-/// gives the HTTP transport the same per-request gate the REST edge has, so a
-/// widened `MEMPHANT_MCP_BIND` never serves the bound tenant unauthenticated.
-pub fn mcp_http_authorized(
-    dev_mode: bool,
-    expected_key: Option<&str>,
+/// Resolve the tenant for ONE streamable-HTTP request from the presented
+/// `Authorization: Bearer mk_<key>` header, mirroring REST's
+/// `AuthedTenant::from_request_parts`: strip the scheme, require the `mk_`
+/// prefix, hash, look the key up, reject a revoked row. The returned
+/// `BoundTenant` binds THIS request only; every store op then sets the tenant
+/// GUC through the existing `tenant_tx`/`bind_tenant`. Unlike the stdio startup
+/// path this holds no process-wide key — the endpoint is multi-tenant, and any
+/// context-bound key authenticates as its own tenant.
+pub async fn resolve_http_principal(
+    store: &AnyStore,
     auth_header: Option<&str>,
-) -> bool {
-    if dev_mode {
-        return true;
+) -> Result<BoundTenant, McpAuthReject> {
+    let token = auth_header
+        .and_then(|header| header.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|token| token.starts_with("mk_"))
+        .ok_or(McpAuthReject::Unauthorized)?;
+    let row = store
+        .lookup_api_key(&api_key_hash(token))
+        .await
+        .map_err(|_| McpAuthReject::Unavailable)?
+        .ok_or(McpAuthReject::Unauthorized)?;
+    if row.revoked {
+        return Err(McpAuthReject::Unauthorized);
     }
-    let Some(expected) = expected_key else {
-        return false;
-    };
-    let Some(token) = auth_header.and_then(|header| {
-        header
-            .strip_prefix("Bearer ")
-            .or_else(|| header.strip_prefix("bearer "))
-    }) else {
-        return false;
-    };
-    constant_time_eq(token.trim(), expected.trim())
+    Ok(bound_from_api_key_row(row))
 }
 
 /// The tenant binding resolved at startup. Stdio serves exactly one
@@ -194,35 +196,97 @@ impl LivePrincipal {
     }
 }
 
-/// Resolves the fixed tenant from the environment:
+/// The dev-mode binding (`MEMPHANT_DEV_TENANT`): auth disabled, trust ceiling
+/// `trusted_system`, body tenant ids ignored. Both stdio startup and the
+/// per-request HTTP dev path build the same shape.
+pub fn dev_bound_tenant(tenant: TenantId) -> BoundTenant {
+    BoundTenant {
+        tenant,
+        max_trust: TrustLevel::TrustedSystem,
+        subject_id: None,
+        subject_generation: None,
+        actor_id: None,
+        scope_id: None,
+        agent_node_id: None,
+        api_key_id: None,
+        api_key_hash: None,
+        dev_mode: true,
+    }
+}
+
+/// The binding an authenticated `api_key` row resolves to. stdio startup
+/// (`resolve_tenant`) and per-request HTTP (`resolve_http_principal`) share this
+/// exact row → principal mapping.
+fn bound_from_api_key_row(row: memphant_core::ApiKeyRow) -> BoundTenant {
+    BoundTenant {
+        tenant: row.tenant_id,
+        max_trust: row.max_trust,
+        subject_id: row.data_subject_id,
+        subject_generation: row.subject_generation,
+        actor_id: row.actor_id,
+        scope_id: row.scope_id,
+        agent_node_id: row.agent_node_id,
+        api_key_id: Some(row.id),
+        api_key_hash: Some(row.key_hash),
+        dev_mode: false,
+    }
+}
+
+/// The unbound placeholder the streamable-HTTP factory falls back to when it is
+/// invoked with no scoped principal (a request that bypassed the auth
+/// middleware, or rmcp filling its shared `tool_schema` cache). It carries no
+/// key and no context, so `live_principal`/`memory_projection` fail every tool
+/// and resource call closed while the static `tools/list` still answers. This
+/// keeps the factory infallible, so rmcp can never cache a `None` schema.
+// ponytail: fail-closed lives at the tool layer (both resolvers require a full
+// context binding), not at the transport factory — so the factory never errors.
+pub fn unbound_tenant() -> BoundTenant {
+    BoundTenant {
+        tenant: TenantId::from_u128(0),
+        max_trust: TrustLevel::AgentOutput,
+        subject_id: None,
+        subject_generation: None,
+        actor_id: None,
+        scope_id: None,
+        agent_node_id: None,
+        api_key_id: None,
+        api_key_hash: None,
+        dev_mode: false,
+    }
+}
+
+/// The dev-mode binding from `MEMPHANT_DEV_TENANT`, or `None` when unset/blank.
+/// Unlike `resolve_tenant`, absence is not an error: the HTTP transport
+/// authenticates per-request and needs no process key.
+pub fn dev_bound_tenant_from_env() -> Result<Option<BoundTenant>, String> {
+    match std::env::var("MEMPHANT_DEV_TENANT") {
+        Ok(raw) if !raw.trim().is_empty() => {
+            let uuid = uuid::Uuid::parse_str(raw.trim())
+                .map_err(|error| format!("MEMPHANT_DEV_TENANT must be a UUID: {error}"))?;
+            let tenant = TenantId::from_u128(uuid.as_u128());
+            eprintln!(
+                "memphant-mcp: AUTH DISABLED (dev) — all tool calls bound to tenant {}",
+                tenant.as_uuid()
+            );
+            Ok(Some(dev_bound_tenant(tenant)))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Resolves the fixed stdio tenant from the environment:
 /// - `MEMPHANT_DEV_TENANT=<uuid>` → dev mode (loud, trust ceiling
 ///   `trusted_system`, body tenant ids ignored);
 /// - `MEMPHANT_API_KEY=mk_…` → sha256 → `api_key` lookup (missing or revoked
 ///   → error: the process must refuse to start);
 /// - neither → error.
+///
+/// stdio only: it is a per-principal transport with no per-request header. The
+/// streamable-HTTP transport does NOT use this — it authenticates per request
+/// via `resolve_http_principal`.
 pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
-    if let Ok(raw) = std::env::var("MEMPHANT_DEV_TENANT")
-        && !raw.trim().is_empty()
-    {
-        let uuid = uuid::Uuid::parse_str(raw.trim())
-            .map_err(|error| format!("MEMPHANT_DEV_TENANT must be a UUID: {error}"))?;
-        let tenant = TenantId::from_u128(uuid.as_u128());
-        eprintln!(
-            "memphant-mcp: AUTH DISABLED (dev) — all tool calls bound to tenant {}",
-            tenant.as_uuid()
-        );
-        return Ok(BoundTenant {
-            tenant,
-            max_trust: TrustLevel::TrustedSystem,
-            subject_id: None,
-            subject_generation: None,
-            actor_id: None,
-            scope_id: None,
-            agent_node_id: None,
-            api_key_id: None,
-            api_key_hash: None,
-            dev_mode: true,
-        });
+    if let Some(dev) = dev_bound_tenant_from_env()? {
+        return Ok(dev);
     }
     let key = std::env::var("MEMPHANT_API_KEY").ok().filter(|key| !key.trim().is_empty()).ok_or_else(|| {
         "no tenant binding: set MEMPHANT_API_KEY=mk_<key> (or MEMPHANT_DEV_TENANT=<uuid> for dev); refusing to start an unauthenticated MCP session".to_string()
@@ -237,18 +301,7 @@ pub async fn resolve_tenant(store: &AnyStore) -> Result<BoundTenant, String> {
     if row.revoked {
         return Err("MEMPHANT_API_KEY is revoked; refusing to start".to_string());
     }
-    Ok(BoundTenant {
-        tenant: row.tenant_id,
-        max_trust: row.max_trust,
-        subject_id: row.data_subject_id,
-        subject_generation: row.subject_generation,
-        actor_id: row.actor_id,
-        scope_id: row.scope_id,
-        agent_node_id: row.agent_node_id,
-        api_key_id: Some(row.id),
-        api_key_hash: Some(row.key_hash),
-        dev_mode: false,
-    })
+    Ok(bound_from_api_key_row(row))
 }
 
 const MCP_RECALL_BUDGET_TOKENS: usize = 512;
@@ -520,14 +573,50 @@ impl MemphantMcp {
     }
 }
 
+/// The four mutating tools, disabled on the recall-only (streamable-HTTP)
+/// surface. Keep in sync with the `#[tool]` methods below; `recall` is the only
+/// read tool and is never listed here.
+pub const MUTATING_TOOLS: [&str; 4] = [
+    "remember",
+    "correct_memory",
+    "invalidate_memory",
+    "report_memory_use",
+];
+
 #[tool_router(router = tool_router)]
 impl MemphantMcp {
+    /// Full surface: all five tools. Used by stdio (a per-principal transport)
+    /// and the canonical `tools_artifact`.
     pub fn new(service: MemoryService<AnyStore>, bound: BoundTenant) -> Self {
+        Self::with_router(service, bound, Self::tool_router())
+    }
+
+    /// Recall-only surface for the streamable-HTTP transport. The four mutating
+    /// tools are disabled — hidden from `tools/list` and rejected by `call` — so
+    /// a context-bound coding key reaching MemPhant over the (backend-proxied,
+    /// 6PN) HTTP path can only recall. In the Syndai integration every write and
+    /// forget is backend-owned over private REST (lanes 1/3) plus MemPhant's
+    /// reflect worker, so nothing is lost; stdio and the canonical artifact keep
+    /// all five. This is server-enforced, unlike the consumer's client-side
+    /// `--allowedTools` fence.
+    pub fn new_recall_only(service: MemoryService<AnyStore>, bound: BoundTenant) -> Self {
+        let mut tool_router = Self::tool_router();
+        for name in MUTATING_TOOLS {
+            tool_router = tool_router.with_disabled(name);
+        }
+        Self::with_router(service, bound, tool_router)
+    }
+
+    fn with_router(
+        service: MemoryService<AnyStore>,
+        bound: BoundTenant,
+        tool_router: ToolRouter<Self>,
+    ) -> Self {
         Self {
             recall_service: service.ambient_free_recall_clone(),
             service,
             bound,
-            tool_router: Self::tool_router(),
+            tool_router,
         }
     }
 

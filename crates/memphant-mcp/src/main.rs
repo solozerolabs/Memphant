@@ -1,7 +1,7 @@
 use std::process::ExitCode;
 
 use memphant_mcp::MemphantMcp;
-use memphant_mcp::http::{McpAuth, allowed_hosts, streamable_http_router};
+use memphant_mcp::http::{allowed_hosts, streamable_http_router};
 use rmcp::ServiceExt;
 
 #[tokio::main]
@@ -71,7 +71,7 @@ async fn run_stdio() -> ExitCode {
     }
 }
 
-/// Streamable-HTTP transport (MCP 2026-07-28, stateless) on
+/// Streamable-HTTP transport (MCP 2026-07-28, stateless, multi-tenant) on
 /// `MEMPHANT_MCP_BIND` (default 127.0.0.1:3333), path `/mcp`.
 ///
 /// Stateless by construction: `NeverSessionManager` + `legacy_session_mode =
@@ -81,28 +81,41 @@ async fn run_stdio() -> ExitCode {
 /// per-request without a session. `json_response = true` answers single-shot
 /// tool calls as plain `application/json` (rmcp still falls back to SSE if a
 /// handler streams notifications).
+///
+/// Auth is PER REQUEST (not a startup key): the middleware resolves the
+/// presented Bearer to a tenant and binds each request to that key. The process
+/// therefore does not resolve a fixed principal at startup — it only needs a
+/// store that can look keys up.
 async fn run_streamable_http() -> ExitCode {
-    let handler = match build_handler().await {
-        Ok(handler) => handler,
+    let store = match memphant_runtime::build_app_store().await {
+        Ok(store) => store,
         Err(error) => {
             eprintln!("memphant-mcp: {error}");
             return ExitCode::from(1);
         }
     };
-    let dev_mode = handler.dev_mode();
-    let expected_key = std::env::var("MEMPHANT_API_KEY")
-        .ok()
-        .map(|key| key.trim().to_string())
-        .filter(|key| !key.is_empty());
+    let dev_tenant = match memphant_mcp::dev_bound_tenant_from_env() {
+        Ok(dev_tenant) => dev_tenant,
+        Err(error) => {
+            eprintln!("memphant-mcp: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    // Per-request auth needs a store that can look keys up. `build_app_store`
+    // silently yields an ephemeral in-memory store when no DB is configured, so
+    // refuse to serve prod traffic against it — otherwise the endpoint boots
+    // green and 401s every request. (`build_app_store` requires the app and
+    // authn URLs together, so a `Pg` store always has the authn pool.) Dev mode
+    // (no per-request auth) is exempt.
+    if dev_tenant.is_none() && !matches!(store, memphant_runtime::AnyStore::Pg(_)) {
+        eprintln!(
+            "memphant-mcp: streamable-http requires an authn-capable store; set MEMPHANT_APP_DATABASE_URL and MEMPHANT_AUTHN_DATABASE_URL (or MEMPHANT_DEV_TENANT for dev)"
+        );
+        return ExitCode::from(1);
+    }
+    let service = memphant_runtime::build_service(store);
     let extra_hosts = std::env::var("MEMPHANT_MCP_ALLOWED_HOSTS").ok();
-    let router = streamable_http_router(
-        handler,
-        McpAuth {
-            dev_mode,
-            expected_key,
-        },
-        allowed_hosts(extra_hosts.as_deref()),
-    );
+    let router = streamable_http_router(service, dev_tenant, allowed_hosts(extra_hosts.as_deref()));
     let bind = std::env::var("MEMPHANT_MCP_BIND").unwrap_or_else(|_| "127.0.0.1:3333".to_string());
     match tokio::net::TcpListener::bind(&bind).await {
         Ok(listener) => {

@@ -13,48 +13,114 @@
 use std::sync::Arc;
 
 use memphant_core::service::MemoryService;
-use memphant_core::{InMemoryStore, NoopEmbedding, SystemClock};
-use memphant_mcp::http::{McpAuth, allowed_hosts, streamable_http_router};
-use memphant_mcp::{BoundTenant, MemphantMcp};
+use memphant_core::{ApiKeyRow, InMemoryStore, NoopEmbedding, SystemClock};
+use memphant_mcp::api_key_hash;
+use memphant_mcp::http::{allowed_hosts, streamable_http_router};
 use memphant_runtime::AnyStore;
-use memphant_types::{TenantId, TrustLevel};
+use memphant_types::{
+    ActorId, MemoryKind, MemorySourceInput, RememberRequest, ScopeId, TenantId, TrustLevel,
+};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const TEST_KEY: &str = "mk_http_conformance_test_key";
 
-/// Minimal handler: tenant-bound, no context binding (the probes exercise the
-/// transport + protocol surface, not tool business logic).
-fn handler_fixture() -> MemphantMcp {
-    MemphantMcp::new(
-        MemoryService::new(
-            Arc::new(AnyStore::Mem(InMemoryStore::default())),
-            Arc::new(SystemClock),
-            Arc::new(NoopEmbedding),
-        ),
-        BoundTenant {
-            tenant: TenantId::new(),
-            max_trust: TrustLevel::TrustedSystem,
-            subject_id: None,
-            subject_generation: None,
-            actor_id: None,
-            scope_id: None,
-            agent_node_id: None,
-            api_key_id: None,
-            api_key_hash: Some("unused-hash".to_string()),
-            dev_mode: false,
-        },
-    )
+/// A store + service sharing one backing InMemoryStore. The returned `store`
+/// handle seeds keys / context bindings / memories that the router — built from
+/// a clone of the same `service` — will authenticate against and serve.
+fn store_and_service() -> (InMemoryStore, MemoryService<AnyStore>) {
+    let store = InMemoryStore::default();
+    let service = MemoryService::new(
+        Arc::new(AnyStore::Mem(store.clone())),
+        Arc::new(SystemClock),
+        Arc::new(NoopEmbedding),
+    );
+    (store, service)
 }
 
-/// Serves the production router on an ephemeral loopback port.
-async fn serve() -> std::net::SocketAddr {
+/// Seed a tenant-bound (no context) key at `token` — enough for transport-level
+/// probes (tools/list, discover) that never resolve a full principal.
+fn seed_key(store: &InMemoryStore, token: &str, revoked: bool) {
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: TenantId::new(),
+        key_hash: api_key_hash(token),
+        label: token.to_string(),
+        max_trust: TrustLevel::TrustedSystem,
+        data_subject_id: None,
+        subject_generation: None,
+        actor_id: None,
+        scope_id: None,
+        agent_node_id: None,
+        can_forget: false,
+        can_audit_history: false,
+        revoked,
+    });
+}
+
+/// Seed one FULLY context-bound key at `token` plus one procedural memory whose
+/// body carries `sentinel`, recallable by the shared trigger `"shared deploy
+/// runbook"`. Two tenants seeded this way share the trigger, so a single recall
+/// query hits both bodies lexically — proving that TENANT scoping (not query
+/// specificity) is what isolates the served results.
+async fn seed_bound_memory(
+    store: &InMemoryStore,
+    service: &MemoryService<AnyStore>,
+    token: &str,
+    sentinel: &str,
+) {
+    let tenant = TenantId::new();
+    let scope = ScopeId::new();
+    let actor = ActorId::new();
+    let context = memphant_store_testkit::resolved_context(tenant, scope, actor);
+    store.seed_context_binding(&context);
+    store.insert_api_key(ApiKeyRow {
+        id: uuid::Uuid::new_v4(),
+        tenant_id: tenant,
+        key_hash: api_key_hash(token),
+        label: token.to_string(),
+        max_trust: TrustLevel::TrustedSystem,
+        data_subject_id: Some(context.data_subject_id),
+        subject_generation: Some(context.subject_generation),
+        actor_id: Some(actor),
+        scope_id: Some(scope),
+        agent_node_id: Some(context.agent_node_id),
+        can_forget: false,
+        can_audit_history: false,
+        revoked: false,
+    });
+    service
+        .remember(
+            &context,
+            &format!("seed-{sentinel}"),
+            TrustLevel::TrustedSystem,
+            RememberRequest {
+                kind: MemoryKind::Procedural,
+                body: format!("{sentinel} shared deploy runbook: run the migration then deploy."),
+                trigger: "shared deploy runbook".to_string(),
+                verification: "the runbook is followed".to_string(),
+                target_scope_id: None,
+                valid_from: None,
+                valid_to: None,
+                source: MemorySourceInput {
+                    kind: "user".to_string(),
+                    r#ref: format!("test:{sentinel}"),
+                    observed_at: "2026-08-21T00:00:00Z".to_string(),
+                    episode_id: None,
+                    resource_id: None,
+                },
+            },
+        )
+        .await
+        .expect("seed bound memory");
+}
+
+/// Serve `service`'s router (per-request auth, no dev tenant) on an ephemeral
+/// loopback port.
+async fn serve_service(service: MemoryService<AnyStore>) -> std::net::SocketAddr {
     let router = streamable_http_router(
-        handler_fixture(),
-        McpAuth {
-            dev_mode: false,
-            expected_key: Some(TEST_KEY.to_string()),
-        },
+        service,
+        None,
         allowed_hosts(Some("memphant-prod.internal:3333")),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -65,6 +131,14 @@ async fn serve() -> std::net::SocketAddr {
         axum::serve(listener, router).await.expect("serve router");
     });
     addr
+}
+
+/// The production router on an ephemeral port, with `TEST_KEY` seeded so the
+/// transport-level probes authenticate.
+async fn serve() -> std::net::SocketAddr {
+    let (store, service) = store_and_service();
+    seed_key(&store, TEST_KEY, false);
+    serve_service(service).await
 }
 
 struct RawResponse {
@@ -243,14 +317,20 @@ async fn stateless_tools_list_has_no_session_and_carries_cache_hints() {
         .iter()
         .map(|tool| tool["name"].as_str().expect("tool name"))
         .collect();
+    // The streamable-HTTP transport is RECALL-ONLY: `recall` is served and the
+    // four mutating tools are server-disabled (hidden from tools/list and
+    // rejected by call). Writes/forgets are backend-owned over private REST.
+    assert!(tools.contains(&"recall"), "recall missing in {tools:?}");
     for name in [
-        "recall",
         "remember",
         "correct_memory",
         "invalidate_memory",
         "report_memory_use",
     ] {
-        assert!(tools.contains(&name), "missing {name} in {tools:?}");
+        assert!(
+            !tools.contains(&name),
+            "{name} must be hidden on the recall-only HTTP surface, got {tools:?}"
+        );
     }
 }
 
@@ -330,4 +410,149 @@ async fn unlisted_host_authority_is_rejected() {
         response.status,
         response.body
     );
+}
+
+/// Drive a `tools/call recall` over the wire with `token`'s Bearer and return
+/// the raw response body. `MCP-Protocol-Version: 2025-11-25` (< STANDARD_HEADERS
+/// = 2026-07-28) is a known version, so it passes protocol validation while
+/// skipping SEP-2243 `Mcp-Method`/`Mcp-Name` header checks — recall is served
+/// version-independently.
+async fn recall_over_wire(addr: std::net::SocketAddr, token: &str, query: &str) -> String {
+    let auth = format!("Bearer {token}");
+    let response = post(
+        addr,
+        &addr.to_string(),
+        &[
+            ("Authorization", &auth),
+            ("MCP-Protocol-Version", "2025-11-25"),
+        ],
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {"name": "recall", "arguments": {"query": query}},
+        }),
+    )
+    .await;
+    assert_eq!(response.status, 200, "recall body: {}", response.body);
+    response.body
+}
+
+/// THE isolation proof: two tenants, each with a bound key and a memory sharing
+/// the SAME recall trigger. Per-request auth must bind each `tools/call` to the
+/// key's OWN tenant, so tenant A's recall serves only A's memory and never B's,
+/// and vice-versa. If the transport were still single-tenant-per-process (the
+/// bug this reworks), one tenant's key would serve the startup tenant's data.
+#[tokio::test]
+async fn per_request_bearer_binds_each_call_to_its_own_tenant() {
+    let (store, service) = store_and_service();
+    seed_bound_memory(&store, &service, "mk_tenant_a_key", "SENTINEL_A").await;
+    seed_bound_memory(&store, &service, "mk_tenant_b_key", "SENTINEL_B").await;
+    let addr = serve_service(service).await;
+
+    let body_a = recall_over_wire(addr, "mk_tenant_a_key", "shared deploy runbook").await;
+    assert!(
+        body_a.contains("SENTINEL_A"),
+        "tenant A recalls its own memory: {body_a}"
+    );
+    assert!(
+        !body_a.contains("SENTINEL_B"),
+        "tenant A must NOT recall tenant B's memory: {body_a}"
+    );
+
+    let body_b = recall_over_wire(addr, "mk_tenant_b_key", "shared deploy runbook").await;
+    assert!(
+        body_b.contains("SENTINEL_B"),
+        "tenant B recalls its own memory: {body_b}"
+    );
+    assert!(
+        !body_b.contains("SENTINEL_A"),
+        "tenant B must NOT recall tenant A's memory: {body_b}"
+    );
+}
+
+/// Server-enforced recall-only: a `tools/call` for a mutating tool is REJECTED
+/// over the HTTP surface even with a valid, fully context-bound key — proving
+/// the disable is a server guarantee, not the consumer's client-side
+/// `--allowedTools` fence. A stolen coding key cannot POST `remember` here.
+#[tokio::test]
+async fn mutating_tool_call_is_rejected_over_http() {
+    let (store, service) = store_and_service();
+    seed_bound_memory(&store, &service, "mk_recall_only_key", "PRESEED").await;
+    let addr = serve_service(service).await;
+
+    let auth = "Bearer mk_recall_only_key".to_string();
+    let response = post(
+        addr,
+        &addr.to_string(),
+        &[
+            ("Authorization", &auth),
+            ("MCP-Protocol-Version", "2025-11-25"),
+        ],
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {"name": "remember", "arguments": {}},
+        }),
+    )
+    .await;
+    // A disabled tool is not minted: no successful remember response (which would
+    // carry `unit_ids`), and the call is refused.
+    assert!(
+        !response.body.contains("unit_ids"),
+        "a disabled mutating tool must not execute: {}",
+        response.body
+    );
+    assert!(
+        response.body.contains("error") || response.body.contains("Invalid"),
+        "a disabled mutating tool call must be refused: {}",
+        response.body
+    );
+}
+
+/// The per-request gate rejects an unknown or revoked key at the wire, before
+/// any protocol handling — the same fail-closed posture as the missing-bearer
+/// probe, now proven per key rather than per process.
+#[tokio::test]
+async fn unknown_and_revoked_bearer_are_401() {
+    let (store, service) = store_and_service();
+    seed_key(&store, TEST_KEY, false);
+    seed_key(&store, "mk_revoked_key", true);
+    let addr = serve_service(service).await;
+
+    let list_body = json!({
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/list",
+        "params": {"_meta": meta_2026_07_28()},
+    });
+
+    let unknown_auth = "Bearer mk_never_minted".to_string();
+    let unknown = post(
+        addr,
+        &addr.to_string(),
+        &[
+            ("Authorization", &unknown_auth),
+            ("Mcp-Method", "tools/list"),
+            ("MCP-Protocol-Version", "2026-07-28"),
+        ],
+        &list_body,
+    )
+    .await;
+    assert_eq!(unknown.status, 401, "unknown key: {}", unknown.body);
+
+    let revoked_auth = "Bearer mk_revoked_key".to_string();
+    let revoked = post(
+        addr,
+        &addr.to_string(),
+        &[
+            ("Authorization", &revoked_auth),
+            ("Mcp-Method", "tools/list"),
+            ("MCP-Protocol-Version", "2026-07-28"),
+        ],
+        &list_body,
+    )
+    .await;
+    assert_eq!(revoked.status, 401, "revoked key: {}", revoked.body);
 }
