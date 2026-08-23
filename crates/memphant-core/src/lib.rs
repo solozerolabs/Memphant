@@ -103,6 +103,36 @@ pub fn fmt_rfc3339(instant: jiff::Timestamp) -> String {
     instant.to_string()
 }
 
+/// Formats a byte count using binary (IEC) units: B, KiB, MiB, GiB, TiB.
+/// Bytes are shown as a bare integer; larger units use one decimal place.
+pub fn humanize_bytes(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    if n < 1024 {
+        return format!("{n} B");
+    }
+    let mut value = n as f64;
+    let mut unit_index = 0;
+    while value >= 1024.0 && unit_index < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit_index += 1;
+    }
+    format!("{value:.1} {}", UNITS[unit_index])
+}
+
+#[cfg(test)]
+mod humanize_bytes_tests {
+    use super::humanize_bytes;
+
+    #[test]
+    fn matches_exact_examples() {
+        assert_eq!(humanize_bytes(0), "0 B");
+        assert_eq!(humanize_bytes(512), "512 B");
+        assert_eq!(humanize_bytes(1536), "1.5 KiB");
+        assert_eq!(humanize_bytes(1_048_576), "1.0 MiB");
+        assert_eq!(humanize_bytes(1_073_741_824), "1.0 GiB");
+    }
+}
+
 fn sha256_bytes_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
