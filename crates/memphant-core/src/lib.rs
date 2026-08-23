@@ -1,6 +1,7 @@
 #![allow(async_fn_in_trait)]
 
 pub mod deep_recall;
+pub mod humanize;
 mod mutation_contract;
 pub mod service;
 mod structured_state;
