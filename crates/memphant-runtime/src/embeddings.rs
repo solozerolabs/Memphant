@@ -37,6 +37,7 @@
 //! first use and never in the default/CI build.
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 #[cfg(feature = "qwen3")]
 use candle_core::{DType, Device};
@@ -202,15 +203,35 @@ impl FastEmbedProvider {
     /// Initializes a chosen embedding arm. The arms coexist in the store via
     /// distinct embedding profiles (id+dims), so ingest and recall must always
     /// select the SAME arm — the caller derives it once and shares it.
+    ///
+    /// First use downloads the model over the network into the local fastembed
+    /// cache. This runs before the server binds its listener, so a single
+    /// transient hiccup in that download (a timeout, a reset, a momentary rate
+    /// limit) must not fail construction outright — a caller's health-check
+    /// wait has a fixed budget and no way to distinguish "still downloading"
+    /// from "never coming up". Retry a few times with a short backoff before
+    /// surfacing the (last) error.
     pub fn with_model(model: FastEmbedModel) -> Result<Self, EmbedError> {
-        let embedding = TextEmbedding::try_new(InitOptions::new(model.model()))
-            .map_err(|error| EmbedError::Unavailable(error.to_string()))?;
-        Ok(Self {
-            session: Mutex::new(embedding),
-            arm: model,
-            id: model.id(),
-            dimensions: model.dimensions(),
-        })
+        const ATTEMPTS: u32 = 3;
+        const BACKOFF: Duration = Duration::from_secs(2);
+        let mut last_error = String::new();
+        for attempt in 0..ATTEMPTS {
+            if attempt > 0 {
+                std::thread::sleep(BACKOFF * attempt);
+            }
+            match TextEmbedding::try_new(InitOptions::new(model.model())) {
+                Ok(embedding) => {
+                    return Ok(Self {
+                        session: Mutex::new(embedding),
+                        arm: model,
+                        id: model.id(),
+                        dimensions: model.dimensions(),
+                    });
+                }
+                Err(error) => last_error = error.to_string(),
+            }
+        }
+        Err(EmbedError::Unavailable(last_error))
     }
 
     /// Shared embed path: applies the arm's [`prefix_text`] convention (a
