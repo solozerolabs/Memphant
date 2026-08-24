@@ -15,6 +15,8 @@
 //! eval harness can run deterministic control arms.
 
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::time::Duration;
 
 #[cfg(any(feature = "fastembed", test))]
 use memphant_core::CrossRerankerConfig;
@@ -310,6 +312,40 @@ pub fn build_cross_reranker() -> Result<Arc<dyn CrossReranker>, String> {
     }
 }
 
+/// Runs [`build_cross_reranker`] on a worker thread and waits at most
+/// `timeout`. Used ONLY for the default-on (not explicitly opted-in) path in
+/// [`build_service`]: caps how long a first-boot model download can delay
+/// server/MCP startup before falling back to serving without rerank, rather
+/// than blocking indefinitely (or until whatever timeout, if any, the
+/// underlying HTTP client applies) on a slow or rate-limited network. On
+/// timeout the spawned thread is left to finish or fail on its own; its
+/// result is simply discarded, which is harmless since nothing waits on it.
+fn build_cross_reranker_within(timeout: Duration) -> Result<Arc<dyn CrossReranker>, String> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(build_cross_reranker());
+    });
+    rx.recv_timeout(timeout).unwrap_or_else(|_| {
+        Err(format!(
+            "reranker initialization did not complete within {timeout:?}"
+        ))
+    })
+}
+
+/// `MEMPHANT_CROSS_RERANK_INIT_TIMEOUT_SECS` → seconds, default 20. Bounds
+/// [`build_cross_reranker_within`]; comfortably under the e2e probe's 60s
+/// health-wait budget (see `scripts/e2e_probe.sh`) so a slow default-on
+/// download cannot starve the health endpoint it is meant to precede.
+fn cross_rerank_init_timeout_from_env() -> Duration {
+    std::env::var("MEMPHANT_CROSS_RERANK_INIT_TIMEOUT_SECS")
+        .ok()
+        .as_deref()
+        .map(str::trim)
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(20))
+}
+
 /// Bring-your-own reranker arm (`MEMPHANT_RERANKER=byo`): loads a local ONNX +
 /// tokenizer from `MEMPHANT_RERANK_BYO_DIR` (ONNX file `MEMPHANT_RERANK_BYO_ONNX`,
 /// default `model_quantized.onnx`) through fastembed's user-defined path. The
@@ -436,13 +472,26 @@ pub fn build_service(store: AnyStore) -> MemoryService<AnyStore> {
         )
         .with_rerank_selective(rerank_selective_from_env());
     let service = if cross_rerank_enabled_from_env() {
-        match build_cross_reranker() {
+        let explicit = cross_rerank_explicitly_enabled_from_env();
+        // An explicit opt-in blocks until the reranker is built (or panics) —
+        // that operator asked for rerank. The default-on path instead bounds
+        // the wait: a real ~1.1 GB first-boot ONNX download over a slow or
+        // rate-limited network must not be able to turn an opt-out feature
+        // into an unbounded startup hang that starves the process's own
+        // health endpoint.
+        let build_result = if explicit {
+            build_cross_reranker()
+        } else {
+            build_cross_reranker_within(cross_rerank_init_timeout_from_env())
+        };
+        match build_result {
             Ok(reranker) => service.with_cross_reranker(reranker),
             // On-by-default: a binary that can't build the reranker (e.g. built
-            // without the fastembed feature) serves without rerank rather than
-            // refusing to boot. An EXPLICIT opt-in stays loud — a misconfig there
-            // is worth a crash.
-            Err(error) if cross_rerank_explicitly_enabled_from_env() => {
+            // without the fastembed feature, or too slow within the bounded
+            // window above) serves without rerank rather than refusing to
+            // boot. An EXPLICIT opt-in stays loud — a misconfig there is
+            // worth a crash.
+            Err(error) if explicit => {
                 panic!("MEMPHANT_CROSS_RERANK: {error}");
             }
             Err(error) => {
