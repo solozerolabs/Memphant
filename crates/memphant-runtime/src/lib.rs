@@ -16,6 +16,9 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "fastembed")]
+mod glibc_isoc23_compat;
+
 #[cfg(any(feature = "fastembed", test))]
 use memphant_core::CrossRerankerConfig;
 use memphant_core::service::{

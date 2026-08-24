@@ -3,11 +3,13 @@
 pub mod deep_recall;
 mod mutation_contract;
 pub mod service;
+mod slugify;
 mod structured_state;
 
 pub use memphant_types::CrossRerankGranularity;
 pub use memphant_types::ResolvedMemoryContext;
 pub use mutation_contract::{canonical_mutation_request_hash, validate_idempotency_key};
+pub use slugify::slugify;
 pub use structured_state::{
     ActiveStructuredState, EvidenceSlice, ProjectedStructuredState, QuantityEvent,
     StructuredObservation, StructuredObservationDisposition, StructuredSourceKind,
