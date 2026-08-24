@@ -293,6 +293,51 @@ pub fn non_blank(value: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Uppercases the first letter of each whitespace-separated word and
+/// lowercases the rest. Runs of whitespace collapse to a single space and
+/// leading/trailing whitespace is trimmed.
+pub fn title_case(input: &str) -> String {
+    input
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => {
+                    first.to_uppercase().collect::<String>()
+                        + &chars.as_str().to_lowercase()
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+mod title_case_tests {
+    use super::title_case;
+
+    #[test]
+    fn title_cases_simple_words() {
+        assert_eq!(title_case("hello world"), "Hello World");
+    }
+
+    #[test]
+    fn collapses_whitespace_and_trims() {
+        assert_eq!(title_case("  the QUICK  brown  "), "The Quick Brown");
+    }
+
+    #[test]
+    fn lowercases_remainder_of_word() {
+        assert_eq!(title_case("rustLang"), "Rustlang");
+    }
+
+    #[test]
+    fn empty_input_yields_empty_output() {
+        assert_eq!(title_case(""), "");
+    }
+}
+
 pub fn validate_valid_interval(
     valid_from: Option<&str>,
     valid_to: Option<&str>,
