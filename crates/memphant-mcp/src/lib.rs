@@ -775,9 +775,10 @@ impl MemphantMcp {
         let request = RecallHttpRequest {
             // This is the portable coding-agent lane: only typed compact
             // envelopes are eligible, and Active procedural compact units are
-            // served. Beliefs are served too: cross-harness CAPTURE mints
-            // `kind=Belief` candidates, so excluding beliefs here would make
-            // captured coding memory permanently un-injectable on this lane.
+            // served. Captures are served by their `capture` marker regardless
+            // of kind (Semantic for mirror/summary, Procedural for
+            // errfix/directive), so no kind filter can hide captured coding
+            // memory on this lane.
             compact_only: true,
             serve_captures: false,
             subject_id: context.data_subject_id,

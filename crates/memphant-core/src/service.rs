@@ -6148,6 +6148,10 @@ impl<S: MemoryStore> MemoryService<S> {
         context: &ResolvedMemoryContext,
         query: String,
         token_budget: u32,
+        // When true the turn-1 core also serves `[unconfirmed]` capture
+        // Candidates (the coding-lane directive-recall path); default false
+        // keeps the anti-poison general lane (Candidates hidden).
+        serve_captures: bool,
     ) -> Result<memphant_types::ScopeCoreResponse, ServiceError> {
         if token_budget == 0 {
             return Err(ServiceError::Invalid(
@@ -6176,7 +6180,7 @@ impl<S: MemoryStore> MemoryService<S> {
                     mode: Some(RecallMode::Fast),
                     include_beliefs: None,
                     compact_only: false,
-                    serve_captures: false,
+                    serve_captures,
                     transaction_as_of: None,
                     valid_at: None,
                     aggregation_window: None,
@@ -6616,11 +6620,13 @@ impl<S: MemoryStore> MemoryService<S> {
                     // Episode gone (e.g. forgotten before compile): nothing to do.
                     return Ok(());
                 };
-                // Cross-harness CAPTURE seam: a `capture://mirror|summary`
-                // source_ref makes this episode a captured claim, not a
-                // transcript to mine. Mint ONE inert `Belief` candidate carrying
-                // the fresh `Captured` marker and skip episodic/fact/structured
-                // nomination; the Stage A engine ladders it on the reflect tail.
+                // Cross-harness CAPTURE seam: a `capture://<family>` source_ref
+                // makes this episode a captured claim, not a transcript to mine.
+                // Mint ONE inert candidate of the channel's kind (`Semantic` for
+                // mirror/summary, `Procedural` for errfix/directive — see
+                // `capture_kind`) carrying the fresh `Captured` marker and skip
+                // episodic/fact/structured nomination; the Stage A engine
+                // ladders it on the reflect tail.
                 if let Some(capture_source) = capture_episode_source(&episode.source_ref) {
                     // A body that cannot be cut under the compact ceiling mints
                     // nothing (empty candidate set ⇒ an empty trace, never an
@@ -8032,8 +8038,8 @@ fn extract_facts(body: &str, content_date: Option<&str>) -> Vec<ExtractedFact> {
 /// cross-harness CAPTURE (the write-side seam). An adapter POSTs an Episode with
 /// `source_kind = "agent"` and `source_ref` of the form `capture://mirror` or
 /// `capture://summary`; the reflect nominator (`capture_episode_candidate`)
-/// detects it and mints ONE `Belief` candidate carrying the `CaptureMarker` at
-/// the episode's (AgentOutput-clamped) trust, which the Stage A engine
+/// detects it and mints ONE candidate of the channel's kind carrying the
+/// `CaptureMarker` at the episode's (AgentOutput-clamped) trust, which the Stage A engine
 /// (`run_capture_crosscheck`) then ladders on reflect. Zero new verb: this rides
 /// `retain` + `reflect`. A trailing path segment after the family is ignored, so
 /// `capture://mirror/MEMORY.md` is a `Mirror` capture (the file path is
@@ -8050,6 +8056,7 @@ fn capture_episode_source(source_ref: &str) -> Option<CaptureSource> {
         "mirror" => Some(CaptureSource::Mirror),
         "summary" => Some(CaptureSource::Summary),
         "errfix" => Some(CaptureSource::ErrFix),
+        "directive" => Some(CaptureSource::Directive),
         _ => None,
     }
 }
@@ -8067,7 +8074,7 @@ fn capture_episode_source(source_ref: &str) -> Option<CaptureSource> {
 /// keeps it zero-schema — no payload field, no job column.
 fn capture_kind(source: CaptureSource) -> MemoryKind {
     match source {
-        CaptureSource::ErrFix => MemoryKind::Procedural,
+        CaptureSource::ErrFix | CaptureSource::Directive => MemoryKind::Procedural,
         CaptureSource::Mirror | CaptureSource::Summary => MemoryKind::Semantic,
     }
 }

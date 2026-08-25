@@ -1047,6 +1047,10 @@ struct ScopeCoreQuery {
     query: String,
     /// Hard server-honored token budget for the returned envelope.
     token_budget: u32,
+    /// When true, also serve `[unconfirmed]` capture Candidates (the coding-lane
+    /// directive-recall path). Absent/false keeps the anti-poison general lane.
+    #[serde(default)]
+    serve_captures: bool,
 }
 
 /// The budgeted deterministic core read (pre-injection). Tenant-service keys
@@ -1084,7 +1088,12 @@ async fn scope_core_handler<S: MemoryStore + 'static>(
     Ok(Json(
         state
             .service
-            .scope_core(&context, query.query, query.token_budget)
+            .scope_core(
+                &context,
+                query.query,
+                query.token_budget,
+                query.serve_captures,
+            )
             .await?,
     ))
 }

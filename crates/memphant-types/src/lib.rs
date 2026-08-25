@@ -2440,6 +2440,12 @@ pub enum CaptureSource {
     /// token as its `capture://errfix` source_ref family.
     #[serde(rename = "errfix")]
     ErrFix,
+    /// A user-stated durable directive extracted from a coding-run transcript (a
+    /// build/test/tooling convention or standing "always/never" rule). Mints a
+    /// `Procedural` card, not a `Belief`; a DISTINCT family from every other
+    /// source. Serialized as `directive`, matching its `capture://directive`
+    /// source_ref family.
+    Directive,
 }
 
 /// The trust-ladder rung of a captured memory unit. Rides `payload.capture`; it

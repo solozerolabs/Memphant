@@ -743,6 +743,87 @@ async fn errfix_channel_mints_a_procedural_capture() {
     );
 }
 
+/// The `directive` channel mints a `Procedural` card (a user-stated durable
+/// directive is a procedure), lands `Candidate`, and is served on the coding
+/// lane labelled `captured_unconfirmed` — the slice-1 write path.
+#[tokio::test]
+async fn directive_channel_mints_a_procedural_capture() {
+    let store = Arc::new(InMemoryStore::default());
+    let ctx =
+        memphant_store_testkit::bind_context(store.as_ref(), TenantId::from_u128(92_071)).await;
+    let svc = service(store.clone());
+
+    let body = "Always run `make format` before every commit.";
+    capture(&svc, &ctx, "cap-dir-1", "directive", "make format", body).await;
+    reflect_tick(&svc, &ctx).await;
+    let unit = open_captured_units(&store, &ctx).await.pop().expect("unit");
+    assert_eq!(unit.kind, MemoryKind::Procedural);
+    assert_eq!(unit.state, UnitState::Candidate);
+    assert_eq!(
+        unit.capture.as_ref().unwrap().source,
+        CaptureSource::Directive
+    );
+    let coding = recall_items(&svc, &ctx, "make format before commit", true, true).await;
+    assert!(
+        coding
+            .iter()
+            .any(|item| item.unit_id == unit.id && item.inclusion_reason == "captured_unconfirmed"),
+        "unconfirmed directive served on coding lane: {coding:?}"
+    );
+    let general = recall_items(&svc, &ctx, "make format before commit", false, true).await;
+    assert!(
+        general.iter().all(|item| item.unit_id != unit.id),
+        "general lane keeps the unconfirmed directive invisible: {general:?}"
+    );
+}
+
+/// The turn-1 `scope_core` read hides `[unconfirmed]` captures by default
+/// (anti-poison) but serves them when `serve_captures=true` — the coding-lane
+/// directive-recall opt-in. Both directions verified against one seeded
+/// directive Candidate.
+#[tokio::test]
+async fn scope_core_serves_unconfirmed_captures_when_flag_set() {
+    let store = Arc::new(InMemoryStore::default());
+    let ctx =
+        memphant_store_testkit::bind_context(store.as_ref(), TenantId::from_u128(92_072)).await;
+    let svc = service(store.clone());
+
+    let body = "Always run `make format` before every commit.";
+    capture(
+        &svc,
+        &ctx,
+        "cap-dir-core-1",
+        "directive",
+        "make format",
+        body,
+    )
+    .await;
+    reflect_tick(&svc, &ctx).await;
+    let unit = open_captured_units(&store, &ctx).await.pop().expect("unit");
+
+    let query = "make format before commit".to_string();
+    let hidden = svc
+        .scope_core(&ctx, query.clone(), 1_000, false)
+        .await
+        .expect("scope_core default");
+    assert!(
+        hidden.items.iter().all(|item| item.unit_id != unit.id),
+        "default core hides the unconfirmed directive: {hidden:?}"
+    );
+
+    let served = svc
+        .scope_core(&ctx, query, 1_000, true)
+        .await
+        .expect("scope_core serve_captures");
+    assert!(
+        served
+            .items
+            .iter()
+            .any(|item| item.unit_id == unit.id && item.inclusion_reason == "captured_unconfirmed"),
+        "serve_captures core returns the unconfirmed directive: {served:?}"
+    );
+}
+
 /// A capture body over the compact one-card ceiling is cut at a line boundary
 /// under the ceiling and flagged `truncated`; a single overlong line that
 /// cannot be cut mints NOTHING. CONTROL: a body under the ceiling is untouched.
