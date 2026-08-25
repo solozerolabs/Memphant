@@ -16,3 +16,10 @@ tmp/
 temp/
 .DS_Store
 
+# fastembed model caches are multi-GB. Ship ONLY the bge-small model the runtime
+# bakes (see Dockerfile), not the whole 9.5GB of downloaded models, and none of
+# the per-crate dev caches.
+.fastembed_cache/*
+!.fastembed_cache/models--Xenova--bge-small-en-v1.5
+crates/*/.fastembed_cache/
+

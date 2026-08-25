@@ -43,9 +43,19 @@ COPY --from=builder /app/target/release/memphant-mcp /usr/local/bin/memphant-mcp
 COPY --from=builder /app/config/structured-state-v2.txt /etc/memphant/structured-state-v2.txt
 RUN ln -s /usr/local/bin/memphant-cli /usr/local/bin/memphant
 
+# Bake the bge-small embedder so a MEMPHANT_EMBEDDINGS-on process never
+# network-pulls the model from HuggingFace at first embed (the cold-start
+# dependency that crashed first boot). fastembed reads FASTEMBED_CACHE_DIR (else
+# `.fastembed_cache` under CWD, which is /app). The internal blobs+snapshots
+# relative symlinks are preserved by COPY because both live in the subtree.
+# Server, worker, and mcp all run from /app off this one baked path.
+COPY --chown=memphant:memphant .fastembed_cache/models--Xenova--bge-small-en-v1.5 \
+     /app/.fastembed_cache/models--Xenova--bge-small-en-v1.5
+
 USER memphant
 ENV MEMPHANT_BIND=0.0.0.0:3000
 ENV RUST_LOG=info
+ENV FASTEMBED_CACHE_DIR=/app/.fastembed_cache
 ENV MEMPHANT_STRUCTURED_STATE_PROMPT_PATH=/etc/memphant/structured-state-v2.txt
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://127.0.0.1:3000/v1/health >/dev/null || exit 1

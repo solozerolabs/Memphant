@@ -221,3 +221,75 @@ async fn two_user_episodic_isolation_is_enforced_by_rls_not_app_code() {
 
     pool.close().await;
 }
+
+/// Phase-1 item 6 — the tenant GUC set by `bind_tenant` must NOT bleed across a
+/// pooled connection. `bind_tenant` uses `set_config(..., is_local => true)`
+/// (`SET LOCAL`, transaction-scoped), and every tenant-scoped query runs inside
+/// an explicit transaction, so the GUC can never outlive the txn that set it.
+/// This regression guard pins that: with `max_connections(1)` the pool hands
+/// the SAME physical backend to every borrow, so a query on a re-borrowed
+/// connection that binds NO tenant must see ZERO rows — the GUC did not survive,
+/// and RLS fails CLOSED on a NULL `memphant.tenant_id`. If a future refactor
+/// moved a tenant query onto a bare pooled connection (no txn) or switched to
+/// session-scoped `SET`, this test would see tenant A's row leak and fail.
+#[tokio::test]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn bind_tenant_guc_does_not_bleed_across_a_pooled_connection() {
+    // ONE physical connection → every pool.begin() reuses it, so this genuinely
+    // exercises "connection returned to pool, then re-borrowed by a caller that
+    // did not bind a tenant".
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&db_url())
+        .await
+        .expect("connect");
+
+    let provisioner = PgStore::connect_provisioner(&db_url())
+        .await
+        .expect("connect provisioner");
+    let tenant_a = provisioner
+        .create_tenant(&format!("bleed-a-{}", Uuid::new_v4().simple()))
+        .await
+        .expect("provision tenant A");
+    seed_episode(&pool, tenant_a).await;
+
+    // 1. Borrow the single connection, bind tenant A under the app role, read
+    //    (sees its own row), rollback → the connection returns to the pool
+    //    carrying whatever GUC state the SET LOCAL bind left behind.
+    assert_eq!(
+        visible_episode_count(&pool, tenant_a).await,
+        1,
+        "tenant A sees its own episode when bound"
+    );
+
+    // 2. Re-borrow the SAME physical connection under the app role, but bind NO
+    //    tenant. A bled GUC would keep current_tenant_id() == A and leak A's
+    //    row (count 1); it must be 0.
+    let mut tx = pool.begin().await.expect("begin unbound read");
+    tx.execute("set local role memphant_app")
+        .await
+        .expect("assume app");
+    let guc: Option<String> = sqlx::query("select current_setting('memphant.tenant_id', true)")
+        .fetch_one(&mut *tx)
+        .await
+        .expect("read tenant guc")
+        .get(0);
+    let unbound_count: i64 = sqlx::query("select count(*) from memphant.episode")
+        .fetch_one(&mut *tx)
+        .await
+        .expect("count under unbound reused connection")
+        .get(0);
+    tx.rollback().await.expect("rollback unbound read");
+
+    assert_eq!(
+        unbound_count, 0,
+        "a re-borrowed connection that bound no tenant must see zero rows — the \
+         SET LOCAL tenant GUC must not bleed across pooled borrows"
+    );
+    assert!(
+        guc.as_deref().unwrap_or("").is_empty(),
+        "the tenant GUC must be unset on a reused connection that did not bind, got {guc:?}"
+    );
+
+    pool.close().await;
+}
