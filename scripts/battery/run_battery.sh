@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Local worktree A/B run battery: the same yurivan coding task through Codex once
+# Local worktree A/B run battery: the same coding task through Codex once
 # per DELIVERY SURFACE, scored by efficiency (tokens/tools/turns to the same fix)
-# with yurivan's own gate as an informational outcome. Memory accrues across
-# rounds via capture; a later round measures whether captured conventions let a
-# memory arm reach the fix cheaper than the bare arm.
+# only when both arms satisfy that fixture's deterministic requested end state.
+# Memory accrues across rounds via capture; a later round measures whether captured
+# conventions let a memory arm reach the fix cheaper than the bare arm.
 #
 # Arms (the delivery-surface head-to-head; Vercel 2026: always-in-context AGENTS.md
 # is read 100%, skills fire 53-79%; Codex dogfood: 0 voluntary MCP calls):
@@ -32,9 +32,11 @@
 # Subcommands:
 #   bootstrap   isolated DB + migrate + bind subject + key + start REST/MCP/worker + wire all arms
 #   seed "<f>"  POST one non-repo convention memory (smoke/warm-start only; real memory = capture)
-#   task <id> <arm>   one run: worktree → codex → gate → result json  (arm ∈ bare|hooks|cli|file)
+#   task <id> <arm>   one run: worktree → codex → acceptance → result json  (arm ∈ bare|hooks|cli|file)
 #   round <n>   run every task in tasks.txt through ALL FOUR arms
 #   read        per-arm paired efficiency Δ vs bare + memory-USED rate + capture→recall linkage
+#   accept <id> <repo>   run one fixture's deterministic acceptance contract
+#   summarize <results>  summarize only complete valid pairs (DB-free regression seam)
 #   smoke       bootstrap + seed + one hooks task; assert injection fired + capture wrote + gate ran
 #   teardown    stop servers, drop DB, prune worktrees
 set -euo pipefail
@@ -201,10 +203,41 @@ seed(){
     python3 "$ROOT/scripts/battery/seed.py" "${1:?seed needs a fact}"
 }
 
-# yurivan terminal outcome: types + antipatterns (fast, convention-bearing).
-# Returns 0 = pass. lint/vitest addable once the fast gate proves out.
-gate(){ local wt="$1"; ( cd "$wt" && ln -sfn "$YURIVAN/web/node_modules" web/node_modules 2>/dev/null; \
-  make types >/dev/null 2>&1 && make check-antipatterns >/dev/null 2>&1 ); }
+# These are the complete deterministic contracts of the two Acme date fixtures.
+# Unknown fixtures fail closed; adding a task requires adding its objective contract.
+accept_fixture(){
+  local id="$1" wt="$2" suite="" direct="" validator=false requested=false
+  case "$id" in
+    r1-date)
+      if suite=$(cd "$wt" && npm test 2>&1); then validator=true; fi
+      if git -C "$wt" diff --quiet HEAD -- test/date1.test.mjs \
+        && (cd "$wt" && node --test test/date1.test.mjs >/dev/null 2>&1) \
+        && grep -Eq '^(#|ℹ) tests 1$' <<<"$suite"; then
+        requested=true
+      fi
+      ;;
+    r2-date)
+      if suite=$(cd "$wt" && npm test 2>&1); then validator=true; fi
+      if git -C "$wt" diff --quiet HEAD -- test/date1.test.mjs \
+        && grep -Eq "dayOfMonth\\(['\"]2026-06-01['\"]\\)[^0-9]*1" "$wt/test/date2.test.mjs" 2>/dev/null \
+        && direct=$(cd "$wt" && node --test test/date1.test.mjs test/date2.test.mjs 2>&1) \
+        && grep -Eq '^(#|ℹ) tests 2$' <<<"$direct" \
+        && grep -Eq '^(#|ℹ) tests 2$' <<<"$suite"; then
+        requested=true
+      fi
+      ;;
+  esac
+  python3 - "$validator" "$requested" <<'PY'
+import json, sys
+validator = sys.argv[1] == "true"
+requested = sys.argv[2] == "true"
+print(json.dumps({
+    "validator_pass": validator,
+    "requested_end_state_pass": requested,
+    "valid": validator and requested,
+}))
+PY
+}
 
 # Did the agent actually USE memory on this surface? (informational; the
 # efficiency Δ is the score). cli: a `memphant recall` in the run log / rollout;
@@ -249,8 +282,7 @@ task(){
     CODEX_HOME="$home" codex exec "$prompt" -m "$CODEX_MODEL" \
       --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust \
       >"$STATE/run-$id-$arm.log" 2>&1 || true )
-  # Outcome is NOT a validator — save the produced diff + final message as artifacts;
-  # an in-session judge (Claude/codex) scores each pair by hand.
+  # Raw patches and run logs remain inside the gitignored private state root.
   local changed diff="$STATE/diff-$id-$arm.patch"
   # cli/file arms rewrite AGENTS.md as DELIVERY (snippet append / managed block), not
   # the agent's work: restore it before diffing. .memphant/ is already git-excluded.
@@ -258,23 +290,19 @@ task(){
   git -C "$wt" add -A 2>/dev/null || true
   changed=$(git -C "$wt" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
   git -C "$wt" diff --cached >"$diff" 2>/dev/null || true
-  # informational only (never the score): whether the change trips the repo gate
-  local gate_info=skip; gate "$wt" && gate_info=pass || gate_info=fail
+  local acceptance; acceptance="$(accept_fixture "$id" "$wt")"
   # Efficiency metrics (the real signal): tokens/turns/tool-calls this run spent
   # reaching its fix, read off the run's own rollout. Δ(bare vs arm) = the value.
   local eff used; eff="$(python3 "$ROOT/scripts/battery/metrics.py" --codex-home "$home" 2>/dev/null || echo '{}')"
   used="$(memory_used "$arm" "$STATE/run-$id-$arm.log" "$home")"
-  EFF="$eff" USED="$used" python3 -c "import json,os;m=json.loads(os.environ.get('EFF') or '{}');u=os.environ.get('USED');print(json.dumps({'task':'$id','arm':'$arm','files_changed':int('$changed'),'diff':'$diff','gate_info':'$gate_info','round':'${ROUND:-1}','total_tokens':m.get('total_tokens',0),'output_tokens':m.get('output_tokens',0),'tool_calls':m.get('tool_calls',0),'turns':m.get('turns',0),'memory_used':(None if u=='' else int(u))}))" | tee -a "$STATE/results.jsonl"
+  EFF="$eff" USED="$used" ACCEPT="$acceptance" python3 -c "import json,os;m=json.loads(os.environ.get('EFF') or '{}');a=json.loads(os.environ['ACCEPT']);u=os.environ.get('USED');print(json.dumps({'task':'$id','arm':'$arm','files_changed':int('$changed'),'diff':'$diff','round':'${ROUND:-1}','total_tokens':m.get('total_tokens',0),'output_tokens':m.get('output_tokens',0),'tool_calls':m.get('tool_calls',0),'turns':m.get('turns',0),'memory_used':(None if u=='' else int(u)),**a}))" | tee -a "$STATE/results.jsonl"
   git -C "$YURIVAN" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
 }
 
 round(){ local n="${1:-1}"; say "ROUND $n"; while IFS=$'\t' read -r id _; do [ -z "$id" ] && continue; case "$id" in \#*) continue;; esac; for a in $ARMS; do ROUND="$n" task "$id" "$a"; done; done <"$TASKS"; }
 
-read_results(){
-  # shellcheck disable=SC1090
-  . "$ENVF"
-  say "paired EFFICIENCY delta per arm (bare - arm; positive = the memory arm is cheaper to the same fix)"
-  python3 - "$STATE/results.jsonl" <<'PY'
+summarize_results(){
+  python3 - "$1" <<'PY'
 import json,sys,collections,os,statistics
 rows=[json.loads(l) for l in open(sys.argv[1]) if l.strip()] if os.path.exists(sys.argv[1]) else []
 ARM={"memphant":"hooks"}  # old rows named the hooks arm `memphant`
@@ -283,19 +311,27 @@ for r in rows: by[r['task']][ARM.get(r['arm'],r['arm'])]=r
 FIELDS=[("total_tokens","tokens"),("output_tokens","out_tok"),("tool_calls","tools"),("turns","turns")]
 arms=[a for a in ("hooks","cli","file") if any(a in v for v in by.values())]
 for arm in arms:
-  deltas=collections.defaultdict(list); used=[]
+  deltas=collections.defaultdict(list); used=[]; rejected=0
   print(f"\n-- {arm} vs bare --")
-  print(f"{'task':<18}{'gate b/a':<10}{'used':<6}" + "".join(f"Δ{lbl:<9}" for _,lbl in FIELDS))
+  print(f"{'task':<18}{'used':<6}" + "".join(f"Δ{lbl:<9}" for _,lbl in FIELDS))
   for t,a in sorted(by.items()):
-    if 'bare' not in a or arm not in a: continue
-    g=f"{a['bare'].get('gate_info','?')[:1]}/{a[arm].get('gate_info','?')[:1]}"
+    pair=(a.get('bare'),a.get(arm))
+    if not all(pair) or not all(
+      row.get('validator_pass') is True
+      and row.get('requested_end_state_pass') is True
+      and row.get('valid') is True
+      for row in pair if row
+    ):
+      rejected+=1
+      continue
     u=a[arm].get('memory_used'); used.append(u); ustr="-" if u is None else str(u)
     cells=""
     for key,_ in FIELDS:
       d=a['bare'].get(key,0)-a[arm].get(key,0); deltas[key].append(d); cells+=f"{d:<10}"
-    print(f"{t[:17]:<18}{g:<10}{ustr:<6}{cells}")
+    print(f"{t[:17]:<18}{ustr:<6}{cells}")
   n=len(deltas["total_tokens"])
   print(f"paired tasks: {n}")
+  print(f"rejected pairs: {rejected}")
   if n:
     for key,lbl in FIELDS:
       d=deltas[key]; med=statistics.median(d); wins=sum(1 for x in d if x>0)
@@ -304,10 +340,15 @@ for arm in arms:
     if known: print(f"  memory USED: {sum(known)}/{len(known)} runs ({100*sum(known)/len(known):.0f}%)  [cli=`memphant recall` seen; file=.memphant/MEMORY.md read; hooks=advisory block injected]")
     else: print("  memory USED: n/a (old rows without the field)")
 if not arms: print("no memory-arm rows yet")
-print("\ninterpretation: consistently positive Δtokens/Δtools = that surface saved re-derivation (the value).")
-print("                gate b/a is INFORMATIONAL only — arms usually reach a correct fix; used-rate says whether")
-print("                the surface even reached the agent (Vercel: AGENTS.md 100% vs skills 53-79%).")
+print("\ninterpretation: deltas include only pairs where both arms passed the fixture validator and requested end state.")
 PY
+}
+
+read_results(){
+  # shellcheck disable=SC1090
+  . "$ENVF"
+  say "paired EFFICIENCY delta per arm (bare - arm; positive = the memory arm is cheaper to the same accepted fix)"
+  summarize_results "$STATE/results.jsonl"
   say "capture→recall linkage (units captured, then served)"
   psql "$BATTERY_DB" -tAc "select count(*) filter (where payload ? 'capture') as captured_units, count(*) filter (where payload ? 'capture' and state='active') as captured_active, count(*) as units from memphant.memory_unit;" 2>/dev/null || true
 }
@@ -342,7 +383,9 @@ case "$cmd" in
   task) task "$@" ;;
   round) round "$@" ;;
   read) read_results ;;
+  accept) accept_fixture "${1:?fixture id required}" "${2:?repository required}" ;;
+  summarize) summarize_results "${1:?results file required}" ;;
   smoke) smoke ;;
   teardown) teardown ;;
-  *) echo "usage: run_battery.sh {bootstrap|seed <fact>|task <id> <arm:bare|hooks|cli|file>|round <n>|read|smoke|teardown}"; exit 2 ;;
+  *) echo "usage: run_battery.sh {bootstrap|seed <fact>|task <id> <arm:bare|hooks|cli|file>|round <n>|read|accept <id> <repo>|summarize <results>|smoke|teardown}"; exit 2 ;;
 esac

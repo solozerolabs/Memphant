@@ -58,6 +58,7 @@
     "docs/build-log/artifacts/null-review-ledger.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/admission-look.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/action-look.json",
+    "docs/build-log/artifacts/outcome-coupled-evolution/checkability-census.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-expansion.json",
     "docs/build-log/artifacts/outcome-coupled-evolution/coding-replay-repro-expansion.json",

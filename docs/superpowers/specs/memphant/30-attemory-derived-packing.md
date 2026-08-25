@@ -95,7 +95,7 @@ This is prose in the client render template (Syndai adapter + spec-28 contract),
 Every scalar in both reports matches except the flag itself. The lever fires and does exactly what the mechanism predicts: **+1 packed item on 4 of 5 questions at the same 8192-token budget**, with no change to which items rank where. That is the correct sign — cheaper per-item cost admits more evidence, the opposite of the reverted fix's failure mode.
 
 Three limits on reading this:
-1. **n=5 cannot promote anything.** It clears the CI chain-smoke bar and shows no regression; it is not a measurement.
+1. **n=5 cannot promote anything.** It clears the CI chain-smoke bar and shows non-regression on the deterministic lane; it is not a measurement.
 2. **Total reader tokens did not fall.** Packing fills the budget either way; what changed is how many distinct items fit inside it. "Cheaper per item" is not "fewer tokens sent."
 3. **No reader ran** — this lane is `retrieval_only`, so the reader-QA question (does more, smaller evidence answer better?) is untouched. Recall at n=5 was insensitive: the single miss stayed a miss.
 

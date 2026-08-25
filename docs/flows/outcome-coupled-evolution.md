@@ -34,6 +34,7 @@ If that gate opens, add only the approved append-only, tenant-bound `memphant.ta
 10. Pin D-2026-08-09b in the existing spec-31 evidence-integrity suite: cover superseded and unresolved-contradiction suppression, compare trace-derived access/recency plus persisted ranking/outcome signals before and after recall, and require the same signals to move in a suppression-removed perturbation. Keep it reader-free and `$0`.
 11. Run the preregistered ten-task silent shadow on isolated coding repositories with exact prompt hashes and unchanged automatic lifecycle settings. Require all ten deterministic validators and requested end states, send only hash/counter/path receipts through the existing outcome and task-memory-event endpoints, simulate one client restart after server acceptance, drain the local JSONL spool, and publish only aggregate public-safe evidence. Any missing task, failed validator, prompt/lifecycle drift, missing exposure link, endpoint failure, residual spool row, or raw-content field closes the gate. This is readiness evidence, never an agent-improvement result.
 12. Only after real silent-shadow readiness passes, run a randomized paired dogfood measurement on ten fresh scoped-verification tasks. Freeze identical base commits, task prompts, validators, canonical lesson bytes, deterministic arm-order assignment, model, and a `$40` reserve before dispatch. Compare no-memory `C0` with one triggered lesson `M1`. Claim a positive measurement only with ten valid pairs, treatment objective success on all ten, no objective or `accepted_without_violation` loss, at least seven paired wins, exact two-sided McNemar `p <= 0.05`, and a computed non-null 80%-power MDE; report paired success, violations, regressions, and cost even when the gate fails. Keep prompts and streams private and publish hashes/counts only.
+13. Repair the local capture A/B battery so each Acme synthetic task records its own deterministic requested-end-state result, and summarize efficiency only for pairs whose bare and memory arms both pass. Keep prompts, diffs, rollouts, and per-run logs under the existing gitignored battery state root; add no generic evaluator or manual grading path.
 
 ## Harness
 
@@ -167,6 +168,18 @@ Check-gaming scan of the committed repo source, testing the fitness-function rou
 - Runtime API and hook onboarding are deliberately deferred; documenting endpoints that the evidence gate has not opened would create a false product contract.
 
 VERDICT: the instrument is operable and failure-explicit; runtime DX remains gated. NO UNRESOLVED DECISIONS.
+
+## Capture battery validity repair addendum (2026-08-25)
+
+- Root cause: `scripts/battery/run_battery.sh` applies the Yurivan-only `make types && make check-antipatterns` gate after every run even when `YURIVAN_REPO` points at the Acme date fixtures. It records that unrelated failure as informational, then `read_results` computes efficiency deltas for any two present rows without an objective-success predicate.
+- Reuse boundary: keep the existing task IDs, gitignored `.state` artifacts, rollout-derived efficiency metrics, and paired reader. Add only explicit checks for the two committed Acme fixture IDs and validity fields on each result row.
+- Acceptance: `r1-date` must pass `npm test` while preserving the original test; `r2-date` must preserve the original test, add the requested second test, prove both direct tests pass, and pass the package suite. Unknown task IDs fail closed instead of falling back to Yurivan or manual judgment.
+- Summary: a pair contributes deltas only when both rows explicitly record `validator_pass`, `requested_end_state_pass`, and `valid` as true. Missing legacy fields, partial arms, and failed arms are counted as rejected pairs and expose no efficiency interpretation.
+- Privacy: committed files contain fixture IDs, commands, and aggregate validity semantics only. Prompts, patches, logs, rollouts, and run rows remain under `scripts/battery/.state/`.
+- Tests: run fixture-local acceptance against synthetic Git repositories and exercise the reader with valid, invalid, partial, and legacy result rows.
+- Sequential implementation, no parallelization opportunity. No new dependency, evaluator framework, manual judge, database object, or public result artifact.
+
+VERDICT: CLEAR. Explicit fixture contracts plus a two-arm validity conjunction are the smallest fail-closed repair.
 
 ## GSTACK REVIEW REPORT
 

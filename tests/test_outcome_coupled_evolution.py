@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -44,6 +45,129 @@ from benchmarks.xs_crosssession.outcome_coupled_evolution import (
     prepare_real_silent_shadow_tasks,
     execute_real_silent_shadow_tasks,
 )
+
+
+BATTERY = Path(__file__).parents[1] / "scripts" / "battery" / "run_battery.sh"
+
+
+def _acme_date_fixture(path: Path) -> None:
+    (path / "src").mkdir(parents=True)
+    (path / "test").mkdir()
+    (path / "package.json").write_text(
+        '{"type":"module","scripts":{"test":"node --test test/date1.test.mjs"}}'
+    )
+    (path / "src" / "date.mjs").write_text(
+        "export function dayOfMonth(value) { return new Date(value).getUTCDate(); }\n"
+    )
+    (path / "test" / "date1.test.mjs").write_text(
+        "import test from 'node:test';\n"
+        "import assert from 'node:assert/strict';\n"
+        "import { dayOfMonth } from '../src/date.mjs';\n"
+        "test('date1', () => assert.equal(dayOfMonth('2026-05-02'), 2));\n"
+    )
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+    subprocess.run(["git", "add", "."], cwd=path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=Acme", "-c", "user.email=acme@example.test", "commit", "-qm", "fixture"],
+        cwd=path,
+        check=True,
+    )
+
+
+def _battery(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", str(BATTERY), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_capture_battery_acme_acceptance_is_fixture_local_and_fail_closed(tmp_path: Path):
+    repo = tmp_path / "acme-date"
+    _acme_date_fixture(repo)
+
+    r1 = json.loads(_battery("accept", "r1-date", str(repo)).stdout)
+    unknown = json.loads(_battery("accept", "unknown", str(repo)).stdout)
+    assert r1 == {
+        "validator_pass": True,
+        "requested_end_state_pass": True,
+        "valid": True,
+    }
+    assert unknown == {
+        "validator_pass": False,
+        "requested_end_state_pass": False,
+        "valid": False,
+    }
+
+    (repo / "package.json").write_text('{"type":"module","scripts":{"test":"true"}}')
+    partial = json.loads(_battery("accept", "r1-date", str(repo)).stdout)
+    assert partial == {
+        "validator_pass": True,
+        "requested_end_state_pass": False,
+        "valid": False,
+    }
+
+
+def test_capture_battery_r2_requires_new_test_to_run_in_package_suite(tmp_path: Path):
+    repo = tmp_path / "acme-date"
+    _acme_date_fixture(repo)
+    (repo / "test" / "date2.test.mjs").write_text(
+        "import test from 'node:test';\n"
+        "import assert from 'node:assert/strict';\n"
+        "import { dayOfMonth } from '../src/date.mjs';\n"
+        "test('date2', () => assert.equal(dayOfMonth('2026-06-01'), 1));\n"
+    )
+
+    partial = json.loads(_battery("accept", "r2-date", str(repo)).stdout)
+    assert partial["validator_pass"] is True
+    assert partial["requested_end_state_pass"] is False
+    assert partial["valid"] is False
+
+    (repo / "package.json").write_text(
+        '{"type":"module","scripts":{"test":"node --test test/*.test.mjs"}}'
+    )
+    assert json.loads(_battery("accept", "r2-date", str(repo)).stdout) == {
+        "validator_pass": True,
+        "requested_end_state_pass": True,
+        "valid": True,
+    }
+
+
+def test_capture_battery_summary_rejects_invalid_partial_and_legacy_pairs(tmp_path: Path):
+    results = tmp_path / "results.jsonl"
+    rows = []
+    for task, valid in (("valid", True), ("invalid", False), ("partial", True)):
+        arms = ("bare", "hooks") if task != "partial" else ("bare",)
+        for arm in arms:
+            rows.append(
+                {
+                    "task": task,
+                    "arm": arm,
+                    "valid": valid,
+                    "validator_pass": valid,
+                    "requested_end_state_pass": valid,
+                    "total_tokens": 20 if arm == "bare" else 10,
+                    "output_tokens": 4 if arm == "bare" else 2,
+                    "tool_calls": 2 if arm == "bare" else 1,
+                    "turns": 1,
+                    "memory_used": 1 if arm == "hooks" else None,
+                }
+            )
+    rows.extend(
+        {"task": "legacy", "arm": arm, "total_tokens": 20}
+        for arm in ("bare", "hooks")
+    )
+    results.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    output = _battery("summarize", str(results)).stdout
+
+    assert "valid" in output
+    assert "invalid" not in output
+    assert "partial" not in output
+    assert "legacy" not in output
+    assert "paired tasks: 1" in output
+    assert "rejected pairs: 3" in output
 
 
 def test_reconstructs_summary_preserved_messages_and_active_tail():

@@ -1,5 +1,39 @@
 {
   "schema_version": 1,
+  "evidence_contract": {
+    "schema_version": 1,
+    "decisional": false,
+    "claim": "The five-rule public-safe census observed no rule that was both checkable by a fitness function and discriminating for the capable-agent corpus.",
+    "power": {
+      "test": "descriptive-only (no test)",
+      "n": 5,
+      "b": 0,
+      "c": 0,
+      "n_d": 0,
+      "psi_observed": null,
+      "mde_at_80": null,
+      "computed_by": "not applicable; deterministic descriptive census",
+      "source": "docs/build-log/artifacts/outcome-coupled-evolution/checkability-census.json"
+    },
+    "harness": {
+      "embed_model": "none",
+      "scorer": "fixture-local source classification recorded in the five public-safe rule predicates",
+      "k": 5,
+      "budget": 0,
+      "flags": [
+        "public-safe-predicates-only",
+        "no-model",
+        "no-paid-run"
+      ],
+      "command": "source audit recorded in docs/flows/outcome-coupled-evolution.md"
+    },
+    "corpus": {
+      "sha256": "2072bda231b94fa0ad3566577eb13f3a8a6fcb42da67efd5d76ed10c4b22d604",
+      "snapshot_id": "canonical-json-sha256-of-checkability-census-rules-v1",
+      "n_items": 5
+    },
+    "notes": "Descriptive source audit only. It records no powered treatment effect and cannot carry a promotion claim. The corpus hash is over canonical JSON of the rules array (sorted keys, compact separators); private lesson bodies remain excluded."
+  },
   "census": "checkable-rule-vs-authored-lesson",
   "date": "2026-08-25",
   "spend_usd": 0.0,

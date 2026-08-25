@@ -187,6 +187,7 @@ Observability must emit alerts for:
 - deleted content appearing in recall
 - cross-tenant recall count nonzero
 - advisor critical finding in the `memphant` schema
+- `retrieval_surface_not_ready` — a recall served degraded because a surface was `missing`/`stale`/`failed` (§13.1)
 
 DB drift is a memory security issue.
 
@@ -249,3 +250,39 @@ MemPhant's eventual repo carries its own migration runner (it does not join Synd
 The **doc-side firewall already exists** — `scripts/validate_docs.py` carries a live MemPhant rule set (`validate_memphant_specs`) and is extended in this pass (`28` cross-ref) — so only the migration triad above is net-new scaffolding.
 
 **BYOC-portability caveat (the one place the EvalRank copy is not verbatim).** EvalRank's bootstrap `2026_06_25_001` runs `CREATE ROLE` and `ALTER DEFAULT PRIVILEGES FOR ROLE postgres` — both rely on Finn/Supabase pre-elevating `postgres`, which a raw customer Postgres does not (§11a). The MemPhant bootstrap migration must (a) resolve the DDL owner from `current_user`, not hardcode `postgres`, and (b) tolerate the no-`CREATE ROLE` provider via the roles-as-grants fallback (§11a). The schema-firewall check (`check_memphant_migration_boundary.py`) stays verbatim — it is provider-independent line-scanning.
+
+## 13. Retrieval Readiness State Machine + Index Adoption (BYOC)
+
+The failure this section closes is *silent degradation at runtime on a DB we don't operate*: a missing/mismatched per-profile partial index turns the vector stage into a seq scan (`02` §2.1a), a re-embed leaves yesterday's index serving today's profile, and a crashed `CREATE INDEX CONCURRENTLY` leaves an invalid index Postgres silently ignores. Today those are guarded by a freeze rule + `db lint` — CI-side, advisory, blind to a customer's live DB. This section makes readiness a **queryable, derived state per retrieval surface**, and makes bootstrap **adopt** a customer's existing equivalent index instead of paying a second multi-hour build. (Pattern observed in Polygres's surface-readiness/index-adoption UX, `13` prior-art; the derivation rule below is ours.)
+
+### 13.1 Readiness is computed, never attested
+
+The unit of readiness is a **retrieval surface**: one row per active `(embedding_profile)` for the vector channel, one per lexical config (tsvector column + language), one for the trigram path, one for the edge/graph channel. State is **derived by reconciling config against `pg_catalog` reality** — `embedding_profile.index_strategy`/dimensions/distance vs. the actual index's access method, operator class, expression, and `WHERE embedding_profile_id` predicate, across every partition (D1 hash partitioning means N physical indexes per surface; the surface is `ready` only if *all* partitions are). No hand-written status column is ever authoritative — an attested flag is the same integrity hole as a hand-written preflight marker; the reconciler *computes* the state (same principle as `check_memphant_migration_class.py`'s computed additive flag, §12).
+
+States and their observed facts:
+
+| State | Derived from | Exit |
+|---|---|---|
+| `missing` | active profile, no matching index on ≥1 partition | build (or adopt, §13.2) |
+| `building` | `pg_stat_progress_create_index` in flight | completes → `ready` / `failed` |
+| `ready` | every partition: valid index, exact match on (am=hnsw, opclass↔distance, column/expression↔strategy, partial predicate) | config change / re-embed → `stale` |
+| `stale` | index matches an **old** shape: profile dim/metric/strategy edited, or re-embed generation advanced past the indexed rows (`14` §10.1) | rebuild beside, then swap |
+| `failed` | `pg_index.indisvalid = false` (crashed CIC) | drop own invalid index + rebuild |
+
+`exact`-strategy profiles are **vacuously `ready`** (no index to verify); lexical/trigram/edge surfaces use the same states minus `stale`'s re-embed arm.
+
+**Where it lives and who reads it.** The reconciler runs inside `memphant verify` (operator-invoked, §11a's live-DB stance: the real gate runs against the real customer URL) and on a periodic worker tick; results are cached in `memphant.retrieval_readiness(surface_key, state, observed_at, detail jsonb)` — a **cache of derived facts, not a source of truth** (rebuilding it from catalogs must always be possible). Readers: the recall path's per-`index_strategy` query builder (`03` §5.2), the §9 app surface (per-surface readiness is the BYOC operator's first debugging screen), and `22` telemetry.
+
+**Runtime rule (the actual gate):** the vector stage consults the cached state; on `missing`/`stale`/`failed` it **degrades to `exact` and emits `retrieval_surface_not_ready`** (added to §10's alert list) — never a silent seq scan, never a hard 500 on recall. Degraded-loud beats both failure modes: fail-closed would take memory down for an index problem; silent seq scan is the pgvector #479 collapse this spec exists to prevent. `stale` additionally pins the query to the still-valid old index shape when one exists (serve yesterday's index knowingly, flagged, rather than exact-scan a whale tenant).
+
+### 13.2 Index adoption: adopt, never rebuild, never touch
+
+At `db bootstrap` (and every `verify`), before scheduling any index build, the reconciler checks whether the customer DB **already carries an equivalent index** — BYOC customers arrive with pgvector warm, and §11a's build-memory probe exists precisely because a redundant HNSW build is the single most expensive bootstrap step (~20-min parallel build at 5M rows, 2× peak during re-embed).
+
+**Adoption predicate — exact on semantics, silent on tuning.** An existing index is adopted iff it matches on the facts that change *correctness*: access method `hnsw`; operator class agrees with the profile's `distance`; indexed column/expression agrees with `index_strategy` (`halfvec` column for `hnsw_full`, `subvector(...)` expression for `hnsw_subvector`, `binary_quantize(...)` for `hnsw_binary`); partial predicate contains `embedding_profile_id = <id>`; `indisvalid`. Matching compares **parsed catalog facts** (`pg_index`/`pg_opclass`/expression trees), never `pg_get_indexdef` string equality. Build parameters (`m`, `ef_construction`) are **not** part of the predicate — a differently-tuned index is semantically correct with possibly different recall; record the params in `detail` as an advisory, because recall quality is measured by the eval harness, not asserted from DDL (`27`).
+
+**Near-miss protocol.** Right column but wrong opclass/metric, or missing the profile predicate → `index_mismatch`: report the exact `CREATE INDEX CONCURRENTLY` statement to run, and *stop*. **MemPhant never drops, renames, or alters a customer-owned index** — the §2 schema boundary generalized to objects: we mutate only what we created (the one exception is dropping our *own* `indisvalid=false` carcass in `failed`). If the customer's near-miss index later becomes redundant, saying so in `verify` output is the ceiling of our authority.
+
+**Adoption is recorded, not renamed.** The adopted index keeps its name; `retrieval_readiness.detail` records `{adopted: true, index_name, params}` so a later `verify` can notice the customer dropped it (surface returns to `missing`, loud). The same predicate-match rule applies to GIN tsvector and `pg_trgm` indexes on the lexical surfaces — one rule, three index families.
+
+**What this deliberately does not do:** no auto-rebuild on `stale`/`missing` (the customer owns the maintenance window — §11b's no-auto-migrate corollary, since an HNSW build is operationally a migration); no readiness state for things a query can't consult mid-flight (partition-modulus drift stays a §10 alert); no per-tenant readiness (indexes are per-partition DDL; tenants map to partitions, D1).
