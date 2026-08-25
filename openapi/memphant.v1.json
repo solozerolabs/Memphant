@@ -1093,6 +1093,58 @@
         "format": "uuid",
         "type": "string"
       },
+      "EraseSubjectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_id": {
+            "$ref": "#/components/schemas/ActorId"
+          },
+          "agent_node_id": {
+            "$ref": "#/components/schemas/AgentNodeId"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ScopeId"
+          },
+          "subject_generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subject_id": {
+            "$ref": "#/components/schemas/SubjectId"
+          }
+        },
+        "required": [
+          "subject_id",
+          "scope_id",
+          "actor_id",
+          "agent_node_id",
+          "subject_generation",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "EraseSubjectResult": {
+        "description": "Public shape of the subject-erasure receipt. Its serialized form is\nbyte-identical to the store's `SubjectErasureReceipt` so the response the\nHTTP caller sees equals the response persisted in the mutation ledger for\nidempotent replay. The erasure engine auto-stages this receipt as the\nledger response, so the service never stages a richer body (a `policy` /\n`verification` envelope here would diverge from the replayed bytes).",
+        "properties": {
+          "erased_at": {
+            "type": "string"
+          },
+          "generation": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generation",
+          "erased_at"
+        ],
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -4344,6 +4396,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CanonicalProjectionResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/subjects/erase": {
+      "post": {
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EraseSubjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EraseSubjectResult"
                 }
               }
             }

@@ -39,6 +39,7 @@ const RECALL_PATH: &str = "/v1/recall";
 const REFLECT_PATH: &str = "/v1/reflect";
 const CORRECT_PATH: &str = "/v1/correct";
 const FORGET_PATH: &str = "/v1/forget";
+const ERASE_SUBJECT_PATH: &str = "/v1/subjects/erase";
 const MARK_PATH: &str = "/v1/mark";
 const TASK_OUTCOMES_PATH: &str = "/v1/task-outcomes";
 const TASK_MEMORY_EVENTS_PATH: &str = "/v1/task-memory-events";
@@ -57,6 +58,7 @@ const DOCUMENTED_OPENAPI_PATHS: &[&str] = &[
     REFLECT_PATH,
     CORRECT_PATH,
     FORGET_PATH,
+    ERASE_SUBJECT_PATH,
     MARK_PATH,
     TASK_OUTCOMES_PATH,
     TASK_MEMORY_EVENTS_PATH,
@@ -331,6 +333,7 @@ pub fn app<S: MutationLedgerStore + 'static>(state: AppState<S>) -> Router {
         .route(REFLECT_PATH, post(reflect_handler::<S>))
         .route(CORRECT_PATH, post(correct_handler::<S>))
         .route(FORGET_PATH, post(forget_handler::<S>))
+        .route(ERASE_SUBJECT_PATH, post(erase_subject_handler::<S>))
         .route(MARK_PATH, post(mark_handler::<S>))
         .route(TASK_OUTCOMES_PATH, post(task_outcome_handler::<S>))
         .route(
@@ -713,6 +716,41 @@ async fn forget_handler<S: MutationLedgerStore + 'static>(
         state
             .service
             .forget(&context, &idempotency_key, request)
+            .await?,
+    )
+}
+
+async fn erase_subject_handler<S: MutationLedgerStore + 'static>(
+    State(state): State<AppState<S>>,
+    authed: AuthedTenant,
+    IdempotencyKey(idempotency_key): IdempotencyKey,
+    StrictJson(request): StrictJson<memphant_types::EraseSubjectRequest>,
+) -> Result<Response, ApiError> {
+    authed.require_can_forget()?;
+    authed.check_principal(request.actor_id, request.scope_id)?;
+    let context = state
+        .store()
+        .resolve_memory_context(
+            authed.tenant,
+            request.subject_id,
+            request.actor_id,
+            request.scope_id,
+            request.agent_node_id,
+        )
+        .await
+        .map_err(|error| match error {
+            StoreError::NotFound(_) => ApiError::scope_denied(),
+            other => ApiError::from(other),
+        })?;
+    if request.subject_generation != context.subject_generation {
+        return Err(ApiError::context_binding_conflict(
+            "subject generation is stale".to_string(),
+        ));
+    }
+    mutation_http_response(
+        state
+            .service
+            .erase_subject(&context, &idempotency_key, request)
             .await?,
     )
 }
@@ -1148,6 +1186,10 @@ fn openapi_paths() -> serde_json::Map<String, Value> {
         mutation_path_item("ForgetRequest", "ForgetResult"),
     );
     paths.insert(
+        ERASE_SUBJECT_PATH.to_string(),
+        mutation_path_item("EraseSubjectRequest", "EraseSubjectResult"),
+    );
+    paths.insert(
         MARK_PATH.to_string(),
         mutation_path_item("MarkRequest", "MarkResult"),
     );
@@ -1265,6 +1307,8 @@ fn component_schemas() -> serde_json::Map<String, Value> {
     seed_component::<memphant_types::CorrectResult>(&mut generator);
     seed_component::<memphant_types::ForgetRequest>(&mut generator);
     seed_component::<memphant_types::ForgetResult>(&mut generator);
+    seed_component::<memphant_types::EraseSubjectRequest>(&mut generator);
+    seed_component::<memphant_types::EraseSubjectResult>(&mut generator);
     seed_component::<MarkRequest>(&mut generator);
     seed_component::<TaskOutcomeRequest>(&mut generator);
     seed_component::<TaskOutcomeResult>(&mut generator);

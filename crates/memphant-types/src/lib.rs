@@ -2156,6 +2156,29 @@ pub struct ForgetResult {
     pub trace_ref: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EraseSubjectRequest {
+    pub subject_id: SubjectId,
+    pub scope_id: ScopeId,
+    pub actor_id: ActorId,
+    pub agent_node_id: AgentNodeId,
+    pub subject_generation: u64,
+    pub reason: String,
+}
+
+/// Public shape of the subject-erasure receipt. Its serialized form is
+/// byte-identical to the store's `SubjectErasureReceipt` so the response the
+/// HTTP caller sees equals the response persisted in the mutation ledger for
+/// idempotent replay. The erasure engine auto-stages this receipt as the
+/// ledger response, so the service never stages a richer body (a `policy` /
+/// `verification` envelope here would diverge from the replayed bytes).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct EraseSubjectResult {
+    pub generation: u64,
+    pub erased_at: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MarkOutcome {

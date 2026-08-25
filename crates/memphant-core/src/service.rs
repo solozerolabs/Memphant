@@ -15,12 +15,12 @@ use memphant_types::TenantId;
 use memphant_types::{
     COMPILER_VERSION, CanonicalProjectionResponse, CanonicalProjectionUnit, CaptureMarker,
     CaptureSource, ContextualChunk, CorrectRequest, CorrectionPayload, DegradedRecallTraceItem,
-    ENGINE_VERSION, EpisodeId, FileSyncOperation, FileSyncOperationResult, FileSyncRequest,
-    FileSyncResult, FileSyncUnitMetadata, ForgetRequest, ForgetResult, ForgetTarget, MarkRequest,
-    MarkResult, MemoryKind, NewEpisode, NewResource, RecallContextItem,
-    RecallDegradationDiagnostic, RecallDegradationReason, RecallHttpRequest, RecallMode,
-    RecallRequest, RecallResponse, ReflectAccepted, ReflectCandidate, ReflectInput, ReflectJob,
-    ReflectJobKind, ReflectRequest, ResolvedMemoryContext, ResourceId, ResourceKind,
+    ENGINE_VERSION, EpisodeId, EraseSubjectRequest, EraseSubjectResult, FileSyncOperation,
+    FileSyncOperationResult, FileSyncRequest, FileSyncResult, FileSyncUnitMetadata, ForgetRequest,
+    ForgetResult, ForgetTarget, MarkRequest, MarkResult, MemoryKind, NewEpisode, NewResource,
+    RecallContextItem, RecallDegradationDiagnostic, RecallDegradationReason, RecallHttpRequest,
+    RecallMode, RecallRequest, RecallResponse, ReflectAccepted, ReflectCandidate, ReflectInput,
+    ReflectJob, ReflectJobKind, ReflectRequest, ResolvedMemoryContext, ResourceId, ResourceKind,
     RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetrievalTrace, ReviewEvent,
     StoredEpisode, StoredMemoryUnit, TaskMemoryAttribution, TaskMemoryEventInput,
     TaskMemoryEventKind, TaskMemoryEventsRequest, TaskMemoryEventsResult, TaskOutcomeRequest,
@@ -5152,6 +5152,45 @@ impl<S: MemoryStore> MemoryService<S> {
                 self.store
                     .stage_mutation_response(&mut tx, response.clone())
                     .await?;
+                self.store.commit(tx).await?;
+                Ok(response)
+            }
+        }
+    }
+
+    pub async fn erase_subject(
+        &self,
+        context: &ResolvedMemoryContext,
+        idempotency_key: &str,
+        request: EraseSubjectRequest,
+    ) -> Result<MutationResponse, ServiceError>
+    where
+        S: MutationLedgerStore,
+    {
+        let claim = MutationClaim::new(
+            context,
+            MutationVerb::EraseSubject,
+            idempotency_key,
+            canonical_mutation_request_hash(MutationVerb::EraseSubject, &request)?,
+        )?;
+        let mut tx = self.store.begin(context).await?;
+        match self.store.stage_mutation_claim(&mut tx, claim).await? {
+            MutationClaimOutcome::Replay(response) => {
+                self.store.commit(tx).await?;
+                Ok(response)
+            }
+            MutationClaimOutcome::Execute => {
+                // The erasure engine hard-deletes the subject and auto-stages the
+                // receipt as this mutation's ledger response; unlike `stage_forget`
+                // the service must NOT stage its own response (the store rejects it).
+                // Return a body byte-identical to the staged receipt so an
+                // idempotent replay (which returns the ledger bytes) matches.
+                let receipt = self.store.stage_subject_erasure(&mut tx).await?;
+                let result = EraseSubjectResult {
+                    generation: receipt.generation,
+                    erased_at: receipt.erased_at.clone(),
+                };
+                let response = serialized_mutation_response(200, &result)?;
                 self.store.commit(tx).await?;
                 Ok(response)
             }

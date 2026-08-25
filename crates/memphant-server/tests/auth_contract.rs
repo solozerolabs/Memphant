@@ -155,6 +155,7 @@ async fn send(
             | "/v1/reflect"
             | "/v1/correct"
             | "/v1/forget"
+            | "/v1/subjects/erase"
             | "/v1/mark"
             | "/v1/file-sync"
     ) {
@@ -1139,6 +1140,72 @@ async fn agent_key_without_can_forget_is_refused_at_the_forget_boundary() {
         "/v1/forget",
         Some(KEY_SCOPED),
         Some(forget_body(subject_id, scope_id, actor_id, agent_node_id)),
+    )
+    .await;
+    assert_eq!(owner_status, StatusCode::FORBIDDEN);
+    assert_ne!(
+        owner_response["error"]["code"], "capability_denied",
+        "an owner key must clear the capability gate; the failure is downstream"
+    );
+}
+
+fn erase_subject_body(
+    subject_id: memphant_types::SubjectId,
+    scope_id: ScopeId,
+    actor_id: ActorId,
+    agent_node_id: memphant_types::AgentNodeId,
+) -> Value {
+    serde_json::json!({
+        "subject_id": subject_id,
+        "scope_id": scope_id,
+        "actor_id": actor_id,
+        "agent_node_id": agent_node_id,
+        "subject_generation": 0,
+        "reason": "capability test"
+    })
+}
+
+/// Permanent subject erasure is owner-only and shares the `can_forget`
+/// capability with forget. A coding-agent key (default false) is refused at the
+/// erase boundary before any context resolution; an owner key WITH `can_forget`
+/// clears the capability gate and fails downstream instead.
+#[tokio::test]
+async fn agent_key_without_can_forget_is_refused_at_the_erase_boundary() {
+    let tenant_id = tenant(80_910);
+    let scope_id = scope(80_911);
+    let actor_id = actor(80_912);
+    let subject_id = memphant_types::SubjectId::new();
+    let agent_node_id = memphant_types::AgentNodeId::new();
+
+    let app = capability_app(tenant_id, actor_id, scope_id, false, false);
+    let (status, response) = send(
+        &app,
+        "POST",
+        "/v1/subjects/erase",
+        Some(KEY_SCOPED),
+        Some(erase_subject_body(
+            subject_id,
+            scope_id,
+            actor_id,
+            agent_node_id,
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(response["error"]["code"], "capability_denied");
+
+    let owner_app = capability_app(tenant_id, actor_id, scope_id, true, false);
+    let (owner_status, owner_response) = send(
+        &owner_app,
+        "POST",
+        "/v1/subjects/erase",
+        Some(KEY_SCOPED),
+        Some(erase_subject_body(
+            subject_id,
+            scope_id,
+            actor_id,
+            agent_node_id,
+        )),
     )
     .await;
     assert_eq!(owner_status, StatusCode::FORBIDDEN);

@@ -9,14 +9,15 @@ use memphant_core::{
 use memphant_types::{
     ActorId, CanonicalProjectionResponse, ContextBindingAgentRef, ContextBindingEntityRef,
     ContextBindingRequest, ContextBindingResponse, ContextBindingScopeRef, CorrectRequest,
-    CorrectSelector, CorrectionPayload, FileSyncOperation, FileSyncRequest, FileSyncResult,
-    ForgetRequest, ForgetSelector, HealthResponse, MAX_FILE_SYNC_REQUEST_ENCODED_BYTES,
-    MarkOutcome, MarkRequest, MemoryKind, NewMemoryUnit, RecallHttpRequest, RecallResponse,
-    ReflectRequest, RetainEpisodeHttpRequest, RetainEpisodeHttpResponse, RetainEpisodePayload,
-    RetainPayload, RetainResourcePayload, RetainUnitPayload, SCHEMA_COMPAT_REVISION, ScopeId,
-    ScopeMemoryResponse, TaskCompletionStatus, TaskId, TaskMemoryAttribution, TaskMemoryEventInput,
-    TaskMemoryEventKind, TaskMemoryEventsRequest, TaskMemoryEventsResult, TaskOutcomeRequest,
-    TaskOutcomeResult, TaskValidatorStatus, TenantId, TrustLevel, UnitState,
+    CorrectSelector, CorrectionPayload, EraseSubjectRequest, FileSyncOperation, FileSyncRequest,
+    FileSyncResult, ForgetRequest, ForgetSelector, HealthResponse,
+    MAX_FILE_SYNC_REQUEST_ENCODED_BYTES, MarkOutcome, MarkRequest, MemoryKind, NewMemoryUnit,
+    RecallHttpRequest, RecallResponse, ReflectRequest, RetainEpisodeHttpRequest,
+    RetainEpisodeHttpResponse, RetainEpisodePayload, RetainPayload, RetainResourcePayload,
+    RetainUnitPayload, SCHEMA_COMPAT_REVISION, ScopeId, ScopeMemoryResponse, TaskCompletionStatus,
+    TaskId, TaskMemoryAttribution, TaskMemoryEventInput, TaskMemoryEventKind,
+    TaskMemoryEventsRequest, TaskMemoryEventsResult, TaskOutcomeRequest, TaskOutcomeResult,
+    TaskValidatorStatus, TenantId, TrustLevel, UnitState,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -38,6 +39,7 @@ fn add_idempotency_header(
             | "/v1/reflect"
             | "/v1/correct"
             | "/v1/forget"
+            | "/v1/subjects/erase"
             | "/v1/mark"
             | "/v1/task-outcomes"
             | "/v1/task-memory-events"
@@ -1134,6 +1136,140 @@ async fn forget_by_episode_empties_recall_and_second_reflect_does_not_resurrect(
         recalled_again.items.is_empty(),
         "reflect must not resurrect forgotten memory"
     );
+}
+
+/// End-to-end subject erasure over HTTP: an owner request hard-deletes the whole
+/// subject (200 + `policy: hard_delete`), replay of the same idempotency key at
+/// the ledger returns the identical receipt, and any follow-up operation on the
+/// erased subject is refused with `410 Gone` / `subject_erased`.
+#[tokio::test]
+async fn erase_subject_over_http_hard_deletes_and_blocks_followups() {
+    let tenant_id = tenant(92_100);
+    let scope_id = scope(92_101);
+    let actor_id = actor(92_102);
+    let (app, state) = dev_app_with_state(tenant_id);
+    let binding = bind_context(&app, "erase-roundtrip").await;
+
+    // Seed the subject with an episode and a compiled belief.
+    let _: RetainEpisodeHttpResponse = json_request(
+        &app,
+        "POST",
+        "/v1/episodes",
+        Some(bind_episode_request(
+            episode_request(
+                scope_id,
+                actor_id,
+                "Payment processor is AcmePay.",
+                Some("payment processor"),
+            ),
+            &binding,
+        )),
+    )
+    .await
+    .1;
+    let _: Value = json_request(
+        &app,
+        "POST",
+        "/v1/reflect",
+        Some(ReflectRequest {
+            subject_id: binding.subject_id,
+            scope_id: binding.scope_id,
+            agent_node_id: binding.agent_node_id,
+            subject_generation: binding.subject_generation,
+            actor_id: binding.actor_id,
+        }),
+    )
+    .await
+    .1;
+    state
+        .service()
+        .run_worker_tick(usize::MAX)
+        .await
+        .expect("worker compiles the subject before erasure");
+
+    // Capture the pre-erasure resolved context so we can assert ledger replay
+    // returns the exact receipt (the HTTP handler resolves context first, which
+    // after erasure refuses with SubjectErased — so replay is proven at the
+    // service/ledger layer that actually owns idempotency).
+    let context = state
+        .store()
+        .resolve_memory_context(
+            tenant_id,
+            binding.subject_id,
+            binding.actor_id,
+            binding.scope_id,
+            binding.agent_node_id,
+        )
+        .await
+        .expect("subject resolves before erasure");
+
+    let request = EraseSubjectRequest {
+        subject_id: binding.subject_id,
+        scope_id: binding.scope_id,
+        actor_id: binding.actor_id,
+        agent_node_id: binding.agent_node_id,
+        subject_generation: binding.subject_generation,
+        reason: "user_request".to_string(),
+    };
+
+    // (b) Owner erase over HTTP → 200 with the erasure receipt (hard delete +
+    // deletion-generation bump).
+    let http = Request::builder()
+        .method("POST")
+        .uri("/v1/subjects/erase")
+        .header("content-type", "application/json")
+        .header("idempotency-key", "erase-idem-fixed")
+        .body(Body::from(serde_json::to_vec(&request).unwrap()))
+        .unwrap();
+    let response = app.clone().oneshot(http).await.unwrap();
+    let status = response.status();
+    let erased: Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(status, StatusCode::OK, "erase body={erased}");
+    assert_eq!(erased["generation"], binding.subject_generation + 1);
+    let erased_at = erased["erased_at"].as_str().expect("erased_at").to_string();
+
+    // (c) Ledger replay of the same idempotency key returns the identical receipt.
+    let replay = state
+        .service()
+        .erase_subject(&context, "erase-idem-fixed", request)
+        .await
+        .expect("replayed erasure resolves");
+    assert_eq!(replay.status(), 200);
+    let replay_body: Value = serde_json::from_slice(replay.body()).unwrap();
+    assert_eq!(replay_body, erased);
+    assert_eq!(replay_body["erased_at"], erased_at);
+
+    // (d) Any follow-up on the erased subject is refused with 410 subject_erased.
+    let followup = Request::builder()
+        .method("POST")
+        .uri("/v1/recall")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&bind_recall_request(
+                recall_request(
+                    tenant_id,
+                    scope_id,
+                    actor_id,
+                    "Which payment processor do we use?",
+                ),
+                &binding,
+            ))
+            .unwrap(),
+        ))
+        .unwrap();
+    let followup_response = app.clone().oneshot(followup).await.unwrap();
+    assert_eq!(followup_response.status(), StatusCode::GONE);
+    let followup_body: Value = serde_json::from_slice(
+        &followup_response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes(),
+    )
+    .unwrap();
+    assert_eq!(followup_body["error"]["code"], "subject_erased");
 }
 
 #[tokio::test]
