@@ -2053,6 +2053,25 @@ async fn scope_core_stale_subject_generation_fails_closed() {
     assert_eq!(body["error"]["code"], "context_binding_conflict");
 }
 
+/// The `serve_captures` query param is accepted (not rejected by
+/// `deny_unknown_fields`) and yields a well-formed 200 — the wire contract the
+/// Syndai coding-lane caller depends on. Behavior (captures actually served) is
+/// proven at the service level in `capture_write_seam.rs`.
+#[tokio::test]
+async fn scope_core_accepts_the_serve_captures_query_param() {
+    let tenant_id = tenant(97_300);
+    let app = dev_app(tenant_id);
+    let binding = bind_context(&app, "scope-core-captures").await;
+
+    let path = format!(
+        "{}&serve_captures=true",
+        scope_core_path(&binding, "q", 1_000)
+    );
+    let (status, body): (StatusCode, Value) = json_request(&app, "GET", &path, None::<()>).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["items"].is_array(), "{body}");
+}
+
 #[tokio::test]
 async fn scope_core_rejects_a_zero_token_budget() {
     let tenant_id = tenant(97_200);
