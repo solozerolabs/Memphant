@@ -64,9 +64,14 @@ login_url() { printf '%s://%s:%s@%s' "${DATABASE_URL%%://*}" "$1" "$2" "${DATABA
 start_server() {
   env -u DATABASE_URL MEMPHANT_APP_DATABASE_URL="$APP_URL" MEMPHANT_AUTHN_DATABASE_URL="$AUTHN_URL" MEMPHANT_BIND="127.0.0.1:${PORT}" "$SERVER" &
   SERVER_PID=$!
-  # 60s window: first boot loads embedding weights and a loaded machine
-  # (parallel cargo builds) can push startup past the old 10s budget.
-  for _ in $(seq 1 120); do
+  # 180s window: every boot (including the restart-durability leg) loads the
+  # bge-small ONNX weights, and a loaded 2-core CI runner reliably pushes that
+  # past the old 60s budget — the probe's real, repeated failure mode. Fail fast
+  # if the process itself died so a crash doesn't burn the full window.
+  for _ in $(seq 1 360); do
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      fail "server process exited before becoming healthy on :$PORT"
+    fi
     curl -sf "$BASE/v1/health" >/dev/null 2>&1 && return 0
     sleep 0.5
   done
