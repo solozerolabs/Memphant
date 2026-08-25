@@ -328,6 +328,11 @@
             "const": "errfix",
             "description": "Deterministic error→fix pairing (a failing command followed by the fix\nthat made it pass). Mints a `Procedural` card, not a `Belief`; a\nDIFFERENT family from `Summary`, so an errfix and a summary that agree\nform a `SourceAgreement` witness. Serialized as `errfix`, the same\ntoken as its `capture://errfix` source_ref family.",
             "type": "string"
+          },
+          {
+            "const": "directive",
+            "description": "A user-stated durable directive extracted from a coding-run transcript (a\nbuild/test/tooling convention or standing \"always/never\" rule). Mints a\n`Procedural` card, not a `Belief`; a DISTINCT family from every other\nsource. Serialized as `directive`, matching its `capture://directive`\nsource_ref family.",
+            "type": "string"
           }
         ]
       },
