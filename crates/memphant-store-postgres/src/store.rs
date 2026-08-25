@@ -72,6 +72,19 @@ pub const PROVISIONER_ROLE: &str = "memphant_provisioner";
 /// Marker the fail-closed RLS refusal carries, so wrapping never buries it.
 const RLS_REFUSAL: &str = "refusing to serve";
 
+/// Gate G2 — default-deny cross-actor recall. Appended to every recall
+/// candidate base filter. A unit on the context's OWN node (`$11` scope,
+/// `$12` agent) must carry the context's own actor (`$13`); a foreign
+/// `actor_id` there is a poisoned/injected write (the "label-and-hope" hole a
+/// public write path opens) and is denied by default. GRANTED sources — a
+/// DIFFERENT node in `sources_by_kind`, i.e. `not (scope,agent)==(own,own)` —
+/// are untouched, so an explicit `scope_policy` grant stays the only way to
+/// cross actors. Legacy/system units (`actor_id is null`) are preserved.
+/// Bound as $11=own scope_id, $12=own agent_node_id, $13=own actor_id at the
+/// tail of every recall candidate query.
+const CROSS_ACTOR_FENCE: &str = " and (not (scope_id = $11 and agent_node_id = $12) \
+     or actor_id = $13 or actor_id is null)";
+
 /// A credential plus the capability role its connections assume.
 #[derive(Clone, Copy)]
 struct PoolSpec<'a> {
@@ -2489,7 +2502,8 @@ impl MemoryStore for PgStore {
         let mut tx = self.tenant_tx(context.tenant_id).await?;
         let (scope_uuids, agent_uuids, allowed_kind_strs) = source_kind_triples(context, kinds);
         let kind_strs: Vec<String> = kinds.iter().map(enum_str).collect();
-        let base = "tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+        let base = format!(
+            "tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
                     and exists (
                       select 1 from unnest($4::uuid[], $5::uuid[], $6::text[])
                         allowed(scope_id, agent_node_id, kind)
@@ -2502,7 +2516,8 @@ impl MemoryStore for PgStore {
                     and coalesce(transaction_from, '-infinity'::timestamptz) <= $8::timestamptz
                     and $8::timestamptz < coalesce(transaction_to, 'infinity'::timestamptz)
                     and coalesce(valid_from, '-infinity'::timestamptz) <= $9::timestamptz
-                    and $9::timestamptz < coalesce(valid_to, 'infinity'::timestamptz)";
+                    and $9::timestamptz < coalesce(valid_to, 'infinity'::timestamptz){CROSS_ACTOR_FENCE}"
+        );
         let mut seen: HashSet<Uuid> = HashSet::new();
         let mut units = Vec::new();
         let mut extend = |fetched: Vec<StoredMemoryUnit>| {
@@ -2536,6 +2551,10 @@ impl MemoryStore for PgStore {
                         Bind::Text(time.transaction_as_of.clone()),
                         Bind::Text(time.valid_at.clone()),
                         Bind::Text(websearch.clone()),
+                        // $11/$12/$13 — cross-actor fence (see CROSS_ACTOR_FENCE).
+                        Bind::Uuid(context.scope_id.as_uuid()),
+                        Bind::Uuid(context.agent_node_id.as_uuid()),
+                        Bind::Uuid(context.actor_id.as_uuid()),
                     ],
                 )
                 .await?;
@@ -2562,6 +2581,10 @@ impl MemoryStore for PgStore {
                     Bind::Text(time.transaction_as_of.clone()),
                     Bind::Text(time.valid_at.clone()),
                     Bind::Uuid(*scope),
+                    // $11/$12/$13 — cross-actor fence (see CROSS_ACTOR_FENCE).
+                    Bind::Uuid(context.scope_id.as_uuid()),
+                    Bind::Uuid(context.agent_node_id.as_uuid()),
+                    Bind::Uuid(context.actor_id.as_uuid()),
                 ],
             )
             .await?;
@@ -2589,6 +2612,10 @@ impl MemoryStore for PgStore {
                     Bind::Text(time.transaction_as_of.clone()),
                     Bind::Text(time.valid_at.clone()),
                     Bind::TextVec(query_terms.to_vec()),
+                    // $11/$12/$13 — cross-actor fence (see CROSS_ACTOR_FENCE).
+                    Bind::Uuid(context.scope_id.as_uuid()),
+                    Bind::Uuid(context.agent_node_id.as_uuid()),
+                    Bind::Uuid(context.actor_id.as_uuid()),
                 ],
             )
             .await?;
@@ -2905,7 +2932,11 @@ impl MemoryStore for PgStore {
         }
         let mut tx = self.tenant_tx(context.tenant_id).await?;
         let (scope_uuids, agent_uuids, allowed_kind_strs) = source_kind_triples(context, &[]);
-        let base = "tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
+        // $9 = query vector, $10 = embedding_profile_id (used in the outer join
+        // below); $11/$12/$13 = the cross-actor fence. `base` skips $9/$10 by
+        // design — they are bound on the outer select, not this inner filter.
+        let base = format!(
+            "tenant_id = $1 and data_subject_id = $2 and subject_generation = $3
                     and exists (
                       select 1 from unnest($4::uuid[], $5::uuid[], $6::text[])
                         allowed(scope_id, agent_node_id, kind)
@@ -2917,7 +2948,8 @@ impl MemoryStore for PgStore {
                     and coalesce(transaction_from, '-infinity'::timestamptz) <= $7::timestamptz
                     and $7::timestamptz < coalesce(transaction_to, 'infinity'::timestamptz)
                     and coalesce(valid_from, '-infinity'::timestamptz) <= $8::timestamptz
-                    and $8::timestamptz < coalesce(valid_to, 'infinity'::timestamptz)";
+                    and $8::timestamptz < coalesce(valid_to, 'infinity'::timestamptz){CROSS_ACTOR_FENCE}"
+        );
         // The embedding_profile_id predicate ($10) is mandatory (spec 03): it
         // keeps `<=>` from comparing vectors of different dimensions/models
         // across profiles, and makes the scan exact-per-profile. Query vector is
@@ -2955,7 +2987,7 @@ impl MemoryStore for PgStore {
               and embedding.memory_unit_id = unit.id
               and embedding.embedding_profile_id = $10
              order by embedding.vec <=> $9::halfvec, unit.body limit {limit}",
-            inner = Self::unit_select(base, ""),
+            inner = Self::unit_select(&base, ""),
             limit = limit.min(1_000),
         );
         let rows = sqlx::query(AssertSqlSafe(sql.as_str()))
@@ -2969,6 +3001,10 @@ impl MemoryStore for PgStore {
             .bind(&time.valid_at)
             .bind(vec_literal(query_vec))
             .bind(profile_id)
+            // $11/$12/$13 — cross-actor fence (see CROSS_ACTOR_FENCE).
+            .bind(context.scope_id.as_uuid())
+            .bind(context.agent_node_id.as_uuid())
+            .bind(context.actor_id.as_uuid())
             .fetch_all(&mut *tx)
             .await
             .map_err(backend)?;

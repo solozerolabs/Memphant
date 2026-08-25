@@ -1179,6 +1179,90 @@ async fn file_sync_transition_snapshot_and_forget_are_actor_bound() {
     );
 }
 
+/// Gate G2 — recall default-denies a foreign-actor unit on the context's OWN
+/// node. Two units are staged under the same node; one is raw-reassigned to a
+/// foreign actor (the only way a foreign actor reaches a node —
+/// `context_binding` keeps legitimate binding one-actor-per-node). Recall must
+/// return ONLY the own-actor unit: the `CROSS_ACTOR_FENCE` predicate. Fails
+/// before the fence (both returned), passes after. InMemory parity lives in
+/// `service::file_sync_tests`.
+#[tokio::test]
+#[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
+async fn recall_default_denies_a_foreign_actor_unit_on_the_context_own_node() {
+    let store = connect().await;
+    let tenant = fresh_tenant(&store).await;
+    let context = fresh_memory_context(&store, tenant).await;
+
+    let mut tx = store.begin(&context).await.expect("begin seed");
+    let own_id = store
+        .stage_memory_unit(
+            &mut tx,
+            active_projection_unit(&context, "own-actor recall unit"),
+        )
+        .await
+        .expect("stage own unit");
+    let foreign_id = store
+        .stage_memory_unit(
+            &mut tx,
+            active_projection_unit(&context, "foreign-actor recall unit"),
+        )
+        .await
+        .expect("stage to-be-foreign unit");
+    store.commit(tx).await.expect("commit seed");
+
+    // Raw reassignment: mint a foreign actor and stamp it onto `foreign_id`,
+    // bypassing the actor-bound write guard the way a public write path would.
+    let foreign_actor_id = Uuid::now_v7();
+    let mut raw_tx = store.pool().begin().await.expect("begin reassignment");
+    sqlx::query("select memphant.bind_tenant($1)")
+        .bind(tenant.as_uuid())
+        .execute(&mut *raw_tx)
+        .await
+        .expect("bind tenant");
+    sqlx::query(
+        "insert into memphant.actor
+           (id, tenant_id, data_subject_id, kind, external_ref, trust_level)
+         values ($1, $2, $3, 'user', $4, 'trusted_user')",
+    )
+    .bind(foreign_actor_id)
+    .bind(tenant.as_uuid())
+    .bind(context.data_subject_id.as_uuid())
+    .bind(format!(
+        "pg-contract:recall-foreign-actor:{foreign_actor_id}"
+    ))
+    .execute(&mut *raw_tx)
+    .await
+    .expect("insert foreign actor");
+    sqlx::query("update memphant.memory_unit set actor_id = $2 where id = $1")
+        .bind(foreign_id.as_uuid())
+        .bind(foreign_actor_id)
+        .execute(&mut *raw_tx)
+        .await
+        .expect("reassign unit actor");
+    raw_tx.commit().await.expect("commit reassignment");
+
+    let candidates = store
+        .fetch_recall_candidates(
+            &context,
+            &[],
+            &[],
+            &memphant_types::RecallTime {
+                evaluated_at: "9999-01-01T00:00:00Z".to_string(),
+                transaction_as_of: "9999-01-01T00:00:00Z".to_string(),
+                valid_at: "9999-01-01T00:00:00Z".to_string(),
+            },
+            usize::MAX,
+        )
+        .await
+        .expect("fetch recall candidates");
+    assert_eq!(
+        candidates.iter().map(|unit| unit.id).collect::<Vec<_>>(),
+        vec![own_id],
+        "recall must return only the own-actor unit; the foreign-actor unit on \
+         the same node is denied by default"
+    );
+}
+
 #[tokio::test]
 #[ignore = "requires MEMPHANT_TEST_DATABASE_URL"]
 async fn source_forget_does_not_cross_a_foreign_actor_bridge() {

@@ -4378,6 +4378,16 @@ impl MemoryStore for InMemoryStore {
                             && unit.subject_generation == context.subject_generation
                             && context.allows(unit.kind, unit.scope_id, unit.agent_node_id)
                     })
+                    // Gate G2 — default-deny cross-actor recall (parity with
+                    // CROSS_ACTOR_FENCE in the Pg store). A foreign actor on the
+                    // context's OWN node is denied; a GRANTED (different-node)
+                    // source is untouched; legacy/system units (no actor) kept.
+                    .filter(|unit| {
+                        !(unit.scope_id == context.scope_id
+                            && unit.agent_node_id == context.agent_node_id)
+                            || unit.actor_id == Some(context.actor_id)
+                            || unit.actor_id.is_none()
+                    })
                     .filter(|unit| kinds.is_empty() || kinds.contains(&unit.kind))
                     .filter(|unit| bitemporally_recallable(unit, time))
                     .cloned()

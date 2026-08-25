@@ -1034,6 +1034,57 @@ mod file_sync_tests {
         assert!(snapshot.edges.is_empty());
     }
 
+    /// Gate G2 — recall default-denies a foreign-actor unit on the context's
+    /// OWN node. A foreign `actor_id` can only reach a node via a raw/injected
+    /// write (the `context_binding` unique keeps legitimate binding one-actor-
+    /// per-node), so the foreign unit is injected directly into store state.
+    /// Recall must return ONLY the own-actor unit — this fails before the
+    /// cross-actor fence and passes after it (Pg parity in
+    /// `pg_store_contract::recall_default_denies_a_foreign_actor_unit_on_the_context_own_node`).
+    #[tokio::test]
+    async fn recall_default_denies_a_foreign_actor_unit_on_the_context_own_node() {
+        let store = InMemoryStore::default();
+        let context = context(&store, "cross-actor-recall").await;
+        let own = stored_unit(
+            &context,
+            MemoryKind::Semantic,
+            "fact:own",
+            "Own-actor fact.",
+        );
+        let own_id = own.id;
+        let mut foreign = stored_unit(
+            &context,
+            MemoryKind::Semantic,
+            "fact:foreign",
+            "Foreign-actor fact injected on the same node.",
+        );
+        foreign.actor_id = Some(memphant_types::ActorId::new());
+        {
+            let mut state = store.inner.lock().unwrap();
+            state
+                .memory_units
+                .entry(context.tenant_id)
+                .or_default()
+                .extend([own, foreign]);
+        }
+
+        let time = memphant_types::RecallTime {
+            evaluated_at: "9999-01-01T00:00:00Z".to_string(),
+            transaction_as_of: "9999-01-01T00:00:00Z".to_string(),
+            valid_at: "9999-01-01T00:00:00Z".to_string(),
+        };
+        let candidates = store
+            .fetch_recall_candidates(&context, &[], &[], &time, usize::MAX)
+            .await
+            .expect("fetch recall candidates");
+        assert_eq!(
+            candidates.iter().map(|unit| unit.id).collect::<Vec<_>>(),
+            vec![own_id],
+            "recall must return only the own-actor unit; a foreign-actor unit on \
+             the same node is denied by default"
+        );
+    }
+
     #[tokio::test]
     async fn file_sync_retain_requires_semantic_policy_and_trusted_direct_provenance() {
         for (suffix, restrict_policy, actor_trust) in [
