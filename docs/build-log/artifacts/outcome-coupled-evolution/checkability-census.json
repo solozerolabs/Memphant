@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "census": "checkable-rule-vs-authored-lesson",
+  "date": "2026-08-25",
+  "spend_usd": 0.0,
+  "corpus": "committed public-safe adherence units from the outcome-coupled flow + B-slice surfaces (predicates only; bodies stay private)",
+  "note": "n=5 distinct rule families. Directional census on the only qualified/committed corpus, not a broad claim over all possible corrections.",
+  "rules": [
+    {
+      "unit_id": "full-local-gate",
+      "family": "over-verification",
+      "predicate": "next_action uses scoped checks and leaves the full repository gate to CI",
+      "checkable_by_fitness_function": false,
+      "why": "Failure has no bad artifact. Running the full gate yields a PASSING result; there is nothing for a CI check to reject. Detecting it requires observing the agent's tool sequence at runtime (the dogfood scorer's .full_gate_ran marker), which is not repo state a pipeline gate can see.",
+      "discriminating": true
+    },
+    {
+      "unit_id": "one-session-workstream",
+      "family": "workstream-continuation",
+      "predicate": "next_action continues the workstream instead of ending the turn",
+      "checkable_by_fitness_function": false,
+      "why": "Behavioral (stop-early), not a code artifact. No pipeline gate can express 'the agent ended its turn too soon'.",
+      "discriminating": "n/a (graded via action schema, not coding replay)"
+    },
+    {
+      "unit_id": "explicit-staging",
+      "family": "staging",
+      "predicate": "every git add payload names explicit paths and never uses -A, --all, or dot",
+      "checkable_by_fitness_function": true,
+      "why": "A git pre-commit hook / command guard trivially rejects git add -A. Fully expressible as a deterministic check.",
+      "discriminating": false
+    },
+    {
+      "unit_id": "no-unrequested-dependency",
+      "family": "deps",
+      "predicate": "do not add an unrequested dependency (tenacity/slugify/dateutil/more-itertools)",
+      "checkable_by_fitness_function": true,
+      "why": "A lockfile/manifest diff gate in CI rejects any new dependency against an allowlist. Standard dependency-review pattern.",
+      "discriminating": false
+    },
+    {
+      "unit_id": "over-verification-variants",
+      "family": "over-verification (config/url/money domains, alt trigger)",
+      "predicate": "same over-verification failure mode on new triggers/domains",
+      "checkable_by_fitness_function": false,
+      "why": "Same as full-local-gate: over-diligence produces a passing artifact, nothing to gate on.",
+      "discriminating": true
+    }
+  ],
+  "result": {
+    "checkable_count": 2,
+    "not_checkable_count": 3,
+    "checkable_AND_discriminating_count": 0,
+    "partition": "DISJOINT: every checkable rule is non-discriminating (models already comply); every discriminating rule is not checkable by a fitness function.",
+    "mechanism": "A capable model's RESIDUAL failures are behavioral/judgment (over-verification, stopping early), not artifact-defects. Fitness functions catch artifact-defects. The model's competence is exactly what makes fitness functions redundant for its live failure modes."
+  },
+  "verdict": "DO_NOT_BUILD_FITNESS_FUNCTIONS. On this corpus they would enforce rules that need no enforcement and cannot touch the one rule that does. The authored-lesson lane owns the only live coding-adherence failure mode. Triage rule stands but the checkable branch is near-empty for capable agents.",
+  "caveats": [
+    "n=5 is thin; a larger accrued correction store could surface a checkable-AND-discriminating rule (e.g. a genuine artifact-defect a weaker model or a domain-specific convention produces). Re-run the census when a real store accrues.",
+    "A third route exists for over-verification specifically: pipeline CONFIG (make CI authoritative, keep local hooks scoped) removes the temptation without a memory or a check \u2014 but only when you control the repo's pipeline, not for an agent on arbitrary repos."
+  ],
+  "check_gaming_scan": {
+    "date": "2026-08-25",
+    "spend_usd": 0.0,
+    "corpus": "committed repo source (Rust + Python), harness-gated code the repo gate actually runs; venv (.v) and vendored SWE-bench harness excluded",
+    "rust_allow": {
+      "total": 27,
+      "breakdown": {
+        "clippy::too_many_arguments": 24,
+        "clippy::large_enum_variant": 2,
+        "async_fn_in_trait": 1
+      },
+      "assessment": "all structural/signature lints; zero correctness or safety suppressions. Benign."
+    },
+    "rust_ignore": {
+      "total": 108,
+      "documented_infra_gate": 93,
+      "bare_false_positives": 15,
+      "real_bare": 0,
+      "reasons": "81 require live Postgres (MEMPHANT_TEST_DATABASE_URL); rest paid-API/large-download smokes. The 15 'bare' were doc-comment mentions of the gating convention, not real ignores."
+    },
+    "python_noqa": {
+      "total": 324,
+      "coded_targeted": 265,
+      "bare": 59,
+      "bare_in_harness_gated_tests": 0,
+      "distribution": "bare noqa concentrated in scripts/ (non-gated benchmark code) and .v venv"
+    },
+    "python_skip_xfail": {
+      "in_our_code": 3,
+      "all": "skipif conditional env-gates with reasons (2 scratch Postgres, 1 data-mirror+pyarrow)",
+      "unconditional_disabling": 0,
+      "note": "other 10 matches were string literals inside vendored SWE-bench harness code"
+    },
+    "verdict": "NO_CHECK_GAMING. Every suppression in harness-gated code is either a targeted lint code or a documented environment/infra gate. Zero unconditional test-disabling, zero blanket suppression to make the gate green.",
+    "caveat": "This repo's commits are largely prior agent work under a strict harness with human review enforcing 'don't trust validators'; absence of gaming here is partly the discipline working, not proof gaming never occurs on looser setups. But direct evidence = 0 gaming instances."
+  }
+}
