@@ -1,0 +1,461 @@
+{
+  "artifact_kind": "broader_coding_preregistration",
+  "evidence_contract": {
+    "claim": "This artifact preregisters a fixed broader coding measurement and carries no outcome claim.",
+    "corpus": {
+      "n_items": 32,
+      "sha256": "bde24b5b1692c1bec0bac20abcc58b8300a14ad81d6dc52b6ab4a8e8da85c433",
+      "snapshot_id": "5068114d5d60ba9c715aa0fa9160726e97430895cff5b8bb396cfaf20a190fbe"
+    },
+    "decisional": false,
+    "harness": {
+      "budget": 80.0,
+      "embed_model": "none",
+      "flags": [
+        "paired",
+        "outcome-coupled",
+        "fixed-denominator",
+        "no-retry",
+        "public-safe"
+      ],
+      "k": 1,
+      "scorer": "deterministic validators and preregistered violation predicates"
+    },
+    "power": {
+      "b": 0,
+      "c": 0,
+      "computed_by": "not applicable; preregistration before outcomes",
+      "mde_at_80": null,
+      "n": 32,
+      "n_d": 0,
+      "psi_observed": null,
+      "source": "broader-coding-preregistration.json",
+      "test": "descriptive-only (no test)"
+    },
+    "schema_version": 1
+  },
+  "preregistration": {
+    "arms": [
+      "C0",
+      "M1"
+    ],
+    "campaign_seed_sha256": "27e41422329cb9cc96593766497a94bf30f0de859c0e20dc49390c38427ad776",
+    "canonical_model": "anthropic/claude-sonnet-5-20260630",
+    "datasets": {
+      "multilingual": {
+        "dataset": "SWE-bench/SWE-bench_Multilingual",
+        "revision": "46ed4e9c82862c0fa94e44c98c839d470f3472ad",
+        "revision_sha256": "5603d6659d69f419986249a95a85868448ec69c7bba380e8e9861f118395c647",
+        "snapshot_sha256": "7bd9d265fb6d459acee77aa5e5573c9e13e4ef55e3649c678d32ea0337c4eeab"
+      },
+      "verified": {
+        "dataset": "SWE-bench/SWE-bench_Verified",
+        "revision": "03e151cf5560b1af6a4363c6a9d766deaaea6b56",
+        "revision_sha256": "0ba4634e83ea2cadc7f132cec43f7f3abf5c9747cc59f75b173e9648e3303e18",
+        "snapshot_sha256": "de2915040684b10b60e9a8366f3715cacd9df8dd1b3e28eec1477e1d0cd1a9c9"
+      }
+    },
+    "mode_counts": {
+      "local_one_shot": 12,
+      "multi_turn": 12,
+      "short_delegated": 8
+    },
+    "pair_count": 32,
+    "preregistration_sha256": "5068114d5d60ba9c715aa0fa9160726e97430895cff5b8bb396cfaf20a190fbe",
+    "private_manifest_sha256": "bde24b5b1692c1bec0bac20abcc58b8300a14ad81d6dc52b6ab4a8e8da85c433",
+    "requested_model_route": "~anthropic/claude-sonnet-5",
+    "skip_counts": {
+      "invalid_preparation_metadata": 26,
+      "no_earlier_validated_outcome": 1,
+      "not_selected_by_frozen_quota": 459
+    },
+    "spend_ceiling_usd": 80.0,
+    "tasks": [
+      {
+        "base_sha256": "ddf9be0f06a83b7eaf9cd443ab036825fc9f936486bb1b3b6e04e19dff7dc901",
+        "family": "ui",
+        "language": "typescript",
+        "lesson_outcome_id": "outcome-6e417e951076375b46d0ba74",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-479c6c2eb042ba866e452ff2",
+        "task_packet_sha256": "1b0b5fb60f8147b2cb0003d272d0f53f62bd6345ed3410a0e8362462b6f01525",
+        "validator_sha256": "6fdce7b17c2b80004fac4dd7a2c7e10a0b05dfd9d7ff9ed041851008fe744125"
+      },
+      {
+        "base_sha256": "41f476cb0ce943fdbcbe5d5dcf25cee2005b4ac7a8218432662b878e495a1967",
+        "family": "ui",
+        "language": "typescript",
+        "lesson_outcome_id": "outcome-768a4c3691f5f65180e93161",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "61d43965d3573a810e455d941dfac5977a49f969542070ebd3cdb06dbfd39401",
+        "mode": "short_delegated",
+        "task_id": "task-b5d5b93579ae9ee5f1d1f103",
+        "task_packet_sha256": "66883a4298d62b58c9d94f335e6161184b6d106c5b201ff3e0c55c6d0bc73b59",
+        "validator_sha256": "4dd632d34a1ca7e27d27b54d3d6b2fa07841cc864d31334822849adaa9c27af8"
+      },
+      {
+        "base_sha256": "b2ef487cfd356abbbfdd934a83b554ea68c2114a76de7a1acf73c82502eb36bd",
+        "family": "ui",
+        "language": "typescript",
+        "lesson_outcome_id": "outcome-ca8eb48dceac0b0c0a9d2cdc",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "61d43965d3573a810e455d941dfac5977a49f969542070ebd3cdb06dbfd39401",
+        "mode": "short_delegated",
+        "task_id": "task-805678b3e2c7a75dbd8702da",
+        "task_packet_sha256": "6f57dc8866e3887445281c254272044b7fd9fe8b6beeaa38d7e871175358b48b",
+        "validator_sha256": "89ade2c33c787efc3e44a20cbded4b50ff1d243eb9f42953e15af81fe8ee0369"
+      },
+      {
+        "base_sha256": "ab82090d3c671a4ed78018ce9443d02b4f84b0f8d80d5a23767ccdf822de4ad5",
+        "family": "ui",
+        "language": "typescript",
+        "lesson_outcome_id": "outcome-7ddddca8f33e3f070ca98eab",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-64a366481ee0ef2075713691",
+        "task_packet_sha256": "bc78a6cd019a551536599a0e3a4c646cc080b650ec28d3d8775dd4012cc86722",
+        "validator_sha256": "799870451bace78f46e26046ef5f8222c1e67d0cbf083b41ca674ca5c2c82c06"
+      },
+      {
+        "base_sha256": "8fb06ba524abb1b9a965eeec9d917055229cb47f98aeb74f8367f310e32a6fda",
+        "family": "persistence",
+        "language": "go",
+        "lesson_outcome_id": "outcome-3994bfa5455e1f35d6a69817",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-512ce58fbbcca74eac7ea2a1",
+        "task_packet_sha256": "503a9aea42d961f13ec86b4f0de08e6d02b836643bf0f0b0f1ea6359f96ea857",
+        "validator_sha256": "6b50a723f8973a4795344e80c8e878dad06afe40e36e60bf9fea078ffd59e730"
+      },
+      {
+        "base_sha256": "83b6024130de6d907684ae432c6ff52daab3191cfc98acf9d15bcf62eaf02166",
+        "family": "persistence",
+        "language": "rust",
+        "lesson_outcome_id": "outcome-bbaf621c30a5241e2f2c512f",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-50026f33dcee70f01e5c749c",
+        "task_packet_sha256": "ee7966a9938688ff7a30322842a74dcf142627c5e9ffa783931351fb81b95ea5",
+        "validator_sha256": "5a8c5ebdeb6222fa004fbe4521e52d235192532b35c68bab24276a6e89582fcf"
+      },
+      {
+        "base_sha256": "33a6db5876632cd1ff629843f3ce95d6a2f79fcf95a1faae374d0cbcbffe08fd",
+        "family": "persistence",
+        "language": "php",
+        "lesson_outcome_id": "outcome-6e4c91be07c3f055a0d77475",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "e791dcc8d8ceda928f925fdedee3f7303e86df5c756c84df1d3f9f59285228c1",
+        "mode": "multi_turn",
+        "task_id": "task-06cf4d9ec6fc0d7d2b11384e",
+        "task_packet_sha256": "89b5066bb15b6f27c1bb150f1e4bbb08ee5b4984d2e3de286d2760e07377fb86",
+        "validator_sha256": "1e99f12b823fe30e31aa9848bfa4c294776a1e73c0fcfdbd8617ffb87738f175"
+      },
+      {
+        "base_sha256": "edc101cd4ef9ec63a0f040f6b202b9319ccd0f2def7781ff0d0ae55e834517c1",
+        "family": "persistence",
+        "language": "cpp",
+        "lesson_outcome_id": "outcome-2fdac96aa0638ae10338b825",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-80e563eab27a083232cc4935",
+        "task_packet_sha256": "69f66efe0048e632c893b1228d9d8ff2b59eef4381300c22835c37e66acfe503",
+        "validator_sha256": "9f97868d7c0179b1fa272324e50e8676964d8e2617649bdb498f4b41f33a8b8e"
+      },
+      {
+        "base_sha256": "2c6d79e72b79dd5880e73959921301c4528ef0c9d39d23955934d7ed500e36bc",
+        "family": "backend_api",
+        "language": "go",
+        "lesson_outcome_id": "outcome-e28239cd1e1e94798c59122e",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "c5c37b11e429661f4cc0d231f6befa5cd1e3386a3ebf022759adc16862c94ec6",
+        "mode": "local_one_shot",
+        "task_id": "task-0e92ca2b96954d022aed4870",
+        "task_packet_sha256": "0c0e1dfd9b7d917b076b8f977c0150efa1349e86657623fbdf947ff4c6f92dbb",
+        "validator_sha256": "90fe4873cb493ec8b3c918c60df6681d373e66c3b0fc412666fb24a1d12e591b"
+      },
+      {
+        "base_sha256": "daf6888877fa417c2360ae9ca531d57bfb0729eaff387d3df93271338e2fe3fa",
+        "family": "backend_api",
+        "language": "cpp",
+        "lesson_outcome_id": "outcome-08fb2f3074eebcf0b64aea0b",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "e791dcc8d8ceda928f925fdedee3f7303e86df5c756c84df1d3f9f59285228c1",
+        "mode": "multi_turn",
+        "task_id": "task-7bd391bd5cc22308de04d0d9",
+        "task_packet_sha256": "9f1b435636f2ceb3d6ff04b6a96642f6429b48e85b5fffe306ecec44699bc285",
+        "validator_sha256": "5db2cbf82d8134be686633fdb04a67f1d058f76c2afb01744c50ac3d6b98e42d"
+      },
+      {
+        "base_sha256": "6635982c312c01eaa8d2e43db7ff4a21484525f815067c81936f3438927f338e",
+        "family": "backend_api",
+        "language": "python",
+        "lesson_outcome_id": "outcome-2589288c38cfc50fcb78ca67",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "bd9a039ee3ea6d5aed12f586c5b35bafe8a72e26d32c1bab1e822b2172b5d162",
+        "mode": "short_delegated",
+        "task_id": "task-5e351d570e621d39d9106315",
+        "task_packet_sha256": "db2cf290290ec2a67e456d548d10904f84879edcef539562bbaf87b2bcccdebd",
+        "validator_sha256": "7e6cbeab3622f086c6e72db6764ffe88d572d074635e73f6f25ba770ddfe7efb"
+      },
+      {
+        "base_sha256": "676f1abb7d92f5674aa17904a704b57226bb25a0b54975f48e9e58c5c3fb299b",
+        "family": "backend_api",
+        "language": "python",
+        "lesson_outcome_id": "outcome-15b73c21ee8b99fce025c097",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-3496efbcc96e0186f63954ab",
+        "task_packet_sha256": "88a6d17a96d9fd0327871ad6c70c31dc35ce9f0c657999e6ec153c4fae65e259",
+        "validator_sha256": "851b12534bde06bc9cadef885169cc7ccafcc9d598fdbc153cdddd6b9ed87ad5"
+      },
+      {
+        "base_sha256": "8027325aa04272b3ef90cba07d002495c51dba3258dac083d5d2d931fa4dc5ab",
+        "family": "docs_integration",
+        "language": "python",
+        "lesson_outcome_id": "outcome-6884515d898a0f5657b96812",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-0ce69fcc9465fe1ada5d1d51",
+        "task_packet_sha256": "a89d5b38bd1fb924628b5cf78939fa86d60c8c90a4d4ab707743845a8ce37808",
+        "validator_sha256": "ec119c5f6501a1a3df2ef70994dc9f1ab0b4650fe9a208be23689898995014d7"
+      },
+      {
+        "base_sha256": "7086af3d078a30965c2c4874a242794b4f728fde18bd48411010b238b89c50a1",
+        "family": "docs_integration",
+        "language": "ruby",
+        "lesson_outcome_id": "outcome-2a810c753da5e66ac0e429b3",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-5b84e23b98a6ea3075d72af4",
+        "task_packet_sha256": "32f191595f7a7dc702bead161e9e28aaf6c6d241ce2ad75fbf9d17dd0bd7d7a4",
+        "validator_sha256": "71d6eebc456e5d226da55aa1311993ab34b7c17cefe4450f49d6e629ace373af"
+      },
+      {
+        "base_sha256": "cb53adab6e4095fdb52befe9dd880ffb645771d09418ec4febafd5262dd173ef",
+        "family": "docs_integration",
+        "language": "python",
+        "lesson_outcome_id": "outcome-b51908e5b280fb166795d857",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-1d3726996e5aa68a738cc7f0",
+        "task_packet_sha256": "a0c00f4910b57e4f0d50e387e3a4da573dd3d1f2d409abf651c22b43b6250580",
+        "validator_sha256": "0c67e8246060657316faeb965f5f3693ee4a948c77023dd30be32c74ac1dd6b7"
+      },
+      {
+        "base_sha256": "3d7b97950c95e42285e0ee18fdd9e9bd8b8ccd0c924b670dfb83aee0244ea4f6",
+        "family": "docs_integration",
+        "language": "php",
+        "lesson_outcome_id": "outcome-179024d461d92485b8cf982f",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-c7c0c980507e1c5940152388",
+        "task_packet_sha256": "a0147b3216448a6008cfea5d037775bc097d803395ceae5ec5a35e281d573f78",
+        "validator_sha256": "4aa6ded1cb2cbd6c30fdd66ae545b285e2671801fda0130c09ed89a99220323e"
+      },
+      {
+        "base_sha256": "7a0b463162dc676553f34d43c6955c43ce50a163ddb07deecd0a219a2a76915b",
+        "family": "bug_fix",
+        "language": "php",
+        "lesson_outcome_id": "outcome-22251d95cf9f5e12a625ab29",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-cecfb60ca04069897edaf12f",
+        "task_packet_sha256": "6491fbd757b400fa45445738d6deb7a28fc8e1f664bead04afe10b272b9dbdfd",
+        "validator_sha256": "37fc22b568cac77a308765a86ef312d09aac1c6bd4936144b6773a68fe2f3be9"
+      },
+      {
+        "base_sha256": "5abc45a8b9db82fc084cac4f09fe80212096aa7e905e37183d8a0c23df59a18f",
+        "family": "bug_fix",
+        "language": "java",
+        "lesson_outcome_id": "outcome-e028f95ade9ab28292ae32e2",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "61d43965d3573a810e455d941dfac5977a49f969542070ebd3cdb06dbfd39401",
+        "mode": "short_delegated",
+        "task_id": "task-e6e3ce3f68001bd42960373b",
+        "task_packet_sha256": "8ca36b4bc79d221c29c91c814f6d6c1afdae7e5a17b92e95321b6712726d9208",
+        "validator_sha256": "15ecc2aa28c688d61cbdb87bca41074b04be96fc014644384fd05db1d637577a"
+      },
+      {
+        "base_sha256": "75ab1a0816ba24af497c9ec6d9bab36ec3ead31ab553a4038cabfdf6c6b8c078",
+        "family": "bug_fix",
+        "language": "go",
+        "lesson_outcome_id": "outcome-e872ac6f5b5be8457925e04f",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "e791dcc8d8ceda928f925fdedee3f7303e86df5c756c84df1d3f9f59285228c1",
+        "mode": "multi_turn",
+        "task_id": "task-57cd65fbb6b7940801ab35d7",
+        "task_packet_sha256": "71f7440c80a0d81470a2180d50db3a7d5197ae8235aabf2a76c25f32826b32e9",
+        "validator_sha256": "063af22cdcc406d27b55af264f8e8d6e119bcfde8d40b3fdd05987c6845524d7"
+      },
+      {
+        "base_sha256": "590a29355f09395bd82fbc663f5ebcb47e3562f155f239b7287e7107c9d169a2",
+        "family": "bug_fix",
+        "language": "rust",
+        "lesson_outcome_id": "outcome-556865d14337772cac151803",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "c5c37b11e429661f4cc0d231f6befa5cd1e3386a3ebf022759adc16862c94ec6",
+        "mode": "local_one_shot",
+        "task_id": "task-68168346d7fb1162e0f8496e",
+        "task_packet_sha256": "d5b20d31b02a6ef96feeb0639e51c9d978c5c3851ac4b01de1176b9480fdd048",
+        "validator_sha256": "3be3d8fa8e9c3e3b78c14c43a02e4aea432fb52b842321fd4476b42c8a7677e0"
+      },
+      {
+        "base_sha256": "b0c4c6951e502ce056a0cd279b863a85920e27f4814241018257210193fba405",
+        "family": "process",
+        "language": "rust",
+        "lesson_outcome_id": "outcome-5f7b219b5f5a9a26987eac43",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "bd9a039ee3ea6d5aed12f586c5b35bafe8a72e26d32c1bab1e822b2172b5d162",
+        "mode": "short_delegated",
+        "task_id": "task-3699fb7ccdba7eb081b8e08b",
+        "task_packet_sha256": "625a2637fedda30d50933fa18495bb9254ff99d6c6fa293492d898c7550a58a4",
+        "validator_sha256": "7345bfb7fc3d1e6e0c9ca7b4f5faef5a61043730bae79ee66366f5ffa4adf722"
+      },
+      {
+        "base_sha256": "8ad5bedaf7c63ac3542864a2c790bff87d908521c5b5f8dfbe0525989493d494",
+        "family": "process",
+        "language": "java",
+        "lesson_outcome_id": "outcome-19b613795234bb622b9b69cb",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-4a9fc3aa40ab4ca890452dd5",
+        "task_packet_sha256": "922509edca9b563bb963af48c93e6eec836203711d35bd7186ddd0d352b34cd1",
+        "validator_sha256": "94832a861f5ba7af9769126ae4844b6496ffdc5cf1cdf2b7fb83d130f653696c"
+      },
+      {
+        "base_sha256": "db711471d4c3472d095e94232c9b9bdb4e60a4368568887bf16dcaf1801786fc",
+        "family": "process",
+        "language": "rust",
+        "lesson_outcome_id": "outcome-f5894db2d5be4a530390eae8",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-bb22943e72df502b38c702c3",
+        "task_packet_sha256": "5a1904458672fcb84116212775866491f0984935faec2476ca9fe617cf1d0f25",
+        "validator_sha256": "5501967f949c1dde68f25675e413943875241500b886beb62a59f3ebf50bdf14"
+      },
+      {
+        "base_sha256": "7ee644456106bcbdb50f8d9486eaa140efd11d27b54b6e04affe7c49462145d8",
+        "family": "process",
+        "language": "go",
+        "lesson_outcome_id": "outcome-60e5959a653be79c3f3575f0",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "c5c37b11e429661f4cc0d231f6befa5cd1e3386a3ebf022759adc16862c94ec6",
+        "mode": "local_one_shot",
+        "task_id": "task-5f038f50d380a1fc622ce790",
+        "task_packet_sha256": "4e842cb2055e1103a067083968e1fab0eee3d3c0c6cded402bfcbf843aeacd17",
+        "validator_sha256": "c98d19b6ef2e0bbf24ceef90e2c4ad446267b762113b6aa900f9e79a36e65137"
+      },
+      {
+        "base_sha256": "6fa6850ea6bbbd50a30cc2018d075ab096979732c3c152991a2faac5a32e2ad6",
+        "family": "bug_fix",
+        "language": "ruby",
+        "lesson_outcome_id": "outcome-a9bd177264e6da2c2129ca78",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-39f17fa8aa0521f9f7e35843",
+        "task_packet_sha256": "195e95bff69583bafa4384a70049f0fab8346ed39ba4f8d246b104d3a0564669",
+        "validator_sha256": "4740e85fb8d7bdca44a692e596b028e05cc6eb2e01e4c229a24cd699312f8e56"
+      },
+      {
+        "base_sha256": "d55fd250c8a7eff9c2ad9d5642ba3169935df6662168bd894a0fb4b5b51ba206",
+        "family": "process",
+        "language": "ruby",
+        "lesson_outcome_id": "outcome-0d07471402cae1ad3c79cd5e",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "9ffddd43bc72bdda450a09944e1862e22aaab5fb79fe68fffe8b3fda08bc8292",
+        "mode": "local_one_shot",
+        "task_id": "task-47a0207a7ecf7275c5081f71",
+        "task_packet_sha256": "5bbf4187e4cd3381891d1230c31cae683ca88e3e1eabc379f271753b9ea0ce8e",
+        "validator_sha256": "257c156cc281926c2e29fecb0079d5a0e07257d8e55f6e33140db2d537b44b2a"
+      },
+      {
+        "base_sha256": "cd76654f2ed56fa77fc7f92a5b85a98494d80be10008f6ac4058ccdaed75c0af",
+        "family": "bug_fix",
+        "language": "ruby",
+        "lesson_outcome_id": "outcome-6055e53cd87d677a6ad77622",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "e791dcc8d8ceda928f925fdedee3f7303e86df5c756c84df1d3f9f59285228c1",
+        "mode": "multi_turn",
+        "task_id": "task-1a98019493db5698fa48245f",
+        "task_packet_sha256": "84fe98589f2575f220607b81b61873392b4de62f1f435a2ab67a1ba8c833ad10",
+        "validator_sha256": "5d9c28e11b44883bde0e53c8d4701ee9d55d5083c1ce57666cfe3ef2c2f536d0"
+      },
+      {
+        "base_sha256": "bd7fcfca67261f3926b874e3e35c86375587f7c889314a253909e2d888f5153e",
+        "family": "docs_integration",
+        "language": "cpp",
+        "lesson_outcome_id": "outcome-a9977b015cc162c30d0071d1",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "c5c37b11e429661f4cc0d231f6befa5cd1e3386a3ebf022759adc16862c94ec6",
+        "mode": "local_one_shot",
+        "task_id": "task-a9ace196b75f2a6dbef71edd",
+        "task_packet_sha256": "9986c81d15eafee42a6372cd8b1e27471597d8ca359ad2ea7816c7c9273fefb3",
+        "validator_sha256": "33a1f53a335c35d1a8f32bf8bcf6ccd196a048e6e57ef39fe1580bfdc8fbee1a"
+      },
+      {
+        "base_sha256": "3483b46fa297f678a99d4e7327e25b59c26c2d0bb7101a91717298ce03cf73c5",
+        "family": "backend_api",
+        "language": "php",
+        "lesson_outcome_id": "outcome-3c0bd5e3d3adb4fd812cd61c",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "61d43965d3573a810e455d941dfac5977a49f969542070ebd3cdb06dbfd39401",
+        "mode": "short_delegated",
+        "task_id": "task-89a8e140e8e80271940e9c98",
+        "task_packet_sha256": "89023fdd37dec26d110ee0f3114d37c8754a38e72eddcfa8bc30926aebf7cc37",
+        "validator_sha256": "1f24746794c14bbe9d717373a780e5031b1cc8433ea618dfb7a754b6327d0561"
+      },
+      {
+        "base_sha256": "793237b54cc810e720a0e61c85b0518e82c7a77a5a882a738dea44af9dec5f7e",
+        "family": "docs_integration",
+        "language": "java",
+        "lesson_outcome_id": "outcome-554843e5287f8dec3d871aa9",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "61d43965d3573a810e455d941dfac5977a49f969542070ebd3cdb06dbfd39401",
+        "mode": "short_delegated",
+        "task_id": "task-2e3720f6a9a03686f364f289",
+        "task_packet_sha256": "2a1301dbae4b0611918afb5bf01cb142605fb1cc7671f05a4ccdcf02d2a43e2b",
+        "validator_sha256": "16619177a07cb72d9062d6fe235f48afd1bd4e23de50149c162d6650617d922a"
+      },
+      {
+        "base_sha256": "5975ce6bf83312b36f00c3c604949b5063727dc4587389a2779efc3ec44f065c",
+        "family": "docs_integration",
+        "language": "java",
+        "lesson_outcome_id": "outcome-e5022fda893ff2b87a2d495c",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "5ddc6f13fe53482fa200f0e2074e0cc73bf05cb43d078c3c318a185e95dcacc6",
+        "mode": "multi_turn",
+        "task_id": "task-69f371eacb1d9188503d7d0c",
+        "task_packet_sha256": "98d3a3d9f4ed6868fade7a33c3399ffc2c79b47f557b604d0814e28e8e3fd93c",
+        "validator_sha256": "30c6c9d9d60bdb6bfc28a7fc0984615123b43bc82171c0f9b521ec5012414739"
+      },
+      {
+        "base_sha256": "48c79fff05de3e9abef23ccce257b4ca9579bf5807f228b4a75041eda9e2428d",
+        "family": "process",
+        "language": "cpp",
+        "lesson_outcome_id": "outcome-48afb05a79fe36652e383905",
+        "lesson_sha256": "dcaa2296e9b618b4976bcd429938d578f3b4b3fdb608777b0eda82819358cbbe",
+        "lifecycle_sha256": "61d43965d3573a810e455d941dfac5977a49f969542070ebd3cdb06dbfd39401",
+        "mode": "short_delegated",
+        "task_id": "task-6c0ec7eb9ff3ad980ed18fa7",
+        "task_packet_sha256": "21e35ca04977d12269eaba828c4380207411f25367c74e40f7adfc5f9334a74d",
+        "validator_sha256": "a857f34425d27394e5014eb1122f926196a1146dda3d96973780c3facc7afa80"
+      }
+    ]
+  },
+  "schema_version": 1
+}
