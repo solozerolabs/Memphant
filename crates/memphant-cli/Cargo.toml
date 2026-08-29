@@ -33,6 +33,9 @@ windows-sys = { version = "0.61.2", features = [
 [dev-dependencies]
 axum.workspace = true
 memphant-core = { workspace = true, features = ["test-support"] }
-memphant-server = { path = "../memphant-server" }
+# default-features off: these tests run with embeddings off, and the default
+# fastembed feature drags in a prebuilt onnxruntime binary that this build
+# environment's glibc can't link.
+memphant-server = { path = "../memphant-server", default-features = false }
 memphant-runtime = { path = "../memphant-runtime" }
 tempfile.workspace = true
