@@ -16,6 +16,7 @@ use std::net::TcpListener;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const TENANT: &str = "00000000-0000-0000-0000-00000000c11a";
@@ -81,6 +82,50 @@ fn cli(url: &str, args: &[&str]) -> (Value, bool) {
         )
     });
     (value, output.status.success())
+}
+
+fn capture_one_request() -> (String, mpsc::Receiver<Vec<u8>>, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let (sender, receiver) = mpsc::channel();
+    let server = std::thread::spawn(move || {
+        let (mut socket, _) = listener.accept().expect("CLI request");
+        socket
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let read = socket.read(&mut buffer).expect("read CLI request");
+            request.extend_from_slice(&buffer[..read]);
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&request[..header_end + 4]);
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    line.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .map(str::trim)
+                        .and_then(|value| value.parse::<usize>().ok())
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        sender.send(request).unwrap();
+        let body = r#"{"items":[],"trace_id":"test-trace"}"#;
+        write!(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+    });
+    (format!("http://{address}"), receiver, server)
 }
 
 fn scripted_openrouter() -> (String, Arc<AtomicUsize>, std::thread::JoinHandle<()>) {
@@ -248,6 +293,93 @@ fn build_deep_service(
         .unwrap_or_else(|error| error.into_inner());
     let _env = ScopedEnv::set(&variables);
     memphant_runtime::build_service(memphant_runtime::AnyStore::Mem(store))
+}
+
+#[test]
+fn recall_unknown_flag_exits_two_without_sending_request() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["recall", "--limt", "5"])
+        .env(
+            "MEMPHANT_URL",
+            format!("http://{}", listener.local_addr().unwrap()),
+        )
+        .output()
+        .expect("CLI runs");
+
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "recall=error\nunknown flag --limt for recall\n"
+    );
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock,
+        "invalid flags must be rejected before HTTP"
+    );
+}
+
+#[test]
+fn recall_equals_limit_sends_numeric_limit() {
+    let (url, captured, server) = capture_one_request();
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["recall", "--json", "--query", "release", "--limit=5"])
+        .env("MEMPHANT_URL", url)
+        .env("MEMPHANT_SUBJECT_ID", "subject")
+        .env("MEMPHANT_SCOPE_ID", "scope")
+        .env("MEMPHANT_ACTOR_ID", "actor")
+        .env("MEMPHANT_AGENT_NODE_ID", "agent")
+        .env("MEMPHANT_SUBJECT_GENERATION", "1")
+        .output()
+        .expect("CLI runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let request = captured.recv_timeout(Duration::from_secs(2)).unwrap();
+    server.join().unwrap();
+    let body_start = request
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .unwrap()
+        + 4;
+    let body: Value = serde_json::from_slice(&request[body_start..]).unwrap();
+    assert_eq!(body["limit"], 5);
+}
+
+#[test]
+fn trace_percent_encodes_path_and_all_query_values() {
+    let (url, captured, server) = capture_one_request();
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["trace", "trace id&part"])
+        .env("MEMPHANT_URL", url)
+        .env("MEMPHANT_SUBJECT_ID", "subject id&part")
+        .env("MEMPHANT_SCOPE_ID", "scope/id")
+        .env("MEMPHANT_ACTOR_ID", "actor?id")
+        .env("MEMPHANT_AGENT_NODE_ID", "agent+node")
+        .env("MEMPHANT_SUBJECT_GENERATION", "1")
+        .output()
+        .expect("CLI runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let request = captured.recv_timeout(Duration::from_secs(2)).unwrap();
+    server.join().unwrap();
+    let request_line = String::from_utf8_lossy(&request)
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        request_line,
+        "GET /v1/traces/trace%20id%26part?subject_id=subject%20id%26part&scope_id=scope%2Fid&actor_id=actor%3Fid&agent_node_id=agent%2Bnode&subject_generation=1 HTTP/1.1"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
