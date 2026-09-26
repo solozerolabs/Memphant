@@ -8,6 +8,7 @@ use std::time::Duration;
 const DEFAULT_BATCH: usize = 64;
 const MAX_BATCH: usize = 1024;
 const TICK: Duration = Duration::from_millis(500);
+const MAX_BACKOFF: Duration = Duration::from_secs(30);
 
 /// Running totals across the ticks of one drain.
 #[derive(Default)]
@@ -49,6 +50,82 @@ fn worker_mode(once: bool, drain: bool) -> Result<WorkerMode, &'static str> {
     }
 }
 
+fn parse_env_flag(name: &str, value: Option<&str>) -> Result<bool, String> {
+    let value = value.unwrap_or_default().trim();
+    match value.to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" | "off" => Ok(false),
+        "1" | "true" | "yes" | "on" => Ok(true),
+        _ => Err(format!(
+            "{name} must be one of 1/0/true/false/yes/no/on/off, got {value:?}"
+        )),
+    }
+}
+
+fn env_flag(name: &str) -> Result<bool, String> {
+    match std::env::var(name) {
+        Ok(value) => parse_env_flag(name, Some(&value)),
+        Err(std::env::VarError::NotPresent) => parse_env_flag(name, None),
+        Err(std::env::VarError::NotUnicode(value)) => {
+            Err(format!("{name} must be valid Unicode, got {value:?}"))
+        }
+    }
+}
+
+fn backoff_delay(consecutive_errors: u32) -> Duration {
+    let multiplier = 1_u32.checked_shl(consecutive_errors).unwrap_or(u32::MAX);
+    TICK.saturating_mul(multiplier).min(MAX_BACKOFF)
+}
+
+#[derive(Default)]
+struct DaemonErrorState {
+    consecutive_errors: u32,
+}
+
+enum DaemonTick<'a> {
+    Idle,
+    Completed(&'a memphant_core::WorkerTickOutcome),
+    Error(&'a str),
+}
+
+impl DaemonErrorState {
+    fn delay(&self) -> Duration {
+        backoff_delay(self.consecutive_errors)
+    }
+
+    fn tick_lines(&mut self, tick: DaemonTick<'_>) -> Vec<String> {
+        match tick {
+            DaemonTick::Error(error) => {
+                self.consecutive_errors = self.consecutive_errors.saturating_add(1);
+                let count = self.consecutive_errors;
+                if count == 1 || count.is_multiple_of(10) {
+                    vec![format!(
+                        "memphant-worker: tick error: {error} (consecutive={count}, delay={:?})",
+                        self.delay()
+                    )]
+                } else {
+                    Vec::new()
+                }
+            }
+            DaemonTick::Idle | DaemonTick::Completed(_) => {
+                let failed_ticks = std::mem::take(&mut self.consecutive_errors);
+                let mut lines = Vec::with_capacity(2);
+                if failed_ticks > 0 {
+                    lines.push(format!(
+                        "memphant-worker: recovered after {failed_ticks} failed ticks"
+                    ));
+                }
+                if let DaemonTick::Completed(tick) = tick {
+                    lines.push(format!(
+                        "memphant-worker: completed={} failed={} retried={} deferred={}",
+                        tick.completed, tick.failed, tick.retried, tick.deferred
+                    ));
+                }
+                lines
+            }
+        }
+    }
+}
+
 fn worker_batch_from_value(value: Option<&str>) -> Result<usize, String> {
     let Some(value) = value else {
         return Ok(DEFAULT_BATCH);
@@ -66,11 +143,11 @@ async fn main() {
     let batch =
         worker_batch_from_value(std::env::var("MEMPHANT_WORKER_BATCH_SIZE").ok().as_deref())
             .unwrap_or_else(|error| panic!("memphant-worker: MEMPHANT_WORKER_BATCH_SIZE: {error}"));
-    let mode = worker_mode(
-        std::env::var("MEMPHANT_WORKER_ONCE").as_deref() == Ok("1"),
-        std::env::var("MEMPHANT_WORKER_DRAIN").as_deref() == Ok("1"),
-    )
-    .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let once =
+        env_flag("MEMPHANT_WORKER_ONCE").unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let drain = env_flag("MEMPHANT_WORKER_DRAIN")
+        .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let mode = worker_mode(once, drain).unwrap_or_else(|error| panic!("memphant-worker: {error}"));
     let store = memphant_runtime::build_worker_store()
         .await
         .expect("memphant-worker: store construction failed");
@@ -129,6 +206,7 @@ async fn main() {
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .expect("install SIGTERM handler");
+    let mut error_state = DaemonErrorState::default();
     loop {
         tokio::select! {
             _ = sigterm.recv() => {
@@ -139,14 +217,15 @@ async fn main() {
                 eprintln!("memphant-worker: interrupt — shutting down");
                 break;
             }
-            _ = tokio::time::sleep(TICK) => {
-                match service.run_worker_tick(batch).await {
-                    Ok(tick) if tick.is_idle() => {}
-                    Ok(tick) => eprintln!(
-                        "memphant-worker: completed={} failed={} retried={} deferred={}",
-                        tick.completed, tick.failed, tick.retried, tick.deferred
-                    ),
-                    Err(error) => eprintln!("memphant-worker: tick error: {error}"),
+            _ = tokio::time::sleep(error_state.delay()) => {
+                let tick = service.run_worker_tick(batch).await;
+                let outcome = match &tick {
+                    Ok(tick) if tick.is_idle() => DaemonTick::Idle,
+                    Ok(tick) => DaemonTick::Completed(tick),
+                    Err(error) => DaemonTick::Error(&error.to_string()),
+                };
+                for line in error_state.tick_lines(outcome) {
+                    eprintln!("{line}");
                 }
             }
         }
@@ -155,7 +234,118 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorkerMode, drain_finished, worker_batch_from_value, worker_mode};
+    use std::time::Duration;
+
+    use memphant_core::WorkerTickOutcome;
+
+    use super::{
+        DaemonErrorState, DaemonTick, WorkerMode, backoff_delay, drain_finished, parse_env_flag,
+        worker_batch_from_value, worker_mode,
+    };
+
+    #[test]
+    fn parse_env_flag_accepts_documented_spellings() {
+        for value in ["1", "true", "yes", "on", " TRUE ", "YeS", "\tON\n"] {
+            assert_eq!(parse_env_flag("FLAG", Some(value)), Ok(true), "{value:?}");
+        }
+        for value in [
+            "", " ", "0", "false", "no", "off", " FALSE ", "nO", "\tOFF\n",
+        ] {
+            assert_eq!(parse_env_flag("FLAG", Some(value)), Ok(false), "{value:?}");
+        }
+        assert_eq!(parse_env_flag("FLAG", None), Ok(false));
+    }
+
+    #[test]
+    fn parse_env_flag_rejects_other_values_with_context() {
+        for value in ["maybe", "2", "y", "enabled"] {
+            assert_eq!(
+                parse_env_flag("MEMPHANT_WORKER_DRAIN", Some(value)),
+                Err(format!(
+                    "MEMPHANT_WORKER_DRAIN must be one of 1/0/true/false/yes/no/on/off, got {value:?}"
+                ))
+            );
+        }
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_DRAIN", Some(" maybe ")),
+            Err(
+                "MEMPHANT_WORKER_DRAIN must be one of 1/0/true/false/yes/no/on/off, got \"maybe\""
+                    .into()
+            )
+        );
+    }
+
+    #[test]
+    fn backoff_is_exponential_and_capped() {
+        assert_eq!(backoff_delay(0), Duration::from_millis(500));
+        assert_eq!(backoff_delay(1), Duration::from_secs(1));
+        assert_eq!(backoff_delay(2), Duration::from_secs(2));
+        assert_eq!(backoff_delay(5), Duration::from_secs(16));
+        assert_eq!(backoff_delay(6), Duration::from_secs(30));
+        assert_eq!(backoff_delay(u32::MAX), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn daemon_error_state_controls_delay_logging_and_recovery() {
+        let mut state = DaemonErrorState::default();
+        assert_eq!(state.delay(), Duration::from_millis(500));
+        assert_eq!(
+            state.tick_lines(DaemonTick::Error("boom")),
+            ["memphant-worker: tick error: boom (consecutive=1, delay=1s)"]
+        );
+        assert_eq!(state.delay(), Duration::from_secs(1));
+        assert!(state.tick_lines(DaemonTick::Error("boom")).is_empty());
+        for _ in 3..10 {
+            assert!(state.tick_lines(DaemonTick::Error("boom")).is_empty());
+        }
+        assert_eq!(
+            state.tick_lines(DaemonTick::Error("still broken")),
+            ["memphant-worker: tick error: still broken (consecutive=10, delay=30s)"]
+        );
+        assert_eq!(
+            state.tick_lines(DaemonTick::Idle),
+            ["memphant-worker: recovered after 10 failed ticks"]
+        );
+        assert!(state.tick_lines(DaemonTick::Idle).is_empty());
+        assert_eq!(state.delay(), Duration::from_millis(500));
+        assert_eq!(
+            state.tick_lines(DaemonTick::Error("again")),
+            ["memphant-worker: tick error: again (consecutive=1, delay=1s)"]
+        );
+    }
+
+    #[test]
+    fn daemon_error_state_orders_recovery_before_completed_tick() {
+        let mut state = DaemonErrorState::default();
+        state.tick_lines(DaemonTick::Error("boom"));
+        let tick = WorkerTickOutcome {
+            completed: 2,
+            failed: 1,
+            retried: 3,
+            deferred: 4,
+        };
+        assert_eq!(
+            state.tick_lines(DaemonTick::Completed(&tick)),
+            [
+                "memphant-worker: recovered after 1 failed ticks",
+                "memphant-worker: completed=2 failed=1 retried=3 deferred=4",
+            ]
+        );
+        assert_eq!(
+            state.tick_lines(DaemonTick::Completed(&tick)),
+            ["memphant-worker: completed=2 failed=1 retried=3 deferred=4"]
+        );
+    }
+
+    #[test]
+    fn daemon_error_count_saturates() {
+        let mut state = DaemonErrorState {
+            consecutive_errors: u32::MAX,
+        };
+        assert!(state.tick_lines(DaemonTick::Error("boom")).is_empty());
+        assert_eq!(state.consecutive_errors, u32::MAX);
+        assert_eq!(state.delay(), Duration::from_secs(30));
+    }
 
     #[test]
     fn worker_modes_are_distinct_and_conflicts_fail() {
