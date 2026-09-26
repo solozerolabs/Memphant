@@ -3,6 +3,26 @@ use std::net::SocketAddr;
 use memphant_types::TenantId;
 use uuid::Uuid;
 
+#[cfg(unix)]
+async fn shutdown_signal() {
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("install SIGTERM handler");
+
+    let signal = tokio::select! {
+        _ = sigterm.recv() => "SIGTERM",
+        _ = tokio::signal::ctrl_c() => "interrupt",
+    };
+    eprintln!("memphant-server: {signal} — draining in-flight requests");
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("install interrupt handler");
+    eprintln!("memphant-server: interrupt — draining in-flight requests");
+}
+
 #[tokio::main]
 async fn main() {
     if std::env::args().nth(1).as_deref() == Some("--openapi-json") {
@@ -32,6 +52,8 @@ async fn main() {
         .await
         .expect("bind memphant-server");
     axum::serve(listener, memphant_server::app(state))
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("serve memphant-server");
+    eprintln!("memphant-server: shut down cleanly");
 }

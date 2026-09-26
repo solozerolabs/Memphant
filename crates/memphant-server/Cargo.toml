@@ -15,7 +15,7 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["signal"] }
 uuid.workspace = true
 
 # The shipped server embeds by DEFAULT (pre-production; accuracy > startup
