@@ -127,7 +127,7 @@ mod http_verbs {
     }
 
     fn execute(verb: &str, args: &[String]) -> Result<ExitCode, String> {
-        let (flags, positional) = parse_flags(args)?;
+        let (flags, positional) = parse_flags(verb, args)?;
         if verb == "trace" {
             let id = positional
                 .first()
@@ -138,7 +138,13 @@ mod http_verbs {
             return request(
                 "GET",
                 &format!(
-                    "/v1/traces/{id}?subject_id={subject}&scope_id={scope}&actor_id={actor}&agent_node_id={agent_node}&subject_generation={generation}"
+                    "/v1/traces/{}?subject_id={}&scope_id={}&actor_id={}&agent_node_id={}&subject_generation={}",
+                    percent_encode(&id),
+                    percent_encode(&subject),
+                    percent_encode(&scope),
+                    percent_encode(&actor),
+                    percent_encode(&agent_node),
+                    percent_encode(&generation.to_string()),
                 ),
                 None,
                 None,
@@ -212,31 +218,151 @@ mod http_verbs {
         out
     }
 
-    /// `--flag value` pairs plus bare `--resource` style booleans.
-    fn parse_flags(args: &[String]) -> Result<(HashMap<String, String>, Vec<String>), String> {
+    const ID_FLAGS: &[&str] = &[
+        "subject-id",
+        "scope",
+        "actor",
+        "agent-node",
+        "subject-generation",
+    ];
+
+    fn allowed_flag(verb: &str, name: &str) -> bool {
+        name == "json"
+            || ID_FLAGS.contains(&name)
+            || match verb {
+                "retain" => matches!(
+                    name,
+                    "idempotency-key"
+                        | "resource"
+                        | "body-file"
+                        | "body"
+                        | "uri"
+                        | "mime-type"
+                        | "content-hash"
+                        | "kind"
+                        | "revision"
+                        | "unit"
+                        | "fact-key"
+                        | "predicate"
+                        | "confidence"
+                        | "valid-from"
+                        | "valid-to"
+                        | "source-kind"
+                        | "subject"
+                        | "source-ref"
+                        | "observed-at"
+                ),
+                "recall" => matches!(
+                    name,
+                    "query"
+                        | "limit"
+                        | "budget-tokens"
+                        | "mode"
+                        | "include-beliefs"
+                        | "compact-only"
+                        | "general"
+                        | "transaction-as-of"
+                        | "valid-at"
+                ),
+                "reflect" => name == "idempotency-key",
+                "correct" => matches!(
+                    name,
+                    "idempotency-key"
+                        | "unit"
+                        | "value"
+                        | "reason"
+                        | "source-ref"
+                        | "observed-at"
+                        | "valid-from"
+                        | "valid-to"
+                ),
+                "forget" => matches!(
+                    name,
+                    "idempotency-key" | "unit" | "episode" | "resource" | "reason"
+                ),
+                "mark" => matches!(
+                    name,
+                    "idempotency-key"
+                        | "trace"
+                        | "caller"
+                        | "used"
+                        | "outcome"
+                        | "success"
+                        | "failure"
+                        | "corrected"
+                        | "ignored"
+                ),
+                "trace" => name == "id",
+                _ => false,
+            }
+    }
+
+    fn boolean_flag(verb: &str, name: &str) -> bool {
+        name == "json"
+            || matches!(
+                (verb, name),
+                ("retain", "resource" | "unit")
+                    | ("recall", "include-beliefs" | "compact-only" | "general")
+                    | ("mark", "success" | "failure" | "corrected" | "ignored")
+            )
+    }
+
+    /// `--flag value` and `--flag=value` pairs plus bare boolean flags.
+    fn parse_flags(
+        verb: &str,
+        args: &[String],
+    ) -> Result<(HashMap<String, String>, Vec<String>), String> {
         let mut flags = HashMap::new();
         let mut positional = Vec::new();
         let mut index = 0;
         while index < args.len() {
             let arg = &args[index];
-            if let Some(name) = arg.strip_prefix("--") {
-                let next = args.get(index + 1);
-                match next {
-                    Some(value) if !value.starts_with("--") => {
-                        flags.insert(name.to_string(), value.clone());
-                        index += 2;
+            if let Some(flag) = arg.strip_prefix("--") {
+                let (name, value, consumed) = if let Some((name, value)) = flag.split_once('=') {
+                    if value.is_empty() {
+                        return Err(format!("empty value for --{name}"));
                     }
-                    _ => {
-                        flags.insert(name.to_string(), "true".to_string());
-                        index += 1;
+                    if boolean_flag(verb, name) {
+                        return Err(format!("flag --{name} does not take a value"));
                     }
+                    (name, value.to_string(), 1)
+                } else if boolean_flag(verb, flag) {
+                    (flag, "true".to_string(), 1)
+                } else {
+                    let next = args.get(index + 1);
+                    match next {
+                        Some(value) if !value.starts_with("--") => (flag, value.clone(), 2),
+                        _ => return Err(format!("missing value for --{flag}")),
+                    }
+                };
+                if !allowed_flag(verb, name) {
+                    return Err(format!("unknown flag --{name} for {verb}"));
                 }
+                if flags.insert(name.to_string(), value).is_some() {
+                    return Err(format!("duplicate flag --{name}"));
+                }
+                index += consumed;
             } else {
                 positional.push(arg.clone());
                 index += 1;
             }
         }
         Ok((flags, positional))
+    }
+
+    fn percent_encode(value: &str) -> String {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        let mut encoded = String::with_capacity(value.len());
+        for byte in value.bytes() {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+                encoded.push(char::from(byte));
+            } else {
+                encoded.push('%');
+                encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+                encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+            }
+        }
+        encoded
     }
 
     fn now_rfc3339() -> String {
@@ -531,6 +657,176 @@ mod http_verbs {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn parse_flags_is_strict_and_supports_both_value_syntaxes() {
+            let (flags, positional) = parse_flags(
+                "recall",
+                &[
+                    "--query".to_string(),
+                    "memory".to_string(),
+                    "--limit=5".to_string(),
+                    "--general".to_string(),
+                ],
+            )
+            .expect("valid recall flags");
+            assert!(positional.is_empty());
+            assert_eq!(flags.get("query").map(String::as_str), Some("memory"));
+            assert_eq!(flags.get("limit").map(String::as_str), Some("5"));
+            assert_eq!(flags.get("general").map(String::as_str), Some("true"));
+            let (boolean, positional) = parse_flags(
+                "recall",
+                &["--general".to_string(), "positional".to_string()],
+            )
+            .expect("bare boolean does not consume the next argument");
+            assert_eq!(boolean.get("general").map(String::as_str), Some("true"));
+            assert_eq!(positional, ["positional"]);
+
+            assert_eq!(
+                parse_flags("recall", &["--limt".to_string(), "5".to_string()])
+                    .expect_err("typo must fail"),
+                "unknown flag --limt for recall"
+            );
+            assert_eq!(
+                parse_flags(
+                    "recall",
+                    &[
+                        "--limit".to_string(),
+                        "5".to_string(),
+                        "--limit=6".to_string(),
+                    ],
+                )
+                .expect_err("duplicate must fail"),
+                "duplicate flag --limit"
+            );
+            assert_eq!(
+                parse_flags("recall", &["--limit=".to_string()])
+                    .expect_err("empty equals value must fail"),
+                "empty value for --limit"
+            );
+            assert_eq!(
+                parse_flags("recall", &["--limit".to_string()])
+                    .expect_err("missing value must fail"),
+                "missing value for --limit"
+            );
+            assert_eq!(
+                parse_flags("recall", &["--general=false".to_string()])
+                    .expect_err("boolean value must not be silently ignored"),
+                "flag --general does not take a value"
+            );
+        }
+
+        #[test]
+        fn flags_are_allowed_only_for_their_verb() {
+            const COMMON: &[&str] = &[
+                "subject-id",
+                "scope",
+                "actor",
+                "agent-node",
+                "subject-generation",
+                "json",
+            ];
+            let cases: &[(&str, &[&str])] = &[
+                (
+                    "retain",
+                    &[
+                        "idempotency-key",
+                        "resource",
+                        "body-file",
+                        "body",
+                        "uri",
+                        "mime-type",
+                        "content-hash",
+                        "kind",
+                        "revision",
+                        "unit",
+                        "fact-key",
+                        "predicate",
+                        "confidence",
+                        "valid-from",
+                        "valid-to",
+                        "source-kind",
+                        "subject",
+                        "source-ref",
+                        "observed-at",
+                    ],
+                ),
+                (
+                    "recall",
+                    &[
+                        "query",
+                        "limit",
+                        "budget-tokens",
+                        "mode",
+                        "include-beliefs",
+                        "compact-only",
+                        "general",
+                        "transaction-as-of",
+                        "valid-at",
+                    ],
+                ),
+                ("reflect", &["idempotency-key"]),
+                (
+                    "correct",
+                    &[
+                        "idempotency-key",
+                        "unit",
+                        "value",
+                        "reason",
+                        "source-ref",
+                        "observed-at",
+                        "valid-from",
+                        "valid-to",
+                    ],
+                ),
+                (
+                    "forget",
+                    &["idempotency-key", "unit", "episode", "resource", "reason"],
+                ),
+                (
+                    "mark",
+                    &[
+                        "idempotency-key",
+                        "trace",
+                        "caller",
+                        "used",
+                        "outcome",
+                        "success",
+                        "failure",
+                        "corrected",
+                        "ignored",
+                    ],
+                ),
+                ("trace", &["id"]),
+            ];
+
+            for (verb, specific) in cases {
+                for name in COMMON.iter().chain(specific.iter()) {
+                    let args = if boolean_flag(verb, name) {
+                        vec![format!("--{name}")]
+                    } else {
+                        vec![format!("--{name}=value")]
+                    };
+                    assert!(parse_flags(verb, &args).is_ok(), "{verb} rejected --{name}");
+                }
+            }
+            assert_eq!(
+                parse_flags("recall", &["--uri=value".to_string()])
+                    .expect_err("retain-only flag must fail on recall"),
+                "unknown flag --uri for recall"
+            );
+            assert_eq!(
+                parse_flags("trace", &["--limit=5".to_string()])
+                    .expect_err("recall-only flag must fail on trace"),
+                "unknown flag --limit for trace"
+            );
+        }
+
+        #[test]
+        fn percent_encode_uses_rfc3986_unreserved_set() {
+            assert_eq!(percent_encode("AZaz09-._~"), "AZaz09-._~");
+            assert_eq!(percent_encode("a b&c/%é"), "a%20b%26c%2F%25%C3%A9");
+        }
 
         #[test]
         fn identity_falls_back_to_env_and_flags_win() {

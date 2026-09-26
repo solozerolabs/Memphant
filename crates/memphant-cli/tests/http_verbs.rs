@@ -2,7 +2,7 @@
 //! axum app (in-process, in-memory store, dev-mode tenant binding) over HTTP:
 //! retain → reflect → recall returns the body; forget → recall is empty.
 
-use std::process::Command;
+use std::process::{Command, Output};
 
 use memphant_core::MemoryStore;
 use memphant_server::AppState;
@@ -16,6 +16,7 @@ use std::net::TcpListener;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 const TENANT: &str = "00000000-0000-0000-0000-00000000c11a";
@@ -66,13 +67,20 @@ async fn spawn_server() -> (
     (format!("http://{addr}"), binding, state)
 }
 
-fn cli(url: &str, args: &[&str]) -> (Value, bool) {
-    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+fn cli_output(url: &str, args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_memphant-cli"));
+    command
         .args(args)
         .env("MEMPHANT_URL", url)
-        .env_remove("MEMPHANT_API_KEY")
-        .output()
-        .expect("cli runs");
+        .env_remove("MEMPHANT_API_KEY");
+    for (name, value) in env {
+        command.env(name, value);
+    }
+    command.output().expect("cli runs")
+}
+
+fn cli(url: &str, args: &[&str]) -> (Value, bool) {
+    let output = cli_output(url, args, &[]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let value: Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|error| {
         panic!(
@@ -81,6 +89,145 @@ fn cli(url: &str, args: &[&str]) -> (Value, bool) {
         )
     });
     (value, output.status.success())
+}
+
+fn capture_one_request(response_body: &'static str) -> (String, Receiver<Vec<u8>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind request capture");
+    let address = listener.local_addr().expect("capture address");
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut socket, _) = listener.accept().expect("accept CLI request");
+        socket
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set request timeout");
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 4096];
+        loop {
+            let read = socket.read(&mut buffer).expect("read CLI request");
+            assert!(read > 0, "connection closed before complete request");
+            request.extend_from_slice(&buffer[..read]);
+            let Some(header_end) = request.windows(4).position(|part| part == b"\r\n\r\n") else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&request[..header_end + 4]);
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    line.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        sender.send(request).expect("send captured request");
+        write!(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        )
+        .expect("write capture response");
+    });
+    (format!("http://{address}"), receiver)
+}
+
+#[test]
+fn strict_flags_reject_typos_before_sending_a_request() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind no-request listener");
+    listener
+        .set_nonblocking(true)
+        .expect("set no-request listener nonblocking");
+    let url = format!(
+        "http://{}",
+        listener.local_addr().expect("listener address")
+    );
+
+    let output = cli_output(&url, &["recall", "--limt", "5"], &[]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("recall=error"), "{stderr}");
+    assert!(
+        stderr.contains("unknown flag --limt for recall"),
+        "{stderr}"
+    );
+    assert!(
+        matches!(
+            listener.accept(),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+        ),
+        "invalid flags must be rejected before HTTP transport"
+    );
+}
+
+#[test]
+fn strict_flags_accept_equals_syntax_for_recall_limit() {
+    let (url, request) = capture_one_request("{}");
+    let output = cli_output(
+        &url,
+        &[
+            "recall",
+            "--json",
+            "--subject-id=s",
+            "--scope=scope",
+            "--actor=actor",
+            "--agent-node=agent",
+            "--subject-generation=1",
+            "--query=memory",
+            "--limit=5",
+        ],
+        &[],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let request = request
+        .recv_timeout(Duration::from_secs(2))
+        .expect("captured recall request");
+    let body_start = request
+        .windows(4)
+        .position(|part| part == b"\r\n\r\n")
+        .expect("header terminator")
+        + 4;
+    let body: Value = serde_json::from_slice(&request[body_start..]).expect("recall JSON body");
+    assert_eq!(body["limit"], 5);
+}
+
+#[test]
+fn trace_url_encoding_covers_path_and_every_query_value() {
+    let (url, request) = capture_one_request("{}");
+    let output = cli_output(
+        &url,
+        &["trace", "trace id&part"],
+        &[
+            ("MEMPHANT_SUBJECT_ID", "subject id&part"),
+            ("MEMPHANT_SCOPE_ID", "scope id&part"),
+            ("MEMPHANT_ACTOR_ID", "actor id&part"),
+            ("MEMPHANT_AGENT_NODE_ID", "agent id&part"),
+            ("MEMPHANT_SUBJECT_GENERATION", "5"),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let request = request
+        .recv_timeout(Duration::from_secs(2))
+        .expect("captured trace request");
+    let request_line = String::from_utf8_lossy(&request)
+        .lines()
+        .next()
+        .expect("request line")
+        .to_string();
+    assert_eq!(
+        request_line,
+        "GET /v1/traces/trace%20id%26part?subject_id=subject%20id%26part&scope_id=scope%20id%26part&actor_id=actor%20id%26part&agent_node_id=agent%20id%26part&subject_generation=5 HTTP/1.1"
+    );
 }
 
 fn scripted_openrouter() -> (String, Arc<AtomicUsize>, std::thread::JoinHandle<()>) {
