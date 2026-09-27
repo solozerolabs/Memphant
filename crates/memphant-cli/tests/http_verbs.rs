@@ -83,6 +83,161 @@ fn cli(url: &str, args: &[&str]) -> (Value, bool) {
     (value, output.status.success())
 }
 
+fn read_http_request(socket: &mut std::net::TcpStream) -> Vec<u8> {
+    socket
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let mut request = Vec::new();
+    let mut buffer = [0u8; 4096];
+    loop {
+        let read = socket.read(&mut buffer).unwrap();
+        request.extend_from_slice(&buffer[..read]);
+        let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n") else {
+            continue;
+        };
+        let headers = String::from_utf8_lossy(&request[..header_end + 4]);
+        let length = headers
+            .lines()
+            .find_map(|line| {
+                line.to_ascii_lowercase()
+                    .strip_prefix("content-length:")
+                    .map(str::trim)
+                    .and_then(|value| value.parse::<usize>().ok())
+            })
+            .unwrap_or(0);
+        if request.len() >= header_end + 4 + length {
+            return request;
+        }
+    }
+}
+
+fn request_capture_server() -> (
+    String,
+    std::sync::mpsc::Receiver<Vec<u8>>,
+    std::thread::JoinHandle<()>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let address = listener.local_addr().unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let server = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let (mut socket, _) = loop {
+            match listener.accept() {
+                Ok(connection) => break connection,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(Instant::now() < deadline, "CLI did not send a request");
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("request capture accept failed: {error}"),
+            }
+        };
+        let request = read_http_request(&mut socket);
+        sender.send(request).unwrap();
+        let body = "{}";
+        write!(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+    });
+    (format!("http://{address}"), receiver, server)
+}
+
+#[test]
+fn recall_unknown_flag_exits_two_without_request() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["recall", "--limt", "5"])
+        .env(
+            "MEMPHANT_URL",
+            format!("http://{}", listener.local_addr().unwrap()),
+        )
+        .env_remove("MEMPHANT_API_KEY")
+        .output()
+        .expect("cli runs");
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("recall=error"), "{stderr}");
+    assert!(
+        stderr.contains("unknown flag --limt for recall"),
+        "{stderr}"
+    );
+    assert!(
+        matches!(listener.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock),
+        "invalid flags must be rejected before connecting"
+    );
+}
+
+#[test]
+fn recall_accepts_inline_limit() {
+    let (url, requests, server) = request_capture_server();
+    let (response, ok) = cli(
+        &url,
+        &[
+            "recall",
+            "--json",
+            "--subject-id",
+            "subject",
+            "--scope",
+            "scope",
+            "--actor",
+            "actor",
+            "--agent-node",
+            "agent",
+            "--subject-generation",
+            "1",
+            "--query",
+            "memory",
+            "--limit=5",
+        ],
+    );
+    assert!(ok, "recall failed: {response}");
+    let request = requests.recv_timeout(Duration::from_secs(1)).unwrap();
+    let header_end = request
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .unwrap();
+    let body: Value = serde_json::from_slice(&request[header_end + 4..]).unwrap();
+    assert_eq!(body["limit"], serde_json::json!(5));
+    server.join().unwrap();
+}
+
+#[test]
+fn trace_percent_encodes_path_and_environment_query_values() {
+    let (url, requests, server) = request_capture_server();
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["trace", "trace / id"])
+        .env("MEMPHANT_URL", &url)
+        .env("MEMPHANT_SUBJECT_ID", "subject one&two")
+        .env("MEMPHANT_SCOPE_ID", "scope/value")
+        .env("MEMPHANT_ACTOR_ID", "actor")
+        .env("MEMPHANT_AGENT_NODE_ID", "agent")
+        .env("MEMPHANT_SUBJECT_GENERATION", "7")
+        .env_remove("MEMPHANT_API_KEY")
+        .output()
+        .expect("cli runs");
+    assert!(
+        output.status.success(),
+        "trace failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let request = requests.recv_timeout(Duration::from_secs(1)).unwrap();
+    let request_line = String::from_utf8_lossy(&request)
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        request_line,
+        "GET /v1/traces/trace%20%2F%20id?subject_id=subject%20one%26two&scope_id=scope%2Fvalue&actor_id=actor&agent_node_id=agent&subject_generation=7 HTTP/1.1"
+    );
+    server.join().unwrap();
+}
+
 fn scripted_openrouter() -> (String, Arc<AtomicUsize>, std::thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -105,32 +260,7 @@ fn scripted_openrouter() -> (String, Arc<AtomicUsize>, std::thread::JoinHandle<(
                 }
             };
             socket.set_nonblocking(false).unwrap();
-            socket
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .unwrap();
-            let mut request = Vec::new();
-            let mut buffer = [0u8; 8192];
-            loop {
-                let read = socket.read(&mut buffer).unwrap();
-                request.extend_from_slice(&buffer[..read]);
-                let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
-                else {
-                    continue;
-                };
-                let headers = String::from_utf8_lossy(&request[..header_end + 4]);
-                let length = headers
-                    .lines()
-                    .find_map(|line| {
-                        line.to_ascii_lowercase()
-                            .strip_prefix("content-length:")
-                            .map(str::trim)
-                            .and_then(|value| value.parse::<usize>().ok())
-                    })
-                    .unwrap();
-                if request.len() >= header_end + 4 + length {
-                    break;
-                }
-            }
+            let request = read_http_request(&mut socket);
             observed_calls.fetch_add(1, Ordering::SeqCst);
             let header_end = request
                 .windows(4)

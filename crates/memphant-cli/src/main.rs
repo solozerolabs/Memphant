@@ -127,23 +127,20 @@ mod http_verbs {
     }
 
     fn execute(verb: &str, args: &[String]) -> Result<ExitCode, String> {
-        let (flags, positional) = parse_flags(args)?;
+        let (flags, positional) = parse_flags(verb, args)?;
         if verb == "trace" {
-            let id = positional
-                .first()
-                .cloned()
-                .or_else(|| flags.get("id").cloned())
-                .ok_or("usage: memphant trace <trace-id>")?;
+            let id = trace_id(&flags, &positional)?;
             let (subject, scope, actor, agent_node, generation) = ids(&flags)?;
-            return request(
-                "GET",
-                &format!(
-                    "/v1/traces/{id}?subject_id={subject}&scope_id={scope}&actor_id={actor}&agent_node_id={agent_node}&subject_generation={generation}"
-                ),
-                None,
-                None,
-                true,
+            let path = format!(
+                "/v1/traces/{}?subject_id={}&scope_id={}&actor_id={}&agent_node_id={}&subject_generation={}",
+                percent_encode(&id),
+                percent_encode(&subject),
+                percent_encode(&scope),
+                percent_encode(&actor),
+                percent_encode(&agent_node),
+                percent_encode(&generation.to_string()),
             );
+            return request("GET", &path, None, None, true);
         }
         if !positional.is_empty() {
             return Err(format!("unexpected positional arguments: {positional:?}"));
@@ -212,31 +209,173 @@ mod http_verbs {
         out
     }
 
-    /// `--flag value` pairs plus bare `--resource` style booleans.
-    fn parse_flags(args: &[String]) -> Result<(HashMap<String, String>, Vec<String>), String> {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum FlagKind {
+        Value,
+        Boolean,
+    }
+
+    const IDENTITY_FLAGS: &[(&str, FlagKind)] = &[
+        ("subject-id", FlagKind::Value),
+        ("scope", FlagKind::Value),
+        ("actor", FlagKind::Value),
+        ("agent-node", FlagKind::Value),
+        ("subject-generation", FlagKind::Value),
+    ];
+    const UNIVERSAL_FLAGS: &[(&str, FlagKind)] = &[("json", FlagKind::Boolean)];
+    const RETAIN_FLAGS: &[(&str, FlagKind)] = &[
+        ("idempotency-key", FlagKind::Value),
+        ("source-ref", FlagKind::Value),
+        ("observed-at", FlagKind::Value),
+        ("body", FlagKind::Value),
+        ("body-file", FlagKind::Value),
+        ("uri", FlagKind::Value),
+        ("mime-type", FlagKind::Value),
+        ("content-hash", FlagKind::Value),
+        ("kind", FlagKind::Value),
+        ("revision", FlagKind::Value),
+        ("fact-key", FlagKind::Value),
+        ("predicate", FlagKind::Value),
+        ("confidence", FlagKind::Value),
+        ("valid-from", FlagKind::Value),
+        ("valid-to", FlagKind::Value),
+        ("source-kind", FlagKind::Value),
+        ("subject", FlagKind::Value),
+        ("resource", FlagKind::Boolean),
+        ("unit", FlagKind::Boolean),
+    ];
+    const RECALL_FLAGS: &[(&str, FlagKind)] = &[
+        ("query", FlagKind::Value),
+        ("limit", FlagKind::Value),
+        ("budget-tokens", FlagKind::Value),
+        ("mode", FlagKind::Value),
+        ("transaction-as-of", FlagKind::Value),
+        ("valid-at", FlagKind::Value),
+        ("include-beliefs", FlagKind::Boolean),
+        ("compact-only", FlagKind::Boolean),
+        ("general", FlagKind::Boolean),
+    ];
+    const REFLECT_FLAGS: &[(&str, FlagKind)] = &[("idempotency-key", FlagKind::Value)];
+    const CORRECT_FLAGS: &[(&str, FlagKind)] = &[
+        ("idempotency-key", FlagKind::Value),
+        ("unit", FlagKind::Value),
+        ("value", FlagKind::Value),
+        ("reason", FlagKind::Value),
+        ("source-ref", FlagKind::Value),
+        ("observed-at", FlagKind::Value),
+        ("valid-from", FlagKind::Value),
+        ("valid-to", FlagKind::Value),
+    ];
+    const FORGET_FLAGS: &[(&str, FlagKind)] = &[
+        ("idempotency-key", FlagKind::Value),
+        ("unit", FlagKind::Value),
+        ("episode", FlagKind::Value),
+        ("resource", FlagKind::Value),
+        ("reason", FlagKind::Value),
+    ];
+    const MARK_FLAGS: &[(&str, FlagKind)] = &[
+        ("idempotency-key", FlagKind::Value),
+        ("trace", FlagKind::Value),
+        ("caller", FlagKind::Value),
+        ("used", FlagKind::Value),
+        ("outcome", FlagKind::Value),
+        ("success", FlagKind::Boolean),
+        ("failure", FlagKind::Boolean),
+        ("corrected", FlagKind::Boolean),
+        ("ignored", FlagKind::Boolean),
+    ];
+    const TRACE_FLAGS: &[(&str, FlagKind)] = &[("id", FlagKind::Value)];
+
+    fn verb_flags(verb: &str) -> Option<&'static [(&'static str, FlagKind)]> {
+        match verb {
+            "retain" => Some(RETAIN_FLAGS),
+            "recall" => Some(RECALL_FLAGS),
+            "reflect" => Some(REFLECT_FLAGS),
+            "correct" => Some(CORRECT_FLAGS),
+            "forget" => Some(FORGET_FLAGS),
+            "mark" => Some(MARK_FLAGS),
+            "trace" => Some(TRACE_FLAGS),
+            _ => None,
+        }
+    }
+
+    fn flag_kind(verb: &str, name: &str) -> Option<FlagKind> {
+        verb_flags(verb)?
+            .iter()
+            .chain(IDENTITY_FLAGS)
+            .chain(UNIVERSAL_FLAGS)
+            .find_map(|(allowed, kind)| (*allowed == name).then_some(*kind))
+    }
+
+    /// Strict per-verb flags in `--name value` or `--name=value` form, plus
+    /// explicitly declared bare booleans such as `--resource` and `--success`.
+    fn parse_flags(
+        verb: &str,
+        args: &[String],
+    ) -> Result<(HashMap<String, String>, Vec<String>), String> {
+        verb_flags(verb).ok_or_else(|| format!("unknown verb: {verb}"))?;
         let mut flags = HashMap::new();
         let mut positional = Vec::new();
         let mut index = 0;
         while index < args.len() {
             let arg = &args[index];
-            if let Some(name) = arg.strip_prefix("--") {
-                let next = args.get(index + 1);
-                match next {
-                    Some(value) if !value.starts_with("--") => {
-                        flags.insert(name.to_string(), value.clone());
-                        index += 2;
-                    }
-                    _ => {
-                        flags.insert(name.to_string(), "true".to_string());
-                        index += 1;
-                    }
-                }
-            } else {
+            let Some(flag) = arg.strip_prefix("--") else {
                 positional.push(arg.clone());
                 index += 1;
+                continue;
+            };
+            let (name, inline_value) = match flag.split_once('=') {
+                Some((name, value)) => (name, Some(value)),
+                None => (flag, None),
+            };
+            let kind =
+                flag_kind(verb, name).ok_or_else(|| format!("unknown flag --{name} for {verb}"))?;
+            if flags.contains_key(name) {
+                return Err(format!("duplicate flag --{name}"));
             }
+            let (value, consumed) = match inline_value {
+                Some("") => return Err(format!("empty value for --{name}")),
+                Some(_) if kind == FlagKind::Boolean => {
+                    return Err(format!("flag --{name} does not take a value"));
+                }
+                Some(value) => (value.to_string(), 1),
+                None if kind == FlagKind::Boolean => ("true".to_string(), 1),
+                None => {
+                    let value = args
+                        .get(index + 1)
+                        .filter(|value| !value.starts_with("--"))
+                        .ok_or_else(|| format!("missing value for --{name}"))?;
+                    (value.clone(), 2)
+                }
+            };
+            flags.insert(name.to_string(), value);
+            index += consumed;
         }
         Ok((flags, positional))
+    }
+
+    fn trace_id(flags: &HashMap<String, String>, positional: &[String]) -> Result<String, String> {
+        match (positional, flags.get("id")) {
+            ([id], None) => Ok(id.clone()),
+            ([], Some(id)) => Ok(id.clone()),
+            ([], None) => Err("usage: memphant trace <trace-id>".to_string()),
+            _ => Err(format!("unexpected positional arguments: {positional:?}")),
+        }
+    }
+
+    fn percent_encode(value: &str) -> String {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        let mut encoded = String::with_capacity(value.len());
+        for byte in value.bytes() {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+                encoded.push(char::from(byte));
+            } else {
+                encoded.push('%');
+                encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+                encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+            }
+        }
+        encoded
     }
 
     fn now_rfc3339() -> String {
@@ -431,18 +570,32 @@ mod http_verbs {
         }
     }
 
-    /// `--outcome <o>` or one of the bare `--success|--failure|--corrected|--ignored`.
+    /// Exactly one of `--outcome <o>` or the bare
+    /// `--success|--failure|--corrected|--ignored` selectors.
     fn mark_outcome(flags: &HashMap<String, String>) -> Result<String, String> {
-        if let Some(outcome) = flags.get("outcome") {
-            return Ok(outcome.clone());
-        }
-        ["success", "failure", "corrected", "ignored"]
+        let mut selectors = ["success", "failure", "corrected", "ignored"]
             .into_iter()
-            .find(|name| flags.contains_key(*name))
-            .map(str::to_string)
-            .ok_or_else(|| {
-                "missing --outcome <success|failure|corrected|ignored> (or --success …)".to_string()
-            })
+            .filter(|name| flags.contains_key(*name))
+            .collect::<Vec<_>>();
+        if flags.contains_key("outcome") {
+            selectors.insert(0, "outcome");
+        }
+        match selectors.as_slice() {
+            [] => Err(
+                "missing --outcome <success|failure|corrected|ignored> (or --success …)"
+                    .to_string(),
+            ),
+            ["outcome"] => Ok(flags["outcome"].clone()),
+            [outcome] => Ok((*outcome).to_string()),
+            _ => Err(format!(
+                "multiple mark outcomes supplied: {}",
+                selectors
+                    .iter()
+                    .map(|name| format!("--{name}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        }
     }
 
     /// `MEMPHANT_URL`, else the origin of `MEMPHANT_CAPTURE_URL` (the battery
@@ -531,6 +684,152 @@ mod http_verbs {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        fn strings(args: &[&str]) -> Vec<String> {
+            args.iter().map(|arg| (*arg).to_string()).collect()
+        }
+
+        #[test]
+        fn parser_accepts_separate_and_inline_values() {
+            let (flags, positional) =
+                parse_flags("recall", &strings(&["--query", "memory", "--limit=5"]))
+                    .expect("valid recall flags");
+            assert_eq!(flags.get("query").map(String::as_str), Some("memory"));
+            assert_eq!(flags.get("limit").map(String::as_str), Some("5"));
+            assert!(positional.is_empty());
+        }
+
+        #[test]
+        fn parser_rejects_unknown_duplicate_empty_and_missing_values() {
+            assert_eq!(
+                parse_flags("recall", &strings(&["--limt", "5"]))
+                    .expect_err("unknown recall flag must fail"),
+                "unknown flag --limt for recall"
+            );
+            assert_eq!(
+                parse_flags("recall", &strings(&["--limit", "5", "--limit=6"]),)
+                    .expect_err("duplicate flag must fail"),
+                "duplicate flag --limit"
+            );
+            assert_eq!(
+                parse_flags("recall", &strings(&["--limit="]))
+                    .expect_err("empty inline value must fail"),
+                "empty value for --limit"
+            );
+            assert_eq!(
+                parse_flags("recall", &strings(&["--limit"])).expect_err("missing value must fail"),
+                "missing value for --limit"
+            );
+            assert_eq!(
+                parse_flags("retain", &strings(&["--resource=false"]))
+                    .expect_err("boolean values must not be silently ignored"),
+                "flag --resource does not take a value"
+            );
+        }
+
+        #[test]
+        fn parser_preserves_bare_boolean_flags() {
+            let (retain, _) =
+                parse_flags("retain", &strings(&["--resource"])).expect("retain resource boolean");
+            assert_eq!(retain.get("resource").map(String::as_str), Some("true"));
+            let (mark, _) =
+                parse_flags("mark", &strings(&["--success"])).expect("mark success boolean");
+            assert_eq!(mark.get("success").map(String::as_str), Some("true"));
+        }
+
+        #[test]
+        fn parser_has_explicit_per_verb_allow_lists() {
+            let expected = [
+                ("retain", RETAIN_FLAGS),
+                ("recall", RECALL_FLAGS),
+                ("reflect", REFLECT_FLAGS),
+                ("correct", CORRECT_FLAGS),
+                ("forget", FORGET_FLAGS),
+                ("mark", MARK_FLAGS),
+                ("trace", TRACE_FLAGS),
+            ];
+            for (verb, specs) in expected {
+                assert_eq!(verb_flags(verb), Some(specs), "{verb} flag list");
+                for (name, kind) in specs.iter().chain(IDENTITY_FLAGS).chain(UNIVERSAL_FLAGS) {
+                    assert_eq!(flag_kind(verb, name), Some(*kind), "{verb} --{name} kind");
+                    let arg = format!("--{name}");
+                    let args = match kind {
+                        FlagKind::Value => vec![arg, "value".to_string()],
+                        FlagKind::Boolean => vec![arg],
+                    };
+                    let (parsed, positional) = parse_flags(verb, &args)
+                        .unwrap_or_else(|error| panic!("{verb} must allow --{name}: {error}"));
+                    assert!(
+                        positional.is_empty(),
+                        "{verb} --{name} must consume its value"
+                    );
+                    let expected_value = match kind {
+                        FlagKind::Value => "value",
+                        FlagKind::Boolean => "true",
+                    };
+                    assert_eq!(
+                        parsed.get(*name).map(String::as_str),
+                        Some(expected_value),
+                        "{verb} --{name} kind"
+                    );
+                }
+            }
+
+            assert_eq!(
+                parse_flags("reflect", &strings(&["--query", "x"]))
+                    .expect_err("reflect must reject recall flags"),
+                "unknown flag --query for reflect"
+            );
+            assert_eq!(
+                parse_flags("forget", &strings(&["--success"]))
+                    .expect_err("forget must reject mark flags"),
+                "unknown flag --success for forget"
+            );
+        }
+
+        #[test]
+        fn mark_rejects_multiple_outcome_selectors() {
+            let booleans = HashMap::from([
+                ("failure".to_string(), "true".to_string()),
+                ("success".to_string(), "true".to_string()),
+            ]);
+            assert_eq!(
+                mark_outcome(&booleans).expect_err("contradictory booleans must fail"),
+                "multiple mark outcomes supplied: --success, --failure"
+            );
+
+            let explicit_and_boolean = HashMap::from([
+                ("outcome".to_string(), "corrected".to_string()),
+                ("ignored".to_string(), "true".to_string()),
+            ]);
+            assert_eq!(
+                mark_outcome(&explicit_and_boolean)
+                    .expect_err("explicit and boolean outcomes must not conflict"),
+                "multiple mark outcomes supplied: --outcome, --ignored"
+            );
+        }
+
+        #[test]
+        fn trace_requires_exactly_one_id_form() {
+            let positional = strings(&["trace-1"]);
+            assert_eq!(trace_id(&HashMap::new(), &positional).unwrap(), "trace-1");
+            let flags = HashMap::from([("id".to_string(), "trace-2".to_string())]);
+            assert_eq!(trace_id(&flags, &[]).unwrap(), "trace-2");
+            assert_eq!(
+                trace_id(&flags, &positional).unwrap_err(),
+                "unexpected positional arguments: [\"trace-1\"]"
+            );
+            assert_eq!(
+                trace_id(&HashMap::new(), &strings(&["trace-1", "extra"])).unwrap_err(),
+                "unexpected positional arguments: [\"trace-1\", \"extra\"]"
+            );
+        }
+
+        #[test]
+        fn percent_encoder_preserves_only_unreserved_bytes() {
+            assert_eq!(percent_encode("AZaz09-._~"), "AZaz09-._~");
+            assert_eq!(percent_encode("/ %&é"), "%2F%20%25%26%C3%A9");
+        }
 
         #[test]
         fn identity_falls_back_to_env_and_flags_win() {
