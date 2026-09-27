@@ -3,11 +3,12 @@
 //! verb uses. `MEMPHANT_WORKER_ONCE=1` runs one tick; `MEMPHANT_WORKER_DRAIN=1`
 //! runs ticks to empty. Both exit deterministically.
 
-use std::time::Duration;
+use std::{fmt::Display, time::Duration};
 
 const DEFAULT_BATCH: usize = 64;
 const MAX_BATCH: usize = 1024;
 const TICK: Duration = Duration::from_millis(500);
+const MAX_BACKOFF: Duration = Duration::from_secs(30);
 
 /// Running totals across the ticks of one drain.
 #[derive(Default)]
@@ -38,6 +39,28 @@ enum WorkerMode {
 // in-process bench drain (`memphant-eval::bench_lme`) share ONE mechanism.
 use memphant_core::service::drain_finished;
 
+fn parse_env_flag(name: &str, value: Option<&str>) -> Result<bool, String> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(false);
+    };
+
+    if ["1", "true", "yes", "on"]
+        .iter()
+        .any(|candidate| value.eq_ignore_ascii_case(candidate))
+    {
+        Ok(true)
+    } else if ["0", "false", "no", "off"]
+        .iter()
+        .any(|candidate| value.eq_ignore_ascii_case(candidate))
+    {
+        Ok(false)
+    } else {
+        Err(format!(
+            "{name} must be one of 1/0/true/false/yes/no/on/off, got {value:?}"
+        ))
+    }
+}
+
 fn worker_mode(once: bool, drain: bool) -> Result<WorkerMode, &'static str> {
     match (once, drain) {
         (false, false) => Ok(WorkerMode::Daemon),
@@ -61,16 +84,56 @@ fn worker_batch_from_value(value: Option<&str>) -> Result<usize, String> {
         .ok_or_else(|| format!("must be an integer from 1 through {MAX_BATCH}, got {value:?}"))
 }
 
+fn backoff_delay(consecutive_errors: u32) -> Duration {
+    if consecutive_errors >= 6 {
+        MAX_BACKOFF
+    } else {
+        (TICK * (1 << consecutive_errors)).min(MAX_BACKOFF)
+    }
+}
+
+#[derive(Default)]
+struct DaemonRetryState {
+    consecutive_errors: u32,
+}
+
+impl DaemonRetryState {
+    fn delay(&self) -> Duration {
+        backoff_delay(self.consecutive_errors)
+    }
+
+    fn record_error(&mut self, error: &impl Display) -> Option<String> {
+        self.consecutive_errors = self.consecutive_errors.saturating_add(1);
+        (self.consecutive_errors == 1 || self.consecutive_errors.is_multiple_of(10)).then(|| {
+            let consecutive_errors = self.consecutive_errors;
+            let delay = self.delay();
+            format!(
+                "memphant-worker: tick error (consecutive={consecutive_errors}, delay={delay:?}): {error}"
+            )
+        })
+    }
+
+    fn record_success(&mut self) -> u32 {
+        std::mem::take(&mut self.consecutive_errors)
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let batch =
         worker_batch_from_value(std::env::var("MEMPHANT_WORKER_BATCH_SIZE").ok().as_deref())
             .unwrap_or_else(|error| panic!("memphant-worker: MEMPHANT_WORKER_BATCH_SIZE: {error}"));
-    let mode = worker_mode(
-        std::env::var("MEMPHANT_WORKER_ONCE").as_deref() == Ok("1"),
-        std::env::var("MEMPHANT_WORKER_DRAIN").as_deref() == Ok("1"),
+    let once = parse_env_flag(
+        "MEMPHANT_WORKER_ONCE",
+        std::env::var("MEMPHANT_WORKER_ONCE").ok().as_deref(),
     )
     .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let drain = parse_env_flag(
+        "MEMPHANT_WORKER_DRAIN",
+        std::env::var("MEMPHANT_WORKER_DRAIN").ok().as_deref(),
+    )
+    .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let mode = worker_mode(once, drain).unwrap_or_else(|error| panic!("memphant-worker: {error}"));
     let store = memphant_runtime::build_worker_store()
         .await
         .expect("memphant-worker: store construction failed");
@@ -129,24 +192,38 @@ async fn main() {
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .expect("install SIGTERM handler");
+    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        .expect("install interrupt handler");
+    let mut retry_state = DaemonRetryState::default();
     loop {
         tokio::select! {
             _ = sigterm.recv() => {
                 eprintln!("memphant-worker: SIGTERM — draining and shutting down");
                 break;
             }
-            _ = tokio::signal::ctrl_c() => {
+            _ = interrupt.recv() => {
                 eprintln!("memphant-worker: interrupt — shutting down");
                 break;
             }
-            _ = tokio::time::sleep(TICK) => {
+            _ = tokio::time::sleep(retry_state.delay()) => {
                 match service.run_worker_tick(batch).await {
-                    Ok(tick) if tick.is_idle() => {}
-                    Ok(tick) => eprintln!(
-                        "memphant-worker: completed={} failed={} retried={} deferred={}",
-                        tick.completed, tick.failed, tick.retried, tick.deferred
-                    ),
-                    Err(error) => eprintln!("memphant-worker: tick error: {error}"),
+                    Ok(tick) => {
+                        let failed_ticks = retry_state.record_success();
+                        if failed_ticks > 0 {
+                            eprintln!("memphant-worker: recovered after {failed_ticks} failed ticks");
+                        }
+                        if !tick.is_idle() {
+                            eprintln!(
+                                "memphant-worker: completed={} failed={} retried={} deferred={}",
+                                tick.completed, tick.failed, tick.retried, tick.deferred
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(message) = retry_state.record_error(&error) {
+                            eprintln!("{message}");
+                        }
+                    }
                 }
             }
         }
@@ -155,7 +232,86 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorkerMode, drain_finished, worker_batch_from_value, worker_mode};
+    use std::time::Duration;
+
+    use super::{
+        DaemonRetryState, WorkerMode, backoff_delay, drain_finished, parse_env_flag,
+        worker_batch_from_value, worker_mode,
+    };
+
+    #[test]
+    fn parse_env_flag_accepts_documented_values() {
+        for value in [None, Some(""), Some("   ")] {
+            assert_eq!(parse_env_flag("TEST_FLAG", value), Ok(false));
+        }
+        for (value, expected) in [
+            ("1", true),
+            ("true", true),
+            ("yes", true),
+            ("on", true),
+            ("0", false),
+            ("false", false),
+            ("no", false),
+            ("off", false),
+        ] {
+            assert_eq!(parse_env_flag("TEST_FLAG", Some(value)), Ok(expected));
+            let padded_uppercase = format!(" \t{}\n", value.to_ascii_uppercase());
+            assert_eq!(
+                parse_env_flag("TEST_FLAG", Some(&padded_uppercase)),
+                Ok(expected),
+                "value={padded_uppercase:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_env_flag_rejects_other_values_with_the_variable_name() {
+        for (value, displayed) in [("maybe", "maybe"), ("2", "2"), (" true-ish ", "true-ish")] {
+            assert_eq!(
+                parse_env_flag("MEMPHANT_WORKER_DRAIN", Some(value)),
+                Err(format!(
+                    "MEMPHANT_WORKER_DRAIN must be one of 1/0/true/false/yes/no/on/off, got {displayed:?}"
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn backoff_delay_is_exponential_and_capped() {
+        assert_eq!(backoff_delay(0), Duration::from_millis(500));
+        assert_eq!(backoff_delay(1), Duration::from_secs(1));
+        assert_eq!(backoff_delay(2), Duration::from_secs(2));
+        assert_eq!(backoff_delay(5), Duration::from_secs(16));
+        assert_eq!(backoff_delay(u32::MAX), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn daemon_retry_state_tracks_logging_recovery_and_reset() {
+        let mut state = DaemonRetryState::default();
+        assert_eq!(state.delay(), Duration::from_millis(500));
+
+        for count in 1..=20 {
+            let message = state.record_error(&"database unavailable");
+            if matches!(count, 1 | 10 | 20) {
+                assert_eq!(
+                    message,
+                    Some(format!(
+                        "memphant-worker: tick error (consecutive={count}, delay={:?}): database unavailable",
+                        state.delay()
+                    ))
+                );
+            } else {
+                assert_eq!(message, None, "count={count}");
+            }
+        }
+        assert_eq!(state.delay(), Duration::from_secs(30));
+        assert_eq!(state.record_success(), 20);
+        assert_eq!(state.record_success(), 0);
+        assert_eq!(state.delay(), Duration::from_millis(500));
+
+        assert!(state.record_error(&"database unavailable").is_some());
+        assert_eq!(state.delay(), Duration::from_secs(1));
+    }
 
     #[test]
     fn worker_modes_are_distinct_and_conflicts_fail() {
