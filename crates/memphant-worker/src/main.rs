@@ -8,6 +8,7 @@ use std::time::Duration;
 const DEFAULT_BATCH: usize = 64;
 const MAX_BATCH: usize = 1024;
 const TICK: Duration = Duration::from_millis(500);
+const MAX_BACKOFF: Duration = Duration::from_secs(30);
 
 /// Running totals across the ticks of one drain.
 #[derive(Default)]
@@ -61,16 +62,90 @@ fn worker_batch_from_value(value: Option<&str>) -> Result<usize, String> {
         .ok_or_else(|| format!("must be an integer from 1 through {MAX_BATCH}, got {value:?}"))
 }
 
+fn parse_env_flag(name: &str, value: Option<&str>) -> Result<bool, String> {
+    let value = value.unwrap_or_default().trim();
+    match value.to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" | "off" => Ok(false),
+        "1" | "true" | "yes" | "on" => Ok(true),
+        _ => Err(format!(
+            "{name} must be one of 1/0/true/false/yes/no/on/off, got {value:?}"
+        )),
+    }
+}
+
+fn backoff_delay(consecutive_errors: u32) -> Duration {
+    let multiplier = 1_u32.checked_shl(consecutive_errors).unwrap_or(u32::MAX);
+    TICK.saturating_mul(multiplier).min(MAX_BACKOFF)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DaemonLogAction {
+    None,
+    Error {
+        consecutive_errors: u32,
+        delay: Duration,
+    },
+    Recovered {
+        failed_ticks: u32,
+    },
+}
+
+fn daemon_tick_transition(consecutive_errors: u32, succeeded: bool) -> (u32, DaemonLogAction) {
+    if succeeded {
+        let action = if consecutive_errors == 0 {
+            DaemonLogAction::None
+        } else {
+            DaemonLogAction::Recovered {
+                failed_ticks: consecutive_errors,
+            }
+        };
+        return (0, action);
+    }
+
+    let consecutive_errors = consecutive_errors.saturating_add(1);
+    let action = if consecutive_errors == 1 || consecutive_errors.is_multiple_of(10) {
+        DaemonLogAction::Error {
+            consecutive_errors,
+            delay: backoff_delay(consecutive_errors),
+        }
+    } else {
+        DaemonLogAction::None
+    };
+    (consecutive_errors, action)
+}
+
+fn daemon_log_message(action: DaemonLogAction, error: Option<&str>) -> Option<String> {
+    match action {
+        DaemonLogAction::None => None,
+        DaemonLogAction::Error {
+            consecutive_errors,
+            delay,
+        } => Some(format!(
+            "memphant-worker: tick error: {} (consecutive errors: {consecutive_errors}, delay: {delay:?})",
+            error.unwrap_or("unknown error")
+        )),
+        DaemonLogAction::Recovered { failed_ticks } => Some(format!(
+            "memphant-worker: recovered after {failed_ticks} failed ticks"
+        )),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let batch =
         worker_batch_from_value(std::env::var("MEMPHANT_WORKER_BATCH_SIZE").ok().as_deref())
             .unwrap_or_else(|error| panic!("memphant-worker: MEMPHANT_WORKER_BATCH_SIZE: {error}"));
-    let mode = worker_mode(
-        std::env::var("MEMPHANT_WORKER_ONCE").as_deref() == Ok("1"),
-        std::env::var("MEMPHANT_WORKER_DRAIN").as_deref() == Ok("1"),
+    let once = parse_env_flag(
+        "MEMPHANT_WORKER_ONCE",
+        std::env::var("MEMPHANT_WORKER_ONCE").ok().as_deref(),
     )
     .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let drain = parse_env_flag(
+        "MEMPHANT_WORKER_DRAIN",
+        std::env::var("MEMPHANT_WORKER_DRAIN").ok().as_deref(),
+    )
+    .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
+    let mode = worker_mode(once, drain).unwrap_or_else(|error| panic!("memphant-worker: {error}"));
     let store = memphant_runtime::build_worker_store()
         .await
         .expect("memphant-worker: store construction failed");
@@ -129,7 +204,9 @@ async fn main() {
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .expect("install SIGTERM handler");
+    let mut consecutive_errors = 0;
     loop {
+        let delay = backoff_delay(consecutive_errors);
         tokio::select! {
             _ = sigterm.recv() => {
                 eprintln!("memphant-worker: SIGTERM — draining and shutting down");
@@ -139,14 +216,31 @@ async fn main() {
                 eprintln!("memphant-worker: interrupt — shutting down");
                 break;
             }
-            _ = tokio::time::sleep(TICK) => {
+            _ = tokio::time::sleep(delay) => {
                 match service.run_worker_tick(batch).await {
-                    Ok(tick) if tick.is_idle() => {}
-                    Ok(tick) => eprintln!(
-                        "memphant-worker: completed={} failed={} retried={} deferred={}",
-                        tick.completed, tick.failed, tick.retried, tick.deferred
-                    ),
-                    Err(error) => eprintln!("memphant-worker: tick error: {error}"),
+                    Ok(tick) => {
+                        let (next_errors, action) =
+                            daemon_tick_transition(consecutive_errors, true);
+                        consecutive_errors = next_errors;
+                        if let Some(message) = daemon_log_message(action, None) {
+                            eprintln!("{message}");
+                        }
+                        if !tick.is_idle() {
+                            eprintln!(
+                                "memphant-worker: completed={} failed={} retried={} deferred={}",
+                                tick.completed, tick.failed, tick.retried, tick.deferred
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        let (next_errors, action) =
+                            daemon_tick_transition(consecutive_errors, false);
+                        consecutive_errors = next_errors;
+                        let error = error.to_string();
+                        if let Some(message) = daemon_log_message(action, Some(&error)) {
+                            eprintln!("{message}");
+                        }
+                    }
                 }
             }
         }
@@ -155,7 +249,132 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorkerMode, drain_finished, worker_batch_from_value, worker_mode};
+    use std::time::Duration;
+
+    use super::{
+        DaemonLogAction, WorkerMode, backoff_delay as calculate_backoff_delay,
+        daemon_log_message as format_daemon_log_message,
+        daemon_tick_transition as apply_daemon_tick_transition, drain_finished,
+        parse_env_flag as parse_flag, worker_batch_from_value, worker_mode,
+    };
+
+    #[test]
+    fn parse_env_flag_accepts_supported_spellings() {
+        for value in ["1", "true", "yes", "on", " TRUE ", "YeS", "\ton\n"] {
+            assert_eq!(parse_flag("FLAG", Some(value)), Ok(true), "{value:?}");
+        }
+        for value in ["0", "false", "no", "off", " FALSE ", "nO", "\toFf\n"] {
+            assert_eq!(parse_flag("FLAG", Some(value)), Ok(false), "{value:?}");
+        }
+        assert_eq!(parse_flag("FLAG", None), Ok(false));
+        assert_eq!(parse_flag("FLAG", Some("")), Ok(false));
+        assert_eq!(parse_flag("FLAG", Some(" \t\n")), Ok(false));
+    }
+
+    #[test]
+    fn parse_env_flag_rejects_unsupported_spellings() {
+        for value in ["maybe", "2", "-1", "truthy", "1.0"] {
+            assert_eq!(
+                parse_flag("MEMPHANT_WORKER_DRAIN", Some(value)),
+                Err(format!(
+                    "MEMPHANT_WORKER_DRAIN must be one of 1/0/true/false/yes/no/on/off, got {value:?}"
+                ))
+            );
+        }
+        assert_eq!(
+            parse_flag("MEMPHANT_WORKER_ONCE", Some("  MAYBE  ")),
+            Err(
+                "MEMPHANT_WORKER_ONCE must be one of 1/0/true/false/yes/no/on/off, got \"MAYBE\""
+                    .to_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn backoff_delay_is_exponential_and_capped() {
+        for (errors, expected) in [
+            (0, Duration::from_millis(500)),
+            (1, Duration::from_secs(1)),
+            (2, Duration::from_secs(2)),
+            (5, Duration::from_secs(16)),
+            (6, Duration::from_secs(30)),
+            (7, Duration::from_secs(30)),
+            (u32::MAX, Duration::from_secs(30)),
+        ] {
+            assert_eq!(calculate_backoff_delay(errors), expected, "errors={errors}");
+        }
+    }
+
+    #[test]
+    fn daemon_tick_transition_tracks_logging_and_recovery() {
+        let (errors, action) = apply_daemon_tick_transition(0, false);
+        assert_eq!(errors, 1);
+        assert_eq!(
+            action,
+            DaemonLogAction::Error {
+                consecutive_errors: 1,
+                delay: Duration::from_secs(1),
+            }
+        );
+
+        let (errors, action) = apply_daemon_tick_transition(errors, false);
+        assert_eq!((errors, action), (2, DaemonLogAction::None));
+
+        let (errors, action) = apply_daemon_tick_transition(9, false);
+        assert_eq!(errors, 10);
+        assert_eq!(
+            action,
+            DaemonLogAction::Error {
+                consecutive_errors: 10,
+                delay: Duration::from_secs(30),
+            }
+        );
+
+        let (errors, action) = apply_daemon_tick_transition(19, false);
+        assert_eq!(errors, 20);
+        assert_eq!(
+            action,
+            DaemonLogAction::Error {
+                consecutive_errors: 20,
+                delay: Duration::from_secs(30),
+            }
+        );
+
+        let (errors, action) = apply_daemon_tick_transition(u32::MAX, false);
+        assert_eq!(errors, u32::MAX);
+        assert_eq!(action, DaemonLogAction::None);
+
+        let (errors, action) = apply_daemon_tick_transition(20, true);
+        assert_eq!(errors, 0);
+        assert_eq!(action, DaemonLogAction::Recovered { failed_ticks: 20 });
+        assert_eq!(calculate_backoff_delay(errors), Duration::from_millis(500));
+        assert_eq!(
+            apply_daemon_tick_transition(errors, true),
+            (0, DaemonLogAction::None)
+        );
+    }
+
+    #[test]
+    fn daemon_log_message_includes_error_count_delay_and_recovery() {
+        assert_eq!(
+            format_daemon_log_message(
+                DaemonLogAction::Error {
+                    consecutive_errors: 10,
+                    delay: Duration::from_secs(30),
+                },
+                Some("database unavailable")
+            ),
+            Some(
+                "memphant-worker: tick error: database unavailable (consecutive errors: 10, delay: 30s)"
+                    .to_owned()
+            )
+        );
+        assert_eq!(
+            format_daemon_log_message(DaemonLogAction::Recovered { failed_ticks: 10 }, None),
+            Some("memphant-worker: recovered after 10 failed ticks".to_owned())
+        );
+        assert_eq!(format_daemon_log_message(DaemonLogAction::None, None), None);
+    }
 
     #[test]
     fn worker_modes_are_distinct_and_conflicts_fail() {
