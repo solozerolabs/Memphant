@@ -1,7 +1,8 @@
 //! The reflect worker: claims queued jobs (SKIP LOCKED in Postgres) and
 //! compiles them through the same `MemoryService` path the public reflect
-//! verb uses. `MEMPHANT_WORKER_ONCE=1` runs one tick; `MEMPHANT_WORKER_DRAIN=1`
-//! runs ticks to empty. Both exit deterministically.
+//! verb uses. `MEMPHANT_WORKER_ONCE` runs one tick and `MEMPHANT_WORKER_DRAIN`
+//! runs ticks to empty (both accept the strict spellings 1/0/true/false/
+//! yes/no/on/off, case-insensitive). Both exit deterministically.
 
 use std::time::Duration;
 
@@ -61,14 +62,50 @@ fn worker_batch_from_value(value: Option<&str>) -> Result<usize, String> {
         .ok_or_else(|| format!("must be an integer from 1 through {MAX_BATCH}, got {value:?}"))
 }
 
+fn parse_env_flag(name: &str, value: Option<&str>) -> Result<bool, String> {
+    let trimmed = value.unwrap_or_default().trim();
+    match trimmed.to_ascii_lowercase().as_str() {
+        "" => Ok(false),
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" => Ok(false),
+        _ => Err(format!(
+            "{name} must be one of 1/0/true/false/yes/no/on/off, got {trimmed:?}"
+        )),
+    }
+}
+
+/// Delay before the next daemon tick after `consecutive_errors` failed ticks
+/// in a row: `TICK * 2^N`, capped at 30 seconds.
+fn backoff_delay(consecutive_errors: u32) -> Duration {
+    const BACKOFF_CAP_MS: u64 = 30_000;
+    // 500 ms << 6 = 32 s already exceeds the cap, so larger shifts are
+    // redundant; capping the shift also makes the math overflow-proof.
+    let shift = consecutive_errors.min(6);
+    Duration::from_millis(((TICK.as_millis() as u64) << shift).min(BACKOFF_CAP_MS))
+}
+
+/// Throttle for daemon tick-error logging: the first error, then every
+/// 10th consecutive error.
+fn should_log_tick_error(consecutive_errors: u32) -> bool {
+    consecutive_errors == 1 || consecutive_errors.is_multiple_of(10)
+}
+
 #[tokio::main]
 async fn main() {
     let batch =
         worker_batch_from_value(std::env::var("MEMPHANT_WORKER_BATCH_SIZE").ok().as_deref())
             .unwrap_or_else(|error| panic!("memphant-worker: MEMPHANT_WORKER_BATCH_SIZE: {error}"));
     let mode = worker_mode(
-        std::env::var("MEMPHANT_WORKER_ONCE").as_deref() == Ok("1"),
-        std::env::var("MEMPHANT_WORKER_DRAIN").as_deref() == Ok("1"),
+        parse_env_flag(
+            "MEMPHANT_WORKER_ONCE",
+            std::env::var("MEMPHANT_WORKER_ONCE").ok().as_deref(),
+        )
+        .unwrap_or_else(|error| panic!("memphant-worker: {error}")),
+        parse_env_flag(
+            "MEMPHANT_WORKER_DRAIN",
+            std::env::var("MEMPHANT_WORKER_DRAIN").ok().as_deref(),
+        )
+        .unwrap_or_else(|error| panic!("memphant-worker: {error}")),
     )
     .unwrap_or_else(|error| panic!("memphant-worker: {error}"));
     let store = memphant_runtime::build_worker_store()
@@ -129,6 +166,7 @@ async fn main() {
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .expect("install SIGTERM handler");
+    let mut consecutive_errors: u32 = 0;
     loop {
         tokio::select! {
             _ = sigterm.recv() => {
@@ -139,14 +177,31 @@ async fn main() {
                 eprintln!("memphant-worker: interrupt — shutting down");
                 break;
             }
-            _ = tokio::time::sleep(TICK) => {
+            _ = tokio::time::sleep(backoff_delay(consecutive_errors)) => {
                 match service.run_worker_tick(batch).await {
-                    Ok(tick) if tick.is_idle() => {}
-                    Ok(tick) => eprintln!(
-                        "memphant-worker: completed={} failed={} retried={} deferred={}",
-                        tick.completed, tick.failed, tick.retried, tick.deferred
-                    ),
-                    Err(error) => eprintln!("memphant-worker: tick error: {error}"),
+                    Ok(tick) => {
+                        if consecutive_errors > 0 {
+                            eprintln!(
+                                "memphant-worker: recovered after {consecutive_errors} failed ticks"
+                            );
+                            consecutive_errors = 0;
+                        }
+                        if !tick.is_idle() {
+                            eprintln!(
+                                "memphant-worker: completed={} failed={} retried={} deferred={}",
+                                tick.completed, tick.failed, tick.retried, tick.deferred
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        consecutive_errors += 1;
+                        if should_log_tick_error(consecutive_errors) {
+                            eprintln!(
+                                "memphant-worker: tick error: {error} ({consecutive_errors} consecutive, next tick in {:?})",
+                                backoff_delay(consecutive_errors)
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -155,7 +210,12 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorkerMode, drain_finished, worker_batch_from_value, worker_mode};
+    use std::time::Duration;
+
+    use super::{
+        WorkerMode, backoff_delay, drain_finished, parse_env_flag, should_log_tick_error,
+        worker_batch_from_value, worker_mode,
+    };
 
     #[test]
     fn worker_modes_are_distinct_and_conflicts_fail() {
@@ -183,5 +243,107 @@ mod tests {
             drain_finished(0, 2, 3).unwrap_err(),
             "drain produced dead-lettered jobs"
         );
+    }
+
+    #[test]
+    fn parse_env_flag_accepts_truthy_and_falsy_spellings() {
+        // Unset and blank values are false, never an error.
+        assert_eq!(parse_env_flag("MEMPHANT_WORKER_ONCE", None), Ok(false));
+        assert_eq!(parse_env_flag("MEMPHANT_WORKER_ONCE", Some("")), Ok(false));
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some("   ")),
+            Ok(false)
+        );
+        for value in ["1", "true", "yes", "on"] {
+            assert_eq!(
+                parse_env_flag("MEMPHANT_WORKER_ONCE", Some(value)),
+                Ok(true),
+                "{value:?} must parse as true"
+            );
+        }
+        for value in ["0", "false", "no", "off"] {
+            assert_eq!(
+                parse_env_flag("MEMPHANT_WORKER_ONCE", Some(value)),
+                Ok(false),
+                "{value:?} must parse as false"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_env_flag_trims_and_matches_case_insensitively() {
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some(" 1 ")),
+            Ok(true)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some("\ttrue\n")),
+            Ok(true)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_DRAIN", Some(" YES ")),
+            Ok(true)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_DRAIN", Some("On")),
+            Ok(true)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some(" FALSE ")),
+            Ok(false)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some("No")),
+            Ok(false)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some(" off\t")),
+            Ok(false)
+        );
+        assert_eq!(
+            parse_env_flag("MEMPHANT_WORKER_ONCE", Some("OFF")),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn parse_env_flag_rejects_unknown_values_naming_variable_and_value() {
+        for value in ["maybe", "2", "y", "01", "enabled"] {
+            let error = parse_env_flag("MEMPHANT_WORKER_DRAIN", Some(value)).unwrap_err();
+            assert!(
+                error.contains("MEMPHANT_WORKER_DRAIN"),
+                "{value:?}: {error}"
+            );
+            assert!(error.contains(value), "{value:?}: {error}");
+            assert!(
+                error.contains("must be one of 1/0/true/false/yes/no/on/off"),
+                "{value:?}: {error}"
+            );
+        }
+        // The reported value is the trimmed spelling.
+        let error = parse_env_flag("MEMPHANT_WORKER_ONCE", Some(" maybe ")).unwrap_err();
+        assert!(error.contains("got \"maybe\""), "{error}");
+    }
+
+    #[test]
+    fn backoff_delay_doubles_with_each_error_and_caps_at_thirty_seconds() {
+        assert_eq!(backoff_delay(0), Duration::from_millis(500));
+        assert_eq!(backoff_delay(1), Duration::from_secs(1));
+        assert_eq!(backoff_delay(2), Duration::from_secs(2));
+        assert_eq!(backoff_delay(5), Duration::from_secs(16));
+        assert_eq!(backoff_delay(6), Duration::from_secs(30));
+        assert_eq!(backoff_delay(7), Duration::from_secs(30));
+        assert_eq!(backoff_delay(100), Duration::from_secs(30));
+        assert_eq!(backoff_delay(u32::MAX), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn tick_error_logging_logs_first_and_then_every_tenth_error() {
+        assert!(should_log_tick_error(1));
+        for consecutive in [2u32, 3, 4, 5, 6, 7, 8, 9, 11, 12, 19, 21] {
+            assert!(!should_log_tick_error(consecutive), "{consecutive}");
+        }
+        assert!(should_log_tick_error(10));
+        assert!(should_log_tick_error(20));
     }
 }
