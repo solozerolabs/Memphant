@@ -172,6 +172,218 @@ fn scripted_openrouter() -> (String, Arc<AtomicUsize>, std::thread::JoinHandle<(
     (format!("http://{address}/api/v1"), calls, server)
 }
 
+/// Run the CLI and return its raw output, with the identity env vars cleared
+/// so a developer shell cannot leak into the assertions.
+fn cli_raw(url: &str, args: &[&str], env: &[(&str, String)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_memphant-cli"));
+    command
+        .args(args)
+        .env("MEMPHANT_URL", url)
+        .env_remove("MEMPHANT_API_KEY")
+        .env_remove("MEMPHANT_CAPTURE_URL")
+        .env_remove("MEMPHANT_SUBJECT_ID")
+        .env_remove("MEMPHANT_SCOPE_ID")
+        .env_remove("MEMPHANT_ACTOR_ID")
+        .env_remove("MEMPHANT_AGENT_NODE_ID")
+        .env_remove("MEMPHANT_SUBJECT_GENERATION");
+    for (name, value) in env {
+        command.env(name, value);
+    }
+    command.output().expect("cli runs")
+}
+
+/// A one-shot raw HTTP responder: captures the single request the CLI sends
+/// and replies with `response` (a JSON body, HTTP 200). The join handle
+/// delivers the raw request bytes — headers and body — so tests can assert
+/// exactly what reached the wire, including the request target.
+fn capture_one_request(response: &str) -> (String, std::thread::JoinHandle<Option<String>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    listener.set_nonblocking(true).unwrap();
+    let address = listener.local_addr().unwrap();
+    let response = response.to_string();
+    let server = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let (mut socket, _) = loop {
+            match listener.accept() {
+                Ok(connection) => break connection,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("accept failed: {error}"),
+            }
+        };
+        socket.set_nonblocking(false).unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0u8; 8192];
+        loop {
+            let read = socket.read(&mut buffer).expect("read request");
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..read]);
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&request[..header_end + 4]);
+            let length = headers
+                .lines()
+                .find_map(|line| {
+                    line.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .map(str::trim)
+                        .and_then(|value| value.parse::<usize>().ok())
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + length {
+                break;
+            }
+        }
+        write!(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            response.len(),
+            response
+        )
+        .unwrap();
+        Some(String::from_utf8_lossy(&request).into_owned())
+    });
+    (format!("http://{address}"), server)
+}
+
+/// A parse error must fail BEFORE the CLI dials the server: exit 2, the
+/// existing `<verb>=error` line, and no request on the wire.
+#[test]
+fn unknown_flag_typo_exits_two_without_sending_a_request() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let output = cli_raw(&url, &["recall", "--limt", "5"], &[]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        output.stdout.is_empty(),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("recall=error"), "{stderr}");
+    assert!(
+        stderr.contains("unknown flag --limt for recall"),
+        "{stderr}"
+    );
+    // The process already exited: nothing may be waiting on the listener.
+    match listener.accept() {
+        Ok(_) => panic!("the CLI sent a request despite the parse error"),
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+        Err(error) => panic!("accept failed: {error}"),
+    }
+}
+
+/// `--limit=5` is a value flag, not a flag literally named `limit=5`: the
+/// parsed limit must reach the request body.
+#[test]
+fn recall_limit_equals_syntax_reaches_the_request_body() {
+    let (url, server) = capture_one_request(r#"{"items":[],"trace_id":"t-limit"}"#);
+    let output = cli_raw(
+        &url,
+        &[
+            "recall",
+            "--json",
+            "--subject-id",
+            "s",
+            "--scope",
+            "sc",
+            "--actor",
+            "a",
+            "--agent-node",
+            "an",
+            "--subject-generation",
+            "1",
+            "--query",
+            "encode me",
+            "--limit=5",
+        ],
+        &[],
+    );
+    assert!(
+        output.status.success(),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let request = server.join().unwrap().expect("the CLI sent a request");
+    let body = request
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .unwrap_or_default();
+    let body: Value = serde_json::from_str(body).expect("recall body is JSON");
+    assert_eq!(body["limit"], serde_json::json!(5));
+    assert_eq!(body["query"], "encode me");
+}
+
+/// `trace` interpolates ids into a URL: a space or `&` in the trace id or in
+/// MEMPHANT_SUBJECT_ID must arrive percent-encoded, not as a broken path or a
+/// forged extra query parameter.
+#[test]
+fn trace_percent_encodes_the_path_segment_and_query_values() {
+    let (url, server) = capture_one_request(r#"{"id":"my trace&id"}"#);
+    let output = cli_raw(
+        &url,
+        &["trace", "my trace&id"],
+        &[
+            ("MEMPHANT_SUBJECT_ID", "sub ject&id".to_string()),
+            ("MEMPHANT_SCOPE_ID", "scope-1".to_string()),
+            ("MEMPHANT_ACTOR_ID", "actor-1".to_string()),
+            ("MEMPHANT_AGENT_NODE_ID", "agent-1".to_string()),
+            ("MEMPHANT_SUBJECT_GENERATION", "7".to_string()),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let request = server.join().unwrap().expect("the CLI sent a request");
+    let request_line = request.lines().next().expect("request line");
+    assert_eq!(
+        request_line,
+        "GET /v1/traces/my%20trace%26id?subject_id=sub%20ject%26id&scope_id=scope-1&actor_id=actor-1&agent_node_id=agent-1&subject_generation=7 HTTP/1.1"
+    );
+}
+
+/// Extra positionals must not be silently ignored: `trace <id> <junk>`
+/// exits 2 before dialing, like every other verb.
+#[test]
+fn trace_rejects_extra_positional_arguments() {
+    let (url, server) = capture_one_request(r#"{"id":"t"}"#);
+    let output = cli_raw(
+        &url,
+        &["trace", "t-1", "t-2"],
+        &[
+            ("MEMPHANT_SUBJECT_ID", "s".to_string()),
+            ("MEMPHANT_SCOPE_ID", "sc".to_string()),
+            ("MEMPHANT_ACTOR_ID", "a".to_string()),
+            ("MEMPHANT_AGENT_NODE_ID", "an".to_string()),
+            ("MEMPHANT_SUBJECT_GENERATION", "1".to_string()),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("trace=error"), "{stderr}");
+    assert!(
+        stderr.contains("unexpected positional arguments"),
+        "{stderr}"
+    );
+    assert!(server.join().unwrap().is_none(), "no request may be sent");
+}
+
 static DEEP_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct ScopedEnv {

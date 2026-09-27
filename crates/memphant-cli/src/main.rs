@@ -127,18 +127,27 @@ mod http_verbs {
     }
 
     fn execute(verb: &str, args: &[String]) -> Result<ExitCode, String> {
-        let (flags, positional) = parse_flags(args)?;
+        let (flags, positional) = parse_flags(verb, args)?;
         if verb == "trace" {
-            let id = positional
-                .first()
-                .cloned()
-                .or_else(|| flags.get("id").cloned())
-                .ok_or("usage: memphant trace <trace-id>")?;
+            let id = match positional.as_slice() {
+                [id] => id.clone(),
+                [] => flags
+                    .get("id")
+                    .cloned()
+                    .ok_or("usage: memphant trace <trace-id>")?,
+                _ => return Err(format!("unexpected positional arguments: {positional:?}")),
+            };
             let (subject, scope, actor, agent_node, generation) = ids(&flags)?;
             return request(
                 "GET",
                 &format!(
-                    "/v1/traces/{id}?subject_id={subject}&scope_id={scope}&actor_id={actor}&agent_node_id={agent_node}&subject_generation={generation}"
+                    "/v1/traces/{}?subject_id={}&scope_id={}&actor_id={}&agent_node_id={}&subject_generation={}",
+                    percent_encode(&id),
+                    percent_encode(&subject),
+                    percent_encode(&scope),
+                    percent_encode(&actor),
+                    percent_encode(&agent_node),
+                    percent_encode(&generation.to_string()),
                 ),
                 None,
                 None,
@@ -212,31 +221,174 @@ mod http_verbs {
         out
     }
 
-    /// `--flag value` pairs plus bare `--resource` style booleans.
-    fn parse_flags(args: &[String]) -> Result<(HashMap<String, String>, Vec<String>), String> {
+    /// The memory-context identity flags every verb reads via `ids()`.
+    const IDENTITY_FLAGS: &[&str] = &[
+        "subject-id",
+        "scope",
+        "actor",
+        "agent-node",
+        "subject-generation",
+    ];
+
+    /// The flag allow-list of one memory verb: the value-taking flags and the
+    /// bare boolean flags it actually reads (`build_body`, `ids()`,
+    /// `execute`, the idempotency-key branch), mirrored on file_plane's strict
+    /// flag handling so a typo fails loudly instead of silently posting a
+    /// wrong request. `--json` is allowed on every verb.
+    struct VerbFlagSet {
+        values: &'static [&'static str],
+        booleans: &'static [&'static str],
+    }
+
+    impl VerbFlagSet {
+        fn of(verb: &str) -> Option<VerbFlagSet> {
+            let (values, booleans): (&'static [&'static str], &'static [&'static str]) = match verb
+            {
+                "retain" => (
+                    &[
+                        "idempotency-key",
+                        "source-ref",
+                        "observed-at",
+                        "source-kind",
+                        "body",
+                        "body-file",
+                        "subject",
+                        "predicate",
+                        "uri",
+                        "mime-type",
+                        "content-hash",
+                        "kind",
+                        "revision",
+                        "fact-key",
+                        "confidence",
+                        "valid-from",
+                        "valid-to",
+                    ],
+                    &["resource", "unit"],
+                ),
+                "recall" => (
+                    &[
+                        "query",
+                        "limit",
+                        "budget-tokens",
+                        "mode",
+                        "transaction-as-of",
+                        "valid-at",
+                    ],
+                    &["include-beliefs", "compact-only", "general"],
+                ),
+                "reflect" => (&["idempotency-key"], &[]),
+                "correct" => (
+                    &[
+                        "unit",
+                        "value",
+                        "reason",
+                        "source-ref",
+                        "observed-at",
+                        "valid-from",
+                        "valid-to",
+                        "idempotency-key",
+                    ],
+                    &[],
+                ),
+                "forget" => (
+                    &["unit", "episode", "resource", "reason", "idempotency-key"],
+                    &[],
+                ),
+                "mark" => (
+                    &["trace", "caller", "used", "outcome", "idempotency-key"],
+                    &["success", "failure", "corrected", "ignored"],
+                ),
+                "trace" => (&["id"], &[]),
+                _ => return None,
+            };
+            Some(VerbFlagSet { values, booleans })
+        }
+
+        fn allows(&self, name: &str) -> bool {
+            self.is_value(name) || self.is_boolean(name)
+        }
+
+        fn is_value(&self, name: &str) -> bool {
+            self.values.contains(&name) || IDENTITY_FLAGS.contains(&name)
+        }
+
+        fn is_boolean(&self, name: &str) -> bool {
+            self.booleans.contains(&name) || name == "json"
+        }
+    }
+
+    /// `--flag value`, `--flag=value` and bare `--resource` style booleans,
+    /// restricted to the verb's allow-list: unknown flags, duplicates and
+    /// missing/empty values are errors instead of silent garbage.
+    fn parse_flags(
+        verb: &str,
+        args: &[String],
+    ) -> Result<(HashMap<String, String>, Vec<String>), String> {
+        let allowed = VerbFlagSet::of(verb).ok_or_else(|| format!("unknown verb: {verb}"))?;
         let mut flags = HashMap::new();
         let mut positional = Vec::new();
         let mut index = 0;
         while index < args.len() {
-            let arg = &args[index];
-            if let Some(name) = arg.strip_prefix("--") {
-                let next = args.get(index + 1);
-                match next {
-                    Some(value) if !value.starts_with("--") => {
-                        flags.insert(name.to_string(), value.clone());
-                        index += 2;
-                    }
-                    _ => {
-                        flags.insert(name.to_string(), "true".to_string());
-                        index += 1;
-                    }
-                }
-            } else {
-                positional.push(arg.clone());
+            let arg = args[index].as_str();
+            let Some(stripped) = arg.strip_prefix("--") else {
+                positional.push(arg.to_string());
                 index += 1;
+                continue;
+            };
+            let (name, inline) = match stripped.split_once('=') {
+                Some((name, value)) => (name, Some(value)),
+                None => (stripped, None),
+            };
+            if !allowed.allows(name) {
+                return Err(format!("unknown flag --{name} for {verb}"));
             }
+            if flags.contains_key(name) {
+                return Err(format!("duplicate flag --{name}"));
+            }
+            let value = if allowed.is_boolean(name) {
+                // Booleans never consume the next token; an inline `=value`
+                // is stored as given (readers only test presence).
+                inline.unwrap_or("true").to_string()
+            } else {
+                match inline {
+                    None => {
+                        let value = args
+                            .get(index + 1)
+                            .filter(|value| !value.starts_with("--"))
+                            .ok_or_else(|| format!("missing value for --{name}"))?;
+                        index += 1;
+                        value.clone()
+                    }
+                    Some("") => return Err(format!("missing value for --{name}")),
+                    Some(value) => value.to_string(),
+                }
+            };
+            flags.insert(name.to_string(), value);
+            index += 1;
         }
         Ok((flags, positional))
+    }
+
+    /// Percent-encoding for a URL query value or path segment: unreserved
+    /// characters (`ALPHA / DIGIT / "-" / "." / "_" / "~"`) pass through,
+    /// everything else becomes uppercase `%XX`. Local helper — no new crate.
+    pub(crate) fn percent_encode(value: &str) -> String {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        let mut encoded = String::with_capacity(value.len());
+        for byte in value.as_bytes() {
+            match byte {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                    encoded.push(*byte as char);
+                }
+                _ => {
+                    encoded.push('%');
+                    encoded.push(HEX[(byte >> 4) as usize] as char);
+                    encoded.push(HEX[(byte & 0x0f) as usize] as char);
+                }
+            }
+        }
+        encoded
     }
 
     fn now_rfc3339() -> String {
@@ -625,6 +777,107 @@ mod http_verbs {
                 card.contains("- [c-2] semantic: confirmed fact\n"),
                 "{card}"
             );
+        }
+
+        fn args(values: &[&str]) -> Vec<String> {
+            values.iter().map(|value| value.to_string()).collect()
+        }
+
+        #[test]
+        fn parse_flags_accepts_both_value_syntaxes() {
+            let (flags, positional) =
+                parse_flags("recall", &args(&["--query", "q", "--limit=5"])).expect("parses");
+            assert_eq!(flags["query"], "q");
+            assert_eq!(flags["limit"], "5");
+            assert!(positional.is_empty());
+            // An `=` in the VALUE stays part of the value, not a split point.
+            let (flags, _) = parse_flags("mark", &args(&["--used=u1,u2"])).expect("parses");
+            assert_eq!(flags["used"], "u1,u2");
+        }
+
+        #[test]
+        fn parse_flags_rejects_unknown_duplicate_and_empty_values() {
+            let error = parse_flags("recall", &args(&["--limt", "5"])).expect_err("typo");
+            assert_eq!(error, "unknown flag --limt for recall");
+            let error = parse_flags("recall", &args(&["--limit=5", "--limit", "6"]))
+                .expect_err("duplicate");
+            assert_eq!(error, "duplicate flag --limit");
+            let error = parse_flags("recall", &args(&["--limit="])).expect_err("empty value");
+            assert_eq!(error, "missing value for --limit");
+            let error = parse_flags("recall", &args(&["--query"])).expect_err("missing value");
+            assert_eq!(error, "missing value for --query");
+            // A value that itself starts with `--` must not be swallowed.
+            let error = parse_flags("recall", &args(&["--query", "--json"]))
+                .expect_err("flag-looking value");
+            assert_eq!(error, "missing value for --query");
+        }
+
+        #[test]
+        fn parse_flags_keeps_bare_booleans_boolean() {
+            let (flags, _) =
+                parse_flags("mark", &args(&["--success", "--used", "u1", "--trace=t-1"]))
+                    .expect("parses");
+            assert_eq!(flags["success"], "true");
+            assert_eq!(flags["used"], "u1");
+            // A boolean never consumes the next token: `--json --success`
+            // stays two flags, and an inline `=value` is stored as given.
+            let (flags, positional) =
+                parse_flags("recall", &args(&["--json", "--general"])).expect("parses");
+            assert_eq!(flags["json"], "true");
+            assert_eq!(flags["general"], "true");
+            assert!(positional.is_empty());
+            let (flags, _) = parse_flags("retain", &args(&["--resource=x", "--unit="]))
+                .expect("booleans accept inline values");
+            assert_eq!(flags["resource"], "x");
+            assert_eq!(flags["unit"], "");
+        }
+
+        #[test]
+        fn parse_flags_enforces_per_verb_allow_lists() {
+            for verb in [
+                "retain", "recall", "reflect", "correct", "forget", "mark", "trace",
+            ] {
+                // Identity flags and --json are on every verb.
+                let (flags, _) = parse_flags(
+                    verb,
+                    &args(&[
+                        "--subject-id",
+                        "s",
+                        "--scope",
+                        "sc",
+                        "--actor",
+                        "a",
+                        "--agent-node",
+                        "an",
+                        "--subject-generation=1",
+                        "--json",
+                    ]),
+                )
+                .expect("identity and --json are always allowed");
+                assert_eq!(flags["subject-id"], "s");
+                assert_eq!(flags["subject-generation"], "1");
+                assert_eq!(flags["json"], "true");
+                assert!(VerbFlagSet::of(verb).is_some());
+            }
+            // Cross-verb leakage is rejected in both directions.
+            let error = parse_flags("recall", &args(&["--body", "b"])).expect_err("recall");
+            assert_eq!(error, "unknown flag --body for recall");
+            let error = parse_flags("retain", &args(&["--query", "q"])).expect_err("retain");
+            assert_eq!(error, "unknown flag --query for retain");
+            let error = parse_flags("reflect", &args(&["--reason", "r"])).expect_err("reflect");
+            assert_eq!(error, "unknown flag --reason for reflect");
+            let error = parse_flags("trace", &args(&["--trace", "t"])).expect_err("trace");
+            assert_eq!(error, "unknown flag --trace for trace");
+            assert!(VerbFlagSet::of("compile").is_none());
+        }
+
+        #[test]
+        fn percent_encode_passes_unreserved_and_encodes_the_rest() {
+            assert_eq!(percent_encode("abcXYZ019-._~"), "abcXYZ019-._~");
+            assert_eq!(percent_encode("sub ject&id"), "sub%20ject%26id");
+            assert_eq!(percent_encode("a=b/c?d"), "a%3Db%2Fc%3Fd");
+            assert_eq!(percent_encode(""), "");
+            assert_eq!(percent_encode("ünïcode"), "%C3%BCn%C3%AFcode");
         }
     }
 }
