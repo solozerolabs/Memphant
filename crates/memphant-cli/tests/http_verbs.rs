@@ -16,6 +16,7 @@ use std::net::TcpListener;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const TENANT: &str = "00000000-0000-0000-0000-00000000c11a";
@@ -839,4 +840,206 @@ async fn resource_retain_and_trace_round_trip_over_http() {
     );
     assert!(ok, "trace exits zero");
     assert_eq!(trace["id"].as_str(), Some(trace_id.as_str()));
+}
+
+/// Strict flag parsing (parity with the file plane's `parse_context_args`):
+/// a typo'd flag is rejected before any HTTP traffic, with the verb's
+/// `<verb>=error` line and exit code 2 — and NO request leaves the process.
+#[test]
+fn recall_unknown_flag_exits_two_and_sends_no_request() {
+    // A listener the CLI must never reach: any connection is a failure.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["recall", "--limt", "5"])
+        .env("MEMPHANT_URL", &url)
+        .env_remove("MEMPHANT_API_KEY")
+        .output()
+        .expect("cli runs");
+    assert_eq!(output.status.code(), Some(2), "unknown flag exits 2");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("recall=error"),
+        "missing verb error line: {stderr}"
+    );
+    assert!(
+        stderr.contains("unknown flag --limt for recall"),
+        "missing unknown-flag message: {stderr}"
+    );
+    match listener.accept() {
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+        other => panic!("strict parsing must send no request, got {other:?}"),
+    }
+}
+
+/// `--limit=5` must parse as the `limit` flag with value 5 and be applied
+/// server-side (the recall engine uses request.limit as its item cap). The
+/// expected cap is derived from an unlimited run on the same query, so a
+/// lane filter cannot make the assertion flaky.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recall_equals_syntax_sends_limit_five() {
+    let (url, binding, state) = spawn_server().await;
+    let subject = binding.subject_id.as_uuid().to_string();
+    let scope = binding.scope_id.as_uuid().to_string();
+    let actor = binding.actor_id.as_uuid().to_string();
+    let agent = binding.agent_node_id.as_uuid().to_string();
+    let generation = binding.subject_generation.to_string();
+    let identity: Vec<&str> = vec![
+        "--subject-id",
+        &subject,
+        "--scope",
+        &scope,
+        "--actor",
+        &actor,
+        "--agent-node",
+        &agent,
+        "--subject-generation",
+        &generation,
+    ];
+
+    for index in 1..=6 {
+        let idempotency_key = format!("cli-limit-retain-{index}");
+        let body = format!("Launch fact {index}: the launch code word is heliotrope-{index}.");
+        let retain_args: Vec<&str> = ["retain"]
+            .into_iter()
+            .chain(identity.iter().copied())
+            .chain([
+                "--idempotency-key",
+                idempotency_key.as_str(),
+                "--source-ref",
+                "cli:test:limit",
+                "--observed-at",
+                "2026-07-15T00:00:00Z",
+                "--body",
+                body.as_str(),
+            ])
+            .collect();
+        let (retained, ok) = cli(&url, &retain_args);
+        assert!(ok, "retain {index} failed: {}", retained);
+    }
+    let reflect_args: Vec<&str> = ["reflect"]
+        .into_iter()
+        .chain(identity.iter().copied())
+        .chain(["--idempotency-key", "cli-limit-reflect"])
+        .collect();
+    let (_reflected, ok) = cli(&url, &reflect_args);
+    assert!(ok, "reflect failed");
+    state
+        .service()
+        .run_worker_tick(usize::MAX)
+        .await
+        .expect("worker consolidates the retained units");
+
+    let unlimited_args: Vec<&str> = ["recall", "--json"]
+        .into_iter()
+        .chain(identity.iter().copied())
+        .chain(["--query", "launch code word"])
+        .collect();
+    let (unlimited, ok) = cli(&url, &unlimited_args);
+    assert!(ok, "unlimited recall failed: {}", unlimited);
+    let available = unlimited["items"].as_array().map(Vec::len).unwrap_or(0);
+    assert!(
+        available > 5,
+        "expected more than 5 servable units, got {available}: {}",
+        unlimited
+    );
+
+    let limited_args: Vec<&str> = ["recall", "--json"]
+        .into_iter()
+        .chain(identity.iter().copied())
+        .chain(["--limit=5", "--query", "launch code word"])
+        .collect();
+    let (limited, ok) = cli(&url, &limited_args);
+    assert!(ok, "limited recall failed: {}", limited);
+    assert_eq!(
+        limited["items"].as_array().map(Vec::len),
+        Some(5),
+        "--limit=5 must cap the recall at 5 of the {available} servable units: {}",
+        limited
+    );
+}
+
+/// The `trace` command percent-encodes its id path segment and every query
+/// value: ids and identity env vars are arbitrary strings (a space would
+/// break the request line, an `&` would splice a fake query parameter).
+/// Proven on the wire with a raw capture server (same pattern as the
+/// scripted OpenRouter server above).
+#[test]
+fn trace_percent_encodes_path_segment_and_query_values() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let address = listener.local_addr().unwrap();
+    let (sender, receiver) = mpsc::channel();
+    let server = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (mut socket, _) = loop {
+            match listener.accept() {
+                Ok(connection) => break connection,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        sender.send("NO REQUEST".to_string()).unwrap();
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("capture accept failed: {error}"),
+            }
+        };
+        socket.set_nonblocking(false).unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let read = socket.read(&mut buffer).expect("capture read");
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..read]);
+            // A GET has no body: the header terminator ends the request.
+            if request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .is_some()
+            {
+                break;
+            }
+        }
+        let line = String::from_utf8_lossy(&request);
+        sender
+            .send(line.lines().next().unwrap_or_default().to_string())
+            .unwrap();
+        let body = "{\"trace\":true}";
+        write!(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .unwrap();
+    });
+    let _env = ScopedEnv::set(&[
+        ("MEMPHANT_SUBJECT_ID", "agent & co".to_string()),
+        ("MEMPHANT_SCOPE_ID", "scope id".to_string()),
+        ("MEMPHANT_ACTOR_ID", "actor-id".to_string()),
+        ("MEMPHANT_AGENT_NODE_ID", "node~1".to_string()),
+        ("MEMPHANT_SUBJECT_GENERATION", "7".to_string()),
+    ]);
+    let output = Command::new(env!("CARGO_BIN_EXE_memphant-cli"))
+        .args(["trace", "my trace id"])
+        .env("MEMPHANT_URL", format!("http://{address}"))
+        .env_remove("MEMPHANT_API_KEY")
+        .output()
+        .expect("cli runs");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "trace with encoded id exits zero: {stderr}"
+    );
+    server.join().unwrap();
+    let request_line = receiver.recv().expect("captured request line");
+    assert_eq!(
+        request_line,
+        "GET /v1/traces/my%20trace%20id?subject_id=agent%20%26%20co&scope_id=scope%20id&actor_id=actor-id&agent_node_id=node~1&subject_generation=7 HTTP/1.1",
+        "trace must percent-encode the path segment and every query value"
+    );
 }

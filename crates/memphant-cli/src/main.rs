@@ -127,7 +127,7 @@ mod http_verbs {
     }
 
     fn execute(verb: &str, args: &[String]) -> Result<ExitCode, String> {
-        let (flags, positional) = parse_flags(args)?;
+        let (flags, positional) = parse_flags(verb, args)?;
         if verb == "trace" {
             let id = positional
                 .first()
@@ -138,7 +138,13 @@ mod http_verbs {
             return request(
                 "GET",
                 &format!(
-                    "/v1/traces/{id}?subject_id={subject}&scope_id={scope}&actor_id={actor}&agent_node_id={agent_node}&subject_generation={generation}"
+                    "/v1/traces/{}?subject_id={}&scope_id={}&actor_id={}&agent_node_id={}&subject_generation={}",
+                    percent_encode(&id),
+                    percent_encode(&subject),
+                    percent_encode(&scope),
+                    percent_encode(&actor),
+                    percent_encode(&agent_node),
+                    percent_encode(&generation.to_string()),
                 ),
                 None,
                 None,
@@ -212,31 +218,200 @@ mod http_verbs {
         out
     }
 
-    /// `--flag value` pairs plus bare `--resource` style booleans.
-    fn parse_flags(args: &[String]) -> Result<(HashMap<String, String>, Vec<String>), String> {
+    /// The flags each verb actually reads — derived from what `build_body`,
+    /// `ids`, `execute`, and the mutating verbs' idempotency key consume —
+    /// plus `--json` everywhere. Whether a flag takes a value or is a bare
+    /// boolean (`--resource`, `--success`) is decided by argument syntax,
+    /// not by this list. Identity flags are checked separately in
+    /// `parse_flags` so every verb shares them without seven copies.
+    fn allowed_flags(verb: &str) -> &'static [&'static str] {
+        match verb {
+            "retain" => &[
+                "resource",
+                "unit",
+                "body",
+                "body-file",
+                "uri",
+                "mime-type",
+                "content-hash",
+                "kind",
+                "revision",
+                "fact-key",
+                "predicate",
+                "confidence",
+                "valid-from",
+                "valid-to",
+                "subject",
+                "source-kind",
+                "source-ref",
+                "observed-at",
+                "idempotency-key",
+                "json",
+            ],
+            "recall" => &[
+                "query",
+                "limit",
+                "budget-tokens",
+                "mode",
+                "include-beliefs",
+                "compact-only",
+                "general",
+                "transaction-as-of",
+                "valid-at",
+                "json",
+            ],
+            "reflect" => &["idempotency-key", "json"],
+            "correct" => &[
+                "unit",
+                "value",
+                "reason",
+                "source-ref",
+                "observed-at",
+                "valid-from",
+                "valid-to",
+                "idempotency-key",
+                "json",
+            ],
+            "forget" => &[
+                "unit",
+                "episode",
+                "resource",
+                "reason",
+                "idempotency-key",
+                "json",
+            ],
+            "mark" => &[
+                "trace",
+                "caller",
+                "used",
+                "outcome",
+                "success",
+                "failure",
+                "corrected",
+                "ignored",
+                "idempotency-key",
+                "json",
+            ],
+            "trace" => &["id", "json"],
+            // Only the seven routed verbs reach the parser (see `main`); an
+            // unrouted verb rejects every flag rather than silently ignoring it.
+            _ => &[],
+        }
+    }
+
+    /// The flags each verb reads as a bare boolean (presence is the whole
+    /// signal: `contains_key` discriminators, `mark`'s outcome shortcuts, and
+    /// `--json`). Everything else on a verb's allow-list takes a value — even
+    /// names that are boolean on a different verb (`--resource` is a bare
+    /// selector on retain but an id value on forget).
+    fn boolean_flags(verb: &str) -> &'static [&'static str] {
+        match verb {
+            "retain" => &["resource", "unit", "json"],
+            "recall" => &["include-beliefs", "compact-only", "general", "json"],
+            "reflect" | "correct" | "forget" => &["json"],
+            "mark" => &["success", "failure", "corrected", "ignored", "json"],
+            "trace" => &["json"],
+            // Unrouted verbs reject every flag in `allowed_flags` already.
+            _ => &[],
+        }
+    }
+
+    /// `--flag value`, `--flag=value`, and bare `--resource` style booleans,
+    /// gated by the verb's allow-list: unknown, duplicate, empty-valued, and
+    /// missing-valued flags are errors (parity with the file plane's
+    /// `parse_context_args`). A boolean flag never swallows the next token
+    /// (`trace --json <id>` leaves the id positional) and never accepts an
+    /// inline value (`mark --success=false` is rejected, not silently read
+    /// as `--success`), so `retain --body --source-kind agent` cannot become
+    /// `body="true"` and `recall --query ""` cannot send an empty query.
+    fn parse_flags(
+        verb: &str,
+        args: &[String],
+    ) -> Result<(HashMap<String, String>, Vec<String>), String> {
+        const IDENTITY: &[&str] = &[
+            "subject-id",
+            "scope",
+            "actor",
+            "agent-node",
+            "subject-generation",
+        ];
+        let allowed = allowed_flags(verb);
         let mut flags = HashMap::new();
         let mut positional = Vec::new();
         let mut index = 0;
         while index < args.len() {
             let arg = &args[index];
-            if let Some(name) = arg.strip_prefix("--") {
-                let next = args.get(index + 1);
-                match next {
-                    Some(value) if !value.starts_with("--") => {
-                        flags.insert(name.to_string(), value.clone());
-                        index += 2;
-                    }
-                    _ => {
-                        flags.insert(name.to_string(), "true".to_string());
-                        index += 1;
-                    }
-                }
-            } else {
+            let Some(name) = arg.strip_prefix("--") else {
                 positional.push(arg.clone());
                 index += 1;
+                continue;
+            };
+            index += 1;
+            // `--name=value` carries its value inline; the value itself may
+            // contain further `=` (split at the first one).
+            let (name, inline_value) = match name.split_once('=') {
+                Some((name, value)) => (name, Some(value)),
+                None => (name, None),
+            };
+            if !allowed.contains(&name) && !IDENTITY.contains(&name) {
+                return Err(format!("unknown flag --{name} for {verb}"));
             }
+            if flags.contains_key(name) {
+                return Err(format!("duplicate flag --{name}"));
+            }
+            let boolean = boolean_flags(verb).contains(&name);
+            let value = match inline_value {
+                // Presence is the whole signal for a boolean flag: an inline
+                // value would be silently ignored (`--success=false` must
+                // not mean success), so it is a usage error.
+                Some(_) if boolean => return Err(format!("flag --{name} does not take a value")),
+                // `--name=` with no value is a typo, not an empty string.
+                Some("") => return Err(format!("empty value for --{name}")),
+                Some(value) => value.to_string(),
+                None if boolean => "true".to_string(),
+                None => match args.get(index) {
+                    // An empty separated value is as empty as `--name=` and
+                    // must fail at the CLI, not as a server-side payload.
+                    Some(value) if !value.starts_with("--") => {
+                        if value.is_empty() {
+                            return Err(format!("empty value for --{name}"));
+                        }
+                        index += 1;
+                        value.clone()
+                    }
+                    _ => return Err(format!("missing value for --{name}")),
+                },
+            };
+            flags.insert(name.to_string(), value);
         }
         Ok((flags, positional))
+    }
+
+    /// Percent-encode a URL path segment or query value: RFC 3986 unreserved
+    /// characters (ALPHA / DIGIT / "-" / "." / "_" / "~") pass through, every
+    /// other byte becomes `%XX`. Hand-rolled by contract, not by accident:
+    /// this change pins Cargo.toml and Cargo.lock byte-for-byte, and the
+    /// `percent-encoding` crate is only a TRANSITIVE dependency here (pulled
+    /// in by ureq) — reaching it would need a new manifest edge, which would
+    /// edit Cargo.toml and add the edge to the lockfile's `memphant-cli`
+    /// entry. The `trace` ids/identity values are arbitrary strings (env
+    /// vars) that would otherwise splice the query or break the path.
+    fn percent_encode(value: &str) -> String {
+        fn is_unreserved(byte: u8) -> bool {
+            matches!(
+                byte,
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~'
+            )
+        }
+        let mut encoded = String::with_capacity(value.len());
+        for byte in value.as_bytes() {
+            if is_unreserved(*byte) {
+                encoded.push(*byte as char);
+            } else {
+                encoded.push_str(&format!("%{byte:02X}"));
+            }
+        }
+        encoded
     }
 
     fn now_rfc3339() -> String {
@@ -605,6 +780,159 @@ mod http_verbs {
             );
             let empty = render_card(&json!({"trace_id": "t-2", "items": []}));
             assert_eq!(empty, "memphant: no memory for this query (trace t-2)\n");
+        }
+
+        fn to_args(items: &[&str]) -> Vec<String> {
+            items.iter().map(|item| item.to_string()).collect()
+        }
+
+        #[test]
+        fn parse_flags_accepts_both_syntaxes_and_keeps_booleans() {
+            let (flags, positional) = parse_flags(
+                "recall",
+                &to_args(&["--query", "hello world", "--limit=5", "--json"]),
+            )
+            .expect("recall flags parse");
+            assert_eq!(flags["query"], "hello world");
+            assert_eq!(flags["limit"], "5");
+            assert_eq!(flags["json"], "true");
+            assert!(positional.is_empty(), "{positional:?}");
+
+            // A bare flag followed by another flag stays a boolean; a
+            // separated value may itself contain `=`.
+            let (flags, _) = parse_flags(
+                "retain",
+                &to_args(&["--resource", "--body", "a=b", "--confidence=0.5"]),
+            )
+            .expect("retain flags parse");
+            assert_eq!(flags["resource"], "true");
+            assert_eq!(flags["body"], "a=b");
+            assert_eq!(flags["confidence"], "0.5");
+        }
+
+        #[test]
+        fn parse_flags_rejects_unknown_duplicate_and_empty_values() {
+            let error = parse_flags("recall", &to_args(&["--limt", "5"]))
+                .expect_err("unknown flag rejected");
+            assert_eq!(error, "unknown flag --limt for recall");
+            // A bare unknown flag (no value follows) is still unknown.
+            let error =
+                parse_flags("recall", &to_args(&["--limt"])).expect_err("bare unknown rejected");
+            assert_eq!(error, "unknown flag --limt for recall");
+            // Duplicates are caught across both syntaxes.
+            let error = parse_flags("recall", &to_args(&["--limit", "5", "--limit=6"]))
+                .expect_err("duplicate rejected");
+            assert_eq!(error, "duplicate flag --limit");
+            let error = parse_flags("recall", &to_args(&["--limit=5", "--limit", "6"]))
+                .expect_err("duplicate rejected the other way");
+            assert_eq!(error, "duplicate flag --limit");
+            // `--name=` with an empty value is a typo, not an empty string.
+            let error =
+                parse_flags("recall", &to_args(&["--limit="])).expect_err("empty = value rejected");
+            assert_eq!(error, "empty value for --limit");
+        }
+
+        #[test]
+        fn parse_flags_rejects_missing_values_for_value_flags() {
+            // A value-taking flag cannot swallow the next flag as "true".
+            let error = parse_flags("retain", &to_args(&["--body", "--source-kind", "agent"]))
+                .expect_err("value flag cannot swallow the next flag");
+            assert_eq!(error, "missing value for --body");
+            // A trailing value-taking flag with nothing left is missing a value.
+            let error =
+                parse_flags("recall", &to_args(&["--query"])).expect_err("trailing value flag");
+            assert_eq!(error, "missing value for --query");
+            // Booleans never consume the next token.
+            let (flags, positional) =
+                parse_flags("retain", &to_args(&["--resource", "--uri", "repo://x"]))
+                    .expect("retain flags parse");
+            assert_eq!(flags["resource"], "true");
+            assert_eq!(flags["uri"], "repo://x");
+            assert!(positional.is_empty(), "{positional:?}");
+            // `trace --json <id>` leaves the id as the positional trace id.
+            let (flags, positional) =
+                parse_flags("trace", &to_args(&["--json", "my trace"])).expect("trace flags");
+            assert_eq!(flags["json"], "true");
+            assert_eq!(positional, vec!["my trace".to_string()]);
+        }
+
+        #[test]
+        fn parse_flags_rejects_boolean_inline_values_and_empty_separated_values() {
+            // Presence is the whole signal for a boolean flag: an inline value
+            // would be silently ignored, so `--success=false` must not mean
+            // success and `--general=0` must not select the general lane.
+            let error = parse_flags("mark", &to_args(&["--success=false"]))
+                .expect_err("boolean inline rejected");
+            assert_eq!(error, "flag --success does not take a value");
+            let error = parse_flags("recall", &to_args(&["--general=0"]))
+                .expect_err("boolean inline rejected");
+            assert_eq!(error, "flag --general does not take a value");
+            let error =
+                parse_flags("recall", &to_args(&["--json=false"])).expect_err("--json is boolean");
+            assert_eq!(error, "flag --json does not take a value");
+            // An empty separated value is rejected exactly like `--name=`.
+            let error = parse_flags("recall", &to_args(&["--query", ""]))
+                .expect_err("empty separated value rejected");
+            assert_eq!(error, "empty value for --query");
+        }
+
+        #[test]
+        fn parse_flags_enforces_per_verb_allow_lists() {
+            // `--unit` belongs to retain/correct/forget, not recall.
+            for verb in ["retain", "correct", "forget"] {
+                assert!(
+                    parse_flags(verb, &to_args(&["--unit", "u-1"])).is_ok(),
+                    "--unit must be allowed on {verb}"
+                );
+            }
+            assert_eq!(
+                parse_flags("recall", &to_args(&["--unit", "u-1"]))
+                    .expect_err("recall has no --unit"),
+                "unknown flag --unit for recall"
+            );
+            // `--json` is allowed on every verb.
+            for verb in [
+                "retain", "recall", "reflect", "correct", "forget", "mark", "trace",
+            ] {
+                assert!(
+                    parse_flags(verb, &to_args(&["--json"])).is_ok(),
+                    "--json must be allowed on {verb}"
+                );
+            }
+            // Identity flags are shared by every verb.
+            for verb in [
+                "retain", "recall", "reflect", "correct", "forget", "mark", "trace",
+            ] {
+                assert!(
+                    parse_flags(verb, &to_args(&["--subject-id", "s-1"])).is_ok(),
+                    "--subject-id must be allowed on {verb}"
+                );
+            }
+            // mark's bare outcome booleans stay booleans.
+            let (flags, _) = parse_flags("mark", &to_args(&["--trace", "t-1", "--success"]))
+                .expect("mark flags");
+            assert_eq!(flags["success"], "true");
+            // trace accepts `--id` plus a positional id.
+            let (flags, positional) =
+                parse_flags("trace", &to_args(&["my trace", "--id", "other"]))
+                    .expect("trace flags");
+            assert_eq!(flags["id"], "other");
+            assert_eq!(positional, vec!["my trace".to_string()]);
+            // reflect reads only identity + idempotency-key + json.
+            assert!(parse_flags("reflect", &to_args(&["--query", "x"])).is_err());
+            assert!(parse_flags("reflect", &to_args(&["--idempotency-key", "k"])).is_ok());
+        }
+
+        #[test]
+        fn percent_encode_passes_unreserved_and_escapes_the_rest() {
+            assert_eq!(percent_encode("actor-id.~1"), "actor-id.~1");
+            assert_eq!(percent_encode("my trace id"), "my%20trace%20id");
+            assert_eq!(percent_encode("agent & co"), "agent%20%26%20co");
+            assert_eq!(percent_encode("a&b/c?d"), "a%26b%2Fc%3Fd");
+            assert_eq!(percent_encode("%"), "%25");
+            // Multi-byte UTF-8 encodes byte-wise.
+            assert_eq!(percent_encode("\u{e9}"), "%C3%A9");
+            assert_eq!(percent_encode("7"), "7");
         }
 
         #[test]
