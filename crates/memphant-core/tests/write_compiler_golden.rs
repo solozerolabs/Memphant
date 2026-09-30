@@ -3,13 +3,26 @@ use memphant_core::{
     retain_episode,
 };
 use memphant_types::{
-    AdmissionAction, ContextualChunk, CorrectRequest, CorrectSelector, CorrectionPayload, JobId,
-    MemoryEdgeKind, MemoryKind, ReflectCandidate, ReflectInput, ResolvedMemoryContext,
-    RetainRequest, TenantId, TrustLevel, UnitId, UnitState,
+    AdmissionAction, COMPILER_VERSION, ContextualChunk, CorrectRequest, CorrectSelector,
+    CorrectionPayload, JobId, MemoryEdgeKind, MemoryKind, ReflectCandidate, ReflectInput,
+    ResolvedMemoryContext, RetainRequest, TenantId, TrustLevel, UnitId, UnitState,
 };
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 const CLOCK: FixedClock = FixedClock("2026-07-03T00:00:00Z");
+
+/// The deterministic compiler's output, pinned to the version that produced
+/// it (graphify's hand-bumped `_AST_CACHE_SCHEMA`). `job_state` dedups reflect
+/// work on `COMPILER_VERSION`, so output that changes under an unchanged
+/// version is silently never re-derived for already-reflected episodes. The
+/// digest covers every golden case's observed actions, unit count, bodies and
+/// edge kinds — no version fields. A changed digest means: bump
+/// `COMPILER_VERSION` and re-pin.
+const COMPILER_OUTPUT_PIN: (&str, &str) = (
+    "compiler-0.1.0-ws0",
+    "31b8c39a02645266453fa0a5e3e0e29b3e46ea3e1e5fa7031302d8fbb73ab8b6",
+);
 
 fn tenant(value: u128) -> TenantId {
     TenantId::from_u128(value)
@@ -144,6 +157,7 @@ async fn write_compiler_golden_fixtures_pass() {
     ))
     .expect("fixtures parse");
 
+    let mut pinned_outputs = String::new();
     for case in cases {
         let store = InMemoryStore::default();
         let tenant_id = tenant(10_000);
@@ -306,6 +320,12 @@ async fn write_compiler_golden_fixtures_pass() {
             case.id
         );
         assert_eq!(edge_kinds, case.expected_edge_kinds, "{}", case.id);
+        pinned_outputs.push_str(&format!(
+            "{}|{observed_actions:?}|{}|{semantic_bodies:?}|{belief_bodies:?}|\
+             {quarantined_bodies:?}|{freshness_due_bodies:?}|{edge_kinds:?}\n",
+            case.id,
+            store.memory_units(tenant_id).len(),
+        ));
         if case.id == "contradiction_detection" {
             let units = store.memory_units(tenant_id);
             let superseded = units
@@ -371,6 +391,15 @@ async fn write_compiler_golden_fixtures_pass() {
             assert!(current.freshness_due_at.is_some());
         }
     }
+
+    let digest = format!("{:x}", Sha256::digest(pinned_outputs.as_bytes()));
+    let (pinned_version, pinned_digest) = COMPILER_OUTPUT_PIN;
+    assert_eq!(
+        (COMPILER_VERSION, digest.as_str()),
+        (pinned_version, pinned_digest),
+        "compiler output changed: bump COMPILER_VERSION and re-pin COMPILER_OUTPUT_PIN \
+         to ({COMPILER_VERSION:?}, {digest:?})"
+    );
 }
 
 #[tokio::test]
