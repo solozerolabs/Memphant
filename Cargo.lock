@@ -2290,6 +2290,7 @@ dependencies = [
  "jiff",
  "memphant-core",
  "memphant-store-postgres",
+ "memphant-store-testkit",
  "memphant-types",
  "reqwest",
  "serde",

@@ -13,6 +13,8 @@
 //! satisfies the backend's FK constraints. Everything else goes through the
 //! `MemoryStore` trait and the store-generic core functions.
 
+pub mod directive_precision;
+
 use std::future::Future;
 use std::sync::Arc;
 

@@ -32,4 +32,5 @@ fastembed = ["dep:fastembed"]
 qwen3 = ["fastembed", "fastembed/qwen3", "dep:candle-core"]
 
 [dev-dependencies]
+memphant-store-testkit.workspace = true
 tempfile.workspace = true

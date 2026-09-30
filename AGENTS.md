@@ -84,6 +84,10 @@ cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features  # --workspace is the floor; never `-p X --lib`
 cargo test --doc
+# Served-block precision, real-model arm: the directive_precision fixture under
+# bge-small-en-v1.5 (the prod dense channel). CPU, deterministic, no network once
+# the fastembed cache is warm; FASTEMBED_CACHE_DIR points at that cache.
+cargo test -p memphant-runtime --features fastembed --test directive_precision_bge -- --ignored
 # Live-Postgres contract + worker-binary smoke tests: #[ignore]d by default.
 # with_scratch_db.sh mints an ephemeral migrated database, points
 # MEMPHANT_TEST_DATABASE_URL at it, and drops it afterward — so these tests
