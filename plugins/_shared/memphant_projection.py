@@ -23,7 +23,7 @@ pre-training-led reasoning". This module renders exactly that from a recall:
 CLI:  python3 memphant_projection.py --cwd <dir>
       fetches `/v1/recall` (coding lane: compact_only + include_beliefs, so
       freshly-captured Candidate units are served labelled `[unconfirmed]`;
-      limit 20, budget 4096,
+      limit 20, budget RECALL_BUDGET_TOKENS,
       query = "<repo_slug> gotchas conventions contracts procedures") using the
       MEMPHANT_CAPTURE_URL-derived base + bearer + identity env, then renders.
       Fail-safe: any error ⇒ silent, exit 0.
@@ -48,6 +48,11 @@ MEMORY_RELPATH = os.path.join(".memphant", "MEMORY.md")
 MAX_MEMORY_BYTES = 8 * 1024
 MAX_INDEX_BYTES = 2 * 1024
 MAX_LINE_CHARS = 240
+# Sized so the server's ranked pack already fits MAX_MEMORY_BYTES: the
+# server charges >= 1 token per 3 bytes, so 1800 tokens is <= ~5.4 KB of
+# bodies plus ~60 bytes of label/anchor per item (<= 20 items). The server's
+# ranker, not the byte cap, then decides what is served.
+RECALL_BUDGET_TOKENS = 1800
 RECALL_QUERY_SUFFIX = "gotchas conventions contracts procedures"
 
 _INSTRUCTION = (
@@ -145,7 +150,7 @@ def _item_block(item: dict) -> list:
     return [head] + [f"  {ln}" for ln in body_lines]
 
 
-def render_memory_md(items: list) -> str:
+def _render_grouped(items: list) -> str:
     lines = ["# MemPhant memory (projected)", "", "Prefer retrieval-led reasoning over pre-training-led reasoning for anything listed here.", ""]
     for name, members in _grouped(items):
         if not members:
@@ -154,19 +159,18 @@ def render_memory_md(items: list) -> str:
         for item in members:
             lines.extend(_item_block(item))
         lines.append("")
-    text = "\n".join(lines).rstrip() + "\n"
-    while len(text.encode("utf-8")) > MAX_MEMORY_BYTES:
-        # Drop the LAST whole item block (least-confirmed / last-sorted first):
-        # from its `- ` head line through its indented body lines.
-        kept = text.rstrip("\n").split("\n")
-        idx = max((i for i, ln in enumerate(kept) if ln.startswith("- ")), default=None)
-        if idx is None:
-            break
-        end = idx + 1
-        while end < len(kept) and kept[end].startswith("  "):
-            end += 1
-        del kept[idx:end]
-        text = "\n".join(kept).rstrip() + "\n"
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_memory_md(items: list) -> str:
+    """`items` arrive in recall-rank order. The display is grouped and sorted
+    for stability, but when the byte cap bites the LOWEST-RANKED whole item is
+    evicted — relevance decides what is served, never the alphabet."""
+    ranked = list(items)
+    text = _render_grouped(ranked)
+    while ranked and len(text.encode("utf-8")) > MAX_MEMORY_BYTES:
+        ranked.pop()
+        text = _render_grouped(ranked)
     return text
 
 
@@ -232,7 +236,7 @@ def http_recall_fetch(url: str, bearer: str, identity: dict, timeout: float = DE
             "subject_generation": identity["subject_generation"],
             "query": query,
             "limit": 20,
-            "budget_tokens": 4096,
+            "budget_tokens": RECALL_BUDGET_TOKENS,
             "include_beliefs": True,
             # The projection is a CODING delivery surface, so it recalls on the
             # coding lane (compact_only). This is what serves freshly-CAPTURED

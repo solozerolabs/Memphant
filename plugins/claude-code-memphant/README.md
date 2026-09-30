@@ -98,6 +98,10 @@ invisible, and fail-safe (they never break a turn and never log secrets):
   `MEMPHANT_CAPTURE_MIRROR_FILES` set), copies the content tagged `source=mirror`.
   ALLOW-AND-COPY: it never blocks the write.
 
+A per-repo napkin runbook (`.claude/napkin.md`, the napkin skill) is captured by the
+same hook: set `MEMPHANT_CAPTURE_MIRROR_FILES=MEMORY.md,AGENTS.md,napkin.md` (the list
+replaces the default, so keep the two defaults in it).
+
 Captured memories land as inert `Belief` candidates; the reflect job's cross-check
 promotes a mirror+summary agreement to `corroborated`/recallable and quarantines a
 divergence. All capture logic lives in the shared core

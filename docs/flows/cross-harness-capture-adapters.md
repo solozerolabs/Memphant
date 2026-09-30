@@ -86,6 +86,21 @@ engine), no blocking of host file writes, no live LLM in any test path, no secon
 extractor, no byte-offset tailer (last-turn read at session end), no Codex file-mirror.
 KISS/DRY: one shared capture core; TS shells out to its CLI.
 
+### Projection budget and eviction (served-block precision, 2026-09-30)
+
+The read-side `.memphant/MEMORY.md` projection (`plugins/_shared/memphant_projection.py`)
+requests `budget_tokens = RECALL_BUDGET_TOKENS` (1800), sized so the server's ranked pack
+already fits the 8 KB file cap: the server's ranker decides what is served. When the cap
+still bites, the renderer evicts the LOWEST RECALL-RANK item (the response order), never
+the last one in the grouped display order. Test: `tests/test_projection.py`
+(`test_cap_evicts_lowest_ranked_not_last_alphabetical`).
+
+Directive-on-correction capture (a correction turned into a `rule` + `Do instead:`
+directive) is deferred: Syndai retired its captured-directive lane for harm, and any new
+directive lane must first clear Syndai's re-entry bar
+(`Syndai/docs/flows/memory-directive-recall-verdict.md`, Verdict 5). See
+`docs/specs/graphify-understand-anything-napkin-digest.md` idea 4.
+
 ### Trade-off priority
 
 Accuracy (never store a secret; never resurrect a forgotten identity; respect every trust

@@ -87,6 +87,10 @@ Two capture hooks shell out to the shared capture CLI
   (`MEMORY.md`, `AGENTS.md`, or the `MEMPHANT_CAPTURE_MIRROR_FILES` set), copies
   the content tagged `source=mirror`. ALLOW-AND-COPY: it never blocks the write.
 
+A per-repo napkin runbook (`.claude/napkin.md`, the napkin skill) is captured by the
+same hook: set `MEMPHANT_CAPTURE_MIRROR_FILES=MEMORY.md,AGENTS.md,napkin.md` (the list
+replaces the default, so keep the two defaults in it).
+
 Both are async and fail-safe. `session.idle` and `tool.execute.before` payload
 shapes are experimental opencode surfaces (read defensively; update the single
 seam in `index.ts` if opencode changes them). Capture config mirrors the

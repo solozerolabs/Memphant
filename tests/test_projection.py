@@ -79,6 +79,20 @@ def test_size_caps_hold(tmp_path):
             assert line.startswith("- [confirmed]") or line.startswith("- [unconfirmed]")
 
 
+def test_cap_evicts_lowest_ranked_not_last_alphabetical(tmp_path):
+    # Recall-rank order: the alphabetically LAST topic ranks first, the
+    # alphabetically FIRST topic ranks last. The cap must evict by rank.
+    filler = "lorem ipsum dolor sit amet " * 12
+    items = [{"unit_id": "u-top", "kind": "semantic", "inclusion_reason": "fused_top_k", "body": "zulu gateway contract " + filler}]
+    items += [{"unit_id": f"u-mid{i:03d}", "kind": "semantic", "inclusion_reason": "fused_top_k", "body": f"mike rule {i:03d} " + filler} for i in range(40)]
+    items.append({"unit_id": "u-last", "kind": "semantic", "inclusion_reason": "fused_top_k", "body": "alpha lowest ranked " + filler})
+    proj.render_projection(str(tmp_path), {"items": items})
+    memory = (tmp_path / ".memphant" / "MEMORY.md").read_text()
+    assert len(memory.encode()) <= proj.MAX_MEMORY_BYTES
+    assert "zulu gateway contract" in memory
+    assert "alpha lowest ranked" not in memory
+
+
 def test_empty_recall_still_renders_valid_files(tmp_path):
     proj.render_projection(str(tmp_path), {"items": []})
     assert (tmp_path / ".memphant" / "MEMORY.md").exists()
@@ -134,6 +148,6 @@ def test_http_recall_fetch_request_shape(monkeypatch):
     out = proj.http_recall_fetch("http://h/v1/recall", "k", identity)("q")
     assert out == {"items": []}
     body = seen["body"]
-    assert body["query"] == "q" and body["limit"] == 20 and body["budget_tokens"] == 4096 and body["include_beliefs"] is True
+    assert body["query"] == "q" and body["limit"] == 20 and body["budget_tokens"] == proj.RECALL_BUDGET_TOKENS and body["include_beliefs"] is True
     assert body["compact_only"] is True  # coding lane: serves captured Candidates ([unconfirmed])
     assert seen["headers"]["Authorization"] == "Bearer k"
