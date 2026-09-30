@@ -32,6 +32,26 @@ Per-idea sweep (bge-small, served tokens / gold): filter only 34,281 / 29; + col
 (-82% tokens) but not the dense arms, because the dense channel still votes for the whole
 store: that is the build condition of idea 2, and it held.
 
+Independent guards ($0, local scratch Postgres, `--embed-model small`, before = `5b0a79f8`,
+after = this branch):
+
+- **LME-S chat lane** (`bench-lme --sample 178 --seed 20260710 --k 10 --budget-tokens 8192
+  --pool 64`, then `scripts/analyze_lme_pack_nonregression.py`): r@5 **0.687 → 0.855**
+  (paired over 166 scored: 31 after-only hits vs 3 before-only, exact McNemar
+  p = 7.7e-7); mean packed items 4.58 → 3.33. Not a loss, so the Batch 1 stop rule does
+  not fire. The 12 abstention questions score "correct" 7 → 4, but that metric counts
+  a question correct when the topically related session is NOT retrieved
+  (`bench_lme::score_question`), so sharper retrieval lowers it by construction; whether
+  the reader then abstains is a reader-lane question, not measured here.
+- **Syndai docs gate** (`scripts/gate_run_memphant.py`, v1 + v2 goldens, `--mode fast`):
+  **not completed.** Both arms ingested and drained all 4,920
+  sections, then died on `/v1/recall failed after retries: timed out` (the harness's
+  120 s client timeout) on this shared machine at load average ~22-35; the after arm got
+  through the 60 v1 goldens first. The `--negative-slice` run fails earlier on `main` too
+  (`PUT /v1/context-bindings/syndai-docs-gate:other_user` → 409 "agent node parent or
+  scope is immutable"), a pre-existing harness break. Rerun on an idle machine, before and
+  after, with the command in **Harness**.
+
 Deviations from the spec below, each with its reason:
 
 1. **Gap cutoff cuts only dense-only candidates (idea 2).** As specified (strength = max
@@ -500,6 +520,15 @@ Each line is independent and exits 0 on the current tree (run 2026-09-29;
 `check_evidence_contract.py` takes ~2.5 min).
 
 ```sh
+cargo test -p memphant-core --test directive_precision
+FASTEMBED_CACHE_DIR=<warm cache> cargo test -p memphant-runtime --features fastembed \
+  --test directive_precision_bge -- --ignored
+# Syndai docs gate (corpus: `git -C <Syndai> archive 6fe7f78f docs | tar -x`, then git init it):
+PYTHONPATH=. python3 scripts/gate_run_memphant.py --syndai-root <archived corpus> \
+  --golden benchmarks/data/syndai_docs_golden.jsonl --golden benchmarks/data/syndai_docs_golden_v2.jsonl \
+  --out-evidence v1-ev.jsonl --out-evidence v2-ev.jsonl --out-provenance v1-prov.json --out-provenance v2-prov.json \
+  --embed-model small --mode fast --k 10 --server-bin target/release/memphant-server \
+  --worker-bin target/release/memphant-worker --cli-bin target/release/memphant-cli
 cargo test -p memphant-core --lib -- bm25_
 python3 -m pytest tests/test_projection.py tests/test_shared_capture.py tests/test_claude_code_capture.py -q
 python3 -m pytest tests/test_gate_compare.py tests/test_packing_sufficiency_screen.py -q
