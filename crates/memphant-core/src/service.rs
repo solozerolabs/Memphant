@@ -8229,7 +8229,7 @@ fn degraded_episode_items(
     query: &str,
     k: usize,
 ) -> Vec<RecallContextItem> {
-    let query_tokens = tokenize(query);
+    let query_tokens = crate::content_query_tokens(tokenize(query));
     let mut scored: Vec<(&StoredEpisode, f32)> = episodes
         .iter()
         .filter_map(|episode| {

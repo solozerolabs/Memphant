@@ -20,7 +20,7 @@ pub use structured_state::{
     validate_structured_observations_for_request,
 };
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::{Arc, Mutex, Weak};
 
@@ -7788,13 +7788,18 @@ where
         None
     };
 
-    let query_tokens = tokenize(&request.query);
+    let raw_query_tokens = tokenize(&request.query);
+    // Every lexical scorer below matches CONTENT terms only: `the`/`to`/`a`
+    // are shared by nearly every query and body, so a stopword-only overlap
+    // made almost the whole store a lexical candidate for any query (measured:
+    // 83% of BM25 and 76% of Exact matches were stopword-only).
+    let query_tokens = content_query_tokens(raw_query_tokens.clone());
     let vector_query = vector_query.filter(|query| !query.vec.is_empty());
     let mut tenant_units = store
         .fetch_recall_candidates(
             &request.context,
             &[],
-            &query_tokens,
+            &raw_query_tokens,
             &recall_time,
             usize::MAX,
         )
@@ -7852,19 +7857,14 @@ where
     // trace it under a dedicated RecallDropReason if the gate ever needs an
     // audit trail; today it mirrors the vector channel's own silent top-N bound.
     if let Some(scores) = vector_scores.as_ref() {
-        // The literal-trigger signal must be CONTENT overlap, not stopword
-        // overlap: "write a haiku about the ocean" shares "a"/"the"/"about" with
-        // a coding lesson's body but does not NAME it, so filter the query to
-        // content tokens before the exact/lexical check (else every query trips
-        // the signal and the floor never bites — measured 2026-08-18).
-        let content_query: Vec<String> = query_tokens
-            .iter()
-            .filter(|token| !is_stopword(token))
-            .cloned()
-            .collect();
+        // The literal-trigger signal is CONTENT overlap (`query_tokens` is
+        // already stopword-filtered): "write a haiku about the ocean" shares
+        // "a"/"the"/"about" with a coding lesson's body but does not NAME it
+        // (else every query trips the signal and the floor never bites —
+        // measured 2026-08-18).
         tenant_units.retain(|unit| {
-            let has_lexical_signal = exact_score(unit, &content_query) > 0.0
-                || lexical_score(unit, &content_query) > 0.0;
+            let has_lexical_signal =
+                exact_score(unit, &query_tokens) > 0.0 || lexical_score(unit, &query_tokens) > 0.0;
             procedural_relevance_admits(
                 unit.kind,
                 scores.get(&unit.id).copied(),
@@ -7947,6 +7947,10 @@ where
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| left.0.body.cmp(&right.0.body))
         });
+        let score_range = (
+            ranked.last().map_or(0.0, |(_, score)| *score),
+            ranked.first().map_or(0.0, |(_, score)| *score),
+        );
         for (rank, (unit, score)) in ranked.into_iter().enumerate() {
             let channel_rank = rank + 1;
             let decay = decay_score_for(&unit, &tenant_review_events, request.decay_enabled);
@@ -7974,15 +7978,19 @@ where
             let contribution = magnitude
                 * channel_weight(pass, &request.query, temporal_window.as_ref())
                 / (60.0 + channel_rank as f32);
+            let vector_strength =
+                (pass == ChannelPass::Vector).then(|| min_max_strength(score, score_range));
             candidates_by_unit
                 .entry(unit.id)
                 .and_modify(|candidate| {
                     candidate.fused_score += contribution;
+                    candidate.vector_strength = candidate.vector_strength.or(vector_strength);
                     candidate.channels.push((channel, channel_rank, score));
                 })
                 .or_insert_with(|| CandidateAccumulator {
                     unit: unit.clone(),
                     fused_score: contribution,
+                    vector_strength,
                     deep_rank: None,
                     cross_rerank_rank: None,
                     decay,
@@ -8025,6 +8033,7 @@ where
                 .or_insert_with(|| CandidateAccumulator {
                     unit: unit.clone(),
                     fused_score: 0.0,
+                    vector_strength: None,
                     deep_rank: Some(channel_rank),
                     cross_rerank_rank: None,
                     decay,
@@ -8160,6 +8169,7 @@ where
         }
     }
     let dropped_items = packed.dropped_items;
+    let gap_cut = packed.gap_cut;
     let mut abstention = packed.abstention;
 
     let candidate_whitelist: Vec<_> = items.iter().map(|item| item.unit_id).collect();
@@ -8217,6 +8227,11 @@ where
         feature_flags.push("cross_rerank_enabled".to_string());
     }
     append_pack_feature_flags(&mut feature_flags, pack_levers);
+    // The gap cutoff traces its drops as `Budget`; this flag says how many of
+    // them it made, so a trace reader can tell them from a full pack.
+    if gap_cut > 0 {
+        feature_flags.push(format!("pack_gap_cutoff:{gap_cut}"));
+    }
     if let Some(flag) = lexical_scorer.flag() {
         feature_flags.push(flag.to_string());
     }
@@ -9123,11 +9138,10 @@ fn recall_embedding_text(unit: &StoredMemoryUnit) -> String {
     }
 }
 
-/// A minimal English function-word set, used ONLY to keep the procedural
-/// relevance gate's literal-trigger signal from firing on stopword overlap
-/// (`the`/`a`/`about` are shared by nearly every query, so counting them as a
-/// trigger hit defeats the floor). Deliberately small and greppable — not a
-/// full stoplist; content tokens are what a lesson's trigger is keyed on.
+/// The one English function-word set. Query terms that match it never earn a
+/// lexical vote (`content_query_tokens`), and `content_terms` drops it from
+/// the Jaccard/coverage term sets. Deliberately small and greppable — not a
+/// full stoplist; content tokens are what a memory is keyed on.
 fn is_stopword(token: &str) -> bool {
     matches!(
         token,
@@ -9184,7 +9198,27 @@ fn is_stopword(token: &str) -> bool {
             | "please"
             | "make"
             | "sure"
+            | "how"
+            | "their"
+            | "what"
+            | "when"
+            | "where"
+            | "which"
+            | "who"
+            | "why"
     )
+}
+
+/// The query terms every lexical scorer matches: `tokens` minus stopwords. A
+/// query made only of stopwords keeps its raw tokens, so no query becomes
+/// unanswerable.
+pub(crate) fn content_query_tokens(tokens: Vec<String>) -> Vec<String> {
+    let content: Vec<String> = tokens
+        .iter()
+        .filter(|token| !is_stopword(token))
+        .cloned()
+        .collect();
+    if content.is_empty() { tokens } else { content }
 }
 
 fn procedural_relevance_admits(
@@ -9554,6 +9588,11 @@ fn sub_split_for_rerank(text: &str, budget: usize) -> Vec<String> {
 struct CandidateAccumulator {
     unit: StoredMemoryUnit,
     fused_score: f32,
+    /// The dense channel's vote for this candidate, min-max normalized over
+    /// the recall ([`min_max_strength`]); `None` when it did not vote. Fusion
+    /// is rank-only, so this is the one place a cosine's magnitude reaches
+    /// packing: the gap cutoff reads it.
+    vector_strength: Option<f32>,
     /// Provider source order followed by bound-unit UUID order. Unlike a
     /// fusion score, this rank is deliberate external evidence selection and
     /// therefore governs packing directly.
@@ -9588,6 +9627,114 @@ struct PackedRecallContext {
     dropped_items: Vec<RecallDroppedItem>,
     token_estimate: usize,
     abstention: bool,
+    /// Candidates the relative gap cutoff dropped (traced as `Budget`).
+    gap_cut: usize,
+}
+
+/// Relative score-gap cutoff at pack admission (graphify `_pick_seeds`): a
+/// candidate ONLY the dense channel voted for is served only when its cosine
+/// sits in the top `1 - PACK_GAP_RATIO` of this recall's cosine range. The
+/// dense channel votes for up to `recall_pool_depth` units with no overlap
+/// required, so after the content-term filter its weak tail is what fills the
+/// budget; lexically matched candidates are never cut (cutting them by
+/// per-channel min-max dropped weakly matched gold in the fixture). Chosen by
+/// the `directive_precision` fixture sweep over {0.2, 0.35, 0.5}: the largest
+/// ratio with zero gold loss on every arm.
+const PACK_GAP_RATIO: f32 = 0.5;
+
+/// A cosine range narrower than this has no gap to cut on: one candidate,
+/// ties, or near-ties (0.899 vs 0.900), which plain min-max would split into
+/// 0 and 1.
+const MIN_STRENGTH_RANGE: f32 = 0.1;
+
+/// Jaccard over non-stopword tokens at or above which two admitted items
+/// restate one decision (their markers matching too). Chosen by the
+/// `directive_precision` fixture sweep over {0.6, 0.7, 0.8}: 0.6 merges the
+/// evidence-integrity goldens' one-value swaps ("checkout flag is legacy_pay"
+/// vs "… express_pay", Alice vs Bob as owner: exactly 0.6); 0.7 and 0.8
+/// collapse the same fixture restatements, so the stricter 0.8 — a one-value
+/// swap needs 8 shared terms to reach it.
+const NEAR_DUPLICATE_JACCARD: f64 = 0.8;
+
+/// Tokens that flip a rule's polarity. `not`/`no` are stopwords, so the term
+/// sets alone call "Use Stripe" and "Do not use Stripe" identical; two items
+/// collide only when their markers (these plus every digit-bearing token) are
+/// equal. `don`/`doesn` are what the tokenizer leaves of "don't"/"doesn't".
+const NEGATION_MARKERS: &[&str] = &[
+    "not", "no", "never", "don", "doesn", "cannot", "avoid", "without", "instead",
+];
+
+/// `score` min-max normalized over its channel's `(min, max)` in this recall.
+/// Not `score / top`: bge cosines sit in ~[0.6, 1], so `s / top` never
+/// separates a weak tail from the head. A degenerate range (below
+/// [`MIN_STRENGTH_RANGE`]) gives every candidate full strength.
+fn min_max_strength(score: f32, (min, max): (f32, f32)) -> f32 {
+    if max - min < MIN_STRENGTH_RANGE {
+        1.0
+    } else {
+        (score - min) / (max - min)
+    }
+}
+
+/// The gap cutoff's test: an ordinary candidate that only the dense channel
+/// voted for, from the weak end of its cosine range. Deep-ranked units and
+/// authoritative projections are packet structure, never cut.
+fn in_weak_dense_tail(candidate: &CandidateAccumulator) -> bool {
+    candidate.deep_rank.is_none()
+        && !is_authoritative_projection(&candidate.unit)
+        && candidate
+            .channels
+            .iter()
+            .all(|(channel, _, _)| *channel == RecallChannel::Vector)
+        && candidate
+            .vector_strength
+            .is_some_and(|strength| strength < PACK_GAP_RATIO)
+}
+
+/// What the near-duplicate collapse compares for one admitted item: its
+/// non-stopword tokens (short ones kept: `eu` vs `us` is a real difference),
+/// its markers — polarity words and digit-bearing tokens (`step1` vs `step2`,
+/// `capped at 4` vs `at 8`), which must match exactly — and its freshness.
+/// Two items that differ in one value word still collide once they share
+/// enough other terms; freshest wins then, as subject supersession would. A
+/// Contradicts edge always keeps both. Only a unit with a curated
+/// subject (a non-`auto` fact key) states a rule that can be restated; raw
+/// episode evidence without one is never collapsed, because two sessions can
+/// say nearly the same words on different dates and both matter.
+struct Restatement {
+    terms: HashSet<String>,
+    markers: BTreeSet<String>,
+    observed_at: String,
+}
+
+impl Restatement {
+    fn of(unit: &StoredMemoryUnit) -> Option<Self> {
+        if fact_key_subject_tokens(unit.fact_key.as_deref()?).is_empty() {
+            return None;
+        }
+        let tokens = tokenize(&unit.body);
+        Some(Self {
+            markers: tokens
+                .iter()
+                .filter(|token| {
+                    NEGATION_MARKERS.contains(&token.as_str())
+                        || token.bytes().any(|byte| byte.is_ascii_digit())
+                })
+                .cloned()
+                .collect(),
+            terms: tokens
+                .into_iter()
+                .filter(|token| !is_stopword(token))
+                .collect(),
+            observed_at: unit.observed_at.clone(),
+        })
+    }
+
+    fn restates(&self, other: &Self) -> bool {
+        !self.terms.is_empty()
+            && self.markers == other.markers
+            && jaccard(&self.terms, &other.terms) >= NEAR_DUPLICATE_JACCARD
+    }
 }
 
 /// W1 render-loss completion state for one partially chunk-rendered item: every
@@ -9629,6 +9776,7 @@ struct Admission {
     candidate_score: f32,
     chunk_mask: Option<Vec<bool>>,
     episode_id: Option<EpisodeId>,
+    restatement: Option<Restatement>,
 }
 
 /// The growing pack: `items` and its parallel bookkeeping vectors (token cost,
@@ -9650,8 +9798,11 @@ struct PackAccumulator {
     /// item body, or `None` (item's unit had no grounded `valid_from`, or the
     /// temporal-grounding flag is off). Applied in one pass after the fill.
     date_prefixes: Vec<Option<String>>,
+    /// Parallel to `items`: what the near-duplicate collapse compares.
+    restatements: Vec<Option<Restatement>>,
     token_estimate: usize,
     episode_counts: HashMap<EpisodeId, usize>,
+    gap_cut: usize,
 }
 
 impl PackAccumulator {
@@ -9665,6 +9816,7 @@ impl PackAccumulator {
         let episode = self.episode_ids.remove(index);
         self.completions.remove(index);
         self.date_prefixes.remove(index);
+        self.restatements.remove(index);
         if let Some(episode_id) = episode
             && let Some(count) = self.episode_counts.get_mut(&episode_id)
         {
@@ -9857,6 +10009,7 @@ fn pack_recall_context(
         dropped_items,
         token_estimate: acc.token_estimate,
         abstention,
+        gap_cut: acc.gap_cut,
     }
 }
 
@@ -9891,6 +10044,36 @@ fn admit_or_drop(
             seen_ids.push(candidate.unit.id);
         }
     }
+    // A restatement of an admitted item is judged by the collapse below, not
+    // by the gap: the pack already chose to serve that decision.
+    let restatement = Restatement::of(&candidate.unit);
+    let restated = if request.context_packing_abstention_enabled
+        && let Some(restatement) = &restatement
+    {
+        acc.restatements
+            .iter()
+            .position(|seen| seen.as_ref().is_some_and(|seen| seen.restates(restatement)))
+            .filter(|index| {
+                !has_contradiction_with_any(
+                    candidate.unit.id,
+                    &[acc.items[*index].unit_id],
+                    ctx.tenant_edges,
+                )
+            })
+    } else {
+        None
+    };
+    if request.context_packing_abstention_enabled
+        && restated.is_none()
+        && in_weak_dense_tail(&candidate)
+    {
+        acc.gap_cut += 1;
+        dropped_items.push(RecallDroppedItem {
+            unit_id: candidate.unit.id,
+            reason: RecallDropReason::Budget,
+        });
+        return;
+    }
 
     let (rendered_body, unit_tokens, chunk_mask) = packed_render(
         &candidate.unit,
@@ -9907,6 +10090,30 @@ fn admit_or_drop(
     } else {
         packing_relevance_score(&candidate, ctx.query_tokens)
     };
+    // Near-duplicate collapse, freshest wins: a paraphrased restatement keys
+    // to a different subject, so the fact-key dedup above never sees it. A
+    // pair joined by a Contradicts edge is never collapsed — that conflict is
+    // the contradiction machinery's to surface.
+    if let Some(index) = restated
+        && let (Some(restatement), Some(seen)) = (&restatement, &acc.restatements[index])
+    {
+        let newer =
+            cmp_rfc3339(&restatement.observed_at, &seen.observed_at) == std::cmp::Ordering::Greater;
+        let fits_in_its_place =
+            acc.token_estimate - acc.token_counts[index] + unit_tokens <= request.budget_tokens;
+        let loser = if newer && fits_in_its_place {
+            acc.evict(index)
+        } else {
+            candidate_id
+        };
+        dropped_items.push(RecallDroppedItem {
+            unit_id: loser,
+            reason: RecallDropReason::Duplicate,
+        });
+        if loser == candidate_id {
+            return;
+        }
+    }
     let admission = Admission {
         episode_id: candidate.unit.source_episode_id,
         candidate,
@@ -9914,6 +10121,7 @@ fn admit_or_drop(
         unit_tokens,
         candidate_score,
         chunk_mask,
+        restatement,
     };
 
     if acc.items.len() >= ctx.output_limit {
@@ -10015,6 +10223,7 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
         candidate_score,
         chunk_mask,
         episode_id,
+        restatement,
     } = admission;
     // W1: a chunk render that covers the unit only partially is the render-loss
     // defect's precondition — keep the unit's chunks and whole body so the
@@ -10055,6 +10264,7 @@ fn admit_new(acc: &mut PackAccumulator, ctx: &PackCtx, admission: Admission) {
     acc.episode_ids.push(episode_id);
     acc.completions.push(completion);
     acc.date_prefixes.push(date_prefix);
+    acc.restatements.push(restatement);
     acc.items.push(item);
 }
 
@@ -10446,13 +10656,8 @@ fn submodular_objective(
 }
 
 fn content_terms<'a>(terms: impl Iterator<Item = &'a str>) -> HashSet<String> {
-    const STOP: &[&str] = &[
-        "and", "are", "but", "did", "does", "for", "from", "had", "has", "have", "how", "that",
-        "the", "their", "then", "this", "was", "were", "what", "when", "where", "which", "who",
-        "why", "with", "would", "you", "your",
-    ];
     terms
-        .filter(|term| term.len() >= 3 && !STOP.contains(term))
+        .filter(|term| term.len() >= 3 && !is_stopword(term))
         .map(ToString::to_string)
         .collect()
 }
@@ -11887,7 +12092,7 @@ fn bm25_unit_scores(
     query: &str,
     scorer: LexicalScorer,
 ) -> HashMap<UnitId, f32> {
-    let mut query_terms: Vec<String> = scorer.tokens(query);
+    let mut query_terms: Vec<String> = content_query_tokens(scorer.tokens(query));
     query_terms.sort_unstable();
     query_terms.dedup();
     let mut scores = HashMap::new();
@@ -16263,6 +16468,7 @@ mod pack_cost_tests {
         CandidateAccumulator {
             unit,
             fused_score,
+            vector_strength: None,
             deep_rank: None,
             cross_rerank_rank: None,
             decay,
@@ -16589,7 +16795,9 @@ mod pack_cost_tests {
         let make = || {
             let mut first = unit(1, "alpha beta shared detail", Vec::new());
             first.source_episode_id = Some(EpisodeId::from_u128(1));
-            let mut redundant = unit(2, "alpha beta shared detail repeated", Vec::new());
+            // Redundant in query coverage, but not a restatement (content-term
+            // Jaccard 0.33 < NEAR_DUPLICATE_JACCARD), so the baseline serves it.
+            let mut redundant = unit(2, "alpha beta partial overlap", Vec::new());
             redundant.source_episode_id = Some(EpisodeId::from_u128(1));
             let mut complementary = unit(3, "gamma delta complementary answer", Vec::new());
             complementary.source_episode_id = Some(EpisodeId::from_u128(2));
@@ -17749,6 +17957,322 @@ mod pack_cost_tests {
             "flag off ⇒ no item is date-prefixed: {:?}",
             off.items.iter().map(|i| i.body.clone()).collect::<Vec<_>>()
         );
+    }
+    // --- Served-block precision (docs/specs/graphify-understand-anything-napkin-digest.md).
+
+    #[test]
+    fn stopword_only_overlap_earns_no_bm25_vote() {
+        let units = vec![
+            unit(1, "the queue is drained to the end", Vec::new()),
+            unit(2, "billing retries use backoff", Vec::new()),
+        ];
+        let scores = bm25_unit_scores(&units, "retry the billing job", LexicalScorer::Bm25Code);
+        assert_eq!(
+            scores.keys().copied().collect::<Vec<_>>(),
+            vec![UnitId::from_u128(2)],
+            "`the` alone earns unit 1 no vote"
+        );
+    }
+
+    #[test]
+    fn stopword_only_subject_overlap_earns_no_exact_vote() {
+        let mut keyed = unit(1, "Deploys go through the release train.", Vec::new());
+        keyed.fact_key = Some("decision:the way to deploy:decided".to_string());
+        let query = "write the migration to add a column";
+        assert!(
+            exact_score(&keyed, &tokenize(query)) > 0.0,
+            "control: the raw tokens `the`/`to` cover the subject"
+        );
+        assert_eq!(
+            exact_score(&keyed, &content_query_tokens(tokenize(query))),
+            0.0
+        );
+    }
+
+    #[test]
+    fn all_stopword_query_still_recalls_by_raw_tokens() {
+        assert_eq!(
+            content_query_tokens(tokenize("what is it")),
+            tokenize("what is it")
+        );
+        let units = vec![unit(1, "what it is", Vec::new())];
+        assert!(!bm25_unit_scores(&units, "what is it", LexicalScorer::Bm25Code).is_empty());
+    }
+
+    fn precise_request(budget_tokens: usize) -> RecallRequest {
+        let mut request = request(budget_tokens);
+        request.context_packing_abstention_enabled = true;
+        request
+    }
+
+    fn pack(
+        candidates: Vec<CandidateAccumulator>,
+        edges: &[StoredMemoryEdge],
+    ) -> PackedRecallContext {
+        let scan = candidates.len();
+        pack_recall_context(
+            candidates,
+            &precise_request(10_000),
+            edges,
+            &tokenize("quantum"),
+            Vec::new(),
+            scan,
+            PackLevers::default(),
+            false,
+        )
+    }
+
+    fn served(packed: &PackedRecallContext) -> Vec<u128> {
+        packed
+            .items
+            .iter()
+            .map(|item| item.unit_id.as_uuid().as_u128())
+            .collect()
+    }
+
+    fn dropped(packed: &PackedRecallContext, reason: RecallDropReason) -> Vec<u128> {
+        packed
+            .dropped_items
+            .iter()
+            .filter(|item| item.reason == reason)
+            .map(|item| item.unit_id.as_uuid().as_u128())
+            .collect()
+    }
+
+    /// A candidate only the dense channel voted for, at raw cosine `cosine`
+    /// in a recall whose cosines span `range`.
+    fn dense_only(
+        id: u128,
+        fused_score: f32,
+        cosine: f32,
+        range: (f32, f32),
+    ) -> CandidateAccumulator {
+        let mut candidate = candidate(
+            unit(id, &format!("dense item {id}"), Vec::new()),
+            fused_score,
+        );
+        candidate.channels = vec![(RecallChannel::Vector, id as usize, cosine)];
+        candidate.vector_strength = Some(min_max_strength(cosine, range));
+        candidate
+    }
+
+    #[test]
+    fn gap_cutoff_drops_weak_tail_under_compressed_cosines() {
+        // bge-shaped: every cosine in [0.6, 1], so `s / top` (0.64 / 0.90 =
+        // 0.71) would never cut; min-max puts the tail at 0.07.
+        let range = (0.62, 0.90);
+        let packed = pack(
+            vec![
+                dense_only(1, 3.0, 0.90, range),
+                dense_only(2, 2.0, 0.80, range),
+                dense_only(3, 1.0, 0.64, range),
+            ],
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
+        assert_eq!(dropped(&packed, RecallDropReason::Budget), vec![3]);
+        assert_eq!(packed.gap_cut, 1);
+    }
+
+    #[test]
+    fn gap_cutoff_never_drops_a_lexically_matched_candidate() {
+        let range = (0.62, 0.90);
+        let mut matched = dense_only(3, 1.0, 0.64, range);
+        matched.channels.push((RecallChannel::Lexical, 9, 0.1));
+        let packed = pack(vec![dense_only(1, 3.0, 0.90, range), matched], &[]);
+        assert_eq!(served(&packed), vec![1, 3]);
+        assert_eq!(packed.gap_cut, 0);
+    }
+
+    #[test]
+    fn gap_cutoff_never_drops_authoritative_projection() {
+        let range = (0.62, 0.90);
+        let mut rollup = dense_only(3, 1.0, 0.64, range);
+        rollup.unit.source_kind = Some("quantity_rollup".to_string());
+        let packed = pack(vec![dense_only(1, 3.0, 0.90, range), rollup], &[]);
+        assert!(served(&packed).contains(&3));
+        assert_eq!(packed.gap_cut, 0);
+    }
+
+    #[test]
+    fn single_candidate_channel_counts_as_full_strength() {
+        assert_eq!(min_max_strength(0.7, (0.7, 0.7)), 1.0);
+        let packed = pack(vec![dense_only(1, 1.0, 0.7, (0.7, 0.7))], &[]);
+        assert_eq!(served(&packed), vec![1]);
+    }
+
+    #[test]
+    fn tied_channel_scores_never_cut() {
+        let range = (0.8, 0.8);
+        let packed = pack(
+            (1..=3)
+                .map(|id| dense_only(id, 4.0 - id as f32, 0.8, range))
+                .collect(),
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2, 3]);
+        assert_eq!(packed.gap_cut, 0);
+    }
+
+    #[test]
+    fn near_tied_cosines_are_not_split_into_zero_and_one() {
+        let range = (0.899, 0.900);
+        assert_eq!(min_max_strength(0.899, range), 1.0);
+        let packed = pack(
+            vec![
+                dense_only(1, 2.0, 0.900, range),
+                dense_only(2, 1.0, 0.899, range),
+            ],
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
+    }
+
+    /// A unit with a curated subject — the shape a restated decision has.
+    fn decision(id: u128, subject: &str, body: &str, observed_at: &str) -> CandidateAccumulator {
+        let mut unit = unit(id, body, Vec::new());
+        unit.fact_key = Some(format!("decision:{subject}:decided"));
+        unit.observed_at = observed_at.to_string();
+        candidate(unit, 4.0 - id as f32)
+    }
+
+    const IMPORTER: &str = "Importer worker wake-up uses Postgres LISTEN/NOTIFY; the polling loop was rejected for connection cost.";
+    const IMPORTER_RESTATED: &str = "Importer worker wake-up now uses Postgres LISTEN/NOTIFY; the polling loop was rejected because of connection cost.";
+
+    #[test]
+    fn paraphrased_restatement_serves_only_the_newest() {
+        let older = || decision(1, "importer wake-up", IMPORTER, "2026-07-01T00:00:00Z");
+        let newer = || {
+            decision(
+                2,
+                "importer notification",
+                IMPORTER_RESTATED,
+                "2026-07-02T00:00:00Z",
+            )
+        };
+        // Older ranked first: the newer restatement takes its place.
+        let packed = pack(vec![older(), newer()], &[]);
+        assert_eq!(served(&packed), vec![2]);
+        assert_eq!(dropped(&packed, RecallDropReason::Duplicate), vec![1]);
+        // Newer ranked first: the older restatement is dropped.
+        let mut first = newer();
+        first.fused_score = 9.0;
+        let packed = pack(vec![first, older()], &[]);
+        assert_eq!(served(&packed), vec![2]);
+        assert_eq!(dropped(&packed, RecallDropReason::Duplicate), vec![1]);
+    }
+
+    #[test]
+    fn contradicting_pair_is_never_collapsed() {
+        let edge = StoredMemoryEdge {
+            id: EdgeId::from_u128(1),
+            tenant_id: TenantId::from_u128(1),
+            scope_id: ScopeId::from_u128(1),
+            src_id: UnitId::from_u128(2),
+            dst_id: UnitId::from_u128(1),
+            kind: MemoryEdgeKind::Contradicts,
+            transaction_from: None,
+            transaction_to: None,
+        };
+        let packed = pack(
+            vec![
+                decision(1, "importer wake-up", IMPORTER, "2026-07-01T00:00:00Z"),
+                decision(
+                    2,
+                    "importer notification",
+                    IMPORTER_RESTATED,
+                    "2026-07-02T00:00:00Z",
+                ),
+            ],
+            &[edge],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
+    }
+
+    #[test]
+    fn negated_restatement_is_never_collapsed() {
+        let use_it = "Use the Stripe SDK directly for billing webhooks.";
+        let ban_it = "Do not use the Stripe SDK directly for billing webhooks.";
+        let terms = |body: &str| {
+            Restatement::of(&decision(9, "x", body, "").unit)
+                .unwrap()
+                .terms
+        };
+        assert_eq!(
+            jaccard(&terms(use_it), &terms(ban_it)),
+            1.0,
+            "the term sets alone cannot tell the opposite rules apart"
+        );
+        let packed = pack(
+            vec![
+                decision(1, "stripe sdk usage", use_it, "2026-07-01T00:00:00Z"),
+                decision(2, "stripe sdk ban", ban_it, "2026-07-02T00:00:00Z"),
+            ],
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
+    }
+
+    #[test]
+    fn restatements_with_different_numbers_are_never_collapsed() {
+        let packed = pack(
+            vec![
+                decision(
+                    1,
+                    "deploy step one",
+                    "Run step1 of the deploy checklist before release.",
+                    "2026-07-01T00:00:00Z",
+                ),
+                decision(
+                    2,
+                    "deploy step two",
+                    "Run step2 of the deploy checklist before release.",
+                    "2026-07-02T00:00:00Z",
+                ),
+            ],
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
+    }
+
+    #[test]
+    fn one_value_swap_in_a_short_claim_is_never_collapsed() {
+        let packed = pack(
+            vec![
+                decision(
+                    1,
+                    "owner rota",
+                    "Checkout operations owner is Alice.",
+                    "2026-07-01T00:00:00Z",
+                ),
+                decision(
+                    2,
+                    "owner runbook",
+                    "Checkout operations owner is Bob.",
+                    "2026-07-02T00:00:00Z",
+                ),
+            ],
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
+    }
+
+    #[test]
+    fn unkeyed_episode_evidence_is_never_collapsed() {
+        let packed = pack(
+            vec![
+                candidate(
+                    unit(1, "[session s1] project deadline alpha bravo", Vec::new()),
+                    2.0,
+                ),
+                candidate(
+                    unit(2, "[session s2] project deadline alpha bravo", Vec::new()),
+                    1.0,
+                ),
+            ],
+            &[],
+        );
+        assert_eq!(served(&packed), vec![1, 2]);
     }
 }
 

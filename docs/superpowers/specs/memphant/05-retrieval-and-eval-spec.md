@@ -83,6 +83,12 @@ pack(candidates, budget):
 
 Over-abstention is the opposite failure — abstention rate is a metric (§5) and an ablation arm (naive top-k vs budgeted-pack-with-abstention).
 
+**As-built: served-block precision (2026-09-30, `docs/specs/graphify-understand-anything-napkin-digest.md`).** Three precision rules on the served path, measured on the `directive_precision` fixture at Syndai's turn-1 `/core` shape (`token_budget=1200`, `serve_captures=false`):
+
+- **Content-term query filter (Stages 1-2).** Every lexical scorer (Exact, BM25, the overlap passes, Edge, pack relevance, chunk selection) matches the query minus the one stoplist (`is_stopword`); an all-stopword query keeps its raw tokens. Before it, a stopword-only overlap made almost the whole store a lexical candidate for any query.
+- **Dense gap cutoff (Stage 7).** A candidate only the vector channel voted for is not served when its cosine, min-max normalized over this recall's vector candidates, is below `PACK_GAP_RATIO` (0.5). A cosine range under `MIN_STRENGTH_RANGE` (0.1) never cuts. Lexically matched candidates, deep-ranked units and authoritative projections are never cut. Drops trace as `budget`; the trace flag `pack_gap_cutoff:<n>` counts them.
+- **Near-duplicate collapse (Stage 7 step 1).** Two admitted units with curated subjects whose non-stopword token Jaccard is at least `NEAR_DUPLICATE_JACCARD` (0.8) and whose markers match exactly (negations, digit-bearing tokens) restate one decision: the fresher `observed_at` is served, the other drops as `duplicate`. A `contradicts` edge always keeps both; unkeyed episode evidence is never collapsed.
+
 ## 1.3 Per-Kind Retrieval + Adaptive Cascade
 
 Retrieval is **kind-aware** (the `04` §1.1 "retrieval default" expanded to stage behavior); kind gates run *inside* the channel stages so an expired fact or quarantined belief never reaches fusion:

@@ -80,9 +80,10 @@ async fn fixture_gold_is_recalled_at_unbounded_budget() {
     assert!(missing.is_empty(), "gold never recalled: {missing:?}");
 }
 
-/// The served block at Syndai's `/core` shape, pinned exactly so any ranking
-/// change shows up here (spec Batch 0 baseline; Batches 1-3 move it).
-const BASELINE_DENSE: Summary = Summary {
+/// The served block at Syndai's `/core` shape before served-block precision
+/// (content-term filter, dense gap cutoff, near-duplicate collapse): the
+/// non-inferiority reference (spec Batch 0).
+const BEFORE_DENSE: Summary = Summary {
     gold_recalled: 29,
     gold_in_pack: 28,
     served: 828,
@@ -92,7 +93,7 @@ const BASELINE_DENSE: Summary = Summary {
     stale_served: 28,
     gap_cut: 0,
 };
-const BASELINE_LEXICAL: Summary = Summary {
+const BEFORE_LEXICAL: Summary = Summary {
     gold_recalled: 28,
     gold_in_pack: 28,
     served: 759,
@@ -103,14 +104,52 @@ const BASELINE_LEXICAL: Summary = Summary {
     gap_cut: 0,
 };
 
+/// The same served block now, pinned exactly so any ranking change shows up.
+const AFTER_DENSE: Summary = Summary {
+    gold_recalled: 29,
+    gold_in_pack: 28,
+    served: 675,
+    token_estimate: 29041,
+    duplicate_served: 21,
+    vector_only_non_gold: 542,
+    stale_served: 0,
+    gap_cut: 288,
+};
+const AFTER_LEXICAL: Summary = Summary {
+    gold_recalled: 28,
+    gold_in_pack: 28,
+    served: 137,
+    token_estimate: 5906,
+    duplicate_served: 5,
+    vector_only_non_gold: 0,
+    stale_served: 2,
+    gap_cut: 0,
+};
+
+/// The ship bar (spec Batch 5, "offline fixture"): every gold served before
+/// is still served, with fewer tokens.
 #[tokio::test]
-async fn served_block_baseline_at_the_core_shape() {
-    for (arm, (service, fixture), expected) in [
-        ("dense", dense().await, BASELINE_DENSE),
-        ("lexical", lexical_only().await, BASELINE_LEXICAL),
+async fn served_block_keeps_gold_with_fewer_tokens() {
+    for (arm, (service, fixture), before, after) in [
+        ("dense", dense().await, BEFORE_DENSE, AFTER_DENSE),
+        (
+            "lexical",
+            lexical_only().await,
+            BEFORE_LEXICAL,
+            AFTER_LEXICAL,
+        ),
     ] {
         let results = fixture::run(&service, &fixture, SYNDAI_CORE_BUDGET).await;
-        assert_eq!(fixture::report(arm, &results), expected, "{arm} arm");
+        let summary = fixture::report(arm, &results);
+        assert!(
+            summary.gold_in_pack >= before.gold_in_pack,
+            "{arm}: gold non-inferior"
+        );
+        assert!(
+            summary.token_estimate < before.token_estimate,
+            "{arm}: fewer tokens"
+        );
+        assert_eq!(summary, after, "{arm} arm");
     }
 }
 

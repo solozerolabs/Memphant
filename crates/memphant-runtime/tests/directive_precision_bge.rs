@@ -21,9 +21,9 @@ use memphant_store_testkit::directive_precision::{
 };
 use memphant_types::TenantId;
 
-/// bge-small's served block at Syndai's `/core` shape, pinned exactly (spec
-/// Batch 0 baseline; Batches 1-3 move it).
-const BASELINE_BGE: Summary = Summary {
+/// bge-small's served block at Syndai's `/core` shape before served-block
+/// precision: the non-inferiority reference (spec Batch 0).
+const BEFORE_BGE: Summary = Summary {
     gold_recalled: 29,
     gold_in_pack: 29,
     served: 837,
@@ -32,6 +32,18 @@ const BASELINE_BGE: Summary = Summary {
     vector_only_non_gold: 77,
     stale_served: 26,
     gap_cut: 0,
+};
+
+/// The same served block now, pinned exactly.
+const AFTER_BGE: Summary = Summary {
+    gold_recalled: 29,
+    gold_in_pack: 29,
+    served: 496,
+    token_estimate: 19121,
+    duplicate_served: 45,
+    vector_only_non_gold: 362,
+    stale_served: 0,
+    gap_cut: 482,
 };
 
 #[tokio::test]
@@ -44,5 +56,14 @@ async fn bge_small_served_block_precision() {
     let fixture = fixture::seed(&service, context).await;
 
     let results = fixture::run(&service, &fixture, SYNDAI_CORE_BUDGET).await;
-    assert_eq!(fixture::report("bge", &results), BASELINE_BGE);
+    let summary = fixture::report("bge", &results);
+    assert!(
+        summary.gold_in_pack >= BEFORE_BGE.gold_in_pack,
+        "gold non-inferior"
+    );
+    assert!(
+        summary.token_estimate < BEFORE_BGE.token_estimate,
+        "fewer tokens"
+    );
+    assert_eq!(summary, AFTER_BGE);
 }

@@ -1,10 +1,86 @@
 # Spec: served-block precision — graphify + Understand-Anything + napkin digest
 
-Status: PROPOSED (research digest; no code in this change).
+Status: BUILT, Batches 0-4 (2026-09-30, branch `precision-served-block`). Batch 5
+(paid behavioural guard) not run. See **Build record** for results and deviations.
 North star: coding-agent UX. Priorities: good UX > cost > perf/latency; KISS/DRY.
 Scope rule: accept only ideas that fit MemPhant's **measured** niche — memory for
 decisions and directives an agent cannot re-derive from the repo, and whether the
 agent adheres to them. Code retrieval is not the niche (grep wins it).
+
+## Build record (2026-09-30)
+
+Offline gate (the ship bar): `crates/memphant-core/tests/directive_precision.rs` and the
+`#[ignore]` bge-small arm `crates/memphant-runtime/tests/directive_precision_bge.rs`, both
+over the fixture in `crates/memphant-store-testkit/src/directive_precision.rs`. Sums over
+the 29 tasks at `/core` shape (`token_budget=1200`, `serve_captures=false`):
+
+| Arm | Gold in pack, before → after | Served units | Served tokens (`token_estimate`) | Duplicates served |
+|---|---|---|---|---|
+| bge-small (prod dense channel) | 29 → **29** | 837 → **496** (-41%) | 34,590 → **19,121** (-45%) | 95 → 45 |
+| compressed cosine (CI) | 28 → **28** | 828 → **675** (-18%) | 34,571 → **29,041** (-16%) | 90 → 21 |
+| lexical only (no embedder) | 28 → **28** | 759 → **137** (-82%) | 32,222 → **5,906** (-82%) | 83 → 5 |
+
+Per task on bge-small: ~28.9 → ~17.1 units, ~1,193 → ~659 tokens. The one gold never
+served on the CI arms (`money_int_cents`: "price field" vs "Monetary amounts … integer
+cents") shares no content term with its task and is budget-dropped before and after;
+bge-small serves it in both. Sanity gate
+`fixture_gold_is_recalled_at_unbounded_budget`: all 29 golds recalled on the dense arm.
+
+Per-idea sweep (bge-small, served tokens / gold): filter only 34,281 / 29; + collapse at
+τ 0.8 34,322 / 29 (the budget refills what the collapse frees); + gap cutoff at ratio 0.2
+32,000, 0.35 26,333, 0.5 **19,121**, all 29 gold. The filter alone moves the lexical arm
+(-82% tokens) but not the dense arms, because the dense channel still votes for the whole
+store: that is the build condition of idea 2, and it held.
+
+Deviations from the spec below, each with its reason:
+
+1. **Gap cutoff cuts only dense-only candidates (idea 2).** As specified (strength = max
+   over all channels, per-channel min-max, anchored on the first admitted item), it lost
+   gold at every ratio on the CI dense arm (`no_pii_logs` at 0.2; a weakly matched BM25
+   gold scores ~0 after min-max) and at 0.5 on bge-small, while cutting little. Cutting
+   only candidates that no lexical channel matched loses no gold on any arm across the
+   grid and cuts more. With min-max the top cosine is 1.0 by construction, so the anchor is gone: a
+   dense-only candidate is served only when its normalized cosine is at least
+   `PACK_GAP_RATIO` (0.5, the largest grid value with zero gold loss). `MIN_STRENGTH_RANGE`
+   (0.1) and the exemptions are as specified.
+2. **Near-duplicate collapse (idea 3).** (a) It compares non-stopword tokens of any length,
+   not `content_terms` (length ≥ 3), so `eu`/`us`, `v1`/`v2` stay distinct. (b) Markers
+   that must match are negations **and digit-bearing tokens**: at τ 0.6 the collapse merged
+   MemPhant's own goldens (`evidence_integrity_suppressed_read_no_refresh_*`: "checkout
+   flag is legacy_pay" vs "… express_pay", Alice vs Bob as owner, Jaccard exactly 0.6) and
+   the MCP test's four numbered checklist steps. (c) Only units with a curated subject
+   (non-`auto` fact key) collapse; unkeyed episode evidence from two sessions can share
+   words and both matter (`temporal_grounding` windowing test). (d) τ = 0.8: 0.7 and 0.8
+   collapse the same fixture restatements, so the stricter one. (e) A newer restatement
+   replaces the admitted one only if it fits in its place, and is exempt from the gap
+   cutoff (the pack already chose to serve that decision). Residual risk, accepted: a
+   one-value swap in a long claim (≥ 8 shared terms) still collapses, freshest wins, as
+   subject supersession would; a `contradicts` edge keeps both.
+3. **Sanity gate is "recalled", not "served" (Batch 0).** With the gap cutoff a correctly
+   seeded gold may be rightly cut, so "served at unbounded budget" would conflate seeding
+   with pack policy. The gate asserts every gold is a recall candidate on the dense arm
+   (where the vector channel votes for the whole store, so only a seeding failure misses).
+4. **Fixture shape (Batch 0).** Case subjects are `decision:<case id as words>` (Syndai
+   subjects are short LLM topic phrases under `decision:`). The stale-vs-fresh pair is an
+   older restatement with the same number, not a changed number: a changed number is now
+   never collapsed (2b), and a value update is subject supersession's job. The cases are
+   embedded in the testkit (the jsonl is gitignored; one fake key in a pressure task is
+   redacted). The fixture lives in `memphant-store-testkit` so the core and runtime arms
+   measure one store.
+5. **Filter scope (idea 1).** Beyond the four named scorers it covers the Edge channel,
+   pack relevance and chunk selection (one query-term list after the candidate fetch) and
+   the degraded raw-episode fallback (`degraded_episode_items`). The store's FTS fetch keeps
+   the raw tokens (Postgres `english` FTS already drops stopwords). The predicted BM25-only
+   loss of the three morphology golds did not happen: the Exact channel's 5-character
+   prefix match on the case subject still reaches them.
+6. **Compiler pin (idea 6)** hashes the golden's observed outputs as specified; the golden
+   drives admission (`reflect_recorded`) with hand-built candidates, so it pins admission
+   output, not episode extraction.
+
+Observed, not fixed (recall reach is a non-goal here): the BM25 tokenizers keep
+sentence-final punctuation on a single-run token (`sandbox.` never matches `sandbox`), so
+the last word of every sentence in a Syndai task summary earns no BM25 vote. Fix in
+`bm25_control_tokens` with its own measurement.
 
 ## Evidence
 
