@@ -7789,11 +7789,6 @@ where
     };
 
     let raw_query_tokens = tokenize(&request.query);
-    // Every lexical scorer below matches CONTENT terms only: `the`/`to`/`a`
-    // are shared by nearly every query and body, so a stopword-only overlap
-    // made almost the whole store a lexical candidate for any query (measured:
-    // 83% of BM25 and 76% of Exact matches were stopword-only).
-    let query_tokens = content_query_tokens(raw_query_tokens.clone());
     let vector_query = vector_query.filter(|query| !query.vec.is_empty());
     let mut tenant_units = store
         .fetch_recall_candidates(
@@ -7857,14 +7852,14 @@ where
     // trace it under a dedicated RecallDropReason if the gate ever needs an
     // audit trail; today it mirrors the vector channel's own silent top-N bound.
     if let Some(scores) = vector_scores.as_ref() {
-        // The literal-trigger signal is CONTENT overlap (`query_tokens` is
-        // already stopword-filtered): "write a haiku about the ocean" shares
-        // "a"/"the"/"about" with a coding lesson's body but does not NAME it
-        // (else every query trips the signal and the floor never bites —
-        // measured 2026-08-18).
+        // The literal-trigger signal must be CONTENT overlap, not stopword
+        // overlap: "write a haiku about the ocean" shares "a"/"the"/"about" with
+        // a coding lesson's body but does not NAME it (else every query trips
+        // the signal and the floor never bites — measured 2026-08-18).
+        let content_query = content_query_tokens(raw_query_tokens.clone());
         tenant_units.retain(|unit| {
-            let has_lexical_signal =
-                exact_score(unit, &query_tokens) > 0.0 || lexical_score(unit, &query_tokens) > 0.0;
+            let has_lexical_signal = exact_score(unit, &content_query) > 0.0
+                || lexical_score(unit, &content_query) > 0.0;
             procedural_relevance_admits(
                 unit.kind,
                 scores.get(&unit.id).copied(),
@@ -7905,196 +7900,221 @@ where
     let dropped_items = trace_filter_drops(&tenant_units, &request, &recall_time);
     let surviving = tenant_units.len().saturating_sub(dropped_items.len());
     let filter_selectivity = Some(surviving as f32 / tenant_units.len().max(1) as f32);
-    let mut candidates_by_unit: HashMap<UnitId, CandidateAccumulator> = HashMap::new();
-    let mut candidate_traces = Vec::new();
+    // Fusion, as a pure function of the query terms so it can run twice. The
+    // content-term filter (stopwords earn no lexical vote) is right where the
+    // lexical scores decide the final order, and wrong ahead of a
+    // cross-encoder: there a stopword-only BM25 rank is the pool-widening vote
+    // that keeps a paraphrased gold inside the reranked head (measured on the
+    // Syndai docs gate). So a recall that WILL rerank fuses on the raw terms,
+    // exactly as before the filter; every other recall fuses on content terms.
+    let fuse = |query_tokens: &[String], content_only: bool| {
+        let mut candidates_by_unit: HashMap<UnitId, CandidateAccumulator> = HashMap::new();
+        let mut candidate_traces = Vec::new();
 
-    // The token-overlap scorers all run under the honest `lexical` label; the
-    // `vector` channel is only emitted by a real embedding path and is traced
-    // as disabled otherwise.
-    let bm25_scores: Option<HashMap<UnitId, f32>> = (lexical_scorer != LexicalScorer::Overlap)
-        .then(|| bm25_unit_scores(&tenant_units, &request.query, lexical_scorer));
-    let lexical_family: &[ChannelPass] = if bm25_scores.is_some() {
-        &[ChannelPass::Bm25]
-    } else {
-        &[ChannelPass::Lexical, ChannelPass::Semantic]
-    };
-    let mut main_channels: Vec<ChannelPass> = vec![ChannelPass::Exact];
-    main_channels.extend_from_slice(lexical_family);
-    main_channels.extend_from_slice(&[ChannelPass::Temporal, ChannelPass::Edge]);
-    if vector_scores.is_some() {
-        main_channels.push(ChannelPass::Vector);
-    }
-    for pass in main_channels
-        .into_iter()
-        .filter(|pass| request.edge_expansion_enabled || *pass != ChannelPass::Edge)
-    {
-        let channel = pass.label();
-        let mut ranked = channel_candidates(
-            pass,
-            &tenant_units,
-            &tenant_edges,
-            &request,
-            &query_tokens,
-            vector_scores.as_ref(),
-            bm25_scores.as_ref(),
-            &recall_time,
-            temporal_window.as_ref(),
-        );
-        ranked.sort_by(|left, right| {
+        // The token-overlap scorers all run under the honest `lexical` label; the
+        // `vector` channel is only emitted by a real embedding path and is traced
+        // as disabled otherwise.
+        let bm25_scores: Option<HashMap<UnitId, f32>> = (lexical_scorer != LexicalScorer::Overlap)
+            .then(|| bm25_unit_scores(&tenant_units, &request.query, lexical_scorer, content_only));
+        let lexical_family: &[ChannelPass] = if bm25_scores.is_some() {
+            &[ChannelPass::Bm25]
+        } else {
+            &[ChannelPass::Lexical, ChannelPass::Semantic]
+        };
+        let mut main_channels: Vec<ChannelPass> = vec![ChannelPass::Exact];
+        main_channels.extend_from_slice(lexical_family);
+        main_channels.extend_from_slice(&[ChannelPass::Temporal, ChannelPass::Edge]);
+        if vector_scores.is_some() {
+            main_channels.push(ChannelPass::Vector);
+        }
+        for pass in main_channels
+            .into_iter()
+            .filter(|pass| request.edge_expansion_enabled || *pass != ChannelPass::Edge)
+        {
+            let channel = pass.label();
+            let mut ranked = channel_candidates(
+                pass,
+                &tenant_units,
+                &tenant_edges,
+                &request,
+                query_tokens,
+                vector_scores.as_ref(),
+                bm25_scores.as_ref(),
+                &recall_time,
+                temporal_window.as_ref(),
+            );
+            ranked.sort_by(|left, right| {
+                right
+                    .1
+                    .partial_cmp(&left.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| left.0.body.cmp(&right.0.body))
+            });
+            let score_range = (
+                ranked.last().map_or(0.0, |(_, score)| *score),
+                ranked.first().map_or(0.0, |(_, score)| *score),
+            );
+            for (rank, (unit, score)) in ranked.into_iter().enumerate() {
+                let channel_rank = rank + 1;
+                let decay = decay_score_for(&unit, &tenant_review_events, request.decay_enabled);
+                // Weighted RRF is rank-only: it keeps a channel's ORDER and discards
+                // its score magnitude. For every channel but Exact that is the
+                // point — a BM25 score and a cosine similarity are not on a shared
+                // scale, so only their ranks are comparable. `exact_score` IS on a
+                // shared scale: it is the fraction of the unit's curated
+                // `fact_key` tokens the query covers, a calibrated 0..1. Flattening
+                // it to a rank means a subject key the query covers COMPLETELY
+                // (1.0) outranks one it covers by a third (0.333) by exactly one
+                // rank position — worth ~0.0005 here — while the lexical family
+                // (Lexical + Semantic, or Bm25 standing in for both) votes with
+                // three times Exact's weight off the raw body, which is precisely
+                // what keyword stuffing inflates. Scaling the Exact contribution by
+                // its own score restores the magnitude the channel measured.
+                // Within-channel order is unchanged (score is non-increasing in
+                // rank, so `score / (60 + rank)` is strictly decreasing); only the
+                // cross-channel magnitude moves.
+                let magnitude = if pass == ChannelPass::Exact {
+                    score
+                } else {
+                    1.0
+                };
+                let contribution = magnitude
+                    * channel_weight(pass, &request.query, temporal_window.as_ref())
+                    / (60.0 + channel_rank as f32);
+                let vector_strength =
+                    (pass == ChannelPass::Vector).then(|| min_max_strength(score, score_range));
+                candidates_by_unit
+                    .entry(unit.id)
+                    .and_modify(|candidate| {
+                        candidate.fused_score += contribution;
+                        candidate.vector_strength = candidate.vector_strength.or(vector_strength);
+                        candidate.channels.push((channel, channel_rank, score));
+                    })
+                    .or_insert_with(|| CandidateAccumulator {
+                        unit: unit.clone(),
+                        fused_score: contribution,
+                        vector_strength,
+                        deep_rank: None,
+                        cross_rerank_rank: None,
+                        decay,
+                        channels: vec![(channel, channel_rank, score)],
+                    });
+                candidate_traces.push(RecallCandidateTrace {
+                    unit_id: unit.id,
+                    channel,
+                    channel_rank,
+                    channel_score: score,
+                    derived_by: derived_by_for_unit(&unit).to_string(),
+                    fused_rank: None,
+                    fused_score: None,
+                    cross_rerank_rank: None,
+                    decay_retrievability: decay.retrievability,
+                    dsr_reinforcement_count: decay.reinforcement_count,
+                    trust_level: unit.trust_level,
+                    state: unit.state,
+                    discard_reason: None,
+                    valid_from: unit.valid_from.clone(),
+                    valid_to: unit.valid_to.clone(),
+                    transaction_from: unit.transaction_from.clone(),
+                    transaction_to: unit.transaction_to.clone(),
+                });
+            }
+        }
+
+        if let Some(deep) = &deep_run {
+            for (rank, unit) in deep.ranked_units.iter().enumerate() {
+                let channel_rank = rank + 1;
+                let decay = decay_score_for(unit, &tenant_review_events, request.decay_enabled);
+                candidates_by_unit
+                    .entry(unit.id)
+                    .and_modify(|candidate| {
+                        candidate.deep_rank = Some(channel_rank);
+                        candidate
+                            .channels
+                            .push((RecallChannel::Deep, channel_rank, 1.0));
+                    })
+                    .or_insert_with(|| CandidateAccumulator {
+                        unit: unit.clone(),
+                        fused_score: 0.0,
+                        vector_strength: None,
+                        deep_rank: Some(channel_rank),
+                        cross_rerank_rank: None,
+                        decay,
+                        channels: vec![(RecallChannel::Deep, channel_rank, 1.0)],
+                    });
+                candidate_traces.push(RecallCandidateTrace {
+                    unit_id: unit.id,
+                    channel: RecallChannel::Deep,
+                    channel_rank,
+                    channel_score: 1.0,
+                    derived_by: derived_by_for_unit(unit).to_string(),
+                    fused_rank: None,
+                    fused_score: None,
+                    cross_rerank_rank: None,
+                    decay_retrievability: decay.retrievability,
+                    dsr_reinforcement_count: decay.reinforcement_count,
+                    trust_level: unit.trust_level,
+                    state: unit.state,
+                    discard_reason: None,
+                    valid_from: unit.valid_from.clone(),
+                    valid_to: unit.valid_to.clone(),
+                    transaction_from: unit.transaction_from.clone(),
+                    transaction_to: unit.transaction_to.clone(),
+                });
+            }
+        }
+
+        let mut fused: Vec<_> = candidates_by_unit.into_values().collect();
+        // A-recency control (default OFF): the twenty-line substitute for the
+        // bitemporal edifice. See `a_recency_control_enabled`.
+        if a_recency_control_enabled() {
+            retain_most_recent_per_subject(&mut fused);
+        }
+        // Decay is an independent retrieval signal, not a feature of the retired
+        // heuristic reranker. Fold it into the fused score before the canonical
+        // sort so review outcomes remain effective even when subject dedup admits
+        // only the first candidate for a fact key.
+        for candidate in &mut fused {
+            candidate.fused_score *= candidate.decay.retrievability;
+        }
+        fused.sort_by(|left, right| {
             right
-                .1
-                .partial_cmp(&left.1)
+                .fused_score
+                .partial_cmp(&left.fused_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| left.0.body.cmp(&right.0.body))
+                .then_with(|| left.unit.body.cmp(&right.unit.body))
         });
-        let score_range = (
-            ranked.last().map_or(0.0, |(_, score)| *score),
-            ranked.first().map_or(0.0, |(_, score)| *score),
-        );
-        for (rank, (unit, score)) in ranked.into_iter().enumerate() {
-            let channel_rank = rank + 1;
-            let decay = decay_score_for(&unit, &tenant_review_events, request.decay_enabled);
-            // Weighted RRF is rank-only: it keeps a channel's ORDER and discards
-            // its score magnitude. For every channel but Exact that is the
-            // point — a BM25 score and a cosine similarity are not on a shared
-            // scale, so only their ranks are comparable. `exact_score` IS on a
-            // shared scale: it is the fraction of the unit's curated
-            // `fact_key` tokens the query covers, a calibrated 0..1. Flattening
-            // it to a rank means a subject key the query covers COMPLETELY
-            // (1.0) outranks one it covers by a third (0.333) by exactly one
-            // rank position — worth ~0.0005 here — while the lexical family
-            // (Lexical + Semantic, or Bm25 standing in for both) votes with
-            // three times Exact's weight off the raw body, which is precisely
-            // what keyword stuffing inflates. Scaling the Exact contribution by
-            // its own score restores the magnitude the channel measured.
-            // Within-channel order is unchanged (score is non-increasing in
-            // rank, so `score / (60 + rank)` is strictly decreasing); only the
-            // cross-channel magnitude moves.
-            let magnitude = if pass == ChannelPass::Exact {
-                score
-            } else {
-                1.0
-            };
-            let contribution = magnitude
-                * channel_weight(pass, &request.query, temporal_window.as_ref())
-                / (60.0 + channel_rank as f32);
-            let vector_strength =
-                (pass == ChannelPass::Vector).then(|| min_max_strength(score, score_range));
-            candidates_by_unit
-                .entry(unit.id)
-                .and_modify(|candidate| {
-                    candidate.fused_score += contribution;
-                    candidate.vector_strength = candidate.vector_strength.or(vector_strength);
-                    candidate.channels.push((channel, channel_rank, score));
-                })
-                .or_insert_with(|| CandidateAccumulator {
-                    unit: unit.clone(),
-                    fused_score: contribution,
-                    vector_strength,
-                    deep_rank: None,
-                    cross_rerank_rank: None,
-                    decay,
-                    channels: vec![(channel, channel_rank, score)],
-                });
-            candidate_traces.push(RecallCandidateTrace {
-                unit_id: unit.id,
-                channel,
-                channel_rank,
-                channel_score: score,
-                derived_by: derived_by_for_unit(&unit).to_string(),
-                fused_rank: None,
-                fused_score: None,
-                cross_rerank_rank: None,
-                decay_retrievability: decay.retrievability,
-                dsr_reinforcement_count: decay.reinforcement_count,
-                trust_level: unit.trust_level,
-                state: unit.state,
-                discard_reason: None,
-                valid_from: unit.valid_from.clone(),
-                valid_to: unit.valid_to.clone(),
-                transaction_from: unit.transaction_from.clone(),
-                transaction_to: unit.transaction_to.clone(),
-            });
+        for (rank, candidate) in fused.iter().enumerate() {
+            for trace_candidate in candidate_traces
+                .iter_mut()
+                .filter(|trace_candidate| trace_candidate.unit_id == candidate.unit.id)
+            {
+                trace_candidate.fused_rank = Some(rank + 1);
+                trace_candidate.fused_score = Some(candidate.fused_score);
+            }
         }
-    }
-
-    if let Some(deep) = &deep_run {
-        for (rank, unit) in deep.ranked_units.iter().enumerate() {
-            let channel_rank = rank + 1;
-            let decay = decay_score_for(unit, &tenant_review_events, request.decay_enabled);
-            candidates_by_unit
-                .entry(unit.id)
-                .and_modify(|candidate| {
-                    candidate.deep_rank = Some(channel_rank);
-                    candidate
-                        .channels
-                        .push((RecallChannel::Deep, channel_rank, 1.0));
-                })
-                .or_insert_with(|| CandidateAccumulator {
-                    unit: unit.clone(),
-                    fused_score: 0.0,
-                    vector_strength: None,
-                    deep_rank: Some(channel_rank),
-                    cross_rerank_rank: None,
-                    decay,
-                    channels: vec![(RecallChannel::Deep, channel_rank, 1.0)],
-                });
-            candidate_traces.push(RecallCandidateTrace {
-                unit_id: unit.id,
-                channel: RecallChannel::Deep,
-                channel_rank,
-                channel_score: 1.0,
-                derived_by: derived_by_for_unit(unit).to_string(),
-                fused_rank: None,
-                fused_score: None,
-                cross_rerank_rank: None,
-                decay_retrievability: decay.retrievability,
-                dsr_reinforcement_count: decay.reinforcement_count,
-                trust_level: unit.trust_level,
-                state: unit.state,
-                discard_reason: None,
-                valid_from: unit.valid_from.clone(),
-                valid_to: unit.valid_to.clone(),
-                transaction_from: unit.transaction_from.clone(),
-                transaction_to: unit.transaction_to.clone(),
-            });
-        }
-    }
-
+        (fused, candidate_traces)
+    };
     let l4_gathered_evidence_ids = deep_run
         .as_ref()
         .map(|deep| deep.source_ids.iter().map(Uuid::to_string).collect())
         .unwrap_or_default();
-
-    let mut fused: Vec<_> = candidates_by_unit.into_values().collect();
-    // A-recency control (default OFF): the twenty-line substitute for the
-    // bitemporal edifice. See `a_recency_control_enabled`.
-    if a_recency_control_enabled() {
-        retain_most_recent_per_subject(&mut fused);
-    }
-    // Decay is an independent retrieval signal, not a feature of the retired
-    // heuristic reranker. Fold it into the fused score before the canonical
-    // sort so review outcomes remain effective even when subject dedup admits
-    // only the first candidate for a fact key.
-    for candidate in &mut fused {
-        candidate.fused_score *= candidate.decay.retrievability;
-    }
-    fused.sort_by(|left, right| {
-        right
-            .fused_score
-            .partial_cmp(&left.fused_score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.unit.body.cmp(&right.unit.body))
-    });
-    for (rank, candidate) in fused.iter().enumerate() {
-        for trace_candidate in candidate_traces
-            .iter_mut()
-            .filter(|trace_candidate| trace_candidate.unit_id == candidate.unit.id)
-        {
-            trace_candidate.fused_rank = Some(rank + 1);
-            trace_candidate.fused_score = Some(candidate.fused_score);
+    let content_query_tokens = content_query_tokens(raw_query_tokens.clone());
+    let (query_tokens, mut fused, mut candidate_traces, will_rerank) = match cross_reranker {
+        Some(_) => {
+            let (fused, traces) = fuse(&raw_query_tokens, false);
+            if !rerank_selective || should_rerank(&fused, request.k) {
+                (raw_query_tokens, fused, traces, true)
+            } else {
+                let (fused, traces) = fuse(&content_query_tokens, true);
+                (content_query_tokens, fused, traces, false)
+            }
         }
-    }
+        None => {
+            let (fused, traces) = fuse(&content_query_tokens, true);
+            (content_query_tokens, fused, traces, false)
+        }
+    };
 
     // W8 cross-encoder rerank: reorder the top `recall_pool_depth` fused
     // candidates by a real (query, body) cross-encoder before packing. A no-op
@@ -8109,9 +8129,7 @@ where
     // tracing/log dependency in this crate to hook a real "debug" level into.
     let mut cross_rerank_ms: u64 = 0;
     let mut cross_rerank = None;
-    if let Some(reranker) =
-        cross_reranker.filter(|_| !rerank_selective || should_rerank(&fused, request.k))
-    {
+    if let Some(reranker) = cross_reranker.filter(|_| will_rerank) {
         if cross_rerank_candidate_selection == CrossRerankCandidateSelection::VectorLexicalBalanced
         {
             promote_vector_lexical_balanced(
@@ -12091,8 +12109,13 @@ fn bm25_unit_scores(
     units: &[StoredMemoryUnit],
     query: &str,
     scorer: LexicalScorer,
+    content_only: bool,
 ) -> HashMap<UnitId, f32> {
-    let mut query_terms: Vec<String> = content_query_tokens(scorer.tokens(query));
+    let mut query_terms: Vec<String> = if content_only {
+        content_query_tokens(scorer.tokens(query))
+    } else {
+        scorer.tokens(query)
+    };
     query_terms.sort_unstable();
     query_terms.dedup();
     let mut scores = HashMap::new();
@@ -16391,7 +16414,7 @@ mod pack_cost_tests {
             unit(2, "parser parser parser parser", Vec::new()),
             unit(3, "parser ran clean", Vec::new()),
         ];
-        let scores = bm25_unit_scores(&units, "parser xylotron", LexicalScorer::Bm25Control);
+        let scores = bm25_unit_scores(&units, "parser xylotron", LexicalScorer::Bm25Control, true);
         assert!(
             scores[&UnitId::from_u128(1)] > scores[&UnitId::from_u128(2)],
             "the rare-term body must outrank the repeated common-term body: {scores:?}"
@@ -16409,7 +16432,7 @@ mod pack_cost_tests {
             unit(1, "xylotron", Vec::new()),
             unit(2, &long_body, Vec::new()),
         ];
-        let scores = bm25_unit_scores(&units, "xylotron", LexicalScorer::Bm25Control);
+        let scores = bm25_unit_scores(&units, "xylotron", LexicalScorer::Bm25Control, true);
         let ratio = scores[&UnitId::from_u128(2)] / scores[&UnitId::from_u128(1)];
         let query = vec!["xylotron".to_string()];
         let density_ratio =
@@ -16426,7 +16449,7 @@ mod pack_cost_tests {
             unit(1, "alpha beta", Vec::new()),
             unit(2, "gamma", Vec::new()),
         ];
-        let scores = bm25_unit_scores(&units, "alpha", LexicalScorer::Bm25Control);
+        let scores = bm25_unit_scores(&units, "alpha", LexicalScorer::Bm25Control, true);
         assert_eq!(scores.len(), 1);
         assert!(scores.contains_key(&UnitId::from_u128(1)));
     }
@@ -16436,8 +16459,8 @@ mod pack_cost_tests {
         // Query names the directory; the body names the full path. The control
         // class keeps `src/foo/bar.py` whole, so it never matches `foo`.
         let units = vec![unit(1, "edited src/foo/bar.py", Vec::new())];
-        assert!(bm25_unit_scores(&units, "foo", LexicalScorer::Bm25Control).is_empty());
-        assert!(!bm25_unit_scores(&units, "foo", LexicalScorer::Bm25Code).is_empty());
+        assert!(bm25_unit_scores(&units, "foo", LexicalScorer::Bm25Control, true).is_empty());
+        assert!(!bm25_unit_scores(&units, "foo", LexicalScorer::Bm25Code, true).is_empty());
     }
 
     #[test]
@@ -17966,7 +17989,12 @@ mod pack_cost_tests {
             unit(1, "the queue is drained to the end", Vec::new()),
             unit(2, "billing retries use backoff", Vec::new()),
         ];
-        let scores = bm25_unit_scores(&units, "retry the billing job", LexicalScorer::Bm25Code);
+        let scores = bm25_unit_scores(
+            &units,
+            "retry the billing job",
+            LexicalScorer::Bm25Code,
+            true,
+        );
         assert_eq!(
             scores.keys().copied().collect::<Vec<_>>(),
             vec![UnitId::from_u128(2)],
@@ -17996,7 +18024,7 @@ mod pack_cost_tests {
             tokenize("what is it")
         );
         let units = vec![unit(1, "what it is", Vec::new())];
-        assert!(!bm25_unit_scores(&units, "what is it", LexicalScorer::Bm25Code).is_empty());
+        assert!(!bm25_unit_scores(&units, "what is it", LexicalScorer::Bm25Code, true).is_empty());
     }
 
     fn precise_request(budget_tokens: usize) -> RecallRequest {

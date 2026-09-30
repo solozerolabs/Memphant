@@ -1,9 +1,9 @@
 # Spec: served-block precision — graphify + Understand-Anything + napkin digest
 
-Status: BUILT, Batches 0-4 (2026-09-30, branch `precision-served-block`), **NOT
-SHIPPABLE AS-IS**: the content-term filter (idea 1) regresses the Syndai docs gate and
-trips the Batch 1 stop rule (see **Build record → Docs gate**). Batch 5 (paid
-behavioural guard) not run.
+Status: BUILT, Batches 0-4 (2026-09-30, branch `precision-served-block`). The
+content-term filter (idea 1) applies only where no cross-encoder rerank follows; with
+that gate every offline bar passes (**Build record**). Batch 5 (paid behavioural guard)
+not run.
 North star: coding-agent UX. Priorities: good UX > cost > perf/latency; KISS/DRY.
 Scope rule: accept only ideas that fit MemPhant's **measured** niche — memory for
 decisions and directives an agent cannot re-derive from the repo, and whether the
@@ -45,40 +45,38 @@ after = this branch):
   a question correct when the topically related session is NOT retrieved
   (`bench_lme::score_question`), so sharper retrieval lowers it by construction; whether
   the reader then abstains is a reader-lane question, not measured here.
-- **Syndai docs gate** (`scripts/gate_run_memphant.py`, v1 + v2 goldens, 120 goldens,
-  corpus `6fe7f78f` archived and verified 114/114 files, 4,920 sections, `--embed-model
-  small --mode fast --k 10`, stock 120 s client timeout, no override; main = `5b0a79f8`
-  plus the 409 fix `52bc2b71`). **Regression:**
+- **Syndai docs gate** (`scripts/gate_run_memphant.py`, 120 goldens, corpus `6fe7f78f`
+  archived and verified 114/114 files, 4,920 sections, `--embed-model small --mode fast
+  --k 10`, the server's default cross-encoder on, stock 120 s client timeout; main =
+  `5b0a79f8` plus the 409 fix `52bc2b71`).
 
-  | Goldens | r@5 main → branch | r@10 main → branch | Lost / gained (hit@10) |
+  | Goldens | main r@10 / r@5 | filter everywhere (`52bc2b71`) | filter gated on rerank (final) |
   |---|---|---|---|
-  | v1 (60) | 0.150 → 0.100 | **0.250 → 0.167** | 6 lost (`s005_ops`, `s028_root`, `s032_tools`, `s037_plans`, `s048_root`, `m003`) / 1 gained (`m001`) |
-  | v2 (60) | 0.233 → 0.217 | **0.283 → 0.267** | 1 lost (`v2_s044_runbooks`) / 0 gained |
+  | v1 (60) | 0.250 / 0.150 | 0.167 / 0.100: 6 lost, 1 gained | **0.250 / 0.150: 0 lost, 0 gained** |
+  | v2 (60) | 0.283 / 0.233 | 0.267 / 0.217: 1 lost | **0.283 / 0.233: 0 lost, 0 gained** |
 
-  Paired over both sets: 7 lost vs 1 gained, exact McNemar p ≈ 0.07. Not significant at
-  0.05, but it is a dense-arm gold loss, so the Batch 1 stop rule fires.
+  With the filter applied everywhere, v1 ablations (gap cutoff off; gap cutoff exempting
+  reranked candidates) reproduced the loss exactly, and the collapse cannot fire on
+  auto-keyed doc sections, so the filter was the whole regression. Mechanism: the docs
+  goldens are paraphrased (gold lexical overlap ≈ 0.07). Under rank-only RRF, a
+  stopword-only BM25 match gave the vector-found gold a BM25 rank that kept it inside
+  the fused head the cross-encoder reranks.
 
-  **Attribution (v1 ablations, same corpus and binaries):** the gap cutoff disabled
-  (`PACK_GAP_RATIO = 0`) and the gap cutoff exempting cross-reranked candidates both
-  reproduce the branch's v1 result exactly: the same 6 lost, 1 gained. The
-  near-duplicate collapse cannot fire on doc sections (resource units carry no subject,
-  so their fact key is `auto` and `Restatement::of` returns `None`). **The content-term
-  filter is the whole regression.** Mechanism: the docs goldens are deliberately
-  paraphrased (gold lexical overlap ≈ 0.07). With rank-only RRF, a stopword-only BM25
-  match still gave the vector-found gold a BM25 rank. Once stopwords earn nothing, units
-  with weak content overlap outrank it, and it falls out of the fused top-64 that the
-  cross-encoder reranks (the server's default; `MEMPHANT_CROSS_RERANK` is unset in
-  `fly.toml`).
-
-  **Why no subset ships cleanly:** on the `/core` fixture the filter is load-bearing. With
-  raw BM25 query terms (filter kept elsewhere, gap cutoff and collapse on), the bge-small
-  arm serves 33,760 tokens (vs 19,121) and loses a gold (28 vs 29): stopword BM25 votes
-  make nearly every unit lexical, so the dense-only gap cutoff has nothing to cut. `/core`
-  never runs the cross-encoder (`should_rerank` skips when the fused pool is ≤ `k`, and
-  `/core` asks for `k = 1000`), so the fixture is the prod `/core` shape. The docs gate
-  (k = 10) is where the reranker runs. Open decision for the owner: a filter that keeps
-  the precision without the paraphrase loss (e.g. a per-candidate vote only on content
-  overlap while keeping stopword ranks as a tie-prior), or shipping ideas 5 and 6 alone.
+  **Deviation 7, the filter is gated on the rerank decision.** Stopword BM25 votes widen
+  the pool usefully ahead of a reranker, and are noise where lexical scores decide the
+  final order. `recall` now fuses on the raw query terms when a cross-reranker is
+  installed. If the existing rerank decision (`!rerank_selective ||
+  should_rerank(&fused, k)`) says it will rerank, that raw-term fusion and pack are used
+  exactly as on main. Otherwise, and whenever no reranker is installed, fusion re-runs
+  on content terms. It is one decision, evaluated once and reused by the rerank stage;
+  no second heuristic. `/core` asks for `k = 1000`, so its pool never exceeds `k`, it
+  never reranks, and it always takes the filtered path: the `/core` fixture numbers
+  above are unchanged (bge-small 29 gold at 19,121 tokens; CI arms identical). Cost: a
+  recall with a reranker installed that then declines to rerank fuses twice (lexical
+  scoring only, no I/O). Regression test:
+  `cross_reranker::stopword_votes_are_kept_only_ahead_of_a_cross_rerank`.
+- **LME-S rerun on the gated build** (`bench-lme`, no reranker): r@5 0.855,
+  per-question identical to the ungated branch run (main 0.687).
 - **Negative slice:** the 409 is fixed (`52bc2b71`, one agent node per gate scope). It now
   fails later, on both arms, at the first time-travel negative query: `/v1/recall` → 403
   `capability_denied` (`can_audit_history` is owner-only and default false), and

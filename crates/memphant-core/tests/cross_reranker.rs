@@ -1031,3 +1031,58 @@ async fn empty_reranker_output_fails_open_and_records_empty() {
         CrossRerankFailure::Empty
     );
 }
+
+/// The content-term filter applies only where no cross-encoder rerank follows.
+/// Ahead of a rerank, a stopword-only BM25 match is a pool-widening vote (it
+/// kept paraphrased golds inside the reranked head on the Syndai docs gate),
+/// so a reranking recall fuses on the raw query terms. Without a rerank the
+/// lexical scores decide the order, so stopwords earn no vote. The gate is the
+/// existing rerank decision, not a second heuristic.
+#[tokio::test]
+async fn stopword_votes_are_kept_only_ahead_of_a_cross_rerank() {
+    let store = InMemoryStore::default();
+    let (tenant, scope, actor) = seed(&store).await;
+    // Every seeded body shares `the`; none contains `gizmo`.
+    let lexical_voters = |service: &MemoryService<InMemoryStore>, trace_id| {
+        service
+            .store()
+            .trace_by_id_any_tenant(trace_id)
+            .expect("trace exists")
+            .candidates
+            .iter()
+            .filter(|candidate| candidate.channel == memphant_types::RecallChannel::Lexical)
+            .count()
+    };
+    let mut request = recall_request(tenant, scope, actor, "the gizmo");
+    request.limit = Some(1);
+
+    let plain = stub_service(store.clone());
+    let response = plain
+        .recall(
+            memphant_store_testkit::resolved_context(tenant, scope, actor),
+            request.clone(),
+        )
+        .await
+        .expect("recall");
+    assert_eq!(
+        lexical_voters(&plain, response.trace_id),
+        0,
+        "no rerank: a stopword-only overlap earns no lexical vote"
+    );
+
+    let reranked = stub_service(store.clone())
+        .with_rerank_selective(false)
+        .with_cross_reranker(Arc::new(ConstantReranker));
+    let response = reranked
+        .recall(
+            memphant_store_testkit::resolved_context(tenant, scope, actor),
+            request,
+        )
+        .await
+        .expect("recall");
+    assert_eq!(
+        lexical_voters(&reranked, response.trace_id),
+        BODIES.len(),
+        "ahead of a rerank: the raw terms widen the pool, as before the filter"
+    );
+}
