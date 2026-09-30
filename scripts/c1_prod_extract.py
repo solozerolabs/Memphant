@@ -13,8 +13,8 @@ a committed lock of counts and hashes only.
 
 Access posture (enforced, not merely intended):
 
-* every statement runs with ``default_transaction_read_only = on`` via
-  ``PGOPTIONS``, and the only verb issued is ``SELECT``;
+* the one statement runs inside ``SET TRANSACTION READ ONLY`` (``psql -1``), so
+  the server rejects any write, and the only verb issued is ``SELECT``;
 * the connection string is consumed from the environment (supplied by
   ``doppler run --project syndai --config prod``) and never printed or written;
 * ``embedding``, ``metadata`` and ``summary`` are refused outright (prereg
@@ -89,6 +89,9 @@ def _sha256_file(path: Path) -> str:
     return _sha256_bytes(path.read_bytes())
 
 
+READ_ONLY_PSQL_ARGS = ("-v", "ON_ERROR_STOP=1", "-q", "-At", "-1", "-c", "SET TRANSACTION READ ONLY")
+
+
 def snapshot() -> int:
     """Freeze the production table into a hashed local snapshot. READ ONLY."""
     url = os.environ.get("DATABASE_URL")
@@ -99,15 +102,14 @@ def snapshot() -> int:
             file=sys.stderr,
         )
         return 2
-    env = dict(os.environ)
-    # The read-only guard is applied by the server to EVERY statement in the
-    # session, so it cannot be bypassed by anything this script does later.
-    env["PGOPTIONS"] = "-c default_transaction_read_only=on"
+    # The server enforces read-only for the whole transaction the SELECT runs in.
+    # Transaction-scoped, never PGOPTIONS: through Supabase's transaction pooler a startup
+    # option becomes a session `set default_transaction_read_only=on` on a SHARED backend
+    # and leaks to its next client (it failed Syndai deploys 2026-09-30).
     proc = subprocess.run(
-        ["psql", url, "-v", "ON_ERROR_STOP=1", "-At", "-c", SELECT_SQL],
+        ["psql", url, *READ_ONLY_PSQL_ARGS, "-c", SELECT_SQL],
         capture_output=True,
         text=True,
-        env=env,
     )
     if proc.returncode != 0:
         # stderr from psql can echo the connection string; report the code only.
@@ -122,7 +124,7 @@ def snapshot() -> int:
         json.dumps(
             {
                 "source": "syndai.episodic_memories",
-                "access": "read-only (default_transaction_read_only=on), SELECT only",
+                "access": "read-only (SET TRANSACTION READ ONLY), SELECT only",
                 "columns": COLUMNS,
                 "rows": len(rows),
                 "bytes": len(payload),

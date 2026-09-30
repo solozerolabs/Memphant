@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import capture_census_dataset as ccd  # noqa: E402
 from capture_census_dataset import normalize_attempt, phase_to_outcome  # noqa: E402
 
 
@@ -158,3 +159,24 @@ def test_normalize_attempt_preserves_ids_and_timestamps():
     assert rec["started_at"] == "2026-01-01T00:00:00+00:00"
     assert rec["ended_at"] == "2026-01-01T00:05:00+00:00"
     assert rec["user_turns"] == []
+
+
+def test_fetch_is_read_only_per_transaction_never_via_pgoptions(tmp_path, monkeypatch):
+    # PGOPTIONS through the transaction pooler becomes a session setting on a SHARED
+    # backend and leaks read-only to its next client (failed Syndai deploys 2026-09-30).
+    monkeypatch.delenv("PGOPTIONS", raising=False)
+    fake = tmp_path / "psql"
+    fake.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os, sys\n"
+        "print(json.dumps([{'argv': sys.argv[1:], 'pgoptions': os.environ.get('PGOPTIONS')}]))\n"
+    )
+    fake.chmod(0o755)
+
+    [seen] = ccd.fetch_raw_attempts("postgresql://db.invalid/x", psql_bin=str(fake))
+
+    argv = seen["argv"]
+    assert "-1" in argv
+    assert argv[argv.index("SET TRANSACTION READ ONLY") - 1] == "-c"
+    assert argv.index("SET TRANSACTION READ ONLY") < argv.index(ccd.SELECT_SQL)
+    assert seen["pgoptions"] is None

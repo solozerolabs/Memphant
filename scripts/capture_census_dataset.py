@@ -21,10 +21,10 @@ earlier draft's shape):
 
 Access posture (read-only, enforced not merely intended): the only SQL this
 script ever issues is the single ``SELECT`` in ``fetch_raw_attempts`` below,
-and every statement in the session runs under
-``default_transaction_read_only = on`` via ``PGOPTIONS`` — a Postgres session
-setting, so a stray write would be rejected by the server itself, not merely
-omitted by this script. The connection string comes from ``CENSUS_DATABASE_URL``
+and it runs inside ``SET TRANSACTION READ ONLY`` (``psql -1``), so a stray write
+would be rejected by the server itself, not merely omitted by this script. It is
+transaction-scoped, never ``PGOPTIONS``: through the transaction pooler that
+becomes a session setting on a shared backend and leaks to its next client. The connection string comes from ``CENSUS_DATABASE_URL``
 (falling back to ``DATABASE_URL``); no secret is ever printed. The operator
 supplies it via ``doppler run --config dev -- ...`` — this script never calls
 doppler itself.
@@ -161,15 +161,13 @@ def normalize_attempt(raw: dict) -> dict:
 
 def fetch_raw_attempts(database_url: str, psql_bin: str = "psql") -> list[dict]:
     """Runs the ONE select above and returns the parsed per-attempt rows.
-    Never writes: the session is forced read-only server-side via PGOPTIONS,
-    and this is the only statement ever issued."""
-    env = dict(os.environ)
-    env["PGOPTIONS"] = "-c default_transaction_read_only=on"
+    Never writes: the transaction is forced read-only server-side, and this is
+    the only statement ever issued."""
     result = subprocess.run(
-        [psql_bin, database_url, "-v", "ON_ERROR_STOP=1", "-At", "-c", SELECT_SQL],
+        [psql_bin, database_url, "-v", "ON_ERROR_STOP=1", "-q", "-At", "-1",
+         "-c", "SET TRANSACTION READ ONLY", "-c", SELECT_SQL],
         capture_output=True,
         text=True,
-        env=env,
     )
     if result.returncode != 0:
         # stderr from psql can echo the connection string; never print it.

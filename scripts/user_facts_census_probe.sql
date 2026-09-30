@@ -1,7 +1,10 @@
 -- SC lane §A.2 census probe for syndai.user_facts.
 -- AGGREGATES ONLY. Selects no label, value, user_id, or any row identifier.
 -- Governed by docs/build-log/2026-08-05-user-facts-census-privacy-prereg.md.
--- Run read-only: PGOPTIONS="-c default_transaction_read_only=on"
+-- Read-only is enforced by the transaction below, never PGOPTIONS: through the
+-- transaction pooler a startup option becomes a session setting on a SHARED backend
+-- and leaks to its next client (it failed Syndai deploys 2026-09-30).
+begin read only;
 
 select
   count(*)                                                as rows_total,
@@ -34,3 +37,5 @@ select category, count(*) as n
 from syndai.user_facts
 group by 1
 order by 2 desc;
+
+rollback;
