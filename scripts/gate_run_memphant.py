@@ -275,13 +275,16 @@ def bind_gate_context(client: ApiClient, label: str) -> dict:
     """One bound strict-contract context per gate scope. ``label`` picks the
     scope_ref, so 'active' and each negative scope kind resolve to distinct
     scopes under the same tenant (the scope_id adapter mapping recorded in
-    ``NEGATIVE_SCOPE_ADAPTER_MAPPING``); subject/actor/agent refs are shared."""
+    ``NEGATIVE_SCOPE_ADAPTER_MAPPING``); subject/actor refs are shared. The
+    agent node is per label: an agent node belongs to exactly one scope, and
+    the server refuses to rebind one to another (409 "agent node parent or
+    scope is immutable"), so a shared agent ref broke every negative slice."""
     return client.bind_context(
         f"syndai-docs-gate:{label}",
         subject_ref="syndai-gate:subject",
         actor_ref="syndai-gate:actor",
         scope_ref=f"syndai-gate:scope:{label}",
-        agent_node_ref="syndai-gate:agent",
+        agent_node_ref=f"syndai-gate:agent:{label}",
     )
 
 

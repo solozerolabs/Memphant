@@ -617,3 +617,25 @@ def test_both_runners_expose_negative_slice_without_mixing_positive_provenance()
         assert "raw_bodies[: args.k]" in source
     syndai = (ROOT / "scripts" / "gate_run_syndai.py").read_text()
     assert '"stale_superseded_only": "natural-language dated query (no valid_at parameter)"' in syndai
+
+
+def test_negative_scope_contexts_bind_distinct_agent_nodes():
+    """An agent node belongs to exactly one scope; the server 409s a rebind
+    ("agent node parent or scope is immutable"). Each gate scope label must
+    therefore bind its own agent node, or every negative slice dies at bind."""
+    runner = _load("gate_run_memphant_bind", "scripts/gate_run_memphant.py")
+
+    class Recorder:
+        def __init__(self):
+            self.binds = []
+
+        def bind_context(self, client_ref, **refs):
+            self.binds.append(refs)
+            return {}
+
+    client = Recorder()
+    labels = ("active", "other_user", "other_project", "other_agent")
+    for label in labels:
+        runner.bind_gate_context(client, label)
+    pairs = {(bind["scope_ref"], bind["agent_node_ref"]) for bind in client.binds}
+    assert len({agent for _, agent in pairs}) == len(labels), pairs
