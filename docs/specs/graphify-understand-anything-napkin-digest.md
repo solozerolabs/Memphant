@@ -1,7 +1,9 @@
 # Spec: served-block precision — graphify + Understand-Anything + napkin digest
 
-Status: BUILT, Batches 0-4 (2026-09-30, branch `precision-served-block`). Batch 5
-(paid behavioural guard) not run. See **Build record** for results and deviations.
+Status: BUILT, Batches 0-4 (2026-09-30, branch `precision-served-block`), **NOT
+SHIPPABLE AS-IS**: the content-term filter (idea 1) regresses the Syndai docs gate and
+trips the Batch 1 stop rule (see **Build record → Docs gate**). Batch 5 (paid
+behavioural guard) not run.
 North star: coding-agent UX. Priorities: good UX > cost > perf/latency; KISS/DRY.
 Scope rule: accept only ideas that fit MemPhant's **measured** niche — memory for
 decisions and directives an agent cannot re-derive from the repo, and whether the
@@ -43,14 +45,49 @@ after = this branch):
   a question correct when the topically related session is NOT retrieved
   (`bench_lme::score_question`), so sharper retrieval lowers it by construction; whether
   the reader then abstains is a reader-lane question, not measured here.
-- **Syndai docs gate** (`scripts/gate_run_memphant.py`, v1 + v2 goldens, `--mode fast`):
-  **not completed.** Both arms ingested and drained all 4,920
-  sections, then died on `/v1/recall failed after retries: timed out` (the harness's
-  120 s client timeout) on this shared machine at load average ~22-35; the after arm got
-  through the 60 v1 goldens first. The `--negative-slice` run fails earlier on `main` too
-  (`PUT /v1/context-bindings/syndai-docs-gate:other_user` → 409 "agent node parent or
-  scope is immutable"), a pre-existing harness break. Rerun on an idle machine, before and
-  after, with the command in **Harness**.
+- **Syndai docs gate** (`scripts/gate_run_memphant.py`, v1 + v2 goldens, 120 goldens,
+  corpus `6fe7f78f` archived and verified 114/114 files, 4,920 sections, `--embed-model
+  small --mode fast --k 10`, stock 120 s client timeout, no override; main = `5b0a79f8`
+  plus the 409 fix `52bc2b71`). **Regression:**
+
+  | Goldens | r@5 main → branch | r@10 main → branch | Lost / gained (hit@10) |
+  |---|---|---|---|
+  | v1 (60) | 0.150 → 0.100 | **0.250 → 0.167** | 6 lost (`s005_ops`, `s028_root`, `s032_tools`, `s037_plans`, `s048_root`, `m003`) / 1 gained (`m001`) |
+  | v2 (60) | 0.233 → 0.217 | **0.283 → 0.267** | 1 lost (`v2_s044_runbooks`) / 0 gained |
+
+  Paired over both sets: 7 lost vs 1 gained, exact McNemar p ≈ 0.07. Not significant at
+  0.05, but it is a dense-arm gold loss, so the Batch 1 stop rule fires.
+
+  **Attribution (v1 ablations, same corpus and binaries):** the gap cutoff disabled
+  (`PACK_GAP_RATIO = 0`) and the gap cutoff exempting cross-reranked candidates both
+  reproduce the branch's v1 result exactly: the same 6 lost, 1 gained. The
+  near-duplicate collapse cannot fire on doc sections (resource units carry no subject,
+  so their fact key is `auto` and `Restatement::of` returns `None`). **The content-term
+  filter is the whole regression.** Mechanism: the docs goldens are deliberately
+  paraphrased (gold lexical overlap ≈ 0.07). With rank-only RRF, a stopword-only BM25
+  match still gave the vector-found gold a BM25 rank. Once stopwords earn nothing, units
+  with weak content overlap outrank it, and it falls out of the fused top-64 that the
+  cross-encoder reranks (the server's default; `MEMPHANT_CROSS_RERANK` is unset in
+  `fly.toml`).
+
+  **Why no subset ships cleanly:** on the `/core` fixture the filter is load-bearing. With
+  raw BM25 query terms (filter kept elsewhere, gap cutoff and collapse on), the bge-small
+  arm serves 33,760 tokens (vs 19,121) and loses a gold (28 vs 29): stopword BM25 votes
+  make nearly every unit lexical, so the dense-only gap cutoff has nothing to cut. `/core`
+  never runs the cross-encoder (`should_rerank` skips when the fused pool is ≤ `k`, and
+  `/core` asks for `k = 1000`), so the fixture is the prod `/core` shape. The docs gate
+  (k = 10) is where the reranker runs. Open decision for the owner: a filter that keeps
+  the precision without the paraphrase loss (e.g. a per-candidate vote only on content
+  overlap while keeping stopword ranks as a tie-prior), or shipping ideas 5 and 6 alone.
+- **Negative slice:** the 409 is fixed (`52bc2b71`, one agent node per gate scope). It now
+  fails later, on both arms, at the first time-travel negative query: `/v1/recall` → 403
+  `capability_denied` (`can_audit_history` is owner-only and default false), and
+  `memphant-cli admin create-key` has no way to mint such a key. Pre-existing on main; the
+  fix is a CLI flag plus a harness change, not attempted here. The v1/v2 numbers above
+  were run without `--negative-slice`.
+- **Spec drift:** `python3 scripts/check_spec_drift.py` → `spec_drift=dirty
+  05-retrieval-and-eval-spec.md:content`, expected until the Syndai mirror lands on
+  Syndai main.
 
 Deviations from the spec below, each with its reason:
 
